@@ -8,4 +8,4 @@ Implements FR-019 (log all operations) and SC-010 (zero secrets).
 from .logger import AuditLogger  # WHY: main audit logging service
 from .masker import SecretMasker  # WHY: redaction filter for sensitive data
 
-__all__ = ['AuditLogger', 'SecretMasker']
+__all__ = ["AuditLogger", "SecretMasker"]

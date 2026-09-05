@@ -3,8 +3,8 @@
 Implement GET /api/runs/:run_id and PATCH /api/runs/:run_id with validation.
 """
 
-from flask import Blueprint, request, jsonify  # WHY: Flask routing and request handling
 import structlog  # WHY: structured logging
+from flask import Blueprint, jsonify, request  # WHY: Flask routing and request handling
 
 logger = structlog.get_logger(__name__)  # WHY: module-scoped logger
 
@@ -22,9 +22,9 @@ def create_runs_routes(runs_service=None, audit_logger=None):
     WHY: factory function for route creation with dependency injection.
     """
     # WHY: create blueprint
-    runs_bp = Blueprint('runs', __name__, url_prefix='/api/runs')  # WHY: blueprint with prefix
+    runs_bp = Blueprint("runs", __name__, url_prefix="/api/runs")  # WHY: blueprint with prefix
 
-    @runs_bp.route('/<run_id>', methods=['GET'])  # WHY: get run route
+    @runs_bp.route("/<run_id>", methods=["GET"])  # WHY: get run route
     def get_run(run_id):
         """Get upgrade run by ID.
 
@@ -43,13 +43,13 @@ def create_runs_routes(runs_service=None, audit_logger=None):
             if not run_id or not isinstance(run_id, str) or len(run_id) == 0:  # WHY: check format
                 # WHY: bad request
                 logger.warning("get_run_invalid_run_id", run_id=run_id)  # WHY: validation failure
-                return jsonify({'error': 'run_id is required and must be non-empty'}), 400  # WHY: return error
+                return jsonify({"error": "run_id is required and must be non-empty"}), 400  # WHY: return error
 
             # WHY: check if runs service available
             if not runs_service:  # WHY: no service
                 # WHY: service unavailable
                 logger.error("runs_service_unavailable_get")  # WHY: service error
-                return jsonify({'error': 'Runs service not available'}), 503  # WHY: return error
+                return jsonify({"error": "Runs service not available"}), 503  # WHY: return error
 
             # WHY: call runs service to get run
             logger.info("runs_service_get_call", run_id=run_id)  # WHY: pre-call log
@@ -58,19 +58,19 @@ def create_runs_routes(runs_service=None, audit_logger=None):
             if run is None:  # WHY: if not found
                 # WHY: not found
                 logger.debug("run_not_found", run_id=run_id)  # WHY: not found log
-                return jsonify({'error': 'Run not found'}), 404  # WHY: return error
+                return jsonify({"error": "Run not found"}), 404  # WHY: return error
 
             # WHY: log success
             logger.info("get_run_success", run_id=run_id)  # WHY: post-call log
             # WHY: return run
-            return jsonify({'run': run}), 200  # WHY: return result
+            return jsonify({"run": run}), 200  # WHY: return result
 
         except Exception as e:
             # WHY: catch unexpected exceptions
             logger.error("get_run_exception", run_id=run_id, error=str(e))  # WHY: exception log
-            return jsonify({'error': 'Internal server error'}), 500  # WHY: return error
+            return jsonify({"error": "Internal server error"}), 500  # WHY: return error
 
-    @runs_bp.route('/<run_id>', methods=['PATCH'])  # WHY: update run route
+    @runs_bp.route("/<run_id>", methods=["PATCH"])  # WHY: update run route
     def update_run(run_id):
         """Update upgrade run.
 
@@ -92,7 +92,7 @@ def create_runs_routes(runs_service=None, audit_logger=None):
             if not run_id or not isinstance(run_id, str) or len(run_id) == 0:  # WHY: check format
                 # WHY: bad request
                 logger.warning("update_run_invalid_run_id", run_id=run_id)  # WHY: validation failure
-                return jsonify({'error': 'run_id is required and must be non-empty'}), 400  # WHY: return error
+                return jsonify({"error": "run_id is required and must be non-empty"}), 400  # WHY: return error
 
             # WHY: parse JSON body
             data = request.get_json() or {}  # WHY: JSON parse
@@ -100,10 +100,10 @@ def create_runs_routes(runs_service=None, audit_logger=None):
             if not data:  # WHY: check if empty
                 # WHY: bad request
                 logger.warning("update_run_empty_body")  # WHY: validation failure
-                return jsonify({'error': 'Request body must contain update fields'}), 400  # WHY: return error
+                return jsonify({"error": "Request body must contain update fields"}), 400  # WHY: return error
 
             # WHY: validate allowed fields (T-005 validation)
-            allowed_fields = ['notes', 'status']  # WHY: allowed update fields
+            allowed_fields = ["notes", "status"]  # WHY: allowed update fields
             updates = {}  # WHY: validated updates
             for field in allowed_fields:  # WHY: iterate allowed
                 if field in data:  # WHY: if present
@@ -113,7 +113,7 @@ def create_runs_routes(runs_service=None, audit_logger=None):
             if not runs_service:  # WHY: no service
                 # WHY: service unavailable
                 logger.error("runs_service_unavailable_update")  # WHY: service error
-                return jsonify({'error': 'Runs service not available'}), 503  # WHY: return error
+                return jsonify({"error": "Runs service not available"}), 503  # WHY: return error
 
             # WHY: call runs service to update run
             logger.info("runs_service_update_call", run_id=run_id)  # WHY: pre-call log
@@ -122,26 +122,26 @@ def create_runs_routes(runs_service=None, audit_logger=None):
             if not success:  # WHY: if failed
                 # WHY: update failed
                 logger.error("runs_service_update_failed", run_id=run_id)  # WHY: update error
-                return jsonify({'error': 'Failed to update run'}), 400  # WHY: return error
+                return jsonify({"error": "Failed to update run"}), 400  # WHY: return error
 
             # WHY: log update to audit trail
             if audit_logger:  # WHY: if audit available
                 audit_logger.log_operation(  # WHY: audit log
-                    operation='run_updated',  # WHY: operation type
-                    details={'run_id': run_id, 'fields': list(updates.keys())},  # WHY: details
+                    operation="run_updated",  # WHY: operation type
+                    details={"run_id": run_id, "fields": list(updates.keys())},  # WHY: details
                 )  # WHY: audit call
 
             # WHY: log success
             logger.info("update_run_success", run_id=run_id)  # WHY: post-call log
             # WHY: return success
-            return jsonify({'message': 'Run updated successfully'}), 200  # WHY: return result
+            return jsonify({"message": "Run updated successfully"}), 200  # WHY: return result
 
         except Exception as e:
             # WHY: catch unexpected exceptions
             logger.error("update_run_exception", run_id=run_id, error=str(e))  # WHY: exception log
-            return jsonify({'error': 'Internal server error'}), 500  # WHY: return error
+            return jsonify({"error": "Internal server error"}), 500  # WHY: return error
 
-    @runs_bp.route('', methods=['POST'])  # WHY: create run route
+    @runs_bp.route("", methods=["POST"])  # WHY: create run route
     def create_run():
         """Create a new upgrade run with selected devices.
 
@@ -162,80 +162,86 @@ def create_runs_routes(runs_service=None, audit_logger=None):
             # WHY: parse JSON body
             data = request.get_json() or {}  # WHY: JSON parse
             # WHY: extract and validate user_id
-            user_id = data.get('user_id', '').strip()  # WHY: get user_id
+            user_id = data.get("user_id", "").strip()  # WHY: get user_id
             if not user_id:  # WHY: check if empty
                 # WHY: validation failure
-                logger.warning("create_run_validation_failed", field='user_id')  # WHY: validation log
+                logger.warning("create_run_validation_failed", field="user_id")  # WHY: validation log
                 # WHY: log to audit if available
                 if audit_logger:  # WHY: if audit available
                     audit_logger.log_validation_error(  # WHY: audit log
-                        field='user_id',  # WHY: field name
-                        reason='User ID is required',  # WHY: reason
+                        field="user_id",  # WHY: field name
+                        reason="User ID is required",  # WHY: reason
                     )  # WHY: audit call
-                return jsonify({'error': 'user_id is required'}), 400  # WHY: return error
+                return jsonify({"error": "user_id is required"}), 400  # WHY: return error
 
             # WHY: extract and validate org_id
-            org_id = data.get('org_id', '').strip()  # WHY: get org_id
+            org_id = data.get("org_id", "").strip()  # WHY: get org_id
             if not org_id:  # WHY: check if empty
                 # WHY: validation failure
-                logger.warning("create_run_validation_failed", field='org_id')  # WHY: validation log
+                logger.warning("create_run_validation_failed", field="org_id")  # WHY: validation log
                 # WHY: log to audit if available
                 if audit_logger:  # WHY: if audit available
                     audit_logger.log_validation_error(  # WHY: audit log
-                        field='org_id',  # WHY: field name
-                        reason='Organization ID is required',  # WHY: reason
+                        field="org_id",  # WHY: field name
+                        reason="Organization ID is required",  # WHY: reason
                     )  # WHY: audit call
-                return jsonify({'error': 'org_id is required'}), 400  # WHY: return error
+                return jsonify({"error": "org_id is required"}), 400  # WHY: return error
 
             # WHY: extract and validate site_id
-            site_id = data.get('site_id', '').strip()  # WHY: get site_id
+            site_id = data.get("site_id", "").strip()  # WHY: get site_id
             if not site_id:  # WHY: check if empty
                 # WHY: validation failure
-                logger.warning("create_run_validation_failed", field='site_id')  # WHY: validation log
+                logger.warning("create_run_validation_failed", field="site_id")  # WHY: validation log
                 # WHY: log to audit if available
                 if audit_logger:  # WHY: if audit available
                     audit_logger.log_validation_error(  # WHY: audit log
-                        field='site_id',  # WHY: field name
-                        reason='Site ID is required',  # WHY: reason
+                        field="site_id",  # WHY: field name
+                        reason="Site ID is required",  # WHY: reason
                     )  # WHY: audit call
-                return jsonify({'error': 'site_id is required'}), 400  # WHY: return error
+                return jsonify({"error": "site_id is required"}), 400  # WHY: return error
 
             # WHY: extract and validate device_ids
-            device_ids = data.get('device_ids', [])  # WHY: get device_ids
+            device_ids = data.get("device_ids", [])  # WHY: get device_ids
             if not isinstance(device_ids, list) or len(device_ids) == 0:  # WHY: check format and non-empty
                 # WHY: validation failure
-                logger.warning("create_run_validation_failed", field='device_ids', reason='must be non-empty array')  # WHY: validation log
+                logger.warning(
+                    "create_run_validation_failed", field="device_ids", reason="must be non-empty array"
+                )  # WHY: validation log
                 # WHY: log to audit if available
                 if audit_logger:  # WHY: if audit available
                     audit_logger.log_validation_error(  # WHY: audit log
-                        field='device_ids',  # WHY: field name
-                        reason='Device IDs must be a non-empty array',  # WHY: reason
+                        field="device_ids",  # WHY: field name
+                        reason="Device IDs must be a non-empty array",  # WHY: reason
                     )  # WHY: audit call
-                return jsonify({'error': 'device_ids must be a non-empty array'}), 400  # WHY: return error
+                return jsonify({"error": "device_ids must be a non-empty array"}), 400  # WHY: return error
 
             # WHY: validate device_ids are strings
             for device_id in device_ids:  # WHY: iterate devices
                 if not isinstance(device_id, str) or not device_id.strip():  # WHY: check type and non-empty
                     # WHY: validation failure
-                    logger.warning("create_run_validation_failed", field='device_ids', reason='contains empty device_id')  # WHY: validation log
+                    logger.warning(
+                        "create_run_validation_failed", field="device_ids", reason="contains empty device_id"
+                    )  # WHY: validation log
                     # WHY: log to audit if available
                     if audit_logger:  # WHY: if audit available
                         audit_logger.log_validation_error(  # WHY: audit log
-                            field='device_ids',  # WHY: field name
-                            reason='Each device ID must be a non-empty string',  # WHY: reason
+                            field="device_ids",  # WHY: field name
+                            reason="Each device ID must be a non-empty string",  # WHY: reason
                         )  # WHY: audit call
-                    return jsonify({'error': 'Each device ID must be a non-empty string'}), 400  # WHY: return error
+                    return jsonify({"error": "Each device ID must be a non-empty string"}), 400  # WHY: return error
 
             # WHY: extract optional notes
-            notes = data.get('notes', '').strip()  # WHY: get notes
+            notes = data.get("notes", "").strip()  # WHY: get notes
             # WHY: check if runs service available
             if not runs_service:  # WHY: no service
                 # WHY: service unavailable
                 logger.error("runs_service_unavailable_create")  # WHY: service error
-                return jsonify({'error': 'Runs service not available'}), 503  # WHY: return error
+                return jsonify({"error": "Runs service not available"}), 503  # WHY: return error
 
             # WHY: call runs service to create run
-            logger.info("runs_service_create_call", user_id=user_id, site_id=site_id, device_count=len(device_ids))  # WHY: pre-call log
+            logger.info(
+                "runs_service_create_call", user_id=user_id, site_id=site_id, device_count=len(device_ids)
+            )  # WHY: pre-call log
             run_id = runs_service.create_run(  # WHY: service call
                 user_id=user_id,  # WHY: user_id param
                 org_id=org_id,  # WHY: org_id param
@@ -248,7 +254,7 @@ def create_runs_routes(runs_service=None, audit_logger=None):
             if not run_id:  # WHY: if failed
                 # WHY: creation failed
                 logger.error("runs_service_create_failed")  # WHY: create error
-                return jsonify({'error': 'Failed to create run'}), 400  # WHY: return error
+                return jsonify({"error": "Failed to create run"}), 400  # WHY: return error
 
             # WHY: log creation to audit trail
             if audit_logger:  # WHY: if audit available
@@ -263,11 +269,11 @@ def create_runs_routes(runs_service=None, audit_logger=None):
             # WHY: log success
             logger.info("create_run_success", run_id=run_id)  # WHY: post-call log
             # WHY: return created run_id with 201 status
-            return jsonify({'run_id': run_id}), 201  # WHY: return result
+            return jsonify({"run_id": run_id}), 201  # WHY: return result
 
         except Exception as e:
             # WHY: catch unexpected exceptions
             logger.error("create_run_exception", error=str(e))  # WHY: exception log
-            return jsonify({'error': 'Internal server error'}), 500  # WHY: return error
+            return jsonify({"error": "Internal server error"}), 500  # WHY: return error
 
     return runs_bp  # WHY: return blueprint

@@ -5,7 +5,7 @@ Store site/device selections in ArangoDB upgrade_runs collection.
 
 import uuid  # WHY: UUID generation for run IDs
 from datetime import datetime  # WHY: timestamp tracking
-from typing import Dict, List, Optional, Any  # WHY: type hints
+from typing import Any  # WHY: type hints
 
 import structlog  # WHY: structured logging
 
@@ -29,13 +29,8 @@ class UpgradeRunsService:
         logger.info("upgrade_runs_service_initialized", db_available=db_router is not None)  # WHY: startup event
 
     def create_run(
-        self,
-        user_id: str,
-        org_id: str,
-        site_id: str,
-        device_ids: List[str],
-        notes: Optional[str] = None
-    ) -> Optional[str]:
+        self, user_id: str, org_id: str, site_id: str, device_ids: list[str], notes: str | None = None
+    ) -> str | None:
         """Create a new upgrade run with selected devices.
 
         Args:
@@ -51,7 +46,9 @@ class UpgradeRunsService:
         WHY: persist selection state to ArangoDB (T-004 requirement).
         """
         # WHY: log operation start
-        logger.info("create_upgrade_run_start", user_id=user_id, site_id=site_id, device_count=len(device_ids))  # WHY: pre-operation log
+        logger.info(
+            "create_upgrade_run_start", user_id=user_id, site_id=site_id, device_count=len(device_ids)
+        )  # WHY: pre-operation log
         try:
             # WHY: validate inputs
             if not user_id or not isinstance(user_id, str):  # WHY: check user_id
@@ -63,7 +60,9 @@ class UpgradeRunsService:
                 return None  # WHY: fail
 
             if not device_ids or not isinstance(device_ids, list) or len(device_ids) == 0:  # WHY: check devices
-                logger.error("create_run_no_devices", device_count=len(device_ids) if device_ids else 0)  # WHY: validation error
+                logger.error(
+                    "create_run_no_devices", device_count=len(device_ids) if device_ids else 0
+                )  # WHY: validation error
                 return None  # WHY: fail
 
             # WHY: check if database available
@@ -78,22 +77,22 @@ class UpgradeRunsService:
 
             # WHY: create run document
             run_doc = {  # WHY: document dict
-                'run_id': run_id,  # WHY: unique identifier
-                'user_id': user_id,  # WHY: user context
-                'org_id': org_id,  # WHY: org context
-                'site_id': site_id,  # WHY: site selection
-                'device_ids': device_ids,  # WHY: device selection
-                'device_count': len(device_ids),  # WHY: count for summary
-                'notes': notes or '',  # WHY: user notes
-                'status': 'selection_complete',  # WHY: workflow state
-                'created_at': now,  # WHY: creation timestamp
-                'updated_at': now,  # WHY: update timestamp
+                "run_id": run_id,  # WHY: unique identifier
+                "user_id": user_id,  # WHY: user context
+                "org_id": org_id,  # WHY: org context
+                "site_id": site_id,  # WHY: site selection
+                "device_ids": device_ids,  # WHY: device selection
+                "device_count": len(device_ids),  # WHY: count for summary
+                "notes": notes or "",  # WHY: user notes
+                "status": "selection_complete",  # WHY: workflow state
+                "created_at": now,  # WHY: creation timestamp
+                "updated_at": now,  # WHY: update timestamp
             }  # WHY: complete document
 
             # WHY: persist to ArangoDB
             logger.info("write_upgrade_run_to_db", run_id=run_id)  # WHY: pre-write log
             result = self.db_router.write(  # WHY: database write
-                collection='upgrade_runs',  # WHY: collection name
+                collection="upgrade_runs",  # WHY: collection name
                 document=run_doc,  # WHY: document to write
             )  # WHY: write operation
 
@@ -111,7 +110,7 @@ class UpgradeRunsService:
             logger.error("create_upgrade_run_exception", error=str(e))  # WHY: exception log
             return None  # WHY: fail
 
-    def get_run(self, run_id: str) -> Optional[Dict[str, Any]]:
+    def get_run(self, run_id: str) -> dict[str, Any] | None:
         """Get upgrade run by ID.
 
         Args:
@@ -155,11 +154,7 @@ class UpgradeRunsService:
             logger.error("get_upgrade_run_exception", run_id=run_id, error=str(e))  # WHY: exception log
             return None  # WHY: fail
 
-    def update_run(
-        self,
-        run_id: str,
-        updates: Dict[str, Any]
-    ) -> bool:
+    def update_run(self, run_id: str, updates: dict[str, Any]) -> bool:
         """Update upgrade run.
 
         Args:
@@ -190,15 +185,15 @@ class UpgradeRunsService:
                 return False  # WHY: fail
 
             # WHY: add updated_at timestamp
-            updates['updated_at'] = datetime.utcnow().isoformat()  # WHY: update timestamp
+            updates["updated_at"] = datetime.utcnow().isoformat()  # WHY: update timestamp
 
             # WHY: update in ArangoDB (would need custom update method or query)
             logger.info("update_upgrade_run_in_db", run_id=run_id)  # WHY: pre-update log
             # WHY: simplified update (assumes db_router has update method)
             # In real implementation, use AQL UPDATE query
             result = self.db_router.write(  # WHY: database write
-                collection='upgrade_runs',  # WHY: collection name
-                document={'run_id': run_id, **updates},  # WHY: document with updates
+                collection="upgrade_runs",  # WHY: collection name
+                document={"run_id": run_id, **updates},  # WHY: document with updates
             )  # WHY: write operation
 
             # WHY: check if update succeeded

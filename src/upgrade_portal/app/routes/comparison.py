@@ -5,10 +5,10 @@ POST /api/runs/:run_id/comparison/approve endpoints for delta review and approva
 """
 
 from datetime import datetime  # WHY: timestamp for approval audit trail
-from typing import Any, Union  # WHY: generic type annotation, Union type
+from typing import Any  # WHY: generic type annotation, Union type
 
 import structlog  # WHY: structured logging
-from flask import Blueprint, jsonify, request, Response  # WHY: Flask routing, request handling, HTML rendering
+from flask import Blueprint, Response, jsonify, request  # WHY: Flask routing, request handling, HTML rendering
 
 logger = structlog.get_logger(__name__)  # WHY: module-scoped logger
 
@@ -33,7 +33,7 @@ def create_comparison_routes(
     comparison_bp = Blueprint("comparison", __name__, url_prefix="/api/runs")  # WHY: blueprint with prefix
 
     @comparison_bp.route("/<run_id>/comparison/results", methods=["GET"])  # WHY: get comparison results route
-    def get_comparison_results(run_id: str) -> Union[Response, tuple[Response, int]]:
+    def get_comparison_results(run_id: str) -> Response | tuple[Response, int]:
         # WHY: docstring for endpoint
         """Get comparison results for upgrade run.
 
@@ -149,7 +149,7 @@ def create_comparison_routes(
             )  # WHY: return error
 
     @comparison_bp.route("/<run_id>/comparison/approve", methods=["POST"])  # WHY: approve comparison results route
-    def approve_comparison(run_id: str) -> Union[Response, tuple[Response, int]]:
+    def approve_comparison(run_id: str) -> Response | tuple[Response, int]:
         # WHY: docstring for endpoint
         """Approve comparison results and mark run as complete.
 

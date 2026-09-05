@@ -5,13 +5,10 @@ status polling), and FR-019 (audit logging). Orchestrates firmware upgrades
 with configurable execution strategy and automatic rollback on failure.
 """
 
-import logging  # WHY: structured operation logging
-import time  # WHY: polling interval management
-import uuid  # WHY: unique upgrade run IDs
-from datetime import datetime, timezone  # WHY: ISO 8601 timestamps
-from typing import Any, Dict, List, Optional, Callable  # WHY: type hints for complex structures
+from collections.abc import Callable  # WHY: type hints for complex structures
+from datetime import UTC, datetime  # WHY: ISO 8601 timestamps
 from enum import Enum  # WHY: strategy enumeration
-from concurrent.futures import ThreadPoolExecutor, as_completed  # WHY: parallel device upgrades
+from typing import Any
 
 import structlog  # WHY: structured logging for observability
 
@@ -95,13 +92,13 @@ class UpgradeService:
         run_id: str,  # WHY: unique run identifier
         org_id: str,  # WHY: organization context
         site_id: str,  # WHY: site context
-        device_ids: List[str],  # WHY: devices to upgrade
+        device_ids: list[str],  # WHY: devices to upgrade
         firmware_version: str,  # WHY: target firmware version
         strategy: str,  # WHY: "serial" or "parallel"
         rollback_enabled: bool,  # WHY: enable automatic rollback on failure
         user_id: str,  # WHY: audit trail user context
-        progress_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,  # WHY: progress reporting callback
-    ) -> Optional[str]:  # WHY: return upgrade run ID or None
+        _progress_callback: Callable[[str, dict[str, Any]], None] | None = None,  # WHY: reserved progress hook
+    ) -> str | None:  # WHY: return upgrade run ID or None
         """Start firmware upgrade orchestration.
 
         Validates inputs, checks firmware version availability, then
@@ -118,7 +115,7 @@ class UpgradeService:
             strategy: Upgrade strategy ("serial" or "parallel").
             rollback_enabled: Enable automatic rollback on device failure.
             user_id: User initiating upgrade (audit trail).
-            progress_callback: Optional callback(run_id, status_dict) called every 10s.
+            _progress_callback: Optional callback reserved for status reporting.
 
         Returns:
             Upgrade run ID if started successfully, None if validation failed.
@@ -196,7 +193,7 @@ class UpgradeService:
                 "strategy": strategy_enum.value,  # WHY: upgrade strategy
                 "rollback_enabled": rollback_enabled,  # WHY: rollback flag
                 "status": "in_progress",  # WHY: initial status
-                "created_at": datetime.now(timezone.utc).isoformat(),  # WHY: start timestamp
+                "created_at": datetime.now(UTC).isoformat(),  # WHY: start timestamp
                 "device_status": {  # WHY: per-device status tracking
                     device_id: DeviceUpgradeStatus.PENDING.value  # WHY: initialize as pending
                     for device_id in device_ids  # WHY: for each device
@@ -257,7 +254,7 @@ class UpgradeService:
     def get_upgrade_status(
         self,
         run_id: str,  # WHY: upgrade run identifier
-    ) -> Optional[Dict[str, Any]]:  # WHY: return status dict or None
+    ) -> dict[str, Any] | None:  # WHY: return status dict or None
         """Get current upgrade status for real-time dashboard.
 
         Fetches upgrade_run from ArangoDB and returns per-device status,
@@ -302,28 +299,35 @@ class UpgradeService:
             # WHY: calculate progress metrics
             device_status = upgrade_run.get("device_status", {})  # WHY: status map
             completed_count = sum(  # WHY: count completions
-                1 for status in device_status.values()  # WHY: iterate statuses
-                if status in [
+                1
+                for status in device_status.values()  # WHY: iterate statuses
+                if status
+                in [
                     DeviceUpgradeStatus.COMPLETED.value,  # WHY: completed marker
                     DeviceUpgradeStatus.ROLLED_BACK.value,  # WHY: rollback marker
                 ]  # WHY: completion check
             )  # WHY: sum result
             failed_count = sum(  # WHY: count failures
-                1 for status in device_status.values()  # WHY: iterate statuses
+                1
+                for status in device_status.values()  # WHY: iterate statuses
                 if status == DeviceUpgradeStatus.FAILED.value  # WHY: failed marker
             )  # WHY: sum result
             pending_count = sum(  # WHY: count pending
-                1 for status in device_status.values()  # WHY: iterate statuses
+                1
+                for status in device_status.values()  # WHY: iterate statuses
                 if status == DeviceUpgradeStatus.PENDING.value  # WHY: pending marker
             )  # WHY: sum result
             upgrading_count = sum(  # WHY: count active
-                1 for status in device_status.values()  # WHY: iterate statuses
+                1
+                for status in device_status.values()  # WHY: iterate statuses
                 if status == DeviceUpgradeStatus.UPGRADING.value  # WHY: upgrading marker
             )  # WHY: sum result
 
             # WHY: calculate progress percentage
             total_devices = len(device_status)  # WHY: total count
-            progress_percent = int((completed_count + failed_count) / total_devices * 100) if total_devices > 0 else 0  # WHY: percentage calculation
+            progress_percent = (
+                int((completed_count + failed_count) / total_devices * 100) if total_devices > 0 else 0
+            )  # WHY: percentage calculation
 
             # WHY: calculate time elapsed
             created_at = upgrade_run.get("created_at")  # WHY: start time
@@ -331,7 +335,7 @@ class UpgradeService:
             if created_at:  # WHY: if created_at exists
                 try:  # WHY: parse timestamp safely
                     created_dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))  # WHY: parse ISO
-                    now = datetime.now(timezone.utc)  # WHY: current time
+                    now = datetime.now(UTC)  # WHY: current time
                     elapsed_seconds = int((now - created_dt).total_seconds())  # WHY: calculate elapsed
                 except Exception as e:  # WHY: catch parse errors
                     logger.warning("elapsed_time_calculation_failed", error=str(e))  # WHY: warn
@@ -429,7 +433,7 @@ class UpgradeService:
 
             # WHY: update run status to cancelled
             upgrade_run["status"] = "cancelled"  # WHY: status update
-            upgrade_run["cancelled_at"] = datetime.now(timezone.utc).isoformat()  # WHY: timestamp
+            upgrade_run["cancelled_at"] = datetime.now(UTC).isoformat()  # WHY: timestamp
             upgrade_run["cancelled_by"] = user_id  # WHY: audit trail
 
             # WHY: if rollback enabled, mark all devices as rolled_back

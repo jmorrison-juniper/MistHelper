@@ -5,12 +5,11 @@ and FR-019 (audit logging). Fetches device state from Mist API and persists
 to ArangoDB with automatic retry on transient errors.
 """
 
-import logging  # WHY: structured operation logging
 import time  # WHY: retry backoff and timing measurements
 import uuid  # WHY: unique capture IDs
-from datetime import datetime, timezone  # WHY: ISO 8601 timestamps
-from typing import Any, Dict, List, Optional  # WHY: type hints for complex structures
 from concurrent.futures import ThreadPoolExecutor, as_completed  # WHY: parallel device fetches
+from datetime import UTC, datetime  # WHY: ISO 8601 timestamps
+from typing import Any  # WHY: type hints for complex structures
 
 import structlog  # WHY: structured logging for observability
 
@@ -68,9 +67,9 @@ class CaptureService:
         run_id: str,  # WHY: unique run identifier for linking snapshots
         org_id: str,  # WHY: organization context
         site_id: str,  # WHY: site context
-        device_ids: List[str],  # WHY: devices to capture
+        device_ids: list[str],  # WHY: devices to capture
         user_id: str,  # WHY: audit trail user context
-    ) -> Optional[str]:
+    ) -> str | None:
         """Capture pre-upgrade device state snapshot.
 
         Fetches device configuration, radio settings, security policies,
@@ -105,7 +104,9 @@ class CaptureService:
                 return None  # WHY: fail fast
 
             if not device_ids or not isinstance(device_ids, list):  # WHY: device list validation
-                logger.error("capture_no_devices", device_count=len(device_ids) if device_ids else 0)  # WHY: validation error
+                logger.error(
+                    "capture_no_devices", device_count=len(device_ids) if device_ids else 0
+                )  # WHY: validation error
                 return None  # WHY: fail fast
 
             # WHY: check dependencies available
@@ -116,7 +117,7 @@ class CaptureService:
             # WHY: generate unique capture ID
             capture_id = str(uuid.uuid4())  # WHY: unique identifier
             # WHY: get current timestamp
-            timestamp = datetime.now(timezone.utc).isoformat()  # WHY: ISO 8601 format
+            timestamp = datetime.now(UTC).isoformat()  # WHY: ISO 8601 format
 
             # WHY: fetch device snapshots in parallel with retry
             logger.info("capture_fetching_devices", device_count=len(device_ids))  # WHY: fetch phase start
@@ -206,9 +207,9 @@ class CaptureService:
         run_id: str,  # WHY: unique run identifier for linking snapshots
         org_id: str,  # WHY: organization context
         site_id: str,  # WHY: site context
-        device_ids: List[str],  # WHY: devices to capture
+        device_ids: list[str],  # WHY: devices to capture
         user_id: str,  # WHY: audit trail user context
-    ) -> Optional[str]:
+    ) -> str | None:
         """Capture post-upgrade device state snapshot.
 
         Identical to capture_pre_upgrade but stores with capture_type="post".
@@ -241,7 +242,9 @@ class CaptureService:
                 return None  # WHY: fail fast
 
             if not device_ids or not isinstance(device_ids, list):  # WHY: device list validation
-                logger.error("capture_no_devices", device_count=len(device_ids) if device_ids else 0)  # WHY: validation error
+                logger.error(
+                    "capture_no_devices", device_count=len(device_ids) if device_ids else 0
+                )  # WHY: validation error
                 return None  # WHY: fail fast
 
             # WHY: check dependencies available
@@ -252,7 +255,7 @@ class CaptureService:
             # WHY: generate unique capture ID
             capture_id = str(uuid.uuid4())  # WHY: unique identifier
             # WHY: get current timestamp
-            timestamp = datetime.now(timezone.utc).isoformat()  # WHY: ISO 8601 format
+            timestamp = datetime.now(UTC).isoformat()  # WHY: ISO 8601 format
 
             # WHY: fetch device snapshots in parallel with retry
             logger.info("capture_fetching_devices", device_count=len(device_ids))  # WHY: fetch phase start
@@ -341,8 +344,8 @@ class CaptureService:
         self,
         org_id: str,  # WHY: organization context for API calls
         site_id: str,  # WHY: site context for API calls
-        device_ids: List[str],  # WHY: devices to fetch
-    ) -> List[Dict[str, Any]]:  # WHY: return array of snapshots
+        device_ids: list[str],  # WHY: devices to fetch
+    ) -> list[dict[str, Any]]:  # WHY: return array of snapshots
         """Fetch device snapshots in parallel with automatic retry.
 
         Uses ThreadPoolExecutor to fetch multiple devices concurrently,
@@ -435,7 +438,7 @@ class CaptureService:
         org_id: str,  # WHY: organization context
         site_id: str,  # WHY: site context
         device_id: str,  # WHY: device identifier
-    ) -> Optional[Dict[str, Any]]:  # WHY: return device snapshot or None
+    ) -> dict[str, Any] | None:  # WHY: return device snapshot or None
         """Fetch single device snapshot with exponential backoff retry.
 
         Attempts to fetch device state from Mist API. On transient errors
@@ -522,7 +525,7 @@ class CaptureService:
                     "radio_settings": radio_settings or {},  # WHY: radio data
                     "policies": policies or {},  # WHY: policy data
                     "lldp_neighbors": lldp_neighbors or {},  # WHY: neighbor data
-                    "fetch_timestamp": datetime.now(timezone.utc).isoformat(),  # WHY: fetch time
+                    "fetch_timestamp": datetime.now(UTC).isoformat(),  # WHY: fetch time
                 }  # WHY: complete snapshot
 
                 # WHY: log successful fetch

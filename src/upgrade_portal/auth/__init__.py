@@ -7,4 +7,4 @@ and expiry warnings per SC-009.
 # WHY: re-export public API for convenient imports
 from .session import JWTSessionManager, require_token  # WHY: session management and decorators
 
-__all__ = ['JWTSessionManager', 'require_token']
+__all__ = ["JWTSessionManager", "require_token"]
