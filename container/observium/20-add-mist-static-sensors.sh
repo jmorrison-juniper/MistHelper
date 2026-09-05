@@ -32,7 +32,7 @@
 set -e  # Stop on the first error, so a partial edit never reaches config.php.
 
 CONFIG_PHP="/config/config.php"  # The persisted Observium settings file (symlinked from /opt/observium/config.php).
-MARKER="MISTHELPER_STATIC_SENSORS_V4"  # Bumped only if the sensor set below changes shape.
+MARKER="MISTHELPER_STATIC_SENSORS_V5"  # Bumped only if the sensor set below changes shape.
 
 if [ ! -f "$CONFIG_PHP" ]; then  # A missing file means Observium has not finished its first boot yet.
     echo "[MIST-SENSORS] ERROR: $CONFIG_PHP not found. Observium may not be initialized yet." >&2
@@ -68,6 +68,16 @@ cat >> "$CONFIG_PHP" <<'EOF'
 // where MISTHELPER-MIB.mib sits (container/observium/discovery-sensors-unix.inc.php
 // is what actually needs this).
 $config['mibs']['MISTHELPER-MIB']['mib_dir'] = 'mibs';
+// A shared status-state type for a Mist device's up/down reading (mistDeviceUp
+// in discovery-sensors-unix.inc.php). Registering it here, once, lets every
+// device row share one definition instead of repeating the 0/1 => down/up map
+// per row. Grouping "Up" under Status instead of Gauge also matches Observium's
+// own convention (an up/down reading is a state, not a measured quantity), and
+// it moves those rows out of the much larger Gauge listing.
+$config['status']['static_states']['mist-device-up'] = [
+    0 => ['name' => 'down', 'event' => 'alert'],
+    1 => ['name' => 'up', 'event' => 'ok'],
+];
 $mist_device_id = NULL;
 // mysqli treats the literal string "localhost" as a request for a Unix socket,
 // not TCP. This image runs MariaDB with no socket file, only TCP on 127.0.0.1,
