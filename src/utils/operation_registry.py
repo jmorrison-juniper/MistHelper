@@ -306,6 +306,16 @@ class OperationRegistry:
             "category": "interactive_safe",
             "skip_reason": "Requires an org and a security intelligence profile choice",
         },
+        # WHY: menu 241 starts a local web server that runs until an operator stops it. An
+        # automated pass would therefore never reach menu 242. The gateway reads Mist Cloud
+        # and never writes it, so the row is `interactive_safe` and not `destructive`.
+        "241": {
+            "category": "interactive_safe",
+            "skip_reason": (
+                "Menu 241 starts the metrics gateway on port 8057 and serves until an operator "
+                "stops it. The menu needs an org choice and a browser or a monitoring system."
+            ),
+        },
         # WHY: menu 239 starts a local web server and drives a firmware upgrade, so it writes
         # device state. The fail-closed guardrail needs this row or the build breaks.
         #

@@ -24,7 +24,9 @@ Identifier contract:
 
 from __future__ import annotations
 
+import logging
 import re
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -75,6 +77,17 @@ CAPTURE_START_UPGRADE_ERROR_ID = "capture-start-upgrade-error"
 # two identifiers, so the walk below opens the same pages an operator opens.
 SITE_OPEN_PREFIX = "site-open-"
 SITE_CAPTURE_LINK_ID = "site-capture-link"
+
+# Issue #2259: the walk must hold the site before it writes to it. FR-072 gives
+# one site to one operator. One press takes a free site, and a site that any
+# lock already holds needs the word of FR-079 as well.
+LOCK_TAKE_BUTTON_ID = "lock-take-button"
+LOCK_CONFIRM_INPUT_ID = "lock-confirm-input"
+LOCK_CONFIRM_SUBMIT_ID = "lock-confirm-submit"
+TAKEOVER_WORD = "CONFIRM"  # FR-079 fixes this word and this letter case. The page may name another.
+CONFIRM_WORD_ATTRIBUTE = "data-confirm-word"  # The page names the word the gate reads.
+LOCK_RELEASE_BUTTON_ID = "lock-release-button"  # The control that gives the site back at once.
+LOCK_SETTLE_MS = 4000  # The take call is one round trip on loopback, so it settles quickly.
 
 # The options page and the confirm page of the run the upgrade button creates.
 # `contracts/http-api.md` section 5 fixes both page paths and the create path.
@@ -553,6 +566,79 @@ def _walk_to_capture_view(page: Any) -> None:
         page.get_by_test_id(f"{SITE_OPEN_PREFIX}{site_id}").click()  # The site row opens the inventory page.
     with page.expect_response(lambda answer: answer.request.is_navigation_request()):
         page.get_by_test_id(SITE_CAPTURE_LINK_ID).click()  # The inventory page opens the capture view.
+    _take_the_site(page)  # FR-072 gives one site to one operator, so the walk must take it before any write.
+
+
+def _take_the_site(page: Any) -> None:
+    """Take the site lock, so the operator may write to the site.
+
+    Why:
+        Issue #2259. FR-072 gives one site to one operator, and `capture.html`
+        draws the start control disabled until this browser holds the site. The
+        walk pressed the start control without the lock, so the press waited for
+        a control that could never become enabled and reported a timeout.
+
+        The take has two shapes, and the walk must follow both. One press takes
+        a free site, which `partials/lock_banner.html` states in its own header.
+        A site that any lock already holds answers a refusal, and the script
+        then opens the confirmation box. FR-079 fixes the word for that box.
+
+        A run of this suite leaves a lock behind, and the lease outlives the
+        run. The second shape is therefore the normal one on a workstation that
+        runs the suite twice, and the first shape is the normal one in CI.
+
+    Args:
+        page: The Playwright page object, on a page that draws the lock banner.
+    """
+    take = page.get_by_test_id(LOCK_TAKE_BUTTON_ID)
+    if take.count() < 1 or not take.is_visible():  # The banner hides the control while this browser holds the site.
+        return  # This browser already holds the site, so no press is needed.
+    take.click()  # A plain press. One press takes a free site.
+    if _write_is_allowed(page):  # The site was free, so the one press was enough.
+        return
+    _confirm_the_takeover(page)  # A lock already held the site, so the word must follow the press.
+
+
+def _write_is_allowed(page: Any) -> bool:
+    """Report whether the page now offers an enabled start control.
+
+    Args:
+        page: The Playwright page object, on the capture view.
+
+    Returns:
+        True when this browser may write to the site.
+    """
+    start = page.get_by_test_id(CAPTURE_START_ID)
+    try:  # A control that never enables is the refusal path, and not a fault.
+        sync_api.expect(start).to_be_enabled(timeout=LOCK_SETTLE_MS)
+    except AssertionError:  # The take met a refusal, so the confirmation box holds the next step.
+        return False
+    return True
+
+
+def _confirm_the_takeover(page: Any) -> None:
+    """Type the word and press the submit control of the takeover box.
+
+    Why:
+        FR-079 guards a takeover with one word, because a takeover moves the
+        write of a live site to another browser. The box opens only after the
+        first press meets the refusal, so this helper runs only on that path.
+
+    Args:
+        page: The Playwright page object, on the capture view.
+    """
+    field = page.get_by_test_id(LOCK_CONFIRM_INPUT_ID)
+    sync_api.expect(field).to_be_visible(timeout=LOCK_SETTLE_MS)  # The refusal opened the box.
+    # WHY: `portal.js` writes the needed word into this attribute from the refusal
+    # body, so the page names the word. A copy in this module would drift from it.
+    word = str(field.get_attribute(CONFIRM_WORD_ATTRIBUTE) or TAKEOVER_WORD)
+    field.fill(word)  # The gate reads each key press and enables the submit for the exact word.
+    submit = page.get_by_test_id(LOCK_CONFIRM_SUBMIT_ID)
+    sync_api.expect(submit).to_be_enabled(timeout=LOCK_SETTLE_MS)  # The gate opened for the typed word.
+    submit.click()  # A plain press sends the typed word.
+    # WHY: the script writes the lock, then enables every control that needs it.
+    # The walk must wait for that state, or the next press meets a disabled control.
+    sync_api.expect(page.get_by_test_id(CAPTURE_START_ID)).to_be_enabled(timeout=START_TIMEOUT_MS)
 
 
 def _start_and_reveal_upgrade(page: Any) -> None:
@@ -581,10 +667,52 @@ def _start_and_reveal_upgrade(page: Any) -> None:
     sync_api.expect(page.get_by_test_id(CAPTURE_START_UPGRADE_ID)).to_be_visible(timeout=START_TIMEOUT_MS)
 
 
+def _release_the_site(page: Any) -> None:
+    """Give the site back, so the next test finds it free.
+
+    Why:
+        Issue #2259. The walk takes the site, and the lease outlives the test.
+        Every later test that writes to the same site then reads a refusal, so
+        one walk would starve the rest of the suite. The release control gives
+        the site back at once, which is the same path an operator uses.
+
+        The release never fails a test. A walk that failed early may sit on a
+        page with no banner, and that is not a fault of the release.
+
+    Args:
+        page: The Playwright page object, on any page that draws the banner.
+    """
+    try:  # A teardown must never turn one failure into two.
+        release = page.get_by_test_id(LOCK_RELEASE_BUTTON_ID)
+        if release.count() < 1 or not release.is_visible():  # This browser holds no site to give back.
+            return
+        release.click()  # A plain press gives the site back at once.
+        sync_api.expect(page.get_by_test_id(LOCK_TAKE_BUTTON_ID)).to_be_visible(timeout=LOCK_SETTLE_MS)
+    except Exception as failure:  # A closed page or a dead portal must not mask the real result.
+        logging.info("The site release did not complete, so a later test may meet the lease. Cause: %s", failure)
+
+
+# WHY: Issue #2259. The walk takes the site lock, and the lease outlives the
+# test. Without the release below, every later test that writes to this site
+# reads a refusal and reports a skip, so one walk would starve the suite.
+@pytest.fixture(name="walking_page")
+def fixture_walking_page(portal_page: Any) -> Iterator[Any]:
+    """Give a browser page to the walk, and release the site afterwards.
+
+    Args:
+        portal_page: The browser page that points at the running portal.
+
+    Yields:
+        The Playwright page object.
+    """
+    yield portal_page
+    _release_the_site(portal_page)  # The next test then finds the site free.
+
+
 class TestUpgradeJourney:
     """The operator walks from the site list to the confirm page by clicking."""
 
-    def test_walk_from_the_site_list_reaches_the_confirm_page(self, portal_page: Any) -> None:
+    def test_walk_from_the_site_list_reaches_the_confirm_page(self, walking_page: Any) -> None:
         """The upgrade button carries the operator from a capture to the confirm page.
 
         Why:
@@ -595,30 +723,30 @@ class TestUpgradeJourney:
             verified pre-check to an upgrade.
 
         Args:
-            portal_page: The browser page that points at the running portal.
+            walking_page: The browser page that points at the running portal.
         """
-        _walk_to_capture_view(portal_page)  # Site list, to inventory, to capture view, by clicks alone.
-        _start_and_reveal_upgrade(portal_page)  # Start the capture and wait for the upgrade button.
+        _walk_to_capture_view(walking_page)  # Site list, to inventory, to capture view, by clicks alone.
+        _start_and_reveal_upgrade(walking_page)  # Start the capture and wait for the upgrade button.
 
-        with portal_page.expect_response(_is_run_create, timeout=START_TIMEOUT_MS) as run_event:
-            portal_page.get_by_test_id(CAPTURE_START_UPGRADE_ID).click()  # The button posts the run create.
+        with walking_page.expect_response(_is_run_create, timeout=START_TIMEOUT_MS) as run_event:
+            walking_page.get_by_test_id(CAPTURE_START_UPGRADE_ID).click()  # The button posts the run create.
         status = run_event.value.status  # The status reads without a body, so it survives the navigation.
         if status in (LOCKED_STATUS, UNREACHABLE_STATUS):  # A live run or a dead lock store stops a fresh run.
             pytest.skip(f"The run create answered {status}, so no fresh run key exists to walk.")
         assert status == CREATED_STATUS, f"The run create answered {status}. The contract fixes 201."
 
-        portal_page.wait_for_url(f"**/runs/*{OPTIONS_PAGE_SUFFIX}", timeout=START_TIMEOUT_MS)
-        run_id = _run_id_from_url(portal_page.url)  # The options URL holds the run key that the walk follows.
-        picker = portal_page.get_by_test_id(VERSION_SELECT_ALL_ID)  # The bulk control fills every device version.
+        walking_page.wait_for_url(f"**/runs/*{OPTIONS_PAGE_SUFFIX}", timeout=START_TIMEOUT_MS)
+        run_id = _run_id_from_url(walking_page.url)  # The options URL holds the run key that the walk follows.
+        picker = walking_page.get_by_test_id(VERSION_SELECT_ALL_ID)  # The bulk control fills every device version.
         if picker.locator("option").count() <= 1:  # Only the empty prompt exists, so no version can plan a device.
             pytest.skip("The options page offered no version, so the save would keep an empty plan.")
         picker.select_option(index=1)  # The first real version, because index 0 is the empty prompt.
-        portal_page.get_by_test_id(OPTIONS_SAVE_ID).click()  # The save writes the plan and opens the confirm page.
+        walking_page.get_by_test_id(OPTIONS_SAVE_ID).click()  # The save writes the plan and opens the confirm page.
 
-        portal_page.wait_for_url(f"**/runs/{run_id}{CONFIRM_PAGE_SUFFIX}", timeout=START_TIMEOUT_MS)
-        sync_api.expect(portal_page.get_by_test_id(CONFIRM_INPUT_ID)).to_be_visible(timeout=START_TIMEOUT_MS)
+        walking_page.wait_for_url(f"**/runs/{run_id}{CONFIRM_PAGE_SUFFIX}", timeout=START_TIMEOUT_MS)
+        sync_api.expect(walking_page.get_by_test_id(CONFIRM_INPUT_ID)).to_be_visible(timeout=START_TIMEOUT_MS)
 
-    def test_a_refused_second_start_shows_a_link_to_the_open_run(self, portal_page: Any) -> None:
+    def test_a_refused_second_start_shows_a_link_to_the_open_run(self, walking_page: Any) -> None:
         """Issue #2172: the open-run refusal now carries a link, not plain text.
 
         Why:
@@ -630,26 +758,26 @@ class TestUpgradeJourney:
             operator has to copy by hand.
 
         Args:
-            portal_page: The browser page that points at the running portal.
+            walking_page: The browser page that points at the running portal.
         """
-        _walk_to_capture_view(portal_page)
-        _start_and_reveal_upgrade(portal_page)
-        with portal_page.expect_response(_is_run_create, timeout=START_TIMEOUT_MS) as first_event:
-            portal_page.get_by_test_id(CAPTURE_START_UPGRADE_ID).click()  # The first attempt sets up the scenario.
+        _walk_to_capture_view(walking_page)
+        _start_and_reveal_upgrade(walking_page)
+        with walking_page.expect_response(_is_run_create, timeout=START_TIMEOUT_MS) as first_event:
+            walking_page.get_by_test_id(CAPTURE_START_UPGRADE_ID).click()  # The first attempt sets up the scenario.
         first_status = first_event.value.status
         if first_status not in (CREATED_STATUS, LOCKED_STATUS):  # Neither state can seed a live run at this site.
             pytest.skip(f"The first run create answered {first_status}, so this walk cannot set up its scenario.")
 
-        _walk_to_capture_view(portal_page)  # Back to the same site's capture view, by clicking alone.
-        _start_and_reveal_upgrade(portal_page)  # A fresh capture, so the upgrade button shows again.
-        with portal_page.expect_response(_is_run_create, timeout=START_TIMEOUT_MS) as second_event:
-            portal_page.get_by_test_id(CAPTURE_START_UPGRADE_ID).click()  # A run already holds this site now.
+        _walk_to_capture_view(walking_page)  # Back to the same site's capture view, by clicking alone.
+        _start_and_reveal_upgrade(walking_page)  # A fresh capture, so the upgrade button shows again.
+        with walking_page.expect_response(_is_run_create, timeout=START_TIMEOUT_MS) as second_event:
+            walking_page.get_by_test_id(CAPTURE_START_UPGRADE_ID).click()  # A run already holds this site now.
         second_status = second_event.value.status
         if second_status == UNREACHABLE_STATUS:  # The lock store answered no better on the second try either.
             pytest.skip("The second run create answered 503. The portal cannot reach the site lock store.")
         assert second_status == LOCKED_STATUS, f"The second run create answered {second_status}, not 409."
 
-        error_region = portal_page.get_by_test_id(CAPTURE_START_UPGRADE_ERROR_ID)
+        error_region = walking_page.get_by_test_id(CAPTURE_START_UPGRADE_ERROR_ID)
         sync_api.expect(error_region).to_contain_text("Open that run before you start", timeout=START_TIMEOUT_MS)
         link = error_region.locator("a")
         sync_api.expect(link).to_be_visible(timeout=START_TIMEOUT_MS)

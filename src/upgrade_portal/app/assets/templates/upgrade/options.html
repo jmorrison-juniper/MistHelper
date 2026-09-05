@@ -795,11 +795,33 @@
     form. A form would move the browser to a new page and would lose the body
     that holds the plan warnings. portal.js adds the token header.
   #}
+  {#
+    Issue #2200: the site lock guards this write. The control renders disabled
+    for an operator who does not hold the site, and it names the reason. The
+    page decides this, not the script, so the control is never live for the
+    moment before the script runs.
+  #}
+  {% set write_allowed = lock_write_allowed | default(false, true) %}
   <button type="button"
           class="portal-button portal-button-primary"
           data-testid="upgrade-options-save-button"
+          data-needs-lock
           data-run-id="{{ run_key }}"
-          data-next-url="{{ next_url }}">Save the options and continue</button>
+          data-next-url="{{ next_url }}"
+          {% if not write_allowed %}disabled aria-describedby="upgrade-options-locked"{% endif %}
+          >Save the options and continue</button>
+
+  {% if not write_allowed %}
+    <p class="portal-note" id="upgrade-options-locked"
+       data-testid="upgrade-options-locked-note" data-lock-reason-note>
+      {% if lock_holder | default('', true) %}
+        {{ lock_holder | default('', true) }} holds this site, so this control is off. You may read
+        every option. Take the site to change one.
+      {% else %}
+        Another operator holds this site, so this control is off. You may read every option.
+      {% endif %}
+    </p>
+  {% endif %}
 </div>
 
 <div class="portal-card">
@@ -895,3 +917,6 @@
   </table>
 </div>
 {% endblock %}
+
+
+

@@ -142,12 +142,36 @@
     it is a button and not a form. A form would move the browser to a new page
     and would lose the 202 body. portal.js adds the token header.
   #}
+  {#
+    Issue #2200: the site lock guards this write. The control renders disabled
+    for an operator who does not hold the site, and it names the reason. The
+    server refuses such a call with 409 site_locked either way, and a live
+    control that answers a refusal wastes the time of the operator.
+
+    The page decides this, not the script. A control that is live until the
+    script runs invites a press in that moment.
+  #}
+  {% set write_allowed = lock_write_allowed | default(false, true) %}
   <button type="button"
           class="portal-button portal-button-primary"
           data-testid="capture-start-button"
+          data-needs-lock
           data-site-id="{{ site_id | default('', true) }}"
           data-run-id="{{ run_id | default('', true) }}"
-          data-role="{{ role | default('pre', true) }}">Start the capture</button>
+          data-role="{{ role | default('pre', true) }}"
+          {% if not write_allowed %}disabled aria-describedby="capture-start-locked"{% endif %}
+          >Start the capture</button>
+
+  {% if not write_allowed %}
+    <p class="portal-note" id="capture-start-locked" data-testid="capture-start-locked-note" data-lock-reason-note>
+      {% if lock_holder | default('', true) %}
+        {{ lock_holder | default('', true) }} holds this site, so this control is off. Take the site
+        to start a capture.
+      {% else %}
+        Another operator holds this site, so this control is off.
+      {% endif %}
+    </p>
+  {% endif %}
 
   {#
     FR-040 requires a manual refresh control. The poll runs every 30 seconds,
@@ -304,6 +328,18 @@
 <div class="portal-card">
   <h2 class="portal-card-title">Devices</h2>
 
+  {#
+    Issue #2075 caps each table. A capped table must state what it removed,
+    because an operator would otherwise read a cut table as the whole site.
+    An uncapped table states nothing, so the common page carries no noise.
+  #}
+  {% if (device_rows_held | default(0, true)) > (device_rows | length) %}
+    <p class="portal-note" data-testid="capture-device-cap-note">
+      This table shows the first {{ device_rows | length }} of
+      {{ device_rows_held }} devices. Download the capture to read every record.
+    </p>
+  {% endif %}
+
   <div class="portal-table-scroll">
     <table class="portal-table" data-testid="capture-device-table"
                  data-sortable>
@@ -365,6 +401,14 @@
 <div class="portal-card">
   <h2 class="portal-card-title">Wired clients</h2>
 
+  {% if (wired_rows_held | default(0, true)) > (wired_rows | length) %}
+    <p class="portal-note" data-testid="capture-wired-cap-note">
+      This table shows the first {{ wired_rows | length }} of
+      {{ wired_rows_held }} wired clients. Download the capture to read every
+      record.
+    </p>
+  {% endif %}
+
   <div class="portal-table-scroll">
     <table class="portal-table" data-testid="capture-client-wired-table"
                  data-sortable>
@@ -410,6 +454,14 @@
 
 <div class="portal-card">
   <h2 class="portal-card-title">Wireless clients</h2>
+
+  {% if (wireless_rows_held | default(0, true)) > (wireless_rows | length) %}
+    <p class="portal-note" data-testid="capture-wireless-cap-note">
+      This table shows the first {{ wireless_rows | length }} of
+      {{ wireless_rows_held }} wireless clients. Download the capture to read
+      every record.
+    </p>
+  {% endif %}
 
   <div class="portal-table-scroll">
     <table class="portal-table" data-testid="capture-client-wireless-table"
@@ -486,3 +538,6 @@
      role="alert"
      hidden></div>
 {% endblock %}
+
+
+

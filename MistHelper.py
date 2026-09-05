@@ -3755,6 +3755,12 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         OrgSecIntelProfileExporter.profile,
         "Export one organization security intelligence profile (getOrgSecIntelProfile)",
     ),
+    "241": (
+        # A lambda defers the name lookup, because _launch_metrics_gateway is defined
+        # further down this module and this dict is built the moment the module loads.
+        lambda: _launch_metrics_gateway(),
+        "Serve Mist Cloud health to a monitoring system on port 8057 (Prometheus and SNMP)",
+    ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
     "46": (OrgConfigExporter.wlans, "Export WLAN configuration for the organization"),
@@ -4980,6 +4986,92 @@ def _launch_capture_portal(dev_debug: bool = False) -> None:
     _run_capture_portal_server(app, host, port, dev_debug)  # Dispatch to the container or local runner
 
 
+def _metrics_gateway_org_id(settings: Any) -> str:
+    """Return the organization the metrics gateway reports.
+
+    Why:
+        A container start reads METRICS_ORG_ID and never prompts, because no operator
+        watches a container. A menu start has an operator, so it falls back to the org
+        the session already selected, and then to the mistapi picker.
+
+    Args:
+        settings: The GatewaySettings record read from the environment.
+
+    Returns:
+        The organization identifier, or an empty string when none was chosen.
+    """
+    if settings.org_id:  # An explicit setting always wins, because a container cannot prompt
+        return str(settings.org_id)
+    if org_id:  # The session already holds a selection, so reuse it rather than ask twice
+        return str(org_id)
+    logging.info("METRICS_GATEWAY: No organization is set - starting the picker")  # Log before the prompt
+    _select_org_from_session()  # Writes the module-level org_id global
+    return str(org_id or "")
+
+
+def _launch_metrics_gateway(dev_debug: bool = False) -> None:
+    """Serve Mist Cloud health to a monitoring system on port 8057.
+
+    Why:
+        Menu 241 and the --metrics-gateway flag need one shared start path, the same
+        rule that menu 239 and --capture-portal follow. The gateway runs on its own
+        port, because port 8055 and port 8056 already hold their own applications.
+
+    Args:
+        dev_debug: True to start the local development server with the debugger.
+    """
+    from src.metrics_gateway.service import GatewaySettings, build_cache, start_refresh_thread
+    from src.metrics_gateway.web import create_app
+
+    in_container = EnvironmentUtils.is_running_in_container()  # A container binds every address
+    settings = GatewaySettings.from_environment(in_container)  # One frozen record holds every setting
+    resolved = _metrics_gateway_org_id(settings)  # The picker runs only when no setting names an org
+    if not resolved:  # Without an organization the gateway would serve an empty reading forever
+        echo("  X No organization selected - the metrics gateway cannot start")
+        logging.error("METRICS_GATEWAY: No organization selected - abort the launch")  # Log the refusal
+        return
+    settings = settings.with_org_id(resolved)  # Carry the chosen org into the frozen record
+    cache = build_cache(apisession, settings)  # The cache holds the reading that both output paths serve
+    start_refresh_thread(cache, threading.Event())  # A daemon thread keeps the reading fresh ahead of a poll
+    logging.info("METRICS_GATEWAY: Building the application for %s:%s", settings.host, settings.port)
+    echo(">> Mist metrics gateway starting at http://127.0.0.1:%s/metrics", settings.port)  # Clickable URL
+    create_app(cache).run(host=settings.host, port=settings.port, debug=dev_debug and not in_container)
+
+
+def _run_metrics_snmp(_args: argparse.Namespace) -> None:
+    """Answer Net-SNMP pass_persist requests on standard input, then exit.
+
+    Why:
+        snmpd owns UDP port 161, the community string, and the SNMP v3 user. It starts
+        this process as a child and speaks a plain line protocol to it. MistHelper
+        therefore binds no privileged port and holds no community string.
+
+    Warning:
+        This mode writes the protocol replies to standard output. Nothing else may
+        print there, because one stray line makes snmpd drop the whole subtree.
+        snmpd also merges standard error into the same pipe, so a log record on
+        either stream breaks the handshake. protect_protocol_streams() must run
+        before anything else, because building the cache writes a log record.
+
+    Args:
+        _args: The parsed command-line namespace. This mode reads no flag.
+    """
+    from src.metrics_gateway.snmp import SnmpPassPersistResponder, protect_protocol_streams
+
+    protect_protocol_streams()  # First call of this mode. A later call cannot recall a sent record.
+
+    from src.metrics_gateway.service import GatewaySettings, build_cache
+
+    logging.info("METRICS_SNMP: Starting the pass_persist responder")  # Log to the file, never to a stream
+    settings = GatewaySettings.from_environment(EnvironmentUtils.is_running_in_container())
+    if not settings.org_id:  # snmpd cannot answer a prompt, so the setting is the only source here
+        logging.error("METRICS_SNMP: METRICS_ORG_ID is not set - abort")  # Log the refusal
+        sys.exit(1)
+    responder = SnmpPassPersistResponder(build_cache(apisession, settings), settings.base_oid)
+    responder.run(sys.stdin, sys.stdout)  # Blocks until snmpd closes the pipe
+    sys.exit(0)
+
+
 def _report_tqdm_status() -> None:
     """Log whether the real tqdm landed in the global namespace after deferred imports."""
     logging.debug("_report_tqdm_status: checking tqdm namespace availability")  # Trace tqdm status check
@@ -5159,6 +5251,20 @@ def _add_interface_mode_flags(parser: argparse.ArgumentParser) -> None:
         help=(
             "Launch the upgrade capture portal on port 8056 (or CAPTURE_PORT env var) instead of the CLI menu"
         ),  # Gunicorn upgrade capture portal, menu 239
+    )
+    parser.add_argument(
+        "--metrics-gateway",
+        action="store_true",
+        help=(
+            "Serve Mist Cloud health to a monitoring system on port 8057 (or METRICS_PORT env var)"
+        ),  # Prometheus metrics gateway, menu 241
+    )
+    parser.add_argument(
+        "--metrics-snmp",
+        action="store_true",
+        help=(
+            "Answer Net-SNMP pass_persist requests on standard input. Start this from snmpd.conf, not by hand"
+        ),  # SNMP output path of the metrics gateway
     )
 
 
@@ -5835,6 +5941,21 @@ def _run_capture_portal_mode(args: argparse.Namespace) -> None:
     sys.exit(0)
 
 
+def _run_metrics_gateway_mode(args: argparse.Namespace) -> None:
+    """Serve the Prometheus endpoint and exit cleanly on shutdown.
+
+    Why:
+        _dispatch_main_mode needs one handler for each front end. This handler keeps the
+        --metrics-gateway flag beside the --capture-portal flag in the same table.
+
+    Args:
+        args: The parsed command-line namespace. The handler reads only the debug flag.
+    """
+    logging.info("METRICS_GATEWAY: Starting metrics gateway mode")  # Trace before launch
+    _launch_metrics_gateway(args.debug)  # Blocks until shutdown
+    sys.exit(0)
+
+
 def _dispatch_main_mode(args: argparse.Namespace) -> None:
     """Dispatch to the appropriate mode entry point based on parsed CLI flags."""
     mode_table = (  # Ordered (predicate, handler) pairs — first match wins
@@ -5843,6 +5964,9 @@ def _dispatch_main_mode(args: argparse.Namespace) -> None:
         (lambda a: bool(a.tui), _run_tui_mode_and_exit),
         (lambda a: bool(getattr(a, "web_portal", False)), _run_web_portal_mode),
         (lambda a: bool(getattr(a, "capture_portal", False)), _run_capture_portal_mode),
+        # The SNMP responder owns standard output, so it must match before any handler that prints.
+        (lambda a: bool(getattr(a, "metrics_snmp", False)), _run_metrics_snmp),
+        (lambda a: bool(getattr(a, "metrics_gateway", False)), _run_metrics_gateway_mode),
         (_has_meaningful_cli_args, _run_cli_mode),
     )
     for predicate, handler in mode_table:  # Stop on first predicate that matches

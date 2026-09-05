@@ -555,7 +555,38 @@ jobs:
       - mypy
     if: ${{ always() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
+    # Issue #2242: the browser suite could cover no write journey, because the
+    # portal refuses a write it cannot guard with the site lock. With no lock
+    # store the run creation answered 503, and 50 browser tests skipped. The run
+    # record needs the document store for the same reason.
+    #
+    # These two services give the job both stores, so the write journey runs.
+    # Neither one holds production data, and both die with the job.
+    services:
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+      arangodb:
+        image: arangodb/arangodb:3.12
+        env:
+          # A throwaway value for a throwaway service. The store dies with the
+          # job, it holds no production data, and it answers on loopback alone.
+          ARANGO_ROOT_PASSWORD: e2e-throwaway-password
+        ports:
+          - 8529:8529
+        options: >-
+          --health-cmd "arangosh --server.endpoint tcp://127.0.0.1:8529 --server.username root --server.password $ARANGO_ROOT_PASSWORD --javascript.execute-string 'db._version()'"
+          --health-interval 10s
+          --health-timeout 10s
+          --health-retries 30
+          --health-start-period 20s
     steps:
       - uses: actions/checkout@v7
         with:
@@ -568,8 +599,25 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install -r requirements-dev.txt  # pinned pytest and timeout plugin (issue #1779)
+      - name: Download the browser
+        # Issue #2241: the playwright package ships no browser. Without this step
+        # every browser test reports a skip, and pytest reports a skip as a pass,
+        # so this gate would report green while it opened no page.
+        run: python -m playwright install --with-deps chromium
       - name: Run E2E smoke tests
-        run: pytest tests/e2e/ -v --timeout=60
+        # UPGRADE_PORTAL_E2E_STRICT turns a missing browser package into a
+        # collection failure. Without it the two steps above could silently stop
+        # working and this gate would keep reporting green over an empty suite.
+        #
+        # The two store addresses point at the service containers above. Issue
+        # #2242 measured that a run without them skips every write journey.
+        env:
+          UPGRADE_PORTAL_E2E_STRICT: "1"
+          REDIS_HOST: "127.0.0.1"
+          REDIS_PORT: "6379"
+          ARANGO_HOST: "http://127.0.0.1:8529"
+          ARANGO_ROOT_PASSWORD: e2e-throwaway-password
+        run: pytest tests/e2e/ -v --timeout=180
 
   # ──────────────────────────────────────────────────────────────
   # OPS PORTAL (TypeScript + React)
@@ -588,7 +636,17 @@ jobs:
     # needs.ops_portal.result. The whole job costs well under a minute with the
     # npm cache warm, so an unconditional run buys a clear signal cheaply.
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Issue #2257: the job held one 10 minute budget for four steps, and no step
+    # had a budget of its own. The audit step reaches a remote service that this
+    # repository does not own, and that service consumed the whole budget twice:
+    # once behind a cold npm cache, and once when it answered "Service
+    # Unavailable" for five minutes. Both runs reported a failure that graded no
+    # code, because the three later steps never ran.
+    #
+    # The job budget stays above the sum of the step budgets on purpose. A step
+    # timeout names the step that ran long. A job timeout reports "cancelled"
+    # with no cause, which is what made the first report hard to read.
+    timeout-minutes: 35
     defaults:
       run:
         working-directory: ops-portal
@@ -612,22 +670,69 @@ jobs:
         # published releases, so no upgrade clears the conflict yet. A strict
         # resolve fails with ERESOLVE. Issue #1852 records the measurement.
         # Delete this flag when both plugins publish an eslint 10 peer range.
+        #
+        # The install reaches the registry, so it carries its own budget. A cold
+        # cache took 5 minutes once, and this bound leaves room for that.
+        timeout-minutes: 8
         run: npm ci --legacy-peer-deps
-      - name: Audit the npm dependency tree
-        # This is the blocking security check and the reason issue #1847 exists.
-        # It fails on a HIGH or a CRITICAL advisory. Dependabot reports a MODERATE
-        # or a LOW finding as a pull request, so those do not block a merge here.
-        run: npm audit --audit-level=high
       # The three steps below block a merge. Issue #1852 fixed the three
       # configuration defects that kept them advisory. tsconfig.json no longer
       # sets the deprecated baseUrl, eslint reads a flat eslint.config.js, and
       # the project ships a vitest suite for the confirmation dialog.
+      #
+      # Issue #2257 moved these three above the audit. Each one reads the code
+      # and needs no network, so a registry outage must never hide their result.
       - name: Type check
+        timeout-minutes: 5
         run: npm run typecheck
       - name: Lint
+        timeout-minutes: 5
         run: npm run lint
       - name: Unit tests
+        timeout-minutes: 5
         run: npm run test
+      - name: Audit the npm dependency tree
+        # This is the blocking security check and the reason issue #1847 exists.
+        # It fails on a HIGH or a CRITICAL advisory. Dependabot reports a MODERATE
+        # or a LOW finding as a pull request, so those do not block a merge here.
+        #
+        # Issue #2257: the audit reaches a remote service, and that service
+        # answered "Service Unavailable" for five minutes on one run. One retry
+        # after a short pause clears a brief outage. A longer outage then fails
+        # this step alone, and the three steps above have already reported.
+        #
+        # Second measurement, 2026-09-04: the first shape of this step called
+        # `npm audit` twice for each attempt, once for the status and once for
+        # the reason, and neither call carried a network bound. Four unbounded
+        # calls passed the step budget, so the step reported a timeout instead
+        # of the cause. This shape calls the audit one time for each attempt and
+        # bounds the call, so a dead endpoint fails fast and says so.
+        timeout-minutes: 8
+        run: |
+          # The default shell is `bash -e`, so every status test below uses `if`.
+          attempt=1
+          while [ "${attempt}" -le 2 ]; do
+            # One call answers both questions. The JSON body carries an `error`
+            # key for an outage, and it carries the advisory counts for a real
+            # finding. `--audit-level` still decides the exit status.
+            if body="$(npm audit --audit-level=high --json --fetch-timeout=60000 2>&1)"; then
+              echo "The npm advisory service answered and reported no finding above the threshold."
+              exit 0
+            fi
+            if ! printf '%s' "${body}" | grep -q '"error"'; then
+              echo "::error::npm audit reported an advisory at the high level or above."
+              printf '%s\n' "${body}" | head -c 4000
+              exit 1
+            fi
+            echo "The audit endpoint did not answer on attempt ${attempt}."
+            if [ "${attempt}" -eq 2 ]; then
+              echo "::error::The npm audit endpoint stayed unreachable. This is not an advisory."
+              printf '%s\n' "${body}" | head -c 1000
+              exit 1
+            fi
+            sleep 30
+            attempt=$((attempt + 1))
+          done
 
   # ──────────────────────────────────────────────────────────────
   # OPS PLATFORM (FastAPI + Celery sub-project)

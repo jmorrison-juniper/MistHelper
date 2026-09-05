@@ -271,10 +271,19 @@ created
 
 any state -> stopping -> stopped
 any state -> failed
+any state before upgrade_submitting -> cancelled
 ```
 
 The cascade order is fixed: gateways, then switches, then access points, then
 wireless clients. A phase starts only after the phase before it reports settled.
+
+The state `cancelled` is not the state `stopped`. Issue #2201 added it. A stop
+cancels firmware that the cloud already holds, and a cancel ends a plan that no
+device ever saw. The move is legal from a state before `upgrade_submitting`
+alone, because that is the first state in which the cloud holds the work.
+
+Warning: a reader months later must tell the two apart. One of them touched
+hardware.
 
 ### 4.2 `targets` entry
 

@@ -88,7 +88,12 @@
 </div>
 
 <div class="portal-table-scroll">
-  <table class="portal-table" id="site-table">
+  {#
+    Issue #2227: this was the one table of the portal that never sorted. An
+    organization with many sites showed one long unordered list, and the
+    operator could not order it by the device count or by the lock state.
+  #}
+  <table class="portal-table" id="site-table" data-testid="site-table" data-sortable>
     <caption class="visually-hidden">
       The sites of the chosen organization, with the device count and the lock
       state of each site.
@@ -99,7 +104,8 @@
         <th scope="col">Site</th>
         <th scope="col">Devices</th>
         <th scope="col">Lock state</th>
-        <th scope="col">Action</th>
+        {# The action column holds a control and never a value, so it offers no order. #}
+        <th scope="col" data-no-sort>Action</th>
       </tr>
     </thead>
 

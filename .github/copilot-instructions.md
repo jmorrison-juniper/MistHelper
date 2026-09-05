@@ -121,11 +121,16 @@ image that the registry builds.
 
 ```powershell
 podman build -t misthelper:local .
-podman stop misthelper ; podman rm misthelper
-podman run -d --name misthelper -p 2200:2200 -p 8055:8055 `
-  -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" misthelper:local
+podman rm -f misthelper-app
+.\scripts\compose.ps1 up -d --no-deps misthelper
 podman ps
 ```
+
+Caution: pass `--no-deps` and name the service. Without both, compose tries to
+create `misthelper-arangodb` and `misthelper-redis` again, and it stops with
+`the container name is already in use`. Those two stores hold every capture and
+every upgrade run, so this pair of commands is the one that leaves them
+untouched. Issue #2228 holds that report.
 
 Caution: do not push a commit to make a registry build an image that Podman
 builds here in one minute. A registry build spends runner minutes, and the

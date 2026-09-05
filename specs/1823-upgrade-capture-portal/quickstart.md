@@ -41,10 +41,37 @@ The menu path also works. Choose menu **238** from the main menu.
 
 ### From the container
 
+Use the helper script. It works on Windows, on Linux, and on macOS.
+
 ```powershell
-podman compose up -d
+.\scripts\compose.ps1 up -d
 podman ps
 ```
+
+Warning: do not run `podman compose up -d` on Windows. That command sends the
+data folder as a path with a drive letter, and the podman machine reads the
+colon of `C:` as the separator of the volume form. The application service then
+never starts, the two stores start without it, and the message names no service.
+The portal answers nothing. Issue #2184 and issue #2228 hold the reports. The
+helper script drives the native provider, which reads a drive letter correctly.
+
+The script needs the native provider one time:
+
+```powershell
+.venv\Scripts\python.exe -m pip install podman-compose
+```
+
+To recreate the application container alone, remove it first and then name it.
+
+```powershell
+podman rm -f misthelper-app
+.\scripts\compose.ps1 up -d --no-deps misthelper
+```
+
+Caution: name the service and pass `--no-deps`. Without both, compose tries to
+create the document store and the site lock store again, and it stops when it
+finds the existing names. Those two stores hold every capture and every run, so
+this pair of commands is the one that leaves them running and untouched.
 
 The container publishes port 8056 next to the existing port 8055. Both portals run
 at the same time. Each portal owns its own process.

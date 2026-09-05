@@ -34,9 +34,11 @@ from __future__ import annotations
 import importlib.util
 import logging
 import os
+import signal
 import socket
 import subprocess
 import tempfile
+import threading
 import time
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass
@@ -93,6 +95,18 @@ STOP_TIMEOUT_SECONDS = 5  # The server gets 5 seconds to stop before this fixtur
 # file never blocks the writer, and the skip message reads the same file back.
 SERVER_LOG_PATH = Path(tempfile.gettempdir()) / f"upgrade_portal_e2e_{CAPTURE_PORT}.log"
 
+# WHY: Issue #2260. A run that ends on a timeout never reaches its teardown, so
+# the portal outlives it and holds the port. Every later run on that port then
+# reported a stray listener, and an operator had to find the process by hand.
+# This file names the portal that the current run started, so the next run can
+# tell its own leftover from a portal container that an operator started.
+SERVER_OWNER_PATH = Path(tempfile.gettempdir()) / f"upgrade_portal_e2e_{CAPTURE_PORT}.pid"
+
+# The wait for a stopped portal to release the port. A stop is quick on
+# loopback, and these two values bound the wait at ten seconds.
+RECLAIM_TRIES = 20
+RECLAIM_PAUSE_SECONDS = 0.5
+
 # WHY: Only a portal that this fixture started carries the sign-in seam and the
 # cookie key of this run. A portal left running in another window carries
 # neither, so every page below the sign-in form answers 401 and every test
@@ -101,7 +115,10 @@ SERVER_LOG_PATH = Path(tempfile.gettempdir()) / f"upgrade_portal_e2e_{CAPTURE_PO
 STRAY_LISTENER_MESSAGE = (
     f"Another process already listens on port {CAPTURE_PORT}. "
     "The browser tests must start their own portal, because only that portal holds the sign-in seam. "
-    f"Stop the process that holds port {CAPTURE_PORT}, then run the tests again."
+    f"This suite records every portal it starts in {SERVER_OWNER_PATH}, and that record names no live "
+    "process now, so the listener belongs to something else. A portal container is the common cause. "
+    f"Stop the process that holds port {CAPTURE_PORT}, or set CAPTURE_PORT to a free port, then run the "
+    "tests again."
 )
 
 # WHY: A workstation that can run no WSGI server describes the workstation and
@@ -213,6 +230,75 @@ def _load_playwright_config() -> dict[str, str]:
 PLAYWRIGHT_CONFIG = _load_playwright_config()
 
 
+# WHY: Issue #2241. Every test module under this folder calls
+# `pytest.importorskip("playwright.sync_api")`. A missing package therefore
+# turned all 11 modules into a skip, and pytest reports a skip as a pass. The
+# "E2E smoke tests" gate then reported green while it opened no page, so the
+# whole browser suite covered nothing and no signal said so.
+#
+# Neither requirements file named the package, so a fresh worktree always hit
+# this state. `requirements-dev.txt` now pins it, and this guard makes the
+# regression impossible to hide: in strict mode a missing package fails
+# collection instead of skipping it.
+STRICT_VARIABLE = "UPGRADE_PORTAL_E2E_STRICT"  # The gate. CI sets it, and a workstation may leave it unset.
+STRICT_ENABLED = "1"  # The one value that turns a skip into a failure. Any other value keeps the skip.
+
+MISSING_PLAYWRIGHT_MESSAGE = (
+    "The Playwright package is not installed, and "
+    f"{STRICT_VARIABLE}={STRICT_ENABLED} forbids a skip. "
+    "Every browser test would report a skip, and pytest reports a skip as a pass, "
+    "so the gate would pass while it opened no page. Install the pinned packages, "
+    "then download the browser:\n"
+    "    pip install -r requirements-dev.txt\n"
+    "    python -m playwright install chromium\n"
+    "`python scripts/bootstrap_worktree.py` runs both commands for you. Issue #2241."
+)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Refuse a run that would skip every browser test in strict mode.
+
+    Why:
+        A skip reads as a pass. In strict mode a missing browser package must
+        stop the run, so no gate can report success over an empty suite.
+
+    Args:
+        config: The pytest configuration for this run. The guard reads no value
+            from it, and the parameter exists because pytest supplies it.
+
+    Raises:
+        pytest.UsageError: If strict mode is on and Playwright is absent.
+    """
+    del config  # WHY: The hook signature requires the parameter, and the guard reads no setting.
+    if os.environ.get(STRICT_VARIABLE) != STRICT_ENABLED:  # WHY: A workstation may still skip.
+        logging.debug("The browser strict guard is off, so a missing package stays a skip")
+        return  # WHY: Leave the existing skip behaviour for a workstation with no browser.
+    logging.info("The browser strict guard is on, so a missing package fails the run")
+    if not _playwright_is_installed():  # WHY: Ask without importing the package.
+        raise pytest.UsageError(MISSING_PLAYWRIGHT_MESSAGE)  # WHY: Stop the run before it reports a pass.
+    logging.debug("The Playwright package is present, so the browser suite can open a page")
+
+
+def _playwright_is_installed() -> bool:
+    """Report whether `playwright.sync_api` can be imported.
+
+    Why:
+        `importlib.util.find_spec` answers None for a missing submodule, but it
+        raises `ModuleNotFoundError` when the parent package is absent. That is
+        the exact state this guard exists to catch, so the raise must become a
+        plain answer. Without this guard the run ends in an internal error and
+        never prints the repair.
+
+    Returns:
+        True when the package is present.
+    """
+    try:  # WHY: A missing parent package raises rather than answering None.
+        return importlib.util.find_spec("playwright.sync_api") is not None
+    except ModuleNotFoundError:  # WHY: No `playwright` package exists at all.
+        logging.debug("The playwright package is absent, so no browser test can open a page")
+        return False  # WHY: Report the absence as an answer, not as an internal error.
+
+
 def _probe_port(port: int) -> bool:
     """Report whether a server answers on one port right now.
 
@@ -266,6 +352,7 @@ def _stop_server(process: subprocess.Popen[bytes]) -> None:
     except subprocess.TimeoutExpired:  # The polite request failed, so end the process.
         logger.warning("The capture portal did not stop in %s seconds", STOP_TIMEOUT_SECONDS)
         process.kill()
+    _forget_owner()  # Issue #2260: this run owns the port no longer, so the record must go.
 
 
 def _build_command() -> list[str] | None:
@@ -283,6 +370,86 @@ def _build_command() -> list[str] | None:
     except RuntimeError as failure:  # State the cause, so the skip message stays honest.
         logger.info("No WSGI server can run on this workstation. Cause: %s", failure)
         return None
+
+
+def _record_owner(process: subprocess.Popen[bytes]) -> None:
+    """Write the process identifier of the portal this run started.
+
+    Why:
+        Issue #2260. A run that ends on a timeout never reaches the teardown, so
+        the portal outlives it and holds the port. The next run then reports a
+        stray listener and every test errors. This record lets that next run
+        name the owner and reclaim the port.
+
+    Args:
+        process: The portal process this run started.
+    """
+    try:  # An unwritable temporary folder must not stop a run that otherwise works.
+        SERVER_OWNER_PATH.write_text(str(process.pid), encoding="utf-8")
+    except OSError as failure:  # The next run then reports the stray listener, as it did before.
+        logger.info("The portal owner record was not written. Cause: %s", failure)
+        return
+    logger.debug("The portal on port %s runs as process %d", CAPTURE_PORT, process.pid)
+
+
+def _forget_owner() -> None:
+    """Remove the owner record, because this run stopped its own portal."""
+    SERVER_OWNER_PATH.unlink(missing_ok=True)  # A stopped portal owns nothing, so the record must go.
+    logger.debug("The portal owner record for port %s is gone", CAPTURE_PORT)
+
+
+def _recorded_owner() -> int | None:
+    """Return the process identifier that an earlier run recorded.
+
+    Returns:
+        The identifier, or None when no readable record exists.
+    """
+    try:  # A first run on this workstation leaves no file at all.
+        text = SERVER_OWNER_PATH.read_text(encoding="utf-8").strip()
+    except OSError:  # No record exists, so no earlier run named an owner.
+        return None
+    return int(text) if text.isdigit() else None  # A damaged record names no process.
+
+
+def _stop_stale_owner() -> bool:
+    """Stop a portal that an earlier run of this suite left behind.
+
+    Why:
+        Issue #2260. The suite writes the identifier of every portal it starts,
+        and it removes that record when it stops the portal. A record that
+        survives therefore names a run that never reached its teardown.
+
+        Warning: this function stops only a process that this suite recorded. It
+        never stops a listener it did not start, because a portal container or
+        another application on the port is a state of the workstation.
+
+    Returns:
+        True when the port is free again.
+    """
+    owner = _recorded_owner()
+    if owner is None:  # This suite started no portal that survived, so the listener belongs elsewhere.
+        return False
+    logger.warning("An earlier run of this suite left the portal %d on port %s", owner, CAPTURE_PORT)
+    try:  # The process may have already ended between the read and this call.
+        os.kill(owner, signal.SIGTERM)
+    except OSError as failure:  # An absent process is the state this function wants.
+        logger.info("The recorded portal %d did not take the stop. Cause: %s", owner, failure)
+    return _wait_for_free_port()
+
+
+def _wait_for_free_port() -> bool:
+    """Wait until no server answers on the port of this run.
+
+    Returns:
+        True when the port is free, or False after the last try.
+    """
+    for _ in range(RECLAIM_TRIES):  # A stopped process releases the port a moment later.
+        if not _probe_port(CAPTURE_PORT):
+            _forget_owner()  # The record named a portal that is gone, so it must go as well.
+            logger.info("Port %s is free again, so this run may start its own portal", CAPTURE_PORT)
+            return True
+        time.sleep(RECLAIM_PAUSE_SECONDS)  # WHY: The process is still closing the socket.
+    return False
 
 
 def _child_environment() -> dict[str, str]:
@@ -362,6 +529,7 @@ def _start_server() -> subprocess.Popen[bytes] | None:
     if process is None:  # The process did not start.
         return None
     if _wait_for_port(CAPTURE_PORT):  # The portal answers, so a browser test may open a page.
+        _record_owner(process)  # Issue #2260: the next run can then reclaim this port.
         return process
     _stop_server(process)  # The process runs and never answered, so it must not outlive the run.
     _report_server_output()  # The output waits in a file, so this read cannot block.
@@ -383,7 +551,10 @@ def capture_portal_server() -> Iterator[str]:
         The base address of the running portal.
     """
     if _probe_port(CAPTURE_PORT):  # A portal this fixture did not start holds no sign-in seam.
-        pytest.fail(STRAY_LISTENER_MESSAGE, pytrace=False)
+        # Issue #2260: an earlier run of this suite may own the port. The record
+        # names that portal, so this run may reclaim the port instead of failing.
+        if not _stop_stale_owner():
+            pytest.fail(STRAY_LISTENER_MESSAGE, pytrace=False)
     if _build_command() is None:  # No WSGI server runs here, which describes the workstation.
         pytest.skip(NO_SERVER_MESSAGE)
     process = _start_server()
@@ -949,6 +1120,73 @@ def _skip_storage_bootstrap() -> None:
     """
 
 
+FAILED_RUN_ID = "e2e-failed-run-0001"  # The seeded run that the retry test opens. One fixed key, so no test guesses.
+
+
+def _failed_run_record() -> dict[str, Any]:
+    """Build one run record that already failed.
+
+    Why:
+        Issue #2202 shows the retry control for a failed run and for no other
+        state. No journey through the pages reaches that state, because a real
+        failure needs a real upgrade fault at a real site. The retry rebuilds a
+        run from the settings of the failed one, so the record carries the same
+        fields that a finished run carries.
+
+    Returns:
+        The run record, in the state `failed`.
+    """
+    return {
+        "run_id": FAILED_RUN_ID,  # The one key that the retry test opens.
+        "site_id": STAND_IN_SITE_ID,  # The same site every other test drives, so one lock covers both.
+        "org_id": STAND_IN_ORG_ID,  # The lock key needs both halves, so the record must carry the org.
+        "state": "failed",  # The one state that offers the retry control.
+        "message": "A stand-in failure, so the retry control appears for the browser test.",
+        "targets": [],  # The retry copies this list. An empty list keeps the record small and valid.
+        "options": {},  # The retry copies every option. An empty table still exercises the copy.
+    }
+
+
+def _seed_failed_run(built: Any, upgrade: Any) -> None:
+    """Write one failed run into the store of the stand-in portal.
+
+    Why:
+        The retry control needs a failed run, and the portal offers no route
+        that puts a run into that state. The server process therefore writes one
+        record itself, exactly as it registers the two operators above.
+
+        The write runs on its own thread. A cold store builds its collections on
+        the first write, and that build takes longer than the port wait of the
+        fixture. A write on this thread would therefore stop the server from
+        binding at all, and every browser test would report a start failure.
+
+    Args:
+        built: The Flask application. The write needs its context to read the
+            store seam out of the configuration.
+        upgrade: The upgrade route module, which owns the store seam.
+    """
+    logger.info("Seeding the failed run %s for the retry control test", FAILED_RUN_ID)
+    writer = threading.Thread(target=_write_failed_run, args=(built, upgrade), daemon=True)
+    writer.start()  # The server binds now, and the record lands a moment later.
+    logger.debug("The failed run seed runs on its own thread")
+
+
+def _write_failed_run(built: Any, upgrade: Any) -> None:
+    """Write the seeded record, and report a refusal instead of raising.
+
+    Args:
+        built: The Flask application that owns the store seam.
+        upgrade: The upgrade route module, which owns the store seam.
+    """
+    try:  # A store that refuses the write must not end the thread with a trace.
+        with built.app_context():  # `run_store` reads `current_app.config`, so a context is required.
+            written = upgrade.save_run(_failed_run_record())
+    except Exception as failure:  # An unreachable store is a normal state on a bare workstation.
+        logger.warning("The failed run seed did not write. The retry test will skip. Cause: %s", failure)
+        return  # The retry test reads the absent run and reports a skip that names the cause.
+    logger.info("The failed run seed reported %s", written)  # The retry test skips when this reads False.
+
+
 def build_stand_in_app() -> Any:
     """Build the portal with two signed-in operators and no cloud reach.
 
@@ -994,6 +1232,7 @@ def build_stand_in_app() -> Any:
     built.config[upgrade.STOP_RUNNER_KEY] = stand_in_stop_runner  # A stop then cancels nothing at the cloud.
     _register_operator(STAND_IN_EMAIL, STAND_IN_BROWSER_ID)  # The operator that every test drives.
     _register_operator(SECOND_EMAIL, SECOND_BROWSER_ID)  # The operator that meets the lock refusal.
+    _seed_failed_run(built, upgrade)  # Issue #2242 needs a failed run, and no page journey reaches that state.
     return built  # Waitress and Gunicorn both load this object by name.
 
 

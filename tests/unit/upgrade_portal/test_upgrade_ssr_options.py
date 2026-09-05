@@ -175,10 +175,19 @@ def test_an_operator_who_picks_no_channel_sends_no_channel() -> None:
 
 @pytest.mark.parametrize("word", ["nightly", "release", "prod", "0", "true"])
 def test_the_portal_refuses_a_channel_outside_the_cloud_enumeration(word: str) -> None:
-    """The cloud answers a bad channel with a 400 that names no field."""
+    """The cloud answers a bad channel with a 400 that names no field.
+
+    Why:
+        The test reads the `field` attribute, which is the machine-readable
+        half of the refusal. Issue #2195 moved the operator-facing sentence to
+        the control label, so the sentence names no cloud field now.
+
+    Args:
+        word: The channel word that the portal must refuse.
+    """
     with pytest.raises(BadOptionError) as caught:
         options_from({"channel": word})
-    assert "channel" in str(caught.value)
+    assert caught.value.field == "channel"
 
 
 def test_the_portal_reads_a_channel_whatever_its_letter_case() -> None:

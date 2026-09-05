@@ -135,6 +135,12 @@
     var STOP_WRITING_TESTID = "stop-outcome-writing";
     var STOP_NO_CANCEL_TESTID = "stop-outcome-no-cancel";
 
+    /* Issue #2201: the two controls of a run that has not begun. */
+    var RESCHEDULE_INPUT_TESTID = "run-reschedule-input";
+    var RESCHEDULE_BUTTON_TESTID = "run-reschedule-button";
+    var CANCEL_BUTTON_TESTID = "run-cancel-button";
+    var RETRY_BUTTON_TESTID = "run-retry-button";  /* Issue #2202. */
+
     /* The lock identifiers. contracts/ui-testids.md lines 77-82 fix every value
      * below. */
     var LOCK_BANNER_TESTID = "lock-banner";
@@ -2732,6 +2738,149 @@
     }
 
     /**
+     * Sends the reschedule of one run that has not begun.
+     *
+     * Why: Issue #2201 lets an operator move the start of a run that never
+     * reached the cloud. The duration counts from this moment, and the server
+     * owns every rule of the form, so this function reads no unit itself.
+     *
+     * @param {Element} button The control the operator pressed.
+     * @param {Element} input The control that holds the duration.
+     * @returns {Promise} The answer, or null after a refusal.
+     */
+    function requestRunReschedule(button, input) {
+        var runId = button.getAttribute("data-run-id") || "";
+        var text = input ? String(input.value || "").trim() : "";
+        button.disabled = true;
+        return fetchJson("/api/runs/" + encodeURIComponent(runId) + "/reschedule", {
+            method: "POST",
+            body: {start_time: text}
+        })
+            .then(function (answer) {
+                showFlash("The portal moved the start of this run.", "success");
+                return answer;
+            })
+            .catch(function (error) {
+                /* The log carries the stable code and the status only. It
+                 * carries no session value and no email address. */
+                console.error("The reschedule failed.", error && error.code, error && error.status);
+                showRequestError(error);
+                button.disabled = false;
+                return null;
+            });
+    }
+
+    /**
+     * Sends the cancel of one run that has not begun.
+     *
+     * Why: A cancel ends a plan that no device ever saw, so it reaches no cloud
+     * endpoint. A run that already sent firmware answers `run_already_started`,
+     * and the stop control applies to that run instead.
+     *
+     * @param {Element} button The control the operator pressed.
+     * @returns {Promise} The answer, or null after a refusal.
+     */
+    function requestRunCancel(button) {
+        var runId = button.getAttribute("data-run-id") || "";
+        button.disabled = true;
+        return fetchJson("/api/runs/" + encodeURIComponent(runId) + "/cancel", {
+            method: "POST",
+            body: {}
+        })
+            .then(function (answer) {
+                showFlash("The portal ended this run. It sent no firmware.", "warning");
+                return answer;
+            })
+            .catch(function (error) {
+                console.error("The cancel failed.", error && error.code, error && error.status);
+                showRequestError(error);
+                button.disabled = false;
+                return null;
+            });
+    }
+
+    /**
+     * Sends the retry of one failed run.
+     *
+     * Why: Issue #2202 builds a new run from the settings of a failed one. The
+     * new run needs a fresh capture, so the browser follows the answer to the
+     * capture page of the new run.
+     *
+     * @param {Element} button The control the operator pressed.
+     * @returns {Promise} The answer, or null after a refusal.
+     */
+    function requestRunRetry(button) {
+        var runId = button.getAttribute("data-run-id") || "";
+        button.disabled = true;
+        return fetchJson("/api/runs/" + encodeURIComponent(runId) + "/retry", {
+            method: "POST",
+            body: {}
+        })
+            .then(function (answer) {
+                var notes = (answer && answer.notes) || [];
+                var index = 0;
+                for (index = 0; index < notes.length; index += 1) {
+                    /* The page names every schedule that the retry dropped. */
+                    showFlash(notes[index], "warning", true);
+                }
+                showFlash("The portal built a retry. Take a fresh capture before you start it.", "success", true);
+                return answer;
+            })
+            .catch(function (error) {
+                console.error("The retry failed.", error && error.code, error && error.status);
+                showRequestError(error);
+                button.disabled = false;
+                return null;
+            });
+    }
+
+    /**
+     * Binds the retry control of a failed run.
+     *
+     * @returns {void}
+     */
+    function initRunRetryControl() {
+        var region = document.querySelector("[data-testid='run-retry-controls']");
+        if (!region) {
+            return;
+        }
+        var button = byTestId(RETRY_BUTTON_TESTID, region);
+        if (button) {
+            button.addEventListener("click", function () {
+                requestRunRetry(button);
+            });
+        }
+    }
+
+    /**
+     * Binds the reschedule control and the cancel control of the run page.
+     *
+     * Why: Both controls appear for a run that has not begun. A page that holds
+     * neither leaves early, so a running run costs nothing here.
+     *
+     * @returns {void}
+     */
+    function initRunScheduleControls() {
+        var region = document.querySelector("[data-testid='run-schedule-controls']");
+        if (!region) {
+            return;
+        }
+        var input = byTestId(RESCHEDULE_INPUT_TESTID, region);
+        var rescheduleButton = byTestId(RESCHEDULE_BUTTON_TESTID, region);
+        if (rescheduleButton) {
+            rescheduleButton.addEventListener("click", function () {
+                requestRunReschedule(rescheduleButton, input);
+            });
+        }
+        var cancelButton = byTestId(CANCEL_BUTTON_TESTID, region);
+        if (cancelButton) {
+            cancelButton.addEventListener("click", function () {
+                requestRunCancel(cancelButton);
+            });
+        }
+    }
+
+    /**
      * Arms the stop control of the run page.
      *
      * Why: FR-038a asks for a stop control while the run is live. The first
@@ -2821,6 +2970,33 @@
     }
 
     /**
+     * Turns every write control on or off to match the site lock.
+     *
+     * Why: Issue #2200 lets any signed-in operator read a run and a capture.
+     * The lock gates the write alone. A control that writes to the site
+     * therefore answers the lock, and the page renders that state already. This
+     * keeps the controls in step when the operator takes or releases the site
+     * with no page load.
+     *
+     * The reason sits in a note that the markup already holds, so this function
+     * writes no sentence of its own and the page owns every word.
+     *
+     * @param {boolean} allowed True when this browser holds the site.
+     * @returns {void}
+     */
+    function paintWriteControls(allowed) {
+        var controls = document.querySelectorAll("[data-needs-lock]");
+        var index = 0;
+        for (index = 0; index < controls.length; index += 1) {
+            controls[index].disabled = !allowed;
+        }
+        var notes = document.querySelectorAll("[data-lock-reason-note]");
+        for (index = 0; index < notes.length; index += 1) {
+            notes[index].hidden = allowed;
+        }
+    }
+
+    /**
      * Paints the banner for a lock this browser now holds.
      *
      * Why: The take button and the release button never both apply. The token
@@ -2836,6 +3012,7 @@
         region.setAttribute("data-lock-token", (grant && grant.lock_token) || "");
         setText(region.querySelector("[data-lock-message]"), "You hold this site.");
         showLockError(region, "");
+        paintWriteControls(true);  // The holder writes, so every write control answers again.
 
         var takeButton = byTestId(LOCK_TAKE_TESTID, region);
         if (takeButton) {
@@ -2866,6 +3043,7 @@
         region.setAttribute("data-lock-state", "free");
         region.setAttribute("data-lock-token", "");
         setText(region.querySelector("[data-lock-message]"), message);
+        paintWriteControls(false);  // A released lock shuts every control that writes to the site.
 
         var takeButton = byTestId(LOCK_TAKE_TESTID, region);
         if (takeButton) {
@@ -3169,6 +3347,8 @@
         initUpgradeConfirmPage();
         initRunPage();
         initStopControl();
+        initRunRetryControl();  // Issue #2202: the retry of a failed run.
+        initRunScheduleControls();  // Issue #2201: the reschedule and the cancel of a run that has not begun.
         initLockBanner();
     }
 
@@ -3229,3 +3409,5 @@
     window.upgradePortal.startLockBeat = startLockBeat;
     window.upgradePortal.stopLockBeat = stopLockBeat;
 })();
+
+

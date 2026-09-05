@@ -7,6 +7,173 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Rehearse the upgrade portal against a stand-in cloud
+
+- **Added**: A rehearsal harness under `tests/support/rehearsal/`. The harness
+  drives the shipped run driver at `RunDriver.start` through all four upgrade
+  phases. A stand-in cloud answers the five calls that the portal makes, and a
+  driven clock fills the four injected clock seats. The harness patches no
+  `time` module, so it starts no thread that another test can meet. Issue
+  #1992.
+- **Added**: 48 rehearsal tests under `tests/unit/upgrade_portal/`. They prove
+  the phase cascade, the settle gate, the stop control, and the guard that the
+  run opens no socket and writes no firmware. The whole set runs in about 5
+  seconds, and no test waits more than 1 real second.
+- **Added**: Three defect drills in `tests/support/rehearsal/defects.py`. Each
+  drill breaks one shipped rule that this repository met before, and the
+  rehearsal fails for each one. A harness that passes against broken code gives
+  false confidence.
+- **Added**: The live checklist at
+  `specs/1992-upgrade-rehearsal/live-checklist.md`. The checklist holds the 5
+  facts that only real hardware can prove. It warns that the live run reboots
+  the hardware, and that the reboot of one switch stops six access points for
+  about six minutes. Issue #2007.
+- **Note**: This work does not close issue #1992. A person must decide the live
+  run.
+
+### Serve Mist Cloud health to a monitoring system
+
+- **Added**: Menu 241 and the `--metrics-gateway` flag start a metrics gateway on
+  port 8057. The gateway reads the organization on a timer and holds the last
+  reading. A monitoring system polls the gateway and never polls Mist Cloud, so a
+  poller cannot spend the Mist rate limit budget. Issue #2243.
+- **Added**: A Prometheus endpoint at `/metrics`. This is the path to choose. It
+  needs no MIB and no registered enterprise number, and it binds an unprivileged
+  port. Prometheus, Grafana, Zabbix, LibreNMS, and Icinga all read the format.
+- **Added**: An SNMP path through the Net-SNMP `pass_persist` protocol, started by
+  the `--metrics-snmp` flag from one line in `snmpd.conf`. `snmpd` keeps port 161
+  and the community string, so MistHelper binds no privileged port and holds no
+  community string. The operator names the base OID, so no unregistered
+  enterprise number is baked into this repository.
+- **Added**: The readings `mist_scrape_success`, `mist_scrape_age_seconds`, and
+  `mist_scrape_duration_seconds` describe the gateway itself. A failed read of
+  Mist Cloud keeps the last good reading, so those values are how an operator
+  tells a stale reading from a real outage.
+- **Note**: The design carries the object set of `tmunzer/mist_snmp_gateway`,
+  which is MIT licensed and which its author calls a proof of concept. The store,
+  the transport, and the OID layout are new. That project copies each reading into
+  MongoDB, which it never queries and never reads after the next refresh, so the
+  database earns nothing and costs a second service. This gateway holds the
+  reading in memory instead.
+- **Note**: One refresh costs three calls, whatever the size of the organization.
+  The upstream project calls two endpoints for each site and waits between two
+  sites, so a 200 site organization costs it 400 calls and 20 seconds of delay.
+- **Note**: SNMP carries a whole number only. A ratio therefore takes a documented
+  scale factor on the SNMP path, and the help text of each scaled reading names
+  the unit. The Prometheus path reports the true value.
+
+### Read every moment as UTC, and sort the last table
+
+- **Fixed**: The capture picker of the comparison page showed the stored text,
+  which holds 32 characters and the offset of the machine that wrote it. It now
+  reads the same short UTC form as the history page. Issue #2227.
+- **Fixed**: The site table was the one table of the portal that never sorted.
+  An organization with many sites showed one long unordered list, and the
+  operator could not order it by the device count or by the lock state.
+
+### Record every site lock action, and show the audit log
+
+- **Added**: The portal records a take and a release beside the takeover that it
+  already recorded. A page built on takeovers alone would tell the reader that
+  one lock action ever happened. Issue #2221.
+- **Added**: The history page holds an audit log section. Each row names the
+  moment in UTC, the site, the action, and the operator.
+- **Added**: The reader infers an expiry. No request runs at the moment a hold
+  ends, and the lock store drops the key, so no writer can record one. A take
+  that follows an unreleased hold means that hold ended with no release, and the
+  row states that the portal read the fact rather than recorded it.
+- **Note**: The trail holds the address of each operator, because an audit names
+  people. No row of the page holds that address. The page shows the one-way
+  digest that the portal already writes into every log record.
+- **Note**: A take and a release never fail closed. A takeover still refuses
+  itself when the trail cannot hold it, because a takeover moves a site between
+  operators and an unaccountable move is worse than a refused one.
+
+### Retry a failed run in one press
+
+- **Added**: A failed run offers a retry to the holder of the site lock. The new
+  run copies every option, the device list, and the target version of each
+  device, and it names the failed run that it came from. Issue #2202.
+- **Fixed**: The retry rebases each schedule. A schedule of the failed run names
+  a moment in the past, and a retry that kept it would write the firmware at
+  once while the operator read a delayed start that never happens.
+- **Note**: The record holds the duration beside the moment, so the retry keeps
+  the duration and the start route counts it again. A record that holds a moment
+  alone cannot be rebased. The retry drops that schedule and names the drop.
+- **Note**: The retry adopts no capture of the failed run. The site changed
+  while that run wrote firmware to part of it, so the confirmation stays locked
+  until a fresh capture verifies.
+
+### Repair every run link of the history page
+
+- **Fixed**: Each run row of the history page linked `/runs/<run_id>/progress`,
+  and no such route exists. Every press reached a fault page. The live run view
+  is `/runs/<run_id>`. Issue #2225.
+- **Added**: A test resolves every internal link of the history page against the
+  routes of the application. Fourteen tests covered the runs section and none
+  caught this, because each one read the shaped row and none read the markup.
+
+### Reschedule or cancel a run that has not begun
+
+- **Added**: An operator with the site lock moves the start of a run that never
+  reached the cloud. The duration counts from the moment of the reschedule, so
+  `8h` means eight hours from now. Issue #2201.
+- **Added**: An operator with the site lock ends such a run. The cancel writes
+  the record alone and reaches no cloud endpoint.
+- **Added**: The run state `cancelled`. It is not the state `stopped`. A stop
+  cancels firmware that the cloud already holds, and a cancel ends a plan that
+  no device ever saw. A reader months later must tell the two apart, because
+  one of them touched hardware.
+- **Note**: Neither control reaches a run at or past the submission. Such a run
+  answers `run_already_started`, and the stop control applies to it instead.
+
+### Let a second operator read a run without the site lock
+
+- **Fixed**: A control that writes to a site now renders shut when another
+  operator holds that site, and it names the holder and the reason. The control
+  stayed live before, so an operator pressed it and learned of the hold only
+  after the refusal. Issue #2200.
+- **Added**: The confirmation page reads the site lock. A second operator reads
+  the whole plan, and the start control stays shut for that operator.
+- **Added**: The takeover box names the count of devices under upgrade. A
+  takeover moves a live firmware write to the second operator, and that operator
+  must read the size of what they take.
+- **Note**: A free site and an unreadable lock store both leave every control
+  live. The server is the real guard, and a control that shut on an unreadable
+  store would stop every operator whenever the lock store blinked.
+
+### List every upgrade run on the history page
+
+- **Added**: The history page holds a runs section beside the captures section.
+  Each row names the run, the site, the state, the device count, the start
+  moment, and the end moment. Issue #2199.
+- **Added**: Each run row links to the capture from before the upgrade and to
+  the capture from after it, so a reader reaches the comparison in one press.
+- **Fixed**: Every moment of the runs section reads as UTC. The store writes the
+  offset of the machine that started the run, so two runs of one afternoon could
+  read as two different hours.
+- **Added**: A run stored before the state field existed reads as `unknown`. The
+  page never hides such a row, because that run still happened.
+
+### Name the control in a refused option, and state its rule
+
+- **Fixed**: A refused option named the internal cloud field, which appears on
+  no control. The message now names the control label that the page paints, and
+  it states the rule that the value broke. Issue #2195.
+- **Fixed**: The message still repeats no value that the operator typed, and the
+  error code stays `bad_option`, so every existing client keeps working.
+- **Added**: A test reads each label against the options page. A label that
+  drifts from the page would send the operator to a control that does not exist.
+
+### Cap each table of the capture page
+
+- **Added**: Each table of the capture page paints at most 500 rows. A capture
+  of a large site holds thousands of client rows, and a page that painted every
+  one would render slowly and sort slowly. Issue #2075.
+- **Added**: A capped table states what it removed, and it names the download
+  control that answers every record. A silent cut would let an operator read a
+  cut table as the whole site.
+
 ### Check every line citation with a gate
 
 - **Added**: `python -m tools.check_citations` reads every citation of the form
@@ -4546,15 +4713,15 @@ that runs without a proxy needs no action.
 - Added menu `196` for `GetOrgLicenseAsyncClaimStatus` so operators can export org-level async claim-job summary data and optional per-device detail rows through `DataExporter` with composite upsert keys for SQLite/Redis/Arango backends.
 - **Address audit now logs a per-phase timing breakdown (menu 195)**: a Tier-3 run
   spends 12-20 seconds per site and it was not obvious where that time went. A tiny
-  always-on ``PhaseTimer`` now accumulates wall-clock time per stage (SQLite cache
+  always-on `PhaseTimer` now accumulates wall-clock time per stage (SQLite cache
   read, Tier-1 internal, Tier-2 Nominatim incl. its rate-limit sleep, Tier-3 browser
   total, and the Tier-3 sub-steps: locating the input, the human-like typing, the
   fresh-result poll incl. the suite grace, and the politeness delay). At the end of
-  the run the audit logs the breakdown sorted slowest-first to ``data/script.log``,
+  the run the audit logs the breakdown sorted slowest-first to `data/script.log`,
   turning "it feels slow" into a measurement. Live data shows the human-like typing
-  (``ui.type_query``) dominates -- tune it with ``UI_GEOCODE_MIN_KEY_DELAY_MS`` /
-  ``UI_GEOCODE_MAX_KEY_DELAY_MS`` (faster typing trades against Google's bot
-  heuristics), or lower the ``UI_GEOCODE`` politeness/timeout knobs.
+  (`ui.type_query`) dominates -- tune it with `UI_GEOCODE_MIN_KEY_DELAY_MS` /
+  `UI_GEOCODE_MAX_KEY_DELAY_MS` (faster typing trades against Google's bot
+  heuristics), or lower the `UI_GEOCODE` politeness/timeout knobs.
 
 - **Address audit now flags rows it cannot safely auto-correct, as review-only
   (menu 195)**: two new classification states protect against pushing a wrong or
@@ -4568,8 +4735,8 @@ that runs without a proxy needs no action.
     outlier); a suite on a dissenting hint does not rescue it, because a suite is
     only meaningful on the agreed-upon street number. This stops the tool from
     silently picking one of several *different valid stores* for a single site --
-    e.g. a real T-Mobile site whose SNMP location was stale ``1520 Route 38 ...
-    Hainesport NJ`` while Mist and the CSV pointed at a Hawaii address.
+    e.g. a real T-Mobile site whose SNMP location was stale `1520 Route 38 ...
+    Hainesport NJ` while Mist and the CSV pointed at a Hawaii address.
   - **`DUPLICATE_ADDRESS`** -- two or more *different* sites resolve to the
     **identical** full address (same suite, or both lacking one), which would make
     them indistinguishable for shipping. Sites that share only a base street but
@@ -4596,15 +4763,15 @@ that runs without a proxy needs no action.
 ### Changed
 
 - **Address audit suite/unit detection is consolidated and typo-tolerant (menu
-  195)**: three modules (``address_resolver``, ``audit_engine``, ``ui_geocoder``)
+  195)**: three modules (`address_resolver`, `audit_engine`, `ui_geocoder`)
   each defined their own suite/unit keyword regex, which drifted out of sync -- a
-  real customer file spelled it ``Sute A-103`` and only some detectors recognized
+  real customer file spelled it `Sute A-103` and only some detectors recognized
   it, so that unit was dropped from the suggested address (cosmetic, but sloppy).
-  All three now derive from a single ``SUITE_KEYWORDS`` constant in a shared
-  ``suite_patterns`` module, so a spelling is added in exactly one place. The common
-  misspelling ``sute`` is now recognized everywhere (``ste``/``Ste.`` were already
-  covered); ``suit`` is deliberately excluded to avoid matching ``lawsuit`` /
-  ``pursuit``. Detection/classification behavior is otherwise unchanged.
+  All three now derive from a single `SUITE_KEYWORDS` constant in a shared
+  `suite_patterns` module, so a spelling is added in exactly one place. The common
+  misspelling `sute` is now recognized everywhere (`ste`/`Ste.` were already
+  covered); `suit` is deliberately excluded to avoid matching `lawsuit` /
+  `pursuit`. Detection/classification behavior is otherwise unchanged.
 
 - **Address audit Source column now names Google explicitly (menu 195)**: the
   Tier-3 web authority is Google Places autocomplete, accessed by driving the Mist
@@ -4705,34 +4872,34 @@ that runs without a proxy needs no action.
   timezone-aware `datetime.now(UTC)` to match the rest of the codebase. Unit tests
   updated to stub the resolver. (#576)
 
-  (menu 195)**: Tier-3 types ``{business} {address}`` (including the suite) into the
+  (menu 195)**: Tier-3 types `{business} {address}` (including the suite) into the
   Mist dashboard's Google Places box, but Google's autocomplete often resolves to
   the street/establishment and drops a unit typed at the end -- and the freshness
   guard only waited for the *house number*, so it accepted the bare street without
   the unit. The unit then vanished from the suggestion, and because Mist also
-  lacked it the row even read ``ADDRESS_MATCH`` ("no change needed"). A real run
+  lacked it the row even read `ADDRESS_MATCH` ("no change needed"). A real run
   lost the unit on four sites whose CSV **and** SNMP location both confirmed it
-  (FLSS2SJB ``Unit 200``, FLS01302 ``Suite 100``, FLS01501 ``Suite 98``, FLSE8677
-  ``Unit 8``). Two changes fix this: (1) when a unit was typed, the freshness guard
-  now waits a short bounded grace (``_SUITE_GRACE_S``) for the unit to also appear
+  (FLSS2SJB `Unit 200`, FLS01302 `Suite 100`, FLS01501 `Suite 98`, FLSE8677
+  `Unit 8`). Two changes fix this: (1) when a unit was typed, the freshness guard
+  now waits a short bounded grace (`_SUITE_GRACE_S`) for the unit to also appear
   in the top suggestion before accepting it (Google usually catches up); and (2) if
   the unit still never appears, the unit we typed is re-appended to Google's street
   -- but only when it is safe (the suggestion carries no *other* unit, and the house
   numbers agree, so a different unit or a different building is never overwritten).
-  Restored rows now correctly read ``MISSING_SUITE`` instead of a false
-  ``ADDRESS_MATCH``, so the operator can add the unit.
+  Restored rows now correctly read `MISSING_SUITE` instead of a false
+  `ADDRESS_MATCH`, so the operator can add the unit.
 
 - **Address audit suggestion glued the business name to Hawaii hyphenated house
   numbers (menu 195)**: the Tier-3 (Google-via-Mist) suggestion cleaner strips the
-  establishment name that Google glues to the address (``T-Mobile931 US Highway
-  ...`` -> ``931 US Highway ...``) by anchoring on the ``<house-number> <street>``
+  establishment name that Google glues to the address (`T-Mobile931 US Highway
+  ...` -> `931 US Highway ...`) by anchoring on the `<house-number> <street>`
   start. Its anchor required the house number to be followed by a space, but
-  Hawaii's grid addresses use a hyphenated house number (``74-5450``), so the
+  Hawaii's grid addresses use a hyphenated house number (`74-5450`), so the
   anchor never matched and the business name survived in the output (real run:
-  ``T-Mobile74-5450 Makala Blvd #107`` for site HIS00364). The anchor now accepts
-  an optional ``-<digits>`` run in the house number, so the prefix is stripped
-  (``74-5450 Makala Blvd #107``) while every non-hyphenated address and suite dash
-  (``Sute A-103``) is unaffected.
+  `T-Mobile74-5450 Makala Blvd #107` for site HIS00364). The anchor now accepts
+  an optional `-<digits>` run in the house number, so the prefix is stripped
+  (`74-5450 Makala Blvd #107`) while every non-hyphenated address and suite dash
+  (`Sute A-103`) is unaffected.
 
 - **Logging and on-screen output crashed on non-Western characters (all menus)**:
   running any operation against data containing characters outside the Windows
@@ -5046,7 +5213,7 @@ All 188 menu operations (0-187) renumbered into 30 logical contiguous groups. An
 
 **Complete old→new mapping (for migration reference):**
 
-```text
+``text
 0→0   1→20  2→21  3→22  4→31  5→102 6→103 7→104 8→105 9→134 10→135
 11→1  12→8  13→15 14→19 15→16 16→33 17→9  18→59 19→34 20→2
 21→11 22→10 23→4  24→17 25→12 26→32 27→3  28→35 29→62 30→65
@@ -5069,7 +5236,7 @@ All 188 menu operations (0-187) renumbered into 30 logical contiguous groups. An
 168→57 169→55 170→70 171→71 172→72 173→88 174→25 175→186
 176→58 177→187 178→80 179→81 180→82 181→83 182→84 183→85
 184→86 185→23 186→87 187→13
-```
+``
 
 Closes #368
 
@@ -6375,3 +6542,4 @@ Closes #368
 - Locations: Single AP pre-check, multi-AP pre-check, site PCAP polling, org PCAP polling
 - Function names now match mistapi SDK and Mist API operationId values
 - operationId: listSitePacketCaptures and listOrgPacketCaptures per OpenAPI spec
+

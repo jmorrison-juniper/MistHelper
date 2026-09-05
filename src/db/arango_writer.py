@@ -18,7 +18,7 @@ from urllib.parse import urlparse  # WHY: extract hostname for DNS pre-flight
 import structlog  # WHY: structured logging for observability of writes and edges
 from arango import ArangoClient  # type: ignore[attr-defined]  # WHY: python-arango client entrypoint
 
-from . import DatabaseConfig, WriteResult  # WHY: shared config and result dataclasses
+from . import ARANGO_DEFAULT_HOSTNAME, DatabaseConfig, WriteResult  # WHY: shared config and result dataclasses
 
 logger = structlog.get_logger(__name__)  # WHY: module-scoped logger tags every event
 
@@ -3895,7 +3895,7 @@ class ArangoDBWriter:  # WHY: primary writer class for the ArangoDB polyglot bac
 
     def __init__(self, config: DatabaseConfig) -> None:  # WHY: constructor wires config and connects to the server
         """Initialize ArangoDB connection and ensure database exists."""
-        hostname = urlparse(config.arango_host).hostname or "arangodb"  # WHY: parse URL to isolate host for DNS check
+        hostname = urlparse(config.arango_host).hostname or ARANGO_DEFAULT_HOSTNAME  # WHY: isolate host for DNS check
         self._preflight_dns(hostname)  # WHY: fail fast when host cannot resolve so callers see a clear error
         self._client = ArangoClient(hosts=config.arango_host)  # WHY: python-arango client is the entry to all ops
         self._config = config  # WHY: retain config for later system-db reconnects and diagnostics

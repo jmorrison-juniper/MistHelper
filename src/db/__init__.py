@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 import structlog
 
 ARANGO_DEFAULT_URL = "http://misthelper-arangodb:9529"  # Compose service URL used when ARANGO_HOST is unset.
+ARANGO_DEFAULT_HOSTNAME = "misthelper-arangodb"  # Host applied when a URL carries no host of its own.
 ARANGO_DEFAULT_PORT = 9529  # Port applied when ARANGO_HOST carries no explicit port.
 REDIS_DEFAULT_HOST = "misthelper-redis"  # Compose service name used when REDIS_HOST is unset.
 REDIS_DEFAULT_PORT = 9379  # Port applied when REDIS_PORT is unset or unreadable.
@@ -90,7 +91,7 @@ def _hosts_unreachable(arango_url: str, redis_host: str) -> bool:
     Uses a fast DNS-only check (no TCP connection) with a short timeout
     so the caller never blocks on retries.
     """
-    arango_hostname = urlparse(arango_url).hostname or "arangodb"
+    arango_hostname = urlparse(arango_url).hostname or ARANGO_DEFAULT_HOSTNAME
     arango_ok = _can_resolve(arango_hostname)
     redis_ok = _can_resolve(redis_host)
     if not arango_ok and not redis_ok:
@@ -143,7 +144,7 @@ def polyglot_hosts_unreachable() -> bool:
     arango_url = os.environ.get("ARANGO_HOST", ARANGO_DEFAULT_URL)  # Read the configured ArangoDB URL.
     redis_host = os.environ.get("REDIS_HOST", REDIS_DEFAULT_HOST)  # Read the configured Redis host.
     parsed = urlparse(arango_url)  # Split the URL so the probe gets a host and a port.
-    arango_ok = _can_connect(parsed.hostname or "arangodb", parsed.port or ARANGO_DEFAULT_PORT)  # Probe ArangoDB.
+    arango_ok = _can_connect(parsed.hostname or ARANGO_DEFAULT_HOSTNAME, parsed.port or ARANGO_DEFAULT_PORT)
     redis_ok = _can_connect(redis_host, _env_int("REDIS_PORT", REDIS_DEFAULT_PORT))  # Probe Redis.
     log.info(
         "polyglot_host_probe",

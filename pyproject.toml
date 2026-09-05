@@ -148,7 +148,30 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["."]
+# Ship the import roots and the modules that the console scripts name. Nothing
+# else belongs inside an installed environment.
+#
+# Issue #2246: this setting was `packages = ["."]`, so the wheel packed the whole
+# repository root. The built wheel held 4664 files and 24.4 MB, and it carried
+# `specs/`, `documentation/`, `tests/`, `.github/`, and `ops-portal/`. An install
+# copied all of it into `site-packages`.
+#
+# Warning: the copied `src` then shadowed the real package for any script that
+# ran from another folder, and it shadowed part of `pydantic_core` as well, so
+# every test that reaches Dash failed to collect. Issue #2010 holds that report.
+#
+# `src` stays a top-level name on purpose. Every module of this project imports
+# `src.<area>`, so the package name is `src` and a rename would touch every
+# import in the repository.
+packages = ["src", "tools", "web_portal"]
+
+# The three modules below sit at the repository root, so no package entry can
+# reach them. `MistHelper.py` carries the `misthelper` console script, and the
+# two `wsgi` modules carry the two servers.
+[tool.hatch.build.targets.wheel.force-include]
+"MistHelper.py" = "MistHelper.py"
+"wsgi.py" = "wsgi.py"
+"wsgi_capture.py" = "wsgi_capture.py"
 
 [tool.ruff]
 line-length = 120

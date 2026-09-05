@@ -64,6 +64,7 @@ from ...compare import render as compare_render
 from ...compare import statistics as compare_statistics
 from ...runtime import identity
 from ..factory import json_error
+from ..seam_shapes import check_stand_in  # Issue #1991: compare each stand-in against the real callee.
 
 logger = logging.getLogger(__name__)
 
@@ -247,6 +248,10 @@ QUERY_ATTRIBUTES = ("CaptureQuery",)
 # carries `runs` and `total` under the same two names as `CaptureListPage`, so
 # one page reader serves both histories.
 RUN_LISTER_ATTRIBUTES = ("list_runs",)
+
+# Issue #2221: the reader of the site lock trail, which the audit log paints.
+AUDIT_MODULE = "compare.lock_audit"
+AUDIT_READER_ATTRIBUTES = ("read_audit_rows",)
 RUN_QUERY_ATTRIBUTES = ("RunQuery",)
 
 # The history view of the compare package. The name is read at call time rather
@@ -316,7 +321,11 @@ def injected_seam(config_key: str) -> Callable[..., Any] | None:
         The injected callable, or None when the config holds no callable.
     """
     candidate: Any = current_app.config.get(config_key)
-    return candidate if callable(candidate) else None
+    if not callable(candidate):  # A value that is not callable counts as unset.
+        return None  # The caller then falls back to the real callee.
+    check_stand_in(config_key, candidate)  # Issue #1991: a wrong shape must fail here, not at a customer site.
+    stand_in: Callable[..., Any] = candidate  # The named type satisfies the strict return check.
+    return stand_in  # The stand-in answers the same call the real callee answers.
 
 
 def store_capture_rows(site_id: str, limit: int = DEFAULT_HISTORY_LIMIT, offset: int = DEFAULT_HISTORY_OFFSET) -> Any:
@@ -817,7 +826,13 @@ def read_capture_rows(site_id: str) -> list[dict[str, Any]]:
         One plain dictionary for each usable row.
     """
     page: Any = capture_lister()(site_id)
-    return plain_rows(getattr(page, CAPTURES_FIELD, page))
+    rows = plain_rows(getattr(page, CAPTURES_FIELD, page))
+    # Issue #2227: the picker showed the stored text, which holds 32 characters
+    # and the offset of the machine that wrote it. The operator picks two
+    # captures here, and the moment is the one value that tells the two apart.
+    # The history page already reads the short UTC form, so the picker reads it
+    # too and no page of the portal shows a raw stamp of the store.
+    return [dict(row, moment_text=short_moment(row.get(STARTED_AT_FIELD))) for row in rows]
 
 
 def render_picker(before_id: str, after_id: str, notice: str = "") -> str:
@@ -1285,6 +1300,119 @@ def short_moment(value: Any) -> str:
     return moment.astimezone(UTC).strftime(MOMENT_TEXT_FORMAT)  # One zone for every row.
 
 
+# The state that the page shows for a run whose record names none. Issue #2199
+# asks the page to name an unknown state and never to hide the row, because a
+# run stored before the state field existed still happened.
+UNKNOWN_RUN_STATE = "unknown"
+
+# The run states that mean the run ended. A run in one of these names an end
+# moment. Any other state leaves that column empty, because the run still runs.
+FINISHED_RUN_STATES = frozenset({"succeeded", "failed", "stopped", "complete", "completed"})
+
+
+def run_site_label(record: Mapping[str, Any]) -> str:
+    """Return the site name of one run, or its identifier.
+
+    Why:
+        An old record holds the identifier alone. A row with an empty site tells
+        the operator nothing, and the identifier at least reaches the site page.
+
+    Args:
+        record: The stored run record.
+
+    Returns:
+        The site name, the site identifier, or an empty text.
+    """
+    return str(record.get("site_name") or record.get("site_id") or "")
+
+
+def run_end_moment(record: Mapping[str, Any], state: str) -> str:
+    """Return the stored end moment of one run, or an empty text.
+
+    Why:
+        A run that still runs has not ended. A page that showed the last update
+        as an end moment would tell the operator that a live run finished.
+
+    Args:
+        record: The stored run record.
+        state: The state that the row shows.
+
+    Returns:
+        The stored moment when the run ended, or an empty text.
+    """
+    return str(record.get("updated_at") or "") if state in FINISHED_RUN_STATES else ""
+
+
+def run_device_count(record: Mapping[str, Any]) -> int:
+    """Return how many devices one run acts on.
+
+    Args:
+        record: The stored run record.
+
+    Returns:
+        The count of targets. A run that reached no options holds none.
+    """
+    targets: Any = record.get("targets") or []  # A run that reached no options holds no target.
+    return len(targets) if isinstance(targets, (list, tuple)) else 0
+
+
+def run_history_row(record: Mapping[str, Any]) -> dict[str, Any]:
+    """Shape one stored run record into the row that the history page paints.
+
+    Why:
+        Issue #2199 asks the history page to list every run beside the captures.
+        An operator who wants to find a run, or to reach the comparison of a run
+        that ended, had no page to read.
+
+        Every moment reads as a human date in UTC. The store writes the offset
+        of the machine that started the run, so a page that showed the stored
+        text would name a different hour for two runs of one afternoon.
+
+    Args:
+        record: The stored run record.
+
+    Returns:
+        The row, with the state, the counts, both moments, and both capture
+        keys.
+    """
+    state = str(record.get("state") or "").strip() or UNKNOWN_RUN_STATE  # An old record names no state.
+    return {
+        "run_id": str(record.get("run_id") or ""),
+        "site_name": run_site_label(record),
+        "site_id": str(record.get("site_id") or ""),
+        "state": state,
+        "device_count": run_device_count(record),
+        "started_text": short_moment(record.get("created_at")),  # The human UTC moment.
+        "started_raw": str(record.get("created_at") or ""),  # The stored text, for the title attribute.
+        "ended_text": short_moment(run_end_moment(record, state)),  # Empty while the run still runs.
+        "pre_capture_id": str(record.get("pre_capture_id") or ""),
+        "post_capture_id": str(record.get("post_capture_id") or ""),
+    }
+
+
+def run_history_rows(site_id: str, limit: int, offset: int) -> list[dict[str, Any]]:
+    """Return one page of run rows for the history page.
+
+    Why:
+        The page reads the same store page as the run history endpoint, so the
+        two views never disagree. A store that offers no run list answers an
+        empty page, and the section then states that it holds no run.
+
+    Args:
+        site_id: The site to narrow to. An empty value reads every site.
+        limit: The largest number of rows to read.
+        offset: The number of rows to step over first.
+
+    Returns:
+        One shaped row for each run of the page.
+    """
+    logger.info("review: the portal reads the run rows of the history page")  # Before the read.
+    rows, total = read_store_page(run_lister(), RUNS_FIELD, site_id, limit, offset)
+    shaped = [run_history_row(row) for row in rows]  # One shape for the template.
+    logger.debug("review: the history page holds %s run row(s) of %s", len(shaped), total)
+    return shaped
+
+
 def moment_texts(rows: Iterable[Mapping[str, Any]]) -> dict[str, str]:
     """Return the short moment of each history row, under the row key.
 
@@ -1626,6 +1754,33 @@ def run_history(site_id: str) -> tuple[Response, int]:
     return jsonify({RUNS_FIELD: rows, TOTAL_FIELD: total}), OK_STATUS
 
 
+def audit_history_rows() -> list[dict[str, Any]]:
+    """Return the audit log rows that the history page paints.
+
+    Why:
+        Issue #2221 asks the history page for a record of every site lock
+        action. The reader lives in its own module, and this seam keeps the
+        page working through a build stage in which that module does not
+        import. That is the rule that every other seam of this route follows.
+
+        Every moment reads as UTC, which is the rule that the runs section
+        already follows.
+
+    Returns:
+        One row for each action, newest first. An empty list when the reader is
+        absent or the trail holds nothing.
+    """
+    module = load_optional_module(AUDIT_MODULE)  # The reader may not be built yet.
+    reader = find_attribute(module, AUDIT_READER_ATTRIBUTES)
+    if reader is None:  # A missing reader draws an empty section, never a fault page.
+        logger.info("review: the portal offers no lock audit reader, so the audit log is empty")
+        return []
+    rows: Any = reader()
+    shaped = [dict(row, moment_text=short_moment(row.get("occurred_at"))) for row in rows]
+    logger.debug("review: the audit log holds %s row(s)", len(shaped))
+    return shaped
+
+
 @review_bp.get(HISTORY_PAGE_PATH)
 @identity.require_session
 def history_page() -> str:
@@ -1654,4 +1809,8 @@ def history_page() -> str:
         site_name=read_site_name(shaped),
         history_view=page_view,
         moment_texts=moment_texts(shaped),
+        # Issue #2199 adds the runs section beside the captures section.
+        run_rows=run_history_rows(site_id, limit, offset),
+        # Issue #2221 adds the audit log of every site lock action.
+        audit_rows=audit_history_rows(),
     )

@@ -106,6 +106,11 @@ class RunState(StrEnum):
     STOPPING = "stopping"
     STOPPED = "stopped"
     FAILED = "failed"
+    # Issue #2201: an operator ends a run that never reached the cloud. This is
+    # not `stopped`. A stop cancels firmware that the cloud already holds, and a
+    # cancel ends a plan that no device ever saw. A reader months later must
+    # tell the two apart, because one of them touched hardware.
+    CANCELLED = "cancelled"
 
 
 class PhaseState(StrEnum):
@@ -381,9 +386,10 @@ class RunStateMachine:
     )
 
     # WHY: A finished run moves nowhere. The stop route answers
-    # run_not_stoppable for each of these three states.
+    # run_not_stoppable for each of these states. Issue #2201 adds `cancelled`,
+    # which ends a run that never reached the cloud.
     TERMINAL: ClassVar[frozenset[RunState]] = frozenset(
-        {RunState.COMPLETE, RunState.STOPPED, RunState.FAILED},
+        {RunState.COMPLETE, RunState.STOPPED, RunState.FAILED, RunState.CANCELLED},
     )
 
     # WHY: The states before firmware submission. A run that reached submission
@@ -450,6 +456,11 @@ class RunStateMachine:
             state, and a failure from any live state. A final state allows
             nothing.
 
+            Issue #2201 adds the cancel. A run that never reached the cloud may
+            end with no cloud call at all. The move is legal from a state before
+            submission alone, because a run that submitted firmware needs the
+            stop, which cancels the work that the cloud already holds.
+
         Args:
             state: The current state of the run.
 
@@ -461,7 +472,10 @@ class RunStateMachine:
         if state is RunState.STOPPING:
             return frozenset({RunState.STOPPED, RunState.FAILED})
         following = cls.CHAIN[cls.CHAIN.index(state) + 1]
-        return frozenset({following, RunState.STOPPING, RunState.FAILED})
+        moves = {following, RunState.STOPPING, RunState.FAILED}
+        if state in cls.PRE_CHECK_OPEN:  # The run holds no firmware at the cloud, so a cancel ends it.
+            moves.add(RunState.CANCELLED)
+        return frozenset(moves)
 
     @classmethod
     def read_state(cls, record: Mapping[str, Any]) -> RunState:
@@ -581,6 +595,10 @@ class RunStatusView:
         RunState.STOPPING.value: "The portal asks the cloud to cancel the upgrade.",
         RunState.STOPPED.value: "The run stopped.",
         RunState.FAILED.value: "The run failed. Read the error field for the reason.",
+        # Issue #2201: the operator ended a run that never reached the cloud.
+        # The sentence says so, because a reader must tell this apart from a
+        # stop, which cancelled firmware that the cloud already held.
+        RunState.CANCELLED.value: "An operator ended this run before it started. It sent no firmware.",
     }
 
     # WHY: A run stays in the created state after its pre-check capture ends,

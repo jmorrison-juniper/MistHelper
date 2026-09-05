@@ -157,15 +157,94 @@ _PHASE_COUNT_HIGHEST = 20
 _P2P_SIZE_HIGHEST = 1000
 
 
+# The label of each control and the rule that its value must follow. Issue #2195
+# records the cause. A refusal that named the cloud field alone asked a junior
+# engineer to map an internal name onto a control label, with no table to read,
+# and it never stated the rule that the value broke.
+#
+# The label must match the text that `upgrade/options.html` paints. A label that
+# drifts from the page sends the operator to a control that does not exist.
+OPTION_HELP: Mapping[str, tuple[str, str]] = {
+    "start_time": (
+        "Begin the firmware download after this much time",
+        "Write a number and a unit. Use s for seconds, m for minutes, h for hours, and d for days. "
+        "An example is 8h.",
+    ),
+    "reboot_at": (
+        "Reboot each switch and each gateway after this much time",
+        "Write a number and a unit. Use s for seconds, m for minutes, h for hours, and d for days. "
+        "An example is 8h.",
+    ),
+    "canary_phases": (
+        "Phases of the staged upgrade",
+        "Write one whole number for each phase, separated by commas. An example is 1,10,50,100.",
+    ),
+    "max_failures": (
+        "Failures allowed inside each phase",
+        "Write one count for each phase above, separated by commas.",
+    ),
+    "max_failure_percentage": (
+        "Failures allowed across the whole run",
+        "Write a percentage from 0 to 100.",
+    ),
+    "channel": (
+        "Release train of each session smart router",
+        "Choose alpha, beta, or stable.",
+    ),
+    "rrm_node_order": (
+        "Order of the radio batches across the site",
+        "Choose a listed order.",
+    ),
+    "rrm_mesh_upgrade": (
+        "Order of the mesh access points",
+        "Choose a listed order.",
+    ),
+}
+
+# The message that a field with no entry above receives. It still names the
+# field, because a message with no name at all helps nobody.
+UNKNOWN_OPTION_RULE = "Read the note under the control for the rule."
+
+
+def option_message(field: str) -> str:
+    """Return the refusal sentence of one option.
+
+    Why:
+        Issue #2195 asks a refusal to name the control that the operator sees,
+        and to state the rule that the value broke. The operator reads a page of
+        labels and never a list of cloud field names.
+
+    Warning: this sentence never repeats the value that the operator typed. A
+    refused value arrives straight from the browser, and a message that echoed
+    it would carry that text into the page and into the log.
+
+    Args:
+        field: The cloud field name of the option that failed.
+
+    Returns:
+        The sentence that names the control and states the rule.
+    """
+    label, rule = OPTION_HELP.get(field, ("", UNKNOWN_OPTION_RULE))  # An unmapped field still reads plainly.
+    if not label:  # No label means the portal knows the field and not its control.
+        logger.warning("Upgrade portal refused the option %s, which names no control", field)
+        return f'The control for "{field}" holds a value that the portal refuses. {rule}'
+    return f'The control "{label}" holds a value that the portal refuses. {rule}'
+
+
 class BadOptionError(ValueError):
     """One upgrade option holds a value that the portal refuses.
 
     Why:
         ``contracts/http-api.md:348`` answers ``POST /api/runs/<id>/options``
         with the error code ``bad_option``. The route layer needs one exception
-        that already carries that code, so no route repeats the mapping. The
-        message names the field and never repeats the value, because a refused
-        value comes straight from the browser.
+        that already carries that code, so no route repeats the mapping.
+
+        The message names the control that the page paints, and it states the
+        rule that the value broke. Issue #2195 records the earlier message,
+        which named the cloud field ``start_time`` and appeared on no control.
+
+    Warning: the message never repeats the value, because a refused value comes
+    straight from the browser.
 
     Attributes:
         code: Always ``bad_option``. The route layer copies it into the answer.
@@ -180,7 +259,7 @@ class BadOptionError(ValueError):
         """
         self.code = ERROR_BAD_OPTION
         self.field = field
-        super().__init__(f"the upgrade option {field} holds a value that the portal refuses")
+        super().__init__(option_message(field))  # The sentence names the control and states the rule.
 
 
 @dataclass(frozen=True, slots=True)

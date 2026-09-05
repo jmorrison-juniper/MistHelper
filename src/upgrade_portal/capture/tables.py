@@ -64,6 +64,13 @@ PARENT_SOURCE = "device_name"  # The name of the switch or the access point that
 
 _LINE_BREAKS = ("\r\n", "\n", "\r")  # A value that held one of these would break the table layout.
 
+# The largest count of rows that one table of the capture page paints. A capture
+# of a large site holds thousands of client rows, and a page that painted every
+# one would render slowly and sort slowly. Issue #2075 asks for the cap. The
+# whole document still reaches the operator through the download control, so the
+# cap hides no record from the evidence.
+TABLE_ROW_CAP = 500
+
 
 def cell_text(value: Any) -> str:
     """Return one captured value as one line of text.
@@ -227,30 +234,73 @@ def _client_records(capture: Mapping[str, Any], group: str) -> list[Mapping[str,
     return [record for record in records if isinstance(record, Mapping)]  # A stray value never reaches a row.
 
 
-def page_tables(capture: Mapping[str, Any]) -> dict[str, list[dict[str, str]]]:
+def capped(rows: list[dict[str, str]], name: str) -> tuple[list[dict[str, str]], int]:
+    """Return one table cut to the row cap, with the count it held before.
+
+    Why:
+        A capture of a large site holds thousands of client rows. One page that
+        painted every row would take a long time to render, and the browser
+        would then sort that whole table on every header press.
+
+        Issue #2075 asks each table to carry a cap and to state what the cap
+        removed. A silent cut is worse than no cut, because the operator would
+        read a short table as the whole site.
+
+    Args:
+        rows: Every row that the capture holds for one table.
+        name: The table name, for the log record.
+
+    Returns:
+        The rows to paint, and the count that the capture held. A count equal to
+        the row count means the cap removed nothing.
+    """
+    held = len(rows)  # The count before the cap, which the page states.
+    if held <= TABLE_ROW_CAP:  # The common site fits inside the cap.
+        return rows, held
+    logger.info("Upgrade portal caps the %s table at %s of %s row(s)", name, TABLE_ROW_CAP, held)
+    return rows[:TABLE_ROW_CAP], held  # The page states both numbers, so no reader mistakes the cut.
+
+
+def page_tables(capture: Mapping[str, Any]) -> dict[str, Any]:
     """Return the three row lists that the capture page paints.
 
     Why:
         The page reads one name for each table. Building all three here keeps
         the route short and keeps the column lists in one module.
 
+        Each table also carries the count that the capture holds. A capped table
+        must state what it removed, so the operator never reads a cut table as
+        the whole site.
+
     Args:
         capture: The stored capture document, or an empty map.
 
     Returns:
-        The device rows, the wired client rows, and the wireless client rows.
+        The device rows, the wired client rows, the wireless client rows, the
+        held count of each table, and the cap itself.
     """
+    devices, device_held = capped(device_table(capture), "device")  # Acceptance Scenario 1.
+    wired, wired_held = capped(client_table(capture, WIRED_GROUP, WIRED_COLUMNS), "wired client")
+    wireless, wireless_held = capped(client_table(capture, WIRELESS_GROUP, WIRELESS_COLUMNS), "wireless client")
     return {
-        "device_rows": device_table(capture),  # Acceptance Scenario 1.
-        "wired_rows": client_table(capture, WIRED_GROUP, WIRED_COLUMNS),  # Acceptance Scenario 2, first half.
-        "wireless_rows": client_table(capture, WIRELESS_GROUP, WIRELESS_COLUMNS),  # The second half.
+        "device_rows": devices,
+        "wired_rows": wired,
+        "wireless_rows": wireless,
+        # The page reads each held count beside its table, so a capped table
+        # states both numbers and an uncapped table states nothing at all.
+        "device_rows_held": device_held,
+        "wired_rows_held": wired_held,
+        "wireless_rows_held": wireless_held,
+        "table_row_cap": TABLE_ROW_CAP,
     }
 
 
 __all__ = [
     "DEVICE_COLUMNS",
+    "TABLE_ROW_CAP",
     "WIRED_COLUMNS",
     "WIRELESS_COLUMNS",
+    "capped",
     "cell_text",
     "client_table",
     "device_table",

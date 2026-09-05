@@ -52,6 +52,9 @@ Gunicorn cannot import `fcntl` on Windows.
 | `signin-password` | Password field |
 | `signin-submit` | Sign-in button |
 | `signin-error` | Error message region |
+| `signin-mode-provider` | Credential radio for the address and the password |
+| `signin-mode-token` | Credential radio for the token that the server holds |
+| `signin-mode-browser-token` | Credential radio for a token of this browser session |
 | `twofactor-code` | Second factor field |
 | `twofactor-submit` | Second factor button |
 | `org-search` | Organization filter field |
@@ -209,6 +212,31 @@ the word and never the class.
 | `stop-outcome-writing` | The list of devices that will finish |
 | `stop-outcome-no-cancel` | The list of devices with no cancel path |
 | `stop-outcome-message` | The plain sentence for the operator |
+
+### Reschedule and cancel
+
+Issue #2201 adds these controls. They appear for a run that has not reached the
+cloud, and that run alone. A run past the submission offers the stop control
+above, which cancels the work that the cloud already holds.
+
+| Identifier | Control |
+| --- | --- |
+| `run-schedule-controls` | The region that holds both controls |
+| `run-reschedule-input` | The field for the new duration, such as `8h` |
+| `run-reschedule-button` | Move the start of the run |
+| `run-cancel-button` | End the run with no cloud call |
+| `run-schedule-locked-note` | The reason both controls are off |
+
+### Retry
+
+Issue #2202 adds this control. It appears for a failed run, and for no other
+state.
+
+| Identifier | Control |
+| --- | --- |
+| `run-retry-controls` | The region that holds the retry |
+| `run-retry-button` | Build a new run from the settings of this one |
+| `run-retry-locked-note` | The reason the retry is off |
 
 ### Comparison
 

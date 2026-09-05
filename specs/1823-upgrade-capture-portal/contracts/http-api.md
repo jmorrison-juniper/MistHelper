@@ -469,6 +469,76 @@ The key sits last in the body, so it never hides a key that this contract fixes.
 
 The browser polls this endpoint every 30 seconds.
 
+### `POST /api/runs/<run_id>/retry` — build a new run from a failed one
+
+| Item | Value |
+| --- | --- |
+| Body | Empty |
+| 201 | `{ "run_id": "<new id>", "state": "created", "retry_of_run_id": "<old id>", "notes": [] }` |
+| 401 | `not_authenticated` when no browser session exists |
+| 404 | `run_not_found` |
+| 409 | `site_locked` when a different operator holds the site lock |
+| 409 | `run_not_retryable` when the run holds any state except `failed` |
+| 500 | `run_write_failed` when the store refused the write |
+| 503 | `lock_store_unreachable` when the portal cannot read the site lock |
+
+The new run copies every option of the failed run, the device list, and the
+target version of each device. It names the failed run in `retry_of_run_id`.
+
+Warning: a schedule of the failed run names a moment in the past. A retry that
+kept that moment would write the firmware at once, and the operator would read a
+delayed start that never happens.
+
+The record holds the duration beside the moment, so the retry keeps the duration
+and the start route counts it again. A record that holds a moment alone cannot be
+rebased. The retry drops that schedule, and `notes` names each drop.
+
+The new run adopts no capture of the failed run. The site changed while that run
+wrote firmware to part of it, so the reading before the failure no longer
+describes the site. The confirmation stays locked until a fresh capture verifies.
+
+### `POST /api/runs/<run_id>/reschedule` — move the start of a run that has not begun
+
+| Item | Value |
+| --- | --- |
+| Body | `{ "start_time": "8h" }`, a number and a unit |
+| 200 | `{ "run_id": "<id>", "start_time": <epoch>, "starts_in_seconds": <count> }` |
+| 400 | `bad_option` when the duration names no unit or no number |
+| 401 | `not_authenticated` when no browser session exists |
+| 404 | `run_not_found` |
+| 409 | `site_locked` when a different operator holds the site lock |
+| 409 | `run_already_started` when the run reached the cloud |
+| 500 | `run_write_failed` when the store refused the write |
+| 503 | `lock_store_unreachable` when the portal cannot read the site lock |
+
+The duration counts from the moment of this call and never from the original
+start. An operator who writes `8h` means eight hours from now.
+
+The call writes the run record alone and reaches no cloud endpoint, because the
+run has not started. Every other option of the run stays as it stands.
+
+### `POST /api/runs/<run_id>/cancel` — end a run that has not begun
+
+| Item | Value |
+| --- | --- |
+| Body | Empty |
+| 200 | `{ "run_id": "<id>", "state": "cancelled" }` |
+| 401 | `not_authenticated` when no browser session exists |
+| 404 | `run_not_found` |
+| 409 | `site_locked` when a different operator holds the site lock |
+| 409 | `run_already_started` when the run reached the cloud |
+| 500 | `run_write_failed` when the store refused the write |
+| 503 | `lock_store_unreachable` when the portal cannot read the site lock |
+
+Warning: a cancel ends a run that never reached the cloud. It writes no firmware
+and it changes no device. A run that already sent firmware answers
+`run_already_started`, and the stop control applies to that run instead.
+
+The state `cancelled` is not the state `stopped`. A stop cancels firmware that
+the cloud already holds, and a cancel ends a plan that no device ever saw. A
+reader months later must tell the two apart, because one of them touched
+hardware.
+
 ### `POST /api/runs/<run_id>/stop` — stop the run
 
 | Item | Value |

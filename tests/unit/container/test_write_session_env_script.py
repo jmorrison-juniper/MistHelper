@@ -24,24 +24,25 @@ Scope:
 from __future__ import annotations  # Postponed annotations keep every hint a plain string.
 
 import os  # The writer reads its values from the environment.
-import shutil  # The test needs the path of bash.
 import stat  # One test reads the permission bits of the finished file.
 import subprocess  # The test runs a shell script.
 from pathlib import Path  # Every path in this module is a Path.
 
 import pytest  # The test framework of the project.
 
+from tests.unit.container.bash_support import BASH_PATH, BASH_SKIP_REASON  # The bash that can open the script.
+
 # Find the repository root, because pytest moves the working directory.
 REPO_ROOT = Path(__file__).resolve().parents[3]
 # Point at the script under test.
 WRITER_SCRIPT = REPO_ROOT / "container" / "scripts" / "write-session-env.sh"
-# Locate bash, because the writer is a bash script.
-BASH_PATH = shutil.which("bash")
 # Stop a runaway script, because a hang must fail the test and not the suite.
 HARNESS_TIMEOUT_SECONDS = 30
 
-# Skip the module when bash is absent, because the script needs bash.
-pytestmark = pytest.mark.skipif(BASH_PATH is None, reason="bash is required to run the writer script")
+# Skip the module when no bash can open the script. A bash that refuses a
+# Windows path reaches this guard too, because the presence of bash proves
+# nothing on Windows. Read tests/unit/container/bash_support.py for the reason.
+pytestmark = pytest.mark.skipif(BASH_SKIP_REASON is not None, reason=BASH_SKIP_REASON or "")
 
 # The account that owns the finished file inside the container. A test runs as
 # one account, so the writer treats a failed change of owner as harmless.

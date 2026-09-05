@@ -22,6 +22,17 @@ from dataclasses import dataclass  # WHY: frozen dataclass replaces 10-param __i
 from datetime import UTC, datetime  # WHY: UTC-anchored timestamps in tracking/results filenames
 from typing import Any  # WHY: type-erase mistapi session for both prod object and MagicMock test doubles
 
+# WHY: issue #2253. One reader holds the rule about which endpoint reports the
+# running firmware version. Three endpoints report a version and they do not
+# agree, so a second copy of that rule would let one path plan the wrong upgrade.
+# Issue #2006 records what that costs on production hardware.
+from src.firmware.running_version import RunningFirmwareVersionResolver
+
+# The value that names a device with no reading from a running-version endpoint.
+# `_partition_devices_by_version` keeps such a device in the upgrade bucket, so
+# no operator skips a device on a value the portal could not confirm.
+UNKNOWN_VERSION = "Unknown"
+
 
 @dataclass(frozen=True, slots=True)  # WHY: frozen=True prevents mid-run mutation; slots=True stops attr drift
 class BulkAPUpgraderConfig:  # WHY: class definition (see docstring)
@@ -124,6 +135,9 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         self.all_aps: list[dict[str, Any]] = []  # WHY: flat list of every AP across selected sites
         self.aps_by_model: dict[str, list[dict[str, Any]]] = {}  # WHY: grouping powers per-model firmware analysis
         self.ap_versions: dict[str, str] = {}  # WHY: model -> current version snapshot for plan diffing
+        # WHY: issue #2253. The resolver owns the running-version rule. It is built
+        # once, because every read of it needs the same session and holds no state.
+        self._version_resolver = RunningFirmwareVersionResolver(self.apisession)
 
     def _init_plan_and_results_state(self) -> None:  # WHY: helper definition (see docstring)
         """Reset the upgrade plan and execution-result tallies.
@@ -559,9 +573,9 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         self._display_model_summary()  # WHY: instance state
         return True  # WHY: surface computed result
 
-    def _fetch_all_ap_stats(self) -> dict[str, Any]:  # WHY: helper definition (see docstring)
+    def _fetch_all_ap_stats(self) -> dict[str, str]:  # WHY: helper definition (see docstring)
         """Fetch device stats for all sites."""
-        stats_lookup: dict[str, Any] = {}  # WHY: capture intermediate value
+        stats_lookup: dict[str, str] = {}  # WHY: capture intermediate value
         for site_id, site_data in self.all_sites_aps.items():  # WHY: iterate collection
             if site_data["count"] == 0:  # WHY: guard on condition
                 continue  # WHY: skip iteration
@@ -569,14 +583,17 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             stats_lookup.update(site_stats)  # WHY: workflow step
         return stats_lookup  # WHY: surface computed result
 
-    def _fetch_site_ap_stats(self, site_id: str, site_name: str) -> dict[str, Any]:
-        """Fetch AP stats for a single site, returning a device_id-keyed lookup."""
+    def _fetch_site_ap_stats(self, site_id: str, site_name: str) -> dict[str, str]:
+        """Fetch AP stats for a single site, returning a key-to-version lookup."""
         try:  # WHY: any network/parse failure yields empty lookup (matches pre-refactor behavior)
             site_stats = self._call_site_stats_api(site_id, site_name)  # WHY: extracted API call
         except Exception as error:  # WHY: recover from failure
             logging.error("Failed to fetch stats for site %s: %s", site_name, error)  # WHY: error log
             return {}  # WHY: empty lookup keeps outer loop resilient
-        return self._index_stats_by_device_id(site_stats)  # WHY: PCPP compute the id->stats map
+        # WHY: issue #2253. One reader holds the rule about which endpoint reports the
+        # running version and how a stats row joins a device row. A second copy here
+        # would drift from it, and issue #2006 records what a drifted rule costs.
+        return RunningFirmwareVersionResolver.index_stats_rows(site_stats)  # WHY: the shared join map
 
     def _call_site_stats_api(self, site_id: str, site_name: str) -> list[dict[str, Any]]:
         """Invoke listSiteDevicesStats via mistapi and return list of stats records."""
@@ -588,16 +605,24 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         )
         return mistapi.get_all(response=stats_resp, mist_session=self.apisession) or []  # WHY: unify None -> []
 
-    def _index_stats_by_device_id(self, site_stats: list[dict[str, Any]]) -> dict[str, Any]:
-        """Index stats records by device_id (falling back to device_id or mac field)."""
-        lookup: dict[str, Any] = {}  # WHY: accumulator keyed by device id
-        for stats in site_stats:  # WHY: single pass over stats records
-            device_id = stats.get("id") or stats.get("device_id") or stats.get("mac")  # WHY: pick first non-empty
-            if device_id:  # WHY: skip records with no identifier
-                lookup[device_id] = stats  # WHY: last-write-wins for duplicate ids
-        return lookup  # WHY: surface computed result
+    def _index_stats_by_device_id(self, site_stats: list[dict[str, Any]]) -> dict[str, str]:
+        """Index stats records by device id, by device_id, and by MAC address.
 
-    def _process_aps_with_stats(self, stats_lookup: dict[str, Any]) -> None:  # WHY: helper definition (see docstring)
+        Deprecated:
+            Issue #2253 moved this rule into
+            ``RunningFirmwareVersionResolver.index_stats_rows``. This method now
+            calls that reader, so one rule serves every firmware path. Call the
+            resolver directly in new code.
+
+        Args:
+            site_stats: The stats rows of one site.
+
+        Returns:
+            A map of device id or MAC address to the running version string.
+        """
+        return RunningFirmwareVersionResolver.index_stats_rows(site_stats)  # WHY: one rule for every caller
+
+    def _process_aps_with_stats(self, stats_lookup: dict[str, str]) -> None:  # WHY: helper definition (see docstring)
         """Process APs and extract version information."""
         for ap in self.all_aps:  # WHY: iterate collection
             model = ap.get("model", "Unknown")  # WHY: capture intermediate value
@@ -610,18 +635,33 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             version = self._get_ap_version(ap, stats_lookup)  # WHY: capture intermediate value
             self.ap_versions[device_id] = version  # WHY: instance state
 
-    def _get_ap_version(self, ap: dict[str, Any], stats_lookup: dict[str, Any]) -> str:  # WHY: helper definition (se...
-        """Get firmware version for an AP."""
-        device_id: str = str(ap.get("id", ""))  # WHY: capture intermediate value
-        device_mac: str = str(ap.get("mac", ""))  # WHY: capture intermediate value
+    def _get_ap_version(self, ap: dict[str, Any], stats_lookup: dict[str, str]) -> str:
+        """Return the running firmware version of one access point.
 
-        for key in [device_id, device_mac]:  # WHY: iterate collection
-            if key and key in stats_lookup:  # WHY: guard on condition
-                stats = stats_lookup[key]  # WHY: capture intermediate value
-                if isinstance(stats, dict):  # WHY: guard on condition
-                    version: str = str(stats.get("version", "Unknown"))  # WHY: capture intermediate value
-                    return version  # WHY: surface computed result
-        return "Unknown"  # WHY: surface computed result
+        Why:
+            Issue #2253. The rule about which endpoint reports the running
+            version lives in ``RunningFirmwareVersionResolver``. This method
+            reads that rule rather than repeating it, so a correction reaches
+            every firmware path at one time.
+
+            Warning: a reading that did not come from a running-version endpoint
+            never reaches a caller as a version. The caller reads ``Unknown``
+            instead, and ``_partition_devices_by_version`` then keeps the device
+            in the upgrade bucket. A stale value that looked like a version could
+            place the device in the already-at-target bucket, and the operator
+            would skip a device that still needs the firmware.
+
+        Args:
+            ap: One access point row from the device listing.
+            stats_lookup: The key-to-version map that the stats endpoint built.
+
+        Returns:
+            The running version, or ``Unknown`` when no running endpoint named one.
+        """
+        reading = self._version_resolver.read(ap, stats_lookup)  # WHY: one reader applies the endpoint rule
+        if not reading.is_running:  # WHY: a stale reading must never look like a running version
+            return UNKNOWN_VERSION  # WHY: the caller keeps this device in the upgrade bucket
+        return reading.value  # WHY: the value came from a running-version endpoint
 
     def _display_model_summary(self) -> None:  # WHY: helper definition (see docstring)
         """Display summary of AP models found."""

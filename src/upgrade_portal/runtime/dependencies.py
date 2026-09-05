@@ -51,7 +51,7 @@ PROBE_TIMEOUT_SECONDS = 2.0  # A local service answers at once. Two seconds keep
 DOCUMENT_STORE_KEY = "document_store"  # The registry key of the capture and run store.
 LOCK_STORE_KEY = "lock_store"  # The registry key of the site lock store.
 
-DEFAULT_ARANGO_PORT = 8529  # The port a URL carries when it names no port of its own.
+DEFAULT_ARANGO_PORT = 9529  # The project port. Not 8529, which every other project also publishes.
 
 READINESS_ROUTE = "/readyz"  # The deeper, authenticated reading that this preflight does not repeat.
 
