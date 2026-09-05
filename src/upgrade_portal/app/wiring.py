@@ -62,6 +62,13 @@ CAPTURE_SERVICE_MODULE = (
 UPGRADE_SERVICE_MODULE = (
     f"{PACKAGE_NAME}.upgrade.service"  # Owns UpgradeService with serial/parallel firmware upgrade orchestration.
 )
+# Phase 3 T-010/T-012: Module paths for Phase 3 services (settle gate, comparison).
+SETTLE_GATE_SERVICE_MODULE = (
+    f"{PACKAGE_NAME}.settle.service"  # Owns SettleGateService for post-upgrade device validation.
+)
+COMPARISON_SERVICE_MODULE = (
+    f"{PACKAGE_NAME}.compare.service"  # Owns ComparisonService for pre/post-upgrade snapshot comparison.
+)
 
 # `upgrade/options.py` and `upgrade/stop.py` both import this module under the
 # same absolute name, so the portal already needs it on the import path.
@@ -77,6 +84,9 @@ PRECHECK_ADOPTER_KEY = "PRECHECK_ADOPTER"  # The seam that reads and links a sta
 # Phase 2 T-006/T-008/T-009: Phase 2 service seams for capture and upgrade orchestration.
 CAPTURE_SERVICE_KEY = "CAPTURE_SERVICE"  # The seam that holds the CaptureService for pre/post-upgrade snapshots.
 UPGRADE_SERVICE_KEY = "UPGRADE_SERVICE"  # The seam that holds the UpgradeService for firmware upgrade orchestration.
+# Phase 3 T-010/T-012: Phase 3 service seams for settle gate and comparison.
+SETTLE_GATE_SERVICE_KEY = "SETTLE_GATE_SERVICE"  # The seam that holds SettleGateService.
+COMPARISON_SERVICE_KEY = "COMPARISON_SERVICE"  # The seam that holds ComparisonService.
 
 POST_CHECK_ORDINAL = 2  # The second capture of a run. `driver.post_check_request` sends this value.
 
@@ -1057,7 +1067,168 @@ def _install_upgrade_service(app: Flask) -> None:
         # WHY: Do not raise—a missing UpgradeService should not crash the portal, only the upgrade route should fail
 
 
-def plan_family(plan: Any) -> Any:
+def _install_settle_gate_service(app: Flask) -> None:
+    """Install the SettleGateService into the Flask config seam for Phase 3 T-010.
+
+    Why:
+       Phase 3 T-010 requires post-upgrade device validation via settle gate.
+       The SettleGateService encapsulates the logic to verify devices have settled
+       after firmware upgrade by running 4 parallel checks: ping, API, firmware
+       version, and LLDP neighbors. The route handler reads the service from the
+       Flask config seam (SETTLE_GATE_SERVICE_KEY) so tests can inject a mock.
+
+       The service needs access to: mist_client (to call Mist API), db_router
+       (to persist settle gate results to ArangoDB), and audit_logger (to log
+       all settle gate operations). These collaborators are passed to the
+       SettleGateService constructor and used internally by wait_for_settle()
+       method.
+
+    Args:
+       app: The Flask application to wire the service into.
+    """
+    try:
+        # WHY: Import the SettleGateService class from the settle/service.py module
+        settle_gate_service_module = load_module(SETTLE_GATE_SERVICE_MODULE)  # Late import
+        if settle_gate_service_module is None:  # The settle gate service module is not available in this deployment
+            logger.warning(
+                "wiring: the settle gate service module is absent, skipping SettleGateService installation"
+            )  # Only pre-phase3 deployments lack this
+            return
+
+        # WHY: Import required collaborators for SettleGateService: Mist client, database router, audit logger
+        mistapi_module = load_module(f"{PACKAGE_NAME}.mistapi")  # The Mist API client wrapper
+        if mistapi_module is None:  # The mistapi module is not available
+            logger.warning(
+                "wiring: mistapi module is absent, SettleGateService needs it to verify device settle"
+            )  # Cannot proceed without API client
+            return
+
+        db_module = load_module(STORE_MODULE)  # The database router for ArangoDB persistence
+        if db_module is None:  # The store module is not available
+            logger.warning(
+                "wiring: store module is absent, SettleGateService needs it to persist settle gate results"
+            )  # Cannot proceed without database
+            return
+
+        # WHY: Get the audit logger instance to log settle gate operations before/after
+        audit_logger = logging.getLogger("upgrade_portal.audit")  # The audit logger for compliance and debugging
+
+        # WHY: Get the Mist API client from the Flask config or create a new one
+        mist_client = app.config.get("MIST_CLIENT")  # May have been injected by a test
+        if mist_client is None:  # The Mist client is not already in Flask config
+            # WHY: Create a new Mist API client using environment variables (org_id, api_token)
+            mistapi_class = getattr(mistapi_module, "MistApiClient", None)  # The class that wraps Mist API calls
+            if mistapi_class is not None:  # The class exists in the mistapi module
+                mist_client = mistapi_class()  # Instantiate with env vars (org_id, api_token, host)
+
+        # WHY: Get the database router instance or create a new one
+        db_router = app.config.get("DB_ROUTER")  # May have been injected by a test
+        if db_router is None:  # The database router is not already in Flask config
+            # WHY: Import and create the database router to connect to ArangoDB
+            db_class = getattr(db_module, "DatabaseRouter", None)  # The class that routes store operations
+            if db_class is not None:  # The database router class exists
+                db_router = db_class()  # Instantiate with env vars (arangodb_host, arangodb_user, arangodb_password)
+
+        # WHY: Instantiate the SettleGateService with all required collaborators
+        SettleGateService = getattr(
+            settle_gate_service_module, "SettleGateService", None
+        )  # The service class from settle/service.py
+        if SettleGateService is not None:  # The SettleGateService class exists
+            settle_gate_service = SettleGateService(
+                mist_client=mist_client,  # The Mist API client for device settle gate checks
+                db_router=db_router,  # The database router for ArangoDB settle gate result persistence
+                audit_logger=audit_logger,  # The audit logger for compliance recording
+            )
+            # WHY: Write the service instance to Flask config with setdefault so tests can inject a mock
+            app.config.setdefault(SETTLE_GATE_SERVICE_KEY, settle_gate_service)  # Install the seam for routes to use
+            logger.info(
+                "wiring: SettleGateService installed on seam %s for Phase 3 T-010", SETTLE_GATE_SERVICE_KEY
+            )  # Record success
+        else:
+            logger.warning(
+                "wiring: SettleGateService class not found in %s module", SETTLE_GATE_SERVICE_MODULE
+            )  # Unexpected: module exists but class missing
+    except Exception as e:  # Catch any unexpected error during service installation
+        logger.error("wiring: failed to install SettleGateService: %s", str(e))  # Record error
+        # WHY: Do not raise—a missing SettleGateService should not crash the portal
+
+
+def _install_comparison_service(app: Flask) -> None:
+    """Install the ComparisonService into the Flask config seam for Phase 3 T-012.
+
+    Why:
+       Phase 3 T-012 requires pre/post-upgrade snapshot comparison with settle
+       gate prerequisite enforcement. The ComparisonService encapsulates the logic
+       to verify settle gate passed, fetch pre-capture and post-capture snapshots,
+       calculate deltas, and compare key fields. The route handler reads the
+       service from the Flask config seam (COMPARISON_SERVICE_KEY) so tests can
+       inject a mock.
+
+       The service needs access to: settle_gate_service (to verify prerequisite),
+       db_router (to fetch captures and persist comparison results), and
+       audit_logger (to log all comparison operations). These collaborators are
+       passed to the ComparisonService constructor and used internally by
+       compare() method.
+
+    Args:
+       app: The Flask application to wire the service into.
+    """
+    try:
+        # WHY: Import the ComparisonService class from the compare/service.py module
+        comparison_service_module = load_module(COMPARISON_SERVICE_MODULE)  # Late import to avoid network at parse time
+        if comparison_service_module is None:  # The comparison service module is not available in this deployment
+            logger.warning(
+                "wiring: the comparison service module is absent, skipping ComparisonService installation"
+            )  # Only pre-phase3 deployments lack this
+            return
+
+        # WHY: Import required collaborators for ComparisonService: settle gate service, database router, audit logger
+        db_module = load_module(STORE_MODULE)  # The database router for ArangoDB persistence
+        if db_module is None:  # The store module is not available
+            logger.warning(
+                "wiring: store module is absent, ComparisonService needs it to persist comparison results"
+            )  # Cannot proceed without database
+            return
+
+        # WHY: Get the audit logger instance to log comparison operations before/after
+        audit_logger = logging.getLogger("upgrade_portal.audit")  # The audit logger for compliance and debugging
+
+        # WHY: Get the database router instance or create a new one
+        db_router = app.config.get("DB_ROUTER")  # May have been injected by a test
+        if db_router is None:  # The database router is not already in Flask config
+            # WHY: Import and create the database router to connect to ArangoDB
+            db_class = getattr(db_module, "DatabaseRouter", None)  # The class that routes store operations
+            if db_class is not None:  # The database router class exists
+                db_router = db_class()  # Instantiate with env vars (arangodb_host, arangodb_user, arangodb_password)
+
+        # WHY: Get the SettleGateService from Flask config (installed by _install_settle_gate_service)
+        settle_gate_service = app.config.get(SETTLE_GATE_SERVICE_KEY)  # The settle gate service for prerequisite checks
+
+        # WHY: Instantiate the ComparisonService with all required collaborators
+        ComparisonService = getattr(
+            comparison_service_module, "ComparisonService", None
+        )  # The service class from compare/service.py
+        if ComparisonService is not None:  # The ComparisonService class exists
+            comparison_service = ComparisonService(
+                settle_gate_service=settle_gate_service,  # The settle gate service for prerequisite enforcement
+                db_router=db_router,  # The database router for ArangoDB capture fetch and result persistence
+                audit_logger=audit_logger,  # The audit logger for compliance recording
+            )
+            # WHY: Write the service instance to Flask config with setdefault so tests can inject a mock
+            app.config.setdefault(COMPARISON_SERVICE_KEY, comparison_service)  # Install the seam for routes to use
+            logger.info(
+                "wiring: ComparisonService installed on seam %s for Phase 3 T-012", COMPARISON_SERVICE_KEY
+            )  # Record success
+        else:
+            logger.warning(
+                "wiring: ComparisonService class not found in %s module", COMPARISON_SERVICE_MODULE
+            )  # Unexpected: module exists but class missing
+    except Exception as e:  # Catch any unexpected error during service installation
+        logger.error("wiring: failed to install ComparisonService: %s", str(e))  # Record error
+        # WHY: Do not raise—a missing ComparisonService should not crash the portal
+
+
+def plan_family(plan: Any) -> Any | None:  # WHY: extract family from plan endpoint
     """Return the gateway family that the status read of one plan needs.
 
     Why:
@@ -1193,9 +1364,13 @@ def install_seams(app: Flask) -> None:
     _install_capture_service(app)  # Inject CaptureService into Flask config seam
     # Phase 2 T-008/T-009: Wire UpgradeService for firmware upgrade orchestration
     _install_upgrade_service(app)  # Inject UpgradeService into Flask config seam
+    # Phase 3 T-010: Wire SettleGateService for post-upgrade device validation
+    _install_settle_gate_service(app)  # Inject SettleGateService into Flask config seam
+    # Phase 3 T-012: Wire ComparisonService for pre/post-upgrade snapshot comparison
+    _install_comparison_service(app)  # Inject ComparisonService into Flask config seam
     prepare_storage()  # Without this no capture can verify, so no upgrade can ever start.
     logger.info(
-        "wiring: the portal holds the run store, the launcher, the stop runner, the adopter, and the Phase 2 services"
+        "wiring: the portal holds the run store, the launcher, the stop runner, the adopter, and the Phase 2-3 services"
     )  # Once.
 
 

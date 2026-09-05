@@ -290,6 +290,17 @@ services:
       # values reach Observium's own sensor poller and RRD graphs instead of
       # only being visible through manual snmpwalk. See the script for why.
       - ./container/observium/20-add-mist-static-sensors.sh:/etc/my_init.d/20-add-mist-static-sensors.sh:ro
+      # Walks the site, device, and SLE tables of MISTHELPER-MIB at discovery
+      # time and registers one sensor per populated cell. Row counts change
+      # over time (a NOC adds a site, Mist retires a device), so these three
+      # tables cannot use the fixed config.php mechanism the file above uses
+      # for the org-level scalars. See the script for the full reason and for
+      # why it is safe for this file to run against every Linux/Unix device.
+      #
+      # Read-write, not `:ro`, for the same reason as the MIB mount above:
+      # this path sits under /opt/observium, and firstrun.sh's recursive
+      # chown fails loudly (though harmlessly) on a read-only file there.
+      - ./container/observium/discovery-sensors-unix.inc.php:/opt/observium/includes/discovery/sensors/unix.inc.php
     networks:
       - misthelper-network
     restart: unless-stopped
