@@ -32,7 +32,7 @@
 set -e  # Stop on the first error, so a partial edit never reaches config.php.
 
 CONFIG_PHP="/config/config.php"  # The persisted Observium settings file (symlinked from /opt/observium/config.php).
-MARKER="MISTHELPER_STATIC_SENSORS_V1"  # Bumped only if the sensor set below changes shape.
+MARKER="MISTHELPER_STATIC_SENSORS_V2"  # Bumped only if the sensor set below changes shape.
 
 if [ ! -f "$CONFIG_PHP" ]; then  # A missing file means Observium has not finished its first boot yet.
     echo "[MIST-SENSORS] ERROR: $CONFIG_PHP not found. Observium may not be initialized yet." >&2
@@ -55,7 +55,13 @@ cat >> "$CONFIG_PHP" <<'EOF'
 // Looked up by hostname, not a fixed device_id, so a later re-add of the
 // device does not require a manual edit here.
 $mist_device_id = NULL;
-$mist_db_link = @mysqli_connect($config['db_host'], $config['db_user'], $config['db_pass'], $config['db_name']);
+// mysqli treats the literal string "localhost" as a request for a Unix socket,
+// not TCP. This image runs MariaDB with no socket file, only TCP on 127.0.0.1,
+// so a plain mysqli_connect($config['db_host'], ...) fails with "No such file
+// or directory" even though Observium's own framework connects fine (it forces
+// TCP internally). Normalize the host here instead of guessing its method.
+$mist_db_host = ($config['db_host'] === 'localhost') ? '127.0.0.1' : $config['db_host'];
+$mist_db_link = @mysqli_connect($mist_db_host, $config['db_user'], $config['db_pass'], $config['db_name']);
 if ($mist_db_link) {
     $mist_result = mysqli_query($mist_db_link, "SELECT device_id FROM devices WHERE hostname = 'misthelper-app' LIMIT 1");
     if ($mist_result && ($mist_row = mysqli_fetch_assoc($mist_result))) {
@@ -72,7 +78,7 @@ if ($mist_device_id) {
     $config['sensors']['static'][] = ['device_id' => $mist_device_id, 'class' => 'gauge', 'oid' => $mist_base . '.90.0', 'descr' => 'Mist scrape success', 'multiplier' => 1];
     $config['sensors']['static'][] = ['device_id' => $mist_device_id, 'class' => 'age', 'oid' => $mist_base . '.91.0', 'descr' => 'Mist scrape age', 'multiplier' => 1];
 }
-unset($mist_device_id, $mist_db_link, $mist_result, $mist_row, $mist_base);
+unset($mist_device_id, $mist_db_host, $mist_db_link, $mist_result, $mist_row, $mist_base);
 // End MistHelper static sensors
 EOF
 sed -i "s/\$MARKER/$MARKER/" "$CONFIG_PHP"  # Turn the literal placeholder into the real marker the check above reads.
