@@ -91,7 +91,7 @@ def create_audit_routes(app, audit_logger: AuditLogger):
         except ValueError as e:
             # WHY: catch invalid parameter values
             logger.warning("audit_query_invalid_param", error=str(e))  # WHY: log invalid param
-            return jsonify({'error': f'invalid parameter: {str(e)}'}), 400  # WHY: return bad request
+            return jsonify({'error': 'invalid parameter'}), 400  # WHY: avoid exposing exception details to the client
 
         except Exception as e:
             # WHY: catch all other exceptions
