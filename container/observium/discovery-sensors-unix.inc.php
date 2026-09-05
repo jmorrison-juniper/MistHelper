@@ -72,7 +72,23 @@ function mist_discover_table($device, $base_oid, $entry_name, $subtree, $identit
             }
             $oid   = "$base_oid.$subtree.1.$column_number.$index";
             $descr = "$row_label $identity: " . mist_readable_column($column_name);
-            discover_sensor_ng($device, $sensor_class, 'MISTHELPER-MIB', $column_name, $oid, $index, $descr, $multiplier, $row[$column_name]);
+            if ($sensor_class === 'status') {
+                // An up/down (or similar named-state) reading belongs under Observium's Status
+                // entity, not a Gauge sensor: it moves the row out of the far larger Gauge
+                // listing, and Observium already colors a "down" status red on its own.
+                //
+                // The mib argument here MUST be the literal string 'STATIC', not
+                // 'MISTHELPER-MIB'. get_states_definition() (includes/entities/status.inc.php)
+                // reads $config['status']['static_states'][$type] only on that exact
+                // 'STATIC' fast path -- the same path the documented static-status
+                // feature (https://docs.observium.org/statics/) uses for a custom state
+                // type. Any other mib value sends this to the standard MIB-derived state
+                // lookup, which finds nothing for a type this MIB never declared, and the
+                // status silently never gets created.
+                discover_status_ng($device, 'STATIC', $column_name, $oid, $index, 'mist-device-up', $descr, $row[$column_name]);
+            } else {
+                discover_sensor_ng($device, $sensor_class, 'MISTHELPER-MIB', $column_name, $oid, $index, $descr, $multiplier, $row[$column_name]);
+            }
         }
     }
 }
@@ -116,8 +132,12 @@ mist_discover_table($device, $mist_base, 'mistSiteEntry', 2, 'mistSiteInfo', 'Si
 // have no reading for this org's device mix today; the loop above skips a
 // cell with no value rather than register a broken sensor, and it picks
 // the column up on its own the day Mist starts returning it.
+//
+// mistDeviceUp uses the 'status' class (a special case mist_discover_table()
+// recognizes above), not 'gauge', because an up/down reading is a named
+// state, and Observium's own Status entity already colors "down" red.
 mist_discover_table($device, $mist_base, 'mistDeviceEntry', 3, 'mistDeviceInfo', 'Device', [
-    'mistDeviceUp'                                 => [2, 'gauge', 1],
+    'mistDeviceUp'                                 => [2, 'status', 1],
     'mistDeviceUptimeSeconds'                       => [3, 'age', 1],
     'mistDeviceLastSeenTimestampSeconds'            => [4, 'gauge', 1],
     'mistDeviceClients'                             => [5, 'gauge', 1],
@@ -134,10 +154,14 @@ mist_discover_table($device, $mist_base, 'mistDeviceEntry', 3, 'mistDeviceInfo',
 // Service level expectations: one row for each Mist SLE category (coverage,
 // roaming, throughput, and so on). The row identity is mistSleIdentity, not
 // an 'info' metric, because the catalog holds no text metric for this scope.
+//
+// mistSleRatio uses the 'quality_factor' class, not 'gauge', because a
+// service level ratio is a quality measurement, and giving it its own class
+// both reads correctly and moves it out of the Gauge listing.
 mist_discover_table($device, $mist_base, 'mistSleEntry', 4, 'mistSleIdentity', 'SLE', [
     'mistSleUserMinutesTotal' => [1, 'gauge', 1],
     'mistSleUserMinutesOk'    => [2, 'gauge', 1],
-    'mistSleRatio'            => [3, 'gauge', 0.0001],
+    'mistSleRatio'            => [3, 'quality_factor', 0.0001],
 ]);
 
 unset($mist_probe, $mist_base);
