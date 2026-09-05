@@ -277,6 +277,11 @@ services:
       # MISTHELPER-MIB` and `snmptranslate` can resolve SNMPv2-SMI/SNMPv2-TC
       # from the IETF set Observium already bundles. See the script for why.
       - ./container/observium/10-fix-mib-search-path.sh:/etc/my_init.d/10-fix-mib-search-path.sh:ro
+      # Registers the Mist Cloud health metrics as native Observium "static
+      # sensors" (the Community Edition path for a custom vendor MIB), so the
+      # values reach Observium's own sensor poller and RRD graphs instead of
+      # only being visible through manual snmpwalk. See the script for why.
+      - ./container/observium/20-add-mist-static-sensors.sh:/etc/my_init.d/20-add-mist-static-sensors.sh:ro
     networks:
       - misthelper-network
     restart: unless-stopped

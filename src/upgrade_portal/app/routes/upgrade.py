@@ -101,6 +101,8 @@ RETRY_PATH = "/api/runs/<run_id>/retry"  # Issue #2202 builds a new run from the
 RESCHEDULE_PATH = "/api/runs/<run_id>/reschedule"  # Issue #2201 moves the start of a run that has not begun.
 CANCEL_PATH = "/api/runs/<run_id>/cancel"  # Issue #2201 ends a run that never reached the cloud.
 STOP_PATH = "/api/runs/<run_id>/stop"  # The one stop action of a run.
+UPGRADE_START_PATH = "/api/runs/<run_id>/upgrade/start"  # Phase 2 T-008: Start upgrade via UpgradeService.
+UPGRADE_CANCEL_PATH = "/api/runs/<run_id>/upgrade/cancel"  # Phase 2 T-009: Cancel upgrade via UpgradeService.
 RUN_PAGE_PATH = "/runs/<run_id>"  # The live run view with the phase list and the device table.
 OPTIONS_PAGE_PATH = "/runs/<run_id>/options"  # The page that picks a version for each device.
 CONFIRM_PAGE_PATH = "/runs/<run_id>/confirm"  # The page that reads the typed word `CONFIRM`.
@@ -113,6 +115,7 @@ RUN_STORE_KEY = "RUN_STORE"  # The seam for the run record store.
 LAUNCHER_KEY = "RUN_LAUNCHER"  # The seam that hands one prepared record to the run driver.
 STOP_RUNNER_KEY = "STOP_RUNNER"  # The seam for the cancel work of a stop.
 PRECHECK_ADOPTER_KEY = "PRECHECK_ADOPTER"  # The seam that reads and links a standalone pre-check.
+UPGRADE_SERVICE_KEY = "UPGRADE_SERVICE"  # Phase 2 T-008/T-009: The seam for UpgradeService (start/cancel/status).
 OPTIONS_BUILDER_KEY = "UPGRADE_OPTIONS_BUILDER"  # The seam for `upgrade/options.py`.
 OPTIONS_VIEW_KEY = "UPGRADE_OPTIONS_VIEW"  # The seam for the device rows of the options page.
 VERSIONS_KEY = "UPGRADE_VERSIONS"  # The version list of each model, for the options page.
@@ -1795,6 +1798,178 @@ def confirm_page(run_id: str) -> str:
             **run_lock_banner(record),
         },  # One merged dict, because the banner repeats `site_id` and a second splat of it would fault.
     )
+
+
+# --------------------------------------------------------------------------
+# Phase 2 T-008/T-009: Upgrade service routes (new paths)
+# --------------------------------------------------------------------------
+
+
+@upgrade_bp.post(UPGRADE_START_PATH)  # Phase 2 T-008: POST /api/runs/<run_id>/upgrade/start
+@identity.require_session  # Ensure operator is authenticated
+def start_upgrade_via_service(run_id: str) -> tuple[Response, int]:
+    """Start a firmware upgrade for a run using UpgradeService orchestration.
+
+    Why:
+        T-008 requires orchestrating firmware upgrades with serial/parallel strategies.
+        This handler invokes UpgradeService.start_upgrade() to validate firmware versions,
+        manage device status, handle retries, and track progress. UpgradeService manages
+        the state machine and per-device status updates.
+
+    Args:
+        run_id: The upgrade run identifier.
+
+    Returns:
+        JSON response with upgrade status, or error refusal.
+    """
+    # WHY: Fetch the UpgradeService from Flask config seam; returns None if not wired yet
+    upgrade_service = current_app.config.get(UPGRADE_SERVICE_KEY)
+    if upgrade_service is None:  # UpgradeService not wired, cannot proceed with upgrade
+        logger.error("upgrade: UpgradeService not wired for run %s", run_id)  # Name the missing dependency
+        return json_error(SERVER_ERROR_STATUS, "service_unavailable", "UpgradeService not available")
+
+    # WHY: Read the request body to extract upgrade parameters (device IDs, version, strategy, etc)
+    body = request.get_json() or {}  # Parse JSON request body, default to empty dict if parsing fails
+    device_ids = body.get("device_ids", [])  # List of device IDs to upgrade
+    firmware_version = body.get("firmware_version", "")  # Target firmware version for all devices
+    strategy = body.get("strategy", "serial")  # Upgrade strategy: "serial" or "parallel"
+    rollback_enabled = body.get("rollback_enabled", False)  # Whether to enable automatic rollback on failure
+
+    # WHY: Validate required parameters before making any upgrade operations
+    if not run_id or not device_ids or not firmware_version or strategy not in ("serial", "parallel"):
+        logger.warning(
+            "upgrade: invalid parameters for upgrade start: run=%s devices=%s version=%s strategy=%s",
+            run_id,
+            len(device_ids) if isinstance(device_ids, list) else 0,
+            firmware_version,
+            strategy,
+        )
+        return json_error(
+            BAD_REQUEST_STATUS,
+            "invalid_parameters",
+            "Missing or invalid parameters: run_id, device_ids, firmware_version, strategy",
+        )
+
+    try:  # UpgradeService call may fail due to validation, API, or transient errors
+        logger.info(
+            "upgrade: start upgrade for run %s with strategy=%s on %d devices", run_id, strategy, len(device_ids)
+        )  # BEFORE service call
+
+        # WHY: Invoke UpgradeService.start_upgrade() to begin firmware update orchestration
+        # Returns upgrade_run record with initial status and per-device state tracking
+        upgrade_result = upgrade_service.start_upgrade(
+            run_id=run_id,
+            device_ids=device_ids,
+            firmware_version=firmware_version,
+            strategy=strategy,
+            rollback_enabled=rollback_enabled,
+        )
+
+        logger.debug(
+            "upgrade: upgrade started for run %s with status %s", run_id, upgrade_result.get("status")
+        )  # AFTER service call
+
+        # WHY: Build response with upgrade ID and initial status for browser polling
+        response_body = {
+            "upgrade_id": run_id,  # Use run_id as upgrade identifier
+            "status": upgrade_result.get("status", "pending"),  # Current upgrade status
+            "devices_count": len(device_ids),  # Total devices in this upgrade
+            "strategy": strategy,  # Echo back the strategy used
+            "rollback_enabled": rollback_enabled,  # Confirm rollback setting
+        }
+        return jsonify(response_body), ACCEPTED_STATUS  # 202 Accepted: async work started
+
+    except Exception as fault:  # UpgradeService raised unexpected fault (validation, API, database, etc)
+        logger.error("upgrade: start upgrade for run %s failed: %s", run_id, type(fault).__name__)  # Name fault type
+        return json_error(SERVER_ERROR_STATUS, "upgrade_failed", str(fault))  # Return error to browser
+
+
+@upgrade_bp.get(STATUS_PATH)  # Phase 2 T-009: GET /api/runs/<run_id>/status (also serves real-time upgrade status)
+@identity.require_session  # Ensure operator is authenticated
+def upgrade_status_via_service(run_id: str) -> tuple[Response, int]:
+    """Poll the real-time status of an upgrade run via UpgradeService.
+
+    Why:
+        T-009 requires real-time progress tracking: per-device status, progress %, ETA, elapsed time.
+        This handler invokes UpgradeService.get_upgrade_status() to fetch current device states
+        and calculate aggregate metrics. Browser polls every 1 second for live dashboard updates.
+
+    Args:
+        run_id: The upgrade run identifier.
+
+    Returns:
+        JSON response with upgrade status and device details, or error refusal.
+    """
+    # WHY: Fetch the UpgradeService from Flask config seam; returns None if not wired yet
+    upgrade_service = current_app.config.get(UPGRADE_SERVICE_KEY)
+    if upgrade_service is None:  # UpgradeService not wired, cannot fetch status
+        logger.error(
+            "upgrade: UpgradeService not wired for status poll of run %s", run_id
+        )  # Name the missing dependency
+        return json_error(SERVER_ERROR_STATUS, "service_unavailable", "UpgradeService not available")
+
+    try:  # UpgradeService call may fail due to database or transient errors
+        logger.debug("upgrade: poll status for run %s", run_id)  # BEFORE service call
+
+        # WHY: Invoke UpgradeService.get_upgrade_status() to fetch real-time upgrade state
+        # Returns status object with per-device states, progress %, ETA, elapsed time
+        status_result = upgrade_service.get_upgrade_status(run_id)
+
+        logger.debug(
+            "upgrade: status poll for run %s returned %d devices", run_id, len(status_result.get("devices", []))
+        )  # AFTER service call
+
+        # WHY: Return the status result directly; UpgradeService owns the response shape
+        return jsonify(status_result), OK_STATUS  # 200 OK: status fetched successfully
+
+    except Exception as fault:  # UpgradeService raised unexpected fault (database, API, etc)
+        logger.error("upgrade: status poll for run %s failed: %s", run_id, type(fault).__name__)  # Name fault type
+        return json_error(SERVER_ERROR_STATUS, "status_failed", str(fault))  # Return error to browser
+
+
+@upgrade_bp.post(UPGRADE_CANCEL_PATH)  # Phase 2 T-009: POST /api/runs/<run_id>/upgrade/cancel
+@identity.require_session  # Ensure operator is authenticated
+def cancel_upgrade_via_service(run_id: str) -> tuple[Response, int]:
+    """Cancel a running upgrade and optionally trigger device rollback via UpgradeService.
+
+    Why:
+        T-009 requires canceling in-flight upgrades and conditionally rolling back devices.
+        This handler invokes UpgradeService.cancel_upgrade() to stop the upgrade, mark devices,
+        and trigger rollback if enabled. Ensures only devices in UPGRADING or FAILED state rollback.
+
+    Args:
+        run_id: The upgrade run identifier.
+
+    Returns:
+        JSON response with cancel result and new status, or error refusal.
+    """
+    # WHY: Fetch the UpgradeService from Flask config seam; returns None if not wired yet
+    upgrade_service = current_app.config.get(UPGRADE_SERVICE_KEY)
+    if upgrade_service is None:  # UpgradeService not wired, cannot cancel upgrade
+        logger.error("upgrade: UpgradeService not wired for cancel of run %s", run_id)  # Name the missing dependency
+        return json_error(SERVER_ERROR_STATUS, "service_unavailable", "UpgradeService not available")
+
+    try:  # UpgradeService call may fail due to API, database, or transient errors
+        logger.info("upgrade: cancel upgrade for run %s", run_id)  # BEFORE service call
+
+        # WHY: Invoke UpgradeService.cancel_upgrade() to stop firmware operation and optionally rollback
+        # Returns cancel result with updated device statuses and final upgrade state
+        cancel_result = upgrade_service.cancel_upgrade(run_id)
+
+        logger.debug("upgrade: cancel completed for run %s with result", run_id)  # AFTER service call
+
+        # WHY: Build response confirming cancel operation for the browser
+        response_body = {
+            "upgrade_id": run_id,  # Echo back the run ID
+            "status": cancel_result.get("status", "cancelled"),  # Updated upgrade status after cancel
+            "message": cancel_result.get("message", "Upgrade cancelled"),  # Status message for the browser
+            "devices_rolled_back": cancel_result.get("devices_rolled_back", 0),  # Count of devices that rolled back
+        }
+        return jsonify(response_body), OK_STATUS  # 200 OK: cancel completed
+
+    except Exception as fault:  # UpgradeService raised unexpected fault (API, database, etc)
+        logger.error("upgrade: cancel upgrade for run %s failed: %s", run_id, type(fault).__name__)  # Name fault type
+        return json_error(SERVER_ERROR_STATUS, "cancel_failed", str(fault))  # Return error to browser
 
 
 # --------------------------------------------------------------------------

@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<!-- Pre-upgrade Configuration Page (T-007)
+     Allows user to configure upgrade strategy, enable/disable rollback,
+     and start pre-upgrade capture. Displays selected devices, current firmware,
+     and upgrade parameters. Shows loading indicator during capture.
+-->
+<html lang="en">
+<head>
+    <!-- WHY: UTF-8 character encoding for international text support -->
+    <meta charset="UTF-8">
+    <!-- WHY: viewport configuration for responsive mobile design -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- WHY: page title for browser tab and document context -->
+    <title>Pre-Upgrade Configuration - MistHelper Upgrade Portal</title>
+    <!-- WHY: CSS stylesheet import for consistent styling -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/upgrade-portal.css') }}">
+    <!-- WHY: T-Mobile theme color palette -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/t-mobile-theme.css') }}">
+    <!-- WHY: Font Awesome icons for UI elements -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/font-awesome.min.css') }}">
+    <!-- WHY: inline style for loading indicator animations -->
+    <style>
+        /* WHY: container styling for page layout */
+        .config-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* WHY: section styling for visual organization -->
+        .config-section {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* WHY: section heading styling -->
+        .config-section h2 {
+            margin-top: 0;
+            color: #1a1a1a;
+            font-size: 1.5rem;
+            border-bottom: 2px solid #e81b23;
+            padding-bottom: 10px;
+        }
+
+        /* WHY: device summary table styling -->
+        .device-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+
+        /* WHY: table header styling -->
+        .device-table thead {
+            background-color: #f5f5f5;
+            border-bottom: 2px solid #e81b23;
+        }
+
+        /* WHY: table header cell styling -->
+        .device-table th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+
+        /* WHY: table body row styling -->
+        .device-table tbody tr {
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        /* WHY: table body row hover effect for better UX -->
+        .device-table tbody tr:hover {
+            background-color: #f9f9f9;
+        }
+
+        /* WHY: table cell styling -->
+        .device-table td {
+            padding: 12px;
+            text-align: left;
+        }
+
+        /* WHY: configuration form styling -->
+        .config-form {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        /* WHY: form field group styling -->
+        .form-field {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        /* WHY: form label styling -->
+        .form-field label {
+            font-weight: 600;
+            color: #1a1a1a;
+            font-size: 1rem;
+        }
+
+        /* WHY: form field help text styling -->
+        .form-help {
+            font-size: 0.875rem;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        /* WHY: select dropdown styling -->
+        .form-field select {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1rem;
+            background-color: white;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+
+        /* WHY: select focus state styling -->
+        .form-field select:focus {
+            outline: none;
+            border-color: #e81b23;
+            box-shadow: 0 0 4px rgba(232, 27, 35, 0.2);
+        }
+
+        /* WHY: checkbox wrapper styling -->
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        /* WHY: checkbox input styling -->
+        .checkbox-wrapper input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: #e81b23;
+        }
+
+        /* WHY: checkbox label styling -->
+        .checkbox-wrapper label {
+            cursor: pointer;
+            font-weight: 500;
+            color: #1a1a1a;
+            margin: 0;
+        }
+
+        /* WHY: action buttons container styling -->
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        /* WHY: primary button styling for "Start Capture" -->
+        .btn-primary {
+            background-color: #e81b23;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        /* WHY: primary button hover state -->
+        .btn-primary:hover:not(:disabled) {
+            background-color: #c41620;
+        }
+
+        /* WHY: primary button disabled state -->
+        .btn-primary:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        /* WHY: secondary button styling for "Cancel" -->
+        .btn-secondary {
+            background-color: #f5f5f5;
+            color: #1a1a1a;
+            padding: 12px 24px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        /* WHY: secondary button hover state -->
+        .btn-secondary:hover {
+            background-color: #e0e0e0;
+        }
+
+        /* WHY: loading indicator spinner styling -->
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #e81b23;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: none;
+            margin: 0 auto;
+        }
+
+        /* WHY: spinner animation keyframes for rotation -->
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* WHY: loading overlay styling to disable UI during capture -->
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* WHY: loading overlay text styling -->
+        .loading-overlay p {
+            color: white;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        /* WHY: error alert styling -->
+        .alert-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 10px 0;
+            display: none;
+        }
+
+        /* WHY: success alert styling -->
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 10px 0;
+            display: none;
+        }
+
+        /* WHY: info message styling -->
+        .info-message {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- WHY: main page container -->
+    <div class="config-container">
+        <!-- WHY: page title and description -->
+        <div class="config-section">
+            <!-- WHY: page heading -->
+            <h1>Pre-Upgrade Configuration</h1>
+            <!-- WHY: introductory text for user context -->
+            <p>Configure the firmware upgrade strategy and options for your selected devices.</p>
+            <!-- WHY: info message about what happens next -->
+            <div class="info-message">
+                <!-- WHY: explain the capture process -->
+                <strong>Next step:</strong> After configuration, the system will capture a snapshot of your current device state for comparison after the upgrade.
+            </div>
+        </div>
+
+        <!-- WHY: device summary section -->
+        <div class="config-section">
+            <!-- WHY: section heading for device summary -->
+            <h2>Selected Devices</h2>
+            <!-- WHY: brief device count summary -->
+            <p id="device-count">Loading device information...</p>
+            <!-- WHY: table showing selected devices and their current firmware versions -->
+            <table class="device-table" id="device-table">
+                <!-- WHY: table header row -->
+                <thead>
+                    <!-- WHY: device name column -->
+                    <th>Device Name</th>
+                    <!-- WHY: device type column -->
+                    <th>Type</th>
+                    <!-- WHY: device model column -->
+                    <th>Model</th>
+                    <!-- WHY: current firmware version column -->
+                    <th>Current Firmware</th>
+                    <!-- WHY: device status column -->
+                    <th>Status</th>
+                </thead>
+                <!-- WHY: table body will be populated by JavaScript -->
+                <tbody id="device-tbody">
+                </tbody>
+            </table>
+        </div>
+
+        <!-- WHY: upgrade configuration section -->
+        <div class="config-section">
+            <!-- WHY: section heading for configuration options -->
+            <h2>Upgrade Configuration</h2>
+
+            <!-- WHY: form element for configuration inputs -->
+            <form class="config-form" id="config-form">
+                <!-- WHY: firmware version input field -->
+                <div class="form-field">
+                    <!-- WHY: label for firmware version field -->
+                    <label for="firmware-version">Target Firmware Version</label>
+                    <!-- WHY: input field for firmware version (read-only from selection) -->
+                    <input
+                        type="text"
+                        id="firmware-version"
+                        name="firmware_version"
+                        readonly
+                        value=""
+                        placeholder="Firmware version"
+                    />
+                    <!-- WHY: help text explaining firmware version selection -->
+                    <div class="form-help">
+                        The firmware version selected during the upgrade wizard.
+                    </div>
+                </div>
+
+                <!-- WHY: upgrade strategy selection field -->
+                <div class="form-field">
+                    <!-- WHY: label for upgrade strategy dropdown -->
+                    <label for="upgrade-strategy">Upgrade Strategy</label>
+                    <!-- WHY: dropdown select for serial or parallel upgrade -->
+                    <select id="upgrade-strategy" name="strategy" required>
+                        <!-- WHY: empty default option to prevent accidental selection -->
+                        <option value="">-- Select upgrade strategy --</option>
+                        <!-- WHY: serial strategy option (one device at a time) -->
+                        <option value="serial">Serial (one device at a time)</option>
+                        <!-- WHY: parallel strategy option (all devices concurrently) -->
+                        <option value="parallel">Parallel (all devices at once)</option>
+                    </select>
+                    <!-- WHY: help text explaining strategy options -->
+                    <div class="form-help">
+                        <!-- WHY: serial strategy description for network stability -->
+                        Serial: Upgrades one device at a time, waiting for each to complete. Better for production networks.
+                        <!-- WHY: newline for readability -->
+                        Parallel: Upgrades all devices simultaneously. Faster but higher network impact.
+                    </div>
+                </div>
+
+                <!-- WHY: rollback enable/disable checkbox -->
+                <div class="form-field">
+                    <!-- WHY: checkbox wrapper for alignment -->
+                    <div class="checkbox-wrapper">
+                        <!-- WHY: checkbox input for rollback enable -->
+                        <input
+                            type="checkbox"
+                            id="enable-rollback"
+                            name="rollback_enabled"
+                            value="true"
+                            checked
+                        />
+                        <!-- WHY: label for rollback checkbox -->
+                        <label for="enable-rollback">
+                            <!-- WHY: checkbox description -->
+                            Enable automatic rollback on failure
+                        </label>
+                    </div>
+                    <!-- WHY: help text explaining rollback behavior -->
+                    <div class="form-help">
+                        <!-- WHY: explain rollback timing -->
+                        If enabled, devices that fail to upgrade will automatically revert to the previous firmware version.
+                        <!-- WHY: note about rollback prerequisites -->
+                        Rollback requires compatible firmware versions.
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- WHY: error alert container for API failures -->
+        <div class="alert-error" id="error-alert">
+            <!-- WHY: error message text will be populated by JavaScript -->
+            <span id="error-message"></span>
+        </div>
+
+        <!-- WHY: action buttons section -->
+        <div class="action-buttons">
+            <!-- WHY: cancel button to return to device selection -->
+            <button class="btn-secondary" id="btn-cancel" onclick="goBack()">Cancel</button>
+            <!-- WHY: primary button to start the capture process -->
+            <button class="btn-primary" id="btn-start-capture" onclick="startCapture()">
+                <!-- WHY: button text indicating next action -->
+                Start Capture
+            </button>
+        </div>
+    </div>
+
+    <!-- WHY: loading overlay shown during capture initialization -->
+    <div class="loading-overlay" id="loading-overlay">
+        <!-- WHY: spinner animation during loading -->
+        <div class="spinner"></div>
+        <!-- WHY: loading status message -->
+        <p id="loading-message">Capturing pre-upgrade device state...</p>
+    </div>
+
+    <!-- WHY: JavaScript to handle page functionality -->
+    <script>
+        // WHY: get run_id from URL query parameters for API calls
+        const urlParams = new URLSearchParams(window.location.search);  // WHY: parse URL
+        const runId = urlParams.get('run_id');  // WHY: extract run_id
+
+        // WHY: initialize page on load
+        window.addEventListener('DOMContentLoaded', function() {  // WHY: wait for DOM
+            // WHY: load device information from API
+            loadDeviceInfo();  // WHY: fetch and display devices
+        });
+
+        /**
+         * Load device information from the API and display in the table.
+         * WHY: fetch selected devices for pre-upgrade configuration display.
+         */
+        async function loadDeviceInfo() {  // WHY: async function for API calls
+            try {  // WHY: error handling for API call
+                // WHY: fetch run data from API endpoint
+                const response = await fetch(`/api/runs/${runId}`);  // WHY: GET /api/runs/:run_id
+                // WHY: check if API call succeeded
+                if (!response.ok) {  // WHY: check HTTP status
+                    // WHY: throw error with HTTP status
+                    throw new Error(`API error: ${response.status}`);  // WHY: error message
+                }
+
+                // WHY: parse JSON response
+                const runData = await response.json();  // WHY: deserialize JSON
+
+                // WHY: extract firmware version from URL or run data
+                const targetFirmware = urlParams.get('firmware_version') || runData.firmware_version || 'Unknown';  // WHY: get firmware
+                // WHY: set firmware version in form field
+                document.getElementById('firmware-version').value = targetFirmware;  // WHY: populate input
+
+                // WHY: fetch device stats from API for each device
+                const deviceIds = runData.device_ids || [];  // WHY: extract device list
+                // WHY: update device count display
+                document.getElementById('device-count').textContent = `${deviceIds.length} device(s) selected`;  // WHY: display count
+
+                // WHY: fetch detailed device info from Mist API via portal API
+                const devicesResponse = await fetch(`/api/runs/${runId}/devices`);  // WHY: GET device details
+                // WHY: check if device fetch succeeded
+                if (!devicesResponse.ok) {  // WHY: check status
+                    // WHY: log warning if device details unavailable
+                    console.warn('Could not fetch device details');  // WHY: debug message
+                    return;  // WHY: continue with empty device table
+                }
+
+                // WHY: parse device details JSON
+                const devices = await devicesResponse.json();  // WHY: deserialize JSON
+
+                // WHY: populate device table with fetched information
+                const tbody = document.getElementById('device-tbody');  // WHY: get table body
+                tbody.innerHTML = '';  // WHY: clear existing rows
+
+                // WHY: create table row for each device
+                devices.forEach(device => {  // WHY: iterate devices
+                    // WHY: create table row element
+                    const row = document.createElement('tr');  // WHY: new row
+
+                    // WHY: build device name (fallback to ID if name missing)
+                    const deviceName = device.name || device.device_id || 'Unknown';  // WHY: get name or fallback
+                    // WHY: build device type (AP, Switch, Gateway)
+                    const deviceType = device.device_type || 'Unknown';  // WHY: get type
+                    // WHY: build device model
+                    const deviceModel = device.model || 'Unknown';  // WHY: get model
+                    // WHY: build firmware version (running version, not configured)
+                    const currentFirmware = device.running_firmware_version || device.firmware_version || 'Unknown';  // WHY: get running version
+                    // WHY: build device status (connected/disconnected)
+                    const deviceStatus = device.status || 'Unknown';  // WHY: get status
+
+                    // WHY: set row HTML content
+                    row.innerHTML = `
+                        <!-- WHY: device name cell -->
+                        <td>${escapeHtml(deviceName)}</td>
+                        <!-- WHY: device type cell -->
+                        <td>${escapeHtml(deviceType)}</td>
+                        <!-- WHY: device model cell -->
+                        <td>${escapeHtml(deviceModel)}</td>
+                        <!-- WHY: current firmware version cell -->
+                        <td>${escapeHtml(currentFirmware)}</td>
+                        <!-- WHY: device status cell with color coding -->
+                        <td>
+                            <!-- WHY: status badge styling based on connectivity -->
+                            <span style="
+                                padding: 4px 8px;
+                                border-radius: 4px;
+                                font-size: 0.875rem;
+                                font-weight: 600;
+                                ${deviceStatus === 'connected' ? 'background-color: #d4edda; color: #155724;' : 'background-color: #f8d7da; color: #721c24;'}
+                            ">
+                                ${escapeHtml(deviceStatus)}
+                            </span>
+                        </td>
+                    `;  // WHY: populate row
+
+                    // WHY: append row to table body
+                    tbody.appendChild(row);  // WHY: add to DOM
+                });
+
+            } catch (error) {  // WHY: catch API or parsing errors
+                // WHY: log error for debugging
+                console.error('Error loading device info:', error);  // WHY: debug message
+                // WHY: display error alert to user
+                showError('Failed to load device information. Please refresh and try again.');  // WHY: user feedback
+            }
+        }
+
+        /**
+         * Start the pre-upgrade capture process.
+         * WHY: initiate capture when user clicks "Start Capture" button.
+         */
+        async function startCapture() {  // WHY: async function for API call
+            try {  // WHY: error handling
+                // WHY: disable button during capture
+                document.getElementById('btn-start-capture').disabled = true;  // WHY: prevent double-click
+                // WHY: show loading overlay
+                document.getElementById('loading-overlay').style.display = 'flex';  // WHY: show spinner
+
+                // WHY: get configuration form values
+                const strategy = document.getElementById('upgrade-strategy').value;  // WHY: get selected strategy
+                const rollbackEnabled = document.getElementById('enable-rollback').checked;  // WHY: get rollback flag
+
+                // WHY: validate strategy selection
+                if (!strategy) {  // WHY: check if selected
+                    // WHY: hide loading overlay
+                    document.getElementById('loading-overlay').style.display = 'none';  // WHY: hide spinner
+                    // WHY: re-enable button
+                    document.getElementById('btn-start-capture').disabled = false;  // WHY: allow retry
+                    // WHY: show validation error to user
+                    showError('Please select an upgrade strategy');  // WHY: user feedback
+                    return;  // WHY: fail validation
+                }
+
+                // WHY: call API to start capture
+                const response = await fetch(`/api/runs/${runId}/capture/start`, {  // WHY: POST /api/runs/:run_id/capture/start
+                    method: 'POST',  // WHY: HTTP POST
+                    headers: {  // WHY: request headers
+                        'Content-Type': 'application/json',  // WHY: JSON content type
+                    },
+                    body: JSON.stringify({  // WHY: request body
+                        strategy: strategy,  // WHY: upgrade strategy
+                        rollback_enabled: rollbackEnabled,  // WHY: rollback flag
+                    }),  // WHY: serialize to JSON
+                });  // WHY: API call
+
+                // WHY: check if capture start succeeded
+                if (!response.ok) {  // WHY: check HTTP status
+                    // WHY: parse error response
+                    const errorData = await response.json();  // WHY: get error details
+                    // WHY: throw error with details
+                    throw new Error(errorData.error || 'Failed to start capture');  // WHY: error message
+                }
+
+                // WHY: parse capture response
+                const captureData = await response.json();  // WHY: deserialize JSON
+
+                // WHY: navigate to upgrade status page to monitor capture/upgrade
+                window.location.href = `/upgrade/status?run_id=${runId}`;  // WHY: redirect to status page
+
+            } catch (error) {  // WHY: catch API or network errors
+                // WHY: log error for debugging
+                console.error('Error starting capture:', error);  // WHY: debug message
+                // WHY: hide loading overlay
+                document.getElementById('loading-overlay').style.display = 'none';  // WHY: hide spinner
+                // WHY: re-enable button
+                document.getElementById('btn-start-capture').disabled = false;  // WHY: allow retry
+                // WHY: show error message to user
+                showError(`Capture failed: ${error.message}`);  // WHY: user feedback
+            }
+        }
+
+        /**
+         * Show error message to user.
+         * WHY: display error alert with provided message.
+         */
+        function showError(message) {  // WHY: helper function for errors
+            // WHY: get error message span
+            document.getElementById('error-message').textContent = message;  // WHY: set text
+            // WHY: show error alert
+            document.getElementById('error-alert').style.display = 'block';  // WHY: display alert
+        }
+
+        /**
+         * Navigate back to device selection page.
+         * WHY: allow user to cancel and modify device selection.
+         */
+        function goBack() {  // WHY: cancel button handler
+            // WHY: navigate back to selection page
+            window.location.href = '/upgrade/select';  // WHY: redirect to select page
+        }
+
+        /**
+         * Escape HTML special characters to prevent XSS attacks.
+         * WHY: sanitize device names and other user-supplied data.
+         */
+        function escapeHtml(text) {  // WHY: security sanitization
+            // WHY: create temporary element to escape HTML
+            const div = document.createElement('div');  // WHY: create element
+            // WHY: set text content (automatically escapes)
+            div.textContent = text;  // WHY: set as text
+            // WHY: return escaped HTML
+            return div.innerHTML;  // WHY: get escaped result
+        }
+    </script>
+</body>
+</html>
