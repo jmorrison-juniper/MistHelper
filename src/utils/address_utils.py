@@ -34,6 +34,8 @@ except ImportError:  # pragma: no cover  # WHY: absence is non-fatal
     urllib3 = None  # type: ignore[assignment]  # WHY: sentinel checked before disabling warnings
     _has_urllib3 = False  # WHY: skip suppression path when the module is missing
 
+from src.utils.tls_policy import TLSVerificationPolicy  # One control for certificate verification.
+
 try:  # WHY: rapidfuzz is optional. Degrade to difflib on absence
     from rapidfuzz import fuzz  # WHY: faster token-sort ratio when available
 except ImportError:  # pragma: no cover  # WHY: keep import graph optional
@@ -859,9 +861,17 @@ class NominatimValidator:
         self._suppress_ssl_warnings()  # WHY: silence urllib3 warnings when verify is disabled
 
     def _suppress_ssl_warnings(self) -> None:
-        """Suppress SSL warnings when verification is disabled."""
-        if self.skip_ssl_verify and _has_urllib3 and urllib3 is not None:  # WHY: only when both toggles align
-            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)  # WHY: silence noisy warnings
+        """Announce a disabled TLS check, then quiet the repeated urllib3 notice.
+
+        The old version silenced the warning and said nothing, so a run with
+        no certificate check looked the same as a normal run. Now the run
+        states the weakened condition one time. See issue #1914.
+        """
+        if not self.skip_ssl_verify:  # Nothing to report when the check stays on.
+            return  # Normal secure path exits early.
+        TLSVerificationPolicy.warn_once()  # State the risk one time for the operator.
+        if _has_urllib3 and urllib3 is not None:  # Quiet the per-request repeat, not the warning above.
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)  # WHY: one notice is enough.
 
     def _log_entry(
         self,

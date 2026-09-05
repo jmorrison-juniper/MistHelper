@@ -119,7 +119,7 @@ class EnvSshConfigLoader:
             ssh_commands = os.getenv("SSH_COMMANDS")  # Read parsed value
             if ssh_commands:  # Only parse when present
                 config["commands"] = self._command_parser.parse(ssh_commands)  # Validated command list
-        except Exception as error:  # noqa: BLE001 - mirror original broad catch
+        except Exception as error:  # mirror original broad catch
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("[WARNING] Error loading .env with python-dotenv: %s", error)
 
@@ -134,7 +134,7 @@ class EnvSshConfigLoader:
         except OSError as error:  # Filesystem-level errors
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("[WARNING] Error reading %s: %s", env_file, error)
-        except Exception as error:  # noqa: BLE001 - mirror original broad catch
+        except Exception as error:  # mirror original broad catch
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("[WARNING] Unexpected error reading %s: %s", env_file, error)
 

@@ -20,10 +20,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.deps import get_authenticated_user, get_db_session
-from src.api.middleware.auth import CurrentUser
+from src.api.deps import (
+    get_authenticated_user,
+    get_db_session,
+    get_scoped_org_id,
+)
+from src.api.middleware.auth import CurrentUser, require_org_access
 from src.api.schemas.common import ResponseEnvelope
-from src.shared.config.settings import get_settings
+from src.shared.sync_db import sync_engine
 from src.api.schemas.deploy import (
     CheckpointDetail,
     DryRunRequest,
@@ -65,12 +69,14 @@ router = APIRouter(prefix="/deploy", tags=["deploy"])
 async def _load_job(
     db: AsyncSession,
     job_id: UUID,
+    user: CurrentUser,
 ) -> ScheduledJob:
-    """Load a job or raise 404."""
+    """Load a job or raise 404. Refuse a caller outside the org with 403."""
     stmt = select(ScheduledJob).where(ScheduledJob.job_id == job_id)
     row = (await db.execute(stmt)).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="Job not found")
+    require_org_access(str(row.org_id), user)  # Refuse a caller outside the org of this record
     return row
 
 
@@ -87,7 +93,7 @@ def _target_count(job: ScheduledJob) -> int:
 
 @router.get("/jobs")
 async def list_jobs(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     status: str | None = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
@@ -124,6 +130,7 @@ async def create_job(
     user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[JobSummary]:
     """Create a new scheduled deployment job."""
+    require_org_access(str(body.org_id), user)  # Refuse a caller outside the org named in the body
     conflict = await _check_conflicts(db, body)
     if conflict:
         raise HTTPException(status_code=409, detail=conflict)
@@ -158,10 +165,10 @@ async def create_job(
 async def get_job(
     job_id: UUID,
     db: AsyncSession = Depends(get_db_session),
-    _user: CurrentUser = Depends(get_authenticated_user),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[JobDetail]:
     """Get detailed job status with checkpoint progress."""
-    job = await _load_job(db, job_id)
+    job = await _load_job(db, job_id, user)
     checkpoints = _build_checkpoints(job)
     targets = _parse_targets(job)
 
@@ -186,10 +193,10 @@ async def update_job(
     job_id: UUID,
     body: JobUpdate,
     db: AsyncSession = Depends(get_db_session),
-    _user: CurrentUser = Depends(get_authenticated_user),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[JobSummary]:
     """Update a pending job (reschedule or modify)."""
-    job = await _load_job(db, job_id)
+    job = await _load_job(db, job_id, user)
     if job.status != JobStatus.PENDING.value:
         raise HTTPException(
             status_code=409,
@@ -205,10 +212,10 @@ async def update_job(
 async def cancel_job(
     job_id: UUID,
     db: AsyncSession = Depends(get_db_session),
-    _user: CurrentUser = Depends(get_authenticated_user),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[JobCancelledResponse]:
     """Cancel a pending job."""
-    job = await _load_job(db, job_id)
+    job = await _load_job(db, job_id, user)
     if job.status not in (JobStatus.PENDING.value, JobStatus.APPROVED.value):
         raise HTTPException(
             status_code=409,
@@ -243,7 +250,7 @@ async def approve_job(
             detail="confirm must be true",
         )
 
-    job = await _load_job(db, job_id)
+    job = await _load_job(db, job_id, user)
     if job.status != JobStatus.PENDING.value:
         raise HTTPException(
             status_code=409,
@@ -268,9 +275,10 @@ async def approve_job(
 async def dry_run(
     body: DryRunRequest,
     db: AsyncSession = Depends(get_db_session),
-    _user: CurrentUser = Depends(get_authenticated_user),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[DryRunResponse]:
     """Validate a change without applying it (FR-036, SC-013 <10s)."""
+    require_org_access(str(body.org_id), user)  # Refuse a caller outside the org named in the body
     from src.worker.deploy.dry_run import DryRunValidator
 
     validator = DryRunValidator(db)
@@ -366,7 +374,7 @@ def _to_summary(job: ScheduledJob) -> JobSummary:
 
 @router.get("/rollouts")
 async def list_rollouts(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     status: str | None = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
@@ -391,6 +399,7 @@ async def create_rollout(
     user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[RolloutSummary]:
     """Create a multi-wave rollout plan."""
+    require_org_access(str(body.org_id), user)  # Refuse a caller outside the org named in the body
     plan = RolloutPlan(
         org_id=body.org_id,
         name=body.name,
@@ -420,13 +429,13 @@ async def activate_rollout(
     plan_id: UUID,
     body: JobApproveRequest,
     db: AsyncSession = Depends(get_db_session),
-    _user: CurrentUser = Depends(get_authenticated_user),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[dict]:
     """Activate a rollout (draft -> active, starts first wave)."""
     if not body.confirm:
         raise HTTPException(status_code=400, detail="confirm required")
 
-    plan = await _load_plan(db, plan_id)
+    plan = await _load_plan(db, plan_id, user)
     if plan.status != "draft":
         raise HTTPException(status_code=409, detail="Plan must be draft")
 
@@ -444,10 +453,10 @@ async def activate_rollout(
 async def pause_rollout(
     plan_id: UUID,
     db: AsyncSession = Depends(get_db_session),
-    _user: CurrentUser = Depends(get_authenticated_user),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[dict]:
     """Pause an active rollout."""
-    plan = await _load_plan(db, plan_id)
+    plan = await _load_plan(db, plan_id, user)
     if plan.status != "active":
         raise HTTPException(status_code=409, detail="Plan must be active")
     plan.status = "paused"
@@ -459,10 +468,10 @@ async def pause_rollout(
 async def resume_rollout(
     plan_id: UUID,
     db: AsyncSession = Depends(get_db_session),
-    _user: CurrentUser = Depends(get_authenticated_user),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[dict]:
     """Resume a paused rollout."""
-    plan = await _load_plan(db, plan_id)
+    plan = await _load_plan(db, plan_id, user)
     if plan.status != "paused":
         raise HTTPException(status_code=409, detail="Plan must be paused")
     plan.status = "active"
@@ -481,11 +490,13 @@ async def promote_wave(
     wave_number: int,
     body: JobApproveRequest,
     db: AsyncSession = Depends(get_db_session),
-    _user: CurrentUser = Depends(get_authenticated_user),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[dict]:
     """Manually promote to the next wave."""
     if not body.confirm:
         raise HTTPException(status_code=400, detail="confirm required")
+
+    await _load_plan(db, plan_id, user)  # Refuse a caller outside the org of this plan
 
     from src.worker.tasks.deploy_tasks import promote_rollout_wave
 
@@ -502,24 +513,24 @@ async def rollback_wave(
     wave_number: int,
     body: JobApproveRequest,
     db: AsyncSession = Depends(get_db_session),
-    _user: CurrentUser = Depends(get_authenticated_user),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[dict]:
     """Roll back a specific wave."""
     if not body.confirm:
         raise HTTPException(status_code=400, detail="confirm required")
 
+    await _load_plan(db, plan_id, user)  # Refuse a caller outside the org of this plan
+
     from src.worker.deploy.rollout import RolloutOrchestrator
-    from sqlalchemy import create_engine as _ce
     from sqlalchemy.orm import Session as _Sess
 
-    settings = get_settings()
-    sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
-    engine = _ce(sync_url)
-    with _Sess(engine) as sync_db:
-        orch = RolloutOrchestrator(sync_db)
-        result = orch.rollback_wave(plan_id, wave_number, body.comment)
-    engine.dispose()
+    logger.info("Rolling back wave %d of rollout plan %s", wave_number, plan_id)
+    # The scope disposes the pool on the success path and on the error path.
+    with sync_engine() as engine, _Sess(engine) as sync_db:
+        orch = RolloutOrchestrator(sync_db)  # Own the wave state machine.
+        result = orch.rollback_wave(plan_id, wave_number, body.comment)  # Undo the wave.
 
+    logger.debug("Rollback of plan %s returned %s", plan_id, result)
     return ResponseEnvelope(data=result)
 
 
@@ -530,7 +541,7 @@ async def rollback_wave(
 
 @router.get("/golden-images")
 async def list_golden_images(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     image_type: str | None = Query(None),
     device_model: str | None = Query(None),
     lifecycle_state: str | None = Query(None),
@@ -561,6 +572,7 @@ async def create_golden_image(
     user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[GoldenImageResponse]:
     """Register a new golden image."""
+    require_org_access(str(body.org_id), user)  # Refuse a caller outside the org named in the body
     image = GoldenImage(
         org_id=body.org_id,
         image_type=body.image_type,
@@ -587,7 +599,7 @@ async def approve_golden_image(
     if not body.confirm:
         raise HTTPException(status_code=400, detail="confirm required")
 
-    image = await _load_golden_image(db, image_id)
+    image = await _load_golden_image(db, image_id, user)
     if image.lifecycle_state != "draft":
         raise HTTPException(status_code=409, detail="Image must be draft")
     if image.created_by == user.email:
@@ -608,13 +620,13 @@ async def retire_golden_image(
     image_id: UUID,
     body: JobApproveRequest,
     db: AsyncSession = Depends(get_db_session),
-    _user: CurrentUser = Depends(get_authenticated_user),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[GoldenImageResponse]:
     """Retire a golden image (approved -> retired)."""
     if not body.confirm:
         raise HTTPException(status_code=400, detail="confirm required")
 
-    image = await _load_golden_image(db, image_id)
+    image = await _load_golden_image(db, image_id, user)
     if image.lifecycle_state != "approved":
         raise HTTPException(status_code=409, detail="Image must be approved")
 
@@ -626,24 +638,27 @@ async def retire_golden_image(
 # -- Rollout/golden image helpers ---
 
 
-async def _load_plan(db: AsyncSession, plan_id: UUID) -> RolloutPlan:
-    """Load a rollout plan or raise 404."""
+async def _load_plan(db: AsyncSession, plan_id: UUID, user: CurrentUser) -> RolloutPlan:
+    """Load a rollout plan or raise 404. Refuse a caller outside the org with 403."""
     stmt = select(RolloutPlan).where(RolloutPlan.plan_id == plan_id)
     row = (await db.execute(stmt)).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="Plan not found")
+    require_org_access(str(row.org_id), user)  # Refuse a caller outside the org of this record
     return row
 
 
 async def _load_golden_image(
     db: AsyncSession,
     image_id: UUID,
+    user: CurrentUser,
 ) -> GoldenImage:
-    """Load a golden image or raise 404."""
+    """Load a golden image or raise 404. Refuse a caller outside the org with 403."""
     stmt = select(GoldenImage).where(GoldenImage.image_id == image_id)
     row = (await db.execute(stmt)).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="Image not found")
+    require_org_access(str(row.org_id), user)  # Refuse a caller outside the org of this record
     return row
 
 
@@ -675,7 +690,7 @@ def _plan_to_summary(
 
 @router.get("/templates")
 async def list_templates(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     category: str | None = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
@@ -700,6 +715,7 @@ async def create_template(
     user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[TemplateResponse]:
     """Create a reusable change template."""
+    require_org_access(str(body.org_id), user)  # Refuse a caller outside the org named in the body
     tmpl = ChangeTemplate(
         org_id=body.org_id,
         name=body.name,
@@ -723,19 +739,18 @@ async def instantiate_template(
     user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[JobSummary]:
     """Instantiate a template to create a deployment job."""
-    tmpl = await _load_template(db, template_id)
+    tmpl = await _load_template(db, template_id, user)
 
     from src.shared.services.template import TemplateService
-    from sqlalchemy import create_engine as _ce
     from sqlalchemy.orm import Session as _Sess
 
-    settings = get_settings()
-    sync_url = settings.database_url.replace("+asyncpg", "+psycopg2")
-    engine = _ce(sync_url)
-    with _Sess(engine) as sync_db:
-        svc = TemplateService(sync_db)
-        payload = svc.instantiate(tmpl, body.parameters)
-    engine.dispose()
+    logger.info("Instantiating template %s", template_id)
+    # The scope disposes the pool on the success path and on the error path.
+    with sync_engine() as engine, _Sess(engine) as sync_db:
+        svc = TemplateService(sync_db)  # Own the template expansion rules.
+        payload = svc.instantiate(tmpl, body.parameters)  # Build the config body.
+
+    logger.debug("Template %s produced %d config keys", template_id, len(payload))
 
     job = ScheduledJob(
         org_id=body.org_id,
@@ -763,12 +778,14 @@ async def instantiate_template(
 async def _load_template(
     db: AsyncSession,
     template_id: UUID,
+    user: CurrentUser,
 ) -> ChangeTemplate:
-    """Load a change template or raise 404."""
+    """Load a change template or raise 404. Refuse a caller outside the org with 403."""
     stmt = select(ChangeTemplate).where(
         ChangeTemplate.template_id == template_id,
     )
     row = (await db.execute(stmt)).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="Template not found")
+    require_org_access(str(row.org_id), user)  # Refuse a caller outside the org of this record
     return row

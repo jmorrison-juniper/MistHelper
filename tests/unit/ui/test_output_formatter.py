@@ -8,7 +8,7 @@ from src.ui.execution.output_formatter import APIResponseParser, HierarchicalFor
 class _FakeAPIResponse:
     """Minimal stub mimicking a mistapi APIResponse."""
 
-    def __init__(self, data) -> None:  # noqa: ANN001 — generic payload
+    def __init__(self, data) -> None:  # generic payload
         self.data = data  # Mimic the .data attribute
 
 

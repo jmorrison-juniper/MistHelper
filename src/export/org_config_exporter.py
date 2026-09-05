@@ -140,7 +140,7 @@ class OrgConfigExporter:
             logging.error("Cannot fetch MSP orgs - apisession is None")  # Log it.
             return  # Abort.
         try:
-            import mistapi.api.v1.msps.orgs as msp_orgs_api  # noqa: PLC0415  # Import MSP orgs API.
+            import mistapi.api.v1.msps.orgs as msp_orgs_api  # Import MSP orgs API.
 
             response = msp_orgs_api.listMspOrgs(mh.apisession, msp_id)  # Call API.
             orgs_data = OrgConfigExporter._extract_msp_orgs_payload(response)  # Validate.

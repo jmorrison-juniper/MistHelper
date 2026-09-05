@@ -7,17 +7,19 @@
 | **Alert Name** | GATEWAY_DOWN |
 | **Mist alarm key** | `gateway_down` (fires when Mist stops receiving heartbeat / telemetry from the gateway — the box is unreachable from the cloud) |
 | **Platform** | Juniper SSR130 (single gateway at a retail branch — no local HA peer). The same alarm key also fires on SRX gateways — an SRX-specific runbook is planned as Phase 2 because the CLI (Junos) differs from SSR PCLI. |
-| **Mist native severity** | `critical` |
-| **NOC severity** | **Critical** (native — no override) |
+| **Mist native severity** | `warn` (verified against `GET /api/v1/const/alarm_defs`) |
+| **NOC severity** | **Critical** (override — see rationale below) |
 | **Group** | `infrastructure` |
 | **Clear event key** | No distinct clear-event key is enumerated in the Mist OpenAPI catalog for `gateway_down`. The alarm auto-clears when Mist starts receiving heartbeat / telemetry from the gateway again; treat the disappearance of the alarm on the device — and the gateway showing `Connected` in `WAN Edges → *SSR130* → Health` — as the machine-verifiable close signal. Verify current auto-clear behavior against `GET /api/v1/const/alarm_defs` at runtime; the alarm-definition catalog is dynamic and may add an explicit clear key in future firmware/cloud releases. |
 | **Correlated alarms** | `switch_down`, `gw_bgp_neighbor_down`, `gw_vpn_path_down`, `vpn_peer_down`, `bad_wan_uplink`, `intermittent_wan_connectivity`, `sw_alarm_chassis_mgmt_link_down`, `sw_critical_port_down` |
 | **Prerequisites** | None — fires automatically when Mist declares the gateway unreachable. |
 | **Description** | Mist has stopped receiving heartbeat / telemetry from the branch SSR130. From the cloud's perspective the gateway is down. Because there is only a single SSR130 at the branch and no local HA peer, this alarm means the branch has either lost management visibility, lost WAN, or both. Treat this alarm as a **branch outage** until proven otherwise. |
 
-### Severity note (no override)
+### Severity rationale (Mist `warn` → NOC `critical`)
 
-Mist ships `gateway_down` as `critical` natively — with a single-gateway branch, gateway loss is site-impacting by construction. No override is applied.
+Mist ships `gateway_down` as `warn` natively, because many customers run gateways in redundant pairs where losing one node is a degraded state rather than an outage. This environment does not. The branch runs a single SSR130 with no local HA peer, so gateway loss is site-impacting by construction. We page it as **critical**.
+
+The override lives in the downstream paging and ticketing layer, keyed off the alarm payload `type` value `gateway_down`. It does not live in Mist. See Shared Appendix §2.
 
 ### What this alarm does *not* tell you
 

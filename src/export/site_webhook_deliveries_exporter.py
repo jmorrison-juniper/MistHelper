@@ -179,7 +179,7 @@ class SiteWebhookDeliveriesExporter:
             SiteWebhookDeliveriesExporter._persist_site_webhook_deliveries(  # Persist or notify empty.
                 rawdata, site_name, webhook_name
             )
-        except Exception as e:  # noqa: BLE001 -- surface any SDK/network error rather than crashing.
+        except Exception as e:  # surface any SDK/network error rather than crashing.
             logging.error(  # ERROR trace with full context for post-mortem correlation.
                 "Error fetching webhook deliveries site=%s webhook=%s: %s",
                 site_name,

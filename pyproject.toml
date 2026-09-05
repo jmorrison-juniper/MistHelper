@@ -23,7 +23,10 @@ classifiers = [
 requires-python = ">=3.13"
 dependencies = [
     # Core API and networking
-    "mistapi>=0.63.1",
+    # 0.63.3 is the floor because the upgrade capture portal reads documented
+    # behavior of `searchOrgDeviceEvents` and `listOrgDevicesStats` that was
+    # verified against that exact release.
+    "mistapi>=0.63.3",
     "requests>=2.28.0",
     "websocket-client>=1.8.0",
     
@@ -53,6 +56,17 @@ dependencies = [
 
     # Structured logging for database modules
     "structlog",
+
+    # Upgrade capture portal (web application, request forgery guard, server)
+    "Flask>=3.1.3",
+    "flask-wtf>=1.3.0",
+    "gunicorn>=26.1.0",
+    # Windows cannot run Gunicorn, because `gunicorn.util` imports `fcntl` and
+    # Windows ships no `fcntl`. `select_server_name()` therefore returns Waitress
+    # on Windows, so a Windows install needs Waitress as a core dependency. A
+    # dev-only Waitress left menu 238 with no server it could start. The marker
+    # keeps Waitress out of a Linux install, where Gunicorn runs.
+    "waitress>=3.0.2 ; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
@@ -75,7 +89,10 @@ dev = [
     "interrogate>=1.7.0",
     "hypothesis>=6.151.12",
     "libcst>=1.5",              # AST-based codemod for #429 logging f-string sweep
-    "playwright>=1.40.0",
+    "playwright>=1.62.0",
+    "pytest-playwright>=0.9.0",  # supplies the `page` fixture; playwright alone has no pytest plugin
+    # Waitress sits in the core dependency list under a Windows marker, because a
+    # Windows operator needs it at run time, not only at test time.
     "pre-commit>=3.0.0",
 ]
 container = [
@@ -131,7 +148,30 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["."]
+# Ship the import roots and the modules that the console scripts name. Nothing
+# else belongs inside an installed environment.
+#
+# Issue #2246: this setting was `packages = ["."]`, so the wheel packed the whole
+# repository root. The built wheel held 4664 files and 24.4 MB, and it carried
+# `specs/`, `documentation/`, `tests/`, `.github/`, and `ops-portal/`. An install
+# copied all of it into `site-packages`.
+#
+# Warning: the copied `src` then shadowed the real package for any script that
+# ran from another folder, and it shadowed part of `pydantic_core` as well, so
+# every test that reaches Dash failed to collect. Issue #2010 holds that report.
+#
+# `src` stays a top-level name on purpose. Every module of this project imports
+# `src.<area>`, so the package name is `src` and a rename would touch every
+# import in the repository.
+packages = ["src", "tools", "web_portal"]
+
+# The three modules below sit at the repository root, so no package entry can
+# reach them. `MistHelper.py` carries the `misthelper` console script, and the
+# two `wsgi` modules carry the two servers.
+[tool.hatch.build.targets.wheel.force-include]
+"MistHelper.py" = "MistHelper.py"
+"wsgi.py" = "wsgi.py"
+"wsgi_capture.py" = "wsgi_capture.py"
 
 [tool.ruff]
 line-length = 120
@@ -161,7 +201,22 @@ target-version = "py313"
 extend-exclude = ["mist-ops-platform", "web_portal", "scripts", "src/maps"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "G"]
+select = ["E", "F", "W", "I", "UP", "B", "G", "PLW1514", "RUF100"]
+# Issue #1792: RUF100 (unused-noqa) reports a `# noqa` directive that suppresses
+# nothing. A stale directive hides the next real finding on that line and it
+# tells a reader that a problem exists where none does. The sweep that closed
+# issue #1792 removed every unused directive, and this rule holds the count at
+# zero, so a reader can trust that each remaining directive answers a real
+# finding.
+# Issue #1795: PLW1514 (unspecified-encoding) is a preview rule. `preview` turns
+# preview rules on and `explicit-preview-rules` limits them to the codes named in
+# `select`, so no other preview rule reaches this gate. An `open()` call in text
+# mode without an explicit encoding uses the platform default. Windows returns
+# cp1252 and Linux returns utf-8. MistHelper writes state files on a Windows
+# workstation and reads them inside a Linux container, so a missing encoding
+# corrupts every character above code point 127.
+preview = true
+explicit-preview-rules = true
 # Phase 1 ignores (2026-03-12) -- tighten these incrementally:
 #   RESOLVED (2026-07-19, #886 slice): E402 moved from repo-wide ignore to
 #     scoped per-file-ignores; see the E402 block in [tool.ruff.lint.per-file-ignores]
@@ -388,15 +443,37 @@ disable_error_code = [
 ]
 
 [tool.bandit]
-targets = ["MistHelper.py", "maps_manager.py", "wsgi.py", "web_portal", "mist-ops-platform", "ops-portal", "src"]
+targets = ["MistHelper.py", "maps_manager.py", "wsgi.py", "wsgi_capture.py", "web_portal", "mist-ops-platform", "ops-portal", "src"]
 # tools/test_quality_analyzer/fixtures: deliberately-bad code used as test
 # material by the analyzer — mirrors the ruff per-file-ignore for the same tree
 # (see [tool.ruff.lint.per-file-ignores] at "tools/test_quality_analyzer/fixtures/bad/**").
-exclude_dirs = ["tests", ".venv", "node_modules", "scripts", "specs", "tools/test_quality_analyzer/fixtures"]
+# WHY both separator forms: bandit compares each entry against the scanned path
+# with a plain substring test and never normalizes the separator. The forward
+# slash matches a Linux path only, so a Windows run reported 42 phantom
+# findings from this tree (issue #1722). Keep both spellings.
+# The bandit job in .github/workflows/ci.yml checks this rule. The step "Check
+# the bandit exclude list on both path separators" fails when an entry that
+# holds a separator carries one spelling only.
+exclude_dirs = [
+    "tests",
+    ".venv",
+    "node_modules",
+    "scripts",
+    "specs",
+    "tools/test_quality_analyzer/fixtures",
+    "tools\\test_quality_analyzer\\fixtures",
+]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ["tests"]
+# The three upgrade_portal entries name the new suites, so a reader sees them
+# without a directory walk. Each one already sits under "tests".
+testpaths = [
+    "tests",
+    "tests/unit/upgrade_portal",
+    "tests/contract/upgrade_portal",
+    "tests/e2e/upgrade_portal",
+]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -406,7 +483,9 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["."]
+# src/upgrade_portal is named on its own, so a run that measures only the new
+# package still reports it. The "." entry already covers the repository.
+source = [".", "src/upgrade_portal"]
 omit = [
     "tests/*",
     "venv/*",

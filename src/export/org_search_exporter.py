@@ -106,7 +106,7 @@ class OrgSearchExporter:
             response = api_call(mh.apisession, org_id)  # SDK call with default filters.
             rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page through all rows.
             OrgSearchExporter._persist(rawdata, prefix, operation, label)  # Persist or report empty.
-        except Exception as e:  # noqa: BLE001 -- surface any SDK or network error rather than crashing the menu.
+        except Exception as e:  # surface any SDK or network error rather than crashing the menu.
             logging.error("Error fetching %s for org %s: %s", label, org_id, e)  # Failure context.
             logging.info("! Error fetching %s data: %s", label, e)  # ASCII-only user notice.
 

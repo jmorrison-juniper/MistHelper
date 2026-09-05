@@ -1,0 +1,1085 @@
+/*
+ * portal.css - Upgrade Capture Portal base stylesheet
+ *
+ * This file holds layout, tables, option bubbles, the confirm box, the status
+ * panel, and the flash region. It holds no color value. Every color comes from
+ * a custom property that a theme file sets. A new theme therefore needs no
+ * change in this file.
+ *
+ * The content security policy is 'self' only. This file loads no font and no
+ * image from a network.
+ */
+
+/* ==========================================================================
+ * 1. Page shell
+ * ========================================================================== */
+
+/*
+ * The scrollbar rule sits on the root element, not on the shell. Two reasons.
+ * The browser reads the root element to paint the scrollbar of the window, and
+ * the shell is the `body` element, which is a child of the root. `body` is
+ * therefore too late to reach the window scrollbar. `scrollbar-color` also
+ * inherits, so this one rule reaches every box that scrolls inside the page,
+ * such as `.portal-table-scroll`.
+ *
+ * Without this rule the browser paints a light scrollbar on the dark theme. The
+ * `color-scheme` value that `data-bs-theme` brings does not reach the scrollbar
+ * in every browser, so the colors are named here instead of inferred.
+ */
+:root {
+    scrollbar-color: var(--portal-scrollbar);
+}
+
+/*
+ * The shell is a column. The header stays at the top and the footer stays at
+ * the bottom, so a short page still fills the window.
+ */
+.portal-shell {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    background-color: var(--portal-bg);
+    color: var(--portal-text);
+}
+
+/*
+ * The header carries its own color tokens, not the page tokens. A theme may
+ * fill the header with a brand color, and the page text tokens then give too
+ * little contrast on that fill. The property is `background`, not
+ * `background-color`, so a theme may hand it a gradient.
+ */
+.portal-header {
+    background: var(--portal-header-bg);
+    border-bottom: 2px solid var(--portal-header-border);
+    padding: 0.5rem 1rem;
+}
+
+/*
+ * Every link rule of the header carries the .portal-header class as well as its
+ * own class. Section 5 styles a link with `.portal-shell a`, which holds one
+ * class and one element name. A bare `.portal-brand` holds one class alone and
+ * therefore loses, so the brand and the navigation links took the page link
+ * color and ignored these tokens. The extra class wins that comparison.
+ */
+.portal-header .portal-brand {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--portal-header-text);
+    text-decoration: none;
+}
+
+.portal-nav {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.portal-header .portal-nav a {
+    color: var(--portal-header-link);
+    text-decoration: none;
+    padding: 0.25rem 0;
+}
+
+.portal-header .portal-nav a:hover {
+    color: var(--portal-header-link-hover);
+}
+
+/* The active tab carries an underline as well as a color, so color is not the
+ * only signal. WCAG 1.4.1 forbids color as the only signal. The underline
+ * repeats the active color, so one token covers both. */
+.portal-header .portal-nav a.is-active {
+    color: var(--portal-header-link-active);
+    border-bottom: 2px solid var(--portal-header-link-active);
+    font-weight: 600;
+}
+
+/*
+ * A control inside the header sits on the header fill, not on the page. A theme
+ * may fill the header with a brand color, and the page boundary color then
+ * gives too little contrast against that fill. WCAG 1.4.11 asks for 3:1 on the
+ * boundary of a control, so a control here takes the header boundary color.
+ */
+.portal-header .portal-button,
+.portal-header .form-select {
+    border-color: var(--portal-header-control-border);
+}
+
+/* The main region grows, so the footer sinks to the bottom of a short page. */
+.portal-main {
+    flex: 1 0 auto;
+    padding: 1.25rem;
+}
+
+.portal-footer {
+    flex-shrink: 0;
+    background-color: var(--portal-surface);
+    border-top: 1px solid var(--portal-border);
+    color: var(--portal-text-muted);
+    font-size: 0.8rem;
+    padding: 0.75rem 1rem;
+}
+
+/*
+ * The guard for the hidden attribute (issue #2008).
+ *
+ * Three containers carry a level class all the time and hold a sentence only
+ * when something goes wrong. The template hides the empty one with the hidden
+ * attribute. Section 12 prints the signal word of the level with generated
+ * content, and a browser builds that content for a hidden element too. The
+ * accessibility snapshot of the sign-in page therefore read a bare "Warning:"
+ * with no sentence after it, on a page where nothing was wrong.
+ *
+ * A signal word with no consequence after it breaks the rule that
+ * documentation/ASD-STE100_writing-guide.md sets for every warning. It also
+ * teaches the operator to skip the word, and the next one carries firmware and
+ * a reboot.
+ *
+ * The display rule repeats what the vendored Bootstrap file already states.
+ * This portal keeps its own copy, so the guard survives a change of vendor
+ * file. The content rules are the ones that fix the defect.
+ *
+ * Every declaration needs !important, because it must beat an author display
+ * rule such as .flash-item and any class a later page adds.
+ */
+[hidden] {
+    display: none !important;
+}
+
+[hidden]::before,
+[hidden]::after {
+    content: none !important;
+}
+
+/* ==========================================================================
+ * 2. Links and focus
+ * ========================================================================== */
+
+.portal-shell a {
+    color: var(--portal-link);
+}
+
+.portal-shell a:hover {
+    color: var(--portal-link-hover);
+}
+
+/*
+ * The focus ring uses an outline and an offset. An outline follows the shape of
+ * the control and survives an overflow clip. A box-shadow does not.
+ */
+.portal-shell :focus-visible {
+    outline: 3px solid var(--portal-focus-ring);
+    outline-offset: 2px;
+}
+
+/* ==========================================================================
+ * 3. Cards
+ * ========================================================================== */
+
+.portal-card {
+    background-color: var(--portal-surface);
+    border: 1px solid var(--portal-border);
+    border-radius: 0.5rem;
+    box-shadow: var(--portal-shadow-card);
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+}
+
+.portal-card-title {
+    font-weight: 600;
+    font-size: 1.05rem;
+    margin-bottom: 0.75rem;
+    color: var(--portal-text);
+}
+
+.portal-card-note {
+    color: var(--portal-text-muted);
+    font-size: 0.85rem;
+}
+
+/* ==========================================================================
+ * 4. Tables
+ * ========================================================================== */
+
+.portal-table {
+    width: 100%;
+    border-collapse: collapse;
+    color: var(--portal-text);
+}
+
+/*
+ * A capture table can hold hundreds of device rows. A sticky head keeps the
+ * column names in view while the operator scrolls.
+ */
+.portal-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background-color: var(--portal-table-head-bg);
+    border-bottom: 2px solid var(--portal-border-strong);
+    padding: 0.6rem 0.75rem;
+    text-align: left;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.portal-table td {
+    background-color: var(--portal-surface);
+    border-bottom: 1px solid var(--portal-table-border);
+    padding: 0.5rem 0.75rem;
+    vertical-align: top;
+    word-break: break-word;
+}
+
+.firmware-mismatch {
+    color: var(--portal-danger-bg);
+    font-weight: 600;
+}
+
+.firmware-mismatch-indicator {
+    display: block;
+    font-family: var(--bs-body-font-family);
+    font-size: 0.8rem;
+    font-weight: 400;
+}
+
+.portal-table tbody tr:hover td {
+    background-color: var(--portal-table-row-hover);
+}
+
+/* A MAC address, a serial number, and a version read better in a fixed pitch
+ * font, because the columns then line up down the page. */
+.portal-table .cell-mono {
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 0.85rem;
+}
+
+.portal-table .cell-number {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+/* A wide table scrolls inside its own box. The page itself never scrolls
+ * sideways. */
+.portal-table-scroll {
+    max-height: 32rem;
+    overflow: auto;
+    border: 1px solid var(--portal-border);
+    border-radius: 0.375rem;
+}
+
+.portal-table-empty {
+    text-align: center;
+    padding: 2.5rem 1rem;
+    color: var(--portal-text-muted);
+}
+
+/* --------------------------------------------------------------------------
+ * 4a. The history table
+ *
+ * Issue #2106 measured one history row at about 113 pixels. The automatic
+ * table layout hands the width to the widest column, and two columns of this
+ * table hold long text. The capture identifier holds 39 characters and the
+ * stored moment holds 32. Those two columns took most of the width, the action
+ * column collapsed, and the `Open` control printed one letter on each line.
+ *
+ * The repair has three parts. The route shapes a short moment. The page clips
+ * the identifier and keeps the whole value in a `title` attribute. These rules
+ * state the width of each column, so no column can take the width of another.
+ *
+ * Every rule below names `.history-table`. `.portal-table` also serves the
+ * capture page and the comparison page, and those tables hold a different
+ * number of columns. A width budget for eight columns would break them.
+ * -------------------------------------------------------------------------- */
+
+/*
+ * A fixed layout obeys the stated column widths and ignores the content width.
+ * The minimum width keeps the action column usable on a narrow window. The
+ * scroll box of the table then scrolls sideways, and the page never does.
+ */
+.history-table {
+    table-layout: fixed;
+    /* WHY 58rem and not 52rem: the device type column joined this table, so the
+     * eight earlier columns would each lose room at the old width. */
+    min-width: 58rem;
+}
+
+/* The nine column widths total 100 percent. The capture identifier and the
+ * device type phrase take the largest share, and the action column keeps
+ * enough width to hold the control on one line. */
+.history-table thead th:nth-child(1) {
+    width: 20%;
+}
+
+.history-table thead th:nth-child(2) {
+    width: 14%;
+}
+
+.history-table thead th:nth-child(3) {
+    width: 6%;
+}
+
+.history-table thead th:nth-child(4) {
+    width: 9%;
+}
+
+.history-table thead th:nth-child(5) {
+    width: 7%;
+}
+
+/* The device type column holds a phrase such as `1 gateway, 1 switch, 6 access
+ * points`, so it takes the second largest share. */
+.history-table thead th:nth-child(6) {
+    width: 18%;
+}
+
+.history-table thead th:nth-child(7) {
+    width: 7%;
+}
+
+.history-table thead th:nth-child(8) {
+    width: 9%;
+}
+
+.history-table thead th:nth-child(9) {
+    width: 10%;
+}
+
+/* The row header of this table reads as a plain cell. `.portal-table` styles
+ * the `td` element alone, so the browser default would center the identifier
+ * and print it in bold beside seven left aligned cells. */
+.history-table tbody th {
+    background-color: var(--portal-surface);
+    border-bottom: 1px solid var(--portal-table-border);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    vertical-align: middle;
+}
+
+.history-table tbody tr:hover th {
+    background-color: var(--portal-table-row-hover);
+}
+
+/* Each cell of a history row sits on the middle line, so the short cells line
+ * up with the taller action cell. */
+.history-table td {
+    vertical-align: middle;
+}
+
+/* The identifier stays on one line and ends in an ellipsis. The `title`
+ * attribute of the cell holds the whole value, so nothing is lost. */
+.history-table .cell-capture {
+    max-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The short moment holds 20 characters and fits the column. The rule stops a
+ * longer stored moment from wrapping when a row reaches no short text. */
+.history-table .cell-moment {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* A row can name more than one device type, such as "access point, switch".
+ * That text wraps and stands the row above the height budget of issue #2106,
+ * so the cell clips and keeps the whole value in its title attribute. */
+.history-table .cell-device-type {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The action cell never wraps, so the control cannot stack its letters. */
+.history-table .cell-action {
+    white-space: nowrap;
+}
+
+/*
+ * The shared table cell asks for 0.75rem of padding above and below the text.
+ * That padding plus the control stands above 48 pixels. A smaller padding on
+ * this table alone brings one row to about 47 pixels, so every row of a short
+ * page shows at one time.
+ */
+.history-table tbody th,
+.history-table tbody td {
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
+}
+
+/*
+ * The shared button asks for 2.5rem of height. That height plus the cell
+ * padding stands above 48 pixels, and one page of 25 rows then needs a long
+ * scroll. This control is 2rem tall, which stays above the 24 pixel floor of
+ * WCAG 2.2 success criterion 2.5.8 and keeps the row near 48 pixels.
+ */
+.history-table .cell-action .portal-button {
+    min-height: 2rem;
+    padding: 0.25rem 0.75rem;
+}
+
+/* ==========================================================================
+ * 5. Option bubbles
+ *
+ * A bubble group replaces a plain radio list for a small set of choices, such
+ * as the sign-in credential choice and the three upgrade option groups: the
+ * strategy, the reboot, and the Junos file action. The real radio input stays
+ * in the document and stays focusable. Only its paint is hidden. A hidden input
+ * with display:none leaves the tab order, and a keyboard operator then loses
+ * the control.
+ * ========================================================================== */
+
+.bubble-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.bubble-group-legend {
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-bottom: 0.4rem;
+    padding: 0;
+    color: var(--portal-text);
+}
+
+.bubble-option {
+    position: relative;
+    display: inline-flex;
+}
+
+/* The input keeps its size and its position, so a screen reader and the focus
+ * order still find it. Opacity alone removes the paint.
+ *
+ * Why the stack order is explicit:
+ *   The input is positioned and the label is not, so the input paints above the
+ *   label by default. A browser driver presses the center of the input, and that
+ *   press must reach the input itself. A later rule that positions the label
+ *   would silently move the press to the label. The z-index states the order, so
+ *   the press target never changes by accident. See issue #2226.
+ */
+.bubble-option-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 1;
+}
+
+.bubble-option-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 2.5rem;
+    padding: 0.4rem 1rem;
+    border: 2px solid var(--portal-bubble-border);
+    border-radius: 999px;
+    background-color: var(--portal-bubble-bg);
+    color: var(--portal-bubble-text);
+    font-size: 0.9rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.bubble-option-input:hover + .bubble-option-label {
+    border-color: var(--portal-accent);
+}
+
+/* The chosen bubble changes its fill, its border, and its weight. Three signals
+ * mean the choice reads without color. */
+.bubble-option-input:checked + .bubble-option-label {
+    background-color: var(--portal-bubble-selected-bg);
+    border-color: var(--portal-bubble-selected-border);
+    color: var(--portal-bubble-selected-text);
+    font-weight: 600;
+}
+
+/* The input carries no paint, so the focus ring must move to the label. */
+.bubble-option-input:focus-visible + .bubble-option-label {
+    outline: 3px solid var(--portal-focus-ring);
+    outline-offset: 2px;
+}
+
+.bubble-option-input:disabled + .bubble-option-label {
+    background-color: var(--portal-bubble-disabled-bg);
+    color: var(--portal-bubble-disabled-text);
+    cursor: not-allowed;
+}
+
+.bubble-option-hint {
+    display: block;
+    width: 100%;
+    margin-top: 0.35rem;
+    font-size: 0.8rem;
+    color: var(--portal-text-muted);
+}
+
+/* ==========================================================================
+ * 6. Confirm box
+ *
+ * The portal asks the operator to type a word before a state change. The three
+ * words are UPGRADE, STOP, and CONFIRM. The box must look different from every
+ * other form on the page, because the action is hard to undo.
+ * ========================================================================== */
+
+.confirm-box {
+    background-color: var(--portal-confirm-bg);
+    border: 2px solid var(--portal-confirm-border);
+    border-left-width: 6px;
+    border-radius: 0.5rem;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0;
+    color: var(--portal-confirm-text);
+}
+
+.confirm-box-title {
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+    color: var(--portal-confirm-text);
+}
+
+.confirm-box-text {
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+    color: var(--portal-confirm-text);
+    max-width: 60ch;
+}
+
+/* The word to type appears in a fixed pitch font and in upper case, so the
+ * operator copies it exactly. */
+.confirm-box-word {
+    font-family: "Consolas", "Courier New", monospace;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+
+/*
+ * This field shows exactly the letters the operator typed. Do not add
+ * text-transform here. The gate compares the letter case, so a display rule that
+ * shows capitals for lower-case input would leave the operator reading CONFIRM
+ * while the button stays locked, with nothing on the page to explain why.
+ */
+.confirm-box-input {
+    font-family: "Consolas", "Courier New", monospace;
+    letter-spacing: 0.08em;
+    max-width: 16rem;
+    background-color: var(--portal-surface);
+    color: var(--portal-text);
+    border: 2px solid var(--portal-border-strong);
+    border-radius: 0.375rem;
+    padding: 0.45rem 0.75rem;
+}
+
+.confirm-box-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    align-items: center;
+}
+
+/* ==========================================================================
+ * 7. Buttons
+ * ========================================================================== */
+
+.portal-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 2.5rem;
+    padding: 0.45rem 1.1rem;
+    border-radius: 0.375rem;
+    border: 2px solid var(--portal-border-strong);
+    background-color: var(--portal-surface);
+    color: var(--portal-text);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.portal-button-primary {
+    background-color: var(--portal-accent);
+    border-color: var(--portal-accent);
+    color: var(--portal-on-accent);
+}
+
+.portal-button-primary:hover {
+    background-color: var(--portal-accent-hover);
+    border-color: var(--portal-accent-hover);
+    color: var(--portal-on-accent);
+}
+
+.portal-button-danger {
+    background-color: var(--portal-danger-bg);
+    border-color: var(--portal-danger-bg);
+    color: var(--portal-on-danger);
+}
+
+.portal-button-danger:hover {
+    background-color: var(--portal-danger-hover);
+    border-color: var(--portal-danger-hover);
+    color: var(--portal-on-danger);
+}
+
+/* A disabled control keeps full color contrast. A dimmed control can drop below
+ * the readable floor, and the operator then cannot read the reason. */
+.portal-button:disabled {
+    background-color: var(--portal-bubble-disabled-bg);
+    border-color: var(--portal-border-strong);
+    color: var(--portal-bubble-disabled-text);
+    cursor: not-allowed;
+}
+
+/*
+ * A link may carry a button class. Section 5 styles a link with `.portal-shell
+ * a`, which holds one class and one element name, and that outranks a bare
+ * button class. A link button therefore took the page link color and kept the
+ * browser underline, which put pale pink text on the brand fill. Each rule below
+ * repeats the button color with one more class, so the button color wins.
+ */
+.portal-shell a.portal-button {
+    color: var(--portal-text);
+    text-decoration: none;
+}
+
+.portal-shell a.portal-button-primary,
+.portal-shell a.portal-button-primary:hover {
+    color: var(--portal-on-accent);
+}
+
+.portal-shell a.portal-button-danger,
+.portal-shell a.portal-button-danger:hover {
+    color: var(--portal-on-danger);
+}
+
+/* ==========================================================================
+ * 8. Status panel
+ *
+ * The panel shows the live state of one capture or one upgrade run. The browser
+ * refreshes it every 30 seconds from a JSON endpoint.
+ * ========================================================================== */
+
+.status-panel {
+    background-color: var(--portal-status-bg);
+    border: 1px solid var(--portal-status-border);
+    border-radius: 0.5rem;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+}
+
+.status-panel-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem;
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--portal-status-heading);
+    margin-bottom: 0.75rem;
+}
+
+.status-panel-state {
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 0.85rem;
+    color: var(--portal-text);
+}
+
+/* The panel puts the phase list into a grid, so the phase name, the bar, and
+ * the count stay in three straight columns. */
+.status-phase-list {
+    display: grid;
+    grid-template-columns: minmax(7rem, auto) 1fr minmax(4rem, auto);
+    gap: 0.4rem 0.75rem;
+    align-items: center;
+    margin: 0;
+}
+
+.status-phase-name {
+    font-size: 0.9rem;
+    color: var(--portal-text);
+}
+
+.status-phase-count {
+    font-size: 0.85rem;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--portal-text-muted);
+}
+
+/*
+ * The note explains a phase, so it sits on its own row under that phase and
+ * spans every column of the grid. A note that holds no text matches `:empty`
+ * and leaves the grid, so a healthy run shows four rows and no blank ones.
+ */
+.status-phase-note {
+    grid-column: 1 / -1;
+    font-size: 0.85rem;
+    color: var(--portal-text-muted);
+}
+
+.status-phase-note:empty {
+    display: none;
+}
+
+.status-section-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.75rem;
+    padding: 0;
+    list-style: none;
+}
+
+.status-section {
+    font-size: 0.8rem;
+    padding: 0.15rem 0.6rem;
+    border: 1px solid var(--portal-border-strong);
+    border-radius: 999px;
+    color: var(--portal-text);
+    background-color: var(--portal-surface);
+}
+
+.status-message {
+    margin-top: 0.75rem;
+    font-size: 0.9rem;
+    color: var(--portal-text);
+    max-width: 70ch;
+}
+
+/* ==========================================================================
+ * 9. Progress bar
+ * ========================================================================== */
+
+.capture-progress-track {
+    height: 1.25rem;
+    border-radius: 999px;
+    overflow: hidden;
+    background-color: var(--portal-progress-track);
+    border: 1px solid var(--portal-border-strong);
+}
+
+.capture-progress-bar {
+    height: 100%;
+    width: 0;
+    background-color: var(--portal-progress-bar);
+    transition: width 0.3s ease;
+}
+
+.capture-progress-percent {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--portal-text);
+}
+
+/* ==========================================================================
+ * 10. Badges
+ * ========================================================================== */
+
+.portal-badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 0.2rem 0.6rem;
+    border-radius: 0.25rem;
+    white-space: nowrap;
+}
+
+.badge-verified {
+    background-color: var(--portal-badge-verified-bg);
+    color: var(--portal-badge-verified-text);
+}
+
+.badge-partial {
+    background-color: var(--portal-badge-partial-bg);
+    color: var(--portal-badge-partial-text);
+}
+
+.badge-failed {
+    background-color: var(--portal-badge-failed-bg);
+    color: var(--portal-badge-failed-text);
+}
+
+/* An unknown state is not a failure. The site list reads `unknown` when the
+ * lock store does not answer, so this badge stays neutral and never paints a
+ * healthy site red. The markup prints the word beside the color, because WCAG
+ * 1.4.1 forbids color as the only signal.
+ */
+.badge-unknown {
+    background-color: var(--portal-badge-unknown-bg);
+    color: var(--portal-badge-unknown-text);
+}
+
+/* ==========================================================================
+ * 11. Comparison outcomes
+ *
+ * Each outcome carries a color and a left border. The border keeps the outcome
+ * readable for an operator who cannot tell the colors apart.
+ * ========================================================================== */
+
+.outcome-cell {
+    font-weight: 600;
+    border-left: 4px solid var(--portal-border-strong);
+    padding-left: 0.5rem;
+}
+
+.outcome-unchanged {
+    color: var(--portal-outcome-unchanged);
+    border-left-color: var(--portal-outcome-unchanged);
+}
+
+.outcome-changed {
+    color: var(--portal-outcome-changed);
+    border-left-color: var(--portal-outcome-changed);
+}
+
+.outcome-added {
+    color: var(--portal-outcome-added);
+    border-left-color: var(--portal-outcome-added);
+}
+
+.outcome-removed {
+    color: var(--portal-outcome-removed);
+    border-left-color: var(--portal-outcome-removed);
+}
+
+.outcome-moved {
+    color: var(--portal-outcome-moved);
+    border-left-color: var(--portal-outcome-moved);
+}
+
+/* The statistics strip wraps on a narrow window instead of overflowing. */
+.compare-statistics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.compare-stat {
+    flex: 1 1 8rem;
+    background-color: var(--portal-surface);
+    border: 1px solid var(--portal-border);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+}
+
+.compare-stat-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--portal-text);
+}
+
+.compare-stat-label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--portal-text-muted);
+}
+
+/* ==========================================================================
+ * 12. Flash region and lock banner
+ *
+ * portal.js writes into this region. The region carries an ARIA live value in
+ * the template, so a screen reader reads a new message without a page change.
+ * ========================================================================== */
+
+.flash-region {
+    margin-bottom: 1rem;
+}
+
+.flash-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    border: 1px solid var(--portal-border-strong);
+    border-left-width: 5px;
+    border-radius: 0.375rem;
+    padding: 0.65rem 0.9rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+/* Each level names itself in a text prefix as well as a color, so the level
+ * reads without color. */
+.flash-item::before {
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.flash-info {
+    background-color: var(--portal-flash-info-bg);
+    border-color: var(--portal-flash-info-border);
+    color: var(--portal-flash-info-text);
+}
+
+.flash-info::before {
+    content: "Note:";
+}
+
+.flash-success {
+    background-color: var(--portal-flash-success-bg);
+    border-color: var(--portal-flash-success-border);
+    color: var(--portal-flash-success-text);
+}
+
+.flash-success::before {
+    content: "Done:";
+}
+
+.flash-warning {
+    background-color: var(--portal-flash-warning-bg);
+    border-color: var(--portal-flash-warning-border);
+    color: var(--portal-flash-warning-text);
+}
+
+.flash-warning::before {
+    content: "Caution:";
+}
+
+.flash-danger {
+    background-color: var(--portal-flash-danger-bg);
+    border-color: var(--portal-flash-danger-border);
+    color: var(--portal-flash-danger-text);
+}
+
+.flash-danger::before {
+    content: "Warning:";
+}
+
+.lock-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    background-color: var(--portal-flash-warning-bg);
+    border: 1px solid var(--portal-flash-warning-border);
+    border-left-width: 5px;
+    border-radius: 0.375rem;
+    padding: 0.65rem 0.9rem;
+    margin-bottom: 1rem;
+    color: var(--portal-flash-warning-text);
+    font-size: 0.9rem;
+}
+
+/* ==========================================================================
+ * 13. Search field
+ * ========================================================================== */
+
+/*
+ * A text field carries its own tokens, not the card tokens. A dark theme sinks
+ * a field below the card it sits on, so the operator sees where to type.
+ */
+.portal-search {
+    max-width: 22rem;
+    margin-bottom: 1rem;
+    background-color: var(--portal-input-bg);
+    color: var(--portal-input-text);
+    border: 1px solid var(--portal-input-border);
+    border-radius: 0.375rem;
+    padding: 0.45rem 0.75rem;
+}
+
+/* ==========================================================================
+ * 14. Narrow window
+ * ========================================================================== */
+
+@media (max-width: 768px) {
+    .portal-main {
+        padding: 0.75rem;
+    }
+
+    .portal-table {
+        font-size: 0.85rem;
+    }
+
+    .portal-search {
+        max-width: 100%;
+    }
+
+    /* Three grid columns do not fit a phone. The phase list becomes one column
+     * and each row stacks. */
+    .status-phase-list {
+        grid-template-columns: 1fr;
+    }
+
+    .status-phase-count {
+        text-align: left;
+    }
+}
+
+/* ==========================================================================
+ * 15. Reduced motion
+ *
+ * An operator can ask the system to reduce motion. The progress bar then jumps
+ * instead of sliding.
+ * ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    .capture-progress-bar {
+        transition: none;
+    }
+}
+
+/* ==========================================================================
+ * 16. Print
+ *
+ * An operator prints a comparison for a change record. A print needs no
+ * navigation and no sticky head.
+ * ========================================================================== */
+
+@media print {
+    .portal-header,
+    .portal-footer,
+    .confirm-box-actions,
+    .flash-region {
+        display: none;
+    }
+
+    .portal-table thead th {
+        position: static;
+    }
+
+    .portal-table-scroll {
+        max-height: none;
+        overflow: visible;
+    }
+}
+
+/* Issue #2027. A sortable header acts as a control, so it shows the pointer
+   shape and a focus ring. The arrow carries the sort state as a shape, so a
+   reader who cannot tell two colors apart still reads the order. */
+.portal-sort-header {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.portal-sort-header:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+
+.portal-sort-arrow {
+  margin-left: 0.35rem;
+  opacity: 0.55;
+  font-size: 0.85em;
+}
+
+/* The active column shows its arrow at full strength, so the ordered column
+   stands out from the columns that only offer an order. */
+.portal-sort-header[aria-sort="ascending"] .portal-sort-arrow,
+.portal-sort-header[aria-sort="descending"] .portal-sort-arrow {
+  opacity: 1;
+}

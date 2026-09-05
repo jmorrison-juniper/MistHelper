@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
@@ -70,11 +70,29 @@ class EventSyncService:
 
     @staticmethod
     def _extract_entity_id(event: dict[str, Any]) -> UUID:
-        """Extract entity UUID from event, fallback to random UUID."""
-        raw = event.get("obj_id") or event.get("id")
-        if raw:
-            try:
-                return UUID(str(raw))
-            except ValueError:
-                pass
-        return uuid4()
+        """Return the entity UUID of the event, or a synthetic UUID.
+
+        ``AuditRecord.entity_id`` links the audit row back to the object that
+        changed. A synthetic value breaks that link, so every fallback path
+        leaves a warning that states the reason.
+        """
+        raw = event.get("obj_id") or event.get("id")  # WHY: Mist sends either key.
+        if not raw:
+            # WHY: the row still stores, so the caller needs the reason in the log.
+            return EventSyncService._synthetic_entity_id("the event carries no identifier")
+        try:
+            return UUID(str(raw))  # WHY: the normal path keeps the real link.
+        except ValueError:
+            # WHY: Mist also returns MAC style object identifiers, which are not UUIDs.
+            return EventSyncService._synthetic_entity_id(f"the identifier {raw!r} is not a UUID")
+
+    @staticmethod
+    def _synthetic_entity_id(reason: str) -> UUID:
+        """Return a fresh UUID and record why the real identifier is missing."""
+        synthetic = uuid4()  # WHY: the audit column needs a value the database accepts.
+        logger.warning(  # WHY: issue #1924 requires a record on every recovery path.
+            "Audit row loses its link to the entity, because %s. Identifier %s is synthetic.",
+            reason,
+            synthetic,
+        )
+        return synthetic

@@ -44,7 +44,8 @@ Open http://localhost:8055 in your browser.
 | `/data` | GET | Data browser page |
 | `/operations` | GET | Operations page |
 | `/maps` | GET | Map viewer page |
-| `/health` | GET | JSON health check |
+| `/health` | GET | Liveness probe. Reports that the process runs. Reads no disk. |
+| `/ready` | GET | Readiness probe. Tests the data directory, the database, and the Mist session. Returns code 503 and names each failed check. |
 | `/api/data/files` | GET | List data files |
 | `/api/operations/list` | GET | List available operations |
 | `/api/operations/run` | POST | Run an operation |

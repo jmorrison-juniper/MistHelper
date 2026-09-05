@@ -51,3 +51,8 @@ celerybeat.pid
 
 # Data outputs
 data/
+
+# Application settings package.
+# WHY: the root .gitignore excludes every config/ directory. That rule hid
+# src/shared/config/, which six modules import. This line re-includes it.
+!src/shared/config/

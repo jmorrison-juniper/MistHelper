@@ -139,7 +139,7 @@ class DeviceEvents52wExporter:  # WHY: Public streaming exporter bound to a sing
         try:
             with open(checkpoint_file, encoding=_ENCODING) as handle:  # WHY: Read persisted resume token
                 token = handle.read().strip()  # WHY: Strip trailing newline written by _write_checkpoint
-        except Exception as error:  # noqa: BLE001  # WHY: Any read failure downgrades to non-fatal warn
+        except Exception as error:  # WHY: Any read failure downgrades to non-fatal warn
             self.logger.warning(_LOG_CHECKPOINT_READ_FAIL, checkpoint_file, error)  # WHY: Trace failure
             return None  # WHY: Read failure treated as no checkpoint (fresh run)
         if not token:  # WHY: Empty file behaves like missing checkpoint
@@ -225,7 +225,7 @@ class DeviceEvents52wExporter:  # WHY: Public streaming exporter bound to a sing
         for attempt in range(retries):  # WHY: Bounded retry loop with exponential backoff
             try:
                 return self._fetch_page(token, duration, limit)  # WHY: Happy-path returns immediately
-            except Exception as error:  # noqa: BLE001  # WHY: Preserve blanket-except for compatibility
+            except Exception as error:  # WHY: Preserve blanket-except for compatibility
                 last_error = error  # WHY: Track for terminal re-raise
                 self.logger.warning(_LOG_ATTEMPT_FAIL, attempt + 1, retries, error)  # WHY: Trace attempt
                 self._sleep_before_retry(attempt, retries, backoff)  # WHY: Backoff isolated in helper
@@ -299,7 +299,7 @@ class DeviceEvents52wExporter:  # WHY: Public streaming exporter bound to a sing
         try:
             with open(checkpoint_file, "w", encoding=_ENCODING) as handle:  # WHY: Truncate + write token
                 handle.write(str(token))  # WHY: Coerce token to string for portability
-        except Exception as error:  # noqa: BLE001  # WHY: Preserve blanket-except for compatibility
+        except Exception as error:  # WHY: Preserve blanket-except for compatibility
             self.logger.warning(_LOG_CHECKPOINT_WRITE_FAIL, checkpoint_file, error)  # WHY: Non-fatal warn
 
     def _remove_checkpoint(self, checkpoint_file: str) -> None:  # WHY: Best-effort checkpoint cleanup
@@ -307,7 +307,7 @@ class DeviceEvents52wExporter:  # WHY: Public streaming exporter bound to a sing
         try:
             if os.path.exists(checkpoint_file):  # WHY: Guard - avoid FileNotFoundError from race
                 os.remove(checkpoint_file)  # WHY: Cleanup so next run starts fresh
-        except Exception:  # noqa: BLE001  # WHY: Preserve blanket-except for compatibility
+        except Exception:  # WHY: Preserve blanket-except for compatibility
             self.logger.debug(_LOG_CHECKPOINT_REMOVE_FAIL)  # WHY: Debug-only breadcrumb
 
     def _log_completion(self, csv_file: str) -> None:  # WHY: Emit final completion status per backend

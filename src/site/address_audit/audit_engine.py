@@ -49,6 +49,7 @@ from src.site.address_audit.suite_patterns import (
     SUITE_PATTERN_CAPTURE as _SUITE_PATTERN,
 )  # Shared suite detector (capturing).
 from src.utils.input_utils import InputUtils  # EOF-safe operator prompts.
+from src.utils.tls_policy import TLSVerificationPolicy  # One control for certificate verification.
 
 try:  # Optional dependency: tqdm renders the per-row progress bar.
     from tqdm import tqdm  # Progress bar for the resolve loop.
@@ -346,7 +347,7 @@ class AddressAuditEngine:
         try:
             rows = self._authority_ingester.load(business_csv_path)  # Parse authoritative rows from selected file.
             return self._authority_ingester.build_index(rows)  # Pre-index for O(1) per-row lookup.
-        except Exception as exc:  # noqa: BLE001 -- authority file is additive, never run-blocking.
+        except Exception as exc:  # authority file is additive, never run-blocking.
             logger.warning("Business-authoritative CSV load failed (%s); continuing without it", exc)  # Fail-soft log.
             return {"by_name": {}, "by_full": {}, "by_no_suite": {}}  # Degrade to empty authority index.
 
@@ -378,7 +379,7 @@ class AddressAuditEngine:
         """Fully paginate a Mist API response into a list (empty on failure)."""
         try:
             return mistapi.get_all(response=response, mist_session=apisession) or []  # Exhaust pagination.
-        except Exception as exc:  # noqa: BLE001 -- a read failure must not crash the audit.
+        except Exception as exc:  # a read failure must not crash the audit.
             logger.warning("Mist pagination failed: %s", exc)  # Log and degrade to empty.
             return []  # Return nothing so the audit continues.
 
@@ -410,7 +411,7 @@ class AddressAuditEngine:
         try:
             response = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id)  # Site settings call.
             record = getattr(response, "data", {}) or {}  # Settings payload (vars, snmp_config).
-        except Exception as exc:  # noqa: BLE001 -- enrichment is best-effort.
+        except Exception as exc:  # enrichment is best-effort.
             logger.debug("Site settings fetch failed for %s: %s", site_id, exc)  # Trace and degrade.
             record = {}  # Empty record -> enricher yields None.
         record.setdefault("id", site_id)  # Carry the id for log context.
@@ -456,12 +457,14 @@ class AddressAuditEngine:
     def _skip_ssl_verify() -> bool:
         """Return whether to skip TLS verification for the public Nominatim call.
 
-        Defaults to True because the deployment environment sits behind Zscaler
-        SSL inspection, whose MITM cert otherwise breaks the OpenStreetMap call.
-        Set ``MIST_SKIP_SSL_VERIFY=false`` to enforce verification (non-Zscaler hosts).
+        Defaults to False, because an unverified call exposes the traffic to
+        any host on the network path. Set ``MIST_SKIP_SSL_VERIFY=true`` to opt
+        out behind a proxy that inspects TLS. A better answer is to mount the
+        corporate certificate authority bundle and keep the check on.
+
+        See issue #1914. This helper defaulted to True before that fix.
         """
-        raw = os.environ.get("MIST_SKIP_SSL_VERIFY", "true").strip().lower()  # Env override. Default on.
-        return raw not in ("false", "0", "no", "off")  # Any falsey token re-enables verification.
+        return TLSVerificationPolicy.skip_verification()  # One control decides for every caller.
 
     @staticmethod
     def _make_ui_geocoder(perf: PhaseTimer) -> Any:

@@ -3,6 +3,11 @@
 
 # Security - Never commit sensitive files
 .env
+# WHY: `.env` alone does not cover a copy such as `.env.backup-2059` or
+# `.env.2026-08-25`. A copy holds the same API token as the original, so the
+# pattern below covers every suffix an operator adds while editing.
+.env.*
+!.env.example
 !documentation/sample.env
 
 # Copyrighted standard - do not redistribute (ASD-STE100 license restricts sharing)
@@ -16,6 +21,10 @@ data/ste_dictionary.json
 .env.production
 .env.staging
 *.log
+# WHY: a saved test run is a local artifact, not source. `e2e-baseline.txt` was
+# a pytest transcript that a `git add -A` swept into a commit twice.
+e2e-baseline.txt
+*-baseline.txt
 *.key
 *.pem
 *.p12
@@ -122,6 +131,9 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+
+# Playwright MCP browser tool artifacts (snapshots, screenshots) from ad hoc E2E checks
+.playwright-mcp/
 
 # Translations
 *.mo
@@ -241,12 +253,11 @@ backups/
 # System files
 *.ini
 *.cfg
-config/
-configs/
-!src/ssh/config/
-!src/ssh/config/*.py
-!src/config/
-!src/config/*.py
+# WHY: anchor each rule to the repository root. An unanchored "config/" rule matches
+# every nested directory of that name, so it hid the source package
+# mist-ops-platform/src/shared/config/ from git and from the scanners (issue #1778).
+/config/
+/configs/
 
 # Archives
 *.zip

@@ -7,6 +7,1536 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Serve Mist Cloud health to a monitoring system
+
+- **Added**: Menu 241 and the `--metrics-gateway` flag start a metrics gateway on
+  port 8057. The gateway reads the organization on a timer and holds the last
+  reading. A monitoring system polls the gateway and never polls Mist Cloud, so a
+  poller cannot spend the Mist rate limit budget. Issue #2243.
+- **Added**: A Prometheus endpoint at `/metrics`. This is the path to choose. It
+  needs no MIB and no registered enterprise number, and it binds an unprivileged
+  port. Prometheus, Grafana, Zabbix, LibreNMS, and Icinga all read the format.
+- **Added**: An SNMP path through the Net-SNMP `pass_persist` protocol, started by
+  the `--metrics-snmp` flag from one line in `snmpd.conf`. `snmpd` keeps port 161
+  and the community string, so MistHelper binds no privileged port and holds no
+  community string. The operator names the base OID, so no unregistered
+  enterprise number is baked into this repository.
+- **Added**: The readings `mist_scrape_success`, `mist_scrape_age_seconds`, and
+  `mist_scrape_duration_seconds` describe the gateway itself. A failed read of
+  Mist Cloud keeps the last good reading, so those values are how an operator
+  tells a stale reading from a real outage.
+- **Note**: The design carries the object set of `tmunzer/mist_snmp_gateway`,
+  which is MIT licensed and which its author calls a proof of concept. The store,
+  the transport, and the OID layout are new. That project copies each reading into
+  MongoDB, which it never queries and never reads after the next refresh, so the
+  database earns nothing and costs a second service. This gateway holds the
+  reading in memory instead.
+- **Note**: One refresh costs three calls, whatever the size of the organization.
+  The upstream project calls two endpoints for each site and waits between two
+  sites, so a 200 site organization costs it 400 calls and 20 seconds of delay.
+- **Note**: SNMP carries a whole number only. A ratio therefore takes a documented
+  scale factor on the SNMP path, and the help text of each scaled reading names
+  the unit. The Prometheus path reports the true value.
+
+### Read every moment as UTC, and sort the last table
+
+- **Fixed**: The capture picker of the comparison page showed the stored text,
+  which holds 32 characters and the offset of the machine that wrote it. It now
+  reads the same short UTC form as the history page. Issue #2227.
+- **Fixed**: The site table was the one table of the portal that never sorted.
+  An organization with many sites showed one long unordered list, and the
+  operator could not order it by the device count or by the lock state.
+
+### Record every site lock action, and show the audit log
+
+- **Added**: The portal records a take and a release beside the takeover that it
+  already recorded. A page built on takeovers alone would tell the reader that
+  one lock action ever happened. Issue #2221.
+- **Added**: The history page holds an audit log section. Each row names the
+  moment in UTC, the site, the action, and the operator.
+- **Added**: The reader infers an expiry. No request runs at the moment a hold
+  ends, and the lock store drops the key, so no writer can record one. A take
+  that follows an unreleased hold means that hold ended with no release, and the
+  row states that the portal read the fact rather than recorded it.
+- **Note**: The trail holds the address of each operator, because an audit names
+  people. No row of the page holds that address. The page shows the one-way
+  digest that the portal already writes into every log record.
+- **Note**: A take and a release never fail closed. A takeover still refuses
+  itself when the trail cannot hold it, because a takeover moves a site between
+  operators and an unaccountable move is worse than a refused one.
+
+### Retry a failed run in one press
+
+- **Added**: A failed run offers a retry to the holder of the site lock. The new
+  run copies every option, the device list, and the target version of each
+  device, and it names the failed run that it came from. Issue #2202.
+- **Fixed**: The retry rebases each schedule. A schedule of the failed run names
+  a moment in the past, and a retry that kept it would write the firmware at
+  once while the operator read a delayed start that never happens.
+- **Note**: The record holds the duration beside the moment, so the retry keeps
+  the duration and the start route counts it again. A record that holds a moment
+  alone cannot be rebased. The retry drops that schedule and names the drop.
+- **Note**: The retry adopts no capture of the failed run. The site changed
+  while that run wrote firmware to part of it, so the confirmation stays locked
+  until a fresh capture verifies.
+
+### Repair every run link of the history page
+
+- **Fixed**: Each run row of the history page linked `/runs/<run_id>/progress`,
+  and no such route exists. Every press reached a fault page. The live run view
+  is `/runs/<run_id>`. Issue #2225.
+- **Added**: A test resolves every internal link of the history page against the
+  routes of the application. Fourteen tests covered the runs section and none
+  caught this, because each one read the shaped row and none read the markup.
+
+### Reschedule or cancel a run that has not begun
+
+- **Added**: An operator with the site lock moves the start of a run that never
+  reached the cloud. The duration counts from the moment of the reschedule, so
+  `8h` means eight hours from now. Issue #2201.
+- **Added**: An operator with the site lock ends such a run. The cancel writes
+  the record alone and reaches no cloud endpoint.
+- **Added**: The run state `cancelled`. It is not the state `stopped`. A stop
+  cancels firmware that the cloud already holds, and a cancel ends a plan that
+  no device ever saw. A reader months later must tell the two apart, because
+  one of them touched hardware.
+- **Note**: Neither control reaches a run at or past the submission. Such a run
+  answers `run_already_started`, and the stop control applies to it instead.
+
+### Let a second operator read a run without the site lock
+
+- **Fixed**: A control that writes to a site now renders shut when another
+  operator holds that site, and it names the holder and the reason. The control
+  stayed live before, so an operator pressed it and learned of the hold only
+  after the refusal. Issue #2200.
+- **Added**: The confirmation page reads the site lock. A second operator reads
+  the whole plan, and the start control stays shut for that operator.
+- **Added**: The takeover box names the count of devices under upgrade. A
+  takeover moves a live firmware write to the second operator, and that operator
+  must read the size of what they take.
+- **Note**: A free site and an unreadable lock store both leave every control
+  live. The server is the real guard, and a control that shut on an unreadable
+  store would stop every operator whenever the lock store blinked.
+
+### List every upgrade run on the history page
+
+- **Added**: The history page holds a runs section beside the captures section.
+  Each row names the run, the site, the state, the device count, the start
+  moment, and the end moment. Issue #2199.
+- **Added**: Each run row links to the capture from before the upgrade and to
+  the capture from after it, so a reader reaches the comparison in one press.
+- **Fixed**: Every moment of the runs section reads as UTC. The store writes the
+  offset of the machine that started the run, so two runs of one afternoon could
+  read as two different hours.
+- **Added**: A run stored before the state field existed reads as `unknown`. The
+  page never hides such a row, because that run still happened.
+
+### Name the control in a refused option, and state its rule
+
+- **Fixed**: A refused option named the internal cloud field, which appears on
+  no control. The message now names the control label that the page paints, and
+  it states the rule that the value broke. Issue #2195.
+- **Fixed**: The message still repeats no value that the operator typed, and the
+  error code stays `bad_option`, so every existing client keeps working.
+- **Added**: A test reads each label against the options page. A label that
+  drifts from the page would send the operator to a control that does not exist.
+
+### Cap each table of the capture page
+
+- **Added**: Each table of the capture page paints at most 500 rows. A capture
+  of a large site holds thousands of client rows, and a page that painted every
+  one would render slowly and sort slowly. Issue #2075.
+- **Added**: A capped table states what it removed, and it names the download
+  control that answers every record. A silent cut would let an operator read a
+  cut table as the whole site.
+
+### Check every line citation with a gate
+
+- **Added**: `python -m tools.check_citations` reads every citation of the form
+  `path:line`, resolves the path, and reads the line number. It reports a
+  citation whose file does not exist, and a citation whose line sits past the
+  end of that file. Issue #1998.
+- **Added**: A CI job runs the check against `src` and `tests`. Those two
+  folders hold the text that a maintainer reads while changing code.
+- **Fixed**: Two comments of the browser fixtures cited a `gunicorn_server`
+  fixture that no longer exists. Two documents cited the same deleted fixture.
+- **Fixed**: The two upgrade-run tables of the HTTP contract omitted three
+  answer codes that the routes can return.
+- **Fixed**: Three documents named the success criterion SC-002 for a 90-second
+  capture, and one named SC-005 for a 3-second render. Both labels were wrong.
+  The four numbers are performance goals of the plan.
+
+### Cover the absent-store paths of the portal wiring
+
+- **Fixed**: `app/wiring.py` sat at 88 percent of statements, under the 90
+  percent floor. It now reads 92 percent. Issue #1996.
+- **Added**: Nine tests drive the paths that run when the store module is absent
+  or when the store raises. A poll now proves that it answers the run from the
+  mirror instead of a fault, and an adoption proves that it costs the operator
+  the adoption alone and never the whole run.
+
+### Bring every portal sentence under the length limit
+
+- **Fixed**: 473 sentences of the portal package passed the 25-word limit of
+  the writing guide. Every one now reads under the limit. The text sits in the
+  `Why:` block of a docstring or in an inline comment, and a junior engineer
+  reads it. Issue #1993.
+- **Fixed**: The sentence splitter of the STE linter joined every entry of a
+  Google-style `Args:` block into one long sentence. An entry name starts in
+  lower case, and the splitter needed a capital letter. The join produced 119
+  reports that no writer could repair without damaging a correct docstring.
+- **Fixed**: The sentence splitter also joined a sentence that starts with an
+  inline code span, such as one that starts with a function name in double
+  backticks. A technical sentence often starts that way.
+- **Added**: `python -m tools.show_long_sentences <path>` prints each long
+  sentence with its text, its word count, and its mode. The linter reports a
+  line number alone, and a long docstring holds many candidates near that line.
+
+### Keep the inventory page alive for an unmodeled device type
+
+- **Fixed**: A device that reports a type the portal does not model no longer
+  ends the site inventory page. One `router` device made the page answer the
+  status 500, so the operator reached no device of the site. Issue #2211.
+- **Added**: The inventory table states that the portal offers no upgrade for an
+  unmodeled type. A blank target with no cause reads as an error.
+
+### Order any table by any column
+
+- **Added**: Every table of the portal now sorts by any column, both ways. The
+  header answers a pointer, the Enter key, and the Space key. Issue #2027.
+- **Added**: Each sortable header carries `aria-sort`, so a screen reader names
+  the order. Each header also carries a shape, so the order needs no color.
+- **Added**: A column that holds a control offers no order. An action column
+  holds a button and never a value, so an order of those cells means nothing.
+- **Added**: The history page states that a sort orders the rows of the page on
+  screen. The sort runs in the browser, so it never reaches a later page.
+
+Warning: an operator who cannot order a device list can miss a device of the
+upgrade. A missed device keeps its old firmware, and the fleet then holds two
+versions. Finding that device is the fault that this whole feature exists to
+catch.
+
+### Tell an operator why the organization picker is empty
+
+- **Fixed**: The organization picker told an operator with a valid token that
+  the sign-in reaches no organization. The reader answers `None` for a scope
+  that it could not read, and the picker turned that answer into an empty list.
+  An empty list and an unread list then looked the same. Issue #1989.
+- **Added**: The page names the cause that fits. A filter that matches nothing
+  reads one sentence. A cloud that answered with no organization reads a second
+  one. A cloud that named no privilege list reads a third one.
+
+Warning: the earlier sentence sent an operator to an administrator who could
+change nothing. The operator held the access the whole time, and the portal
+could not read the list that names it.
+
+### Hide a control that the device types of the run do not read
+
+- **Fixed**: The radio strategy word stayed visible and stayed checked for a run
+  that held no access point. The cloud reads that word for an access point
+  alone, so the portal sent no strategy at all. The cloud then wrote every
+  device at the same moment, which is not the order that the operator picked.
+  Issue #2198.
+- **Added**: The page moves the strategy choice when it hides the word that
+  holds it. The move goes to the first word that the page still shows, and a
+  message names the move. A silent move would run an order that nobody read.
+- **Fixed**: Each control that applies a version to one device type stayed
+  visible for a type that the run did not hold. Each control now names its own
+  device type.
+
+### Keep the upgrade schedule and show every warning of the plan
+
+- **Fixed**: The portal discarded the upgrade schedule. A run asked for a
+  download in two hours and a reboot in three hours. The request carried
+  neither field, so the cloud wrote the firmware at once. A duration now
+  resolves against the clock of the reader whatever the caller passed. Issue
+  #2196.
+- **Fixed**: The confirmation page showed the warnings of the option save and
+  none of the warnings of the plan. A real run hid three sentences, and one of
+  them named the reboot of six access points. Issue #2194.
+- **Added**: The confirmation page names the count of cloud calls. The portal
+  splits a run by device type, by gateway family, and by version, so one
+  selection can send several calls.
+
+Warning: the schedule defect can drop a production site with no warning. An
+operator plans a window at midnight, reads that window on the confirmation page,
+and the firmware writes the moment they confirm.
+
+### Start the container stack with a provider that works on Windows
+
+- **Added**: A helper script at `scripts/compose.ps1`. It finds a compose
+  provider that works on every platform, and it passes every argument through.
+  Issue #2184.
+- **Added**: The README names the supported command for the stack. It also names
+  the one install command that the helper script needs.
+- **Fixed**: The command `podman compose` starts the stack without its
+  application service on Windows. That command delegates to an external
+  provider, which sends the bind mount as a Windows path with a drive letter.
+  The volume parser reads the colon of the drive letter as a separator, so it
+  refuses the application service. The two database services start without it.
+
+Warning: a stack without its application service can stop every operation of the
+portal. Such a stack answers no request on port 8055 and none on port 8056. Each
+database service of the stack still reports a healthy state, so the fault reads
+as a working stack.
+
+### Show the effective default in every upgrade option control
+
+- **Added**: Each optional control names the value that applies when the
+  operator leaves it empty. The page reads that value from the server, because
+  the cloud schema and the environment both live there. A default written into
+  the markup by hand would drift from the schema. Issue #2186.
+- **Fixed**: The control for the failures inside each phase carried the text
+  `1,2,5,10`. The cloud names no such default. An operator therefore read an
+  invented example as the value that the run would use. The page no longer
+  shows that text.
+- **Added**: The three version defaults of the environment reach the page.
+  `CAPTURE_DEFAULT_AP_VERSION`, `CAPTURE_DEFAULT_SWITCH_VERSION`, and
+  `CAPTURE_DEFAULT_GATEWAY_VERSION` each name the version of one device type.
+
+Warning: a default that reached the request body can start an upgrade that
+nobody reviewed. Such a run would carry a value that the operator never chose.
+The page shows each default as placeholder text alone, and a test proves that an
+untouched control stores nothing.
+
+### Take a duration instead of an epoch second for the two schedule controls
+
+- **Changed**: Each schedule control takes a duration that counts from the
+  moment that the operator starts the job. The operator writes a number and
+  a unit, such as `200s`, `5m`, `8h`, or `3d`. Issue #2187.
+- **Changed**: The portal refuses a value with no unit. A bare number reads as
+  seconds to one operator and as minutes to another, and the two readings differ
+  by a factor of sixty.
+- **Added**: The confirmation page names the duration and the moment that the
+  duration reaches. The moment carries the word "about" and the condition of the
+  start, because the operator did not start the job yet.
+- **Changed**: The saved run keeps the duration and not the moment. An operator
+  saves the options, reads the plan for ten minutes, and still gets the window
+  that they asked for.
+- **Fixed**: A run saved before this change keeps its stored moment. A whole
+  number of ten digits or more reads as an epoch second, and a value with a
+  unit reads as a duration. Warning: a stored epoch second that reads as a
+  duration can stop the upgrade of a whole site. Such a value names a moment
+  about 60 years ahead. The run then never writes firmware.
+
+### Reveal each upgrade option only when its dependency is satisfied
+
+- **Fixed**: The reboot control and the control for the Junos file action
+  appeared for a run of access points alone. The cloud reboots an access point
+  on its own. The cloud rejects each of the two fields on an access point. An
+  operator therefore planned a window around a control with no effect. Each
+  group now names the device types that read it. Issue #2185.
+- **Fixed**: The reboot moment appeared when the operator held the reboot. The
+  cloud reads that moment only when the reboot is on, so the page now reveals
+  the control after the operator chooses a reboot.
+- **Fixed**: The size and the parallelism of a download group appeared when the
+  download between access points was off. Each control now waits for that choice.
+- **Fixed**: The count of failures inside each phase appeared before the phase
+  list held a phase. The server refuses a list that does not match the phase
+  list, so an operator met a refusal that no control predicted. The control now
+  waits for the phase list.
+- **Fixed**: The first strategy radio tested for "not canary". A saved run with
+  the serial strategy therefore marked two radios of one group. The browser
+  picks the last such radio, so the page looked correct by accident. The test is
+  now an exact match.
+- **Added**: Two rule attributes for the page. One names a control and the value
+  that reveals the dependent control. The other names a control that must hold
+  any value at all. Both rules live in the markup, because the policy for
+  content security allows no inline script.
+
+### Carry the API token into every SSH session
+
+- **Fixed**: An operator who connected over SSH met a login loop. MistHelper
+  refused to start, and the session script restarted it five times before it
+  closed the connection. Issue #2181.
+- **Fixed**: The cause was a missing credential. The compose file supplies the
+  token through `env_file`, which fills the environment of the container
+  process and writes no file. The SSH daemon starts each session with a fresh
+  environment, so no credential reached a session. The entrypoint now writes an
+  allowlist of configuration names to a file, and the session script reads that
+  file.
+- **Added**: A new script at `container/scripts/write-session-env.sh` owns the
+  allowlist. It writes the file with the mode 0400 and the ownership of the
+  session user, so no other account of the container reads the token. It names
+  each variable in the log and prints no value.
+- **Changed**: The session script refuses at the first attempt when no token
+  reaches it. A missing token is a permanent fault of the configuration. The
+  restart loop repeated that failure five times, and it hid the one useful
+  line. The refusal names the cause and names the variable that repairs it.
+
+### Write the safety design of the BIOS, FPGA, and Mist Edge workflows
+
+- **Added**: A design document at
+  `specs/2158-high-risk-firmware-workflows/design.md`. It states the boundaries
+  of three workflows with a high risk. None of the three belongs on the ordinary
+  firmware page. The document adds no user-visible control. Issue #2158.
+- **Added**: The document records one finding that shapes every later choice.
+  A BIOS run and an FPGA run reach four endpoints of the Mist API. Each one
+  writes. No endpoint reads the state of such a run. No endpoint stops one.
+  The design therefore forbids a progress bar and a stop button for those two
+  workflows. It defines a recovery procedure that reads the device instead.
+
+### Add the release train and the schedule of a session smart router
+
+- **Added**: The options page offers the release train of a session smart
+  router. The control names the three words that the router schema holds, which
+  are alpha, beta, and stable. Only the router schema reads a channel, so the
+  page hides the control unless the run upgrades a router. Issue #2157.
+- **Added**: The options page offers the moment that the firmware download
+  begins. Each cloud schema of the three holds the field, so the control shows
+  for every device type. Before this change the portal held the rule and
+  offered no control at all.
+- **Added**: The plan warns when a run upgrades two routers or more under a
+  single wave. Two routers of one site may share the wide area link, and one
+  wave reboots the pair at once. The portal names the risk and keeps the order
+  that the operator chose.
+- **Added**: The confirmation page reports the release train, the download
+  moment, and the reboot moment before the firmware moves.
+- **Changed**: The note of the separate window for a reboot now states the rule
+  of a router. That schema holds no reboot flag, so a no on the reboot control
+  sends the value that disables the reboot of the router.
+
+### Expose the advanced firmware upgrade controls of the cloud schema
+
+- **Added**: The portal now offers every remaining upgrade field of the cloud
+  schema. The new controls are the phase list of a staged
+  upgrade and the failure limit of each phase. They are the failure
+  percentage of the whole run and a separate window for the reboot of a
+  switch and a gateway. They are the serial strategy and the radio strategy
+  with its five settings. They are the three settings for a download between
+  access points. They are the force flag and the vendor stable build. Before
+  this change an operator who needed one of these fields had to leave the
+  portal and call the cloud by hand. Issue #2156.
+- **Added**: The page hides a control that the selection does not read. The
+  radio settings reach an access point only. The settings for a download
+  between access points reach an access point only. The separate window for
+  a reboot reaches a switch and a gateway only. The phase list reaches the
+  staged strategy only.
+- **Added**: The confirmation page names each advanced control that the run
+  submits, and it names no control that keeps the cloud default.
+- **Added**: The plan warns when the radio strategy misses the switches and
+  the gateways of a mixed run. It also warns that the stable build ignores
+  every version that the device table shows.
+- **Fixed**: The save call of the options dropped the schedule and every
+  advanced choice when no site inventory answered. That path stored three
+  fields by hand instead of the whole option record. It now maps the body
+  through the one module that owns every rule. Both paths store the same
+  record, and both refuse the same bad value.
+- **Fixed**: A refusal of the separate reboot window named the start time.
+  The refusal now names the reboot control, so the operator opens the control
+  that holds the fault.
+
+### Show the saved plan warning list on the confirm page
+
+- **Fixed**: The confirm page shows the same list of warnings that the
+  options page saved, for example the access-point reboot warning. Before
+  this change, the options-save call answered a warning list but never wrote
+  it onto the run record. The confirm page reads a fresh record with no
+  warning list at all, so it always showed "The plan found no warning," even
+  when a real warning applied. The confirm page is the last page before
+  firmware moves, so a hidden warning was a safety gap. Issue #2003.
+
+### Retire the duplicate continuous-loop menu number
+
+- **Removed**: Menu 152 ran the same `DataCollectionManager.continuous_loop`
+  action as menu 151, under a vaguer description. One of the two
+  descriptions could not be true for both numbers. Menu 152 is retired. Menu
+  151 keeps the accurate description. It stays the one number for this
+  action. `RETIRED_MENU_NUMBERS` in
+  `tests/guardrails/test_menu_number_uniqueness.py` records the gap. The
+  guardrail still catches a new, unexplained gap, and it refuses a future
+  reuse of 152.
+- **Changed**: The generated menu reference, the README menu tables, and the
+  architecture diagram now show one `continuous_loop` operation. Each one
+  also shows the corrected total of 240 operations.
+
+### Link the open run that an already-running refusal names
+
+- **Added**: The capture page's already-running-upgrade refusal now shows the
+  open run identifier as a link to its live view (`/runs/<run_id>`). Before
+  this change the identifier was plain text, and an operator had to copy it
+  by hand. The site-lock-holder refusal keeps showing its address as plain
+  text alone, because that value comes from another operator and must never
+  reach `innerHTML`. The link is a real anchor element, built through
+  `createElement`, never a concatenated string.
+
+### Fix the E2E stand-in cloud session's crash on the site inventory page
+
+- **Fixed**: The browser test fixture's stand-in cloud session had no
+  `mist_get` method. Every browser test that opened the site inventory page
+  then met a 500 fault. The stale-firmware check (issue #2006) started
+  reading device versions through that session, and the stand-in never grew
+  a method for it. The stand-in now answers the one read that check needs.
+  Every other cloud call still fails fast, as the class always intended.
+
+### Report a lost run write and a lost tracker write instead of discarding them
+
+- **Fixed**: The upgrade driver now reads the result of `write_run`. A write
+  that never reaches the store logs the fact. The record then moves to the
+  failed state, the same rule `write_capture` already applies to a capture.
+  One retry writes the failed state to the store. A second failure only logs,
+  because the driver must never recurse through its own failure path.
+- **Fixed**: `write_tracker` now catches a disk fault and returns `None`
+  instead of raising. The tracker is a convenience for restart recovery. The
+  upgrade already reached the cloud by the time the driver writes the tracker.
+  A lost tracker write now only logs. It never fails a run whose firmware
+  write is already underway on real hardware.
+
+### Group the local stack under one project and drop the unused Ollama container
+
+- **Removed**: The local compose stack no longer builds or starts an Ollama
+  container. No file under `src/` used it. The only other Ollama references
+  are in the standalone `scripts/mist_ideas_*` tools. Those tools connect to
+  an external Ollama fleet through `OLLAMA_SERVERS`. They do not read this
+  compose file. Issue #2167 records the finding.
+- **Changed**: `compose.yml` now sets an explicit project name. This is the
+  same pattern that the fiber-planner project uses. Every service now joins
+  one pod in Podman. Before this change, the project name came from the
+  current folder name. A worktree checkout could then start a separate pod
+  instead of the shared one.
+
+### Restore confirmed upgrade starts
+
+- **Fixed**: A run that adopts a verified pre-check capture now moves to the
+  confirmation stage when its upgrade plan is saved. The portal sends the
+  upgrade after the operator confirms it.
+- **Changed**: A run that cannot start now names the recovery step. The run
+  page links to the saved upgrade options. Manual refresh now confirms that the
+  displayed state is current.
+
+### Show useful wired-client identity data
+
+- **Display (Changed)**: The wired-client table now uses `hostname` and falls
+  back to `last_hostname`. It shows the manufacturer and no longer shows the
+  VLAN number.
+
+### Render capture result tables after automatic refresh
+
+- **Fixed**: A capture page now reloads once when polling first finds a verified
+  capture. The reload renders the stored device, wired-client, and
+  wireless-client rows. A page that already rendered its tables does not reload.
+
+### Show capture results and firmware targets in the portal
+
+- **Fixed**: The capture page now opens the stored capture after the portal starts
+  it. The completed capture tables now load on that page.
+- **Added**: The site inventory now marks a reported firmware version that differs
+  from its safe target. The target uses the configured version when available.
+  Otherwise, the portal uses the highest compatible model version.
+
+### Restore SSR firmware version choices in the capture portal
+
+- **Fixed**: The portal now reads Session Smart Router versions from the Mist
+  SSR endpoint. It offers the returned versions for each SSR model in a site.
+
+### Restore capture collection in the container
+
+- **Fixed**: The container image now includes the `scripts` package. The capture
+  collector can import the Zscaler city metadata helper during startup.
+
+### Browser token and safe device selection
+
+- **Added**: The capture portal accepts a browser API token only when it started
+  without an environment token. The portal reads a safe token name for the
+  session audit and never stores, shows, or logs the token value.
+- **Added**: Operators can select all supported device types, one device type,
+  or several device types for an upgrade plan. The capture still includes every
+  device.
+- **Added**: The options page marks known firmware versions that differ from
+  the safe target. A compatible configured target takes priority. Otherwise,
+  the portal uses the highest compatible model version.
+
+### Restore capture portal browser controls
+
+- **Fixed**: The portal JavaScript now initializes correctly. Site lock, capture,
+  and upgrade option controls now attach to the page.
+### Use safe type-specific firmware targets in the capture portal
+
+- **Defaults (Added)**: The upgrade capture portal now selects the numerically
+  highest compatible firmware version for each access point, switch, and gateway
+  type. Each device uses the type target when compatible. Otherwise, it uses its
+  own highest compatible version.
+- **Configuration (Added)**: `CAPTURE_DEFAULT_AP_VERSION`,
+  `CAPTURE_DEFAULT_SWITCH_VERSION`, and `CAPTURE_DEFAULT_GATEWAY_VERSION` can
+  set a type target. The portal ignores an unavailable value and uses the safe
+  fallback.
+- **Controls (Changed)**: The options page now has separate access point, switch,
+  and gateway selectors. The retired all-device selector is removed.
+- **Discovery (Fixed)**: Version discovery now sends the Mist device type and
+  model. Mist otherwise defaults the version request to access points.
+
+### The capture portal waited on serial cloud calls and raced on the tracker (issue #2090)
+
+- **Strategy (Applied)**: `documentation/python-parallelism-matrix.md` decides the
+  tool for each case. Every hot path of the portal waits on a network, so the
+  bottleneck is input and output. The matrix answers that case with a bounded
+  thread pool and warns against a process pool, because the payload is a
+  multi-megabyte document and the pickle cost is larger than the gain. No change
+  raises the cloud call count, so the hourly call budget is unchanged.
+- **Defect (Fixed)**: `capture/extras.py` made four cloud calls one after another
+  inside the tier 3 call group. Each call walks every page, so a large site paid
+  the sum of four page walks. `tests/unit/upgrade_portal/test_performance.py`
+  credited that group with one page of latency, because its fake answered the
+  whole group in one call. The code was about four times slower than its own
+  documented model and no test could see it.
+- **Fan-out (Added)**: `runtime/pools.py` grows `BoundedFanOut`. It runs a small
+  set of named blocking calls at one time, never wider than
+  `CAPTURE_WORKER_TARGET`, and returns one answer for each name. A call that
+  raises answers with None, so one fault never loses the other answers.
+- **Capture (Faster)**: the four tier 3 reads now run at one time. The tier 3
+  group costs the longest page walk instead of the sum of four.
+- **Stop (Faster)**: `upgrade/stop.py` cancelled each upgrade plan one at a time,
+  and each plan costs two cloud calls. A run holds up to one plan for each device
+  family, so a stop waited for six round trips before the last plan reached the
+  cloud. Every second of that wait is a second in which one more device can start
+  to write firmware, and FR-038d forbids an interrupt of a write. The cancels now
+  run at one time.
+- **Race (Fixed)**: `upgrade/driver.py` `write_tracker` read `ActiveUpgrades.json`,
+  dropped one row, appended a row, and wrote the whole file with no lock. The plan
+  allows six runs at one time and each run owns a driver thread, so two threads
+  could interleave and lose one run row. An operator then saw no record of a run
+  that was still writing firmware. A process-wide re-entrant lock now holds the
+  read and the write together.
+- **Atomic (Added)**: the tracker write lands through a neighbor file and one
+  rename, so a reader never meets a half-written file. Windows refuses to rename a
+  file that another handle holds open, so the reader takes the same lock and both
+  the read and the rename try again after a short pause.
+- **Waste (Removed)**: `capture/assembly.py` `stamp_size` ran four whole JSON
+  serializations of a multi-megabyte document every time. The number settles after
+  two or three rounds. The loop now stops the moment the number repeats, which is
+  what `capture/store.py` already did.
+- **Model (Repaired)**: the performance model now drives the real
+  `extras.collect_extras` with counted cloud calls and reads the four tier 3
+  tallies apart from the call group tallies. Five new tests pin the call count at
+  four, pin the group cost at one page, and prove the model reports four times the
+  cloud time for a group that runs its calls in order.
+- **Tests (Added)**: 18 tests. Each concurrency test uses a barrier, which
+  releases only when every party arrives, so it passes under a fan-out and times
+  out under a loop. A value test alone could not tell the two apart.
+- **Not Changed (Explained)**: the settle gate poll still makes its two reads in
+  order. The round already sleeps 20 seconds and the round count is capped, so a
+  faster round buys nothing and the gate is safety critical. The comparison
+  counters still walk the delta list once for each count, because the list holds
+  at most 250 devices and 5000 clients and five passes cost about one millisecond.
+
+### Remove the unused noqa directives and gate the rule (issue #1792)
+
+- **Defect (Fixed)**: 310 `# noqa` directives suppressed nothing. A stale
+  directive hides the next real finding on the same line, and it tells a reader
+  that a problem exists where none does. `ruff check . --fix` removed all 310.
+- **Gate (Added)**: `RUF100` joins `select` in `pyproject.toml`. The rule reports
+  a directive that suppresses nothing, so the count stays at zero and a reader
+  can trust that every remaining directive answers a real finding.
+- **Comments (Restored)**: the ruff fix removes the whole trailing comment when
+  the reason runs on directly after the code, so
+  `except Exception:  # noqa: BLE001 - the SDK raises bare Exception` lost its
+  reason. This project requires a reason on every executable line, so a repair
+  pass read the base revision of each changed file and put 121 lost reasons back
+  as plain comments. No line lost its reason.
+- **Count (Explained)**: the earlier attempt on this issue removed 287
+  directives. `main` has moved since then, so the sweep was measured again
+  against the current tree and it now reports 310. A rebase of the old sweep
+  would have left the 23 newer directives in place, and the new gate would then
+  have failed on the very branch that added it.
+- **Formatting (Applied)**: `src/export/org_inventory_exporter.py` and
+  `src/firmware/firmware_manager.py` needed black after the sweep, because the
+  shorter lines let black rejoin two wrapped calls.
+- **Sweep safety (Verified)**: the four checks of the sweep policy pass.
+  `py_compile` reports no output for all 107 changed files. `ruff check .`
+  reports `All checks passed`. `mypy src/ MistHelper.py wsgi.py` reports
+  `Success: no issues found in 387 source files`. `tools.symbol_diff` reports
+  `no module-level name changed` and exits 0. The count of deleted lines that
+  are not comments is zero.
+### Read one organization security intelligence profile (spec 635, issue #1148)
+
+- **Gap (Closed)**: MistHelper exported the whole SecIntel profile list through
+  `listOrgSecIntelProfiles`, and that list view holds the summary fields only.
+  An operator who reviewed one profile had to open the Mist portal to read the
+  full body. Menu **240** now reads one profile through `getOrgSecIntelProfile`
+  (`GET /api/v1/orgs/{org_id}/secintelprofiles/{secintelprofile_id}`).
+- **Prompt (Chosen)**: the endpoint needs a profile UUID. A junior engineer
+  cannot be expected to know a UUID, and a typed UUID invites a typing error.
+  The exporter therefore reads the profile list first, prints a numbered table,
+  and asks for a number. The operator never types a UUID.
+- **Response shape (Explained)**: the endpoint returns one object and it is not
+  paginated, so `OrgSecIntelProfileExporter._fetch` reads `response.data`.
+  `mistapi.get_all` would return nothing useful for this call.
+- **Primary key (Added)**: `getOrgSecIntelProfile` joins
+  `ENDPOINT_PRIMARY_KEY_STRATEGIES` as a `natural_pk` on `id`, with indexes on
+  `org_id` and `name`. A repeat read of the same profile therefore upserts
+  instead of writing a duplicate row.
+- **Category (Assigned)**: menu 240 is `interactive_safe`. The operation reads
+  only, and it needs an org and a profile choice, so it runs under
+  `--testinteractive` and not under `--test`.
+- **Tests (Added)**: `tests/unit/export/test_org_sec_intel_profile_exporter.py`
+  holds 23 tests. They pin the paging call, the rejection of a malformed list
+  entry, the numbered prompt with every cancel path, the `response.data` read
+  with four wrong body shapes, the flatten step, the exact operationId that
+  reaches the writer, and the promise that an SDK error returns to the menu
+  instead of ending the session. Every Mist call is mocked.
+
+### Menu 238 was allocated twice, so the portal moved to menu 239 (issue #2065)
+
+- **Defect (Fixed)**: `main` gave menu 238 to the MSP license export, which is
+  `interactive_safe`. This branch gave menu 238 to the upgrade capture portal,
+  which is `destructive`. Each branch passed the registry guardrail on its own,
+  because that check compares `menu_actions` against the registry inside one
+  branch and never reads the merge base.
+- **Safety (Explained)**: the two entries disagreed on the category, and the
+  category decides whether an automated run may execute the option. Had the
+  merge kept the portal action under the `interactive_safe` row from `main`,
+  `python MistHelper.py --testinteractive` would have started the firmware
+  upgrade portal on port 8056 during a normal test pass. That is the one outcome
+  the destructive classification exists to prevent.
+- **Renumber (Applied)**: `listMspLicenses` reached `main` first, so it keeps
+  menu 238. The upgrade capture portal moves to menu **239** and keeps its
+  `destructive` category. The `--capture-portal` flag is unchanged.
+- **Merge (Resolved)**: pull request #1825 reported `DIRTY`, so 80 commits of
+  portal work could not reach `main`. This commit merges `origin/main` into the
+  branch and resolves all six conflicts: `MistHelper.py`,
+  `src/utils/operation_registry.py`, `README.md`, `CHANGELOG.md`, and the two
+  generated menu references.
+- **Counts (Corrected)**: the registry now holds 240 entries, numbered 0 to 239.
+  `interactive_safe` reads 71 and covers 235-238. `destructive` reads 42 and
+  covers 154-187, 189-191, 194, 206-208, and 239.
+- **Guardrail (Added)**: `tests/guardrails/test_menu_number_uniqueness.py` holds
+  6 tests. They refuse a duplicate key, a gap in the numbering, and two numbers
+  that answer one action. They also pin the portal to `destructive` and pin menu
+  238 to the MSP license export, so a later branch that takes 238 back fails at
+  once.
+- **Finding (Recorded)**: the new guardrail found that menus 151 and 152 both
+  call `DataCollectionManager.continuous_loop` with no argument that tells them
+  apart, while each advertises different work. Issue #2066 tracks the repair.
+  The pair sits in `KNOWN_SHARED_ACTIONS` so the guardrail still catches a new
+  duplicate while that one waits.
+
+### The capture page shows the stored size of a finished capture (issue #2063)
+
+- **Defect (Fixed)**: the capture detail page reported `Stored size in bytes: 0`
+  beside the word `Verified` for a capture that was stored and complete. The
+  history page and the database both held the true size for the same document,
+  so one page disagreed with the other two.
+- **Cause (Found)**: the template reads `stored_size_bytes` from the context
+  root. `status_body` removes that field, because `STATUS_FIELDS` does not name
+  it and the poll contract carries no size, and `page_context` never set it
+  separately. The browser filled the gap with one extra read of the whole
+  capture in `loadStoredSize`, but `refreshCaptureStatus` calls that read only
+  when a poll answers `verified`. A capture that ended before the page opened
+  never polls, so the value stayed at the template default of zero.
+- **Fix (Applied)**: `page_context` now renders `stored_size_bytes` at the first
+  paint, and `stored_page_fields` carries the value for a capture that the
+  portal reads back from the store. The page no longer depends on the second
+  browser read, which stays as a refinement for a capture that finishes while
+  the page is open.
+- **Reading (Hardened)**: `stored_size_of` turns an absent value, a null, and a
+  value the page cannot read into zero, so an older document renders rather than
+  raising.
+- **Tests (Added)**: `tests/unit/upgrade_portal/test_capture_stored_size.py`
+  holds 17 tests. They cover the page fields, the whole status record, the merge
+  order, every unreadable value, the page context, and the rule that the poll
+  body must still drop the size. Five were verified red first against the old
+  code.
+- **Verification (Measured)**: both stored captures were opened after a portal
+  restart, which guarantees no live progress record exists. The page rendered
+  39472 and 15494 bytes, matching the database and the history page. Before the
+  fix the same two pages rendered 0.
+
+### Every capture failed, because the write name and the read name differed (issue #2061)
+
+- **Defect (Fixed)**: no capture could ever be stored. The portal collected the
+  data correctly, wrote it to ArangoDB successfully, and then declared the write
+  failed. Both tier 2 and tier 3 failed the same way, and the page showed every
+  collection phase as `done` beside the sentence "The portal could not store the
+  capture."
+- **Cause (Found)**: `src/upgrade_portal/capture/store.py` held two names for one
+  thing. It wrote through `CAPTURE_OPERATION = "upgradeCaptureWrite"` and read
+  back through `CAPTURE_COLLECTION = "upgrade_captures"`.
+  `DataExporter.write_with_format_selection` hands the operation name to
+  `DatabaseRouter.write`, which hands it to `ArangoWriter.write` as the
+  collection name. `ArangoWriter._ensure_collection` then creates the collection
+  when it is absent. Nothing translates the name on the way, so every capture
+  created and filled a collection named `upgradeCaptureWrite`, and the read-back
+  looked in an empty `upgrade_captures` and reported `document_absent`.
+- **Evidence (Measured)**: the two failed captures of the report were found in
+  the wrong collection under the exact keys from the log.
+  `upgradeCaptureWrite` held 2 documents while `upgrade_captures`,
+  `upgrade_runs`, and `capture_for_run` each held 0. The `data/` directory held
+  21 capture backup files, so the fault predates the report.
+- **Fix (Applied)**: each operation name is now bound to its collection name,
+  `CAPTURE_OPERATION = CAPTURE_COLLECTION` and `RUN_OPERATION = RUN_COLLECTION`.
+  The second name is gone, so the two cannot drift again. The matching keys in
+  `ENDPOINT_PRIMARY_KEY_STRATEGIES` move with them and keep `natural_pk` on
+  `capture_id` and `run_id`.
+- **Why no gate caught it**: every readiness signal was green while every
+  capture failed. The storage bootstrap creates the three collections the portal
+  reads and reports `collections=3, indexes=7, database_available=True`, and
+  `GET /readyz` answered `{"database":"ok","redis":"ok"}`. Neither one exercises
+  the write path, and the write path never used those collections.
+- **Tests (Added)**: `test_the_write_name_equals_the_read_name` asserts the two
+  names are one value for both targets, and
+  `test_no_stale_write_endpoint_name_returns` refuses either retired name in the
+  strategy table. The first test was verified red against the old constants: it
+  reported 2 failures before the fix and passes after it.
+- **Verification (Measured)**: both tiers were run against a live site after the
+  fix and both reached the verified state.
+
+  | Tier | Key | State | Stored bytes |
+  | - | - | - | - |
+  | 2 | `cap-b4e8473a...-01` | `verified` | 15494 |
+  | 3 | `cap-434b67ea...-01` | `verified` | 39472 |
+
+  The page reads "Capture progress verified 100%" and "The portal read the
+  capture back and the record matches." `upgrade_captures` holds 2 documents and
+  `capture_for_run` holds 2 edges.
+- **Migration (Done)**: the stray `upgradeCaptureWrite` collection held two
+  captures that never left the `writing` state. Both keep a CSV backup under
+  `data/`, so the collection was dropped without data loss.
+
+### The portal checks its dependencies and repairs a stopped one (issue #2059)
+
+- **Defect (Fixed)**: the portal started, logged "ready for the port 8056", and
+  served the sign-in page while the document store answered nothing. The
+  operator signed in, picked a site, and only then met a 503, because
+  `acquire_site_lock` fails closed. The fault appeared three pages after its
+  cause. `GET /readyz` already reported the gap, but it answers JSON for an
+  orchestrator and no page showed the result.
+- **Preflight (Added)**: `src/upgrade_portal/runtime/dependencies.py` probes
+  every service the portal needs and returns one report. The sign-in page renders
+  the report, so the operator reads the state, the address, and the next action
+  on the first page.
+- **Probe depth (Stated)**: each probe opens a TCP connection and closes it, so
+  it answers one question: does a service listen. It signs in to nothing,
+  because the page must render fast and must render before the portal holds a
+  credential. The panel names `/readyz` for the deeper reading that also writes
+  to both stores.
+- **Auto-start (Added)**: `src/upgrade_portal/runtime/containers.py` reads the
+  state of one named container and starts it. A stopped container is the common
+  workstation fault and the one case the portal can repair. The module creates
+  nothing, pulls nothing, and removes nothing, so a missing container stays
+  missing and the report names the compose command instead. `CAPTURE_AUTOSTART`
+  turns the behavior off, and `compose.yml` sets it to `0` inside the container,
+  because a container cannot start its sibling.
+- **Command safety (Kept)**: every runtime call passes an argument list and no
+  shell, the runtime path comes from `shutil.which`, each container name passes
+  a pattern that refuses a leading hyphen and every shell character, and each
+  call carries a timeout.
+- **Name collisions (Fixed)**: `compose.yml` named two containers `arangodb` and
+  `redis-stack`. Those names belong to no project, so another project took them
+  first. A container named `truck-arangodb` from a different project held port
+  8529 on the test workstation, and the portal read that foreign database as its
+  own store. It reached a real server, received 401, and reported its own store
+  unreachable. Every service, container, network, and volume now carries the
+  `misthelper-` prefix.
+- **Ports (Moved)**: a vendor default is the port every other project also
+  publishes. ArangoDB moves from 8529 to 9529, Redis from 6379 to 9379, the
+  Insight UI from 8001 to 9526, and Ollama from 11434 to 9530. Each service binds
+  the new port inside the container as well, so each health check names the port
+  its client tool would otherwise guess. Ports 2200, 8055, and 8056 do not move,
+  because none is a vendor default and each already sits in the required range.
+- **Network (Pinned)**: the project network takes the subnet `172.31.240.0/24`
+  and an explicit name. A bridge with no subnet takes the next free range from
+  the runtime pool, and two projects can receive the same range. The test host
+  showed this: the old network held `10.89.0.0/24` from the pool.
+- **Migration (Required)**: the renamed containers use renamed volumes, so a
+  fresh ArangoDB holds no `misthelper` database. Create the database once, and
+  the portal then builds its three collections and seven indexes on the next
+  start. The old `arangodb-data` and `redis-data` volumes are left in place, so
+  no data is deleted by the rename.
+- **Tests (Added)**: 69 tests. `tests/unit/upgrade_portal/test_containers.py`
+  holds 26 and covers the name guard, the runtime search, every reported state,
+  and every failure path. `tests/unit/upgrade_portal/test_dependencies.py` holds
+  30 and covers the probe, the switch, and every reading the page can show.
+  `tests/guardrails/test_compose_naming_policy.py` holds 13 and fails when a
+  later edit reintroduces a generic name, a vendor default port, or a bridge
+  with no subnet. No test runs a container.
+- **Verification (Measured)**: the renamed stack was started on the test host.
+  Both containers report healthy, the network holds the pinned subnet, and the
+  storage bootstrap reported `database_available=True` with 3 collections and 7
+  indexes. `GET /readyz` answered `{"database":"ok","redis":"ok"}`. With
+  `misthelper-redis` stopped, one load of the sign-in page started the container
+  and rendered the state `started`.
+
+### Add the upgrade capture portal, menu 238 (issue #1823)
+
+- **Menu 238 (Added)**: `Upgrade Capture Portal` starts a web server and prints a
+  clickable link. The flag `--capture-portal` starts the same server without the
+  menu. Spec 1823.
+- **New package (Added)**: `src/upgrade_portal/`. It sits outside `web_portal/`,
+  which ruff and mypy exclude, so every gate covers the new code.
+- **Port (Added)**: `CAPTURE_PORT`, default 8056. The portal takes its own port,
+  so it never fights the other portal in a container or on a shared desktop.
+- **Server (Added)**: Gunicorn on Linux and Waitress on Windows. Windows ships no
+  `fcntl`, and `gunicorn.util` imports `fcntl`, so Gunicorn cannot start there.
+- **Bind address (Added)**: the portal binds the loopback address on a desktop.
+  It binds every address only inside a container, where the port map is the only
+  way in.
+- **Capture (Added)**: one capture records the firmware, the device state, and
+  the client counts of one site. The operator picks a standard tier or a full
+  tier. Every capture writes to ArangoDB, to a CSV file under `data/`, and to the
+  browser as a table. The page offers the CSV as a download.
+- **Upgrade (Added)**: the portal reuses the bulk firmware tools through a new
+  seam, `src/firmware/upgrade_service.py`. The operator types `CONFIRM` to unlock
+  the start control, and types `STOP` to cancel the devices not yet started.
+- **Settle logic (Added)**: the portal watches the device events of the site
+  every 20 seconds. It waits for the reconnect message, then waits one more
+  minute before the post-upgrade capture. Access points and clients wait for the
+  switches, and everything waits for the gateways.
+- **Comparison (Added)**: the compare page shows the two captures side by side
+  and adds a statistics summary. The page offers that summary as a CSV download.
+- **Site lock (Added)**: Redis holds one lock for each site, so two operators
+  never work one site at the same time. An operator signs in with a work email
+  address, and the lock pairs that address with the browser. One operator can
+  therefore hold several sites in several tabs. An abandoned session frees the
+  site after a five minute cooldown. Any operator can read a site and download
+  its data without a lock.
+- **Lost lock (Added)**: a lost lock never fails a run. The portal submits the
+  upgrade to the cloud, and the cloud then owns the work. The banner states that
+  the upgrade continues in the cloud and that the devices still reboot.
+- **Theme (Added)**: the navigation holds a theme picker, and the portal now
+  reads the choice. The picker is a GET form, because the content security
+  policy blocks an inline script, so the page reloads with `?theme=<name>`. One
+  context processor reads that argument for every page. Before this the picker
+  rendered, accepted a choice, reloaded the page, and changed nothing, so the
+  brand theme was unreachable. A name the portal does not ship reads as the
+  neutral theme, so no operator input reaches a file path.
+- **History (Added)**: the portal keeps every capture without an expiry, and it
+  records the stored size of each one. An operator can return a week later and
+  read the same comparison.
+- **Storage (Added)**: ArangoDB is the primary store, with collections
+  `upgrade_captures` and `upgrade_runs` and the edge `capture_for_run`. Redis
+  holds the site lock alone. CSV files under `data/` are the fallback.
+- **Tests (Added)**: 2548 unit and contract tests under
+  `tests/unit/upgrade_portal/` and `tests/contract/upgrade_portal/`. Statement
+  coverage of the package is 94.67 percent.
+### Export the MSP licenses through menu 238 (issue #1260)
+
+- **Gap (Closed)**: the Mist endpoint `listMspLicenses`
+  (`GET /api/v1/msps/{msp_id}/licenses`) had no menu entry. An operator who
+  manages an MSP had to write custom code to read the license entitlement, the
+  usage counters, and the subscription records.
+- **Menu (Added)**: menu 238 runs the export. The registry classifies it
+  `interactive_safe`, because it reads only and it prompts for an MSP ID. The
+  `--testinteractive` run therefore includes it, and the `--test` run skips it.
+- **Class (Added)**: `src/export/msp_license_exporter.py` holds
+  `MSPLicenseExporter`. It prompts through `InputUtils.safe_input`, calls the
+  SDK once, and writes through `DataExporter.write_with_format_selection`, so
+  the CSV, SQLite, and ArangoDB backends all work.
+- **Response shape (Explained)**: the endpoint returns one aggregate object, not
+  a list. The object holds four counter maps, one `licenses` array, and one
+  `amendments` array. The endpoint is not paginated, so the exporter reads
+  `response.data` instead of running `mistapi.get_all`.
+- **Two files (Chosen)**: the exporter writes `MSPLicenses_<msp>_summary.csv`
+  and `MSPLicenses_<msp>_details.csv`. One wide row would hold one column for
+  each subscription field, so the column count would change every time the MSP
+  buys or retires a subscription. Two files keep both schemas stable. The
+  detail file carries a `record_type` column, because a subscription record and
+  an amendment record share the same field names.
+- **Primary keys (Added)**: `ENDPOINT_PRIMARY_KEY_STRATEGIES` gains
+  `listMspLicenses` as a `natural_pk` on `msp_id` and `listMspLicensesDetails`
+  as a `natural_pk` on `id`. Both are natural keys, so a repeat run upserts and
+  writes no duplicate row.
+- **Shared prompt (Extracted)**: `InputUtils.prompt_msp_id` now holds the MSP
+  identifier prompt. Menu 237 carried its own copy inside `CountExporter`, and a
+  second copy in the new exporter made Pylint report duplicate code. One method
+  keeps the prompt text, the trim, and the abort rule identical across both MSP
+  menus. `CountExporter._prompt_msp_id` is deleted, not delegated, because the
+  project forbids a wrapper.
+- **Tests (Added)**: `tests/unit/export/test_msp_license_exporter.py` holds 22
+  tests. They cover the abort path, the non-dict body, both row builders, the
+  malformed-array guards, the empty result, the error handler, both primary-key
+  entries, and the menu wiring. `tests/unit/utils/test_input_utils_wave9.py`
+  gains 4 tests for the shared prompt, including the EOF path. Every Mist call
+  is mocked, so no test reaches the live cloud.
+- **Documentation (Updated)**: `documentation/menu_reference.md` and
+  `documentation/wiki/Menu-Reference.md` were regenerated. The README operation
+  counts were stale at menu 234, because menus 235 to 237 reached `main` without
+  a README update. The counts now read 238 entries plus Exit, and the menu table
+  lists 235 through 238.
+### Count and report the dropped server-sent events (issue #1924, instance 3)
+
+- **Defect (Fixed)**: `PortalEventBus._enqueue_event` in
+  `web_portal/services/event_bus.py` held two silent loss paths. The first
+  `queue.get_nowait()` removed the oldest event to free a slot, and the closing
+  `except Full: pass` discarded the new event. Neither path kept a record.
+- **Reader risk (Explained)**: an operator watching the live operation feed saw
+  an incomplete record of a run and received no indication that a gap existed.
+  Issue #1924 names this shape: a failure path that erases its own evidence.
+- **Counters (Added)**: `_evicted_event_count` and `_rejected_event_count`
+  separate the two loss paths. The `dropped_event_count` property and the
+  `drop_stats()` method expose them to a test and to an operator.
+- **Rate limit (Chosen)**: the bus logs the first drop at WARNING, then doubles
+  the threshold before each later report. A full queue overflows again on the
+  next event, so one line for each drop would flood the log. Issue #1766
+  already records that noise dilutes the WARNING level in this project.
+- **Summary (Added)**: `stop()` reports the final drop total one time, because
+  the growing threshold can leave the last drops unreported.
+- **Live feed (Changed)**: the heartbeat event now carries a `dropped_events`
+  count, so the operator sees the gap in the stream without opening a log.
+- **Lock safety (Verified)**: `publish()` is the only caller and it already
+  holds `self._lock`. `threading.Lock` is not reentrant, so the counters take
+  no further lock and the property reads them without one.
+- **Tests (Added)**: `tests/unit/web_portal/test_event_bus.py` holds 5 new
+  tests. They pin the drop counter, the eviction order, the first WARNING, the
+  bounded line count across a 500-event burst, and the stop summary.
+
+### Run the quality gates on every pull request (issue #1952)
+
+- **Defect (Fixed)**: `.github/workflows/ci.yml` started on a pull request that
+  targeted `main` only. A pull request against any other base ran no gate. Ruff,
+  Black, mypy, pytest, the coverage gate, Bandit, pip-audit, Pylint, Radon,
+  Vulture, and both docstring gates all stayed silent.
+- **Evidence (Measured)**: pull request #1890 targets
+  `feat/1823-upgrade-capture-portal`. It reported 0 successful checks and 0
+  failed checks, while every pull request against `main` reported 17 to 19. The
+  pull request was closed and reopened to force a new run. The count stayed at
+  zero, which rules out a missed event.
+- **Reader risk (Explained)**: the pull request also reported a `CLEAN` merge
+  state. `CLEAN` means no required check is failing. A reviewer reads an empty
+  check list as safe, and the correct reading is unmeasured.
+- **Trigger (Changed)**: the `pull_request` trigger now carries no branch
+  filter, so a pull request against any base runs every gate.
+- **Cost control (Kept)**: the `push` trigger stays pinned to `main`. A push run
+  on every branch would repeat the pull request run and add no signal.
+- **Tests (Added)**: `tests/guardrails/test_ci_gate_triggers.py` holds 5 tests.
+  They pin the absent branch filter and the narrow push trigger. The tests were
+  verified red first. They report 2 failures against the old workflow and 5
+  passes against the new one.
+
+### The ops-portal CI gate now blocks a merge (issue #1852)
+
+- **Defect (Fixed)**: the `ops_portal` job ran `typecheck`, `lint`, and `test`
+  with `continue-on-error: true`. Each step failed on a configuration defect,
+  so each step reported a result and blocked nothing. The `ops_portal` job is
+  the only gate that reads the TypeScript source and the npm dependency tree.
+  The whole `ops-portal/` application therefore had no enforcing check.
+- **Type check (Fixed)**: `tsconfig.json` set the deprecated `baseUrl` option,
+  and TypeScript 6 refuses it. The option is deleted. The `paths` map resolves
+  relative to the config file, so the `@/*` alias still works. `vite.config.ts`
+  carries its own alias, so the build is unchanged.
+- **Broken imports (Fixed)**: the `baseUrl` error stopped TypeScript before it
+  read any file, so three broken imports in `src/router.tsx` stayed hidden.
+  The router loaded `@/pages/config/TimeTravelPage`, `RevisionsPage`, and
+  `BaselinesPage`, and none of the three files existed. Three `/config` routes
+  and the `time-travel` route pointed at nothing. The three pages are added.
+  Each one reads the existing `configQueries` API layer.
+- **Lint (Fixed)**: the project shipped `.eslintrc.cjs`, and eslint 10 reads
+  `eslint.config.js` only, so eslint found no configuration and exited
+  non-zero. A flat `eslint.config.js` replaces it. Each plugin supplies its own
+  flat configuration, so the file needs no `FlatCompat` shim.
+- **Lint findings (Fixed)**: the working lint step found four errors that had
+  reached `main`. `src/hooks/useTelemetry.ts` declared a never reassigned
+  binding with `let`. `src/pages/deploy/TemplatesPage.tsx` held three labels
+  with no associated control, which a screen reader cannot read. Each label now
+  wraps its control.
+- **Tests (Added)**: the project shipped no test, and vitest exits non-zero
+  when it finds no test. `vitest.config.ts` and
+  `src/components/ConfirmationDialog.test.tsx` add 12 tests. The suite covers
+  the confirmation dialog, which is the safety gate for every destructive
+  action in the portal.
+- **Dialog crash (Fixed)**: the first test run proved that
+  `ConfirmationDialog` threw "Passing props on Fragment" and never rendered.
+  The component passed `as={Fragment}` to the Headless UI dialog, and a
+  Fragment cannot carry the ref and the aria attributes that the dialog sets.
+  Seven call sites guard a destructive action with this dialog. The prop is
+  removed.
+- **Dependencies (Added)**: `@eslint/js`, `globals`, `jsdom`, and
+  `@testing-library/dom` are added as dev dependencies. The lint configuration
+  and the test environment need them. `npm audit` still reports zero
+  vulnerabilities.
+- **Gate (Changed)**: `.github/workflows/ci.yml` drops `continue-on-error` from
+  all three steps. A type error, a lint error, and a failing test now each stop
+  a merge.
+- **Flag (Unchanged)**: `npm ci` keeps `--legacy-peer-deps`. Both
+  `eslint-plugin-jsx-a11y` 6.10.2 and `eslint-plugin-react` 7.37.5 cap their
+  eslint peer range below the installed eslint 10.7.0, and both are the newest
+  published releases. The workflow comment records the measurement.
+
+### Warning: the web portal now refuses a remote client by default (issue #1933)
+
+- **Warning: read this before you upgrade.** This entry changes a shipped
+  default. A running portal can stop answering a remote browser after the
+  upgrade. Set `PORTAL_ALLOWED_IPS` before you upgrade, and no operator loses
+  access. The startup log names the setting and gives an example value.
+- **Defect (Fixed)**: the web portal has no user authentication. The address
+  allowlist is the only access control it has. `PORTAL_ALLOWED_IPS` shipped
+  empty, and `SecurityMiddleware._register_ip_allowlist` read an empty value as
+  "accept every source address". A portal that reached a network therefore
+  served every page, every data browser table, and every operation to any
+  caller who reached the port. No credential was needed.
+- **Fallback (Added)**: an empty `PORTAL_ALLOWED_IPS` value no longer opens the
+  portal. `SecurityMiddleware._build_fallback_allowlist` picks a closed set of
+  networks that fits the run mode. Outside a container the portal serves the
+  loopback ranges `127.0.0.0/8` and `::1/128` only. The operator who starts the
+  portal keeps access.
+- **Container case (Added)**: inside a container the portal serves the private
+  ranges only. These are the two loopback ranges, `10.0.0.0/8`,
+  `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, `fe80::/10`, and
+  `fc00::/7`. A container must bind every interface to answer a published port,
+  so a loopback rule would make every container unreachable. This fallback
+  blocks a direct path from the public internet. It does not replace a real
+  allowlist. Set `PORTAL_ALLOWED_IPS` on a container that faces a shared
+  network.
+- **Opt-out (Added)**: `PORTAL_ALLOW_PUBLIC_ACCESS` restores the old open
+  behavior. The portal accepts `1`, `true`, `yes`, and `on`. Every other value
+  keeps the portal shut, so a typing slip cannot open it. The portal writes a
+  warning to the log at every startup while the setting is true, so an audit
+  finds the choice.
+- **Startup message (Added)**: each fallback writes one warning. The message
+  names the served scope, names `PORTAL_ALLOWED_IPS`, gives the example value
+  `10.20.30.0/24,192.168.1.5`, and names the opt-out setting. The message is
+  ASCII only.
+- **Precedence (Unchanged)**: a configured `PORTAL_ALLOWED_IPS` value still
+  wins. The fallback ranges never widen an explicit allowlist.
+- **Tests (Added)**: `tests/unit/web_portal/test_portal_access_control_default.py`
+  adds 24 tests. Twelve of them failed before the fix. The proof case sends a
+  request from the public address `203.0.113.10` to a portal with no allowlist
+  and expects 403.
+- **Documentation (Changed)**: `deploy/.env.example` states the fallback, the
+  container ranges, and the opt-out.
+
+### Stop the ZTP password from reaching a stored stream (issue #1735)
+
+- **Defect (Fixed)**: `src/device/_utility_commands_action.py` printed the live
+  ZTP password to stdout on every call of menu 144. CodeQL alert 173 reported
+  clear-text logging of sensitive data. Three paths stored the value. The first
+  path is an SSH session transcript on container port 2200. The second path is a
+  shell redirect such as `MistHelper.py > run.txt`. The third path is a planned
+  print-to-logging migration under issue #886.
+- **Terminal gate (Added)**: `_stdout_is_terminal()` calls `sys.stdout.isatty()`
+  before the print. The value now reaches a live terminal only. A stream that
+  lacks `isatty`, and a stream that raises on the call, both count as unsafe.
+- **Warning order (Added)**: the reveal path writes the warning first, the label
+  and the value second, and the copy guidance last. The operator reads the risk
+  before the screen holds the value. Clause C-4 of
+  `specs/1034-codeql-cleartext-logging/contracts/credential_console.md` states
+  that rule.
+- **Withheld notice (Added)**: a redirect, a pipe, and a recorded session now
+  receive a four-line notice. The notice states the decision and the reason. The
+  notice also gives two other sources for the value. The notice never holds the
+  value.
+- **Comment (Changed)**: the old comment claimed the value could not reach a
+  file, and the code did not enforce that claim. The new docstring states the
+  review date 2026-08-22, the reason, the migration rule, and the next review
+  trigger.
+- **Migration rule (Added)**: `TestZtpCredentialMigrationRule` parses the source
+  of the three helpers. The test fails when a `logging` call appears next to the
+  credential. The rule now lives in a test, so a lost comment cannot drop it.
+- **Tests (Added)**: `tests/unit/test_device_utility_commands.py` gains 17 cases.
+  They prove that a terminal stdout prints the value. They prove that the
+  warning reaches the screen before the value. They prove that a pipe stdout
+  prints the value nowhere. They prove that no log record holds the value in
+  either mode. They also prove that the empty-payload path and the error path
+  keep their old behavior.
+- **Divergence from spec 1034 (Noted)**: clause C-2 of the console contract asks
+  for `sys.stdout.write()` instead of `print()`. This change keeps `print()` and
+  blocks the issue #886 migration with an `ast` guard test. Spec 1034 is unbuilt
+  at 0 of 67 tasks, and `CredentialConsole` does not exist yet.
+### Replace the obfuscated all-interfaces bind in the web portal launcher (issue #1711)
+
+Version 26.08.23.01.26
+
+- **Defect (Fixed)**: `_launch_web_portal()` built the bind address with
+  `".".join(("0",) * 4)`. The expression produced the string `0.0.0.0`, and the
+  only purpose of the expression was to hide that literal from bandit rule B104.
+  The project standard forbids a shortcut that silences a real finding. A
+  suppression comment records the decision and the reason. A join expression
+  records nothing.
+- **Bind address (Changed)**: the new function `_resolve_web_portal_host()` holds
+  the decision. It returns the value of `WEB_HOST` when the operator sets that
+  variable. Without that variable it returns `0.0.0.0` inside a container and
+  `127.0.0.1` on a workstation. The old code bound to all interfaces on every
+  platform, so a workstation run exposed the portal to the local network.
+- **Container test (Changed)**: the all-interfaces bind now depends on
+  `EnvironmentUtils.is_running_in_container()`. A container needs the external
+  bind, because the container network maps the port from outside. The container
+  port map controls the exposure.
+- **Suppression (Added)**: the assignment carries `# nosec B104`, and the three
+  comment lines above it state the container condition and the reason. Bandit
+  reports no issue and no warning for the file.
+- **Tests (Added)**: `tests/unit/test_web_portal_bind_address.py` holds 8 cases.
+  They prove the loopback default, the container all-interfaces bind, the
+  `WEB_HOST` override in both states, the fallback for an empty `WEB_HOST` value,
+  and that the join expression is gone from the script.
+
+### Scan the Redis keyspace in batches instead of blocking it (issue #1882)
+
+- **Defect (Fixed)**: `RetentionManager.check_redis_retention` ran the Redis
+  `KEYS` command with the pattern `*.avg_1h`. The pattern starts with a
+  wildcard, so Redis compared every key in the keyspace. Redis serves commands
+  on one thread, so the whole server stalled for the length of each scan. The
+  background sweep thread repeated the stall every 6 hours by default.
+- **`SCAN` loop (Added)**: the check now drives a cursor loop. Each round trip
+  sends `SCAN <cursor> MATCH *.avg_1h COUNT 500`. Redis returns one bounded
+  batch and then serves other clients, so no single command holds the thread.
+- **Memory (Changed)**: the loop adds the length of each batch to a running
+  total and drops the batch. The process never holds the whole key set. The old
+  code returned a list of every matching key only to read its length.
+- **Upper bound (Added)**: `REDIS_SCAN_MAX_KEYS` stops the loop after 100000
+  scanned keys. The sweep then logs the new `redis_retention_scan_capped`
+  warning with the partial count and returns it. The cost of one sweep stays
+  fixed as the keyspace grows.
+- **Contract (Unchanged)**: the method still returns an `int` key count. It
+  still logs a warning and returns 0 when the Redis call raises.
+- **Tests (Added)**: `tests/unit/db/test_retention_redis_scan.py` holds 10
+  cases. A fake client records every command it receives. The cases prove the
+  code issues `SCAN`, never issues `KEYS`, sends `MATCH` and a bounded `COUNT`,
+  follows the cursor until it returns to 0, accepts a cursor that arrives as
+  bytes, and stops at the upper bound against an endless keyspace.
+
+### Run the real rollback when a post-check fails (issue #1887)
+
+- **Defect (Fixed)**: `_execute_scheduled_job` set the job status to
+  `ROLLED_BACK` after a failed post-check, but no restore ran. The new
+  configuration stayed on the live network devices. The operator read the status,
+  believed the network held the previous configuration, and started no manual
+  repair. The audit trail recorded a rollback that never happened.
+- **Configuration backup (Added)**: the workflow now reads the live configuration
+  of every target before the push and keeps the snapshots for the whole job.
+- **Restore on a failed post-check (Added)**: a failed post-check now pushes the
+  captured snapshot back to each device through `RollbackService`.
+- **Install result (Fixed)**: the workflow now reads the install result. A failed
+  install stops the workflow and starts the restore. The post-check no longer
+  runs after a failed install.
+- **Honest job status (Changed)**: the status comes from the real restore
+  outcome. `rolled_back` means that every device holds the previous
+  configuration again. The new value `rollback_failed` means that one or more
+  devices did not restore.
+- **`auto_rollback_on_failure` (Fixed)**: the workflow now reads this payload
+  field. If the value is false, the status is `failed` and no restore runs. The
+  workflow never reports `rolled_back` when no restore ran.
+- **Tests (Added)**: `mist-ops-platform/tests/unit/worker/test_deploy_rollback.py`
+  covers the post-check failure, the failed install, the disabled rollback
+  switch, an incomplete restore, the happy path, and the pre-check failure.
+- **Test setup (Added)**: `mist-ops-platform/tests/conftest.py` supplies a
+  stand-in for `src.shared.config`, because the root `.gitignore` pattern
+  `config/` keeps that package out of git and every clean checkout fails to
+  import the worker modules.
+
+### Add a graceful shutdown path to the web portal (issue #1861)
+
+- **Defect (Fixed)**: nothing called `PortalEventBus.stop()` or shut down the
+  `OperationExecutor` thread pool. A restart sent `SIGTERM`, Gunicorn killed the
+  worker, an in-flight operation aborted mid-run, and the heartbeat thread
+  leaked past the worker exit.
+- **Heartbeat thread (Changed)**: `PortalEventBus._heartbeat_loop` now waits on
+  a `threading.Event` instead of `time.sleep(30)`. `stop()` sets the event, so
+  the thread exits within a bounded join instead of up to 30 seconds later.
+  A second `stop()` call is a no-op, so a duplicate shutdown signal is safe.
+- **Operation pool (Added)**: `OperationExecutor.shutdown()` waits for every
+  in-flight run's future, up to a bounded grace period, then closes the thread
+  pool. A second `shutdown()` call is a no-op.
+- **Shutdown wiring (Added)**: `WebPortalApp.create_app` registers one
+  `atexit` hook through `WebPortalApp._register_shutdown_hook`. Gunicorn never
+  runs `if __name__ == "__main__"`, so the hook calls the new
+  `WebPortalApp.shutdown_app` function, which stops the event bus and drains
+  the operation pool. `shutdown_app` is idempotent, so a duplicate call at
+  process exit does not raise.
+- **Grace period (Added)**: `PORTAL_OPERATION_SHUTDOWN_GRACE_SECONDS` defaults
+  to 30 seconds. `deploy/.env.example` documents it.
+  `container/scripts/start.sh` reads the same value for the Gunicorn
+  `--graceful-timeout` flag, so Python and Gunicorn agree on the drain time.
+- **Container cleanup (Changed)**: `container/scripts/start.sh` `cleanup()` now
+  waits for Gunicorn and sshd to exit, bounded by the grace period plus a
+  10-second margin, then sends `SIGKILL` if a process still runs. The old code
+  sent one `kill` signal and returned right away, so it never confirmed a
+  drain.
+- **Quadlet timeout (Changed)**: `deploy/misthelper.container` sets
+  `TimeoutStopSec=60`, so systemd waits long enough for the bounded shutdown
+  chain to finish before it forces a kill.
+- **Tests (Added)**: `tests/unit/web_portal/test_portal_graceful_shutdown.py`
+  holds 9 tests. They prove the heartbeat thread ends after `stop()`, that
+  `OperationExecutor.shutdown()` closes the pool and waits for a short
+  in-flight run, that `WebPortalApp.shutdown_app` stops both the event bus and
+  the operation executor for a real app, and that every shutdown path is safe
+  to call twice. `tests/e2e/conftest.py` now tears its session-scoped Flask app
+  down through `shutdown_app`, so the long-lived test fixture no longer leaks
+  its own heartbeat thread.
+### Report the real Mist status from list_all_entities (issue #1884)
+
+- **Defect (Fixed)**: `MistEndpointService.list_all_entities` built its result
+  with the hardcoded status `200`. A Mist API failure therefore reached the
+  caller as a success. `_extract_list` then turned the error body into one data
+  record, so the inventory sync wrote a site row with a random identifier and an
+  empty name. The sync ledger recorded that run as a success of one site. The
+  drift check compared the live configuration against that row, so every real
+  site looked like a drift.
+- **Status code (Changed)**: `_paginate` now returns the rows and the last
+  response. `list_all_entities` reads the real status from that response through
+  `_wrap`. On a failure the result holds the Mist error body and no data records.
+- **Error body (Changed)**: `_extract_list` returns an empty list for a body that
+  is not a list. The old `[data] if data else []` fallback is gone, so an error
+  body can never become a data record.
+- **Page cap (Kept)**: `main` already caps the page loop at `MAX_PAGINATION_PAGES`
+  and already stops a repeated cursor through `_accept_cursor` (issue #1903). This
+  branch therefore adds no second cap and no second repeat guard. `_paginate` keeps
+  the rate limiting and the 429 retry of `_invoke_with_protection` (issue #1886)
+  and only changes its return value to carry the last response.
+- **Inventory sync (Changed)**: `_sync_sites` and `_sync_devices` now call
+  `_read_records`, which reads `result.success` before it reads `result.data`. A
+  failure raises the new `MistSyncError`, so the service writes no row and the
+  sync ledger records the run as a failure with the Mist error text.
+- **Tests (Added)**: `mist-ops-platform/tests/unit/mist/test_list_status.py`
+  holds 11 cases. They prove a failed page reports a failure, that an error body
+  never becomes a data record, that a repeated cursor stops the loop, that the
+  page cap stops the loop, that a page which stays at 429 reports the failure
+  once the retries run out, and that a failed list writes no site row and no
+  device row.
+
+### Add a real readiness probe and keep the health endpoint cheap (issue #1863)
+
+- **Defect (Fixed)**: the `/health` endpoint returned the fixed text `healthy` on
+  every call. It never tested write access to the data directory, which is the
+  one resource with a documented failure. A portal that could not write a single
+  output file still reported a good state, so no monitor saw the fault.
+- **`/health` (Changed)**: the route is now a liveness probe. It reports the
+  process state and the uptime. It reads no disk and it opens no network
+  connection, so a blocked resource cannot slow the reply down. The response
+  keeps the word `healthy`, so an existing monitor still matches.
+- **`/ready` (Added)**: the route tests every resource the portal needs. It
+  writes and deletes one temporary file in the data directory, it opens the
+  SQLite database read-only when the file exists, and it reads the Mist API
+  session state without a network call.
+- **Failure report (Added)**: `/ready` returns code 503 when a check fails, and
+  the body names each failed check under `failed_checks`. The body also carries
+  a detail line for each check, so the operator learns how to repair it.
+- **Quadlet probe (Added)**: `deploy/misthelper.container` now sets `HealthCmd=`
+  against `/ready`, with an interval of 30 seconds, a timeout of 5 seconds,
+  3 retries, a start period of 20 seconds, and `HealthOnFailure=restart`. A
+  wedged portal now restarts, because `Restart=always` alone could not see it.
+- **Tests (Added)**: `tests/unit/web_portal/test_dashboard_readiness.py` holds 14
+  cases. They prove `/ready` returns 503 for a read-only data directory, that the
+  body names the failed check, that `/ready` returns 200 when the directory is
+  writable, and that `/health` answers while every disk call raises.
+- **SQLite query (Changed)**: the database check runs
+  `SELECT count(*) FROM sqlite_master`. That query reads a real page, so SQLite
+  validates the file header. The first version ran `SELECT 1`, which answers from
+  memory. A corrupt database therefore passed the check on the Linux build of
+  SQLite, and the test caught the miss only in CI.
+- **Deferred**: the `Containerfile`, the `Dockerfile`, and `compose.yml` still
+  need a probe. Open pull request #1825 owns those three files today.
+
+### Cap the output file list in a web portal run record (issue #1870)
+
+- **Gap (Fixed)**: issue #1860 bounded `log_messages` and `debug_messages`, and
+  it left `run["output_files"]` without a cap. One per-site export appends one
+  distinct name for each site, so deduplication does not bound that list.
+- **Output files (Changed)**: `output_files` is now a `collections.deque` with a
+  `maxlen`. The deque drops the oldest name, so the operator still sees the most
+  recent output.
+- **Dropped count (Added)**: `dropped_output_file_count` counts every name the
+  cap discarded. `_run_to_dict` and `_run_to_summary` report the count next to
+  `dropped_log_count`.
+- **Setting (Added)**: `PORTAL_RUN_OUTPUT_FILES_MAX` defaults to 500. An
+  unusable value falls back to the default and logs a warning, which matches the
+  three settings issue #1860 added. `deploy/.env.example` documents it.
+- **Read boundary (Changed)**: `_run_to_dict` and `_publish_complete` copy the
+  deque into a list, so the JSON response and the SSE event still encode.
+- **Tests (Added)**: `tests/unit/web_portal/test_operation_output_files_cap.py`
+  holds 11 tests. They cover the cap, the newest-name order, the duplicate name
+  rule, the dropped count in the response, the two read boundaries, the default
+  cap, and the warning for an unusable setting.
+
+### Repair the container health probe command and add the compose probe (issues #1863, #1881)
+
+- **Defect (Fixed)**: `deploy/misthelper.container` ran the probe with
+  `curl --fail --silent --show-error`. The image installs `ca-certificates`,
+  `openssh-server`, and `sudo` only, so the image holds no curl binary. The
+  probe therefore failed on every call, and `HealthOnFailure=restart` restarted
+  a healthy container in a loop.
+- **Quadlet probe (Changed)**: `HealthCmd` now runs the Python interpreter that
+  already runs the application. The command reads `WEB_PORT` and calls `/ready`.
+  A non-200 response raises `HTTPError`, the command exits non-zero, and the
+  runtime marks the container unhealthy.
+- **Container probe (Added)**: `Containerfile` and `Dockerfile` define a
+  `HEALTHCHECK` that calls `/ready` with the same Python command. A Quadlet
+  build can drop the instruction when the image uses the OCI format, so the
+  unit states the command as well.
+- **Compose probe (Added)**: the `misthelper` service in `compose.yml` now
+  carries a `healthcheck` block. It matches the pattern the ArangoDB service
+  and the Redis service already use.
+- **Readiness endpoint (Superseded)**: pull request #1893 landed the `/health`
+  and `/ready` split for issue #1863 first. This change keeps that version of
+  `web_portal/routes/dashboard.py` and supplies the container probe only.
+- **Tests (Added)**: `tests/unit/test_container_health_probe.py` holds 12 tests.
+  They prove that no probe command calls curl, that every probe targets
+  `/ready`, and that the Quadlet unit keeps its timing keys and its restart key.
+
+### Bound the web portal operation run registry (issue #1860)
+
+- **Defect (Fixed)**: `OperationExecutor` kept every run in memory forever, and
+  each run appended one dictionary for every log record the operation emitted.
+  The portal runs as one long-lived Gunicorn worker, so the memory only rose
+  until an out-of-memory kill interrupted a write to the data directory.
+- **Run log (Changed)**: `log_messages` and `debug_messages` are now a
+  `collections.deque` with a `maxlen`. The deque drops the oldest entry, so one
+  high-volume run cannot fill the worker memory.
+- **Dropped count (Added)**: `dropped_log_count` counts every entry the cap
+  discarded. `_run_to_dict` and `_run_to_summary` report the count, so the
+  operator sees that the portal truncated the run log.
+- **Registry cap (Added)**: `OperationExecutor._prune_runs` keeps the most
+  recent finished runs and drops the rest. It also drops a finished run that
+  passed the retention period. It never evicts a pending or a running
+  operation, and it follows the `PortalEventBus._cleanup_stale_subscribers`
+  pattern.
+- **Settings (Added)**: `PORTAL_RUN_LOG_MAX_ENTRIES` defaults to 2000,
+  `PORTAL_RUN_HISTORY_MAX` defaults to 50, and `PORTAL_RUN_RETENTION_SECONDS`
+  defaults to 3600. An unusable value falls back to the default and logs a
+  warning. `deploy/.env.example` documents all three.
+- **Tests (Added)**: `tests/unit/web_portal/test_operation_run_registry_caps.py`
+  holds 11 tests. They cover the registry cap, the per-run log cap, the
+  protection of an active run, the retention period, the dropped count in the
+  response, and the fallback for an unusable setting.
+### Store an opaque session id and unblock the auth event loop (issues #1859, #1858)
+
+- **Cookie (Fixed)**: the `mist_session` cookie held the raw Mist API token. A
+  reader of that cookie gained the full Mist privileges of the operator, outside
+  this application and outside its audit log. The cookie now holds an opaque
+  identifier that `secrets.token_urlsafe(32)` produces.
+- **Token storage (Added)**: `SessionStore` in
+  `mist-ops-platform/src/shared/services/session_store.py` keeps the Mist token in
+  a server-side record. The record uses Redis when Redis answers, and a
+  process-local map when Redis does not answer. `_extract_token` reads the token
+  from that record, so no route reads a token from a client.
+- **Secure flag (Added)**: the cookie now sets `Secure` and `HttpOnly`. The new
+  `SESSION_COOKIE_SECURE` setting defaults to a true value. Set the value to
+  `false` only for local work over plain HTTP.
+- **Logout (Fixed)**: `DELETE /api/v1/auth/session` now deletes the server-side
+  record. A logout therefore ends the session, which the old code could not do.
+- **Event loop (Fixed)**: the Mist `/api/v1/self` lookup ran inside an `async def`
+  dependency and blocked the event loop for one round trip to `api.mist.com`. The
+  lookup now runs in a worker thread through `anyio.to_thread.run_sync`.
+- **Verification cache (Fixed)**: the privilege cache was never active, because
+  both call sites passed `redis=None`. The auth middleware now caches the
+  verification result on the session record for 5 minutes, so a repeat request
+  makes no second call to Mist.
+- **Cache key (Changed)**: the Redis privilege key derived from `hash(token)`,
+  which Python randomizes for each process. The key now derives from a SHA-256
+  digest, so it stays stable across every worker and across a restart.
+- **Status codes (Changed)**: an unreachable Mist API now returns 503 through the
+  new `MistApiUnavailableError`. Only a token that Mist rejects returns 401. A
+  transient upstream fault no longer logs every operator out.
+- **Settings (Added)**: `mist-ops-platform/src/shared/config/settings.py` supplies
+  the `AppSettings` object that six modules already imported. Every default value
+  lives in a module constant, because a `slots` dataclass turns a class attribute
+  into a descriptor instead of the default value.
+- **Tests (Added)**:
+  `mist-ops-platform/tests/unit/api/test_session_security.py` holds 18 tests. They
+  prove the cookie differs from the token, the cookie carries `Secure`, a deleted
+  identifier returns 401, the lookup runs off the event loop, and a second request
+  inside the cache period makes no second upstream call. The suite reports
+  18 passed, and the wider `tests/unit` run reports no new failure.
+
+### Bind the web portal IP allowlist to the peer address (issue #1857)
+
+**Warning:** This entry contains a breaking change. If you run the portal behind
+a reverse proxy and you set `PORTAL_ALLOWED_IPS`, the portal answers 403 to every
+client after this upgrade. The allowlist now reads the socket peer address, which
+is the address of the proxy. Set `PORTAL_TRUSTED_PROXIES` to the address of the
+proxy, or to the CIDR range that holds the proxy, before you upgrade. A portal
+that runs without a proxy needs no action.
+
+- **Defect (Fixed)**: `SecurityMiddleware._get_client_ip` read the
+  client-supplied `X-Forwarded-For` header and fed that value into the
+  `PORTAL_ALLOWED_IPS` check. No reverse proxy sits in front of the portal, so a
+  blocked caller reached every portal operation with one extra header.
+- **Peer address (Changed)**: `SecurityMiddleware._get_peer_ip` returns
+  `request.remote_addr`, and the allowlist judges that address. A caller cannot
+  forge the socket peer address.
+- **PORTAL_TRUSTED_PROXIES (Added)**: this new setting names the reverse proxy
+  addresses that the portal trusts. The default value is empty. The portal reads
+  the forwarded header only when the peer address matches an entry. An entry is
+  a plain address or a CIDR range.
+- **Forwarded entry (Changed)**: `SecurityMiddleware._resolve_client_ip` reads
+  the rightmost entry of the header, because that entry is the address the
+  trusted proxy observed. A caller controls every entry to its left.
+- **Audit trail (Changed)**: the block message now names the client address and
+  the peer address, so the record always holds the real source.
+- **PortalConfigLoader.parse_networks (Added)**: this shared parser replaces
+  `_parse_allowed_ips`. It reads both settings and names the setting in every
+  log message. It reports the position of an invalid entry, not the text of that
+  entry, because an environment value can hold a secret.
+- **Documentation (Added)**: `deploy/.env.example` documents
+  `PORTAL_ALLOWED_IPS` and `PORTAL_TRUSTED_PROXIES` in one section.
+- **Tests (Added)**: `tests/unit/web_portal/test_config_ip_allowlist.py` holds 15
+  cases. A forged header from a blocked peer returns 403. The same header from a
+  trusted proxy peer sets the client address.
+### Remove the spawned Edge profile directory on teardown (issue #1862)
+
+- **Defect (Fixed)**: the address audit spawned a debuggable Edge into a new
+  temporary profile directory on every run in auto mode. The teardown path
+  stopped the process and left the directory on disk. The path was a local
+  variable, so no later code could find it. An Edge profile that completed a
+  Mist login holds the cache, the cookies, and the local storage of that
+  session, so every run leaked one directory of session material.
+- **SpawnedBrowser (Added)**: `src/site/address_audit/ui_geocoder.py` holds a
+  frozen dataclass with a `process` field and a `profile_dir` field.
+  `spawn_debuggable_browser` returns it, so the caller owns both.
+- **Teardown (Changed)**: `MistUIGeocoder._terminate_spawned` stops the browser,
+  waits for the exit, then removes the profile directory. Edge holds a file lock
+  on the profile until the process exits. A stop that passes the 10-second
+  budget leads to a kill, and the removal then runs.
+- **Safety (Added)**: a failed removal logs a WARNING and never raises, and
+  `close()` stays idempotent. One DEBUG line names the removed path, so an
+  operator can confirm the cleanup.
+- **Tests (Added)**: `tests/unit/site/address_audit/test_ui_geocoder_profile_cleanup.py`
+  holds nine cases that use a fake process object, so no test starts a browser.
+
+### Stop the gitignore rule that hid a source package and a security finding (issue #1778)
+
+- **Defect (Fixed)**: line 244 of `.gitignore` held an unanchored `config/` rule.
+  That rule matched every nested directory of that name, so it hid the source
+  package `mist-ops-platform/src/shared/config/` from git and from every
+  scanner. Eight tracked modules import that package, and none of it was
+  tracked.
+- **Ignore rules (Changed)**: `/config/` and `/configs/` now carry a leading
+  slash, so each rule matches the repository root only. The four negation lines
+  that undid the over-broad rule are gone, because they became inert.
+- **Source package (Added)**: `__init__.py`, `constants.py`, and `settings.py`
+  of `mist-ops-platform/src/shared/config/` now enter git. Pull request #1905
+  force-added the same three modules, so this change keeps that version of each
+  module and removes the ignore rule that made the force-add necessary.
+- **B104 (Fixed)**: the `api_host` default was `0.0.0.0`, which binds the API to
+  every interface. Bandit reported it as a MEDIUM `hardcoded_bind_all_interfaces`
+  finding that no gate could see. The current settings module defines no bind
+  address, so the finding is gone. A guard test fails again if a bind-all default
+  returns.
+- **Suppression (Removed)**: the inert `# noqa: S104` note is gone. The root
+  ruff configuration does not select the `S` family, and bandit reads `# nosec`
+  only, so that note suppressed nothing and misled a reader.
+- **Tests (Added)**: `tests/unit/test_config_package_tracked.py` holds six cases.
+  They read text only, so they need no optional dependency. They fail again if
+  an unanchored rule returns, if the package leaves the checkout, if a field
+  default binds to every interface, or if an inert `# noqa: S` note returns.
+
+### Route the Starlink status line through the GPS precision control (issue #1838)
+
+- **Defect (Fixed)**: `StarlinkStatusWidget._status_part_location` built its
+  status line with a hardcoded `:.4f` format on the latitude and on the
+  longitude. That path never called `_format_gps_coordinate`, so it ignored both
+  the `GPS_PRECISION_DECIMALS` default and the operator opt-in that issue #1737
+  added. Four decimal places locate a driveway, and the line reaches stdout,
+  where a redirect or a recorded SSH session can capture it into a support
+  bundle.
+- **Cause (Recorded)**: pull request #1834 fixed the two paths that CodeQL
+  reported as alert 190 and alert 191. Both sat in `_dump_diagnostics_location`.
+  CodeQL never flagged the status line, so the alert-scoped triage never reached
+  it. The module then held two different rules for one value.
+- **Status line (Changed)**: the method now calls `_format_gps_coordinate` for
+  each coordinate. One rule governs every coordinate the module prints. The
+  default rounds to about 100 meters, and `STARLINK_DASHBOARD_EXACT_GPS` returns
+  the exact value through this path too.
+- **Delivery (Recorded)**: pull request #1849 landed the code change and the
+  test cases first. This entry records the fix in the changelog, because #1849
+  merged without one. The source and the tests here match the merged version.
+- **Tests (Added)**: four cases in
+  `tests/unit/test_starlink_dashboard_startup_and_gps.py`. Three prove the
+  behavior of the status line: it rounds on a default run, it returns the exact
+  pair after the opt-in, and it returns `None` when the terminal reports no
+  location. The fourth scans the module source and fails when any coordinate
+  format field states a literal decimal count, so a new caller cannot reopen the
+  same gap. All three behavior tests fail against the unfixed source. All 11
+  tests in the file pass against the fix.
+
 ### Replace the assert runtime guards in the SSH package (issue #1720)
 
 - **Defect (Fixed)**: four runtime guards used `assert`. The interpreter removes
@@ -50,6 +1580,28 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Tests (Added)**: `TestRouterReprobe` and `TestRouterCloseRedisJson` in
   `tests/unit/test_router.py`. All seven new cases fail against the pre-fix
   router.
+### Route polyglot writes by host reachability, not by the container boundary (issue #1824)
+
+- **Fixed**: `DataExporter._is_standalone_mode` returned true whenever
+  MistHelper ran outside a container. Every ArangoDB and Redis write was
+  dropped on a workstation. `DatabaseRouter._csv_fallback` answered
+  `success=True`, so the loss left no trace in the log.
+- **Changed**: the decision now follows a TCP reachability probe against the
+  configured `ARANGO_HOST` and `REDIS_HOST`. MistHelper writes to the polyglot
+  backend whenever one of the two answers, inside or outside a container.
+- **Added**: `src.db.polyglot_hosts_unreachable` runs the probe and records
+  both verdicts through the `polyglot_host_probe` structured log event. The
+  probe uses a TCP connect, not a DNS lookup, because a hostname can resolve
+  while no service listens. The timeout is 0.5 seconds for each host.
+- **Added**: `DataExporter._standalone_probe` caches the verdict for the life
+  of the process, so an export pays the probe cost one time.
+- **Added**: one `WARNING` at the fallback point names the dropped polyglot
+  write and the two environment variables that fix it.
+- **Unchanged**: `MISTHELPER_STANDALONE` still forces the mode. The
+  `--standalone` flag still sets that variable.
+- **Tests (Added)**: `TestPolyglotHostProbe` in `tests/unit/test_standalone.py`
+  and the rewritten `TestIsStandaloneMode` in
+  `tests/unit/export/test_data_exporter.py`.
 
 ### Add five organization-scoped search operations, menus 230 to 234 (issues #1386, #1385, #1383, #1382, #1379)
 
@@ -4966,3 +6518,4 @@ Closes #368
 - Locations: Single AP pre-check, multi-AP pre-check, site PCAP polling, org PCAP polling
 - Function names now match mistapi SDK and Mist API operationId values
 - operationId: listSitePacketCaptures and listOrgPacketCaptures per OpenAPI spec
+

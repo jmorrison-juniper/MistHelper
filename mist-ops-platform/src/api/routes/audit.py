@@ -12,15 +12,18 @@ Covers:
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.deps import get_authenticated_user, get_db_session
-from src.api.middleware.auth import CurrentUser
+from src.api.deps import (
+    get_authenticated_user,
+    get_db_session,
+    get_scoped_org_id,
+)
+from src.api.middleware.auth import CurrentUser, require_org_access
 from src.api.schemas.audit import (
     AuditRecordResponse,
     CompliancePackRequest,
@@ -46,7 +49,7 @@ router = APIRouter(prefix="/audit", tags=["audit"])
 
 @router.get("/records")
 async def list_audit_records(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     entity_type: str | None = Query(None),
     entity_id: UUID | None = Query(None),
     actor: str | None = Query(None),
@@ -81,7 +84,7 @@ async def list_audit_records(
 @router.get("/records/{record_id}")
 async def get_audit_record(
     record_id: int,
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     db: AsyncSession = Depends(get_db_session),
     _user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[AuditRecordResponse]:
@@ -105,9 +108,11 @@ async def get_audit_record(
 async def export_records(
     body: ExportRequest,
     db: AsyncSession = Depends(get_db_session),
-    _user: CurrentUser = Depends(get_authenticated_user),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[ExportStatusResponse]:
-    """Trigger async audit record export (SC-012 <30s)."""
+    """Trigger async audit record export (SC-012 <30s), scoped to the caller's org."""
+    logger.info("export_records called for org_id=%s by user=%s", body.org_id, user.email)
+    require_org_access(str(body.org_id), user)  # Refuse a caller outside the target org
     from src.worker.tasks.audit_tasks import export_audit_records
 
     filters = body.filters.model_dump(by_alias=True)
@@ -120,6 +125,7 @@ async def export_records(
 
     export_id = _uuid.uuid4()
     total = await _estimate_records(db, body.org_id)
+    logger.debug("export_records: export_id=%s estimated_records=%s", export_id, total)
     return ResponseEnvelope(
         data=ExportStatusResponse(
             export_id=export_id,
@@ -135,7 +141,7 @@ async def export_records(
 
 @router.get("/correlations")
 async def list_correlations(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     incident_type: str | None = Query(None),
     min_confidence: float = Query(0.0, ge=0.0, le=1.0),
     page: int = Query(1, ge=1),
@@ -167,7 +173,9 @@ async def create_compliance_pack(
     db: AsyncSession = Depends(get_db_session),
     user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[CompliancePackResponse]:
-    """Generate a compliance audit evidence package."""
+    """Generate a compliance audit evidence package, scoped to the caller's org."""
+    logger.info("create_compliance_pack called for org_id=%s by user=%s", body.org_id, user.email)
+    require_org_access(str(body.org_id), user)  # Refuse a caller outside the target org
     from src.worker.tasks.audit_tasks import generate_compliance_pack
 
     generate_compliance_pack.delay(
@@ -180,9 +188,11 @@ async def create_compliance_pack(
     )
     import uuid as _uuid
 
+    pack_id = _uuid.uuid4()
+    logger.debug("create_compliance_pack: pack_id=%s queued for org_id=%s", pack_id, body.org_id)
     return ResponseEnvelope(
         data=CompliancePackResponse(
-            pack_id=_uuid.uuid4(),
+            pack_id=pack_id,
             status="generating",
             framework=body.framework,
         ),
@@ -193,17 +203,19 @@ async def create_compliance_pack(
 async def get_compliance_pack(
     pack_id: UUID,
     db: AsyncSession = Depends(get_db_session),
-    _user: CurrentUser = Depends(get_authenticated_user),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[CompliancePackResponse]:
-    """Poll compliance pack generation status."""
+    """Poll compliance pack generation status, scoped to the caller's org."""
+    logger.info("get_compliance_pack called for pack_id=%s by user=%s", pack_id, user.email)
     stmt = select(ComplianceAuditPack).where(
         ComplianceAuditPack.pack_id == pack_id,
     )
     row = (await db.execute(stmt)).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="Pack not found")
-
+    require_org_access(str(row.org_id), user)  # Refuse a caller outside the org of this pack
     included = row.included_records or {}
+    logger.debug("get_compliance_pack: pack_id=%s returned to user=%s", pack_id, user.email)
     return ResponseEnvelope(
         data=CompliancePackResponse(
             pack_id=row.pack_id,

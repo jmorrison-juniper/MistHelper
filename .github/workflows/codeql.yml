@@ -1,12 +1,21 @@
 name: CodeQL Analysis
 
 on:
+  # No branch filter here. A pull request against any base runs the scan. A
+  # filter that named main alone let a stacked pull request merge without a
+  # scan, because the required check never started and never reported. Issue
+  # #1952 records that gap for the Quality Gates workflow, and the same trap
+  # applied here.
   pull_request:
-    branches: [main]
   push:
     branches: [main]
   schedule:
     - cron: '0 6 * * 1'
+  # GitHub starts no push run for a merge that GITHUB_TOKEN performs, so the
+  # scan on main went stale. Issue #1851 records the effect. An explicit
+  # dispatch is the exception that GitHub honors, and the Auto-merge workflow
+  # calls this trigger after every merge into main.
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'

@@ -18,6 +18,9 @@ from typing import Any  # WHY: precise typing for injected callables + site/map 
 
 import mistapi  # type: ignore[import-untyped]  # WHY: Mist SDK is the source of truth for site maps + image URLs.
 
+from src.maps._browser_opener import (
+    DelayedBrowserOpener,
+)  # WHY: one stoppable opener replaces the daemon thread that no caller joined.
 from src.maps._container_detection import is_running_in_container  # WHY: gate 0.0.0.0 bind to container envs only.
 
 logger = logging.getLogger(__name__)  # WHY: module-scoped logger keeps route-handler emissions grouped in logs.
@@ -42,7 +45,6 @@ _ERR_MAP_IMAGE_FAILED = (
 _TOKEN_ATTR = "_api_token"  # nosec B105 - The value is the mistapi attribute name, not a token value.
 _AUTHORIZATION_HEADER = "Authorization"  # WHY: exposes header key so proxies + tests do not repeat the literal.
 _CONTENT_TYPE_HEADER = "Content-Type"  # WHY: response-header key reused between fetch + proxy paths.
-_JSON_SORT_KEYS_CONFIG = "JSON_SORT_KEYS"  # WHY: Flask config key kept as constant to avoid typos on re-mount.
 _ROUTE_INDEX = "/"  # WHY: canonical index route so dispatch table matches the mounted Flask endpoints.
 _ROUTE_SITE_MAPS = "/api/site/<site_id>/maps"  # WHY: keep the maps-list URL definition close to the handler.
 _ROUTE_MAP_IMAGE = "/api/map-image/<site_id>/<map_id>"  # WHY: image proxy path used by the front-end <img> tag.
@@ -207,22 +209,21 @@ def _print_flask_viewer_banner(host: str, port: int) -> None:
     logger.info("%s", _BANNER_SEPARATOR)  # WHY: trailing divider signals end of banner block.
 
 
-def _maybe_open_browser(port: int) -> None:
-    """Spawn a daemon thread to open the browser after a short delay, unless in a container."""
-    import threading  # WHY: local import keeps stdlib threading out of the module import graph unless invoked.
-    import webbrowser  # WHY: local import mirrors threading -- optional path when running headless.
+def _maybe_open_browser(port: int) -> DelayedBrowserOpener | None:
+    """Start a delayed browser open, unless the viewer runs in a container.
 
+    Returns the opener so the caller can stop the thread. Returns ``None`` in a
+    container, because the host opens the browser there.
+    """
     if is_running_in_container():
-        return  # WHY: containers expose ports externally. Caller handles browser launch on the host side.
-
-    def open_browser() -> None:
-        """Wait briefly then point the default browser at the local Flask server."""
-        import time  # WHY: local import scopes time to the delayed launch only.
-
-        time.sleep(_BROWSER_OPEN_DELAY_S)  # WHY: lets Flask bind before we hit it with the first HTTP request.
-        webbrowser.open(f"http://{_LOCALHOST_BIND}:{port}")  # WHY: hardcode loopback -- container path exits early.
-
-    threading.Thread(target=open_browser, daemon=True).start()  # WHY: daemon flag prevents blocking process exit.
+        # WHY: containers expose ports externally. Caller handles browser launch on the host side.
+        logger.debug("The viewer runs in a container, so it schedules no browser open")
+        return None  # WHY: The caller has no thread to stop on this path.
+    url = f"http://{_LOCALHOST_BIND}:{port}"  # WHY: hardcode loopback -- container path exits early.
+    logger.info("The viewer schedules a browser open to %s", url)  # WHY: Records the request before the start.
+    opener = DelayedBrowserOpener(url, delay_s=_BROWSER_OPEN_DELAY_S)  # WHY: The delay lets Flask bind the port.
+    opener.start()  # WHY: The wait runs off the main thread, so the Flask server can start.
+    return opener  # WHY: The caller stops this opener after the server returns.
 
 
 def _run_flask_server(flask_app, host: str, port: int) -> None:
@@ -1312,7 +1313,7 @@ def _build_flask_app(ctx: FlaskViewerContext):
     from flask import Flask, jsonify, render_template_string  # WHY: local so import cost is deferred to launch time.
 
     flask_app = Flask(__name__)  # WHY: Flask needs the module __name__ to locate static/template folders.
-    flask_app.config[_JSON_SORT_KEYS_CONFIG] = False  # WHY: preserve key order so the browser matches server payload.
+    flask_app.json.sort_keys = False  # WHY: preserve key order so the browser matches server payload.
     _register_flask_routes(flask_app, ctx, json_module, render_template_string, jsonify)  # WHY: mount all endpoints.
     return flask_app  # WHY: caller runs the returned app after banner + browser-open steps.
 
@@ -1336,5 +1337,9 @@ def launch_flask_viewer(ctx: FlaskViewerContext):
     flask_app = _build_flask_app(ctx)  # WHY: helper handles imports + Flask config + route registration.
     flask_host, flask_port = _resolve_flask_bind_address()  # WHY: pick loopback versus all-interfaces based on env.
     _print_flask_viewer_banner(flask_host, flask_port)  # WHY: operator-facing status before the blocking run call.
-    _maybe_open_browser(flask_port)  # WHY: fires only on desktop -- container path exits early inside the helper.
-    _run_flask_server(flask_app, flask_host, flask_port)  # WHY: blocking call -- returns on Ctrl+C or fatal error.
+    browser_opener = _maybe_open_browser(flask_port)  # WHY: fires only on desktop -- container path returns None.
+    try:
+        _run_flask_server(flask_app, flask_host, flask_port)  # WHY: blocking call -- returns on Ctrl+C or fatal error.
+    finally:
+        if browser_opener is not None:  # WHY: a container run scheduled no opener, so it has no thread to join.
+            browser_opener.stop()  # WHY: the join runs on every exit path, so no thread outlives the server.

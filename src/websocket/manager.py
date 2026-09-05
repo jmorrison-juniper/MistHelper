@@ -32,6 +32,7 @@ _WS_HANDSHAKE_LOG_MOD = 2  # WHY: Log every second handshake tick to reduce nois
 _WS_API_HOST_PREFIX = "api."  # WHY: Prefix on REST host, swapped for WS variant.
 _WS_HOST_PREFIX = "api-ws."  # WHY: Prefix Mist uses for streaming endpoints.
 _WS_STREAM_PATH = "/api-ws/v1/stream"  # WHY: Fixed Mist WebSocket entry point.
+_WS_THREAD_JOIN_SECONDS = 5.0  # WHY: Bounded join so a stuck reader cannot block the caller (issue #1875).
 _DEBUG_TRUE_VALUES = frozenset({"true", "1", "yes"})  # WHY: Accepted truthy strings for DEBUG env.
 
 
@@ -353,11 +354,34 @@ class WebSocketManager:
         )
         self.logger.info("WebSocket connection closed (status: %s)", close_status_code)  # WHY: User-facing.
 
+    def _join_websocket_thread(self) -> None:
+        """Wait a bounded time for the reader thread to stop, then report the outcome."""
+        reader_thread = self.websocket_thread  # WHY: One alias keeps every check on the same object.
+        if reader_thread is None:  # WHY: connect() never ran, so no reader exists.
+            return  # WHY: Nothing to wait for.
+        if reader_thread is threading.current_thread():  # WHY: A close callback can call disconnect().
+            self.logger.debug("Reader thread called disconnect. Skip the join.")  # WHY: A self-join raises.
+            return  # WHY: A join on the current thread raises an error.
+        self.logger.info("Waiting for the WebSocket reader thread to stop")  # WHY: Action log before the wait.
+        reader_thread.join(_WS_THREAD_JOIN_SECONDS)  # WHY: Bounded wait stops the leak reported in #1875.
+        if reader_thread.is_alive():  # WHY: The bound expired before run_forever unwound.
+            self.logger.warning(  # WHY: A silent leak gives the operator nothing to act on.
+                "WebSocket reader thread still alive after %.1fs for %s",
+                _WS_THREAD_JOIN_SECONDS,
+                self.websocket_url,
+            )
+            return  # WHY: Keep the handle so a later disconnect can retry the join.
+        self.websocket_thread = None  # WHY: Drop the handle, because the reader stopped.
+        self.logger.debug("WebSocket reader thread stopped for %s", self.websocket_url)  # WHY: Result log.
+
     def disconnect(self) -> None:
         """Close WebSocket connection and cleanup resources."""
-        if self.websocket_connection:  # WHY: Idempotent — no-op if never connected.
-            self.websocket_connection.close()  # WHY: Ask library to shut the socket down.
-        self.connected = False  # WHY: Reset flag regardless of prior state.
-        self.subscribed_channels.clear()  # WHY: Force fresh subscribes on next connect.
-        with self.results_lock:  # WHY: Serialise clearing shared buffer.
-            self.command_results.clear()  # WHY: Drop stale in-flight sessions.
+        try:  # WHY: A close() failure must not skip the join or leave stale state.
+            if self.websocket_connection:  # WHY: Idempotent — no-op if never connected.
+                self.websocket_connection.close()  # WHY: Ask library to shut the socket down.
+        finally:  # WHY: The stop path runs on every exit, including the exception path.
+            self.connected = False  # WHY: Reset flag regardless of prior state.
+            self._join_websocket_thread()  # WHY: close() only requests a stop. Wait for run_forever to unwind.
+            self.subscribed_channels.clear()  # WHY: Force fresh subscribes on next connect.
+            with self.results_lock:  # WHY: Serialise clearing shared buffer.
+                self.command_results.clear()  # WHY: Drop stale in-flight sessions.

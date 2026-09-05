@@ -228,7 +228,7 @@ class MultiHostRunner:
                 iteration += 1  # WHY: bump the iteration counter used in the trace line.
                 done, pending = concurrent.futures.wait(pending, return_when=concurrent.futures.FIRST_COMPLETED)
                 MultiHostRunner._process_done_futures(done, future_to_host, state, logger, iteration)
-        except Exception as loop_error:  # noqa: BLE001 - wait-loop failure fallback (verbatim trace).
+        except Exception as loop_error:  # wait-loop failure fallback (verbatim trace).
             MultiHostRunner._handle_loop_failure(loop_error, future_to_host, state, logger)
 
     @staticmethod
@@ -303,7 +303,7 @@ class MultiHostRunner:
         """Return (hostname, success, summary) with the original safe-fallback path."""
         try:
             return future.result()  # WHY: normal path - HostRunner.run's tuple.
-        except Exception as fut_error:  # noqa: BLE001 - mirror original safe-fallback path.
+        except Exception as fut_error:  # mirror original safe-fallback path.
             logger.exception("[TRACE] Future exception: %s: %s", type(fut_error).__name__, fut_error)
             hostname = future_to_host.get(future, "unknown")  # WHY: map back to host or 'unknown'.
             return (hostname, False, f"Error: {fut_error}")  # WHY: preserve legacy failure tuple shape.

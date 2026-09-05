@@ -61,7 +61,7 @@ class _ClusterBase:  # WHY: shared wrapper base for every utility_commands clust
         (ARP) filter builders share the same 5-line pattern without pylint
         flagging R0801 duplicate-code across the two cluster modules.
         """
-        node = self._safe_input_fn(  # noqa: SLF001  # WHY: proxied via __getattr__
+        node = self._safe_input_fn(  # WHY: proxied via __getattr__
             "Node (node0/node1, Enter to skip): ",
             context=node_context,
         )  # WHY: optional VC node filter

@@ -1,0 +1,116 @@
+{#
+  auth/twofactor.html - the second factor page of the upgrade capture portal.
+
+  Why this file exists:
+    FR-007 asks the portal to request a second factor when the Mist cloud wants
+    one, then to retry the sign-in with that code. `POST /auth/signin` answers
+    `{"next": "/auth/twofactor"}` for that case, so a browser must be able to
+    open this path and read a page.
+
+  Why the page holds a literal path:
+    contracts/http-api.md fixes every public path of this portal. The blueprint
+    endpoint names are not fixed in the template layer, so the form action
+    follows the contract path. url_for stays for a static asset.
+
+  Why the page names no operator:
+    The half-finished sign-in waits on the server, keyed by the first-party
+    browser cookie. The page therefore needs no address and no identifier, and
+    a screenshot of this page shows nothing about the account.
+
+  Why the code field carries no value attribute:
+    A value attribute would place the code in the markup. A refused attempt
+    would then put it in the page source, in a screenshot, and in a browser
+    cache entry. FR-009 forbids that, so the field always starts empty.
+
+  Variables a route may supply:
+    error_message - the reason of a refused code. Empty otherwise.
+    page_title    - the heading text and the tab text.
+    theme         - the name of the current theme. See layout.html.
+    themes        - the theme names the operator may pick.
+#}
+{% extends 'layout.html' %}
+
+{#
+  Every value passes through a default filter first. The portal runs Jinja with
+  the standard undefined type, and this step also holds if a later setting turns
+  on the strict undefined type. The second argument stays true, because an empty
+  string reads as missing for both values below.
+#}
+{% set refusal = error_message | default('', true) %}
+{% set heading = page_title | default('Second factor', true) %}
+
+{% block title %}{{ heading }}{% endblock %}
+
+{% block heading %}<h1>{{ heading }}</h1>{% endblock %}
+
+{% block content %}
+<div class="portal-card">
+  <h2 class="portal-card-title">Enter the current code</h2>
+
+  {#
+    The page reuses the sign-in error identifier, because the identifier
+    contract names one error region for the whole sign-in journey. The region
+    always stays in the markup, so a browser test reads it before a refusal as
+    well as after one.
+  #}
+  <div class="alert alert-danger flash-danger"
+       id="twofactor-error"
+       data-testid="signin-error"
+       role="alert"
+       aria-live="assertive"
+       {% if not refusal %}hidden{% endif %}>
+    {{ refusal }}
+  </div>
+
+  <p class="portal-card-note" id="twofactor-note">
+    Your Mist account needs a second factor. Read the current code from your
+    authenticator application, then type it below. The portal sends the code to
+    the Mist cloud and keeps no copy. No log record holds it.
+  </p>
+
+  <form method="post" action="/auth/twofactor">
+    {#
+      The token guard matches layout.html. The page stays renderable before the
+      security layer registers the csrf_token global. The server still refuses
+      a post that carries no token, so the fault stays visible instead of
+      passing quietly.
+    #}
+    <input type="hidden"
+           name="csrf_token"
+           value="{{ csrf_token() if csrf_token is defined else '' }}">
+
+    {#
+      The label stays visible. A placeholder disappears on the first key press,
+      so a placeholder alone leaves a screen reader and a returning operator
+      with no name for the field.
+
+      The input mode asks a telephone for the number keypad, and the token
+      autocomplete hint lets a password manager fill a one-time code. Neither
+      changes what the server accepts, because the cloud judges the value.
+    #}
+    <label class="form-label" for="twofactor-code">Second factor code</label>
+    <input type="text"
+           id="twofactor-code"
+           name="code"
+           class="form-control"
+           data-testid="twofactor-code"
+           inputmode="numeric"
+           autocomplete="one-time-code"
+           spellcheck="false"
+           required
+           aria-describedby="twofactor-note">
+
+    <button type="submit"
+            class="portal-button portal-button-primary"
+            data-testid="twofactor-submit">
+      Send the code
+    </button>
+  </form>
+
+  <p class="portal-card-note">
+    The code expires. If the portal refuses the code twice, wait for a new code,
+    then try again. If the sign-in step closes, start again at
+    <a href="/auth/signin">the sign-in page</a>.
+  </p>
+</div>
+{% endblock %}

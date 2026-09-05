@@ -27,7 +27,7 @@ from src.shared.models.base import Base
 
 
 # ---------------------------------------------------------------------------
-# E-04: ConfigRevision (hash-partitioned by org_id)
+# E-04: ConfigRevision (LIST-partitioned by org_id)
 # ---------------------------------------------------------------------------
 class ConfigRevision(Base):
     """Immutable configuration snapshot captured from Mist API."""
@@ -70,7 +70,7 @@ class ConfigRevision(Base):
 
 
 # ---------------------------------------------------------------------------
-# E-05: DeviceStatusSnapshot (hash-partitioned by org_id)
+# E-05: DeviceStatusSnapshot (LIST-partitioned by org_id)
 # ---------------------------------------------------------------------------
 class DeviceStatusSnapshot(Base):
     """Point-in-time device status for time-travel queries."""

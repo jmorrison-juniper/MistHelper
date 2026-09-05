@@ -146,7 +146,7 @@ class TestInitAndExecute:
         fake_impl_instance.execute.assert_called_once_with()  # Delegation confirmed.
 
     def test_init_default_flags(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Default constructor args produce fast=False/address_check=False/debug=False/skip_ssl_verify=True."""
+        """Default constructor args produce fast/address_check/debug/skip_ssl_verify all False."""
         # WHY: covers the default keyword argument branch of __init__.
         # Publish minimal MistHelper attrs (same as above).
         for name, val in [
@@ -168,6 +168,6 @@ class TestInitAndExecute:
             patch("src.inventory.csv_comparator.ComparatorDependencies", MagicMock(name="Deps")),
         ):
             InventoryCSVComparator()  # Rely entirely on defaults.
-        fake_flags_cls.assert_called_once_with(  # Assert defaults propagated.
-            fast=False, address_check=False, debug=False, skip_ssl_verify=True
+        fake_flags_cls.assert_called_once_with(  # Assert defaults propagated. Verification stays on (#1914).
+            fast=False, address_check=False, debug=False, skip_ssl_verify=False
         )

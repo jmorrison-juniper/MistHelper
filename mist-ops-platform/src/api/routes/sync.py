@@ -16,6 +16,8 @@ Provides:
 
 from __future__ import annotations  # Defer annotation evaluation; cheap forward refs
 
+import logging  # Records the authorization decision on the sync trigger route
+
 from dataclasses import dataclass  # For query-param grouping (replaces 6/7-arg signatures)
 from datetime import UTC, datetime  # Timezone-aware timestamps for ack/recertify
 from typing import TYPE_CHECKING  # For type-only imports below
@@ -24,7 +26,12 @@ from uuid import UUID  # Used in route signatures and DB filters
 from fastapi import APIRouter, Depends, HTTPException, Query  # FastAPI route plumbing
 from sqlalchemy import select  # Build typed SQLAlchemy SELECTs
 
-from src.api.deps import get_authenticated_user, get_db_session  # DI for auth + DB session
+from src.api.deps import (  # DI for auth, DB session, and the org scope check
+    get_authenticated_user,
+    get_db_session,
+    get_scoped_org_id,
+)
+from src.api.middleware.auth import require_org_access  # Org membership check
 from src.api.schemas.common import ResponseEnvelope  # Uniform response wrapper
 from src.api.schemas.sync import (  # Public response/request models
     DeviceResponse,
@@ -53,6 +60,8 @@ if TYPE_CHECKING:  # Type-only imports -- runtime cost zero
     from sqlalchemy.ext.asyncio import AsyncSession  # Async DB session type
     from src.api.middleware.auth import CurrentUser  # Current-user identity object
 
+logger = logging.getLogger(__name__)  # Module logger, so the records name this module
+
 router = APIRouter(prefix="/sync", tags=["sync"])  # /sync/* endpoints
 inv_router = APIRouter(prefix="/inventory", tags=["inventory"])  # /inventory/* endpoints
 
@@ -61,8 +70,13 @@ def _resolve_org_ids(
     explicit: UUID | None,
     user: CurrentUser,
 ) -> list[UUID]:
-    """Return org_ids to query — explicit param or user's orgs."""
+    """Return org_ids to query — explicit param or user's orgs.
+
+    An explicit organization must pass the membership check. Without the
+    check, any caller reads the data of any organization.
+    """
     if explicit:  # Caller supplied a specific org filter
+        require_org_access(str(explicit), user)  # Raise 403 when the caller is outside that org
         return [explicit]
     return [UUID(oid) for oid in user.org_ids] if user.org_ids else []  # User's accessible orgs
 
@@ -151,11 +165,23 @@ async def _recent_ledger_for_org(db: AsyncSession, org_id: UUID) -> list[SyncLed
 
 
 @router.post("/trigger")
-async def trigger_sync(body: SyncTriggerRequest) -> dict[str, str]:
-    """Enqueue an on-demand inventory sync for an org."""
+async def trigger_sync(
+    body: SyncTriggerRequest,
+    user: CurrentUser = Depends(get_authenticated_user),
+) -> dict[str, str]:
+    """Enqueue an on-demand inventory sync for an org.
+
+    The route queues work on the Celery fleet, so an anonymous caller could
+    exhaust the workers. The caller must hold a valid credential and must
+    belong to the organization that ``body.org_id`` names.
+    """
     from src.worker.tasks.sync_tasks import sync_org_inventory  # Lazy import; avoid worker cycle
 
+    logger.info("Inventory sync trigger starts for organization %s.", body.org_id)
+    require_org_access(str(body.org_id), user)  # Raise 403 when the caller is outside the org
+
     sync_org_inventory.delay(str(body.org_id))  # Hand off to Celery worker
+    logger.debug("Inventory sync queued for organization %s.", body.org_id)
     return {"status": "queued", "org_id": str(body.org_id)}  # Caller polls status separately
 
 
@@ -193,7 +219,7 @@ def _orgs_query_for_user(user: CurrentUser):
 
 @inv_router.get("/sites")
 async def list_sites(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     db: AsyncSession = Depends(get_db_session),
 ) -> ResponseEnvelope[list[SiteResponse]]:
     """List sites for an organization."""
@@ -249,9 +275,12 @@ async def list_devices(
     site_id: UUID | None = Query(None),
     search: str | None = Query(None),
     db: AsyncSession = Depends(get_db_session),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[list[DeviceResponse]]:
     """List devices (filtered by org, site, and/or name/MAC search)."""
+    org_ids = _resolve_org_ids(org_id, user)  # Check membership and compute the org scope
     stmt = _device_search_query(org_id, site_id, search)  # Build SELECT with filters
+    stmt = stmt.where(Device.org_id.in_(org_ids))  # Never return a device outside the caller scope
     rows = (await db.execute(stmt)).scalars().all()  # Materialize device rows
     items = [_device_to_response(d) for d in rows]  # Project rows to response shape
     return ResponseEnvelope(data=items)
@@ -261,13 +290,22 @@ async def list_devices(
 async def get_device(
     device_id: UUID,
     db: AsyncSession = Depends(get_db_session),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[DeviceResponse]:
-    """Get a single device by ID."""
-    stmt = select(Device).where(Device.device_id == device_id)  # Single-row lookup
+    """Get a single device by ID, scoped to the caller's organizations."""
+    logger.info("get_device called for device_id=%s by user=%s", device_id, user.email)
+    stmt = select(Device).where(Device.device_id == device_id)  # Single-row lookup by device UUID
     row = (await db.execute(stmt)).scalar_one_or_none()  # 0 or 1 result
-    if not row:  # 404 path
+    if not row:  # 404 path — device does not exist
         raise HTTPException(status_code=404, detail="Device not found")
-    return ResponseEnvelope(data=_device_to_response(row))  # 200 path
+    require_org_access(str(row.org_id), user)  # Refuse a caller outside the org of this device
+    logger.debug(
+        "get_device: device_id=%s org_id=%s returned to user=%s",
+        device_id,
+        row.org_id,
+        user.email,
+    )  # Log device returned to confirm the scope check passed
+    return ResponseEnvelope(data=_device_to_response(row))  # 200 path — caller is in scope
 
 
 # ===================================================================
@@ -294,8 +332,11 @@ def _drift_alert_filters(
     status: str | None = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> DriftAlertFilters:
     """FastAPI dependency that groups drift-alert filter query params into one object."""
+    if org_id is not None:  # Only an explicit organization needs the membership check
+        require_org_access(str(org_id), user)  # Raise 403 when the caller is outside that org
     return DriftAlertFilters(
         org_id=org_id,
         acknowledged=acknowledged,
@@ -336,13 +377,16 @@ async def list_drift_alerts(
 async def get_drift_alert(
     alert_id: UUID,
     db: AsyncSession = Depends(get_db_session),
-    _user: CurrentUser = Depends(get_authenticated_user),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[DriftAlertDetail]:
-    """Get drift alert detail with full diff payload."""
+    """Get drift alert detail with full diff payload, scoped to the caller's org."""
+    logger.info("get_drift_alert called for alert_id=%s by user=%s", alert_id, user.email)
     stmt = select(DriftAlert).where(DriftAlert.alert_id == alert_id)  # Single-row lookup
     alert = (await db.execute(stmt)).scalar_one_or_none()  # 0 or 1
     if alert is None:  # 404 path
         raise HTTPException(status_code=404, detail="Alert not found")
+    require_org_access(str(alert.org_id), user)  # Refuse a caller outside the org of this alert
+    logger.debug("get_drift_alert: alert_id=%s returned to user=%s", alert_id, user.email)
     return ResponseEnvelope(data=DriftAlertDetail.model_validate(alert))
 
 
@@ -353,15 +397,22 @@ async def acknowledge_drift_alert(
     db: AsyncSession = Depends(get_db_session),
     user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[DriftAlertDetail]:
-    """Acknowledge a drift alert."""
+    """Acknowledge a drift alert, scoped to the caller's org."""
+    logger.info("acknowledge_drift_alert called for alert_id=%s by user=%s", alert_id, user.email)
     stmt = select(DriftAlert).where(DriftAlert.alert_id == alert_id)  # Look up alert
     alert = (await db.execute(stmt)).scalar_one_or_none()  # 0 or 1
     if alert is None:  # 404 path
         raise HTTPException(status_code=404, detail="Alert not found")
+    require_org_access(str(alert.org_id), user)  # Refuse a caller outside the org of this alert
     alert.status = "acknowledged"  # Flip state to acknowledged
     alert.resolved_by = user.email  # Track who acknowledged
     alert.resolved_at = datetime.now(UTC)  # Track when (UTC)
     await db.flush()  # Push changes to DB without committing the transaction
+    logger.debug(
+        "acknowledge_drift_alert: alert_id=%s acknowledged by user=%s",
+        alert_id,
+        user.email,
+    )  # Log acknowledgment to confirm the write completed
     return ResponseEnvelope(data=DriftAlertDetail.model_validate(alert))
 
 
@@ -383,7 +434,7 @@ class PolicyListFilters:
 
 
 def _policy_list_filters(
-    org_id: UUID = Query(...),
+    org_id: UUID = Depends(get_scoped_org_id),
     lifecycle_state: str | None = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
@@ -424,9 +475,11 @@ async def list_policies(
 async def create_policy(
     body: PolicyCreate,
     db: AsyncSession = Depends(get_db_session),
-    _user: CurrentUser = Depends(get_authenticated_user),
+    user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[PolicyResponse]:
-    """Create a network policy."""
+    """Create a network policy, scoped to the caller's org."""
+    logger.info("create_policy called for org_id=%s by user=%s", body.org_id, user.email)
+    require_org_access(str(body.org_id), user)  # Refuse a caller outside the target org
     policy = NetworkPolicy(
         org_id=body.org_id,
         mist_entity_id=body.mist_entity_id,
@@ -439,6 +492,11 @@ async def create_policy(
     )  # Hydrate ORM object from request body
     db.add(policy)  # Stage insert
     await db.flush()  # Push to DB to populate generated columns
+    logger.debug(
+        "create_policy: policy_id=%s created for org_id=%s",
+        policy.policy_id,
+        body.org_id,
+    )  # Log creation to confirm the flush completed
     return ResponseEnvelope(data=PolicyResponse.model_validate(policy))
 
 
@@ -449,15 +507,23 @@ async def recertify_policy(
     db: AsyncSession = Depends(get_db_session),
     user: CurrentUser = Depends(get_authenticated_user),
 ) -> ResponseEnvelope[PolicyResponse]:
-    """Recertify a policy before expiration."""
+    """Recertify a policy before expiration, scoped to the caller's org."""
+    logger.info("recertify_policy called for policy_id=%s by user=%s", policy_id, user.email)
     if not body.confirm:  # Reject unconfirmed recertify
         raise HTTPException(status_code=400, detail="confirm required")
     stmt = select(NetworkPolicy).where(NetworkPolicy.policy_id == policy_id)  # Look up policy
     policy = (await db.execute(stmt)).scalar_one_or_none()  # 0 or 1
     if policy is None:  # 404 path
         raise HTTPException(status_code=404, detail="Policy not found")
+    require_org_access(str(policy.org_id), user)  # Refuse a caller outside the org of this policy
     policy.last_reviewed_at = datetime.now(UTC)  # Stamp review time
     policy.reviewed_by = user.email  # Track who reviewed
     policy.version = policy.version + 1  # Bump version
     await db.flush()  # Push update
+    logger.debug(
+        "recertify_policy: policy_id=%s version=%s by user=%s",
+        policy_id,
+        policy.version,
+        user.email,
+    )  # Log recertification to confirm the bump completed
     return ResponseEnvelope(data=PolicyResponse.model_validate(policy))

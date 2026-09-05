@@ -54,7 +54,7 @@ class TelemetryEmitter:
             parent = os.path.dirname(file_path)
             if parent:
                 os.makedirs(parent, exist_ok=True)
-            self._handle = open(file_path, "a", encoding="utf-8")  # noqa: SIM115  # long-lived append handle
+            self._handle = open(file_path, "a", encoding="utf-8")  # long-lived append handle
         except OSError as exc:
             logging.warning("TelemetryEmitter: cannot open %s: %s", file_path, exc)
 

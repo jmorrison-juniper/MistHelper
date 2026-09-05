@@ -1,7 +1,14 @@
 # MistHelper Container Image
 # Compatible with both Docker and Podman (OCI-compliant)
-# Features: SSH access on port 2200, SQLite persistence, corporate SSL bypass
+# Features: SSH access on port 2200, SQLite persistence, TLS verification on
 # Usage: podman build -t misthelper . OR docker build -t misthelper .
+#
+# Corporate proxy support (issue #1906):
+# The image verifies every TLS certificate. It never disables the check.
+# If you build behind a TLS-inspecting proxy, add the proxy root certificate:
+#   podman build --build-arg INSTALL_CORPORATE_CA=true -t misthelper .
+# At run time, mount the proxy root certificate instead:
+#   -v /path/to/corp-root-ca.crt:/usr/local/share/ca-certificates/corp-root-ca.crt:ro
 FROM python:3.13-slim
 
 # Metadata following OCI standards
@@ -64,36 +71,59 @@ RUN mkdir -p /home/misthelper/.ssh && \
     chmod 700 /home/misthelper/.ssh && \
     chmod 600 /home/misthelper/.ssh/known_hosts
 
+# Optional corporate root certificate for a TLS-inspecting proxy.
+# The build keeps certificate verification on. It never turns the check off.
+# Set INSTALL_CORPORATE_CA=true to add the supplied root certificate to the
+# system trust store. The default value of false ships a clean trust store.
+ARG INSTALL_CORPORATE_CA=false
+ARG CORPORATE_CA_FILE=zscaler-root-ca.crt
+COPY ${CORPORATE_CA_FILE} /tmp/corporate-root-ca.crt
+RUN if [ "${INSTALL_CORPORATE_CA}" = "true" ]; then \
+        echo "[TLS] Adding the corporate root certificate to the trust store" && \
+        cp /tmp/corporate-root-ca.crt /usr/local/share/ca-certificates/corporate-root-ca.crt && \
+        update-ca-certificates ; \
+    else \
+        echo "[TLS] Skipping the corporate root certificate. The default trust store applies." ; \
+    fi && \
+    rm -f /tmp/corporate-root-ca.crt
+
 # Copy requirements first for better Docker layer caching
 COPY requirements.txt ./
 COPY pyproject.toml ./
 
-# Install Python dependencies with SSL bypass for corporate environments
-RUN pip install --no-cache-dir -r requirements.txt \
-        --trusted-host pypi.org \
-        --trusted-host pypi.python.org \
-        --trusted-host files.pythonhosted.org
+# Install Python dependencies. Every download validates the TLS certificate.
+# Warning: Do not add --trusted-host. That flag disables certificate
+# verification and lets an attacker replace a package during the build.
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY MistHelper.py __init__.py ./
+COPY scripts/ ./scripts/
 
 # Set ownership and switch to non-root user for application files
 RUN chown -R misthelper:misthelper /app
 
 # Copy and configure container entrypoint script
 COPY container/scripts/start.sh /start.sh
-RUN chmod +x /start.sh
+# The entrypoint runs the writer as root at container start. The writer carries
+# the runtime configuration into a file that the SSH session reads, because the
+# SSH daemon starts every session with a fresh environment. See issue #2181.
+COPY container/scripts/write-session-env.sh /usr/local/bin/write-session-env.sh
+RUN chmod +x /start.sh /usr/local/bin/write-session-env.sh
 
 USER misthelper
 
-# Environment variables for SSL bypass and container-specific configurations
+# Environment variables for container-specific configurations
 ENV PYTHONUNBUFFERED=1
 ENV OUTPUT_FORMAT=sqlite
 ENV DATABASE_PATH=/app/data/mist_data.db
-ENV PYTHONHTTPSVERIFY=0
-ENV SSL_VERIFY=false
-ENV REQUESTS_CA_BUNDLE=""
-ENV CURL_CA_BUNDLE=""
+# TLS trust settings. The image verifies every certificate by default.
+# update-ca-certificates writes the merged bundle to this same path, so a
+# mounted corporate root certificate works without any further change.
+ENV PYTHONHTTPSVERIFY=1
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+ENV CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 # Container-specific overrides: Disable UV and auto-installation for reliability
 ENV DISABLE_UV_CHECK=true
 ENV DISABLE_AUTO_INSTALL=true
@@ -106,8 +136,12 @@ VOLUME ["/app/data"]
 # Expose SSH port 2200 and Dash web viewer port 8050
 EXPOSE 2200 8050
 
-# Note: HEALTHCHECK removed for OCI/Podman compatibility
-# For health monitoring, use external tools or docker format
+# Health probe for the web portal readiness endpoint (issue #1863).
+# The image installs no curl, so the probe uses the Python interpreter that
+# already runs the application. A non-200 response raises HTTPError, the
+# command exits non-zero, and the runtime marks the container unhealthy.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD ["python", "-c", "import os,urllib.request;urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('WEB_PORT','8055')+'/ready',timeout=8)"]
 
 # Start both SSH server and MistHelper
 USER root

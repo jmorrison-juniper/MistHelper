@@ -8,9 +8,14 @@
 name: Quality Gates
 
 on:
+  # No branch filter here. A pull request against any base runs every gate.
+  # A filter that named main alone let a stacked pull request merge with zero
+  # checks, which a reviewer reads as clean rather than unmeasured. Issue #1952
+  # records that gap.
   pull_request:
-    branches: [main]
   push:
+    # The push trigger stays pinned to main. A push run on every branch would
+    # repeat the pull request run and add cost with no added signal.
     branches: [main]
   workflow_dispatch:
   workflow_call:
@@ -36,6 +41,21 @@ on:
       create-issues:
         type: boolean
         default: true
+
+# WHY this group: a second push to the same pull request must cancel the first
+# run. Without a group, both runs continue, and the 15 gates of the older run
+# spend minutes on a tree that no reviewer will read. One month of that waste
+# used the whole free allowance of the account.
+#
+# WHY a literal name: github.workflow reports the name of the caller when
+# another workflow starts this one through workflow_call. A literal keeps this
+# group distinct from the group of any caller.
+concurrency:
+  group: quality-gates-${{ github.event.pull_request.number || github.ref }}
+  # WHY this condition: a push to main must not cancel an earlier main run.
+  # That run reports the state of a merged tree, and the Auto-merge workflow
+  # reads it.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -67,8 +87,21 @@ env:
   PYDOCSTYLE_PATHS: 'src/ wsgi.py web_portal'
   # interrogate: every target clears the 90 percent floor, so this gate covers the
   # whole project. Lowest measured value is web_portal at 97.5 percent.
-  INTERROGATE_PATHS: 'src/ MistHelper.py wsgi.py starlink_dashboard.py web_portal tools'
+  INTERROGATE_PATHS: 'src/ MistHelper.py wsgi.py wsgi_capture.py starlink_dashboard.py web_portal tools'
   COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold || '80' }}
+  # Issue #1895: the ops platform suite keeps its own denominator and its own
+  # floor, so it can never move the root percentage. Issue #1883 unified the
+  # schema and unblocked the last 2 tests, so no test stays deselected now.
+  # This branch measures 56.21 percent, and the merge result measures 58.92
+  # percent, because main gained tests from other pull requests. The floor
+  # tracks the lower value, so a later revert on main cannot fail this gate for
+  # a reason that belongs to another change.
+  OPS_PLATFORM_COVERAGE_THRESHOLD: '56'
+  # The count floor proves the gate ran the tests. A broken import path drops a
+  # whole module from collection, and this floor turns that drop into a red gate.
+  # The suite collects 398 tests. If you delete a test on purpose, lower this
+  # number in the same commit.
+  OPS_PLATFORM_MIN_TESTS: '390'
   PYLINT_THRESHOLD: ${{ inputs.pylint-threshold || '9.5' }}
   INTERROGATE_THRESHOLD: ${{ inputs.interrogate-threshold || '90' }}
   # Vulture reports 0 findings at 90, at 80, and at 70. The cliff sits at 60, which
@@ -217,7 +250,18 @@ jobs:
         # uncovered lines to the denominator, so the percentage drops against the 80
         # floor without any test changing. Widen it only together with the tests that
         # cover the added code.
-        run: pytest --cov=${{ env.SRC_PATH }} --cov-fail-under=${{ env.COVERAGE_THRESHOLD }}
+        #
+        # Issue #2036: --timeout=120 gives each test 120 seconds before pytest marks
+        # it as FAILED with a traceback that names the hung call. The job limit is 15
+        # minutes, so a single stalled test now fails fast and visibly instead of
+        # silently consuming the full job budget.
+        run: pytest --cov=${{ env.SRC_PATH }} --cov-fail-under=${{ env.COVERAGE_THRESHOLD }} --timeout=120
+      - name: Report job timeout
+        # Issue #2036: a cancelled result means the job hit timeout-minutes, not that
+        # a test failed. This step writes a plain line so a reader can tell a stalled
+        # runner from a broken test without counting timestamps in the log.
+        if: cancelled()
+        run: echo "::error::The pytest job was cancelled at the timeout-minutes limit (15 min). A per-test timeout of 120 s should have caught any stalled test first. Check the log for a test that held the runner."
 
   # ──────────────────────────────────────────────────────────────
   # SECURITY
@@ -245,6 +289,41 @@ jobs:
       # Pinned in requirements-dev.txt so Dependabot raises a new release as a
       # reviewable pull request rather than breaking CI on an unrelated commit (issue #1718)
       - run: pip install -r requirements-dev.txt  # pinned (issue #1779)
+      - name: Check the bandit exclude list on both path separators
+        # Issue #1722: bandit compares an exclude entry against a scanned path with a
+        # plain substring test, and it never normalizes the separator. A forward-slash
+        # entry matches a Linux path only. A Windows run then scanned the analyzer
+        # fixtures and reported 42 extra findings that this job never sees.
+        # This job runs on Linux, so only an explicit check can hold the Windows form.
+        run: |
+          python - <<'PY'
+          import pathlib  # Reads pyproject.toml from the checkout root.
+          import tomllib  # Parses the TOML config that bandit also reads.
+
+          from bandit.core.manager import _is_file_included  # The matcher bandit uses.
+
+          config = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
+          excludes = config["tool"]["bandit"]["exclude_dirs"]  # The list under test.
+          failures = []  # Collects every problem, so one run reports all of them.
+          for entry in excludes:  # A separator-free entry matches on both platforms.
+              if "/" not in entry and "\\" not in entry:
+                  continue  # No separator, so no platform gap.
+              posix = entry.replace("\\", "/")  # The Linux spelling of this entry.
+              windows = posix.replace("/", "\\")  # The Windows spelling of this entry.
+              for spelling in (posix, windows):  # Both spellings must be present.
+                  if spelling not in excludes:
+                      failures.append("exclude_dirs misses the spelling %r" % spelling)
+          samples = [  # The fixture tree that issue #1722 named, in both spellings.
+              "./tools/test_quality_analyzer/fixtures/bad/weak.py",
+              ".\\tools\\test_quality_analyzer\\fixtures\\bad\\weak.py",
+          ]
+          for sample in samples:  # bandit must exclude the sample on either platform.
+              if _is_file_included(sample, ["*.py"], excludes):
+                  failures.append("bandit would scan %s" % sample)
+          if failures:  # A failure here means a Windows run and CI disagree.
+              raise SystemExit("issue #1722 guard failed: " + "; ".join(failures))
+          print("bandit exclude_dirs covers both path separators")
+          PY
       - name: Run Bandit
         # -c pyproject.toml picks up [tool.bandit] targets/exclude_dirs (issue #881)
         # No severity flag: the gate fails on a finding at any severity, including LOW (issue #889)
@@ -426,6 +505,23 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: python scripts/lint_diagram_refs.py
 
+  citation_lint:
+    name: "Citation reference lint"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      # Issue #1998: a citation of the form `path:line` went stale in silence.
+      # The check reads `src` and `tests` alone, because those two folders hold
+      # the text that a maintainer reads while changing code. A dated record
+      # under `specs/` keeps its citation on purpose.
+      - run: python -m tools.check_citations src tests
+
   menu_reference_drift:
     name: "Menu reference drift"
     runs-on: ubuntu-latest
@@ -459,7 +555,38 @@ jobs:
       - mypy
     if: ${{ always() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
+    # Issue #2242: the browser suite could cover no write journey, because the
+    # portal refuses a write it cannot guard with the site lock. With no lock
+    # store the run creation answered 503, and 50 browser tests skipped. The run
+    # record needs the document store for the same reason.
+    #
+    # These two services give the job both stores, so the write journey runs.
+    # Neither one holds production data, and both die with the job.
+    services:
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+      arangodb:
+        image: arangodb/arangodb:3.12
+        env:
+          # A throwaway value for a throwaway service. The store dies with the
+          # job, it holds no production data, and it answers on loopback alone.
+          ARANGO_ROOT_PASSWORD: e2e-throwaway-password
+        ports:
+          - 8529:8529
+        options: >-
+          --health-cmd "arangosh --server.endpoint tcp://127.0.0.1:8529 --server.username root --server.password $ARANGO_ROOT_PASSWORD --javascript.execute-string 'db._version()'"
+          --health-interval 10s
+          --health-timeout 10s
+          --health-retries 30
+          --health-start-period 20s
     steps:
       - uses: actions/checkout@v7
         with:
@@ -472,8 +599,302 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install -r requirements-dev.txt  # pinned pytest and timeout plugin (issue #1779)
+      - name: Download the browser
+        # Issue #2241: the playwright package ships no browser. Without this step
+        # every browser test reports a skip, and pytest reports a skip as a pass,
+        # so this gate would report green while it opened no page.
+        run: python -m playwright install --with-deps chromium
       - name: Run E2E smoke tests
-        run: pytest tests/e2e/ -v --timeout=60
+        # UPGRADE_PORTAL_E2E_STRICT turns a missing browser package into a
+        # collection failure. Without it the two steps above could silently stop
+        # working and this gate would keep reporting green over an empty suite.
+        #
+        # The two store addresses point at the service containers above. Issue
+        # #2242 measured that a run without them skips every write journey.
+        env:
+          UPGRADE_PORTAL_E2E_STRICT: "1"
+          REDIS_HOST: "127.0.0.1"
+          REDIS_PORT: "6379"
+          ARANGO_HOST: "http://127.0.0.1:8529"
+          ARANGO_ROOT_PASSWORD: e2e-throwaway-password
+        run: pytest tests/e2e/ -v --timeout=180
+
+  # ──────────────────────────────────────────────────────────────
+  # OPS PORTAL (TypeScript + React)
+  # ──────────────────────────────────────────────────────────────
+  ops_portal:
+    name: "ops-portal (npm audit, types, lint, tests)"
+    # Issue #1847: every gate above reads Python only, so no check covered the
+    # TypeScript and React application in ops-portal/. pip-audit parses
+    # requirements.txt, so it can never read an npm lockfile. Two HIGH advisories
+    # therefore sat on main, and a dependency bump to this directory could break
+    # the build while CI stayed green. This job closes both gaps.
+    #
+    # The job runs on every event rather than behind an ops-portal/** path filter.
+    # A filtered job reports "skipped", and a skipped result is ambiguous both to
+    # branch protection and to the two summary jobs below, which read
+    # needs.ops_portal.result. The whole job costs well under a minute with the
+    # npm cache warm, so an unconditional run buys a clear signal cheaply.
+    runs-on: ubuntu-latest
+    # Issue #2257: the job held one 10 minute budget for four steps, and no step
+    # had a budget of its own. The audit step reaches a remote service that this
+    # repository does not own, and that service consumed the whole budget twice:
+    # once behind a cold npm cache, and once when it answered "Service
+    # Unavailable" for five minutes. Both runs reported a failure that graded no
+    # code, because the three later steps never ran.
+    #
+    # The job budget stays above the sum of the step budgets on purpose. A step
+    # timeout names the step that ran long. A job timeout reports "cancelled"
+    # with no cause, which is what made the first report hard to read.
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: ops-portal
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ops-portal/package-lock.json
+      - name: Install from the lockfile
+        # npm ci fails when package.json and package-lock.json disagree, so this
+        # step also proves the lockfile is in sync.
+        #
+        # --legacy-peer-deps is required today, and it must stay. Two plugins
+        # cap their eslint peer range below the installed eslint 10.7.0.
+        # eslint-plugin-jsx-a11y 6.10.2 declares "<=^9", and
+        # eslint-plugin-react 7.37.5 declares "<=^9.7". Both are the newest
+        # published releases, so no upgrade clears the conflict yet. A strict
+        # resolve fails with ERESOLVE. Issue #1852 records the measurement.
+        # Delete this flag when both plugins publish an eslint 10 peer range.
+        #
+        # The install reaches the registry, so it carries its own budget. A cold
+        # cache took 5 minutes once, and this bound leaves room for that.
+        timeout-minutes: 8
+        run: npm ci --legacy-peer-deps
+      # The three steps below block a merge. Issue #1852 fixed the three
+      # configuration defects that kept them advisory. tsconfig.json no longer
+      # sets the deprecated baseUrl, eslint reads a flat eslint.config.js, and
+      # the project ships a vitest suite for the confirmation dialog.
+      #
+      # Issue #2257 moved these three above the audit. Each one reads the code
+      # and needs no network, so a registry outage must never hide their result.
+      - name: Type check
+        timeout-minutes: 5
+        run: npm run typecheck
+      - name: Lint
+        timeout-minutes: 5
+        run: npm run lint
+      - name: Unit tests
+        timeout-minutes: 5
+        run: npm run test
+      - name: Audit the npm dependency tree
+        # This is the blocking security check and the reason issue #1847 exists.
+        # It fails on a HIGH or a CRITICAL advisory. Dependabot reports a MODERATE
+        # or a LOW finding as a pull request, so those do not block a merge here.
+        #
+        # Issue #2257: the audit reaches a remote service, and that service
+        # answered "Service Unavailable" for five minutes on one run. One retry
+        # after a short pause clears a brief outage. A longer outage then fails
+        # this step alone, and the three steps above have already reported.
+        #
+        # Second measurement, 2026-09-04: the first shape of this step called
+        # `npm audit` twice for each attempt, once for the status and once for
+        # the reason, and neither call carried a network bound. Four unbounded
+        # calls passed the step budget, so the step reported a timeout instead
+        # of the cause. This shape calls the audit one time for each attempt and
+        # bounds the call, so a dead endpoint fails fast and says so.
+        timeout-minutes: 8
+        run: |
+          # The default shell is `bash -e`, so every status test below uses `if`.
+          attempt=1
+          while [ "${attempt}" -le 2 ]; do
+            # One call answers both questions. The JSON body carries an `error`
+            # key for an outage, and it carries the advisory counts for a real
+            # finding. `--audit-level` still decides the exit status.
+            if body="$(npm audit --audit-level=high --json --fetch-timeout=60000 2>&1)"; then
+              echo "The npm advisory service answered and reported no finding above the threshold."
+              exit 0
+            fi
+            if ! printf '%s' "${body}" | grep -q '"error"'; then
+              echo "::error::npm audit reported an advisory at the high level or above."
+              printf '%s\n' "${body}" | head -c 4000
+              exit 1
+            fi
+            echo "The audit endpoint did not answer on attempt ${attempt}."
+            if [ "${attempt}" -eq 2 ]; then
+              echo "::error::The npm audit endpoint stayed unreachable. This is not an advisory."
+              printf '%s\n' "${body}" | head -c 1000
+              exit 1
+            fi
+            sleep 30
+            attempt=$((attempt + 1))
+          done
+
+  # ──────────────────────────────────────────────────────────────
+  # OPS PLATFORM (FastAPI + Celery sub-project)
+  # ──────────────────────────────────────────────────────────────
+  ops_platform_pytest:
+    name: "pytest (ops platform)"
+    # Issue #1895: no gate read mist-ops-platform/tests. The root
+    # pyproject.toml sets testpaths = ["tests"], and the "pytest (coverage
+    # gate)" job runs pytest from the repository root with no path argument.
+    # pytest therefore collected the root tests/ directory only, so every ops
+    # platform pull request reported green while nothing ran the changed code.
+    #
+    # The job runs from mist-ops-platform, so the sub-project pyproject.toml
+    # supplies testpaths, asyncio_mode, and the marker list. The job runs on
+    # every event rather than behind a path filter, because a skipped result is
+    # ambiguous to a reviewer and to a branch protection rule.
+    #
+    # The gate blocks. It runs 300 tests and it fails on a red test, on a
+    # coverage drop, and on a drop in the collected count.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: mist-ops-platform
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install dependencies
+        # Issue #2034: install from pyproject.toml so runtime and dev packages
+        # come from one source. The editable install reads [project.dependencies]
+        # (runtime) and [project.optional-dependencies].dev (test tools) together,
+        # so a new runtime package never needs a matching entry in a second file.
+        #
+        # requirements-dev.txt adds the two test-infrastructure packages that
+        # mist-ops-platform/pyproject.toml does not own:
+        #   pytest-timeout: needed for --timeout=120 (issue #2036).
+        #   httpx2: starlette 0.49+ imports httpx2 inside TestClient. The runner
+        #     installs starlette through fastapi, so every TestClient test raises
+        #     ModuleNotFoundError without this pin.
+        run: pip install -e ".[dev]" -r requirements-dev.txt
+      - name: Confirm the suite collects its tests
+        # A gate that collects nothing still exits green. That result hides a
+        # broken import path and is worse than no gate. This step counts the
+        # collected tests and fails when the count drops below the floor.
+        run: |
+          set -o pipefail
+          COUNT=$(pytest --collect-only -q | grep -c '::' || true)
+          echo "Collected $COUNT tests"
+          if [ "$COUNT" -lt "$OPS_PLATFORM_MIN_TESTS" ]; then
+            echo "::error::Collected $COUNT tests. The floor is $OPS_PLATFORM_MIN_TESTS."
+            exit 1
+          fi
+      - name: Run tests with coverage
+        # Issue #888: the root gate keeps its own SRC_PATH denominator. This job
+        # measures mist-ops-platform/src only, so neither percentage moves the
+        # other.
+        #
+        # This job deselected 2 tests until issue #1883. They asserted the table
+        # names that migration 0001 creates, and the ORM models declared other
+        # names. Migration 0003_align_schema_with_orm unified the two schemas on
+        # the ORM models, so both tests now pass and the deselect list is empty.
+        # Issue #1897 tracked that removal.
+        # Do not add a test to a deselect list to make a new failure go away.
+        # Fix the code instead.
+        run: |
+          pytest --cov=src \
+            --cov-fail-under=${{ env.OPS_PLATFORM_COVERAGE_THRESHOLD }} \
+            --timeout=120  # Issue #2036: fail fast on a stalled test instead of consuming the full job budget
+      - name: Report job timeout
+        # Issue #2036: a cancelled result means the job hit timeout-minutes. This
+        # step writes a plain line so a reader can tell a stalled runner from a
+        # broken test without counting timestamps in the log.
+        if: cancelled()
+        run: echo "::error::The ops platform pytest job was cancelled at the timeout-minutes limit (15 min). A per-test timeout of 120 s should have caught any stalled test first. Check the log for a test that held the runner."
+
+  ops_platform_ruff:
+    name: "Ruff (ops platform)"
+    # Issue #1974: mist-ops-platform/pyproject.toml declares its own stricter
+    # [tool.ruff] configuration, and no gate ever read it. The root
+    # pyproject.toml names the subtree in extend-exclude, and every root lint job
+    # runs from the repository root, so "ruff check ." skipped the whole
+    # sub-project. The sub-project declared a standard that nothing enforced.
+    #
+    # The cost was real. An F821 undefined name reached production in
+    # src/worker/sync/events.py, where the documented fallback called uuid4
+    # without an import. Issue #1975 repaired that crash. This job stops the next
+    # one.
+    #
+    # The job runs from mist-ops-platform, so ruff discovers the sub-project
+    # configuration. Config discovery, and not path exclusion, is the cause of
+    # the gap, so --force-exclude does not solve it.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: mist-ops-platform
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install ruff
+        # The root file pins the ruff version that the "Ruff (lint)" job uses
+        # (issue #1779). Both gates install the same pin, so a rule change
+        # between ruff releases cannot move one gate without the other. The
+        # sub-project requirements-dev.txt carries test packages only.
+        run: pip install -r ../requirements-dev.txt
+      - name: Confirm ruff reads the sub-project configuration
+        # A gate that falls back to the root configuration reports green while it
+        # checks nothing. That result is the exact defect this job repairs, so
+        # the job proves the config before it trusts the result. The step names
+        # the resolved settings file and fails on any other file.
+        run: |
+          ruff check --show-settings . > ruff-settings.txt
+          SETTINGS=$(grep '^Settings path:' ruff-settings.txt)
+          rm -f ruff-settings.txt
+          echo "$SETTINGS"
+          case "$SETTINGS" in
+            *mist-ops-platform*pyproject.toml*) ;;
+            *)
+              echo "::error::Ruff did not read mist-ops-platform/pyproject.toml."
+              exit 1
+              ;;
+          esac
+      - name: Ruff correctness gate (blocking)
+        # The full sub-project configuration reports 393 findings today. A gate
+        # that fails on the first day blocks every pull request, so this step
+        # is a ratchet. It selects the correctness families and it measures zero,
+        # which makes it green today and red on the first regression.
+        #
+        # F, B, and E9 hold the rules that find defects rather than style. F821
+        # (undefined name), F841 (unused variable), F811 (redefinition), F632
+        # (identity comparison), B006 (mutable default), and B904 (lost exception
+        # context) all block from this day.
+        #
+        # Three rules stay out, with the count each reports today. Each one is
+        # deferred, not accepted. Never widen this ignore list to clear a new
+        # finding. Fix the code, or clear the family and delete its entry here.
+        #   F401 unused-import (69). Mechanical. Issue #1974 tracks the sweep.
+        #   B008 function-call-in-default-argument (122). Every hit is the
+        #        FastAPI Depends and Query idiom. The repair is the
+        #        flake8-bugbear extend-immutable-calls setting, not a source
+        #        edit, so it belongs in a separate change.
+        #   B905 zip-without-explicit-strict (1). One call site.
+        #
+        # mist-ops-platform/docs/ruff-ratchet.md records the full split.
+        run: ruff check . --select F,B,E9 --ignore F401,B008,B905 --output-format=concise
+      - name: Ruff full configuration report (advisory)
+        # The blocking step above covers a subset. This step runs the whole
+        # sub-project configuration, so every remaining finding stays visible in
+        # the job log. It does not block, because 393 findings cannot clear in
+        # one change. Read the count here to tighten the blocking step.
+        continue-on-error: true
+        run: ruff check . --statistics
 
   # ──────────────────────────────────────────────────────────────
   # FAILURE → GITHUB ISSUES (auto-create issues for each failure)
@@ -492,6 +913,7 @@ jobs:
       - vulture
       - pydocstyle
       - interrogate
+      - ops_portal
     if: ${{ always() && contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     permissions:
@@ -530,17 +952,21 @@ jobs:
           RESULTS[vulture]="${{ needs.vulture.result }}"
           RESULTS[pydocstyle]="${{ needs.pydocstyle.result }}"
           RESULTS[interrogate]="${{ needs.interrogate.result }}"
+          RESULTS[ops_portal]="${{ needs.ops_portal.result }}"
 
-          # Scope: PR failures get scoped title (per-PR), push failures use gate-only title (dedup across pushes).
+          # Scope: a PR failure gets a scoped title (per-PR). A branch failure uses a
+          # gate-only title, so repeated runs on the same branch reuse one issue.
           if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_NUMBER" ]; then
             SCOPE="PR #${PR_NUMBER}"
             SEARCH_PREFIX="CI: quality-gate"
             TITLE_SUFFIX=" (PR #${PR_NUMBER})"
             PR_LINK="**PR**: #${PR_NUMBER} — ${PR_TITLE}"
           else
-            SCOPE="push to ${HEAD_REF}"
+            # A run on main now arrives by dispatch as well as by push, so the
+            # wording names the branch instead of the trigger. See issue #1851.
+            SCOPE="run on ${HEAD_REF}"
             TITLE_SUFFIX=""
-            PR_LINK="**Push**: \`${HEAD_REF}\`"
+            PR_LINK="**Run scope**: \`${HEAD_REF}\`"
           fi
 
           for gate in "${!RESULTS[@]}"; do
@@ -593,6 +1019,7 @@ jobs:
       - vulture
       - pydocstyle
       - interrogate
+      - ops_portal
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
@@ -609,7 +1036,10 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_REF: ${{ github.head_ref || github.ref_name }}
-          IS_MAIN_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          # A run on main is authoritative for the issue state. A merge that
+          # GITHUB_TOKEN performs starts no push run, so the Auto-merge
+          # workflow dispatches this workflow instead. See issue #1851.
+          IS_MAIN_RUN: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' }}
         run: |
           declare -A RESULTS
           RESULTS[ruff]="${{ needs.ruff.result }}"
@@ -623,16 +1053,17 @@ jobs:
           RESULTS[vulture]="${{ needs.vulture.result }}"
           RESULTS[pydocstyle]="${{ needs.pydocstyle.result }}"
           RESULTS[interrogate]="${{ needs.interrogate.result }}"
+          RESULTS[ops_portal]="${{ needs.ops_portal.result }}"
 
           for gate in "${!RESULTS[@]}"; do
             result="${RESULTS[$gate]}"
             if [ "$result" = "success" ]; then
               # On PR events: close only the PR-scoped issue for this gate.
-              # On main push: close all open issues for this gate (main is authoritative).
+              # On a run on main: close all open issues for this gate (main is authoritative).
               if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_NUMBER" ]; then
                 EXACT_TITLE="CI: quality-gate \`${gate}\` failed (PR #${PR_NUMBER})"
                 SEARCH_QUERY="in:title \"${EXACT_TITLE}\""
-              elif [ "$IS_MAIN_PUSH" = "true" ]; then
+              elif [ "$IS_MAIN_RUN" = "true" ]; then
                 SEARCH_QUERY="in:title \"CI: quality-gate \`${gate}\` failed\""
               else
                 continue

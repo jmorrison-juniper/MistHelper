@@ -180,7 +180,7 @@ class MarvisTroubleshootUtils:
             )
             logging.debug("Marvis client response received (has_data=%s)", bool(response.data))  # WHY: post log.
             MarvisTroubleshootUtils._handle_client_response(deps, response, client_mac, client_type)  # WHY: dispatch.
-        except Exception as error:  # noqa: BLE001 - Marvis SDK raises bare Exception subclasses.
+        except Exception as error:  # Marvis SDK raises bare Exception subclasses.
             logging.error("Failed to troubleshoot client %s: %s", client_mac, error)  # WHY: log full context.
             MarvisTroubleshootUtils._print_error_guidance(  # WHY: user-visible guidance banner.
                 "client", f"! Failed to troubleshoot client: {error}"
@@ -216,7 +216,7 @@ class MarvisTroubleshootUtils:
             )
             logging.debug("Marvis device response received (has_data=%s)", bool(response.data))  # WHY: post log.
             MarvisTroubleshootUtils._handle_device_response(deps, response, device_mac, device_name)  # WHY: dispatch.
-        except Exception as error:  # noqa: BLE001 - bare Exception is the SDK contract.
+        except Exception as error:  # bare Exception is the SDK contract.
             logging.exception("Exception in device_performance: %s", error)  # WHY: log with traceback.
             MarvisTroubleshootUtils._print_error_guidance(  # WHY: user-visible guidance banner.
                 "device", f"! Failed to troubleshoot device: {error}"
@@ -242,7 +242,7 @@ class MarvisTroubleshootUtils:
             )
             logging.debug("Marvis network response received (has_data=%s)", bool(response.data))  # WHY: post log.
             MarvisTroubleshootUtils._handle_network_response(deps, response, site_id)  # WHY: dispatch into display.
-        except Exception as error:  # noqa: BLE001 - bare Exception is the SDK contract.
+        except Exception as error:  # bare Exception is the SDK contract.
             logging.exception("Exception in network_connectivity: %s", error)  # WHY: log with traceback.
             MarvisTroubleshootUtils._print_error_guidance(  # WHY: user-visible guidance banner.
                 "network", f"! Failed to troubleshoot network: {error}"
@@ -710,7 +710,7 @@ class MarvisTroubleshootUtils:
             MarvisTroubleshootUtils._display_org_features(org_info)  # WHY: show Marvis-related features.
             MarvisTroubleshootUtils._fetch_org_insights(org_id, deps)  # WHY: pull live insights endpoints.
             MarvisTroubleshootUtils._display_usage_guide()  # WHY: static usage guidance footer.
-        except Exception as error:  # noqa: BLE001 - surface to UI via shared error handler.
+        except Exception as error:  # surface to UI via shared error handler.
             MarvisTroubleshootUtils._handle_insights_error(error)  # WHY: standard error path.
 
     @staticmethod
@@ -812,7 +812,7 @@ class MarvisTroubleshootUtils:
             insights_found = MarvisTroubleshootUtils._iter_insight_endpoints(org_id, deps)  # WHY: loop dispatch.
             if not insights_found:  # WHY: tell user when no endpoint produced data.
                 logging.warning("\n  No organization-level insights currently available.")  # WHY: user message.
-        except Exception as error:  # noqa: BLE001 - broad SDK exception surface.
+        except Exception as error:  # broad SDK exception surface.
             logging.warning("Could not retrieve organization insights: %s", error)  # WHY: log context.
             logging.warning("! Could not retrieve insights: %s", error)  # WHY: user-facing failure.
 
@@ -880,7 +880,7 @@ class MarvisTroubleshootUtils:
             if not response.data:  # WHY: skip empty responses.
                 return False  # WHY: nothing to render.
             return MarvisTroubleshootUtils._process_insight_response(endpoint_name, response.data, deps)  # WHY: render.
-        except Exception as endpoint_error:  # noqa: BLE001 - logged via helper.
+        except Exception as endpoint_error:  # logged via helper.
             MarvisTroubleshootUtils._log_endpoint_error(endpoint_name, endpoint_error)  # WHY: classify + log.
             return False  # WHY: treat as no data.
 

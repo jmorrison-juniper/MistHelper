@@ -730,7 +730,7 @@ class OrgExportUtils:
             raise  # Re-raise to caller.
 
     @staticmethod
-    def sle_metrics(fast: bool = False):  # noqa: C901, PLR0912, PLR0915
+    def sle_metrics(fast: bool = False):
         """Export organization-wide SLE (Service Level Experience) metrics to OrgSLEMetrics.csv."""
         from src.refactors.serial_cc.sle_metrics import SLEMetricsService  # Import the SLE service.
 
@@ -740,7 +740,7 @@ class OrgExportUtils:
     def ssid_template_consolidation() -> None:  # Consolidate SSID templates.
         """SSID template consolidation workflow (Menu #145). Delegates to src.ssid_consolidation."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession, DEFAULT_API_PAGE_LIMIT, helpers.
-        from src.ssid_consolidation.ssid_template_consolidation import (  # noqa: PLC0415
+        from src.ssid_consolidation.ssid_template_consolidation import (
             SSIDTemplateConsolidationManager as _Impl,
         )
 

@@ -9,8 +9,12 @@ Uses identity-checked teardown to avoid cross-test sys.modules contamination.
 
 from __future__ import annotations
 
+import ast
+import inspect
+import io
 import logging
 import sys
+import textwrap
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -23,6 +27,7 @@ _saved_mistapi = sys.modules.get("mistapi")
 _our_mock = MagicMock()
 sys.modules["mistapi"] = _our_mock
 try:
+    from src.device._utility_commands_action import _UtilityCommandsAction
     from src.device._utility_commands_websocket import ExportResultSpec, StreamWsSpec
     from src.device.utility_commands import DeviceUtilityCommands, UtilityCommandsDeps
 finally:
@@ -33,6 +38,21 @@ finally:
 
 _WS_LOGGER = "src.device._utility_commands_websocket"  # WHY: caplog target for #886 print-to-logger tests
 _SEL_LOGGER = "src.device._utility_commands_selection"  # WHY: caplog target for #886 print-to-logger tests
+_ZTP_SECRET = "secret123"  # WHY: one literal keeps every ZTP assertion on the same value
+
+
+class _FakeTerminalStdout(io.StringIO):
+    """Captured stream that reports itself as a live terminal."""
+
+    def isatty(self) -> bool:
+        return True  # WHY: drive the branch that prints the ZTP credential
+
+
+class _FakePipeStdout(io.StringIO):
+    """Captured stream that reports itself as a pipe or a redirect."""
+
+    def isatty(self) -> bool:
+        return False  # WHY: drive the branch that withholds the ZTP credential
 
 
 def setup_module() -> None:
@@ -2098,22 +2118,96 @@ class TestReadoptDevice:
 class TestGetZtpPassword:
     """Tests for get_ztp_password."""
 
+    @staticmethod
+    def _run_with_stdout(
+        duc: DeviceUtilityCommands,
+        mock_api: MagicMock,
+        stream: io.StringIO,
+    ) -> str:
+        """Run menu 144 against a stub stdout and return the captured text."""
+        resp = MagicMock()
+        resp.data = {"password": _ZTP_SECRET}
+        mock_api.api.v1.sites.devices.getSiteDeviceZtpPassword.return_value = resp
+        with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")):
+            with patch.object(sys, "stdout", stream):
+                duc.get_ztp_password()
+        return stream.getvalue()
+
     def test_early_return(self, duc: DeviceUtilityCommands) -> None:
         with patch.object(duc, "_select_site_and_device", return_value=None):
             duc.get_ztp_password()
 
-    def test_success(
+    def test_success_on_terminal_prints_value(
+        self,
+        duc: DeviceUtilityCommands,
+        mock_api: MagicMock,
+    ) -> None:
+        output = self._run_with_stdout(duc, mock_api, _FakeTerminalStdout())
+        assert _ZTP_SECRET in output
+        assert "ZTP Password:" in output
+
+    def test_terminal_warns_before_it_shows_the_value(
+        self,
+        duc: DeviceUtilityCommands,
+        mock_api: MagicMock,
+    ) -> None:
+        output = self._run_with_stdout(duc, mock_api, _FakeTerminalStdout())
+        warning_index = output.index("Warning:")
+        value_index = output.index(_ZTP_SECRET)
+        assert warning_index < value_index
+        assert "session recording" in output[:value_index]
+        assert "live credential" in output[:value_index]
+
+    def test_terminal_prints_the_copy_guidance_after_the_value(
+        self,
+        duc: DeviceUtilityCommands,
+        mock_api: MagicMock,
+    ) -> None:
+        output = self._run_with_stdout(duc, mock_api, _FakeTerminalStdout())
+        assert output.index("Copy the value now") > output.index(_ZTP_SECRET)
+
+    def test_terminal_output_keeps_the_contract_line_order(
+        self,
+        duc: DeviceUtilityCommands,
+        mock_api: MagicMock,
+    ) -> None:
+        lines = [line for line in self._run_with_stdout(duc, mock_api, _FakeTerminalStdout()).splitlines() if line]
+        assert lines[0].startswith("Warning:")
+        assert lines[1] == f"-> ZTP Password: {_ZTP_SECRET}"
+        assert lines[2].startswith("-> Copy the value now")
+        assert len(lines) == 3
+
+    def test_non_terminal_withholds_value(
         self,
         duc: DeviceUtilityCommands,
         mock_api: MagicMock,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
-        resp = MagicMock()
-        resp.data = {"password": "secret123"}
-        mock_api.api.v1.sites.devices.getSiteDeviceZtpPassword.return_value = resp
-        with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")):
-            duc.get_ztp_password()
-            assert "secret123" in capsys.readouterr().out
+        output = self._run_with_stdout(duc, mock_api, _FakePipeStdout())
+        assert _ZTP_SECRET not in output
+        assert _ZTP_SECRET not in capsys.readouterr().out
+        assert "withheld" in output
+        assert "interactive terminal" in output
+
+    def test_non_terminal_never_logs_the_value(
+        self,
+        duc: DeviceUtilityCommands,
+        mock_api: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        with caplog.at_level(logging.DEBUG):
+            self._run_with_stdout(duc, mock_api, _FakePipeStdout())
+        assert _ZTP_SECRET not in caplog.text
+
+    def test_terminal_never_logs_the_value(
+        self,
+        duc: DeviceUtilityCommands,
+        mock_api: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        with caplog.at_level(logging.DEBUG):
+            self._run_with_stdout(duc, mock_api, _FakeTerminalStdout())
+        assert _ZTP_SECRET not in caplog.text
 
     def test_no_password_data(
         self,
@@ -2137,6 +2231,85 @@ class TestGetZtpPassword:
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")):
             duc.get_ztp_password()
             assert "ztp boom" in capsys.readouterr().out
+
+
+class TestStdoutIsTerminal:
+    """Tests for the stdout terminal check that guards the ZTP credential."""
+
+    def test_true_for_a_terminal(self) -> None:
+        with patch.object(sys, "stdout", _FakeTerminalStdout()):
+            assert _UtilityCommandsAction._stdout_is_terminal() is True
+
+    def test_false_for_a_pipe(self) -> None:
+        with patch.object(sys, "stdout", _FakePipeStdout()):
+            assert _UtilityCommandsAction._stdout_is_terminal() is False
+
+    def test_false_when_the_stream_has_no_isatty(self) -> None:
+        with patch.object(sys, "stdout", MagicMock(spec=[])):
+            assert _UtilityCommandsAction._stdout_is_terminal() is False
+
+    def test_false_when_isatty_raises(self) -> None:
+        closed = MagicMock()
+        closed.isatty.side_effect = ValueError("stream closed")
+        with patch.object(sys, "stdout", closed):
+            assert _UtilityCommandsAction._stdout_is_terminal() is False
+
+
+class TestZtpCredentialMigrationRule:
+    """Blocks an issue #886 print-to-logging migration of the ZTP credential.
+
+    Issue #1735 and CodeQL alert 173 record the reason. A mechanical rewrite
+    of the credential print would write a live password into
+    ``data/script.log``. These tests state the rule in code, so the rule
+    survives a comment removal.
+    """
+
+    @staticmethod
+    def _parse(func: object) -> ast.Module:
+        """Return the parsed source tree of one function."""
+        return ast.parse(textwrap.dedent(inspect.getsource(func)))
+
+    @staticmethod
+    def _logging_calls(tree: ast.Module) -> list[ast.Call]:
+        """Return every call whose target is an attribute of ``logging``."""
+        calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)]
+        return [
+            call
+            for call in calls
+            if isinstance(call.func, ast.Attribute)
+            and isinstance(call.func.value, ast.Name)
+            and call.func.value.id == "logging"
+        ]
+
+    def test_credential_print_has_no_logging_call(self) -> None:
+        tree = self._parse(_UtilityCommandsAction._print_ztp_credential)
+        assert self._logging_calls(tree) == []
+
+    def test_withheld_notice_has_no_logging_call(self) -> None:
+        tree = self._parse(_UtilityCommandsAction._print_ztp_withheld)
+        assert self._logging_calls(tree) == []
+
+    def test_renderer_never_passes_the_credential_to_a_log_record(self) -> None:
+        tree = self._parse(_UtilityCommandsAction._render_ztp_response.__func__)
+        for call in self._logging_calls(tree):
+            names = {node.id for node in ast.walk(call) if isinstance(node, ast.Name)}
+            assert "ztp_credential" not in names
+
+    def test_credential_print_stays_behind_the_terminal_check(self) -> None:
+        source = inspect.getsource(_UtilityCommandsAction._render_ztp_response.__func__)
+        assert "_stdout_is_terminal()" in source
+        assert "_print_ztp_credential(ztp_credential)" in source
+
+    def test_credential_print_carries_the_review_record(self) -> None:
+        doc = inspect.getdoc(_UtilityCommandsAction._print_ztp_credential) or ""
+        assert "2026-08-22" in doc
+        assert "#1735" in doc
+        assert "#886" in doc
+
+    def test_source_puts_the_warning_before_the_credential(self) -> None:
+        source = inspect.getsource(_UtilityCommandsAction._print_ztp_credential)
+        body = source.split('"""')[-1]
+        assert body.index("_ZTP_REVEAL_WARNING") < body.index("ztp_credential")
 
 
 class TestGetConfigCommands:

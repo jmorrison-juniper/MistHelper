@@ -144,7 +144,7 @@ class SingleCommandRunner:
                 request, log_ctx, logger
             )
             return single_cmd_success  # WHY: propagate session outcome to the caller.
-        except Exception as run_error:  # noqa: BLE001 - top-level fallback mirrors original behavior
+        except Exception as run_error:  # top-level fallback mirrors original behavior
             SingleCommandRunner._handle_run_error(request.hostname, run_error, log_ctx, logger)  # WHY: log path.
             return False  # WHY: signal caller that the command failed.
         finally:
@@ -320,7 +320,7 @@ class SingleCommandRunner:
         try:
             final_success = single_cmd_success if isinstance(single_cmd_success, bool) else False  # WHY: type guard.
             log_ctx.writer(SingleCommandRunner._build_footer(final_success, log_ctx.log_file))  # WHY: verbatim.
-        except Exception as footer_error:  # noqa: BLE001 - footer is best-effort
+        except Exception as footer_error:  # footer is best-effort
             SingleCommandRunner._write_fallback_footer(log_ctx.writer, footer_error, logger)  # WHY: last-resort.
 
     @staticmethod
@@ -347,5 +347,5 @@ class SingleCommandRunner:
         try:
             simple_footer = f"Session completed at {datetime.now().strftime(_TS_FMT_HUMAN)}"  # WHY: verbatim.
             writer(simple_footer)  # WHY: attempt to write the minimal fallback footer.
-        except Exception as fallback_error:  # noqa: BLE001 - last-resort path
+        except Exception as fallback_error:  # last-resort path
             logger.error("Even simple footer failed: %s", fallback_error)  # WHY: give up gracefully.

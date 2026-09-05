@@ -407,6 +407,9 @@ from src.export.license_export_utils import (
 from src.export.msp_inventory_exporter import (
     MSPInventoryExporter,  # Cat B (1013 SC-001 position 8) -- re-export for menu tuple + static call rewire
 )
+from src.export.msp_license_exporter import (
+    MSPLicenseExporter,  # Issue #1260 -- the MSP license export, menu 238
+)
 from src.export.org_admin_exporter import (
     OrgAdminExporter,  # Cat B (1013 SC-001 position 20) -- re-export for MistHelper.OrgAdminExporter callers
 )
@@ -430,6 +433,9 @@ from src.export.org_inventory_exporter import (
 )
 from src.export.org_search_exporter import (
     OrgSearchExporter,  # Specs 874-879 / issues #1379, #1382, #1383, #1385, #1386 -- org search menus 230-234
+)
+from src.export.org_sec_intel_profile_exporter import (
+    OrgSecIntelProfileExporter,  # Issue #1148 -- one SecIntel profile read by id, menu 240
 )
 from src.export.org_site_exporter import (
     OrgSiteExporter,  # Cat E canonical (1014 P9) -- re-export for MistHelper.OrgSiteExporter callers
@@ -777,7 +783,7 @@ try:  # Try to load environment variables from a .env file before any dependency
 except Exception:  # If python-dotenv is not installed yet, fall back to a manual parser
     # Inline fallback: read .env manually so env vars are available
     try:  # Try a best-effort manual parse of the .env file
-        with open(".env") as _ef:  # Open .env in the current working directory
+        with open(".env", encoding="utf-8") as _ef:  # Open .env in the current working directory
             for _line in _ef:  # Process the file one line at a time
                 _line = _line.strip()  # Remove surrounding whitespace and the trailing newline
                 if (
@@ -1154,7 +1160,7 @@ def _apply_dotenv_line(line: str) -> None:  # Set one KEY=VALUE pair from a .env
 def _fallback_load_dotenv() -> None:  # Minimal .env parser used when python-dotenv is not installed
     """Fallback .env loader when python-dotenv package is not installed."""
     try:  # The .env file is optional. Handle its absence/errors gracefully
-        with open(".env") as dotenv_file:  # Open .env in the current working directory
+        with open(".env", encoding="utf-8") as dotenv_file:  # Open .env in the current working directory
             for line in dotenv_file:  # Process the file one line at a time
                 _apply_dotenv_line(line)  # Set this KEY=VALUE pair (skips blanks/comments internally)
     except FileNotFoundError:  # No .env file present
@@ -3356,6 +3362,7 @@ def _configure_site_config_manager() -> type[SiteConfigManager]:
             data_exporter=DataExporter,  # Result-report writer
             mistapi=mistapi,  # Root SDK module for calls + pagination
             default_api_page_limit=DEFAULT_API_PAGE_LIMIT,  # Bulk fetch page size
+            api_usage_cache=_api_usage_cache,  # Shared quota view for the adaptive rate limiter
         )
     )
     return SiteConfigManager  # Canonical class ready for menu callback dispatch
@@ -3734,6 +3741,26 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         CountExporter.msp_counts,
         "Run any MSP-scoped Mist count endpoint (3 operations, issue #1802)",
     ),
+    "238": (
+        MSPLicenseExporter.licenses,
+        "Export the license entitlement, usage, and subscriptions for an MSP (listMspLicenses)",
+    ),
+    "239": (
+        # A lambda defers the name lookup, because _launch_capture_portal is defined
+        # further down this module and this dict is built the moment the module loads.
+        lambda: _launch_capture_portal(),
+        "Launch the upgrade capture portal on port 8056 (pre-check, upgrade, post-check)",
+    ),
+    "240": (
+        OrgSecIntelProfileExporter.profile,
+        "Export one organization security intelligence profile (getOrgSecIntelProfile)",
+    ),
+    "241": (
+        # A lambda defers the name lookup, because _launch_metrics_gateway is defined
+        # further down this module and this dict is built the moment the module loads.
+        lambda: _launch_metrics_gateway(),
+        "Serve Mist Cloud health to a monitoring system on port 8057 (Prometheus and SNMP)",
+    ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
     "46": (OrgConfigExporter.wlans, "Export WLAN configuration for the organization"),
@@ -3874,16 +3901,15 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "95": (InteractiveDisplayUtils.device_tests, "View synthetic test stats for a selected gateway device"),
     "96": (InteractiveDisplayUtils.device_config, "View configuration details for a selected device"),
     # > Continuous Operations & Monitoring
+    # WHY: menu 152 duplicated this action with a vaguer description. Issue
+    # #2066 retired 152. The number stays retired; see RETIRED_MENU_NUMBERS in
+    # tests/guardrails/test_menu_number_uniqueness.py.
     "151": (
         DataCollectionManager.continuous_loop,
         (
             "Loop refresh of core datasets (site list, inventory, stats, ports, VPN) Stop with CTRL+C or create "
             "'stop_loop.txt'"
         ),
-    ),
-    "152": (
-        DataCollectionManager.continuous_loop,
-        "Run continuous data collection loop (5 core API calls with rate limiting)",
     ),
     # > File Processing & Support Operations
     "100": (
@@ -4845,6 +4871,30 @@ def _run_web_portal_server(app: Any, host: str, port: int, dev_debug: bool) -> N
         app.run(host=host, port=port, debug=dev_debug)  # Honor caller's debug flag locally
 
 
+def _resolve_web_portal_host() -> str:
+    """Return the address that the web portal binds to.
+
+    The WEB_HOST variable overrides every default. Without that
+    variable, a container binds to all interfaces, and a
+    workstation binds to the loopback address.
+    """
+    logging.info("WEB_PORTAL: resolving the bind address for the web portal")  # Log before the resolution starts
+    override_host = os.environ.get("WEB_HOST")  # An operator value must win over both defaults
+    if override_host:  # A set WEB_HOST value controls the bind on a container and on a workstation
+        logging.debug("WEB_PORTAL: bind address came from WEB_HOST: %s", override_host)  # Report the override result
+        return override_host  # Return the operator value and skip the container check
+    in_container = EnvironmentUtils.is_running_in_container()  # Only a container gets the all-interfaces bind
+    if not in_container:  # A workstation must keep the portal on the loopback interface
+        logging.debug("WEB_PORTAL: bind address is the loopback address on a workstation")  # Report the result
+        return "127.0.0.1"  # Keep the portal off every external interface of the workstation
+    # The next assignment runs only when is_running_in_container() returns True. A container needs the
+    # all-interfaces bind, because the container network maps the port from outside. The container port map
+    # controls the exposure, and a workstation returns the loopback address above.
+    all_interfaces_host = "0.0.0.0"  # nosec B104
+    logging.debug("WEB_PORTAL: bind address is %s inside a container", all_interfaces_host)  # Report the result
+    return all_interfaces_host  # Hand the container bind address to the launcher
+
+
 def _launch_web_portal(args: argparse.Namespace) -> None:
     """Launch the Flask web portal.
 
@@ -4859,7 +4909,7 @@ def _launch_web_portal(args: argparse.Namespace) -> None:
     loader = PortalConfigLoader()  # Read web_port + other portal settings from env/.env
     config = loader.load_config()
     port = config["web_port"]
-    host = os.environ.get("WEB_HOST") or ".".join(("0",) * 4)  # All-interfaces bind (env override wins) for containers.
+    host = _resolve_web_portal_host()  # Loopback on a workstation, all interfaces in a container, WEB_HOST wins
 
     app = WebPortalApp.create_app(  # Construct Flask app with shared API session + menu registry
         apisession=apisession,
@@ -4868,6 +4918,158 @@ def _launch_web_portal(args: argparse.Namespace) -> None:
     )
 
     _run_web_portal_server(app, host, port, args.debug)  # Dispatch to container/local runner
+
+
+def _capture_portal_port() -> int:
+    """Return the listen port for the upgrade capture portal.
+
+    Why:
+        The container and a workstation both set CAPTURE_PORT. A bad value must not stop
+        the launch, so the reader falls back to the documented default of 8056.
+
+    Returns:
+        The port from CAPTURE_PORT, or 8056 when the value is absent or is not a number.
+    """
+    raw_port = os.environ.get("CAPTURE_PORT", "8056")  # The container sets this; 8056 matches the plan
+    if raw_port.isdigit():  # Accept only a plain number, so startup never raises on a typo
+        return int(raw_port)
+    logging.warning("CAPTURE_PORTAL: CAPTURE_PORT value %s is not a number - using 8056", raw_port)  # Warn on a typo
+    return 8056  # Documented default port for the capture portal
+
+
+def _run_capture_portal_server(app: Any, host: str, port: int, dev_debug: bool) -> None:
+    """Start the capture portal in container mode (Gunicorn-aware) or local Flask dev server mode.
+
+    Why:
+        Gunicorn serves the portal in the container through wsgi_capture.py. A developer on a
+        workstation needs the Flask development server instead. The port 8055 portal splits the
+        two paths the same way, so both portals behave alike.
+
+    Args:
+        app: The Flask application that create_app built.
+        host: The bind address for the listener.
+        port: The listen port, 8056 by default.
+        dev_debug: True to start the local development server with the debugger.
+    """
+    if EnvironmentUtils.is_running_in_container():  # Container path -- Gunicorn owns the socket
+        logging.info("CAPTURE_PORTAL: Container detected - use wsgi_capture.py with Gunicorn on port %s", port)
+        echo(">> For production, use: gunicorn wsgi_capture:app -w 1 -k gthread --threads 4")
+        app.run(host=host, port=port, debug=False)  # Force debug=False inside the container
+        return  # Container path is complete
+    logging.info("CAPTURE_PORTAL: Local mode - Flask dev server on %s:%s", host, port)  # Log the local dev path
+    echo(">> Upgrade capture portal starting at http://127.0.0.1:%s", port)  # Clickable URL for the operator
+    app.run(host=host, port=port, debug=dev_debug)  # Honor the caller's debug flag locally
+
+
+def _launch_capture_portal(dev_debug: bool = False) -> None:
+    """Launch the upgrade capture portal on port 8056.
+
+    Why:
+        Menu 239 and the --capture-portal flag need one shared start path. The portal runs in
+        its own process on its own port, because the port 8055 portal holds process-level state
+        that a second application would corrupt.
+
+    Args:
+        dev_debug: True to start the local development server with the debugger.
+    """
+    from src.upgrade_portal.app.factory import create_app  # Deferred import keeps CLI startup fast
+    from src.upgrade_portal.runtime.server import resolve_host  # Deferred for the same reason
+
+    port = _capture_portal_port()  # CAPTURE_PORT with the documented default of 8056
+    # A container needs every address, because a published port cannot reach a loopback bind. A
+    # workstation must not take that bind: this portal has no password, so any computer that reaches
+    # it could start a firmware upgrade. A CAPTURE_HOST value from the operator wins over both.
+    host = resolve_host(os.environ.get("CAPTURE_HOST"), in_container=EnvironmentUtils.is_running_in_container())
+    logging.info("CAPTURE_PORTAL: Building the application for %s:%s", host, port)  # Log before the build
+    app = create_app()  # The factory reads every setting from the environment and holds no credential value
+    logging.debug("CAPTURE_PORTAL: Application built - starting the server")  # Log after the build
+    _run_capture_portal_server(app, host, port, dev_debug)  # Dispatch to the container or local runner
+
+
+def _metrics_gateway_org_id(settings: Any) -> str:
+    """Return the organization the metrics gateway reports.
+
+    Why:
+        A container start reads METRICS_ORG_ID and never prompts, because no operator
+        watches a container. A menu start has an operator, so it falls back to the org
+        the session already selected, and then to the mistapi picker.
+
+    Args:
+        settings: The GatewaySettings record read from the environment.
+
+    Returns:
+        The organization identifier, or an empty string when none was chosen.
+    """
+    if settings.org_id:  # An explicit setting always wins, because a container cannot prompt
+        return str(settings.org_id)
+    if org_id:  # The session already holds a selection, so reuse it rather than ask twice
+        return str(org_id)
+    logging.info("METRICS_GATEWAY: No organization is set - starting the picker")  # Log before the prompt
+    _select_org_from_session()  # Writes the module-level org_id global
+    return str(org_id or "")
+
+
+def _launch_metrics_gateway(dev_debug: bool = False) -> None:
+    """Serve Mist Cloud health to a monitoring system on port 8057.
+
+    Why:
+        Menu 241 and the --metrics-gateway flag need one shared start path, the same
+        rule that menu 239 and --capture-portal follow. The gateway runs on its own
+        port, because port 8055 and port 8056 already hold their own applications.
+
+    Args:
+        dev_debug: True to start the local development server with the debugger.
+    """
+    from src.metrics_gateway.service import GatewaySettings, build_cache, start_refresh_thread
+    from src.metrics_gateway.web import create_app
+
+    in_container = EnvironmentUtils.is_running_in_container()  # A container binds every address
+    settings = GatewaySettings.from_environment(in_container)  # One frozen record holds every setting
+    resolved = _metrics_gateway_org_id(settings)  # The picker runs only when no setting names an org
+    if not resolved:  # Without an organization the gateway would serve an empty reading forever
+        echo("  X No organization selected - the metrics gateway cannot start")
+        logging.error("METRICS_GATEWAY: No organization selected - abort the launch")  # Log the refusal
+        return
+    settings = settings.with_org_id(resolved)  # Carry the chosen org into the frozen record
+    cache = build_cache(apisession, settings)  # The cache holds the reading that both output paths serve
+    start_refresh_thread(cache, threading.Event())  # A daemon thread keeps the reading fresh ahead of a poll
+    logging.info("METRICS_GATEWAY: Building the application for %s:%s", settings.host, settings.port)
+    echo(">> Mist metrics gateway starting at http://127.0.0.1:%s/metrics", settings.port)  # Clickable URL
+    create_app(cache).run(host=settings.host, port=settings.port, debug=dev_debug and not in_container)
+
+
+def _run_metrics_snmp(_args: argparse.Namespace) -> None:
+    """Answer Net-SNMP pass_persist requests on standard input, then exit.
+
+    Why:
+        snmpd owns UDP port 161, the community string, and the SNMP v3 user. It starts
+        this process as a child and speaks a plain line protocol to it. MistHelper
+        therefore binds no privileged port and holds no community string.
+
+    Warning:
+        This mode writes the protocol replies to standard output. Nothing else may
+        print there, because one stray line makes snmpd drop the whole subtree.
+        snmpd also merges standard error into the same pipe, so a log record on
+        either stream breaks the handshake. protect_protocol_streams() must run
+        before anything else, because building the cache writes a log record.
+
+    Args:
+        _args: The parsed command-line namespace. This mode reads no flag.
+    """
+    from src.metrics_gateway.snmp import SnmpPassPersistResponder, protect_protocol_streams
+
+    protect_protocol_streams()  # First call of this mode. A later call cannot recall a sent record.
+
+    from src.metrics_gateway.service import GatewaySettings, build_cache
+
+    logging.info("METRICS_SNMP: Starting the pass_persist responder")  # Log to the file, never to a stream
+    settings = GatewaySettings.from_environment(EnvironmentUtils.is_running_in_container())
+    if not settings.org_id:  # snmpd cannot answer a prompt, so the setting is the only source here
+        logging.error("METRICS_SNMP: METRICS_ORG_ID is not set - abort")  # Log the refusal
+        sys.exit(1)
+    responder = SnmpPassPersistResponder(build_cache(apisession, settings), settings.base_oid)
+    responder.run(sys.stdin, sys.stdout)  # Blocks until snmpd closes the pipe
+    sys.exit(0)
 
 
 def _report_tqdm_status() -> None:
@@ -5042,6 +5244,27 @@ def _add_interface_mode_flags(parser: argparse.ArgumentParser) -> None:
         help=(
             "Launch the web portal interface on port 8055 (or WEB_PORT env var) instead of the CLI menu"
         ),  # Gunicorn web portal
+    )
+    parser.add_argument(
+        "--capture-portal",
+        action="store_true",
+        help=(
+            "Launch the upgrade capture portal on port 8056 (or CAPTURE_PORT env var) instead of the CLI menu"
+        ),  # Gunicorn upgrade capture portal, menu 239
+    )
+    parser.add_argument(
+        "--metrics-gateway",
+        action="store_true",
+        help=(
+            "Serve Mist Cloud health to a monitoring system on port 8057 (or METRICS_PORT env var)"
+        ),  # Prometheus metrics gateway, menu 241
+    )
+    parser.add_argument(
+        "--metrics-snmp",
+        action="store_true",
+        help=(
+            "Answer Net-SNMP pass_persist requests on standard input. Start this from snmpd.conf, not by hand"
+        ),  # SNMP output path of the metrics gateway
     )
 
 
@@ -5231,13 +5454,21 @@ def _initialize_dependencies(args: argparse.Namespace) -> None:
 def _establish_mist_session(args: argparse.Namespace) -> None:
     """Initialize Mist API session using interactive login or API token, then detect MSP privileges."""
     logging.debug("_establish_mist_session: starting session initialization")  # Log entry
+    is_capture_portal = bool(
+        getattr(args, "capture_portal", False)
+    )  # The portal creates its own environment or browser credential session.
     # Feature 1020 (US3, R4 insertion-point 1): host/token preflight for every dispatch mode. Runs before
     # the --login/token branches so a missing/placeholder host or token exits with a redacted, actionable
     # message BEFORE mistapi/requests can build a malformed URL. require_token is False for interactive
     # --login (email/password auth needs no token). Host is still validated in both modes. The second,
     # distinct failure mode - a non-interactive org-id miss - is guarded separately in ConfigUtils (R4
     # insertion-point 2), since org selection is interactive-vs-non-interactive dependent.
-    _preflight_verify_credentials(require_token=not args.login)  # Fail closed pre-network on bad host/token
+    _preflight_verify_credentials(
+        require_token=not args.login and not is_capture_portal
+    )  # The portal validates its host but can receive a browser token after startup.
+    if is_capture_portal:  # The capture app owns credential selection and session creation per browser.
+        logging.info("CAPTURE_PORTAL: Credential preflight passed; deferring Mist session creation to the portal")
+        return
     _preflight_systematic_test_org(args)  # Resolve org before any session or MSP call in systematic modes.
     if args.login:  # Interactive login requested via --login flag
         _init_interactive_session()  # Email/password path. Exits non-zero on failure.
@@ -5695,6 +5926,36 @@ def _run_web_portal_mode(args: argparse.Namespace) -> None:
     sys.exit(0)
 
 
+def _run_capture_portal_mode(args: argparse.Namespace) -> None:
+    """Launch the upgrade capture portal on port 8056 and exit cleanly on shutdown.
+
+    Why:
+        _dispatch_main_mode needs one handler for each front end. This handler keeps the
+        --capture-portal flag beside the --web-portal flag in the same dispatch table.
+
+    Args:
+        args: The parsed command-line namespace. The handler reads only the debug flag.
+    """
+    logging.info("CAPTURE_PORTAL: Starting upgrade capture portal mode")  # Trace before launch
+    _launch_capture_portal(args.debug)  # Blocks until shutdown
+    sys.exit(0)
+
+
+def _run_metrics_gateway_mode(args: argparse.Namespace) -> None:
+    """Serve the Prometheus endpoint and exit cleanly on shutdown.
+
+    Why:
+        _dispatch_main_mode needs one handler for each front end. This handler keeps the
+        --metrics-gateway flag beside the --capture-portal flag in the same table.
+
+    Args:
+        args: The parsed command-line namespace. The handler reads only the debug flag.
+    """
+    logging.info("METRICS_GATEWAY: Starting metrics gateway mode")  # Trace before launch
+    _launch_metrics_gateway(args.debug)  # Blocks until shutdown
+    sys.exit(0)
+
+
 def _dispatch_main_mode(args: argparse.Namespace) -> None:
     """Dispatch to the appropriate mode entry point based on parsed CLI flags."""
     mode_table = (  # Ordered (predicate, handler) pairs — first match wins
@@ -5702,6 +5963,10 @@ def _dispatch_main_mode(args: argparse.Namespace) -> None:
         (lambda a: bool(a.testinteractive), _run_interactive_test_mode),
         (lambda a: bool(a.tui), _run_tui_mode_and_exit),
         (lambda a: bool(getattr(a, "web_portal", False)), _run_web_portal_mode),
+        (lambda a: bool(getattr(a, "capture_portal", False)), _run_capture_portal_mode),
+        # The SNMP responder owns standard output, so it must match before any handler that prints.
+        (lambda a: bool(getattr(a, "metrics_snmp", False)), _run_metrics_snmp),
+        (lambda a: bool(getattr(a, "metrics_gateway", False)), _run_metrics_gateway_mode),
         (_has_meaningful_cli_args, _run_cli_mode),
     )
     for predicate, handler in mode_table:  # Stop on first predicate that matches

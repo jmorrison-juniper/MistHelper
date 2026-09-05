@@ -33,6 +33,8 @@ except ImportError:  # pyte not installed
     pyte = None  # type: ignore[assignment]
     _has_pyte = False
 
+_RECEIVER_JOIN_TIMEOUT_SEC = 5.0  # WHY: bound the shutdown wait so a stuck socket cannot hang the menu.
+
 
 class CLIShellManager:
     """Manage interactive CLI shell sessions for network devices.
@@ -165,11 +167,39 @@ class CLIShellManager:
             return  # Stop after a failed send.
 
     @staticmethod
-    def _shell_start_receiver(ws: Any, stream: Any, screen: Any, debug: bool) -> None:
-        """Start the background thread that reads WebSocket output and renders it into the terminal."""
-        threading.Thread(
-            target=functools.partial(CLIShellManager._shell_receive_loop, ws, stream, screen, debug)
-        ).start()  # functools.partial binds the shared session state to the thread target.
+    def _shell_start_receiver(ws: Any, stream: Any, screen: Any, debug: bool) -> threading.Thread:
+        """Start the background thread that reads WebSocket output and renders it into the terminal.
+
+        The thread is a daemon thread. A non-daemon thread blocks the interpreter
+        exit while it waits inside ``ws.recv()``. MistHelper then hangs after the
+        operator leaves the shell. The caller receives the thread so that it can
+        join the thread after it closes the socket.
+        """
+        logging.info("Starting the CLI shell receive thread")  # WHY: audit the thread start.
+        receiver = threading.Thread(  # WHY: the receive loop must not block the keyboard listener.
+            target=functools.partial(CLIShellManager._shell_receive_loop, ws, stream, screen, debug),
+            name="cli-shell-receiver",  # WHY: a named thread makes a stack dump readable.
+            daemon=True,  # WHY: a daemon thread never blocks the interpreter exit.
+        )
+        receiver.start()  # WHY: begin reading frames from the remote PTY.
+        logging.debug("CLI shell receive thread started (alive=%s)", receiver.is_alive())  # WHY: result summary.
+        return receiver  # WHY: the caller joins this thread during shutdown.
+
+    @staticmethod
+    def _shell_shutdown(ws: Any, receiver: threading.Thread) -> None:
+        """Close the WebSocket and join the receive thread after the shell session ends.
+
+        Without this cleanup each shell session leaks one open socket and one
+        live thread. A long NOC shift opens many sessions and the process then
+        reaches the open file limit.
+        """
+        logging.info("Closing the CLI shell WebSocket")  # WHY: audit before the close.
+        try:  # WHY: the socket may already be closed by the exit key handler.
+            ws.close()  # WHY: closing wakes the blocked recv() so the receive thread can end.
+        except Exception as close_error:  # cleanup must never mask the session outcome.
+            logging.debug("CLI shell WebSocket close failed: %s", close_error)  # WHY: trace only.
+        receiver.join(timeout=_RECEIVER_JOIN_TIMEOUT_SEC)  # WHY: bound the wait so a stuck socket cannot hang exit.
+        logging.debug("CLI shell shutdown done (receiver_alive=%s)", receiver.is_alive())  # WHY: result summary.
 
     @staticmethod
     def _run_interactive(shell_url: str, debug: bool = False) -> None:
@@ -187,14 +217,17 @@ class CLIShellManager:
         screen = pyte.Screen(80, 40)  # Virtual screen.
         stream = pyte.Stream(screen)  # Terminal stream.
         CLIShellManager._shell_resize_terminal(ws, debug)  # Send initial terminal dimensions to the remote PTY.
-        CLIShellManager._shell_start_receiver(ws, stream, screen, debug)  # Start the background receiver thread.
-        time.sleep(1)  # Wait for connect before waking the prompt.
-        ws.send_binary(bytes(map(ord, "\00\n\n")))  # Send a wakeup. Bytes (not bytearray) matches send_binary.
-        if debug:  # Debug mode.
-            logging.debug("[DEBUG] Sent wakeup sequence to Juniper SSRs")  # WHY: trace wakeup handshake (was print()).
-        mh.KeyboardListener().listen(  # Block on keyboard input, forwarding each key to the PTY.
-            on_release=functools.partial(CLIShellManager._shell_send_key, ws, debug),
-            delay_second_char=0,
-            delay_other_chars=0,
-            lower=False,
-        )
+        receiver = CLIShellManager._shell_start_receiver(ws, stream, screen, debug)  # Start the receive thread.
+        try:  # WHY: every exit path must close the socket and join the receive thread.
+            time.sleep(1)  # Wait for connect before waking the prompt.
+            ws.send_binary(bytes(map(ord, "\00\n\n")))  # Send a wakeup. Bytes (not bytearray) matches send_binary.
+            if debug:  # Debug mode.
+                logging.debug("[DEBUG] Sent wakeup sequence to Juniper SSRs")  # WHY: trace wakeup handshake.
+            mh.KeyboardListener().listen(  # Block on keyboard input, forwarding each key to the PTY.
+                on_release=functools.partial(CLIShellManager._shell_send_key, ws, debug),
+                delay_second_char=0,
+                delay_other_chars=0,
+                lower=False,
+            )
+        finally:  # WHY: a KeyboardInterrupt or a send failure must still release the socket and the thread.
+            CLIShellManager._shell_shutdown(ws, receiver)  # WHY: close the socket, then join the receive thread.

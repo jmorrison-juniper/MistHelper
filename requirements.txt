@@ -26,7 +26,7 @@ python-dotenv
 PyYAML
 
 # AI analysis (Mist Ideas Analyzer)
-openai>=2.51.0
+openai>=3.5.0
 
 # Terminal emulation for SSH operations
 pyte
@@ -39,6 +39,12 @@ rapidfuzz
 Flask
 gunicorn
 flask-wtf
+
+# Windows cannot run Gunicorn, because `gunicorn.util` imports `fcntl` and
+# Windows ships no `fcntl`. The upgrade capture portal therefore starts Waitress
+# on Windows. The marker keeps Waitress out of a Linux install, where Gunicorn
+# runs. Without this line, menu 238 has no server it can start on Windows.
+waitress>=3.0.2 ; sys_platform == 'win32'
 
 # Interactive visualization (Maps Manager uses Dash for interactive view, Plotly for static)
 dash
@@ -55,7 +61,7 @@ redis[hiredis]>=7.4.0
 structlog
 
 # Pygments: CVE-2026-4539 has no fix available yet - ignored in CI pip-audit
-Pygments>=2.20.0
+Pygments>=2.21.0
 
 # Testing (dev dependency - not needed at runtime)
 pytest

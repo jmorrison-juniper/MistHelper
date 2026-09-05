@@ -89,7 +89,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         page_limit: int,
     ) -> list[dict[str, Any]]:
         """Fetch all sites with pagination."""
-        import mistapi  # noqa: E402  # WHY: lazy import keeps CLI startup fast for non-report menus
+        import mistapi  # WHY: lazy import keeps CLI startup fast for non-report menus
 
         response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=page_limit)  # WHY: page-1 fetch
         return mistapi.get_all(response=response, mist_session=apisession)  # type: ignore[no-any-return]
@@ -190,7 +190,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
 
         WHY: keeps `_fetch_org_bulk_data` skinny while isolating band inference.
         """
-        import mistapi  # noqa: E402  # WHY: lazy import so non-report menus start fast
+        import mistapi  # WHY: lazy import so non-report menus start fast
 
         echo("    Fetching AP radio MACs...")
         radio_response = mistapi.api.v1.orgs.devices.listOrgApsMacs(apisession, org_id, limit=page_limit)  # WHY: page 1
@@ -227,7 +227,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         page_limit: int,
     ) -> dict[str, dict[str, str]]:
         """Fetch AP inventory stats and build lookup dict."""
-        import mistapi  # noqa: E402  # WHY: lazy import for CLI startup performance
+        import mistapi  # WHY: lazy import for CLI startup performance
 
         stats_response = mistapi.api.v1.orgs.stats.listOrgDevicesStats(apisession, org_id, type="ap", limit=page_limit)
         all_ap_stats: list[dict[str, Any]] = mistapi.get_all(response=stats_response, mist_session=apisession)
@@ -265,7 +265,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
 
         WHY: extracted to shrink `_prefetch_site_templates` complexity below 5.
         """
-        import mistapi  # noqa: E402  # WHY: lazy import keeps startup light
+        import mistapi  # WHY: lazy import keeps startup light
 
         try:  # WHY: any single template can fail without aborting the report
             response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(apisession, org_id, sitetemplate_id)
@@ -363,7 +363,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         org_id: str,
     ) -> list[dict[str, Any]]:
         """Fetch all org-level WLAN templates."""
-        import mistapi  # noqa: E402  # WHY: lazy import keeps CLI startup fast
+        import mistapi  # WHY: lazy import keeps CLI startup fast
 
         response = mistapi.api.v1.orgs.templates.listOrgTemplates(apisession, org_id)  # WHY: single-page endpoint
         if hasattr(response, "status_code") and response.status_code == 200:  # WHY: trust only 200 responses
@@ -377,7 +377,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         page_limit: int,
     ) -> list[dict[str, Any]]:
         """Fetch all org-level WLANs."""
-        import mistapi  # noqa: E402  # WHY: lazy import keeps startup light
+        import mistapi  # WHY: lazy import keeps startup light
 
         response = mistapi.api.v1.orgs.wlans.listOrgWlans(apisession, org_id, limit=page_limit)  # WHY: paginated call
         return mistapi.get_all(response=response, mist_session=apisession)  # type: ignore[no-any-return]
@@ -393,7 +393,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
 
         Raises RuntimeError on HTTP 429 (rate limit).
         """
-        import mistapi  # noqa: E402  # WHY: lazy import keeps CLI startup fast
+        import mistapi  # WHY: lazy import keeps CLI startup fast
 
         maps_response = mistapi.api.v1.sites.maps.listSiteMaps(apisession, site_id, limit=page_limit)
         if hasattr(maps_response, "status_code") and maps_response.status_code == 429:  # WHY: 429 == rate-limited
@@ -432,7 +432,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
 
         WHY: extracted from `_resolve_site_ssids` to shrink parent below 25 lines.
         """
-        import mistapi  # noqa: E402  # WHY: lazy import keeps CLI startup fast
+        import mistapi  # WHY: lazy import keeps CLI startup fast
 
         site_wlans_response = mistapi.api.v1.sites.wlans.listSiteWlans(apisession, site_id, limit=page_limit)
         if hasattr(site_wlans_response, "status_code") and site_wlans_response.status_code == 429:

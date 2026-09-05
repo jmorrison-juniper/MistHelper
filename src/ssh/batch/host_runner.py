@@ -95,7 +95,7 @@ class HostRunner:
         try:
             logger.debug("[%s] Starting SSH session...", request.hostname)  # WHY: session-start trace.
             return HostRunner._dispatch(request, logger)  # WHY: single dispatch entry per host.
-        except Exception as host_error:  # noqa: BLE001 - top-level fallback mirrors original behavior.
+        except Exception as host_error:  # top-level fallback mirrors original behavior.
             logger.exception(  # WHY: capture traceback for post-mortem debugging.
                 "[%s] Unexpected error: %s: %s",
                 request.hostname,

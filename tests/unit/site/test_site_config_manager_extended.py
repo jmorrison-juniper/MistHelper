@@ -15,6 +15,13 @@ from src.site.site_config_manager import (  # WHY: import public surface + datac
     SiteConfigManager,
     configure_site_config_manager_dependencies,
 )
+from src.utils.rate_limiting import AdaptivePacer  # WHY: build an inert pacer for the write-loop helpers.
+
+
+def _idle_pacer() -> AdaptivePacer:  # WHY: a disabled pacer keeps every unit test free of a real sleep.
+    """Return a disabled pacer so a helper under test never waits."""
+    return AdaptivePacer(apisession=None, api_usage_cache=None, enabled=False)  # WHY: no sleep, no PID call.
+
 
 # --- Test fixtures & helpers -----------------------------------------------
 
@@ -467,7 +474,9 @@ def test_update_one_rf_template_success_populates_mapping() -> None:
     )
     _wire(mistapi_ns=mistapi_ns)
     mapping: dict[str, dict[str, str]] = {}
-    SiteConfigManager._update_one_rf_template("org-1", {"country": "US", "id": "t-1", "name": "RF-US"}, mapping)
+    SiteConfigManager._update_one_rf_template(
+        "org-1", {"country": "US", "id": "t-1", "name": "RF-US"}, mapping, _idle_pacer()
+    )
     assert mapping["US"] == {"id": "t-1", "name": "RF-US"}
 
 
@@ -484,7 +493,9 @@ def test_update_one_rf_template_exception_skips_mapping() -> None:
     )
     _wire(mistapi_ns=mistapi_ns)
     mapping: dict[str, dict[str, str]] = {}
-    SiteConfigManager._update_one_rf_template("org-1", {"country": "US", "id": "t-1", "name": "RF-US"}, mapping)
+    SiteConfigManager._update_one_rf_template(
+        "org-1", {"country": "US", "id": "t-1", "name": "RF-US"}, mapping, _idle_pacer()
+    )
     assert mapping == {}
 
 
@@ -500,7 +511,7 @@ def test_create_one_rf_template_success() -> None:
     )
     _wire(mistapi_ns=mistapi_ns)
     mapping: dict[str, dict[str, str]] = {}
-    SiteConfigManager._create_one_rf_template("org-1", {"country": "CA", "name": "RF-CA"}, mapping)
+    SiteConfigManager._create_one_rf_template("org-1", {"country": "CA", "name": "RF-CA"}, mapping, _idle_pacer())
     assert mapping["CA"]["id"] == "new-1"
 
 
@@ -583,6 +594,7 @@ def test_assign_one_site_to_template_success() -> None:
         {"id": "s1", "name": "Alpha"},
         {"id": "t-1", "name": "RF-US", "country": "US"},
         (success, failed),
+        _idle_pacer(),
     )
     assert success[0]["country"] == "US"
     assert failed == []
@@ -605,6 +617,7 @@ def test_assign_one_site_to_template_http_failure() -> None:
         {"id": "s1", "name": "Alpha"},
         {"id": "t-1", "name": "RF-US", "country": "US"},
         (success, failed),
+        _idle_pacer(),
     )
     assert failed[0]["error"] == "HTTP 500"
 
@@ -625,6 +638,7 @@ def test_assign_one_site_to_template_exception() -> None:
         {"id": "s1", "name": "Alpha"},
         {"id": "t-1", "name": "RF-US", "country": "US"},
         (success, failed),
+        _idle_pacer(),
     )
     assert "nope" in failed[0]["error"]
 
@@ -912,7 +926,9 @@ def test_create_one_device_profile_exception_path() -> None:
     _wire(mistapi_ns=mistapi_ns)
     created: list[dict[str, Any]] = []
     failed: list[dict[str, Any]] = []
-    SiteConfigManager._create_one_device_profile("org-1", {"model": "AP32", "name": "AP-AP32"}, created, failed)
+    SiteConfigManager._create_one_device_profile(
+        "org-1", {"model": "AP32", "name": "AP-AP32"}, created, failed, _idle_pacer()
+    )
     assert failed[0]["model"] == "AP32"
 
 
@@ -1098,6 +1114,7 @@ def test_assign_one_ap_to_profile_exception() -> None:
         },
         success,
         failed,
+        _idle_pacer(),
     )
     assert failed[0]["mac"] == "aa"
 

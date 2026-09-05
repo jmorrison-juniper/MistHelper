@@ -22,6 +22,7 @@ from src.export.device_events_52w_exporter import (
     _StreamRequest,
     _write_rows,
 )
+from tests.support.thread_scoped_sleep import ThreadScopedSleepSpy
 
 
 def _build_exporter(**overrides: Any) -> DeviceEvents52wExporter:
@@ -309,7 +310,8 @@ def test_log_completion_sqlite_branch_logs_database_path() -> None:
 def test_sleep_before_retry_skips_on_final_attempt() -> None:
     """_sleep_before_retry must not sleep when attempt is the last one."""
     exporter = _build_exporter()
-    with patch("time.sleep") as sleep_mock:  # Track sleep calls
+    sleep_mock = ThreadScopedSleepSpy()  # Thread-scoped, so a leaked thread cannot fail the no-call check.
+    with patch("time.sleep", new=sleep_mock):  # Track the sleep calls of this thread only.
         exporter._sleep_before_retry(attempt=2, retries=3, backoff=1.0)  # Last attempt
     sleep_mock.assert_not_called()  # Final attempt short-circuits
 
@@ -317,10 +319,12 @@ def test_sleep_before_retry_skips_on_final_attempt() -> None:
 def test_sleep_before_retry_sleeps_exponentially() -> None:
     """_sleep_before_retry must sleep backoff*2^attempt on non-final attempts."""
     exporter = _build_exporter()
-    with patch("time.sleep") as sleep_mock:  # Track sleep calls
+    sleep_mock = ThreadScopedSleepSpy()  # Thread-scoped, so a leaked thread cannot break the exact count.
+    with patch("time.sleep", new=sleep_mock):  # Track the sleep calls of this thread only.
         exporter._sleep_before_retry(attempt=0, retries=3, backoff=1.0)  # First attempt
     sleep_mock.assert_called_once_with(1.0)  # 1.0 * 2^0 = 1.0
-    with patch("time.sleep") as sleep_mock:  # Second call, reset mock
+    sleep_mock = ThreadScopedSleepSpy()  # A fresh spy, which replaces the old reset_mock call.
+    with patch("time.sleep", new=sleep_mock):  # Second call, fresh record
         exporter._sleep_before_retry(attempt=1, retries=3, backoff=1.0)  # Second attempt
     sleep_mock.assert_called_once_with(2.0)  # 1.0 * 2^1 = 2.0
 

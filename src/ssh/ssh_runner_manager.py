@@ -68,7 +68,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
             logging.warning("\n[INTERRUPT] Operation cancelled by user")  # WHY: user-visible interrupt notice.
             SSHRunnerManager._emit_completion(emitter, op_start, cancelled=True)  # WHY: mark run as cancelled.
             return False  # WHY: cancellation surfaces as failure to caller.
-        except Exception as error:  # noqa: BLE001  # WHY: surface any fatal error to operator.
+        except Exception as error:  # WHY: surface any fatal error to operator.
             logging.warning("[ERROR] Fatal error: %s", error)  # WHY: user-visible fatal error banner.
             logging.exception("SSH Runner error: %s", error)  # WHY: full traceback captured to logs.
             SSHRunnerManager._emit_completion(emitter, op_start, cancelled=False)  # WHY: telemetry after crash.
@@ -514,7 +514,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
                 management_ips, username, password, commands
             )
             SSHRunnerManager._report_by_template_results(template_name, management_ips, results)  # WHY: print stats.
-        except Exception as error:  # noqa: BLE001  # WHY: preserve historical "surface any error" contract.
+        except Exception as error:  # WHY: preserve historical "surface any error" contract.
             logging.warning("! Error: %s", error)
             logging.exception("SSH by template error: %s", error)
 

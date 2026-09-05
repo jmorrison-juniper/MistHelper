@@ -90,7 +90,7 @@ class AddressCorrector:
         logging.info("Pushing corrected address to site %s (%s)", site_id, name)  # Action-log the write.
         try:
             ok = self._update_site_address(site_id, after)  # Fetch-modify-PUT the site record.
-        except Exception as exc:  # noqa: BLE001 -- one failed write must not abort the batch.
+        except Exception as exc:  # one failed write must not abort the batch.
             logging.warning("Write-back failed for site %s: %s", site_id, exc)  # Surface the cause.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("  FAILED: %s", exc)

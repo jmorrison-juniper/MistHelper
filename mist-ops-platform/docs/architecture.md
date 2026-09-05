@@ -27,7 +27,7 @@ Juniper Mist Cloud networks.
 
 ### 3. Data Layer
 
-- **PostgreSQL 16**: Primary store with hash-partitioned tables (16 partitions)
+- **PostgreSQL 16**: Primary store with LIST-partitioned tables (one partition per org)
   for `config_revisions`, `device_status_snapshots`, `audit_records`
 - **Redis 7**: Caching, rate limiting, Celery broker
 - **MinIO**: S3-compatible object storage for audit artifacts
@@ -71,7 +71,7 @@ Juniper Mist Cloud networks.
 ## Key Design Decisions
 
 - **R-01**: All Mist API calls isolated to Celery workers (never in API request path)
-- **R-02**: Hash-partitioned tables by org_id for multi-tenant scalability
+- **R-02**: LIST-partitioned tables by org_id for multi-tenant scalability
 - **R-04**: Temporal queries use `captured_at <= timestamp ORDER BY desc LIMIT 1`
 - **R-05**: deepdiff 8.x for JSON config diffing
 - **R-06**: Saga pattern for multi-step rollback

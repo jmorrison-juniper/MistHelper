@@ -27,7 +27,7 @@ def _patch_keypress(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_sys.stdin, "read", lambda _n=1: "\n")  # Single-char read
 
 
-def _api(org_id: str, limit: int = 100):  # noqa: ANN201
+def _api(org_id: str, limit: int = 100):
     """Test API stub returning a small dict."""
     return {"org_id": org_id, "limit": limit}
 
@@ -110,7 +110,7 @@ def test_execute_handles_keyboard_interrupt(tui_stub, make_item, monkeypatch: py
 def test_execute_handles_generic_exception(tui_stub, make_item, monkeypatch: pytest.MonkeyPatch) -> None:
     """A raising API call surfaces last_error and a stdout banner."""
 
-    def _broken():  # noqa: ANN202 — zero-arg so no prompts run
+    def _broken():  # zero-arg so no prompts run
         raise RuntimeError("boom")
 
     tui_stub.current_items = [make_item("function", "broken", object=_broken)]
@@ -125,7 +125,7 @@ def test_execute_autofills_apisession(tui_stub, make_item, monkeypatch: pytest.M
     sentinel = MagicMock(name="session")  # Distinct session sentinel
     tui_stub.apisession = sentinel  # Wire shared session
 
-    def _needs_session(mist_session):  # noqa: ANN001, ANN202
+    def _needs_session(mist_session):
         return {"got": mist_session}
 
     tui_stub.current_items = [make_item("function", "fn", object=_needs_session)]

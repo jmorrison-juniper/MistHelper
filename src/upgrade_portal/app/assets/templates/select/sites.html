@@ -1,0 +1,183 @@
+{#
+  select/sites.html - the site picker of the upgrade capture portal.
+
+  Why this file exists:
+    The operator picks one site for each run. The picker must show the lock
+    state before the operator opens a site, so the operator never starts work
+    on a site that another person holds. contracts/http-api.md:69-70 fixes the
+    three columns: the site name, the device count, and the lock state.
+
+  Why the links hold a literal path:
+    contracts/http-api.md fixes every public path of this portal. The blueprint
+    endpoint names are not fixed, and the route modules do not exist yet. A
+    url_for call against an endpoint name would raise while this page renders,
+    so every link follows the contract paths. url_for stays for a static asset.
+
+  Why the filter runs in the browser:
+    contracts/http-api.md:76 offers a `q` argument on GET /api/sites. A server
+    filter costs one round trip for each key press. The site count for one
+    organization fits in one page, so portal.js hides a row that does not match
+    and the list answers at once. The `q` argument stays available for a later
+    list that does not fit.
+
+  Variables a route may supply:
+    sites       - the list of site records. Each record holds site_id, name,
+                  device_count, locked_by, and lock_state. locked_by is null
+                  when no lock exists, and holds an email address when a lock
+                  exists. lock_state holds free, locked, or unknown.
+                  contracts/site-lock.md:138 asks this page to mark the lock
+                  state unknown when the lock store does not answer, because a
+                  free site and an unreadable site both hold a null locked_by.
+                  A record may also hold open_url. See below.
+    org_name    - the name of the chosen organization, for the card note.
+    page_title  - the heading text and the tab text.
+    theme       - the name of the current theme. See layout.html.
+    themes      - the theme names the operator may pick.
+
+  The open link:
+    contracts/http-api.md fixes no page path for the inventory of one site.
+    Each record may therefore carry open_url. Without that value the link falls
+    back to /select/site/<site_id>, which follows the shape of the site list
+    path. The route lane owns the real path and supplies open_url if it differs.
+#}
+{% extends 'layout.html' %}
+
+{% block title %}{{ page_title | default('Sites', true) }}{% endblock %}
+
+{% block heading %}<h1>{{ page_title | default('Sites', true) }}</h1>{% endblock %}
+
+{% block content %}
+{#
+  Every value passes through a default filter first. The portal runs Jinja with
+  the standard undefined type, and this step also holds if a later setting turns
+  on the strict undefined type.
+#}
+{% set site_rows = sites | default([], true) %}
+{% set org_label = org_name | default('', true) %}
+
+<div class="portal-card">
+  <h2 class="portal-card-title">Find a site</h2>
+
+  {#
+    The label stays visible. A placeholder disappears on the first key press,
+    so a placeholder alone leaves a screen reader and a returning operator with
+    no name for the field.
+
+    portal.js reads data-filter-target, finds the table by that identifier, and
+    hides each row that does not match. The row carries the text to match in
+    data-filter-text, so the filter never reads the markup of a cell.
+  #}
+  <label class="form-label" for="site-search">Search the sites</label>
+  <input type="search"
+         id="site-search"
+         class="portal-search"
+         data-testid="site-search"
+         data-filter-target="site-table"
+         autocomplete="off"
+         placeholder="Type a site name"
+         aria-controls="site-table"
+         aria-describedby="site-search-note">
+
+  <p class="portal-card-note" id="site-search-note">
+    The list filters in the browser. The filter reads the site name and the site
+    identifier.
+    {% if org_label %}
+      The list shows the sites of {{ org_label }}.
+    {% endif %}
+  </p>
+</div>
+
+<div class="portal-table-scroll">
+  {#
+    Issue #2227: this was the one table of the portal that never sorted. An
+    organization with many sites showed one long unordered list, and the
+    operator could not order it by the device count or by the lock state.
+  #}
+  <table class="portal-table" id="site-table" data-testid="site-table" data-sortable>
+    <caption class="visually-hidden">
+      The sites of the chosen organization, with the device count and the lock
+      state of each site.
+    </caption>
+
+    <thead>
+      <tr>
+        <th scope="col">Site</th>
+        <th scope="col">Devices</th>
+        <th scope="col">Lock state</th>
+        {# The action column holds a control and never a value, so it offers no order. #}
+        <th scope="col" data-no-sort>Action</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for site in site_rows %}
+        {% set site_id = site.site_id %}
+        {% set site_name = site.name | default('Unnamed site', true) %}
+        {% set locked_by = site.locked_by | default('', true) %}
+        {% set lock_state = site.lock_state | default('unknown', true) %}
+        {% set open_url = site.open_url | default('/select/site/' ~ site_id, true) %}
+
+        <tr data-testid="site-row-{{ site_id }}"
+            data-filter-text="{{ site_name }} {{ site_id }}">
+
+          <th scope="row">{{ site_name }}</th>
+
+          <td class="cell-number">{{ site.device_count | default(0, true) }}</td>
+
+          {#
+            The cell names the state in words as well as in a badge color. WCAG
+            1.4.1 forbids color as the only signal. The holder appears next to
+            the word, because a blocked operator needs to know who to ask.
+
+            The unknown state carries a sentence as well as the word. An empty
+            lock_state or an absent lock_state also reads as unknown, because a
+            page that cannot prove a site is free must not show it as free. The
+            unknown badge stays neutral and never red, because a lock store that
+            does not answer is no fault of the site.
+            Each badge color meets WCAG AA against its badge background in both
+            themes. The lowest of the four is 7:1, and AA asks for 4.5:1.
+          #}
+          <td data-testid="site-lock-state-{{ site_id }}">
+            {% if lock_state == 'locked' %}
+              <span class="portal-badge badge-partial">Locked</span>
+              <span>Holder: {{ locked_by }}</span>
+            {% elif lock_state == 'free' %}
+              <span class="portal-badge badge-verified">Free</span>
+            {% else %}
+              <span class="portal-badge badge-unknown">Unknown</span>
+              <span>The lock store did not answer. Another operator may hold this site.</span>
+            {% endif %}
+          </td>
+
+          <td>
+            {#
+              A read view needs no lock, so this link opens a locked site too.
+              The site sections of contracts/http-api.md state that a read never
+              needs the lock.
+            #}
+            <a class="portal-button portal-button-primary"
+               data-testid="site-open-{{ site_id }}"
+               href="{{ open_url }}">Open</a>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="4" class="portal-table-empty">
+            The portal found no site. Choose a different organization.
+          </td>
+        </tr>
+      {% endfor %}
+
+      {#
+        portal.js shows this row when the filter hides every site row. The row
+        stays in the markup, so the filter needs no element builder.
+      #}
+      <tr data-filter-empty hidden>
+        <td colspan="4" class="portal-table-empty">
+          No site name matches the filter. Clear the filter to see every site.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}

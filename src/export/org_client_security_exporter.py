@@ -62,7 +62,7 @@ class OrgClientSecurityExporter:
             - Cache hit: If all 3 output CSVs exist and are fresh, skip entirely.
             - Reduced lookback: Uses dynamic lookback (1h in test) instead of hardcoded 7d.
         """
-        from src.refactors.serial_cc.security_events import SecurityEventsService  # noqa: PLC0415
+        from src.refactors.serial_cc.security_events import SecurityEventsService
 
         SecurityEventsService.execute(fast)  # Run the security export.
 

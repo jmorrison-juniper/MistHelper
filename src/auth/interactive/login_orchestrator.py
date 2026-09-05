@@ -230,7 +230,7 @@ class LoginOrchestrator:
             from src.auth.session_timeout import configure_session_timeout  # Deferred import
 
             configure_session_timeout(apisession)  # Apply project-wide session timeout settings
-        except Exception as error:  # noqa: BLE001  WHY: an optional step must never fail the login.
+        except Exception as error:  # WHY: an optional step must never fail the login.
             logging.debug("Session timeout configuration skipped: %s", error)  # Make the skip visible.
 
     def _announce_msp_privileges(self) -> None:

@@ -6,19 +6,26 @@ with the correct entity type string — no raw api_module/list_method args.
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
 
+from src.shared.mist.endpoints import ApiResult
+
 
 def _mock_api_result(
     data: dict[str, Any] | list[dict[str, Any]],
     status_code: int = 200,
-) -> SimpleNamespace:
-    return SimpleNamespace(status_code=status_code, data=data)
+) -> ApiResult:
+    """Return a real ApiResult, because the callers now read result.success.
+
+    A SimpleNamespace carried only status_code and data. `_read_records` reads
+    `result.success` before it reads `result.data` (issue #1884), so a stub
+    without that property raised AttributeError instead of proving the call.
+    """
+    return ApiResult(status_code=status_code, data=data)
 
 
 class TestAuthUsesRegistry:
@@ -76,44 +83,60 @@ class TestAuthUsesRegistry:
 
 
 class TestPreChecksUsesRegistry:
-    """pre_checks.py must call list_all_entities('org_device_list')."""
+    """pre_checks.py must call list_all_entities('org_device_list') once.
 
-    def test_ping_device_calls_org_device_list(self) -> None:
+    Issue #1886: the fetch moved from once-per-device to once-per-run,
+    so this test now drives the shared fetch, not the per-device path.
+    """
+
+    def test_fetch_device_index_calls_org_device_list(self) -> None:
         from src.worker.checks.pre_checks import PreCheckService
 
         runner = PreCheckService.__new__(PreCheckService)
-        runner._mist = MagicMock()
+        runner._mist = MagicMock()  # WHY: stand in for the real Mist client.
         runner._mist.list_all_entities.return_value = _mock_api_result(
             [{"id": "dev-1", "status": "connected"}],
         )
 
-        result = runner._ping_device("org-1", "dev-1")
+        # WHY: one org-wide fetch must build the index for every target.
+        index, fetch_error = runner._fetch_device_index("org-1", ["dev-1"])
 
         runner._mist.list_all_entities.assert_called_once_with(
             "org_device_list",
             ids={"org_id": "org-1"},
         )
+        assert fetch_error is None  # WHY: a 200 response must not report an error.
+        # WHY: the static lookup must read the index, not call the API again.
+        result = PreCheckService._ping_device("dev-1", index, fetch_error)
         assert result.passed is True
 
 
 class TestPostChecksUsesRegistry:
-    """post_checks.py must call list_all_entities('org_device_list')."""
+    """post_checks.py must call list_all_entities('org_device_list') once.
 
-    def test_get_device_health_calls_org_device_list(self) -> None:
+    Issue #1886: the fetch moved from once-per-device to once-per-run,
+    so this test now drives the shared fetch, not the per-device path.
+    """
+
+    def test_fetch_device_index_calls_org_device_list(self) -> None:
         from src.worker.checks.post_checks import PostCheckService
 
         runner = PostCheckService.__new__(PostCheckService)
-        runner._mist = MagicMock()
+        runner._mist = MagicMock()  # WHY: stand in for the real Mist client.
         runner._mist.list_all_entities.return_value = _mock_api_result(
             [{"id": "dev-1", "status": "connected"}],
         )
 
-        result = runner._get_device_health("org-1", "dev-1")
+        # WHY: one org-wide fetch must build the index for every target.
+        index, fetch_error = runner._fetch_device_index("org-1", ["dev-1"])
 
         runner._mist.list_all_entities.assert_called_once_with(
             "org_device_list",
             ids={"org_id": "org-1"},
         )
+        assert fetch_error is None  # WHY: a 200 response must not report an error.
+        # WHY: the static lookup must read the index, not call the API again.
+        result = PostCheckService._get_device_health("dev-1", index, fetch_error)
         assert result.passed is True
 
 

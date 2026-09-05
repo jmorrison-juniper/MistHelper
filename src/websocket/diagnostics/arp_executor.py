@@ -61,7 +61,7 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
         websocket_manager: WebSocketManager | None = None  # WHY: tracked for finally cleanup.
         try:  # WHY: mirror legacy try/except/finally so cleanup always runs.
             websocket_manager = self._run_workflow(deps, debug_mode)  # WHY: drive workflow.
-        except Exception as arp_error:  # noqa: BLE001  # WHY: match legacy resilience broad catch.
+        except Exception as arp_error:  # WHY: match legacy resilience broad catch.
             log_ws_error(f"WebSocket ARP operation failed: {arp_error}", False)  # WHY: legacy log.
             logging.debug("EXIT: arp_device_websocket - error")  # WHY: trace marker preserved.
         finally:  # WHY: always release WS resources on any exit path.
@@ -113,7 +113,7 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
         """Call the device list API and pick the matching record. None on failure."""
         try:  # WHY: legacy swallows errors so ARP attempt still proceeds.
             rawdata = deps.list_devices_fn(deps.apisession, site_id, type="all").data  # WHY: API.
-        except Exception as device_check_error:  # noqa: BLE001  # WHY: match legacy broad catch.
+        except Exception as device_check_error:  # WHY: match legacy broad catch.
             logging.warning(  # WHY: action log after failed lookup.
                 "Could not verify device compatibility: %s", device_check_error
             )

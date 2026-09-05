@@ -141,7 +141,7 @@ class BatchExecutor:
         try:
             overall_success = BatchExecutor._execute_with_connection(request, log_ctx, logger)  # WHY: real run.
             return overall_success  # WHY: propagate session outcome to the caller.
-        except Exception as run_error:  # noqa: BLE001 - top-level fallback mirrors original behavior
+        except Exception as run_error:  # top-level fallback mirrors original behavior
             BatchExecutor._handle_run_error(request.hostname, run_error, log_ctx, logger)  # WHY: log path.
             overall_success = False  # WHY: guarantee failure state before finally-writes footer.
             return False  # WHY: signal caller that the batch failed.
@@ -389,7 +389,7 @@ class BatchExecutor:
         try:
             final_success = overall_success if isinstance(overall_success, bool) else False  # WHY: type guard.
             writer(BatchExecutor._build_footer(final_success, host_log_file))  # WHY: verbatim footer.
-        except Exception as footer_error:  # noqa: BLE001 - footer is best-effort
+        except Exception as footer_error:  # footer is best-effort
             BatchExecutor._write_fallback_footer(writer, footer_error, logger)  # WHY: last-resort path.
 
     @staticmethod
@@ -416,7 +416,7 @@ class BatchExecutor:
         try:
             simple_footer = f"Session completed at {datetime.now().strftime(_TS_FMT_HUMAN)}"  # WHY: verbatim.
             writer(simple_footer)  # WHY: attempt to write the minimal fallback footer.
-        except Exception as fallback_error:  # noqa: BLE001 - last-resort path
+        except Exception as fallback_error:  # last-resort path
             logger.error("Even simple multi-command footer failed: %s", fallback_error)  # WHY: give up.
 
 

@@ -153,7 +153,7 @@ class SiteAssetExporter:
             rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page through all rows.
             filename = f"SiteAssetsOfInterest_{site_name.replace(' ', '_')}.csv"  # Per-site filename.
             SiteAssetExporter._persist(rawdata, filename, "getSiteAssetsOfInterest", "assets of interest")
-        except Exception as e:  # noqa: BLE001 -- surface any SDK or network error rather than crashing the menu.
+        except Exception as e:  # surface any SDK or network error rather than crashing the menu.
             logging.error("Error fetching assets of interest for site %s: %s", site_name, e)  # Failure context.
             logging.info("! Error fetching assets of interest: %s", e)  # ASCII-only user notice.
 
@@ -189,7 +189,7 @@ class SiteAssetExporter:
             rows = SiteAssetExporter._normalize_payload(payload)  # Normalize the single object to rows.
             filename = f"SiteAssetFilter_{site_name.replace(' ', '_')}_{assetfilter_id.replace('-', '_')}.csv"
             SiteAssetExporter._persist(rows, filename, "getSiteAssetFilter", "asset filter")
-        except Exception as e:  # noqa: BLE001 -- surface any SDK or network error rather than crashing the menu.
+        except Exception as e:  # surface any SDK or network error rather than crashing the menu.
             logging.error("Error fetching asset filter %s for site %s: %s", assetfilter_id, site_name, e)
             logging.info("! Error fetching asset filter detail: %s", e)  # ASCII-only user notice.
 
@@ -221,6 +221,6 @@ class SiteAssetExporter:
             rows = SiteAssetExporter._normalize_payload(payload)  # Normalize the single object to rows.
             filename = f"SiteAsset_{site_name.replace(' ', '_')}_{asset_id.replace('-', '_')}.csv"
             SiteAssetExporter._persist(rows, filename, "getSiteAsset", "asset")
-        except Exception as e:  # noqa: BLE001 -- surface any SDK or network error rather than crashing the menu.
+        except Exception as e:  # surface any SDK or network error rather than crashing the menu.
             logging.error("Error fetching asset %s for site %s: %s", asset_id, site_name, e)  # Failure context.
             logging.info("! Error fetching asset detail: %s", e)  # ASCII-only user notice.

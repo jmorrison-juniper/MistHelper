@@ -85,3 +85,66 @@ class TestImportFallback:
         except ImportError:
             available = False
         assert isinstance(available, bool)
+
+
+class TestPolyglotHostProbe:
+    """Verify the TCP reachability probe that decides polyglot mode (issue #1824)."""
+
+    def test_both_silent_returns_true(self) -> None:
+        from src.db import polyglot_hosts_unreachable
+
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            patch("src.db._can_connect", return_value=False),
+        ):
+            assert polyglot_hosts_unreachable() is True
+
+    def test_one_answer_returns_false(self) -> None:
+        from src.db import polyglot_hosts_unreachable
+
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            patch("src.db._can_connect", side_effect=[True, False]),
+        ):
+            assert polyglot_hosts_unreachable() is False
+
+    def test_probe_reads_configured_hosts(self) -> None:
+        from src.db import polyglot_hosts_unreachable
+
+        env = {"ARANGO_HOST": "http://db.example:9999", "REDIS_HOST": "cache.example", "REDIS_PORT": "6380"}
+        with (
+            patch.dict("os.environ", env, clear=True),
+            patch("src.db._can_connect", return_value=False) as connect,
+        ):
+            polyglot_hosts_unreachable()
+        assert connect.call_args_list[0].args == ("db.example", 9999)
+        assert connect.call_args_list[1].args == ("cache.example", 6380)
+
+    def test_url_without_port_uses_arango_default(self) -> None:
+        from src.db import ARANGO_DEFAULT_PORT, polyglot_hosts_unreachable
+
+        with (
+            patch.dict("os.environ", {"ARANGO_HOST": "http://db.example"}, clear=True),
+            patch("src.db._can_connect", return_value=False) as connect,
+        ):
+            polyglot_hosts_unreachable()
+        assert connect.call_args_list[0].args == ("db.example", ARANGO_DEFAULT_PORT)
+
+    def test_unreadable_port_falls_back_to_default(self) -> None:
+        from src.db import REDIS_DEFAULT_PORT, _env_int
+
+        with patch.dict("os.environ", {"REDIS_PORT": "not-a-port"}, clear=True):
+            assert _env_int("REDIS_PORT", REDIS_DEFAULT_PORT) == REDIS_DEFAULT_PORT
+
+    def test_can_connect_reports_a_refused_socket(self) -> None:
+        from src.db import _can_connect
+
+        with patch("src.db.socket.create_connection", side_effect=OSError("refused")):
+            assert _can_connect("db.example", 8529) is False
+
+    def test_can_connect_closes_a_live_socket(self) -> None:
+        from src.db import _can_connect
+
+        with patch("src.db.socket.create_connection") as create:
+            assert _can_connect("db.example", 8529) is True
+        create.assert_called_once()

@@ -132,7 +132,7 @@ class JobCheckpoint(Base):
 
 
 # ---------------------------------------------------------------------------
-# E-06: AuditRecord (hash-partitioned by org_id)
+# E-06: AuditRecord (LIST-partitioned by org_id)
 # ---------------------------------------------------------------------------
 class AuditRecord(Base):
     """Field-level change audit trail entry."""

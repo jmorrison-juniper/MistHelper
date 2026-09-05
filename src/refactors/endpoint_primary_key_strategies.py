@@ -792,6 +792,20 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "License records from canonical list endpoint",
     },
+    "listMspLicenses": {  # Issue #1260 -- the MSP counter row that menu 238 writes.
+        "type": "natural_pk",  # The endpoint returns one aggregate for each MSP.
+        "primary_key": ["msp_id"],  # The MSP identifier keys the single counter row.
+        "indexes": [],  # A one-row-per-MSP table needs no secondary index.
+        "unique_constraints": [],  # The natural primary key already enforces uniqueness.
+        "description": "MSP license entitlement and usage counters (listMspLicenses summary)",
+    },
+    "listMspLicensesDetails": {  # Issue #1260 -- the per-record rows that menu 238 writes.
+        "type": "natural_pk",  # Every subscription and every amendment carries a stable UUID.
+        "primary_key": ["id"],  # The record UUID keys the row, so a repeat run upserts.
+        "indexes": ["msp_id", "org_id", "subscription_id", "type", "record_type"],  # Common filter columns.
+        "unique_constraints": [],  # The natural primary key already enforces uniqueness.
+        "description": "MSP license subscription and amendment records (listMspLicenses detail)",
+    },
     # Site Inventory Health Analysis reports
     "sitesMissingInfrastructure": {
         "type": "natural_pk",
@@ -2058,6 +2072,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Organization packet capture records",
     },
+    "getOrgSecIntelProfile": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name"],
+        "unique_constraints": [],
+        "description": "One organization security intelligence profile, read by id (issue #1148)",
+    },
     "listOrgSecIntelProfiles": {
         "type": "natural_pk",
         "primary_key": ["id"],
@@ -2648,5 +2669,34 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "indexes": ["site_id", "is_ha", "node_name"],
         "unique_constraints": [],
         "description": "Combined HA gateway stats and cluster node membership for all HA gateways at a site",
+    },
+    # ==============================
+    # UPGRADE CAPTURE PORTAL (menu 239, issue #1823)
+    # Both entries MUST stay natural_pk. src/db/redis_writer.py:598 puts a 7-day
+    # time to live on every composite_pk document, and the portal keeps a capture
+    # and a run forever.
+    #
+    # Each key is the ArangoDB collection name, not a verb. `DatabaseRouter`
+    # passes the api_function_name to `ArangoWriter.write` as the collection
+    # name, and `_ensure_collection` creates whatever it is handed. Issue #2061:
+    # these keys used to read `upgradeCaptureWrite` and `upgradeRunWrite`, so
+    # every capture wrote into a collection of that name while the portal
+    # verified `upgrade_captures`. Every capture failed with `document_absent`.
+    # The names must match `CAPTURE_COLLECTION` and `RUN_COLLECTION` in
+    # `src/upgrade_portal/capture/store.py`, and a guardrail test pins that.
+    # ==============================
+    "upgrade_captures": {
+        "type": "natural_pk",
+        "primary_key": ["capture_id"],  # Value is cap-{run_hex}-{ordinal}. No slash and no colon
+        "indexes": ["run_id", "ordinal", "site_id", "org_id", "actor_email", "started_at"],
+        "unique_constraints": [],
+        "description": "Site state capture written before and after a firmware upgrade",
+    },
+    "upgrade_runs": {
+        "type": "natural_pk",
+        "primary_key": ["run_id"],  # Value is run-{uuid4hex}. A retry replaces the record
+        "indexes": ["site_id", "state", "actor_email", "created_at"],
+        "unique_constraints": [],
+        "description": "Upgrade run record that joins the pre-check capture to the post-check capture",
     },
 }

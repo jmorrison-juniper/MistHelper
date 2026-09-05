@@ -81,7 +81,7 @@ class ConfigUtils:
     def _resolve_org_id_from_dotenv() -> str | None:
         """Parse org_id from a sibling .env file. Return the value or None."""
         try:
-            with open(".env") as env_file:  # Fall back to the .env file.
+            with open(".env", encoding="utf-8") as env_file:  # Fall back to the .env file.
                 for line in env_file:  # Scan each line for org_id.
                     if line.strip().startswith("org_id="):  # Match the org_id assignment.
                         return line.strip().split("=", 1)[1].strip().strip('"')  # Extract and unquote.

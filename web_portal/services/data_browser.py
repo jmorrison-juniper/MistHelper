@@ -5,11 +5,21 @@ with pagination, and enforces path traversal guards.
 """
 
 import csv
+import logging
 import math
 import os
 import sqlite3
+from contextlib import closing
 
 ALLOWED_EXTENSIONS = {".csv", ".db", ".sqlite", ".log", ".json"}
+
+# The smallest page the preview returns. A zero page size divided by zero and
+# returned 500 with a stack trace. See issue #1946.
+MIN_PAGE_SIZE = 1
+
+# The largest page the preview returns. SQLite reads a negative `LIMIT` as no
+# limit, so a caller who sent -1 read the whole table in one response.
+MAX_PAGE_SIZE = 200
 
 
 class DataBrowserService:
@@ -21,7 +31,8 @@ class DataBrowserService:
 
     def __init__(self, data_dir: str):
         """Initialize with the absolute path to the data directory."""
-        self._data_dir = os.path.abspath(data_dir)
+        self._data_dir = os.path.abspath(data_dir)  # Listing code compares names against this path.
+        self._real_data_dir = os.path.realpath(self._data_dir)  # Link-free root for the path guard.
 
     def list_files(self) -> list:
         """List all browsable files and directories in data dir."""
@@ -42,6 +53,7 @@ class DataBrowserService:
         resolved = self.resolve_safe_path(rel_path)
         if resolved is None:
             return {"error": "File not found"}
+        page, per_page = self._clamp_page_args(page, per_page)  # Bound the request on both ends.
         ext = os.path.splitext(resolved)[1].lower()
         if ext == ".csv":
             return self._preview_csv(resolved, page, per_page, search)
@@ -60,18 +72,51 @@ class DataBrowserService:
             return {"error": "File not found"}
         if not self._is_valid_table_name(resolved, table_name):
             return {"error": "Table not found"}
+        page, per_page = self._clamp_page_args(page, per_page)  # Bound the request on both ends.
         return self._preview_sqlite(resolved, table_name, page, per_page, search)
 
-    def resolve_safe_path(self, rel_path: str) -> str:
-        """Resolve a relative path safely within the data directory."""
-        if ".." in rel_path.split("/") or ".." in rel_path.split("\\"):
+    @staticmethod
+    def _clamp_page_args(page: int, per_page: int) -> tuple[int, int]:
+        """Return a page number and a page size that both sit inside the bounds.
+
+        The service owns this rule so that a new route cannot skip it.
+        """
+        # Clamp the size on both ends. A negative size reached SQLite as a
+        # negative `LIMIT`, which SQLite reads as no limit at all.
+        safe_per_page = max(MIN_PAGE_SIZE, min(per_page, MAX_PAGE_SIZE))
+        # Clamp the page number to the first page. A page below one produced a
+        # negative offset, which reads rows from the end of the list.
+        safe_page = max(1, page)
+        return safe_page, safe_per_page
+
+    def resolve_safe_path(self, rel_path: str) -> str | None:
+        """Resolve a request path to a real file inside the data directory.
+
+        The method resolves every symbolic link before it compares the paths.
+        A text prefix match cannot do that, because a link points anywhere.
+        Return `None` when the request leaves the data directory, names a
+        directory, or names a file type that the listing does not show.
+        """
+        logging.info("Data browser resolves a path request: %s", rel_path)
+        candidate = os.path.realpath(os.path.join(self._data_dir, rel_path))  # Follow every link.
+        # Append the separator to the root. Without the separator the path
+        # "/app/data_backup" passes a bare check for the prefix "/app/data".
+        root = os.path.join(self._real_data_dir, "")
+        if not candidate.startswith(root):  # Refuse a target outside the data directory.
+            logging.debug("Data browser refused a path outside the data directory: %s", rel_path)
             return None
-        full = os.path.normpath(os.path.join(self._data_dir, rel_path))
-        if not full.startswith(self._data_dir):
+        if not self._is_browsable_file(candidate):  # Refuse a directory or a hidden file type.
+            logging.debug("Data browser refused a path that is not a browsable file: %s", rel_path)
             return None
-        if not os.path.exists(full):
-            return None
-        return full
+        logging.debug("Data browser accepted the path request: %s", rel_path)
+        return candidate
+
+    @staticmethod
+    def _is_browsable_file(candidate: str) -> bool:
+        """Report whether a resolved path names a file the portal may serve."""
+        if not os.path.isfile(candidate):  # A directory breaks `send_file` and leaks a stack trace.
+            return False
+        return os.path.splitext(candidate)[1].lower() in ALLOWED_EXTENSIONS  # Same rule as listing.
 
     def _build_file_entry(self, entry) -> dict:
         """Build metadata dict for a directory entry."""
@@ -188,15 +233,15 @@ class DataBrowserService:
     def _list_sqlite_tables(self, filepath: str) -> dict:
         """List tables and metadata in a SQLite database."""
         try:
-            conn = sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)
-            cursor = conn.cursor()
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-            tables = []
-            for (name,) in cursor.fetchall():
-                info = self._get_table_info(conn, name)
-                tables.append(info)
-            conn.close()
-            return {"tables": tables}
+            # WHY: closing() releases the handle on the error path too (issue #1901).
+            with closing(sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+                tables = []
+                for (name,) in cursor.fetchall():
+                    info = self._get_table_info(conn, name)
+                    tables.append(info)
+                return {"tables": tables}
         except Exception as exc:
             return {"error": f"Failed to read SQLite: {exc}"}
 
@@ -220,32 +265,29 @@ class DataBrowserService:
     def _is_valid_table_name(self, filepath: str, table_name: str) -> bool:
         """Validate table_name exists in the database to prevent SQL injection."""
         try:
-            conn = sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-                (table_name,),
-            )
-            exists = cursor.fetchone() is not None
-            conn.close()
-            return exists
+            # WHY: closing() releases the handle on the error path too (issue #1901).
+            with closing(sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                    (table_name,),
+                )
+                return cursor.fetchone() is not None
         except Exception:
             return False
 
     def _preview_sqlite(self, filepath: str, table_name: str, page: int, per_page: int, search: str) -> dict:
         """Read and paginate rows from a SQLite table."""
         try:
-            conn = sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)
-            cursor = conn.cursor()
-            cursor.execute(f'PRAGMA table_info("{table_name}")')  # nosec B608 — validated
-            col_info = cursor.fetchall()
-            if not col_info:
-                conn.close()
-                return {"error": "Table not found"}
-            columns = [row[1] for row in col_info]
-            result = self._query_sqlite_page(conn, table_name, columns, page, per_page, search)
-            conn.close()
-            return result
+            # WHY: closing() releases the handle on the error path too (issue #1901).
+            with closing(sqlite3.connect(f"file:{filepath}?mode=ro", uri=True)) as conn:
+                cursor = conn.cursor()
+                cursor.execute(f'PRAGMA table_info("{table_name}")')  # nosec B608 — validated
+                col_info = cursor.fetchall()
+                if not col_info:
+                    return {"error": "Table not found"}
+                columns = [row[1] for row in col_info]
+                return self._query_sqlite_page(conn, table_name, columns, page, per_page, search)
         except Exception as exc:
             return {"error": f"Failed to read SQLite table: {exc}"}
 

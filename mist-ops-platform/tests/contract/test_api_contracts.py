@@ -12,8 +12,11 @@ from datetime import UTC, datetime
 import pytest
 
 from src.api.schemas.common import ErrorDetail, PaginationMeta, ResponseEnvelope
+
+# Issue #1895: this module imported InventoryStatsResponse, and that name does not
+# exist in src.api.schemas.sync. The dead import raised an ImportError and stopped
+# pytest from collecting the whole contract module. No test used the name.
 from src.api.schemas.sync import (
-    InventoryStatsResponse,
     SyncStatusResponse,
     SyncTriggerRequest,
 )
@@ -63,41 +66,50 @@ class TestSyncContracts:
         assert req.org_id is not None
 
     def test_sync_status_response_fields(self) -> None:
+        # This test sent org_id, status, last_sync_at, and next_sync_at. The schema
+        # names its fields orgId, state, lastSyncAt, and nextPollAt, and it sets no
+        # alias, so every one of those four names was wrong.
         resp = SyncStatusResponse(
-            org_id=str(uuid.uuid4()),
-            status="idle",
-            last_sync_at=datetime.now(tz=UTC),
-            next_sync_at=None,
+            orgId=uuid.uuid4(),
+            state="idle",
+            lastSyncAt=datetime.now(tz=UTC),
+            nextPollAt=None,
         )
         data = resp.model_dump()
-        assert "org_id" in data
-        assert "status" in data
+        assert "orgId" in data
+        assert "state" in data
 
 
 class TestConfigContracts:
     """Verify config endpoint schemas."""
 
     def test_revision_response_fields(self) -> None:
+        # This test sent org_id, config_blob, and config_hash. The schema carries
+        # none of those three names. It requires content_hash, and it exposes
+        # revision_id under the alias revision_number. The schema sets no
+        # populate_by_name, so a caller must use the alias.
         resp = RevisionResponse(
-            revision_id=str(uuid.uuid4()),
+            revision_number=1,
             entity_type="device",
-            entity_id=str(uuid.uuid4()),
-            org_id=str(uuid.uuid4()),
-            config_blob={"radio": {"power": 10}},
-            config_hash="abc123",
+            entity_id=uuid.uuid4(),
+            content_hash="abc123",
             captured_at=datetime.now(tz=UTC),
             source="sync",
         )
         data = resp.model_dump()
         assert "revision_id" in data
-        assert "config_blob" in data
+        assert "content_hash" in data
 
     def test_diff_request_requires_two_revisions(self) -> None:
+        # This test sent revision_a and revision_b. The schema requires org_id,
+        # old_revision_id, and new_revision_id, and the revision keys are integers
+        # rather than UUID strings.
         req = DiffRequest(
-            revision_a=str(uuid.uuid4()),
-            revision_b=str(uuid.uuid4()),
+            org_id=uuid.uuid4(),
+            old_revision_id=1,
+            new_revision_id=2,
         )
-        assert req.revision_a != req.revision_b
+        assert req.old_revision_id != req.new_revision_id
 
     def test_time_travel_request(self) -> None:
         req = TimeTravelRequest(
@@ -113,9 +125,13 @@ class TestDeployContracts:
     """Verify deploy endpoint schemas."""
 
     def test_job_create_payload(self) -> None:
+        # This test omitted scheduled_at. JobCreate requires it, because the deploy
+        # route writes it straight to ScheduledJob.scheduled_at. JobUpdate is the
+        # schema that makes the field optional, so the requirement is deliberate.
         job = JobCreate(
-            org_id=str(uuid.uuid4()),
+            org_id=uuid.uuid4(),
             change_payload={"radio": {"power": 12}},
+            scheduled_at=datetime.now(tz=UTC),
             target_entities=[
                 {"entity_type": "device", "entity_id": str(uuid.uuid4())},
             ],
@@ -135,12 +151,18 @@ class TestDeployContracts:
         assert req.change_payload is not None
 
     def test_rollout_create_has_waves(self) -> None:
+        # This test sent name and device_ids to WaveCreate. The schema requires
+        # wave_number and target_entities. device_ids does not exist, and a wave
+        # targets an entity pair rather than a bare device identifier.
         wave = WaveCreate(
+            wave_number=1,
             name="Wave 1",
-            device_ids=[str(uuid.uuid4())],
+            target_entities=[
+                {"entity_type": "device", "entity_id": str(uuid.uuid4())},
+            ],
         )
         rollout = RolloutCreate(
-            org_id=str(uuid.uuid4()),
+            org_id=uuid.uuid4(),
             name="Firmware v1.2",
             waves=[wave],
         )
@@ -158,16 +180,18 @@ class TestAuditContracts:
         assert req.format in ("csv", "json")
 
     def test_audit_record_response(self) -> None:
+        # This test sent record_id as a UUID string and added org_id, action, and
+        # details. record_id is an integer, because the audit_records table uses an
+        # autoincrement key. The schema names the verb change_type, not action, and
+        # it carries no org_id or details field.
         resp = AuditRecordResponse(
-            record_id=str(uuid.uuid4()),
-            org_id=str(uuid.uuid4()),
+            record_id=1,
             entity_type="device",
-            entity_id=str(uuid.uuid4()),
-            action="config_push",
+            entity_id=uuid.uuid4(),
+            change_type="config_push",
             actor="system",
             timestamp=datetime.now(tz=UTC),
-            details={},
         )
         data = resp.model_dump()
         assert "record_id" in data
-        assert "action" in data
+        assert "change_type" in data

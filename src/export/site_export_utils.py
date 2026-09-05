@@ -249,7 +249,7 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
         """Resolve site display name for insights export with fallback on API failure."""
         try:
             return self._fetch_org_site_name(site_id)  # WHY: happy-path resolution.
-        except Exception as exception:  # noqa: BLE001  # WHY: preserve legacy broad-except behavior.
+        except Exception as exception:  # WHY: preserve legacy broad-except behavior.
             logging.error("Error getting site name: %s", exception)  # WHY: preserve legacy log line.
             return site_id  # WHY: fall back to raw id.
 
@@ -260,7 +260,7 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
             site_name = self._fetch_org_site_name(site_id)  # WHY: shared org-name lookup.
             logging.debug("Resolved site_name=%s for site_id=%s", site_name, site_id)  # WHY: post-log.
             return site_name  # WHY: hand back to caller.
-        except Exception as e:  # noqa: BLE001  # WHY: preserve legacy broad-except behavior.
+        except Exception as e:  # WHY: preserve legacy broad-except behavior.
             logging.error("Error getting site name: %s", e)  # WHY: preserve legacy error string.
             return site_id  # WHY: fall back to raw site_id.
 
@@ -329,7 +329,7 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
                 payload.get("supported", []),
             )
             self._write_insight_rows(rows, filename, site_name)  # WHY: persist and log.
-        except Exception as exception:  # noqa: BLE001
+        except Exception as exception:
             # WHY: preserve legacy operator error notice verbatim.
             logging.error("! Error exporting site SLE metric insights: %s", exception)
             logging.error("Failed to export site SLE metric insights for site %s: %s", site_name, exception)
@@ -389,7 +389,7 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
                 "getSiteStats",
             )
             logging.info("Exported %d site stats records to %s", count, "SiteSiteStats.csv")
-        except Exception as exception:  # noqa: BLE001
+        except Exception as exception:
             logging.exception("Failed to export site stats: %s", exception)  # WHY: preserve legacy log.
 
     def gateway_metrics(self) -> None:
@@ -408,7 +408,7 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
                 "getSiteGatewayMetrics",
             )
             logging.info("Exported %d gateway metric records to %s", count, "SiteGatewayMetrics.csv")
-        except Exception as exception:  # noqa: BLE001
+        except Exception as exception:
             logging.exception("Failed to export gateway metrics: %s", exception)  # WHY: preserve legacy log.
 
     def switches_metrics(self) -> None:
@@ -427,7 +427,7 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
                 "getSiteSwitchesMetrics",
             )
             logging.info("Exported %d switches metric records to %s", count, "SiteSwitchesMetrics.csv")
-        except Exception as exception:  # noqa: BLE001
+        except Exception as exception:
             logging.exception("Failed to export switches metrics: %s", exception)  # WHY: preserve legacy log.
 
     def beacons_stats(self) -> None:
@@ -453,7 +453,7 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
                 "getSiteWxRulesUsage",
             )
             logging.info("Exported %d WxRules usage records to %s", count, "SiteWxrulesUsage.csv")
-        except Exception as exception:  # noqa: BLE001
+        except Exception as exception:
             logging.exception("Failed to export WxRules usage: %s", exception)  # WHY: preserve legacy log.
 
     def assets_stats(self) -> None:
@@ -485,12 +485,12 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
                 rows, filename, api_function_name="getSiteCurrentChannelPlanning"
             )
             logging.info("Exported %d channel planning records to %s", len(rows), filename)
-        except Exception as exception:  # noqa: BLE001
+        except Exception as exception:
             logging.exception("Failed to export channel planning: %s", exception)  # WHY: preserve legacy log.
 
     def zone_config_analysis(self) -> None:
         """Zone, engagement, and occupancy config analysis (Menu #6). Delegates to src.analytics.zone_analyzer."""
-        from src.analytics.zone_analyzer import ZoneConfigurationAnalyzer as _ZCA  # noqa: PLC0415
+        from src.analytics.zone_analyzer import ZoneConfigurationAnalyzer as _ZCA
 
         _ZCA.analyze(  # WHY: reuse zone analyzer for menu #6.
             apisession=self.apisession,

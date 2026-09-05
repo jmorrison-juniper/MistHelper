@@ -11,8 +11,11 @@ on:
   pull_request:
     types: [closed]
   schedule:
-    # Every 2 hours. Catches an auto-merge, which starts no pull_request event.
-    - cron: '43 */2 * * *'
+    # Catches an auto-merge, which starts no pull_request event.
+    # WHY twice a day and not every two hours: the two-hour form started about
+    # 360 runs each month, and GitHub bills a whole minute for each one. A
+    # linked issue that closes twelve hours later still closes on the same day.
+    - cron: '43 */12 * * *'
   workflow_dispatch:
     inputs:
       lookback-hours:

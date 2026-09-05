@@ -86,7 +86,7 @@ class InventoryCSVComparator:  # Inventory CSV comparator.
         fast: bool = False,
         address_check: bool = False,
         debug: bool = False,
-        skip_ssl_verify: bool = True,
+        skip_ssl_verify: bool = False,
     ) -> None:
         """Initialize the inventory comparator (fast/address_check/debug/skip_ssl_verify flags)."""
         logging.info("Initializing InventoryCSVComparator adapter")  # Announce construction

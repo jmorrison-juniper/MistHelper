@@ -160,8 +160,9 @@ class OperationRegistry:
         "78": {"category": "interactive_safe", "skip_reason": "Requires site and device selection"},
         "79": {"category": "interactive_safe", "skip_reason": "Requires site and client selection"},
         # --- continuous loop ------------------------------------------------
+        # WHY: 152 was a duplicate of 151 (issue #2066). The number stays
+        # retired; do not reuse it.
         "151": {"category": "continuous_loop", "skip_reason": "Continuous loop operation"},
-        "152": {"category": "continuous_loop", "skip_reason": "Continuous data collection loop"},
         # --- resource intensive (file/support) ------------------------------
         "100": {
             "category": "resource_intensive",
@@ -300,6 +301,36 @@ class OperationRegistry:
         "235": {"category": "interactive_safe", "skip_reason": "Requires a count operation choice"},
         "236": {"category": "interactive_safe", "skip_reason": "Requires a count operation and site"},
         "237": {"category": "interactive_safe", "skip_reason": "Requires a count operation and MSP ID"},
+        "238": {"category": "interactive_safe", "skip_reason": "Requires an MSP ID"},
+        "240": {
+            "category": "interactive_safe",
+            "skip_reason": "Requires an org and a security intelligence profile choice",
+        },
+        # WHY: menu 241 starts a local web server that runs until an operator stops it. An
+        # automated pass would therefore never reach menu 242. The gateway reads Mist Cloud
+        # and never writes it, so the row is `interactive_safe` and not `destructive`.
+        "241": {
+            "category": "interactive_safe",
+            "skip_reason": (
+                "Menu 241 starts the metrics gateway on port 8057 and serves until an operator "
+                "stops it. The menu needs an org choice and a browser or a monitoring system."
+            ),
+        },
+        # WHY: menu 239 starts a local web server and drives a firmware upgrade, so it writes
+        # device state. The fail-closed guardrail needs this row or the build breaks.
+        #
+        # Issue #2065: the portal used to sit at menu 238. Menu 238 reached `main` first as
+        # the MSP license export, which is `interactive_safe` and therefore runs under
+        # `--testinteractive`. Keeping both at 238 would have let one merge resolution start
+        # a firmware upgrade portal inside an automated test pass, so the portal moved to 239.
+        "239": {
+            "category": "destructive",
+            "skip_reason": (
+                "DESTRUCTIVE: Menu 239 starts the upgrade capture portal on port 8056 and "
+                "drives a firmware upgrade for the selected site. The menu needs a browser "
+                "and a live Mist test tenant."
+            ),
+        },
         "186": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Deletes all generated cache CSV files"},
         "58": {"category": "safe"},
         "187": {"category": "destructive", "skip_reason": "DESTRUCTIVE: Creates config objects in destination org"},

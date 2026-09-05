@@ -15,22 +15,58 @@ from typing import Any
 
 from src.data.data_processing_utils import DataProcessingUtils
 from src.dataclasses.export_backend_options import ExportBackendOptions
+from src.dataclasses.polyglot_write_outcome import PolyglotWriteOutcome
 from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 from src.refactors.sqlite_database_writer import SQLiteDatabaseWriter
-from src.utils.environment_utils import EnvironmentUtils
 
 # Optional polyglot DB layer — mirror MistHelper's try/except so the exporter
 # still works when the optional dependency is missing.
 try:  # pragma: no cover - import guard mirrors MistHelper
-    from src.db import DatabaseConfig, configure_db_logging
+    from src.db import DatabaseConfig, configure_db_logging, polyglot_hosts_unreachable
     from src.db.router import DatabaseRouter
 
     DB_LAYER_AVAILABLE = True
 except Exception:  # pragma: no cover - graceful degradation when DB layer missing
     DatabaseConfig = None  # type: ignore[assignment, misc]
     configure_db_logging = None  # type: ignore[assignment]
+    polyglot_hosts_unreachable = None  # type: ignore[assignment]
     DatabaseRouter = None  # type: ignore[assignment, misc]
     DB_LAYER_AVAILABLE = False
+
+# Cause identifiers for a polyglot write that reached no database (issue #2009).
+SKIP_NO_API_FUNCTION_NAME = "no_api_function_name"  # The call site sent no API function name.
+SKIP_DB_LAYER_MISSING = "db_layer_missing"  # The optional database layer is not installed.
+SKIP_STANDALONE_MODE = "standalone_mode"  # MistHelper runs in CSV and SQLite mode.
+SKIP_ROUTER_UNAVAILABLE = "router_unavailable"  # The router could not be built from the settings.
+SKIP_ROUTER_FILE_FALLBACK = "router_file_fallback"  # The router returned success after a file fallback.
+SKIP_ROUTER_WRITE_FAILED = "router_write_failed"  # The router reported a failed write.
+
+# One plain-language message for each cause. A junior NOC engineer reads these lines.
+POLYGLOT_SKIP_MESSAGES: dict[str, str] = {
+    SKIP_NO_API_FUNCTION_NAME: (
+        "Skipped the polyglot database write, because the caller sent no API function name. Fix the call site."
+    ),
+    SKIP_DB_LAYER_MISSING: (
+        "Skipped the polyglot database write, because the database layer is not installed. "
+        "Install the database requirements."
+    ),
+    SKIP_STANDALONE_MODE: (
+        "Skipped the polyglot database write, because MistHelper runs in standalone mode. "
+        "MISTHELPER_STANDALONE has three states. The value true skips the database. The value false uses the "
+        "database. An unset value probes the hosts, and MistHelper skips the database when no host answers."
+    ),
+    SKIP_ROUTER_UNAVAILABLE: (
+        "Skipped the polyglot database write, because the database router did not build. "
+        "Read the connection settings ARANGO_HOST and REDIS_HOST in the .env file."
+    ),
+    SKIP_ROUTER_FILE_FALLBACK: (
+        "The polyglot write reached no database. The router wrote the file and returned success. "
+        "Check that ArangoDB and Redis answer."
+    ),
+    SKIP_ROUTER_WRITE_FAILED: (
+        "The polyglot write failed inside the database router. The file output holds the only copy."
+    ),
+}
 
 
 class DataExporter:  # Multi-backend export facade.
@@ -125,63 +161,160 @@ class DataExporter:  # Multi-backend export facade.
         csv_ok = DataExporter._dispatch_format_write(
             data, filename_or_table, output_format, fieldnames, api_function_name
         )  # Run the chosen writer
-        DataExporter._route_to_polyglot(data, api_function_name, raw_data=opts.raw_data)  # Mirror to polyglot DB
+        outcome = DataExporter._route_to_polyglot(
+            data, api_function_name, raw_data=opts.raw_data
+        )  # Mirror to the polyglot database and keep the true result.
+        DataExporter._warn_when_database_write_dropped(outcome, api_function_name, filename_or_table)  # Report a loss.
         return csv_ok  # Return the primary result
 
+    @staticmethod
+    def _warn_when_database_write_dropped(
+        outcome: PolyglotWriteOutcome,
+        api_function_name: str | None,
+        filename_or_table: str,
+    ) -> None:
+        """Warn when the caller asked for a database write and no row reached a database."""
+        if api_function_name is None:  # The caller asked for a file write only, so no database write was lost.
+            return
+        if outcome.written:  # The rows reached a database, so the caller has nothing to fix.
+            return
+        logging.warning(  # Warning level, because the operator sees a file and an empty database.
+            "The database write was dropped for %s. Cause: %s. The file output %s holds the only copy.",
+            api_function_name,  # Name the endpoint that lost the write.
+            outcome.skip_reason,  # Name the cause identifier so a log search finds every case.
+            filename_or_table,  # Name the file that still holds the rows.
+        )
+
     _standalone_logged = False  # One-shot standalone log guard.
+    _standalone_probe: bool | None = None  # Cached polyglot reachability verdict for the life of the process.
 
     @staticmethod
-    def _is_standalone_mode() -> bool:  # Detect non-container standalone.
-        """Auto-detect standalone mode: skip polyglot when not in a container."""
+    def _standalone_override() -> bool | None:
+        """Return the forced verdict from MISTHELPER_STANDALONE, or None when the operator set no override.
+
+        The variable has three states. The value ``true`` skips the database. The
+        value ``false`` uses the database. An unset value returns None here, and
+        the caller then probes the hosts.
+        """
         standalone_env = os.getenv("MISTHELPER_STANDALONE", "").lower()  # Read the override env.
         if standalone_env == "true":  # Explicit standalone request.
             return True  # Forced standalone.
         if standalone_env == "false":  # Forced non-standalone.
             return False  # Not standalone.
-        if not EnvironmentUtils.is_running_in_container():  # Auto-detect when not in container.
-            if not DataExporter._standalone_logged:  # Log once.
-                logging.info("Standalone mode auto-detected (not in container), skipping polyglot database")
-                DataExporter._standalone_logged = True  # Latch the one-shot log.
-            return True  # Standalone outside a container.
-        return False  # Containerized: not standalone.
+        return None  # No override, so the caller must probe the hosts.
+
+    @classmethod
+    def _polyglot_hosts_silent(cls) -> bool:
+        """Return True when no configured polyglot host answers. The probe runs one time for each process."""
+        if cls._standalone_probe is not None:  # A prior call already paid the probe cost.
+            return cls._standalone_probe
+        if not DataExporter._polyglot_db_layer_available():  # No DB layer means no host to probe.
+            cls._standalone_probe = True  # Cache the verdict so the check stays cheap.
+            return True
+        logging.debug("Probing the polyglot database hosts")  # Log before the network probe.
+        assert polyglot_hosts_unreachable is not None  # nosec B101 - _polyglot_db_layer_available proved the import.
+        cls._standalone_probe = polyglot_hosts_unreachable()  # Ask the db package for one TCP verdict.
+        logging.debug("Polyglot host probe: unreachable=%s", cls._standalone_probe)  # Log the verdict.
+        return cls._standalone_probe
+
+    @classmethod
+    def _is_standalone_mode(cls) -> bool:  # Decide whether the polyglot write must be skipped.
+        """Return True when MistHelper must write CSV and SQLite only.
+
+        The decision follows the reachability of the configured hosts, not the
+        container boundary. A workstation that reaches ArangoDB and Redis writes
+        to them.
+        """
+        override = cls._standalone_override()  # Honor an explicit operator decision first.
+        if override is not None:  # The operator named the mode.
+            return override
+        if not cls._polyglot_hosts_silent():  # At least one backend answers.
+            return False  # Run the polyglot write, inside or outside a container.
+        if not cls._standalone_logged:  # Emit the degraded-mode warning one time.
+            logging.warning(
+                "Polyglot database hosts do not answer. MistHelper writes CSV and SQLite only. "
+                "Set ARANGO_HOST and REDIS_HOST to reach the databases."
+            )  # Make the dropped polyglot write visible in the log.
+            cls._standalone_logged = True  # Latch the one-shot warning.
+        return True  # No backend answers, so stay in CSV and SQLite mode.
 
     @staticmethod
-    def _should_skip_polyglot(api_function_name: str | None) -> bool:
-        """Decide whether the polyglot write should be skipped (no API name / layer / standalone / no router)."""
-        if not api_function_name or not DB_LAYER_AVAILABLE:  # Need API name AND DB layer present
-            return True
-        if DataExporter._is_standalone_mode():  # Standalone bypasses polyglot
-            return True
-        DataExporter._init_router()  # Lazy router init
-        return DataExporter._router is None  # Skip if router could not be built
+    def _polyglot_skip_reason(api_function_name: str | None) -> str | None:
+        """Return the cause that blocks the polyglot write, or None when the write can run.
+
+        Each cause needs a different answer from the operator, so each cause has
+        its own identifier. See ``POLYGLOT_SKIP_MESSAGES`` for the plain-language text.
+        """
+        if not api_function_name:  # The call site named no endpoint, so the router cannot pick a strategy.
+            return SKIP_NO_API_FUNCTION_NAME
+        if not DB_LAYER_AVAILABLE:  # The optional database package failed to import at module load.
+            return SKIP_DB_LAYER_MISSING
+        if DataExporter._is_standalone_mode():  # The operator or the host probe selected CSV and SQLite only.
+            return SKIP_STANDALONE_MODE
+        DataExporter._init_router()  # Build the router one time, because the first write pays the setup cost.
+        if DataExporter._router is None:  # The router construction failed, so no connection exists.
+            return SKIP_ROUTER_UNAVAILABLE
+        return None  # Every check passed, so the polyglot write can run.
 
     @staticmethod
-    def _perform_polyglot_write(payload: list[dict[str, Any]], api_function_name: str) -> None:
-        """Issue the actual router write call, logging result. Never raises (logs warning on failure)."""
+    def _log_polyglot_skip(reason: str, api_function_name: str | None) -> None:
+        """Write one warning that names the cause of a dropped polyglot write."""
+        logging.warning(  # Warning level, because the operator lost a database write.
+            "%s Target: %s.",
+            POLYGLOT_SKIP_MESSAGES[reason],  # The plain-language cause for a junior NOC engineer.
+            api_function_name or "unnamed call site",  # Name the endpoint so the log points at the call.
+        )
+
+    @staticmethod
+    def _outcome_from_write_result(result: Any, api_function_name: str) -> PolyglotWriteOutcome:
+        """Turn a router result into a truthful outcome. The router returns success after a file fallback."""
+        records_written = int(getattr(result, "records_written", 0) or 0)  # Rows the router says it stored.
+        records_failed = int(getattr(result, "records_failed", 0) or 0)  # Rows the router says it lost.
+        backend = getattr(result, "backend", None)  # Backend label, such as arangodb or csv_only.
+        reason: str | None = None  # Start with no cause, because the write may have reached a database.
+        if not getattr(result, "success", False):  # The router reported a failed write.
+            reason = SKIP_ROUTER_WRITE_FAILED
+        elif records_written <= 0:  # Success with zero rows means the file fallback ran.
+            reason = SKIP_ROUTER_FILE_FALLBACK
+        if reason is not None:  # The rows reached no database, so name the cause.
+            DataExporter._log_polyglot_skip(reason, api_function_name)  # Make the loss visible in the log.
+            return PolyglotWriteOutcome(False, reason, records_written, records_failed, backend)
+        logging.debug("Polyglot write stored %s rows in %s", records_written, backend)  # Log the result after.
+        return PolyglotWriteOutcome(True, None, records_written, records_failed, backend)  # Report the true result.
+
+    @staticmethod
+    def _perform_polyglot_write(payload: list[dict[str, Any]], api_function_name: str) -> PolyglotWriteOutcome:
+        """Issue the router write call and return a truthful outcome. Never raises."""
+        logging.info("Writing %s rows to the polyglot database for %s", len(payload), api_function_name)
         try:
-            assert DataExporter._router is not None  # nosec B101 - The caller checked _should_skip_polyglot first.
-            result = DataExporter._router.write(payload, api_function_name)  # Write to polyglot DB
-            logging.info(  # Log the polyglot result
+            assert DataExporter._router is not None  # nosec B101 - The caller checked _polyglot_skip_reason first.
+            result = DataExporter._router.write(payload, api_function_name)  # Write to the polyglot database.
+            logging.info(  # Log the router answer before the exporter judges it.
                 "Polyglot write: backend=%s, written=%s, failed=%s",
                 result.backend,
                 result.records_written,
                 result.records_failed,
             )
-        except Exception as error:  # Never let polyglot break CSV
-            logging.warning("Polyglot write failed (CSV preserved): %s", error)
+            return DataExporter._outcome_from_write_result(result, api_function_name)  # Judge the answer.
+        except Exception as error:  # Never let the polyglot path break the CSV path.
+            logging.warning("Polyglot write failed (CSV preserved): %s", error)  # Report the raised error.
+            DataExporter._log_polyglot_skip(SKIP_ROUTER_WRITE_FAILED, api_function_name)  # Name the cause.
+            return PolyglotWriteOutcome(False, SKIP_ROUTER_WRITE_FAILED, 0, len(payload), None)  # Truthful result.
 
     @staticmethod
     def _route_to_polyglot(  # Mirror writes to polyglot DB.
         data: list[dict[str, Any]],
         api_function_name: str | None,
         raw_data: list[dict[str, Any]] | None = None,
-    ) -> None:
-        """Send data to polyglot backends (ArangoDB/Redis) if available."""
-        if DataExporter._should_skip_polyglot(api_function_name):  # Combined eligibility check
-            return
-        polyglot_data = raw_data or data  # Prefer raw payload when caller supplied it
-        assert api_function_name is not None  # nosec B101 - _should_skip_polyglot returns True for a None name.
-        DataExporter._perform_polyglot_write(polyglot_data, api_function_name)  # Issue write (catches errors)
+    ) -> PolyglotWriteOutcome:
+        """Send data to the polyglot backends and report whether the rows reached a database."""
+        skip_reason = DataExporter._polyglot_skip_reason(api_function_name)  # Find the cause that blocks the write.
+        if skip_reason is not None:  # One of the four skip causes applies.
+            DataExporter._log_polyglot_skip(skip_reason, api_function_name)  # Name the cause in the log.
+            return PolyglotWriteOutcome(False, skip_reason)  # Tell the caller that no row reached a database.
+        polyglot_data = raw_data or data  # Prefer the raw payload when the caller supplied it.
+        assert api_function_name is not None  # nosec B101 - _polyglot_skip_reason returns a cause for a None name.
+        return DataExporter._perform_polyglot_write(polyglot_data, api_function_name)  # Issue the write.
 
     @classmethod
     def _check_periodic_snapshot(  # Throttle periodic snapshots.

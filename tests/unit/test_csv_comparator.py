@@ -882,7 +882,7 @@ class TestDataLoading:
         """List available CSV files excluding source."""
         with tempfile.TemporaryDirectory() as tmpdir:
             for name in ["test1.csv", "test2.csv", "AllDevicesWithSiteInfo.csv"]:
-                with open(os.path.join(tmpdir, name), "w") as fh:
+                with open(os.path.join(tmpdir, name), "w", encoding="utf-8") as fh:
                     fh.write("header\n")
             comp = _make_comparator()
             with patch("src.inventory.csv_comparator.glob.glob") as mock_glob:

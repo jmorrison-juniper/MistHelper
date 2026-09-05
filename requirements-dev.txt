@@ -25,27 +25,44 @@
 # these pins do not change any gate result.
 
 # Lint and format
-ruff==0.16.1
+ruff==0.16.5
 black==26.5.1
 
 # Type checking
-mypy==1.20.2
-types-requests==2.33.0.20260408
+mypy==2.3.1
+types-requests==2.33.0.20260712
 types-paramiko==5.0.0.20260724
-types-tqdm==4.70.0.20260805
+types-tqdm==4.70.0.20260827
 
 # Tests and coverage
 pytest==9.1.1
 pytest-cov==7.1.0
 pytest-timeout==2.4.0
-hypothesis==6.165.2
+hypothesis==6.165.10
+
+# Browser tests
+#
+# Issue #2241: neither requirements file named these packages, so a fresh
+# worktree skipped every test under tests/e2e/upgrade_portal. The skip carried a
+# reason and no failure, so the "E2E smoke tests" gate reported green while it
+# opened no page. 11 test files covered nothing.
+#
+# `playwright` ships the browser driver. `pytest-playwright` supplies the
+# `page`, `browser`, and `context` fixtures that the tests request.
+#
+# Warning: the package alone cannot open a page. Every browser test then reports
+# a skip, and a skip reads as a pass. Download the browser after any install:
+#   python -m playwright install chromium
+# `scripts/bootstrap_worktree.py` runs that command for you.
+playwright==1.62.0
+pytest-playwright==0.9.0
 
 # Security
 bandit[toml]==1.9.4
 pip-audit==2.10.1
 
 # Code quality
-pylint==4.0.6
+pylint==4.0.7
 radon==6.0.1
 vulture==2.16
 

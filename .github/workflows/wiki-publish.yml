@@ -11,8 +11,12 @@ name: Publish wiki
 
 on:
   schedule:
-    # Every 6 hours. Catches an auto-merge, which starts no push event.
-    - cron: '17 */6 * * *'
+    # Catches an auto-merge, which starts no push event.
+    # WHY once a day and not every six hours: the six-hour form started about
+    # 120 runs each month, and GitHub bills a whole minute for each one. The
+    # wiki is a read surface, so a page that appears the next morning is
+    # current enough. A maintainer who needs it sooner uses the dispatch below.
+    - cron: '17 3 * * *'
   workflow_dispatch:
   push:
     branches: [main]

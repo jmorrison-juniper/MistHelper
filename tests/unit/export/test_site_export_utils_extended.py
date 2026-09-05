@@ -169,7 +169,7 @@ def _named_mock(name: str, return_value: Any) -> MagicMock:
     return mock
 
 
-def _build_exporter(  # noqa: PLR0913
+def _build_exporter(
     *,
     select_site_return: str | None = "site-1",
     org_sites: list[dict[str, Any]] | Exception | None = None,

@@ -78,6 +78,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-03
 - CSV files under `data/`, SQLite (`data/mist_data.db`), optional ArangoDB + Redis through `DatabaseRouter` (671-mist-get-site-beacon)
 - Python 3.13 or newer. The `pyproject.toml` file targets `py313`. + `mistapi>=0.63.1`. This feature adds no dependency. (1034-codeql-cleartext-logging)
 - No database change. The verdict register is a Markdown file under (1034-codeql-cleartext-logging)
+- Python 3.13+. `pyproject.toml` requires `>=3.13` and targets + `mistapi` 0.63.3 (installed and verified), Flask 3.x with (1823-upgrade-capture-portal)
+- ArangoDB is the primary store, through (1823-upgrade-capture-portal)
 
 - Python 3.13+ + mistapi>=0.59.0, python-dotenv>=1.0.0 (001-radius-wlan-config)
 
@@ -97,10 +99,29 @@ cd src; pytest; ruff check .
 Python 3.13+: Follow standard conventions
 
 ## Recent Changes
+- 1823-upgrade-capture-portal: Added Python 3.13+. `pyproject.toml` requires `>=3.13` and targets + `mistapi` 0.63.3 (installed and verified), Flask 3.x with
 - 1034-codeql-cleartext-logging: Added Python 3.13 or newer. The `pyproject.toml` file targets `py313`. + `mistapi>=0.63.1`. This feature adds no dependency.
 - 671-mist-get-site-beacon: Added Python 3.13+ + `mistapi>=0.63.1`, `python-dotenv`, `PyYAML`, `structlog`, existing MistHelper utility modules (`InputUtils`, `DataExporter`)
-- 990-redis-entity-id: Added an entity identifier fallback to `RedisTimeSeriesWriter`. The writer reads the strategy field first, then walks `device_id`, `site_id`, `org_id`, `mac`, `id`, and uses the `unknown` sentinel last.
 
 
 <!-- MANUAL ADDITIONS START -->
+## Branching, parallel agents, and Actions minutes
+
+The branch model, the rules that hold parallel agents apart, and the rules that
+protect the GitHub Actions minute balance live in one file:
+`.github/instructions/git-flow-multi-agent.instructions.md`. That file is
+authoritative. Read it before you create a branch, before you commit, and
+before you start a workflow run.
+
+Three rules matter most.
+
+1. Branch from `main`. Never branch from another feature branch.
+2. Use a worktree. Never run `git checkout` in a shared checkout.
+3. Validate on your own machine first. Never push a commit only to start a
+   workflow. MistHelper is public, so a standard runner costs nothing. A
+   private repository spends the 2,000 free minutes each month.
+
+Caution: this file carries a stale generation date. If it disagrees with
+`.github/copilot-instructions.md`, obey `.github/copilot-instructions.md`.
+
 <!-- MANUAL ADDITIONS END -->

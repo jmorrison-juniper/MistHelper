@@ -517,7 +517,7 @@ class TestFetchMspOrgList:
     """``_fetch_msp_org_list`` sorts orgs case-insensitively; None on empty."""
 
     def test_returns_sorted_orgs(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        import mistapi.api.v1.msps.orgs as real_api  # noqa: PLC0415
+        import mistapi.api.v1.msps.orgs as real_api
 
         response = types.SimpleNamespace(data=[{"name": "Zeta"}, {"name": "alpha"}])
         monkeypatch.setattr(real_api, "listMspOrgs", lambda _s, _m: response)
@@ -525,7 +525,7 @@ class TestFetchMspOrgList:
         assert result == [{"name": "alpha"}, {"name": "Zeta"}]
 
     def test_returns_none_when_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        import mistapi.api.v1.msps.orgs as real_api  # noqa: PLC0415
+        import mistapi.api.v1.msps.orgs as real_api
 
         response = types.SimpleNamespace(data=[])
         monkeypatch.setattr(real_api, "listMspOrgs", lambda _s, _m: response)
@@ -667,14 +667,14 @@ class TestFetchAndValidateOrgSites:
     """``_fetch_and_validate_org_sites`` sorts sites and returns None on empty."""
 
     def test_returns_sorted(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        import mistapi.api.v1.orgs.sites as real_api  # noqa: PLC0415
+        import mistapi.api.v1.orgs.sites as real_api
 
         response = types.SimpleNamespace(data=[{"name": "B"}, {"name": "a"}])
         monkeypatch.setattr(real_api, "listOrgSites", lambda _s, _o: response)
         assert _make_manager()._fetch_and_validate_org_sites("o1") == [{"name": "a"}, {"name": "B"}]
 
     def test_empty_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        import mistapi.api.v1.orgs.sites as real_api  # noqa: PLC0415
+        import mistapi.api.v1.orgs.sites as real_api
 
         response = types.SimpleNamespace(data=[])
         monkeypatch.setattr(real_api, "listOrgSites", lambda _s, _o: response)

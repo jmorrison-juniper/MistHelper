@@ -25,6 +25,10 @@ from typing import Any, cast  # WHY: opaque manager plus typed cast for untyped 
 from src.capture.packet_capture_download import PacketCaptureDownloadManager  # WHY: shared parser/downloader
 from src.capture.site_capture_loop import SiteCaptureLoopRunner  # WHY: shared loop-runner
 
+# WHY: a dropped WebSocket never delivers the Mist end-of-capture signal. The cap turns a permanent hang into a
+# reported timeout. One hour covers the longest supported Mist capture window with room to spare.
+_STREAM_MAX_SECONDS = 3600
+
 
 def _pc() -> Any:
     """Return the ``packet_capture`` module for test-patchable name lookup.
@@ -379,19 +383,34 @@ class PacketCaptureExec:
         print("-" * 80)  # WHY: visual separator
 
     def read_stream_packets(self, channel: str, capture_id: str) -> None:
-        """Read and count packets from WebSocket stream."""
+        """Read and count packets from WebSocket stream until the end signal or the deadline."""
         if self.websocket_manager is None:  # WHY: guard against uninitialized stream
             logging.error("WebSocket manager not available for stream reading")  # WHY: audit
             return  # WHY: nothing to read
         state = {"count": 0, "start": _pc().time.time()}  # WHY: mutable state shared with helper
+        # WHY: a dropped socket or a lost end-of-capture signal never returns True from the drain helper. Without a
+        # deadline the loop spins until the operator sends Ctrl-C, and an SSH session with no terminal cannot.
+        deadline = state["start"] + _STREAM_MAX_SECONDS  # WHY: hard wall-clock cap on the whole stream.
+        logging.info("Reading capture stream %s with a %s second cap", capture_id, _STREAM_MAX_SECONDS)  # WHY: audit.
         try:  # WHY: catch Ctrl-C to print summary
-            while True:  # WHY: infinite drain. Helper returns when capture ends
+            while _pc().time.time() < deadline:  # WHY: bounded drain. The helper returns True when capture ends.
                 if self._drain_stream_batch(channel, capture_id, state):  # WHY: batch drain returns True on end
+                    logging.debug("Capture stream %s ended with %s packets", capture_id, state["count"])  # WHY: result
                     return  # WHY: capture ended cleanly
                 _pc().time.sleep(0.1)  # WHY: gentle CPU yield between batches
+            self._report_stream_timeout(capture_id, state)  # WHY: the deadline expired, so tell the operator why.
         except KeyboardInterrupt:  # WHY: user aborted monitoring
             print("\n\n! Monitoring stopped by user")  # WHY: user confirmation
             print(f"  Total packets received: {state['count']}")  # WHY: expose summary
+
+    @staticmethod
+    def _report_stream_timeout(capture_id: str, state: dict[str, Any]) -> None:
+        """Tell the operator that the stream reached the time cap before the end signal arrived."""
+        print(f"\n! Capture stream stopped after {_STREAM_MAX_SECONDS} seconds with no end signal")  # WHY: notice.
+        print(f"  Total packets received: {state['count']}")  # WHY: expose the partial result.
+        logging.warning(  # WHY: audit the timeout so a support bundle shows the cause.
+            "Capture stream %s hit the %s second cap after %s packets", capture_id, _STREAM_MAX_SECONDS, state["count"]
+        )
 
     def _drain_stream_batch(self, channel: str, capture_id: str, state: dict[str, Any]) -> bool:
         """Drain one batch of WebSocket messages. Return True when the capture end signal is seen."""

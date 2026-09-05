@@ -1,23 +1,41 @@
 # GW_VPN_PEER_DOWN
 
+> **Read this first — the alert name is not the Mist alarm key.** This alert reaches the NOC as `GW_VPN_PEER_DOWN`, but Mist catalogues the alarm as **`vpn_peer_down`**, with no `gw_` prefix. There is no `gw_vpn_peer_down` key in Mist. If you filter Monitor → Alerts on `gw_vpn_peer_down` you get an empty result, which looks identical to "no alarms firing". **Always filter on `vpn_peer_down`.**
+>
+> This differs from the sibling path-down alarm, which really is `gw_vpn_path_down` with the prefix. The two keys are not named consistently in Mist. Check §1.1 before you filter.
+
 ## 1. Overview
 
 | Field | Value |
 |---|---|
 | **Alert Name** | GW_VPN_PEER_DOWN |
-| **Mist alarm key** | `gw_vpn_peer_down` |
+| **Mist alarm key** | **`vpn_peer_down`** — note there is no `gw_` prefix. Verified against `GET /api/v1/const/alarm_defs`. The payload `type` value is also `vpn_peer_down`. |
 | **Platform** | Juniper SSR130 (single gateway at a retail branch — no local HA peer). The SVR peers this branch cares about are the overlay peers to the DC-hub SSR1300 pair (Dallas + Chicago). The same alarm key also fires on SRX gateways running SD-WAN — an SRX-specific runbook is planned as Phase 2 because the CLI (Junos) differs from SSR PCLI. |
-| **Mist native severity** | `critical` |
-| **NOC severity** | **Critical** (native — no override) |
+| **Mist native severity** | `warn` (verified against `GET /api/v1/const/alarm_defs`) |
+| **NOC severity** | **Critical** (override — see rationale below) |
 | **Group** | `infrastructure` |
-| **Clear event key** | `gw_vpn_peer_up` |
+| **Clear event key** | **`vpn_peer_up`** (native severity `info`) — again with no `gw_` prefix |
 | **Correlated alarms** | `gw_vpn_path_down`, `vpn_path_down`, `bad_wan_uplink`, `intermittent_wan_connectivity`, `gw_bgp_neighbor_down`, `gw_critical_port_down`, `switch_down`, `gateway_down` |
-| **Prerequisites** | An SVR peer relationship must be configured between this branch SSR130 and a remote SSR (in this environment, a DC-hub SSR1300). This alarm fires when the aggregate peer state is `down` — i.e., every transport path making up that peer is down. |
-| **Description** | The SVR (Session Smart Routing) peer relationship between the branch SSR130 and a remote SSR is fully down — every underlying transport path has failed. Overlay traffic to that peer cannot flow. This is a strict escalation of `gw_vpn_path_down`; if only one transport failed and another survived, the peer would remain `up` and only the path-down alarm would fire. |
+| **Prerequisites** | An SVR peer relationship must be configured between this branch SSR130 and a remote SSR (in this environment, a DC-hub SSR1300). This alarm fires when the aggregate peer state is `down` — every transport path making up that peer is down. |
+| **Description** | The SVR (Session Smart Routing) peer relationship between the branch SSR130 and a remote SSR is fully down — every underlying transport path has failed. Overlay traffic to that peer cannot flow. This is a strict escalation of `gw_vpn_path_down`. If only one transport failed and another survived, the peer would remain `up` and only the path-down alarm would fire. |
 
-### Severity note (no override)
+### 1.1 Key naming — the three SVR alarm keys
 
-Mist ships `gw_vpn_peer_down` as `critical` natively — an aggregate peer outage means the overlay to that hub is fully out. On a two-hub branch (Dallas + Chicago), one peer down is still degraded-but-serving via the surviving hub; but the paired-peer failure mode is one alarm away, and detection latency matters. No override is applied.
+Mist does not use one prefix convention across the SVR alarm family. Copy the key from this table rather than guessing from the alert name:
+
+| Alert name on the ticket | Mist alarm key | Native severity | Clear key |
+|---|---|---|---|
+| GW_VPN_PEER_DOWN (this runbook) | **`vpn_peer_down`** | `warn` | `vpn_peer_up` |
+| GW_VPN_PATH_DOWN | `gw_vpn_path_down` | `warn` | `gw_vpn_path_up` |
+| VPN_PATH_DOWN (Marvis) | `vpn_path_down` | `critical` | none enumerated |
+
+`vpn_path_down` is a separate Marvis alarm. It is not the clear pair or the plural form of anything above. Do not confuse it with `gw_vpn_path_down`.
+
+### Severity rationale (Mist `warn` → NOC `critical`)
+
+Mist ships `vpn_peer_down` as `warn` natively, because many customers run several redundant peers and losing one is a degraded state rather than an outage. We page it as **critical**. An aggregate peer outage means the overlay to that hub is fully out. On a two-hub branch (Dallas and Chicago), one peer down is still degraded and serving through the surviving hub, but the paired-peer failure mode is one alarm away, and detection latency matters.
+
+The override lives in the downstream paging and ticketing layer, keyed off the payload `type` value `vpn_peer_down`. It does not live in Mist. See Shared Appendix §2.
 
 ### Path-down vs peer-down — which am I looking at?
 
@@ -25,10 +43,10 @@ Both alarms cover the SVR overlay but at different granularities. Read the alarm
 
 | Alarm | Meaning | Serving state |
 |---|---|---|
-| `gw_vpn_path_down` | One or more (but not all) transports to a peer are down | Peer stays `up`; traffic reconverges onto surviving transport |
-| `gw_vpn_peer_down` (this alarm) | **All** transports to a peer are down; aggregate peer is `down` | Overlay to that peer is fully out |
+| `gw_vpn_path_down` | One or more (but not all) transports to a peer are down | Peer stays `up`. Traffic reconverges onto the surviving transport. |
+| `vpn_peer_down` (this alarm) | **All** transports to a peer are down. The aggregate peer is `down`. | The overlay to that peer is fully out. |
 
-If `gw_vpn_peer_down` fires, expect one or more `gw_vpn_path_down` alarms to be co-firing on the same peer — they are the constituent path failures that added up to the peer outage. Resolve the underlying path failures; the peer will come back on its own once at least one path is restored.
+If `vpn_peer_down` fires, expect one or more `gw_vpn_path_down` alarms to be co-firing on the same peer. They are the constituent path failures that added up to the peer outage. Resolve the underlying path failures. The peer comes back on its own once at least one path is restored.
 
 ### SVR vs BGP — two independent overlays on SSR
 
@@ -109,7 +127,7 @@ If BGP is `Established` on some transport while the SVR peer is fully `down`, on
 
 ## 5. Resolution
 
-Because `gw_vpn_peer_down` is the aggregate of all constituent paths failing, resolution is almost always "restore at least one path" — but which path and why depends on the co-fired alarms.
+Because `vpn_peer_down` is the aggregate of all constituent paths failing, resolution is almost always "restore at least one path" — but which path and why depends on the co-fired alarms.
 
 | Area | Action |
 |---|---|
@@ -137,8 +155,8 @@ Because `gw_vpn_peer_down` is the aggregate of all constituent paths failing, re
 - At least one constituent transport path is `up`; ideally all expected paths are `up`.
 - Packet loss, latency, and jitter on the recovered paths are within acceptable thresholds (per Peer Path Insights baseline).
 - Reachability to the remote peer's public IP from the correct source succeeds.
-- **The paired clear event `gw_vpn_peer_up` has been received.**
-- No recurrence of `gw_vpn_peer_down` for this peer within a 30-minute debounce window.
+- **The paired clear event `vpn_peer_up` has been received.**
+- No recurrence of `vpn_peer_down` for this peer within a 30-minute debounce window.
 - The *other* DC-hub peer (whichever of Dallas / Chicago was not the impaired one) is also confirmed `up` — the branch is back to full 2-hub overlay redundancy, not just single-hub-serving.
 - Any co-fired `gw_vpn_path_down` alarms have cleared on their own tickets (do not implicitly close them from this ticket).
 - Root cause is documented on the ticket, including which hub peer was affected, which underlay transport(s) failed, and whether the branch was ever in the "both hubs down" isolation state during the incident.
@@ -152,7 +170,7 @@ Because `gw_vpn_peer_down` is the aggregate of all constituent paths failing, re
 
 | Task | Navigation |
 |---|---|
-| Verify alert | Monitor → Alerts → filter by `gw_vpn_peer_down` |
+| Verify alert | Monitor → Alerts → filter by `vpn_peer_down` (no `gw_` prefix — see §1.1) |
 | Peer path health | Monitor → Service Levels → WAN → Peer Paths |
 | WAN link health (underlay) | Monitor → Service Levels → WAN |
 | SSR health | WAN Edges → *SSR130* → Insights |
@@ -201,7 +219,7 @@ See Shared Appendix §7 for the full SSR PCLI reference.
 
 If any of these are co-firing, resolve the co-fired alarm first — it is usually root cause. Because the branch has a single SSR130 (no local HA), *any* gateway-side symptom here is branch-scope; coordinate with the hub-side on-call if the impairment is on the DC-hub SSR1300's side of the peering:
 
-- `gw_vpn_path_down` — one or more constituent transport paths to this peer are down. Expected to co-fire with `gw_vpn_peer_down` (they are the constituent failures that added up to the peer outage). Resolve per `GW_VPN_PATH_DOWN.md`; the peer will recover once at least one path is restored.
+- `gw_vpn_path_down` — one or more constituent transport paths to this peer are down. Expected to co-fire with `vpn_peer_down` (they are the constituent failures that added up to the peer outage). Resolve per `GW_VPN_PATH_DOWN.md`; the peer will recover once at least one path is restored.
 - `vpn_path_down` — related SVR path alarm on peered devices; usually co-fires when a shared underlay drops.
 - `bad_wan_uplink` — underlying transport failure (Marvis). Common shared root cause; the SVR peer is a symptom, the ISP link is the cause.
 - `intermittent_wan_connectivity` — flaky underlay. Expect the peer to flap in step with the underlay.
