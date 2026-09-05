@@ -5,13 +5,17 @@ checks, pre/post capture fetching, delta calculation, and ArangoDB persistence.
 Uses pytest with AsyncMock for dependency injection and isolation.
 """
 
+from unittest.mock import Mock, patch  # WHY: dependency mocking
+
 import pytest  # WHY: test framework
-from datetime import datetime, timezone  # WHY: timestamp handling
-from unittest.mock import Mock, AsyncMock, patch, MagicMock  # WHY: dependency mocking
-from typing import Dict, Any  # WHY: type hints
 
 # WHY: import service under test
-from src.upgrade_portal.compare.service import ComparisonService, ComparisonResult
+from src.upgrade_portal.compare.service import (
+    ComparisonResult,  # WHY: T-012 result
+    ComparisonResultService,  # WHY: T-013 service
+    ComparisonService,  # WHY: T-012 service
+    DetailedComparisonResult,  # WHY: T-013 result
+)
 
 
 class TestComparisonResult:
@@ -409,6 +413,7 @@ class TestComparisonServiceCompareFull:
 
         # WHY: verify audit_logger.log_operation was called
         assert audit_logger.log_operation.called  # WHY: audit logged
+        assert isinstance(result, ComparisonResult)  # WHY: result type valid
 
 
 class TestComparisonServiceCheckSettleGate:
@@ -466,3 +471,410 @@ class TestComparisonServiceException:
             # WHY: verify failure result
             assert result.passed is False  # WHY: failed
             assert result.run_id == "run-1"  # WHY: run_id preserved
+
+
+# ==========================================
+# T-013 TESTS: ComparisonResultService
+# ==========================================
+
+
+class TestDetailedComparisonResult:
+    """Test DetailedComparisonResult dataclass."""
+
+    def test_detailed_result_frozen_immutable(self):  # WHY: verify immutability
+        """DetailedComparisonResult must be immutable once created."""
+        # WHY: create result
+        result = DetailedComparisonResult(run_id="run-123")
+
+        # WHY: attempt to modify should raise TypeError
+        with pytest.raises(AttributeError):  # WHY: expect immutable error
+            result.run_id = "run-456"  # WHY: try to modify
+
+        # WHY: result remains unchanged
+        assert result.run_id == "run-123"  # WHY: verify original
+
+    def test_detailed_result_defaults(self):  # WHY: test default values
+        """Verify default values for optional fields."""
+        # WHY: create minimal result
+        result = DetailedComparisonResult(run_id="run-456")
+
+        # WHY: verify defaults are set
+        assert result.deltas == []  # WHY: default deltas
+        assert result.summary == {}  # WHY: default summary
+        assert result.flagged_for_review == []  # WHY: default flagged
+        assert result.timestamp is not None  # WHY: timestamp auto-generated
+
+    def test_detailed_result_custom_values(self):  # WHY: test custom values
+        """Verify custom values are stored correctly."""
+        # WHY: prepare test data
+        deltas = [  # WHY: sample deltas
+            {
+                "device_id": "ap1",  # WHY: device identifier
+                "field": "firmware_version",  # WHY: field type
+                "delta_type": "firmware_upgrade",  # WHY: change type
+                "pre_value": "1.0",  # WHY: old value
+                "post_value": "2.0",  # WHY: new value
+                "severity": "high",  # WHY: severity
+            }
+        ]  # WHY: deltas complete
+        summary = {"total_deltas": 1, "by_severity": {"high": 1}}  # WHY: sample summary
+        flagged = [deltas[0]]  # WHY: high-severity
+
+        # WHY: create result with custom values
+        result = DetailedComparisonResult(
+            run_id="run-789",  # WHY: run identifier
+            deltas=deltas,  # WHY: deltas
+            summary=summary,  # WHY: summary
+            flagged_for_review=flagged,  # WHY: flagged items
+        )  # WHY: result created
+
+        # WHY: verify values stored
+        assert result.run_id == "run-789"  # WHY: verify run_id
+        assert len(result.deltas) == 1  # WHY: verify delta count
+        assert result.summary["total_deltas"] == 1  # WHY: verify summary
+        assert len(result.flagged_for_review) == 1  # WHY: verify flagged
+
+
+class TestComparisonResultServiceInit:
+    """Test ComparisonResultService initialization."""
+
+    def test_service_init_with_dependencies(self):  # WHY: test init with all deps
+        """Service must accept all dependencies."""
+        # WHY: create mock dependencies
+        db_router = Mock()  # WHY: mock database
+        audit_logger = Mock()  # WHY: mock audit logger
+        masker = Mock()  # WHY: mock masker
+
+        # WHY: create service
+        service = ComparisonResultService(
+            db_router=db_router,  # WHY: database
+            audit_logger=audit_logger,  # WHY: audit trail
+            masker=masker,  # WHY: secret masking
+        )  # WHY: service created
+
+        # WHY: verify dependencies stored
+        assert service.db_router is db_router  # WHY: verify db_router
+        assert service.audit_logger is audit_logger  # WHY: verify audit_logger
+        assert service.masker is masker  # WHY: verify masker
+
+    def test_service_init_without_dependencies(self):  # WHY: test init without deps
+        """Service must handle missing dependencies gracefully."""
+        # WHY: create service without dependencies
+        service = ComparisonResultService()
+
+        # WHY: verify defaults are None
+        assert service.db_router is None  # WHY: no db_router
+        assert service.audit_logger is None  # WHY: no audit_logger
+        assert service.masker is None  # WHY: no masker
+
+    def test_service_severity_levels(self):  # WHY: test class constants
+        """Verify service severity levels are defined correctly."""
+        # WHY: create service
+        service = ComparisonResultService()
+
+        # WHY: verify severity mappings
+        assert service.SEVERITY_LEVELS["firmware_downgrade"] == "critical"  # WHY: rollback
+        assert service.SEVERITY_LEVELS["firmware_upgrade"] == "high"  # WHY: upgrade
+        assert service.SEVERITY_LEVELS["policy_change"] == "high"  # WHY: policy
+        assert service.SEVERITY_LEVELS["device_removed"] == "high"  # WHY: missing device
+        assert service.SEVERITY_LEVELS["device_added"] == "medium"  # WHY: new device
+
+
+class TestAnalyzeDeltasInventory:
+    """Test inventory delta analysis."""
+
+    def test_analyze_inventory_no_changes(self):  # WHY: test no inventory changes
+        """analyze_deltas() must handle identical device inventory."""
+        # WHY: create service
+        service = ComparisonResultService(
+            db_router=Mock(),  # WHY: mock database
+            audit_logger=Mock(),  # WHY: mock audit
+        )  # WHY: service created
+
+        # WHY: create identical pre and post captures
+        pre_capture = {  # WHY: pre-capture
+            "devices": [{"device_id": "ap1", "name": "AP-1", "model": "MX5"}]  # WHY: device list  # WHY: sample device
+        }  # WHY: pre complete
+        post_capture = {  # WHY: post-capture
+            "devices": [{"device_id": "ap1", "name": "AP-1", "model": "MX5"}]  # WHY: device list  # WHY: same device
+        }  # WHY: post complete
+
+        # WHY: analyze deltas
+        result = service.analyze_deltas(
+            run_id="run-1",  # WHY: run identifier
+            pre_capture=pre_capture,  # WHY: pre-snapshot
+            post_capture=post_capture,  # WHY: post-snapshot
+            user_id="user-1",  # WHY: audit context
+        )  # WHY: analysis complete
+
+        # WHY: verify no inventory deltas
+        inventory_deltas = [d for d in result.deltas if d["field"] == "inventory"]  # WHY: filter
+        assert len(inventory_deltas) == 0  # WHY: no changes
+        assert result.summary["by_type"]["inventory"] == 0  # WHY: verify count
+        assert len(result.flagged_for_review) == 0  # WHY: no flags
+
+    def test_analyze_inventory_device_added(self):  # WHY: test device added
+        """analyze_deltas() must detect added devices."""
+        # WHY: create service
+        service = ComparisonResultService(
+            db_router=Mock(),  # WHY: mock database
+            audit_logger=Mock(),  # WHY: mock audit
+        )  # WHY: service created
+
+        # WHY: create pre/post with added device
+        pre_capture = {  # WHY: pre-capture
+            "devices": [  # WHY: device list
+                {"device_id": "ap1", "name": "AP-1", "model": "MX5"}  # WHY: original device
+            ]
+        }  # WHY: pre complete
+        post_capture = {  # WHY: post-capture
+            "devices": [  # WHY: device list
+                {"device_id": "ap1", "name": "AP-1", "model": "MX5"},  # WHY: original
+                {"device_id": "ap2", "name": "AP-2", "model": "MX5"},  # WHY: new device
+            ]
+        }  # WHY: post complete
+
+        # WHY: analyze deltas
+        result = service.analyze_deltas(
+            run_id="run-1",  # WHY: run identifier
+            pre_capture=pre_capture,  # WHY: pre-snapshot
+            post_capture=post_capture,  # WHY: post-snapshot
+            user_id="user-1",  # WHY: audit context
+        )  # WHY: analysis complete
+
+        # WHY: verify device added delta
+        device_added = [  # WHY: filter results
+            d for d in result.deltas if d.get("delta_type") == "device_added"  # WHY: iterate  # WHY: match type
+        ]  # WHY: filter complete
+        assert len(device_added) == 1  # WHY: one added
+        assert device_added[0]["device_id"] == "ap2"  # WHY: correct device
+        assert device_added[0]["severity"] == "medium"  # WHY: medium severity
+
+    def test_analyze_inventory_device_removed(self):  # WHY: test device removed
+        """analyze_deltas() must detect removed devices."""
+        # WHY: create service
+        service = ComparisonResultService(
+            db_router=Mock(),  # WHY: mock database
+            audit_logger=Mock(),  # WHY: mock audit
+        )  # WHY: service created
+
+        # WHY: create pre/post with removed device
+        pre_capture = {  # WHY: pre-capture
+            "devices": [  # WHY: device list
+                {"device_id": "ap1", "name": "AP-1", "model": "MX5"},  # WHY: original
+                {"device_id": "ap2", "name": "AP-2", "model": "MX5"},  # WHY: device to remove
+            ]
+        }  # WHY: pre complete
+        post_capture = {  # WHY: post-capture
+            "devices": [{"device_id": "ap1", "name": "AP-1", "model": "MX5"}]  # WHY: device list  # WHY: remaining
+        }  # WHY: post complete
+
+        # WHY: analyze deltas
+        result = service.analyze_deltas(
+            run_id="run-1",  # WHY: run identifier
+            pre_capture=pre_capture,  # WHY: pre-snapshot
+            post_capture=post_capture,  # WHY: post-snapshot
+            user_id="user-1",  # WHY: audit context
+        )  # WHY: analysis complete
+
+        # WHY: verify device removed delta
+        device_removed = [  # WHY: filter results
+            d for d in result.deltas if d.get("delta_type") == "device_removed"  # WHY: iterate  # WHY: match type
+        ]  # WHY: filter complete
+        assert len(device_removed) == 1  # WHY: one removed
+        assert device_removed[0]["device_id"] == "ap2"  # WHY: correct device
+        assert device_removed[0]["severity"] == "high"  # WHY: high severity
+
+
+class TestAnalyzeDeltasFirmware:
+    """Test firmware delta analysis."""
+
+    def test_analyze_firmware_upgrade(self):  # WHY: test firmware upgrade
+        """analyze_deltas() must detect firmware upgrades."""
+        # WHY: create service
+        service = ComparisonResultService(
+            db_router=Mock(),  # WHY: mock database
+            audit_logger=Mock(),  # WHY: mock audit
+        )  # WHY: service created
+
+        # WHY: create pre/post with firmware upgrade
+        pre_capture = {  # WHY: pre-capture
+            "devices": [  # WHY: device list
+                {  # WHY: device
+                    "device_id": "ap1",  # WHY: identifier
+                    "name": "AP-1",  # WHY: name
+                    "firmware_version": "1.0.0",  # WHY: old version
+                }  # WHY: device complete
+            ]
+        }  # WHY: pre complete
+        post_capture = {  # WHY: post-capture
+            "devices": [  # WHY: device list
+                {  # WHY: device
+                    "device_id": "ap1",  # WHY: identifier
+                    "name": "AP-1",  # WHY: name
+                    "firmware_version": "2.0.0",  # WHY: new version
+                }  # WHY: device complete
+            ]
+        }  # WHY: post complete
+
+        # WHY: analyze deltas
+        result = service.analyze_deltas(
+            run_id="run-1",  # WHY: run identifier
+            pre_capture=pre_capture,  # WHY: pre-snapshot
+            post_capture=post_capture,  # WHY: post-snapshot
+            user_id="user-1",  # WHY: audit context
+        )  # WHY: analysis complete
+
+        # WHY: verify firmware upgrade delta
+        firmware_changes = [  # WHY: filter results
+            d for d in result.deltas if d.get("field") == "firmware_version"  # WHY: iterate  # WHY: match field
+        ]  # WHY: filter complete
+        assert len(firmware_changes) == 1  # WHY: one change
+        assert firmware_changes[0]["delta_type"] == "firmware_upgrade"  # WHY: upgrade type
+        assert firmware_changes[0]["severity"] == "high"  # WHY: high severity
+        assert firmware_changes[0]["pre_value"] == "1.0.0"  # WHY: old version
+        assert firmware_changes[0]["post_value"] == "2.0.0"  # WHY: new version
+
+    def test_analyze_firmware_downgrade(self):  # WHY: test firmware rollback
+        """analyze_deltas() must detect firmware downgrades (rollback)."""
+        # WHY: create service
+        service = ComparisonResultService(
+            db_router=Mock(),  # WHY: mock database
+            audit_logger=Mock(),  # WHY: mock audit
+        )  # WHY: service created
+
+        # WHY: create pre/post with firmware downgrade
+        pre_capture = {  # WHY: pre-capture
+            "devices": [  # WHY: device list
+                {  # WHY: device
+                    "device_id": "ap1",  # WHY: identifier
+                    "name": "AP-1",  # WHY: name
+                    "firmware_version": "2.0.0",  # WHY: new version
+                }  # WHY: device complete
+            ]
+        }  # WHY: pre complete
+        post_capture = {  # WHY: post-capture
+            "devices": [  # WHY: device list
+                {  # WHY: device
+                    "device_id": "ap1",  # WHY: identifier
+                    "name": "AP-1",  # WHY: name
+                    "firmware_version": "1.0.0",  # WHY: old version (rollback)
+                }  # WHY: device complete
+            ]
+        }  # WHY: post complete
+
+        # WHY: analyze deltas
+        result = service.analyze_deltas(
+            run_id="run-1",  # WHY: run identifier
+            pre_capture=pre_capture,  # WHY: pre-snapshot
+            post_capture=post_capture,  # WHY: post-snapshot
+            user_id="user-1",  # WHY: audit context
+        )  # WHY: analysis complete
+
+        # WHY: verify firmware downgrade delta
+        firmware_changes = [  # WHY: filter results
+            d for d in result.deltas if d.get("field") == "firmware_version"  # WHY: iterate  # WHY: match field
+        ]  # WHY: filter complete
+        assert len(firmware_changes) == 1  # WHY: one change
+        assert firmware_changes[0]["delta_type"] == "firmware_downgrade"  # WHY: downgrade type
+        assert firmware_changes[0]["severity"] == "critical"  # WHY: critical severity
+        # WHY: verify change is flagged for review
+        flagged = [d for d in result.flagged_for_review if d["device_id"] == "ap1"]  # WHY: filter
+        assert len(flagged) == 1  # WHY: one flagged
+
+
+class TestAnalyzeDeltasValidation:
+    """Test delta analysis input validation."""
+
+    def test_analyze_deltas_empty_run_id(self):  # WHY: test empty run_id
+        """analyze_deltas() must handle empty run_id."""
+        # WHY: create service
+        service = ComparisonResultService()
+
+        # WHY: analyze with empty run_id
+        result = service.analyze_deltas(
+            run_id="",  # WHY: invalid
+            pre_capture={"devices": []},  # WHY: capture
+            post_capture={"devices": []},  # WHY: capture
+        )  # WHY: analysis complete
+
+        # WHY: verify empty result
+        assert result.run_id == ""  # WHY: run_id preserved
+        assert len(result.deltas) == 0  # WHY: no deltas
+        assert result.summary == {}  # WHY: empty summary
+
+    def test_analyze_deltas_missing_captures(self):  # WHY: test missing captures
+        """analyze_deltas() must handle missing captures."""
+        # WHY: create service
+        service = ComparisonResultService()
+
+        # WHY: analyze with None captures
+        result = service.analyze_deltas(
+            run_id="run-1",  # WHY: run identifier
+            pre_capture=None,  # WHY: invalid
+            post_capture=None,  # WHY: invalid
+        )  # WHY: analysis complete
+
+        # WHY: verify empty result
+        assert result.run_id == "run-1"  # WHY: run_id preserved
+        assert len(result.deltas) == 0  # WHY: no deltas
+
+    def test_analyze_deltas_audit_logging(self):  # WHY: test audit logging
+        """analyze_deltas() must log audit trail."""
+        # WHY: create mock audit logger
+        audit_logger = Mock()  # WHY: mock audit
+
+        # WHY: create service with audit logger
+        service = ComparisonResultService(
+            db_router=Mock(),  # WHY: mock database
+            audit_logger=audit_logger,  # WHY: audit logger
+        )  # WHY: service created
+
+        # WHY: analyze deltas
+        result = service.analyze_deltas(
+            run_id="run-1",  # WHY: run identifier
+            pre_capture={"devices": []},  # WHY: pre-capture
+            post_capture={"devices": []},  # WHY: post-capture
+            user_id="user-1",  # WHY: audit context
+        )  # WHY: analysis complete
+
+        # WHY: verify result type
+        assert isinstance(result, DetailedComparisonResult)  # WHY: correct type
+        # WHY: verify audit logging called
+        assert audit_logger.log_operation.called  # WHY: audit logged
+        call_args = audit_logger.log_operation.call_args  # WHY: get call args
+        # WHY: verify operation name
+        assert "delta_analysis_complete" in str(call_args)  # WHY: check operation name
+        # WHY: verify success status
+        assert "success" in str(call_args)  # WHY: check status
+
+
+class TestAnalyzeDeltasExceptionHandling:
+    """Test delta analysis exception handling."""
+
+    def test_analyze_deltas_exception_handling(self):  # WHY: test exception handling
+        """analyze_deltas() must handle exceptions gracefully."""
+        # WHY: create service
+        service = ComparisonResultService(
+            db_router=Mock(),  # WHY: mock database
+            audit_logger=Mock(),  # WHY: mock audit
+        )  # WHY: service created
+
+        # WHY: patch inventory analysis to raise exception
+        with patch.object(
+            service,  # WHY: patch object
+            "_analyze_inventory_deltas",  # WHY: method name
+            side_effect=Exception("Analysis error"),  # WHY: raise error
+        ):  # WHY: patch complete
+            # WHY: analyze deltas
+            result = service.analyze_deltas(
+                run_id="run-1",  # WHY: run identifier
+                pre_capture={"devices": [{"device_id": "ap1"}]},  # WHY: pre-capture
+                post_capture={"devices": [{"device_id": "ap1"}]},  # WHY: post-capture
+                user_id="user-1",  # WHY: audit context
+            )  # WHY: analysis complete
+
+            # WHY: verify result handles exception
+            assert isinstance(result, DetailedComparisonResult)  # WHY: correct type
+            # WHY: audit logger should have logged failure
+            # Note: will be verified if audit_logger.log_operation was called
