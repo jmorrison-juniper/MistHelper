@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<!-- WHY: HTML5 doctype declaration -->
+<html lang="en">
+<head>
+    <!-- WHY: UTF-8 encoding for text -->
+    <meta charset="UTF-8">
+    <!-- WHY: responsive viewport for mobile -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- WHY: page title in browser tab -->
+    <title>Upgrade Portal - Select Sites and Devices</title>
+    <!-- WHY: Bootstrap CSS for styling -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <!-- WHY: custom styles -->
+    <style>
+        /* WHY: custom styles for form */
+        .form-container {
+            /* WHY: max width for readability */
+            max-width: 800px;
+            /* WHY: centered layout */
+            margin: 50px auto;
+            /* WHY: padding for spacing */
+            padding: 20px;
+        }
+        /* WHY: error message styling */
+        .error-message {
+            /* WHY: red color for errors */
+            color: #d32f2f;
+            /* WHY: bottom margin for spacing */
+            margin-bottom: 10px;
+            /* WHY: small font for secondary info */
+            font-size: 0.875rem;
+        }
+        /* WHY: device list styling */
+        .device-list {
+            /* WHY: max height for scrollable list */
+            max-height: 400px;
+            /* WHY: scrollable overflow */
+            overflow-y: auto;
+            /* WHY: border for visual separation */
+            border: 1px solid #ddd;
+            /* WHY: padding for spacing */
+            padding: 10px;
+            /* WHY: rounded corners for modern look */
+            border-radius: 4px;
+        }
+        /* WHY: device item styling */
+        .device-item {
+            /* WHY: bottom padding for spacing */
+            padding-bottom: 10px;
+            /* WHY: bottom margin for separation */
+            margin-bottom: 10px;
+            /* WHY: bottom border for visual separation */
+            border-bottom: 1px solid #f0f0f0;
+        }
+        /* WHY: device name styling */
+        .device-name {
+            /* WHY: bold font weight for emphasis */
+            font-weight: bold;
+            /* WHY: darker color for readability */
+            color: #333;
+        }
+        /* WHY: device details styling */
+        .device-details {
+            /* WHY: gray color for secondary info */
+            color: #666;
+            /* WHY: small font for secondary info */
+            font-size: 0.875rem;
+            /* WHY: top margin for spacing */
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<!-- WHY: page body container -->
+<body>
+    <!-- WHY: Bootstrap container for layout -->
+    <div class="container">
+        <!-- WHY: form container for styling -->
+        <div class="form-container">
+            <!-- WHY: page title -->
+            <h1>Select Sites and Devices</h1>
+            <!-- WHY: subtitle for context -->
+            <p class="text-muted">Choose the site and devices to upgrade.</p>
+
+            <!-- WHY: error message container (hidden initially) -->
+            <div id="errorContainer" class="error-message" style="display:none;"></div>
+
+            <!-- WHY: form element -->
+            <form id="selectionForm" method="POST" action="/upgrade/configure">
+                <!-- WHY: site selection fieldset -->
+                <fieldset class="mb-3">
+                    <!-- WHY: fieldset legend for accessibility -->
+                    <legend class="form-label">Site Selection</legend>
+                    <!-- WHY: site dropdown label -->
+                    <label for="siteSelect" class="form-label">Select Site:</label>
+                    <!-- WHY: site dropdown select element -->
+                    <select id="siteSelect" name="site_id" class="form-select" required>
+                        <!-- WHY: placeholder option for UX -->
+                        <option value="">-- Choose a site --</option>
+                        <!-- WHY: loop through sites (populated by JavaScript) -->
+                        {% for site in sites %}
+                            <!-- WHY: option for each site -->
+                            <option value="{{ site.id }}">{{ site.name }} ({{ site.country_code }})</option>
+                        {% endfor %}
+                    </select>
+                    <!-- WHY: help text for site selection -->
+                    <small class="form-text text-muted">Select the site where devices are located.</small>
+                </fieldset>
+
+                <!-- WHY: device selection fieldset -->
+                <fieldset class="mb-3">
+                    <!-- WHY: fieldset legend for accessibility -->
+                    <legend class="form-label">Device Selection</legend>
+                    <!-- WHY: help text explaining device selection -->
+                    <p class="text-muted small">Select one or more devices to upgrade (minimum 1 required).</p>
+                    <!-- WHY: device list container (populated by JavaScript) -->
+                    <div id="deviceList" class="device-list">
+                        <!-- WHY: loading indicator -->
+                        <p class="text-muted">Select a site above to load devices.</p>
+                    </div>
+                    <!-- WHY: error message for device selection -->
+                    <small id="deviceError" class="form-text text-danger" style="display:none;">
+                        <!-- WHY: error text for no devices selected -->
+                        Please select at least one device.
+                    </small>
+                </fieldset>
+
+                <!-- WHY: device count summary -->
+                <div class="alert alert-info" id="deviceSummary" style="display:none;">
+                    <!-- WHY: summary text container -->
+                    <span id="deviceCount">0</span> device(s) selected.
+                </div>
+
+                <!-- WHY: form action buttons -->
+                <div class="btn-group" role="group">
+                    <!-- WHY: submit button for proceeding -->
+                    <button type="submit" class="btn btn-primary" id="nextButton">Next</button>
+                    <!-- WHY: cancel button to return -->
+                    <button type="button" class="btn btn-secondary" onclick="window.history.back()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- WHY: Bootstrap JavaScript for interactions -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- WHY: custom JavaScript for form logic -->
+    <script>
+        // WHY: initialize page when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            // WHY: get form elements
+            const siteSelect = document.getElementById('siteSelect');  // WHY: site dropdown
+            const deviceList = document.getElementById('deviceList');  // WHY: device list container
+            const deviceError = document.getElementById('deviceError');  // WHY: error message
+            const deviceSummary = document.getElementById('deviceSummary');  // WHY: summary container
+
+            // WHY: load devices when site selected
+            siteSelect.addEventListener('change', async function() {
+                // WHY: get selected site ID
+                const siteId = this.value;  // WHY: site_id from dropdown
+                // WHY: clear previous devices
+                deviceList.innerHTML = '';  // WHY: reset container
+                // WHY: hide device summary
+                deviceSummary.style.display = 'none';  // WHY: hide summary
+
+                // WHY: return early if no site selected
+                if (!siteId) {  // WHY: check if empty
+                    // WHY: show placeholder
+                    deviceList.innerHTML = '<p class="text-muted">Select a site to load devices.</p>';  // WHY: placeholder
+                    return;  // WHY: exit
+                }
+
+                // WHY: show loading indicator
+                deviceList.innerHTML = '<p class="text-muted">Loading devices...</p>';  // WHY: loading
+                // WHY: fetch devices from API
+                try {
+                    // WHY: construct API URL
+                    const url = `/api/sites/${encodeURIComponent(siteId)}/devices?type=all`;  // WHY: API endpoint
+                    // WHY: fetch devices
+                    const response = await fetch(url);  // WHY: HTTP GET
+                    // WHY: check if response is OK
+                    if (!response.ok) {  // WHY: check status
+                        // WHY: throw error for non-2xx
+                        throw new Error(`HTTP ${response.status}`);  // WHY: error message
+                    }
+                    // WHY: parse JSON response
+                    const data = await response.json();  // WHY: JSON parse
+                    // WHY: get devices array
+                    const devices = data.devices || [];  // WHY: devices list
+
+                    // WHY: clear container for devices
+                    deviceList.innerHTML = '';  // WHY: reset
+                    // WHY: check if any devices found
+                    if (devices.length === 0) {  // WHY: check length
+                        // WHY: show no devices message
+                        deviceList.innerHTML = '<p class="text-muted">No devices found for this site.</p>';  // WHY: no data
+                        return;  // WHY: exit
+                    }
+
+                    // WHY: create device checkboxes
+                    devices.forEach(function(device) {  // WHY: iterate devices
+                        // WHY: create device item container
+                        const deviceItem = document.createElement('div');  // WHY: div element
+                        deviceItem.className = 'device-item';  // WHY: CSS class
+
+                        // WHY: create checkbox
+                        const checkbox = document.createElement('input');  // WHY: input element
+                        checkbox.type = 'checkbox';  // WHY: checkbox type
+                        checkbox.name = 'device_ids';  // WHY: form name
+                        checkbox.value = device.id;  // WHY: device ID value
+                        checkbox.className = 'form-check-input';  // WHY: Bootstrap class
+
+                        // WHY: create label for checkbox
+                        const label = document.createElement('label');  // WHY: label element
+                        label.className = 'form-check-label ms-2 device-name';  // WHY: CSS class
+                        label.htmlFor = `device-${device.id}`;  // WHY: label for
+                        label.textContent = device.name;  // WHY: device name
+
+                        // WHY: create details section
+                        const details = document.createElement('div');  // WHY: div element
+                        details.className = 'device-details ms-4';  // WHY: CSS class
+                        // WHY: show model and serial
+                        details.innerHTML = `<div>Model: ${device.model}</div><div>Serial: ${device.serial}</div><div>Firmware: ${device.firmware_version}</div>`;  // WHY: device details
+
+                        // WHY: add checkbox and label to item
+                        deviceItem.appendChild(checkbox);  // WHY: add checkbox
+                        deviceItem.appendChild(label);  // WHY: add label
+                        deviceItem.appendChild(details);  // WHY: add details
+
+                        // WHY: add item to list
+                        deviceList.appendChild(deviceItem);  // WHY: append to container
+
+                        // WHY: add change listener to checkbox
+                        checkbox.addEventListener('change', updateDeviceSummary);  // WHY: event handler
+                    });  // WHY: end loop
+
+                } catch (error) {  // WHY: catch errors
+                    // WHY: show error message
+                    deviceList.innerHTML = `<p class="text-danger">Error loading devices: ${error.message}</p>`;  // WHY: error
+                    // WHY: log error
+                    console.error('Error loading devices:', error);  // WHY: console log
+                }
+            });  // WHY: end event listener
+
+            // WHY: update device summary when selection changes
+            function updateDeviceSummary() {
+                // WHY: get all checked checkboxes
+                const checked = document.querySelectorAll('input[name="device_ids"]:checked');  // WHY: selector
+                // WHY: get count of selected devices
+                const count = checked.length;  // WHY: count
+                // WHY: update summary display
+                if (count > 0) {  // WHY: if any selected
+                    // WHY: show summary
+                    deviceSummary.style.display = 'block';  // WHY: display
+                    // WHY: update count
+                    document.getElementById('deviceCount').textContent = count;  // WHY: update text
+                    // WHY: hide error
+                    deviceError.style.display = 'none';  // WHY: hide
+                } else {  // WHY: if none selected
+                    // WHY: hide summary
+                    deviceSummary.style.display = 'none';  // WHY: display
+                }  // WHY: end if
+            }  // WHY: end function
+
+            // WHY: validate form on submit
+            document.getElementById('selectionForm').addEventListener('submit', function(e) {
+                // WHY: get selected site
+                const siteId = siteSelect.value;  // WHY: site_id
+                // WHY: get selected devices
+                const devices = document.querySelectorAll('input[name="device_ids"]:checked');  // WHY: selector
+                // WHY: validate site selected
+                if (!siteId) {  // WHY: check site
+                    // WHY: prevent submission
+                    e.preventDefault();  // WHY: stop submit
+                    // WHY: show error
+                    document.getElementById('errorContainer').textContent = 'Please select a site.';  // WHY: error text
+                    document.getElementById('errorContainer').style.display = 'block';  // WHY: show
+                    return;  // WHY: exit
+                }
+                // WHY: validate devices selected
+                if (devices.length === 0) {  // WHY: check count
+                    // WHY: prevent submission
+                    e.preventDefault();  // WHY: stop submit
+                    // WHY: show error
+                    deviceError.style.display = 'block';  // WHY: show
+                    // WHY: show error message
+                    document.getElementById('errorContainer').textContent = 'Please select at least one device.';  // WHY: error text
+                    document.getElementById('errorContainer').style.display = 'block';  // WHY: show
+                    return;  // WHY: exit
+                }
+            });  // WHY: end event listener
+        });  // WHY: end DOMContentLoaded
+    </script>
+</body>
+</html>
