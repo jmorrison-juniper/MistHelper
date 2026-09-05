@@ -39,6 +39,43 @@ _LOGGER_NAME = "src.device.ap_profile_migration_manager"
 
 
 # ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+
+def _sleep_recorder() -> tuple[list[float], Callable[[float], None]]:
+    """Build a pacing log and a recorder that accepts the calling thread only.
+
+    Why:
+        ``patch("src.device.ap_profile_migration_manager.time.sleep", ...)``
+        replaces the ``sleep`` attribute on the shared ``time`` module,
+        because the module under test does a plain ``import time``. The patch
+        is therefore process wide. A background thread that another test
+        started can call ``time.sleep`` while this test runs. That foreign
+        call lands in the pacing log, shifts every index by one, and breaks a
+        positional assertion. Issue #1822 recorded one such failure in CI.
+        This recorder compares the caller thread against the thread that
+        built the recorder and drops every foreign call.
+
+    Returns:
+        A pair. The first item is the ordered pacing log. The second item is
+        the recorder to pass as the ``side_effect`` of the sleep patch.
+    """
+    logging.info("Building a thread-scoped sleep recorder for the pacing assertions")
+    owner_thread_id = threading.get_ident()  # WHY: only this thread may add to the pacing log.
+    sleep_args: list[float] = []  # WHY: ordered pacing log that the assertions read by index.
+
+    def _record_sleep(secs: float) -> None:
+        """Record one pacing sleep when the call comes from the owning thread."""
+        if threading.get_ident() != owner_thread_id:  # WHY: a foreign thread must not shift the indexes.
+            return  # WHY: drop the foreign sleep so the pacing log stays exact.
+        sleep_args.append(secs)  # WHY: keep the ordered pacing log for the assertions.
+
+    logging.debug("Sleep recorder ready for thread %d", owner_thread_id)
+    return sleep_args, _record_sleep
+
+
+# ---------------------------------------------------------------------------
 # Shared fixtures
 # ---------------------------------------------------------------------------
 
@@ -1552,7 +1589,7 @@ def test_migrate_hermetic_no_wall_clock_sleep(
     _seed_rate_limiter(fake_mh, delay=0.25)
     fake_mh.InputUtils.safe_input.return_value = "MIGRATE"
 
-    # WHY: a thread-scoped spy; a global patch would also catch foreign threads.
+    # WHY: a thread-scoped recorder keeps a foreign thread out of the pacing log.
     sleep_args, _record_sleep = _sleep_recorder()
 
     with (
@@ -1665,8 +1702,9 @@ def test_migrate_limiter_exception_falls_back_and_continues(
 
     get_delay_mock.side_effect = _delay_or_raise
 
-    # WHY: a thread-scoped spy. A foreign thread's sleep once shifted index 4
-    # of this list from 0.75 to 30 and failed the gate. See issue #1822.
+    # WHY: a thread-scoped recorder keeps a foreign thread out of the pacing log.
+    # Issue #1822: a process-wide sleep patch let one foreign sleep of 30 s shift
+    # every index, so the fallback landed at position 5 instead of position 4.
     sleep_args, _record_sleep = _sleep_recorder()
 
     caplog.set_level(logging.WARNING, logger=_LOGGER_NAME)
@@ -1687,6 +1725,43 @@ def test_migrate_limiter_exception_falls_back_and_continues(
     assert sleep_args[4] == pytest.approx(0.75), f"5th sleep arg expected 0.75, got {sleep_args[4]!r}"
     # WHY: the run completed all 10 APs (limiter fault MUST NOT halt).
     assert get_delay_mock.call_count == 10, f"expected 10 limiter consults, got {get_delay_mock.call_count}"
+
+
+# ---------------------------------------------------------------------------
+# Issue #1822 -- the pacing recorder ignores a sleep from a foreign thread
+# ---------------------------------------------------------------------------
+
+
+def test_sleep_recorder_ignores_a_foreign_thread() -> None:
+    """The pacing recorder MUST drop a sleep that another thread reports.
+
+    Why:
+        Issue #1822 -- ``patch("...ap_profile_migration_manager.time.sleep")``
+        replaces the attribute on the shared ``time`` module, so the patch is
+        process wide. A background thread that another test left running can
+        call ``time.sleep`` during this test. In CI one such call of 30 s
+        entered the pacing log and shifted the index that
+        ``test_migrate_limiter_exception_falls_back_and_continues`` reads.
+        This test locks the guard that removes that failure mode.
+    """
+    logging.info("Checking that the pacing recorder rejects a foreign thread")
+    sleep_args, record_sleep = _sleep_recorder()  # WHY: recorder is owned by this test thread.
+    record_sleep(0.1)  # WHY: the owning thread must reach the pacing log.
+
+    def _foreign_sleep() -> None:
+        """Report one long sleep from a thread that does not own the recorder."""
+        record_sleep(30)  # WHY: reproduce the exact foreign value seen in the CI failure.
+
+    foreign = threading.Thread(target=_foreign_sleep, name="issue-1822-foreign")
+    foreign.start()  # WHY: run the foreign call on a real second thread.
+    foreign.join(timeout=5.0)  # WHY: bounded join keeps the suite hermetic.
+    assert not foreign.is_alive(), "the foreign thread did not finish inside the join timeout"
+
+    record_sleep(0.2)  # WHY: a later owning-thread call must still append in order.
+    logging.debug("Pacing log after the foreign call is %r", sleep_args)
+
+    # WHY: the foreign 30 s value MUST NOT appear, and the order MUST hold.
+    assert sleep_args == [0.1, 0.2], f"foreign sleep leaked into the pacing log: {sleep_args!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -1803,7 +1878,7 @@ def test_revert_hermetic_no_wall_clock_sleep(
     _seed_rate_limiter(fake_mh, delay=0.25)
     fake_mh.InputUtils.safe_input.return_value = "REVERT"
 
-    # WHY: a thread-scoped spy; a global patch would also catch foreign threads.
+    # WHY: a thread-scoped recorder keeps a foreign thread out of the pacing log.
     sleep_args, _record_sleep = _sleep_recorder()
 
     start = time.perf_counter()
@@ -2074,8 +2149,8 @@ def test_migrate_integration_real_limiter_seeded_cache(
 
     fake_mh.InputUtils.safe_input.return_value = "MIGRATE"
 
-    # WHY: a thread-scoped spy; this test asserts an exact count of 50, which
-    # a single foreign thread's sleep would break.
+    # WHY: a thread-scoped recorder keeps a foreign thread out of the pacing log,
+    # so the exact count assertion below stays stable under a full-suite run.
     sleep_args, _record_sleep = _sleep_recorder()
 
     with (
