@@ -57,7 +57,8 @@ STATIC_FOLDER = str(ASSET_ROOT / "static")  # The vendored stylesheets and scrip
 
 # The five route modules match the five stages of the operator journey: sign in,
 # choose a site, capture the state, drive the upgrade, and review the difference.
-BLUEPRINT_NAMES = ("auth", "select", "capture", "upgrade", "review")  # The registration order.
+# Comparison route module added for T-014 delta analysis and approval workflow.
+BLUEPRINT_NAMES = ("auth", "select", "capture", "upgrade", "review", "comparison")  # The registration order.
 
 # Each route module publishes its blueprint under one of these names. The first
 # match wins, so a module needs no registration list of its own.
