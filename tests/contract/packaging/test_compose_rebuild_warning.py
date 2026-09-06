@@ -21,10 +21,12 @@ from pathlib import Path
 
 import pytest
 
-# The two files that carry the warning.
+# The three files that carry the repair, and the script that enforces it.
 _ROOT = Path(__file__).resolve().parents[3]
 _COMPOSE = _ROOT / "compose.yml"
+_COMPOSE_BUILD = _ROOT / "compose.build.yml"
 _GUIDE = _ROOT / "documentation" / "container-deployment.md"
+_SCRIPT = _ROOT / "scripts" / "compose.ps1"
 
 # The sentence that the old header carried. It is false under podman-compose, so
 # no file may state it again.
@@ -46,6 +48,24 @@ def fixture_guide_text() -> str:
     logging.info("Reading the deployment guide at %s", _GUIDE)  # Report the read before the work.
     text = _GUIDE.read_text(encoding="utf-8")
     logging.debug("The guide holds %d characters", len(text))  # Record the size.
+    return text
+
+
+@pytest.fixture(name="compose_build_text", scope="module")
+def fixture_compose_build_text() -> str:
+    """Read the build file that holds the build section."""
+    logging.info("Reading the build file at %s", _COMPOSE_BUILD)  # Report the read before the work.
+    text = _COMPOSE_BUILD.read_text(encoding="utf-8")
+    logging.debug("The build file holds %d characters", len(text))  # Record the size.
+    return text
+
+
+@pytest.fixture(name="script_text", scope="module")
+def fixture_script_text() -> str:
+    """Read the helper script that enforces the split."""
+    logging.info("Reading the helper script at %s", _SCRIPT)  # Report the read before the work.
+    text = _SCRIPT.read_text(encoding="utf-8")
+    logging.debug("The script holds %d characters", len(text))  # Record the size.
     return text
 
 
@@ -88,6 +108,38 @@ def test_the_compose_header_names_the_revision_check(compose_text: str) -> None:
     logging.info("Checking the revision check of the compose header")  # Report the plan.
 
     assert "org.opencontainers.image.revision" in compose_text, "the header must name the label"
+
+
+def test_the_compose_file_carries_no_build_section(compose_text: str) -> None:
+    """The compose file MUST NOT carry a build section.
+
+    Why:
+        podman-compose builds every service that holds a build section when a
+        plain `up` runs. A build section in this file can therefore overwrite
+        the published tag with a local build.
+    """
+    logging.info("Checking that the compose file holds no build section")  # Report the plan.
+
+    assert "build:" not in compose_text, "the compose file must not hold a build section; move it to compose.build.yml"
+
+
+def test_the_build_file_holds_the_build_section(compose_build_text: str) -> None:
+    """The build file MUST hold the build section that the compose file lost."""
+    logging.info("Checking the build section of the build file")  # Report the plan.
+
+    assert "context: ." in compose_build_text, "the build file must name the build context"
+    assert "dockerfile: Containerfile" in compose_build_text, "the build file must name the build file"
+
+
+def test_the_script_builds_only_through_the_build_file(script_text: str) -> None:
+    """The script MUST build through the build file, and it MUST offer the revision check."""
+    logging.info("Checking the build and revision paths of the helper script")  # Report the plan.
+
+    assert "compose.build.yml" in script_text, "the build subcommand must load the build file"
+    assert "check-revision" in script_text, "the script must offer the revision check"
+    assert (
+        "org.opencontainers.image.revision" in script_text
+    ), "the revision check must read the label that names the commit"
 
 
 def test_the_guide_warns_about_the_rebuild(guide_text: str) -> None:

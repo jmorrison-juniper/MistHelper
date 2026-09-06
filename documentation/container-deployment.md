@@ -11,7 +11,7 @@ Read the README first for the plain start.
 
 | Method | File | Description |
 |--------|------|-------------|
-| Compose | `compose.yml` | The stack of three containers. The supported method. |
+| Compose | `compose.yml`, `compose.build.yml` | The stack of three containers. The supported method. |
 | Podman Quadlet | `deploy/misthelper.container` | One container under systemd, with auto-restart |
 | Systemd | `deploy/misthelper.service` | A host that runs the code with no container |
 
@@ -53,11 +53,16 @@ The script needs the native provider. Install it one time with this command:
 
 ## Update the stack to the newest code
 
-Warning: a plain `up` rebuilds. `podman-compose up -d` with no service argument
-builds the application image from your working tree and overwrites the published
-tag with that build. It prints no line that names the build. If your checkout is
-behind `main`, the command downgrades the running container and clears the labels
-that name the commit. Issue #2272 holds the measurement.
+Warning: a plain `up` rebuilds. A compose file that carries a build section
+rebuilds the application image from your working tree and overwrites the
+published tag with that build. It prints no line that names the build. If your
+checkout is behind `main`, the command downgrades the running container and
+clears the labels that name the commit. Issue #2272 holds the measurement.
+
+The repair holds for every future run. The build section now lives in
+`compose.build.yml`, and a plain `up` reads `compose.yml` only, so it can
+never build the image. The recipe below stays the safe path, and it is the
+path this page names.
 
 Update the checkout first, then pull, then name the service.
 
@@ -67,6 +72,30 @@ podman pull ghcr.io/jmorrison-juniper/misthelper:latest
 podman rm -f misthelper-app
 .\scripts\compose.ps1 up -d --no-deps misthelper
 ```
+
+## Build the image from your working tree
+
+The helper script merges `compose.build.yml` only for an explicit build request.
+
+```powershell
+.\scripts\compose.ps1 build
+```
+
+Warning: a build from a checkout that is behind `main` overwrites the published
+tag with a stale build and clears the labels that name the commit. Run
+`git pull` before the build, and read the revision after the run.
+
+## Check the revision of the running container
+
+The script reads the commit label and compares it against `origin/main`.
+
+```powershell
+.\scripts\compose.ps1 check-revision
+```
+
+An empty label names a local build, because only the CI build writes the label.
+A label that differs from `origin/main` names an image that CI published for an
+older commit.
 
 Continuous integration builds and publishes an image for every commit that
 changes `src/`, `web_portal/`, `MistHelper.py`, `requirements.txt`, or the
@@ -152,7 +181,7 @@ corporate network. Let GitHub Actions build and push the image instead. The
 runner sits outside the corporate network.
 
 Two build files exist. `Containerfile` builds with pip and is the file that
-`compose.yml` names. `Dockerfile` adds a health check and the UV package
+`compose.build.yml` names. `Dockerfile` adds a health check and the UV package
 manager. Both verify every TLS certificate.
 
 ## Remote access over SSH

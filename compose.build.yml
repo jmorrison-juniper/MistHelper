@@ -1,0 +1,21 @@
+# ==============================================================================
+# Build section for the misthelper service (issue #2272)
+# ==============================================================================
+# This file holds the build section that compose.yml used to carry. A plain
+# `up` reads compose.yml only, so it can never build the image and never
+# overwrites the published tag with a local build.
+#
+# The helper script merges this file only when the operator asks for a build:
+#   .\scripts\compose.ps1 build
+#
+# A build from a checkout that is behind `main` still downgrades the running
+# container and clears the labels that name the commit. Update the checkout
+# first, and read the revision after the run:
+#   .\scripts\compose.ps1 check-revision
+# ==============================================================================
+
+services:
+  misthelper:
+    build:
+      context: .
+      dockerfile: Containerfile  # Use Containerfile for Podman, Dockerfile for Docker
