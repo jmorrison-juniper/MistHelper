@@ -22,10 +22,11 @@ LABEL org.opencontainers.image.documentation="https://github.com/jmorrison-junip
 LABEL org.opencontainers.image.source="https://github.com/jmorrison-juniper/MistHelper"
 LABEL maintainer="MistHelper Development Team"
 
-# Install minimal system dependencies including SSH server
+# Install minimal system dependencies including SSH server and SNMP support
 RUN apt-get update && \
-    apt-get install -y ca-certificates openssh-server sudo && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y ca-certificates openssh-server sudo snmpd && \
+    rm -rf /var/lib/apt/lists/* && \
+    ls -la /usr/sbin/snmp* 
 
 # Create non-root user and configure SSH access
 RUN groupadd -r misthelper && useradd -r -g misthelper -m -s /bin/bash misthelper
@@ -50,6 +51,10 @@ RUN mkdir -p /var/run/sshd && \
 RUN echo "misthelper:misthelper123!" | chpasswd && \
     usermod -aG sudo misthelper && \
     echo "misthelper ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Configure SNMPd for metrics gateway pass_persist handler
+RUN mkdir -p /var/lib/snmp && \
+    mkdir -p /var/run/snmp
 
 # Copy container scripts from maintainable source files
 COPY container/scripts/misthelper-session.sh /usr/local/bin/misthelper-session
@@ -97,8 +102,10 @@ COPY pyproject.toml ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
-COPY MistHelper.py __init__.py ./
+COPY MistHelper.py __init__.py wsgi.py wsgi_capture.py ./
 COPY scripts/ ./scripts/
+COPY web_portal/ ./web_portal/
+COPY src/ ./src/
 
 # Set ownership and switch to non-root user for application files
 RUN chown -R misthelper:misthelper /app
@@ -133,8 +140,8 @@ ENV AUTO_UPGRADE_DEPENDENCIES=false
 # Volume for data persistence
 VOLUME ["/app/data"]
 
-# Expose SSH port 2200 and Dash web viewer port 8050
-EXPOSE 2200 8050
+# Expose SSH port 2200, Dash web viewer port 8055, and SNMP port 1161 (UDP)
+EXPOSE 2200 8055 1161/udp
 
 # Health probe for the web portal readiness endpoint (issue #1863).
 # The image installs no curl, so the probe uses the Python interpreter that

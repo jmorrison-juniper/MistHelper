@@ -75,12 +75,14 @@ STATUS_PATH = "/api/captures/<capture_id>/status"  # The poll target of the brow
 READ_PATH = "/api/captures/<capture_id>"  # The whole capture document.
 EXPORT_PATH = "/api/captures/<capture_id>/export"  # The file download of one whole capture.
 PAGE_PATH = "/captures/<capture_id>"  # The human view of one capture.
+CAPTURE_PRE_UPGRADE_PATH = "/api/runs/<run_id>/capture/start"  # Phase 2 T-006: Start pre-upgrade capture for a run.
 
 CAPTURE_TEMPLATE = "capture/capture.html"  # The page that starts a capture and shows its progress.
 
 RUNNER_KEY = "CAPTURE_RUNNER"  # The seam for the collection work.
 LOCK_GRANT_ATTR = "capture_lock_grant"  # The request-local field that carries a fresh grant to the answer.
 LOADER_KEY = "CAPTURE_LOADER"  # The seam for the stored capture reader.
+CAPTURE_SERVICE_KEY = "CAPTURE_SERVICE"  # Phase 2 T-006: The seam for CaptureService (pre/post capture).
 
 STORE_MODULE = "capture.store"  # Built by the storage work of this phase.
 ASSEMBLY_MODULE = "capture.assembly"  # Built by the assembly work of this phase.
@@ -1086,6 +1088,78 @@ def refusal_for(load: Any) -> tuple[Response, int]:
 # --------------------------------------------------------------------------
 # The routes.
 # --------------------------------------------------------------------------
+
+
+@capture_bp.post(CAPTURE_PRE_UPGRADE_PATH)  # Phase 2 T-006: POST /api/runs/<run_id>/capture/start
+@identity.require_session  # Ensure operator is authenticated
+def capture_pre_upgrade_for_run(run_id: str) -> tuple[Response, int]:
+    """Start a pre-upgrade device snapshot capture for a specific run.
+
+    Why:
+        T-006 requires capturing device state before upgrade: inventory, firmware versions,
+        policies, radio settings, LLDP neighbors. This handler invokes CaptureService to
+        fetch device snapshots from Mist API and store in ArangoDB with composite key
+        (run_id, capture_type="pre", timestamp). Retry logic handles transient API timeouts.
+
+    Args:
+        run_id: The upgrade run identifier that this capture belongs to.
+
+    Returns:
+        JSON response with capture_id and status, or error refusal.
+    """
+    # WHY: Fetch the CaptureService from Flask config seam; returns None if not wired yet
+    capture_service = current_app.config.get(CAPTURE_SERVICE_KEY)
+    if capture_service is None:  # CaptureService not wired, cannot proceed with capture
+        logger.error("capture: CaptureService not wired for run %s", run_id)  # Name the missing dependency
+        return json_error(SERVER_ERROR_STATUS, "service_unavailable", "CaptureService not available")
+
+    # WHY: Read the request body to extract device IDs and optional parameters (tier, etc)
+    body = request_body()
+    device_ids = body.get("device_ids", [])  # List of device identifiers to capture
+    org_id = body.get("org_id", "")  # Organization ID for Mist API context
+    site_id = body.get("site_id", "")  # Site ID for the devices being captured
+    tier = body.get("tier", TIER_STANDARD)  # Data tier for the capture (standard or extra)
+
+    # WHY: Validate required parameters before making any API calls to avoid wasted work
+    if not run_id or not device_ids or not org_id or not site_id:
+        logger.warning(
+            "capture: invalid parameters for pre-upgrade capture: run=%s devices=%s org=%s site=%s",
+            run_id,
+            len(device_ids) if isinstance(device_ids, list) else 0,
+            org_id,
+            site_id,
+        )
+        return json_error(
+            BAD_REQUEST_STATUS, "invalid_parameters", "Missing required parameters: run_id, device_ids, org_id, site_id"
+        )
+
+    try:  # CaptureService call may fail due to network, timeout, or Mist API errors
+        logger.info(
+            "capture: start pre-upgrade capture for run %s with %d devices", run_id, len(device_ids)
+        )  # BEFORE service call
+
+        # WHY: Invoke CaptureService.capture_pre_upgrade() to fetch device state from Mist API
+        # This returns capture result with snapshot data stored in ArangoDB
+        capture_result = capture_service.capture_pre_upgrade(
+            run_id=run_id, device_ids=device_ids, org_id=org_id, site_id=site_id, tier=tier
+        )
+
+        logger.debug("capture: pre-upgrade capture for run %s completed with result", run_id)  # AFTER service call
+
+        # WHY: Build success response with capture ID and status for the browser to poll
+        response_body = {
+            "capture_id": capture_result.get("capture_id", ""),  # ID used for status polling
+            "status": "pending",  # Initial status while capture is being processed
+            "devices_count": len(device_ids),  # Number of devices in this capture
+            "run_id": run_id,  # Echo back the run ID for reference
+        }
+        return jsonify(response_body), ACCEPTED_STATUS  # 202 Accepted: async work started
+
+    except Exception as fault:  # CaptureService raised unexpected fault (network, database, API, etc)
+        logger.error(
+            "capture: pre-upgrade capture for run %s failed: %s", run_id, type(fault).__name__
+        )  # Name the fault type
+        return json_error(SERVER_ERROR_STATUS, "capture_failed", str(fault))  # Return error to browser
 
 
 def launch_capture(site: dict[str, Any], org_id: str, tier: int, body: dict[str, Any]) -> tuple[Response, int]:
