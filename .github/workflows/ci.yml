@@ -548,6 +548,25 @@ jobs:
           fi
           echo "The menu reference matches the generator output."
 
+  codeql_register_check:
+    name: "CodeQL verdict register check"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      # Issue #2088: the register drifted by seven rows and no gate noticed,
+      # because no workflow called the tool. This gate runs the shipped check
+      # and fails when a dismissed alert holds no register row.
+      - name: Reconcile the register against the dismissed alerts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/codeql_verdict_register.py check
+
   playwright:
     name: "E2E smoke tests"
     needs:
@@ -914,6 +933,7 @@ jobs:
       - pydocstyle
       - interrogate
       - ops_portal
+      - codeql_register_check
     if: ${{ always() && contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     permissions:
@@ -953,6 +973,7 @@ jobs:
           RESULTS[pydocstyle]="${{ needs.pydocstyle.result }}"
           RESULTS[interrogate]="${{ needs.interrogate.result }}"
           RESULTS[ops_portal]="${{ needs.ops_portal.result }}"
+          RESULTS[codeql_register_check]="${{ needs.codeql_register_check.result }}"
 
           # Scope: a PR failure gets a scoped title (per-PR). A branch failure uses a
           # gate-only title, so repeated runs on the same branch reuse one issue.
@@ -1020,6 +1041,7 @@ jobs:
       - pydocstyle
       - interrogate
       - ops_portal
+      - codeql_register_check
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
@@ -1054,6 +1076,7 @@ jobs:
           RESULTS[pydocstyle]="${{ needs.pydocstyle.result }}"
           RESULTS[interrogate]="${{ needs.interrogate.result }}"
           RESULTS[ops_portal]="${{ needs.ops_portal.result }}"
+          RESULTS[codeql_register_check]="${{ needs.codeql_register_check.result }}"
 
           for gate in "${!RESULTS[@]}"; do
             result="${RESULTS[$gate]}"
