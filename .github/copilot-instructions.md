@@ -197,6 +197,10 @@ global interpreter. `python -m pytest` stops with one message that names the boo
 instead of one import error for each test module. Run `python scripts/bootstrap_worktree.py` in the
 new worktree, activate the environment, then run the tests again. See issue #1866.
 
+The bootstrap also configures the repository credential username as
+`jmorrison-juniper`. If `GH_TOKEN` or `GITHUB_TOKEN` names another account, clear both variables
+before a push, then run `gh auth switch --user jmorrison-juniper`. See issue #1893.
+
 ---
 
 ## Critical Patterns
