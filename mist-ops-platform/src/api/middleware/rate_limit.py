@@ -7,11 +7,14 @@ but applies to inbound API requests on a per-org basis.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+from redis.exceptions import RedisError
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+
+if TYPE_CHECKING:
+    from starlette.requests import Request
 
 logger = logging.getLogger(__name__)
 
@@ -56,12 +59,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return False  # fail-open when Redis unavailable
 
         key = f"api_ratelimit:{org_id}"
-        current = await redis.incr(key)
-        if current == 1:
-            await redis.expire(key, DEFAULT_WINDOW_SECONDS)
-        return current > DEFAULT_REQUEST_LIMIT
+        try:
+            current = await redis.incr(key)  # Increment the active window counter.
+            if current == 1:
+                await redis.expire(key, DEFAULT_WINDOW_SECONDS)  # Set the first-window expiry.
+            return current > DEFAULT_REQUEST_LIMIT  # Reject only requests over the budget.
+        except RedisError as error:
+            self._redis = None  # Force a reconnect attempt after a runtime Redis outage.
+            logger.warning(
+                "Rate limit Redis command failed: %s. Rate limiting is disabled.",
+                error,
+            )
+            return False  # Preserve the documented fail-open behavior during an outage.
 
-    async def _get_redis(self):  # noqa: ANN202
+    async def _get_redis(self):
         """Lazy-initialize async Redis connection."""
         if self._redis is not None:
             return self._redis
