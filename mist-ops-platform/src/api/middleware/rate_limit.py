@@ -21,6 +21,14 @@ logger = logging.getLogger(__name__)
 DEFAULT_REQUEST_LIMIT = 1_000
 DEFAULT_WINDOW_SECONDS = 60
 
+ATOMIC_INCR_SCRIPT = """
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return count
+"""  # One atomic INCR+EXPIRE, so a crash cannot drop the TTL.
+
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Enforce per-org request rate limits on the API layer."""
@@ -29,6 +37,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self._redis_url = redis_url
         self._redis = None
+        self._atomic_incr: Any = None  # Cached script handle, bound to the live client.
 
     async def dispatch(
         self,
@@ -59,20 +68,25 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return False  # fail-open when Redis unavailable
 
         key = f"api_ratelimit:{org_id}"
+        if self._atomic_incr is None:
+            self._atomic_incr = redis.register_script(
+                ATOMIC_INCR_SCRIPT
+            )  # One atomic INCR+EXPIRE, so a crash cannot drop the TTL.
         try:
-            current = await redis.incr(key)  # Increment the active window counter.
-            if current == 1:
-                await redis.expire(key, DEFAULT_WINDOW_SECONDS)  # Set the first-window expiry.
+            current = int(
+                await self._atomic_incr(keys=[key], args=[DEFAULT_WINDOW_SECONDS])
+            )  # Counter and TTL are set in a single Redis call.
             return current > DEFAULT_REQUEST_LIMIT  # Reject only requests over the budget.
         except RedisError as error:
             self._redis = None  # Force a reconnect attempt after a runtime Redis outage.
+            self._atomic_incr = None  # Drop the stale script bound to the dead client.
             logger.warning(
                 "Rate limit Redis command failed: %s. Rate limiting is disabled.",
                 error,
             )
             return False  # Preserve the documented fail-open behavior during an outage.
 
-    async def _get_redis(self):
+    async def _get_redis(self) -> Any:
         """Lazy-initialize async Redis connection."""
         if self._redis is not None:
             return self._redis
