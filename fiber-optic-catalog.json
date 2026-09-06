@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "catalog_type": "ethernet_transceivers",
+  "planner_rule": "Exact vendor part-number support overrides family matching.",
+  "families": [
+    {"id":"1000base-sx","form_factor":"SFP","fiber":"MMF","wavelength_nm":850,"reach_m":{"OM1":220,"OM2":550,"OM3":550,"OM4":550},"connector":"duplex-lc","host_speed_gbps":1,"duplex":"duplex"},
+    {"id":"1000base-lx","form_factor":"SFP","fiber":"SMF/MMF","wavelength_nm":1310,"reach_m":{"SMF":5000,"MMF":550},"connector":"duplex-lc","host_speed_gbps":1,"duplex":"duplex","mode_conditioning_required_for_mm":true},
+    {"id":"1000base-zx","form_factor":"SFP","fiber":"SMF","wavelength_nm":1550,"reach_m":{"SMF":70000},"connector":"duplex-lc","host_speed_gbps":1,"duplex":"duplex"},
+    {"id":"1000base-bx","form_factor":"SFP","fiber":"SMF","wavelength_nm":"1310/1490","reach_m":{"SMF":10000},"connector":"simplex-lc","host_speed_gbps":1,"duplex":"bi_di","matched_pair_required":true},
+    {"id":"10gbase-sr","form_factor":"SFP+","fiber":"MMF","wavelength_nm":850,"reach_m":{"OM1":33,"OM2":82,"OM3":300,"OM4":400},"connector":"duplex-lc","host_speed_gbps":10,"duplex":"duplex"},
+    {"id":"10gbase-lr","form_factor":"SFP+","fiber":"SMF","wavelength_nm":1310,"reach_m":{"SMF":10000},"connector":"duplex-lc","host_speed_gbps":10,"duplex":"duplex"},
+    {"id":"10gbase-er","form_factor":"SFP+","fiber":"SMF","wavelength_nm":1550,"reach_m":{"SMF":40000},"connector":"duplex-lc","host_speed_gbps":10,"duplex":"duplex"},
+    {"id":"10gbase-zr","form_factor":"SFP+","fiber":"SMF","wavelength_nm":1550,"reach_m":{"SMF":80000},"connector":"duplex-lc","host_speed_gbps":10,"duplex":"duplex","vendor_specific":true},
+    {"id":"10gbase-bx","form_factor":"SFP+","fiber":"SMF","wavelength_nm":"1270/1330","reach_m":{"SMF":20000},"connector":"simplex-lc","host_speed_gbps":10,"duplex":"bi_di","matched_pair_required":true},
+    {"id":"25gbase-sr","form_factor":"SFP28","fiber":"MMF","wavelength_nm":850,"reach_m":{"OM3":70,"OM4":100},"connector":"duplex-lc","host_speed_gbps":25,"duplex":"duplex"},
+    {"id":"25gbase-lr","form_factor":"SFP28","fiber":"SMF","wavelength_nm":1310,"reach_m":{"SMF":10000},"connector":"duplex-lc","host_speed_gbps":25,"duplex":"duplex"},
+    {"id":"40gbase-sr4","form_factor":"QSFP+","fiber":"MMF","wavelength_nm":850,"reach_m":{"OM3":100,"OM4":150},"connector":"mpo-12","host_speed_gbps":40,"duplex":"duplex","lanes":4},
+    {"id":"40gbase-lr4","form_factor":"QSFP+","fiber":"SMF","wavelength_nm":1310,"reach_m":{"SMF":10000},"connector":"duplex-lc","host_speed_gbps":40,"duplex":"duplex","lanes":4},
+    {"id":"100gbase-sr4","form_factor":"QSFP28","fiber":"MMF","wavelength_nm":850,"reach_m":{"OM3":70,"OM4":100},"connector":"mpo-12","host_speed_gbps":100,"duplex":"duplex","lanes":4},
+    {"id":"100gbase-lr4","form_factor":"QSFP28","fiber":"SMF","wavelength_nm":1310,"reach_m":{"SMF":10000},"connector":"duplex-lc","host_speed_gbps":100,"duplex":"duplex","lanes":4},
+    {"id":"100gbase-er4","form_factor":"QSFP28","fiber":"SMF","wavelength_nm":1310,"reach_m":{"SMF":40000},"connector":"duplex-lc","host_speed_gbps":100,"duplex":"duplex","lanes":4},
+    {"id":"100gbase-cwdm4","form_factor":"QSFP28","fiber":"SMF","wavelength_nm":1310,"reach_m":{"SMF":2000},"connector":"duplex-lc","host_speed_gbps":100,"duplex":"duplex","lanes":4},
+    {"id":"100gbase-psm4","form_factor":"QSFP28","fiber":"SMF","wavelength_nm":1310,"reach_m":{"SMF":2000},"connector":"mpo-12","host_speed_gbps":100,"duplex":"duplex","lanes":4},
+    {"id":"200gbase-sr4","form_factor":"QSFP56","fiber":"MMF","wavelength_nm":850,"reach_m":{"OM3":70,"OM4":100},"connector":"mpo-12","host_speed_gbps":200,"duplex":"duplex","lanes":4},
+    {"id":"200gbase-fr4","form_factor":"QSFP56","fiber":"SMF","wavelength_nm":1310,"reach_m":{"SMF":2000},"connector":"duplex-lc","host_speed_gbps":200,"duplex":"duplex","lanes":4},
+    {"id":"200gbase-dr4","form_factor":"QSFP56","fiber":"SMF","wavelength_nm":1310,"reach_m":{"SMF":500},"connector":"mpo-12","host_speed_gbps":200,"duplex":"duplex","lanes":4},
+    {"id":"400gbase-sr8","form_factor":"QSFP-DD","fiber":"MMF","wavelength_nm":850,"reach_m":{"OM4":70},"connector":"mpo-16","host_speed_gbps":400,"duplex":"duplex","lanes":8},
+    {"id":"400gbase-fr4","form_factor":"QSFP-DD","fiber":"SMF","wavelength_nm":1310,"reach_m":{"SMF":2000},"connector":"duplex-lc","host_speed_gbps":400,"duplex":"duplex","lanes":4},
+    {"id":"400gbase-lr4","form_factor":"QSFP-DD","fiber":"SMF","wavelength_nm":1310,"reach_m":{"SMF":10000},"connector":"duplex-lc","host_speed_gbps":400,"duplex":"duplex","lanes":4},
+    {"id":"400gbase-dr4","form_factor":"QSFP-DD","fiber":"SMF","wavelength_nm":1310,"reach_m":{"SMF":500},"connector":"mpo-12","host_speed_gbps":400,"duplex":"duplex","lanes":4}
+  ]
+}
+
