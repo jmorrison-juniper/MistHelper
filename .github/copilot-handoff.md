@@ -32,7 +32,7 @@ Not required. No Mist API call runs in this change.
 
 ## Commit and push status
 
-- Commit: `efa87fd`
+- Commit: `efa87fd` (repair), `05c9c9d` (this handoff record)
 - Push: pushed to `origin/jmorrison-juniper-fix-2272-compose-rebuild`.
 
 ## Remaining work
