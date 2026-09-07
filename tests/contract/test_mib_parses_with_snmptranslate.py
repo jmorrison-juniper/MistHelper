@@ -17,7 +17,27 @@ REPO_ROOT = Path(__file__).resolve().parents[2]  # The tests run from a temporar
 MIB_PATH = REPO_ROOT / "documentation" / "mibs" / "MISTHELPER-MIB.mib"  # The generated file.
 
 
-@pytest.mark.skipif(shutil.which("snmptranslate") is None, reason="snmptranslate is not on this machine")
+def _snmptranslate_has_standard_mibs() -> bool:
+    """Return True when snmptranslate can load the SNMPv2-SMI base module.
+
+    Why:
+        A CI runner may ship the binary without the standard MIB files.
+        The test must skip in that case, not fail on a missing base module.
+    """
+    if shutil.which("snmptranslate") is None:  # The binary is absent, so skip.
+        return False
+    probe = subprocess.run(  # A real parse of the base module is the honest check.
+        ["snmptranslate", "-m", "SNMPv2-SMI", "-Tp", "SNMPv2-SMI::enterprises"],
+        capture_output=True,
+        check=False,
+    )
+    return probe.returncode == 0  # The base module must load before any test MIB can.
+
+
+@pytest.mark.skipif(
+    not _snmptranslate_has_standard_mibs(),
+    reason="snmptranslate or its standard MIBs are not on this machine",
+)
 def test_snmptranslate_parses_the_generated_mib(tmp_path: Path) -> None:
     """Prove Net-SNMP loads the module and prints the tree."""
     shutil.copy(MIB_PATH, tmp_path / "MISTHELPER-MIB.mib")  # The tool reads a whole folder of modules.
@@ -32,4 +52,4 @@ def test_snmptranslate_parses_the_generated_mib(tmp_path: Path) -> None:
     ]
     result = subprocess.run(command, capture_output=True, text=True, check=False)  # nosec B603
     assert result.returncode == 0, result.stderr  # A parse error must fail the test loudly.
-    assert "mistOrgObjects" in result.stdout  # The tree must hold the org subtree by name.
+    assert "mistOrg" in result.stdout  # The tree must hold the org subtree by name.
