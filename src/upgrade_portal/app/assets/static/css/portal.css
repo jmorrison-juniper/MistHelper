@@ -126,7 +126,7 @@
  * when something goes wrong. The template hides the empty one with the hidden
  * attribute. Section 12 prints the signal word of the level with generated
  * content, and a browser builds that content for a hidden element too. The
- * accessibility snapshot of the sign-in page therefore read a bare "Warning:"
+ * accessibility capture of the sign-in page therefore read a bare "Warning:"
  * with no sentence after it, on a page where nothing was wrong.
  *
  * A signal word with no consequence after it breaks the rule that

@@ -5,9 +5,9 @@ Implements FR-012 (settle gate), FR-019 (audit logging), and SC-010
 by running parallel checks: ping, API, firmware version, LLDP neighbors.
 """
 
-import asyncio  # WHY: parallel device checks with timeout management
 import time  # WHY: retry backoff timing
 import uuid  # WHY: unique settle gate run IDs
+from concurrent.futures import ThreadPoolExecutor  # WHY: parallel device checks with timeout management
 from dataclasses import dataclass, field  # WHY: immutable result structures
 from datetime import UTC, datetime  # WHY: ISO 8601 timestamps
 from typing import Any  # WHY: type hints for complex structures
@@ -102,7 +102,7 @@ class SettleGateService:
             audit_available=audit_logger is not None,  # WHY: dependency status
         )  # WHY: startup event
 
-    async def wait_for_settle(
+    def wait_for_settle(
         self,
         run_id: str,  # WHY: unique run identifier
         device_ids: list[str],  # WHY: devices to validate
@@ -156,18 +156,20 @@ class SettleGateService:
                 device_count=len(device_ids),  # WHY: scope metric
             )  # WHY: check phase start
 
-            # WHY: create check tasks for parallel execution
+            # WHY: create check callables for parallel execution
             check_tasks = self._create_check_tasks(
                 device_ids, run_id, site_id, org_id, settle_run_id
             )  # WHY: schedule device checks
 
             # WHY: execute all checks concurrently with timeout
             try:
-                # WHY: gather results from all tasks with timeout
-                results = await asyncio.wait_for(
-                    asyncio.gather(*check_tasks, return_exceptions=True),  # WHY: parallel execution
-                    timeout=timeout,  # WHY: enforce timeout
-                )  # WHY: await results
+                # WHY: run all checks in a thread pool and collect results with timeout
+                with ThreadPoolExecutor(max_workers=self.MAX_WORKER_THREADS) as pool:  # WHY: bounded worker pool
+                    futures = [pool.submit(check) for check in check_tasks]  # WHY: submit each device check
+                    results = [  # WHY: collect results with timeout
+                        future.result(timeout=timeout)  # WHY: per-future timeout
+                        for future in futures  # WHY: each submitted check
+                    ]  # WHY: ordered result list
             except TimeoutError:  # WHY: timeout occurred
                 # WHY: log timeout error
                 logger.error(
@@ -285,16 +287,18 @@ class SettleGateService:
         settle_run_id: str,
     ) -> list[Any]:
         """Create one validation task for each device."""
+        # WHY: return callables so the thread pool runs each device check
+        # WHY: a lambda per device keeps the bound arguments for that device
         return [
-            self._run_device_checks(
-                device_id=device_id,
-                run_id=run_id,
-                site_id=site_id,
-                org_id=org_id,
-                settle_run_id=settle_run_id,
-            )
-            for device_id in device_ids
-        ]
+            lambda device_id=device_id: self._run_device_checks(  # WHY: one task per device
+                device_id=device_id,  # WHY: device identifier
+                run_id=run_id,  # WHY: run context
+                site_id=site_id,  # WHY: site context
+                org_id=org_id,  # WHY: org context
+                settle_run_id=settle_run_id,  # WHY: settle run identifier
+            )  # WHY: task callable
+            for device_id in device_ids  # WHY: one task per device
+        ]  # WHY: task list complete
 
     def _create_timeout_results(self, device_ids: list[str], timeout: int, timestamp: str) -> dict[str, SettleResult]:
         """Build failure results when the settle gate reaches its timeout."""
@@ -333,7 +337,7 @@ class SettleGateService:
                 device_results[device_id] = result
         return device_results
 
-    async def _run_device_checks(
+    def _run_device_checks(
         self,
         device_id: str,  # WHY: device identifier
         run_id: str,  # WHY: run context
@@ -362,20 +366,21 @@ class SettleGateService:
             settle_run_id=settle_run_id,  # WHY: settle run context
         )  # WHY: debug event
 
-        # WHY: create parallel check tasks
+        # WHY: create check callables so each check runs once in this loop
         check_tasks = [  # WHY: task list
-            # WHY: ping check task
-            self._check_ping(device_id),  # WHY: check function call
-            # WHY: API check task
-            self._check_api(device_id, site_id, org_id),  # WHY: check function call
-            # WHY: firmware check task
-            self._check_firmware(device_id, site_id, org_id),  # WHY: check function call
-            # WHY: neighbor check task
-            self._check_neighbors(device_id, site_id, org_id),  # WHY: check function call
+            lambda: self._check_ping(device_id),  # WHY: ping check task
+            lambda: self._check_api(device_id, site_id, org_id),  # WHY: API check task
+            lambda: self._check_firmware(device_id, site_id, org_id),  # WHY: firmware check task
+            lambda: self._check_neighbors(device_id, site_id, org_id),  # WHY: neighbor check task
         ]  # WHY: task list complete
 
-        # WHY: run all checks concurrently
-        check_results = await asyncio.gather(*check_tasks, return_exceptions=True)  # WHY: gather results
+        # WHY: run all checks sequentially in this worker thread
+        check_results = []  # WHY: collect each check outcome
+        for check in check_tasks:  # WHY: iterate device checks
+            try:  # WHY: keep one bad check from stopping the others
+                check_results.append(check())  # WHY: run check and record result
+            except Exception as check_error:  # WHY: capture per-check failure
+                check_results.append(check_error)  # WHY: store exception for reporting
 
         # WHY: analyze check results
         passed = True  # WHY: assume success
@@ -426,7 +431,7 @@ class SettleGateService:
             details=details,  # WHY: detailed results
         )  # WHY: result object complete
 
-    async def _check_ping(self, device_id: str) -> bool:
+    def _check_ping(self, device_id: str) -> bool:
         """Check if device responds to ping.
 
         Args:
@@ -447,10 +452,8 @@ class SettleGateService:
                     attempt=attempt + 1,  # WHY: attempt number
                 )  # WHY: debug event
 
-                # WHY: placeholder for actual ping implementation
-                # In production, use subprocess to call system ping command
-                # For now, assume device responds after first attempt
-                return True  # WHY: placeholder return
+                # WHY: run one ping attempt so the retry loop can wrap it
+                return self._ping_once(device_id)  # WHY: single attempt
 
             except Exception as e:  # WHY: catch errors
                 # WHY: log attempt error
@@ -465,12 +468,28 @@ class SettleGateService:
                 if attempt == self.MAX_RETRIES - 1:  # WHY: check last attempt
                     raise  # WHY: propagate exception
                 # WHY: wait before retry with exponential backoff
-                await asyncio.sleep(self.RETRY_BACKOFF_SECONDS * (2**attempt))  # WHY: backoff sleep
+                time.sleep(self.RETRY_BACKOFF_SECONDS * (2**attempt))  # WHY: backoff sleep
 
         # WHY: should not reach here
         return False  # WHY: default fail
 
-    async def _check_api(self, device_id: str, site_id: str, org_id: str) -> bool:
+    def _ping_once(self, device_id: str) -> bool:
+        """Run one ping attempt for a device.
+
+        Args:
+            device_id: Device ID to ping.
+
+        Returns:
+            True if the device responds.
+
+        WHY: a single attempt the retry loop can wrap and test.
+        """
+        # WHY: placeholder for actual ping implementation
+        # In production, use subprocess to call system ping command
+        # For now, assume device responds after first attempt
+        return True  # WHY: placeholder return
+
+    def _check_api(self, device_id: str, site_id: str, org_id: str) -> bool:
         """Check if device appears in Mist API listSiteDevices.
 
         Args:
@@ -517,12 +536,12 @@ class SettleGateService:
                 if attempt == self.MAX_RETRIES - 1:  # WHY: check last attempt
                     raise  # WHY: propagate exception
                 # WHY: wait before retry with exponential backoff
-                await asyncio.sleep(self.RETRY_BACKOFF_SECONDS * (2**attempt))  # WHY: backoff sleep
+                time.sleep(self.RETRY_BACKOFF_SECONDS * (2**attempt))  # WHY: backoff sleep
 
         # WHY: should not reach here
         return False  # WHY: default fail
 
-    async def _check_firmware(self, device_id: str, site_id: str, org_id: str) -> bool:
+    def _check_firmware(self, device_id: str, site_id: str, org_id: str) -> bool:
         """Check if device is running the target firmware version.
 
         Args:
@@ -563,12 +582,12 @@ class SettleGateService:
                 if attempt == self.MAX_RETRIES - 1:  # WHY: check last attempt
                     raise  # WHY: propagate exception
                 # WHY: wait before retry with exponential backoff
-                await asyncio.sleep(self.RETRY_BACKOFF_SECONDS * (2**attempt))  # WHY: backoff sleep
+                time.sleep(self.RETRY_BACKOFF_SECONDS * (2**attempt))  # WHY: backoff sleep
 
         # WHY: should not reach here
         return False  # WHY: default fail
 
-    async def _check_neighbors(self, device_id: str, site_id: str, org_id: str) -> bool:
+    def _check_neighbors(self, device_id: str, site_id: str, org_id: str) -> bool:
         """Check if device LLDP neighbors are reachable.
 
         Args:
@@ -609,7 +628,7 @@ class SettleGateService:
                 if attempt == self.MAX_RETRIES - 1:  # WHY: check last attempt
                     raise  # WHY: propagate exception
                 # WHY: wait before retry with exponential backoff
-                await asyncio.sleep(self.RETRY_BACKOFF_SECONDS * (2**attempt))  # WHY: backoff sleep
+                time.sleep(self.RETRY_BACKOFF_SECONDS * (2**attempt))  # WHY: backoff sleep
 
         # WHY: should not reach here
         return False  # WHY: default fail

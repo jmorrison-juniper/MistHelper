@@ -106,9 +106,9 @@ def test_only_the_index_column_is_not_accessible(generated: dict[str, tuple[str,
 
 def test_the_module_names_the_base_oid_of_the_agent() -> None:
     """Prove the module root is the root the agent answers at."""
-    text = MIB_PATH.read_text(encoding="utf-8")  # The MODULE-IDENTITY holds the two numbers below enterprises.
-    parent, child = DEFAULT_BASE_OID.strip(".").split(".")[-2:]
-    assert f"::= {{ enterprises {parent} {child} }}" in text
+    text = MIB_PATH.read_text(encoding="utf-8")  # The MODULE-IDENTITY holds the numbers below enterprises.
+    tail = DEFAULT_BASE_OID.strip(".").split(".")[6:]  # enterprises is the first six components.
+    assert f"::= {{ enterprises {' '.join(tail)} }}" in text  # The MIB names the same OID the agent answers at.
 
 
 def test_no_hand_written_object_moved(generated: dict[str, tuple[str, str, int]]) -> None:

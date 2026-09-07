@@ -318,8 +318,8 @@ class TestComparisonServiceDeltaCalculation:
         service = ComparisonService()
 
         # WHY: create empty captures
-        pre_capture = {"device_snapshots": []}  # WHY: empty pre  # WHY: no devices
-        post_capture = {"device_snapshots": []}  # WHY: empty post  # WHY: no devices
+        pre_capture = {"device_captures": []}  # WHY: empty pre  # WHY: no devices
+        post_capture = {"device_captures": []}  # WHY: empty post  # WHY: no devices
 
         # WHY: calculate deltas
         deltas, summary = service._calculate_deltas(
@@ -333,17 +333,17 @@ class TestComparisonServiceDeltaCalculation:
         assert "firmware_changes" in summary  # WHY: has firmware key
         assert "total_devices_compared" in summary  # WHY: has device key
 
-    def test_calculate_deltas_with_snapshots(self):  # WHY: test with snapshots
-        """_calculate_deltas() must work with device snapshots."""
+    def test_calculate_deltas_with_captures(self):  # WHY: test with captures
+        """_calculate_deltas() must work with device captures."""
         # WHY: create service
         service = ComparisonService()
 
-        # WHY: create captures with snapshots
+        # WHY: create captures with captures
         pre_capture = {  # WHY: pre-capture
-            "device_snapshots": [{"device_id": "dev-1", "firmware": "1.0"}]  # WHY: sample device
+            "device_captures": [{"device_id": "dev-1", "firmware": "1.0"}]  # WHY: sample device
         }
         post_capture = {  # WHY: post-capture
-            "device_snapshots": [{"device_id": "dev-1", "firmware": "2.0"}]  # WHY: updated device
+            "device_captures": [{"device_id": "dev-1", "firmware": "2.0"}]  # WHY: updated device
         }
 
         # WHY: calculate deltas
@@ -602,8 +602,8 @@ class TestAnalyzeDeltasInventory:
         # WHY: analyze deltas
         result = service.analyze_deltas(
             run_id="run-1",  # WHY: run identifier
-            pre_capture=pre_capture,  # WHY: pre-snapshot
-            post_capture=post_capture,  # WHY: post-snapshot
+            pre_capture=pre_capture,  # WHY: pre-capture
+            post_capture=post_capture,  # WHY: post-capture
             user_id="user-1",  # WHY: audit context
         )  # WHY: analysis complete
 
@@ -637,8 +637,8 @@ class TestAnalyzeDeltasInventory:
         # WHY: analyze deltas
         result = service.analyze_deltas(
             run_id="run-1",  # WHY: run identifier
-            pre_capture=pre_capture,  # WHY: pre-snapshot
-            post_capture=post_capture,  # WHY: post-snapshot
+            pre_capture=pre_capture,  # WHY: pre-capture
+            post_capture=post_capture,  # WHY: post-capture
             user_id="user-1",  # WHY: audit context
         )  # WHY: analysis complete
 
@@ -672,8 +672,8 @@ class TestAnalyzeDeltasInventory:
         # WHY: analyze deltas
         result = service.analyze_deltas(
             run_id="run-1",  # WHY: run identifier
-            pre_capture=pre_capture,  # WHY: pre-snapshot
-            post_capture=post_capture,  # WHY: post-snapshot
+            pre_capture=pre_capture,  # WHY: pre-capture
+            post_capture=post_capture,  # WHY: post-capture
             user_id="user-1",  # WHY: audit context
         )  # WHY: analysis complete
 
@@ -720,8 +720,8 @@ class TestAnalyzeDeltasFirmware:
         # WHY: analyze deltas
         result = service.analyze_deltas(
             run_id="run-1",  # WHY: run identifier
-            pre_capture=pre_capture,  # WHY: pre-snapshot
-            post_capture=post_capture,  # WHY: post-snapshot
+            pre_capture=pre_capture,  # WHY: pre-capture
+            post_capture=post_capture,  # WHY: post-capture
             user_id="user-1",  # WHY: audit context
         )  # WHY: analysis complete
 
@@ -766,8 +766,8 @@ class TestAnalyzeDeltasFirmware:
         # WHY: analyze deltas
         result = service.analyze_deltas(
             run_id="run-1",  # WHY: run identifier
-            pre_capture=pre_capture,  # WHY: pre-snapshot
-            post_capture=post_capture,  # WHY: post-snapshot
+            pre_capture=pre_capture,  # WHY: pre-capture
+            post_capture=post_capture,  # WHY: post-capture
             user_id="user-1",  # WHY: audit context
         )  # WHY: analysis complete
 

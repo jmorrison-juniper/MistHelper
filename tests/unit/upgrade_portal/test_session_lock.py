@@ -425,9 +425,7 @@ class TestSessionLockManagerIntegration:
         assert acquired_token is not None  # WHY: verify token exists
 
         # WHY: setup mock for extend (GET returns token, EXPIRE succeeds)
-        mock_redis.get.return_value = acquired_token.encode(
-            "utf-8"
-        )  # WHY: return token
+        mock_redis.get.return_value = acquired_token.encode("utf-8")  # WHY: return token
 
         # WHY: extend lock
         extend_result = manager.extend_lock(

@@ -4,9 +4,8 @@ Tests post-upgrade device validation with 4 parallel checks.
 WHY: Ensures settle gate correctly validates devices after firmware upgrade.
 """
 
-import asyncio  # WHY: async test support
-import pytest  # WHY: test framework
-from unittest.mock import Mock, AsyncMock, patch, MagicMock  # WHY: mocking utilities
+import time  # WHY: time-based test helpers
+from unittest.mock import Mock  # WHY: mocking utilities
 
 from src.upgrade_portal.settle.service import SettleGateService, SettleResult  # WHY: service under test
 
@@ -105,8 +104,7 @@ class TestSettleGateServiceInit:
 class TestSettleGateServiceValidation:
     """Tests for input validation in wait_for_settle."""
 
-    @pytest.mark.asyncio
-    async def test_wait_for_settle_invalid_run_id(self):
+    def test_wait_for_settle_invalid_run_id(self):
         """Test validation of invalid run_id.
 
         WHY: Ensures service rejects invalid run_id.
@@ -115,7 +113,7 @@ class TestSettleGateServiceValidation:
         service = SettleGateService()  # WHY: service instance
 
         # WHY: call with empty run_id
-        result = await service.wait_for_settle(
+        result = service.wait_for_settle(
             run_id="",  # WHY: empty run_id
             device_ids=["device-1"],  # WHY: valid device list
             site_id="site-1",  # WHY: valid site
@@ -125,8 +123,7 @@ class TestSettleGateServiceValidation:
         # WHY: verify returned empty dict
         assert result == {}  # WHY: check result
 
-    @pytest.mark.asyncio
-    async def test_wait_for_settle_no_devices(self):
+    def test_wait_for_settle_no_devices(self):
         """Test validation of empty device list.
 
         WHY: Ensures service rejects empty device list.
@@ -135,7 +132,7 @@ class TestSettleGateServiceValidation:
         service = SettleGateService()  # WHY: service instance
 
         # WHY: call with empty device list
-        result = await service.wait_for_settle(
+        result = service.wait_for_settle(
             run_id="run-123",  # WHY: valid run_id
             device_ids=[],  # WHY: empty device list
             site_id="site-1",  # WHY: valid site
@@ -145,8 +142,7 @@ class TestSettleGateServiceValidation:
         # WHY: verify returned empty dict
         assert result == {}  # WHY: check result
 
-    @pytest.mark.asyncio
-    async def test_wait_for_settle_no_dependencies(self):
+    def test_wait_for_settle_no_dependencies(self):
         """Test validation of missing dependencies.
 
         WHY: Ensures service handles missing Mist client gracefully.
@@ -158,7 +154,7 @@ class TestSettleGateServiceValidation:
         )  # WHY: service instance
 
         # WHY: call with valid inputs
-        result = await service.wait_for_settle(
+        result = service.wait_for_settle(
             run_id="run-123",  # WHY: valid run_id
             device_ids=["device-1"],  # WHY: valid device list
             site_id="site-1",  # WHY: valid site
@@ -172,8 +168,7 @@ class TestSettleGateServiceValidation:
 class TestSettleGateServiceParallelChecks:
     """Tests for parallel check execution."""
 
-    @pytest.mark.asyncio
-    async def test_run_device_checks_all_pass(self):
+    def test_run_device_checks_all_pass(self):
         """Test device checks when all pass.
 
         WHY: Ensures service correctly aggregates successful checks.
@@ -182,13 +177,13 @@ class TestSettleGateServiceParallelChecks:
         service = SettleGateService()  # WHY: service instance
 
         # WHY: mock all check methods to pass
-        service._check_ping = AsyncMock(return_value=True)  # WHY: mock ping
-        service._check_api = AsyncMock(return_value=True)  # WHY: mock api
-        service._check_firmware = AsyncMock(return_value=True)  # WHY: mock firmware
-        service._check_neighbors = AsyncMock(return_value=True)  # WHY: mock neighbors
+        service._check_ping = Mock(return_value=True)  # WHY: mock ping
+        service._check_api = Mock(return_value=True)  # WHY: mock api
+        service._check_firmware = Mock(return_value=True)  # WHY: mock firmware
+        service._check_neighbors = Mock(return_value=True)  # WHY: mock neighbors
 
         # WHY: run device checks
-        result = await service._run_device_checks(
+        result = service._run_device_checks(
             device_id="device-1",  # WHY: device identifier
             run_id="run-1",  # WHY: run identifier
             site_id="site-1",  # WHY: site identifier
@@ -201,8 +196,7 @@ class TestSettleGateServiceParallelChecks:
         assert result.failed_checks == []  # WHY: check no failures
         assert result.device_id == "device-1"  # WHY: check device id
 
-    @pytest.mark.asyncio
-    async def test_run_device_checks_some_fail(self):
+    def test_run_device_checks_some_fail(self):
         """Test device checks when some fail.
 
         WHY: Ensures service correctly handles partial failures.
@@ -211,13 +205,13 @@ class TestSettleGateServiceParallelChecks:
         service = SettleGateService()  # WHY: service instance
 
         # WHY: mock checks with mixed results
-        service._check_ping = AsyncMock(return_value=True)  # WHY: mock ping pass
-        service._check_api = AsyncMock(return_value=False)  # WHY: mock api fail
-        service._check_firmware = AsyncMock(return_value=True)  # WHY: mock firmware pass
-        service._check_neighbors = AsyncMock(return_value=False)  # WHY: mock neighbors fail
+        service._check_ping = Mock(return_value=True)  # WHY: ping passes
+        service._check_api = Mock(return_value=False)  # WHY: api fails
+        service._check_firmware = Mock(return_value=True)  # WHY: firmware passes
+        service._check_neighbors = Mock(return_value=False)  # WHY: neighbors fail
 
         # WHY: run device checks
-        result = await service._run_device_checks(
+        result = service._run_device_checks(
             device_id="device-2",  # WHY: device identifier
             run_id="run-1",  # WHY: run identifier
             site_id="site-1",  # WHY: site identifier
@@ -232,8 +226,7 @@ class TestSettleGateServiceParallelChecks:
         assert "ping" not in result.failed_checks  # WHY: check ping passed
         assert "firmware" not in result.failed_checks  # WHY: check firmware passed
 
-    @pytest.mark.asyncio
-    async def test_run_device_checks_exception_handling(self):
+    def test_run_device_checks_exception_handling(self):
         """Test device checks exception handling.
 
         WHY: Ensures service handles exceptions in checks gracefully.
@@ -242,13 +235,13 @@ class TestSettleGateServiceParallelChecks:
         service = SettleGateService()  # WHY: service instance
 
         # WHY: mock checks with exception
-        service._check_ping = AsyncMock(return_value=True)  # WHY: mock ping pass
-        service._check_api = AsyncMock(side_effect=RuntimeError("API error"))  # WHY: mock api exception
-        service._check_firmware = AsyncMock(return_value=True)  # WHY: mock firmware pass
-        service._check_neighbors = AsyncMock(return_value=True)  # WHY: mock neighbors pass
+        service._check_ping = Mock(return_value=True)  # WHY: ping passes
+        service._check_api = Mock(side_effect=RuntimeError("API error"))  # WHY: api raises
+        service._check_firmware = Mock(return_value=True)  # WHY: firmware passes
+        service._check_neighbors = Mock(return_value=True)  # WHY: neighbors pass
 
         # WHY: run device checks
-        result = await service._run_device_checks(
+        result = service._run_device_checks(
             device_id="device-3",  # WHY: device identifier
             run_id="run-1",  # WHY: run identifier
             site_id="site-1",  # WHY: site identifier
@@ -264,13 +257,13 @@ class TestSettleGateServiceParallelChecks:
 class TestSettleGateServicePersistence:
     """Tests for result persistence to ArangoDB."""
 
-    @pytest.mark.asyncio
-    async def test_wait_for_settle_persists_results(self):
+    def test_wait_for_settle_persists_results(self):
         """Test that results are persisted to ArangoDB.
 
         WHY: Ensures service stores results for audit trail.
         """
         # WHY: create mock dependencies
+        mock_mist_client = Mock()  # WHY: mock Mist API client
         mock_db_router = Mock()  # WHY: mock database router
         mock_db_router.write = Mock(return_value=True)  # WHY: mock write success
         mock_audit_logger = Mock()  # WHY: mock audit logger
@@ -278,12 +271,13 @@ class TestSettleGateServicePersistence:
 
         # WHY: create service with mocks
         service = SettleGateService(
+            mist_client=mock_mist_client,  # WHY: pass mock client
             db_router=mock_db_router,  # WHY: pass mock router
             audit_logger=mock_audit_logger,  # WHY: pass mock logger
         )  # WHY: service instance
 
         # WHY: mock device check method
-        service._run_device_checks = AsyncMock(
+        service._run_device_checks = Mock(
             return_value=SettleResult(  # WHY: return result object
                 passed=True,  # WHY: passing result
                 device_id="device-1",  # WHY: device identifier
@@ -293,7 +287,7 @@ class TestSettleGateServicePersistence:
         )  # WHY: mock method
 
         # WHY: call wait_for_settle
-        result = await service.wait_for_settle(
+        service.wait_for_settle(
             run_id="run-123",  # WHY: run identifier
             device_ids=["device-1"],  # WHY: device list
             site_id="site-1",  # WHY: site identifier
@@ -313,8 +307,7 @@ class TestSettleGateServicePersistence:
 class TestSettleCheckMethods:
     """Tests for individual check methods."""
 
-    @pytest.mark.asyncio
-    async def test_check_ping_success(self):
+    def test_check_ping_success(self):
         """Test ping check success.
 
         WHY: Ensures ping check returns True on success.
@@ -323,28 +316,26 @@ class TestSettleCheckMethods:
         service = SettleGateService()  # WHY: service instance
 
         # WHY: call ping check
-        result = await service._check_ping("device-1")  # WHY: ping call
+        result = service._check_ping("device-1")  # WHY: ping call
 
         # WHY: verify result
         assert result is True  # WHY: check success
 
-    @pytest.mark.asyncio
-    async def test_check_api_success(self):
+    def test_check_api_success(self):
         """Test API check success.
 
         WHY: Ensures API check returns True on success.
         """
-        # WHY: create service
-        service = SettleGateService()  # WHY: service instance
+        # WHY: create service with a Mist client, because the check needs one
+        service = SettleGateService(mist_client=Mock())  # WHY: service instance
 
         # WHY: call API check
-        result = await service._check_api("device-1", "site-1", "org-1")  # WHY: api call
+        result = service._check_api("device-1", "site-1", "org-1")  # WHY: api call
 
         # WHY: verify result
         assert result is True  # WHY: check success
 
-    @pytest.mark.asyncio
-    async def test_check_firmware_success(self):
+    def test_check_firmware_success(self):
         """Test firmware check success.
 
         WHY: Ensures firmware check returns True on success.
@@ -353,13 +344,12 @@ class TestSettleCheckMethods:
         service = SettleGateService()  # WHY: service instance
 
         # WHY: call firmware check
-        result = await service._check_firmware("device-1", "site-1", "org-1")  # WHY: firmware call
+        result = service._check_firmware("device-1", "site-1", "org-1")  # WHY: firmware call
 
         # WHY: verify result
         assert result is True  # WHY: check success
 
-    @pytest.mark.asyncio
-    async def test_check_neighbors_success(self):
+    def test_check_neighbors_success(self):
         """Test neighbor check success.
 
         WHY: Ensures neighbor check returns True on success.
@@ -368,13 +358,12 @@ class TestSettleCheckMethods:
         service = SettleGateService()  # WHY: service instance
 
         # WHY: call neighbor check
-        result = await service._check_neighbors("device-1", "site-1", "org-1")  # WHY: neighbor call
+        result = service._check_neighbors("device-1", "site-1", "org-1")  # WHY: neighbor call
 
         # WHY: verify result
         assert result is True  # WHY: check success
 
-    @pytest.mark.asyncio
-    async def test_check_ping_retry_on_error(self):
+    def test_check_ping_retry_on_error(self):
         """Test ping check retries on error.
 
         WHY: Ensures check retries transient errors per MAX_RETRIES.
@@ -390,18 +379,18 @@ class TestSettleCheckMethods:
         call_count = 0  # WHY: call counter
 
         # WHY: define side effect function
-        async def failing_then_success():  # WHY: function definition
+        def failing_then_success(device_id):  # WHY: function definition
             nonlocal call_count  # WHY: access outer variable
             call_count += 1  # WHY: increment counter
             if call_count < 2:  # WHY: check if first call
                 raise RuntimeError("Transient error")  # WHY: raise error
             return True  # WHY: return success
 
-        # WHY: mock ping as failing then succeeding
-        service._check_ping = failing_then_success  # WHY: replace method
+        # WHY: mock one ping attempt as failing then succeeding
+        service._ping_once = failing_then_success  # WHY: replace attempt
 
         # WHY: call ping check
-        result = await service._check_ping("device-1")  # WHY: ping call
+        result = service._check_ping("device-1")  # WHY: ping call
 
         # WHY: verify result is success
         assert result is True  # WHY: check success
@@ -412,21 +401,23 @@ class TestSettleCheckMethods:
 class TestSettleGateTimeout:
     """Tests for timeout handling."""
 
-    @pytest.mark.asyncio
-    async def test_wait_for_settle_timeout(self):
+    def test_wait_for_settle_timeout(self):
         """Test settle gate timeout.
 
         WHY: Ensures service handles timeout gracefully.
         """
-        # WHY: create service
-        service = SettleGateService()  # WHY: service instance
+        # WHY: create service with dependencies so validation passes
+        service = SettleGateService(
+            mist_client=Mock(),  # WHY: mock Mist client
+            db_router=Mock(),  # WHY: mock database router
+        )  # WHY: service instance
 
-        # WHY: mock device check to never complete
-        async def never_completes(*args, **kwargs):  # WHY: async function
-            await asyncio.sleep(10)  # WHY: sleep forever
+        # WHY: mock device check to block past the timeout
+        def never_completes(device_id, **kwargs):  # WHY: blocking function
+            time.sleep(10)  # WHY: sleep long enough to trigger timeout
             return SettleResult(  # WHY: return result
                 passed=True,  # WHY: success status
-                device_id=kwargs.get("device_id", "device-1"),  # WHY: device id
+                device_id=device_id,  # WHY: device id
                 failed_checks=[],  # WHY: no failures
                 details={},  # WHY: no details
             )  # WHY: result
@@ -435,7 +426,7 @@ class TestSettleGateTimeout:
         service._run_device_checks = never_completes  # WHY: replace method
 
         # WHY: call with short timeout
-        result = await service.wait_for_settle(
+        result = service.wait_for_settle(
             run_id="run-1",  # WHY: run identifier
             device_ids=["device-1"],  # WHY: device list
             site_id="site-1",  # WHY: site identifier

@@ -56,9 +56,7 @@ SELECT_ROUTES = f"{ROUTES_PACKAGE}.select"  # Owns the reader of the site lock r
 CAPTURE_ROUTES = f"{ROUTES_PACKAGE}.capture"  # Owns the capture runner seam.
 UPGRADE_ROUTES = f"{ROUTES_PACKAGE}.upgrade"  # Owns the reader of the run store seam.
 # Phase 2 T-006/T-008: Module paths for Phase 2 services.
-CAPTURE_SERVICE_MODULE = (
-    f"{PACKAGE_NAME}.capture.service"  # Owns CaptureService with pre/post-upgrade snapshot capture.
-)
+CAPTURE_SERVICE_MODULE = f"{PACKAGE_NAME}.capture.service"  # Owns CaptureService with pre/post-upgrade capture capture.
 UPGRADE_SERVICE_MODULE = (
     f"{PACKAGE_NAME}.upgrade.service"  # Owns UpgradeService with serial/parallel firmware upgrade orchestration.
 )
@@ -67,7 +65,7 @@ SETTLE_GATE_SERVICE_MODULE = (
     f"{PACKAGE_NAME}.settle.service"  # Owns SettleGateService for post-upgrade device validation.
 )
 COMPARISON_SERVICE_MODULE = (
-    f"{PACKAGE_NAME}.compare.service"  # Owns ComparisonService for pre/post-upgrade snapshot comparison.
+    f"{PACKAGE_NAME}.compare.service"  # Owns ComparisonService for pre/post-upgrade capture comparison.
 )
 
 # `upgrade/options.py` and `upgrade/stop.py` both import this module under the
@@ -82,7 +80,7 @@ LAUNCHER_KEY = "RUN_LAUNCHER"  # The seam that hands one prepared record to the 
 STOP_RUNNER_KEY = "STOP_RUNNER"  # The seam that cancels the remaining devices of one run at the cloud.
 PRECHECK_ADOPTER_KEY = "PRECHECK_ADOPTER"  # The seam that reads and links a standalone pre-check.
 # Phase 2 T-006/T-008/T-009: Phase 2 service seams for capture and upgrade orchestration.
-CAPTURE_SERVICE_KEY = "CAPTURE_SERVICE"  # The seam that holds the CaptureService for pre/post-upgrade snapshots.
+CAPTURE_SERVICE_KEY = "CAPTURE_SERVICE"  # The seam that holds the CaptureService for pre/post-upgrade captures.
 UPGRADE_SERVICE_KEY = "UPGRADE_SERVICE"  # The seam that holds the UpgradeService for firmware upgrade orchestration.
 # Phase 3 T-010/T-012: Phase 3 service seams for settle gate and comparison.
 SETTLE_GATE_SERVICE_KEY = "SETTLE_GATE_SERVICE"  # The seam that holds SettleGateService.
@@ -898,14 +896,14 @@ def _install_capture_service(app: Flask) -> None:
     """Install the CaptureService into the Flask config seam for Phase 2 T-006.
 
     Why:
-        Phase 2 T-006 requires pre-upgrade and post-upgrade device snapshots.
+        Phase 2 T-006 requires pre-upgrade and post-upgrade device captures.
         The CaptureService encapsulates the logic to fetch device inventory,
         network policies, radio settings, and LLDP neighbors from Mist API and
         store them in ArangoDB. The route handler reads the service from the
         Flask config seam (CAPTURE_SERVICE_KEY) so tests can inject a mock.
 
         The service needs access to: mist_client (to call Mist API), db_router
-        (to persist snapshots to ArangoDB), and audit_logger (to log all capture
+        (to persist captures to ArangoDB), and audit_logger (to log all capture
         operations). These collaborators are passed to the CaptureService
         constructor and used internally by capture_pre_upgrade() and
         capture_post_upgrade() methods.
@@ -926,14 +924,14 @@ def _install_capture_service(app: Flask) -> None:
         mistapi_module = load_module(f"{PACKAGE_NAME}.mistapi")  # The Mist API client wrapper
         if mistapi_module is None:  # The mistapi module is not available
             logger.warning(
-                "wiring: mistapi module is absent, CaptureService needs it to fetch device snapshots"
+                "wiring: mistapi module is absent, CaptureService needs it to fetch device captures"
             )  # Cannot proceed without API client
             return
 
         db_module = load_module(STORE_MODULE)  # The database router for ArangoDB persistence
         if db_module is None:  # The store module is not available
             logger.warning(
-                "wiring: store module is absent, CaptureService needs it to persist snapshots"
+                "wiring: store module is absent, CaptureService needs it to persist captures"
             )  # Cannot proceed without database
             return
 
@@ -962,7 +960,7 @@ def _install_capture_service(app: Flask) -> None:
         )  # The service class from capture/service.py
         if CaptureService is not None:  # The CaptureService class exists
             capture_service = CaptureService(
-                mist_client=mist_client,  # The Mist API client for device snapshot fetching
+                mist_client=mist_client,  # The Mist API client for device capture fetching
                 db_router=db_router,  # The database router for ArangoDB persistence
                 audit_logger=audit_logger,  # The audit logger for compliance recording
             )
@@ -1157,9 +1155,9 @@ def _install_comparison_service(app: Flask) -> None:
     """Install the ComparisonService into the Flask config seam for Phase 3 T-012.
 
     Why:
-       Phase 3 T-012 requires pre/post-upgrade snapshot comparison with settle
+       Phase 3 T-012 requires pre/post-upgrade capture comparison with settle
        gate prerequisite enforcement. The ComparisonService encapsulates the logic
-       to verify settle gate passed, fetch pre-capture and post-capture snapshots,
+       to verify settle gate passed, fetch pre-capture and post-capture captures,
        calculate deltas, and compare key fields. The route handler reads the
        service from the Flask config seam (COMPARISON_SERVICE_KEY) so tests can
        inject a mock.
@@ -1360,13 +1358,13 @@ def install_seams(app: Flask) -> None:
     app.config.setdefault(LAUNCHER_KEY, start_upgrade_run)  # Without this the confirmed run sends nothing.
     app.config.setdefault(STOP_RUNNER_KEY, cancel_run)  # Without this a stop cancels nothing at the cloud.
     app.config.setdefault(PRECHECK_ADOPTER_KEY, StandalonePrecheckAdopter())  # The run create call adopts a pre-check.
-    # Phase 2 T-006: Wire CaptureService for pre/post-upgrade device snapshot capture
+    # Phase 2 T-006: Wire CaptureService for pre/post-upgrade device capture capture
     _install_capture_service(app)  # Inject CaptureService into Flask config seam
     # Phase 2 T-008/T-009: Wire UpgradeService for firmware upgrade orchestration
     _install_upgrade_service(app)  # Inject UpgradeService into Flask config seam
     # Phase 3 T-010: Wire SettleGateService for post-upgrade device validation
     _install_settle_gate_service(app)  # Inject SettleGateService into Flask config seam
-    # Phase 3 T-012: Wire ComparisonService for pre/post-upgrade snapshot comparison
+    # Phase 3 T-012: Wire ComparisonService for pre/post-upgrade capture comparison
     _install_comparison_service(app)  # Inject ComparisonService into Flask config seam
     prepare_storage()  # Without this no capture can verify, so no upgrade can ever start.
     logger.info(

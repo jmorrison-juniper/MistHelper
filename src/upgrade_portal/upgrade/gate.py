@@ -36,7 +36,7 @@ Why:
 
     The gate compares the ``last_seen`` value of each record against the
     highest ``last_seen`` that it already read for the same device. A record
-    that does not raise that mark repeats a snapshot that the gate read
+    that does not raise that mark repeats a capture that the gate read
     before. It holds no new evidence, and the gate drops it.
 
     Both values of that comparison come from the cloud, and both come from the
@@ -176,7 +176,7 @@ class GateReading:
         see a decrease and would settle a device that never rebooted.
 
         The ``last_seen`` value dates the record on the clock of the cloud, so
-        the gate can drop a record that repeats an earlier snapshot. The gate
+        the gate can drop a record that repeats an earlier capture. The gate
         compares that value against an earlier ``last_seen`` and never against
         the local clock.
 
@@ -223,7 +223,7 @@ class GateProgress:
         a repeated round harmless and makes a retry safe.
 
         ``last_seen_at`` follows that same rule. It only rises, so a record
-        that repeats an earlier snapshot can never move the gate a second
+        that repeats an earlier capture can never move the gate a second
         time. The mark holds a cloud value, which lets the staleness test
         compare two cloud values and use no local clock.
 
@@ -489,7 +489,7 @@ def reading_last_seen(value: Any) -> int | None:
 
 
 def reading_is_stale(last_seen_before: int | None, last_seen_now: int | None) -> bool:
-    """Report whether one statistics record repeats a snapshot already read.
+    """Report whether one statistics record repeats a capture already read.
 
     Why:
         FR-046 at ``spec.md:525`` asks the gate to ignore a statistics record
@@ -517,7 +517,7 @@ def reading_is_stale(last_seen_before: int | None, last_seen_now: int | None) ->
     """
     if last_seen_before is None or last_seen_now is None:  # A null proves nothing about the age of the record.
         return False  # The caller uses the record, because an absent value is no evidence.
-    return last_seen_now <= last_seen_before  # An equal moment repeats the snapshot that the gate already read.
+    return last_seen_now <= last_seen_before  # An equal moment repeats the capture that the gate already read.
 
 
 def last_seen_advanced(last_seen_before: int | None, last_seen_now: int | None) -> bool:
@@ -541,7 +541,7 @@ def last_seen_advanced(last_seen_before: int | None, last_seen_now: int | None) 
     """
     if last_seen_before is None or last_seen_now is None:  # A null is no proof that the device returned.
         return False  # The caller keeps the uptime rule and waits for the next round.
-    return last_seen_now > last_seen_before  # The cloud heard from the device after the pre-check snapshot.
+    return last_seen_now > last_seen_before  # The cloud heard from the device after the pre-check capture.
 
 
 def reading_from_record(record: Mapping[str, Any]) -> GateReading | None:
@@ -574,7 +574,7 @@ def reading_from_record(record: Mapping[str, Any]) -> GateReading | None:
 
 
 def _screen_reading(progress: GateProgress, reading: GateReading | None) -> tuple[GateProgress, GateReading | None]:
-    """Drop one statistics record that repeats a snapshot the gate already read.
+    """Drop one statistics record that repeats a capture the gate already read.
 
     Why:
         FR-046 at ``spec.md:525`` asks the gate to ignore a record that is
@@ -597,7 +597,7 @@ def _screen_reading(progress: GateProgress, reading: GateReading | None) -> tupl
     """
     if reading is None:  # The poll returned no record for this device this round.
         return progress, None
-    if reading_is_stale(progress.last_seen_at, reading.last_seen):  # The cloud repeated an earlier snapshot.
+    if reading_is_stale(progress.last_seen_at, reading.last_seen):  # The cloud repeated an earlier capture.
         logger.debug("Upgrade gate ignored a stale statistics record for device %s", reading.mac)
         return progress, None
     if reading.last_seen is None:  # No moment to record, so the mark stays where it is.
@@ -744,7 +744,7 @@ def advance(target: GateTarget, progress: GateProgress, signals: GateSignals, no
         proof.
 
         A stale statistics record never reaches the reboot rule. The screen
-        runs first and drops a record that repeats a snapshot the gate read
+        runs first and drops a record that repeats a capture the gate read
         before. A copy that the cloud cached before the reboot can neither
         settle a device nor delay one.
 
@@ -762,7 +762,7 @@ def advance(target: GateTarget, progress: GateProgress, signals: GateSignals, no
     seen = replace(progress, reconnected=True) if signals.reconnected else progress
     if not seen.reconnected:
         return seen
-    seen, fresh = _screen_reading(seen, signals.reading)  # FR-046 drops a record that repeats an old snapshot.
+    seen, fresh = _screen_reading(seen, signals.reading)  # FR-046 drops a record that repeats an old capture.
     if seen.reboot_at is None:
         return _note_reboot(target, seen, fresh, now)
     return _note_settled(target, seen, now)

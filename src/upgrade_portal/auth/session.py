@@ -405,7 +405,7 @@ class PauseResumeManager:
                 current_device_id=upgrade_run.get("current_device_id"),  # WHY: active device
                 next_device_index=upgrade_run.get("next_device_index", 0),  # WHY: next device
                 failed_devices=upgrade_run.get("failed_devices", []),  # WHY: failed list
-                service_state={  # WHY: upgrade service state snapshot
+                service_state={  # WHY: upgrade service state capture
                     "strategy": upgrade_run.get("upgrade_strategy"),  # WHY: strategy
                     "retry_count": upgrade_run.get("retry_count", 0),  # WHY: retry count
                     "start_time": upgrade_run.get("start_time"),  # WHY: start time

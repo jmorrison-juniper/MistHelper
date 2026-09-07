@@ -3,7 +3,7 @@
 Implements FR-013 (comparison results), FR-019 (audit logging), and
 SC-010 (audit trail with zero secrets). Enforces settle gate as prerequisite
 before allowing comparison. Calculates deltas between pre- and post-upgrade
-snapshots.
+captures.
 """
 
 import time  # WHY: retry backoff timing
@@ -53,7 +53,7 @@ class ComparisonService:
     """Service for post-upgrade device comparison.
 
     Enforces settle gate as prerequisite before allowing comparison.
-    Calculates deltas between pre-upgrade and post-upgrade snapshots.
+    Calculates deltas between pre-upgrade and post-upgrade captures.
     Identifies firmware changes, config changes, policy changes, and
     neighbor topology changes.
 
@@ -107,7 +107,7 @@ class ComparisonService:
         device_ids: list[str],  # WHY: devices to compare
         user_id: str = "",  # WHY: audit trail user context
     ) -> ComparisonResult:
-        """Compare pre- and post-upgrade snapshots.
+        """Compare pre- and post-upgrade captures.
 
         Verifies settle gate succeeded before proceeding. Fetches pre-capture
         and post-capture documents from ArangoDB and compares key fields:
@@ -135,24 +135,13 @@ class ComparisonService:
         )  # WHY: pre-operation event
 
         try:
-            # WHY: validate inputs
-            if not run_id or not isinstance(run_id, str):  # WHY: run_id validation
-                logger.error("comparison_invalid_run_id", run_id=run_id)  # WHY: validation error
-                return ComparisonResult(  # WHY: error result
-                    passed=False,  # WHY: validation failed
-                    run_id=run_id,  # WHY: run identifier
-                    settled=False,  # WHY: not settled
-                )  # WHY: result
-
-            if not device_ids or not isinstance(device_ids, list):  # WHY: device list validation
-                # WHY: device list is empty or invalid type
-                device_count = len(device_ids) if device_ids else 0  # WHY: get count or 0
-                logger.error("comparison_no_devices", device_count=device_count)  # WHY: log error
-                return ComparisonResult(  # WHY: error result
-                    passed=False,  # WHY: validation failed
-                    run_id=run_id,  # WHY: run identifier
-                    settled=False,  # WHY: not settled
-                )  # WHY: result
+            # WHY: validate inputs via helper
+            validation_error = self._validate_compare_inputs(  # WHY: delegate validation
+                run_id=run_id,  # WHY: run identifier
+                device_ids=device_ids,  # WHY: device list
+            )  # WHY: validation result
+            if validation_error is not None:  # WHY: validation failed
+                return validation_error  # WHY: return error result
 
             # WHY: check dependencies available
             if not self.settle_gate_service or not self.db_router:  # WHY: dependency check
@@ -182,36 +171,12 @@ class ComparisonService:
 
             # WHY: if settle gate failed, return error
             if not settle_results or not settle_results.get("passed", False):  # WHY: check settle status
-                # WHY: log settle gate failure
-                # WHY: use empty list if settle_results is None
-                failed_checks = settle_results.get("failed_checks", []) if settle_results else []  # WHY: failures
-                logger.warning(
-                    "comparison_settle_gate_failed",  # WHY: warning event
-                    run_id=run_id,  # WHY: run context
-                    failed_checks=failed_checks,  # WHY: failure list
-                )  # WHY: settle gate failure logged
-
-                # WHY: audit log settle gate failure
-                if self.audit_logger:  # WHY: audit logging conditional
-                    self.audit_logger.log_operation(  # WHY: audit trail
-                        operation="comparison_blocked",  # WHY: operation type
-                        user_id=user_id,  # WHY: user context
-                        details={  # WHY: operation details
-                            "run_id": run_id,  # WHY: identifier
-                            "reason": "settle_gate_failed",  # WHY: failure reason
-                            "failed_checks": failed_checks,  # WHY: failures
-                        },  # WHY: detail dict
-                        result="blocked",  # WHY: result status
-                    )  # WHY: audit entry
-
-                # WHY: return comparison failure
-                return ComparisonResult(  # WHY: failure result
-                    passed=False,  # WHY: comparison blocked
+                return self._settle_gate_failure_result(  # WHY: delegate failure handling
                     run_id=run_id,  # WHY: run identifier
-                    settled=False,  # WHY: not settled
-                    failed_checks=failed_checks,  # WHY: settle failures
+                    user_id=user_id,  # WHY: audit context
+                    settle_results=settle_results,  # WHY: settle outcome
                     timestamp=timestamp,  # WHY: result timestamp
-                )  # WHY: result
+                )  # WHY: failure result
 
             # WHY: settle gate passed, proceed to comparison
             logger.info(
@@ -219,39 +184,23 @@ class ComparisonService:
                 run_id=run_id,  # WHY: run context
             )  # WHY: settle gate passed
 
-            # WHY: fetch pre-capture snapshot
-            logger.info("comparison_fetching_pre_capture", run_id=run_id)  # WHY: fetch phase start
-            pre_capture = self._fetch_pre_capture(run_id=run_id)  # WHY: fetch pre-capture
-
-            # WHY: check if pre-capture exists
-            if not pre_capture:  # WHY: check fetch result
-                logger.error("comparison_pre_capture_not_found", run_id=run_id)  # WHY: error event
-                return ComparisonResult(  # WHY: error result
-                    passed=False,  # WHY: comparison failed
+            # WHY: fetch both captures, failing fast when either is missing
+            captures = self._fetch_both_captures(  # WHY: fetch pair
+                run_id=run_id,  # WHY: run identifier
+                timestamp=timestamp,  # WHY: result timestamp
+            )  # WHY: capture pair
+            if captures is None:  # WHY: a capture was missing
+                return self._capture_missing_result(  # WHY: build error result
                     run_id=run_id,  # WHY: run identifier
-                    settled=True,  # WHY: settled but no pre-capture
                     timestamp=timestamp,  # WHY: result timestamp
-                )  # WHY: result
-
-            # WHY: fetch post-capture snapshot
-            logger.info("comparison_fetching_post_capture", run_id=run_id)  # WHY: fetch phase start
-            post_capture = self._fetch_post_capture(run_id=run_id)  # WHY: fetch post-capture
-
-            # WHY: check if post-capture exists
-            if not post_capture:  # WHY: check fetch result
-                logger.error("comparison_post_capture_not_found", run_id=run_id)  # WHY: error event
-                return ComparisonResult(  # WHY: error result
-                    passed=False,  # WHY: comparison failed
-                    run_id=run_id,  # WHY: run identifier
-                    settled=True,  # WHY: settled but no post-capture
-                    timestamp=timestamp,  # WHY: result timestamp
-                )  # WHY: result
+                )  # WHY: error result
+            pre_capture, post_capture = captures  # WHY: unpack pair
 
             # WHY: calculate deltas between pre and post captures
             logger.info("comparison_calculating_deltas", run_id=run_id)  # WHY: calculation phase start
             deltas, summary = self._calculate_deltas(  # WHY: delta calculation
-                pre_capture=pre_capture,  # WHY: pre-capture snapshot
-                post_capture=post_capture,  # WHY: post-capture snapshot
+                pre_capture=pre_capture,  # WHY: pre-capture capture
+                post_capture=post_capture,  # WHY: post-capture capture
             )  # WHY: delta result
 
             # WHY: log delta calculation completion
@@ -262,48 +211,19 @@ class ComparisonService:
                 summary=summary,  # WHY: summary data
             )  # WHY: delta complete
 
-            # WHY: persist comparison to ArangoDB
-            logger.info("comparison_persisting_to_arangodb", run_id=run_id)  # WHY: persist start
-            comparison_id = str(uuid.uuid4())  # WHY: unique identifier
-            comparison_doc = {  # WHY: ArangoDB document structure
-                "_key": f"{run_id}_{int(time.time() * 1000)}",  # WHY: composite key
-                "comparison_id": comparison_id,  # WHY: public identifier
-                "run_id": run_id,  # WHY: run link
-                "org_id": org_id,  # WHY: organization context
-                "site_id": site_id,  # WHY: site context
-                "timestamp": timestamp,  # WHY: comparison moment
-                "pre_capture_timestamp": pre_capture.get("timestamp"),  # WHY: pre-capture time
-                "post_capture_timestamp": post_capture.get("timestamp"),  # WHY: post-capture time
-                "device_count": len(device_ids),  # WHY: scope metric
-                "deltas": deltas,  # WHY: delta array
-                "summary": summary,  # WHY: summary data
-                "user_id": user_id,  # WHY: audit context
-            }  # WHY: document complete
-
-            # WHY: write to database
-            write_result = self.db_router.write(  # WHY: database write operation
-                collection="comparisons",  # WHY: collection name
-                document=comparison_doc,  # WHY: document to write
-            )  # WHY: write operation result
-
-            # WHY: verify persistence succeeded
-            if not write_result:  # WHY: check write result
-                logger.error("comparison_persist_failed", comparison_id=comparison_id)  # WHY: persistence error
-
-            # WHY: audit log comparison completion
-            if self.audit_logger:  # WHY: audit logging conditional
-                self.audit_logger.log_operation(  # WHY: audit trail
-                    operation="comparison_complete",  # WHY: operation type
-                    user_id=user_id,  # WHY: user context
-                    details={  # WHY: operation details
-                        "comparison_id": comparison_id,  # WHY: identifier
-                        "device_count": len(device_ids),  # WHY: scope metric
-                        "delta_count": len(deltas),  # WHY: delta count
-                        "run_id": run_id,  # WHY: run link
-                        "summary": summary,  # WHY: summary data
-                    },  # WHY: detail dict
-                    result="success",  # WHY: result status
-                )  # WHY: audit entry
+            # WHY: persist comparison to ArangoDB and audit the completion
+            comparison_id = self._persist_comparison(  # WHY: persist and audit
+                run_id=run_id,  # WHY: run link
+                org_id=org_id,  # WHY: organization context
+                site_id=site_id,  # WHY: site context
+                user_id=user_id,  # WHY: audit context
+                timestamp=timestamp,  # WHY: comparison moment
+                device_count=len(device_ids),  # WHY: scope metric
+                pre_capture=pre_capture,  # WHY: pre-capture capture
+                post_capture=post_capture,  # WHY: post-capture capture
+                deltas=deltas,  # WHY: delta array
+                summary=summary,  # WHY: summary data
+            )  # WHY: comparison identifier
 
             # WHY: log success
             logger.info(
@@ -349,6 +269,226 @@ class ComparisonService:
                 settled=False,  # WHY: unknown settle state
             )  # WHY: result
 
+    def _validate_compare_inputs(
+        self,
+        run_id: str,  # WHY: run identifier
+        device_ids: list[str],  # WHY: device list
+    ) -> ComparisonResult | None:  # WHY: error result or None when valid
+        """Validate comparison inputs before any API work.
+
+        Args:
+            run_id: Unique run ID.
+            device_ids: List of device IDs to compare.
+
+        Returns:
+            ComparisonResult error when invalid, None when valid.
+        """
+        # WHY: run_id must be a non-empty string
+        if not run_id or not isinstance(run_id, str):  # WHY: run_id validation
+            logger.error("comparison_invalid_run_id", run_id=run_id)  # WHY: validation error
+            return ComparisonResult(  # WHY: error result
+                passed=False,  # WHY: validation failed
+                run_id=run_id,  # WHY: run identifier
+                settled=False,  # WHY: not settled
+            )  # WHY: result
+
+        # WHY: device list must be a non-empty list
+        if not device_ids or not isinstance(device_ids, list):  # WHY: device list validation
+            device_count = len(device_ids) if device_ids else 0  # WHY: get count or 0
+            logger.error("comparison_no_devices", device_count=device_count)  # WHY: log error
+            return ComparisonResult(  # WHY: error result
+                passed=False,  # WHY: validation failed
+                run_id=run_id,  # WHY: run identifier
+                settled=False,  # WHY: not settled
+            )  # WHY: result
+
+        return None  # WHY: inputs valid
+
+    def _settle_gate_failure_result(
+        self,  # WHY: instance method
+        run_id: str,  # WHY: run identifier
+        user_id: str,  # WHY: audit context
+        settle_results: dict[str, Any] | None,  # WHY: settle outcome
+        timestamp: str,  # WHY: result timestamp
+    ) -> ComparisonResult:  # WHY: failure result
+        """Build the failure result when the settle gate blocks comparison.
+
+        Args:
+            run_id: Unique run ID.
+            user_id: User initiating comparison.
+            settle_results: Settle gate outcome or None.
+            timestamp: ISO 8601 timestamp for the result.
+
+        Returns:
+            ComparisonResult with passed=False and the failed checks.
+        """
+        # WHY: extract failed checks, tolerating a None settle result
+        failed_checks = (  # WHY: failure list
+            settle_results.get("failed_checks", []) if settle_results else []  # WHY: failures
+        )  # WHY: list
+
+        # WHY: log the settle gate failure
+        logger.warning(  # WHY: warning event
+            "comparison_settle_gate_failed",  # WHY: event type
+            run_id=run_id,  # WHY: run context
+            failed_checks=failed_checks,  # WHY: failure list
+        )  # WHY: event logged
+
+        # WHY: audit log the blocked comparison
+        if self.audit_logger:  # WHY: audit logging conditional
+            self.audit_logger.log_operation(  # WHY: audit trail
+                operation="comparison_blocked",  # WHY: operation type
+                user_id=user_id,  # WHY: user context
+                details={  # WHY: operation details
+                    "run_id": run_id,  # WHY: identifier
+                    "reason": "settle_gate_failed",  # WHY: failure reason
+                    "failed_checks": failed_checks,  # WHY: failures
+                },  # WHY: detail dict
+                result="blocked",  # WHY: result status
+            )  # WHY: audit entry
+
+        # WHY: return the blocked comparison result
+        return ComparisonResult(  # WHY: failure result
+            passed=False,  # WHY: comparison blocked
+            run_id=run_id,  # WHY: run identifier
+            settled=False,  # WHY: not settled
+            failed_checks=failed_checks,  # WHY: settle failures
+            timestamp=timestamp,  # WHY: result timestamp
+        )  # WHY: result
+
+    def _fetch_both_captures(
+        self,  # WHY: instance method
+        run_id: str,  # WHY: run identifier
+        timestamp: str,  # WHY: result timestamp
+    ) -> tuple[dict[str, Any], dict[str, Any]] | None:  # WHY: capture pair or None
+        """Fetch the pre- and post-capture documents for a run.
+
+        Args:
+            run_id: Unique run ID.
+            timestamp: ISO 8601 timestamp (used for logging context).
+
+        Returns:
+            (pre_capture, post_capture) when both exist, None when either is missing.
+        """
+        # WHY: fetch the pre-upgrade capture
+        logger.info("comparison_fetching_pre_capture", run_id=run_id)  # WHY: fetch phase start
+        pre_capture = self._fetch_pre_capture(run_id=run_id)  # WHY: fetch pre-capture
+
+        # WHY: fail fast when the pre-capture is absent
+        if not pre_capture:  # WHY: check fetch result
+            logger.error("comparison_pre_capture_not_found", run_id=run_id)  # WHY: error event
+            return None  # WHY: missing capture
+
+        # WHY: fetch the post-upgrade capture
+        logger.info("comparison_fetching_post_capture", run_id=run_id)  # WHY: fetch phase start
+        post_capture = self._fetch_post_capture(run_id=run_id)  # WHY: fetch post-capture
+
+        # WHY: fail fast when the post-capture is absent
+        if not post_capture:  # WHY: check fetch result
+            logger.error("comparison_post_capture_not_found", run_id=run_id)  # WHY: error event
+            return None  # WHY: missing capture
+
+        return (pre_capture, post_capture)  # WHY: both captures present
+
+    def _persist_comparison(
+        self,  # WHY: instance method
+        run_id: str,  # WHY: run link
+        org_id: str,  # WHY: organization context
+        site_id: str,  # WHY: site context
+        user_id: str,  # WHY: audit context
+        timestamp: str,  # WHY: comparison moment
+        device_count: int,  # WHY: scope metric
+        pre_capture: dict[str, Any],  # WHY: pre-capture capture
+        post_capture: dict[str, Any],  # WHY: post-capture capture
+        deltas: list[dict[str, Any]],  # WHY: delta array
+        summary: dict[str, Any],  # WHY: summary data
+    ) -> str:  # WHY: comparison identifier
+        """Persist a completed comparison to ArangoDB and audit it.
+
+        Args:
+            run_id: Unique run ID.
+            org_id: Organization ID.
+            site_id: Site ID.
+            user_id: User initiating comparison.
+            timestamp: ISO 8601 timestamp for the comparison.
+            device_count: Number of devices compared.
+            pre_capture: Pre-upgrade capture document.
+            post_capture: Post-upgrade capture document.
+            deltas: List of detected deltas.
+            summary: Delta summary data.
+
+        Returns:
+            The comparison identifier written to the database.
+        """
+        # WHY: log persistence start
+        logger.info("comparison_persisting_to_arangodb", run_id=run_id)  # WHY: persist start
+
+        # WHY: build the ArangoDB document
+        comparison_id = str(uuid.uuid4())  # WHY: unique identifier
+        comparison_doc = {  # WHY: ArangoDB document structure
+            "_key": f"{run_id}_{int(time.time() * 1000)}",  # WHY: composite key
+            "comparison_id": comparison_id,  # WHY: public identifier
+            "run_id": run_id,  # WHY: run link
+            "org_id": org_id,  # WHY: organization context
+            "site_id": site_id,  # WHY: site context
+            "timestamp": timestamp,  # WHY: comparison moment
+            "pre_capture_timestamp": pre_capture.get("timestamp"),  # WHY: pre-capture time
+            "post_capture_timestamp": post_capture.get("timestamp"),  # WHY: post-capture time
+            "device_count": device_count,  # WHY: scope metric
+            "deltas": deltas,  # WHY: delta array
+            "summary": summary,  # WHY: summary data
+            "user_id": user_id,  # WHY: audit context
+        }  # WHY: document complete
+
+        # WHY: write to database
+        write_result = self.db_router.write(  # WHY: database write operation
+            collection="comparisons",  # WHY: collection name
+            document=comparison_doc,  # WHY: document to write
+        )  # WHY: write operation result
+
+        # WHY: verify persistence succeeded
+        if not write_result:  # WHY: check write result
+            logger.error("comparison_persist_failed", comparison_id=comparison_id)  # WHY: persistence error
+
+        # WHY: audit log comparison completion
+        if self.audit_logger:  # WHY: audit logging conditional
+            self.audit_logger.log_operation(  # WHY: audit trail
+                operation="comparison_complete",  # WHY: operation type
+                user_id=user_id,  # WHY: user context
+                details={  # WHY: operation details
+                    "comparison_id": comparison_id,  # WHY: identifier
+                    "device_count": device_count,  # WHY: scope metric
+                    "delta_count": len(deltas),  # WHY: delta count
+                    "run_id": run_id,  # WHY: run link
+                    "summary": summary,  # WHY: summary data
+                },  # WHY: detail dict
+                result="success",  # WHY: result status
+            )  # WHY: audit entry
+
+        return comparison_id  # WHY: return identifier
+
+    def _capture_missing_result(
+        self,  # WHY: instance method
+        run_id: str,  # WHY: run identifier
+        timestamp: str,  # WHY: result timestamp
+    ) -> ComparisonResult:  # WHY: error result
+        """Build the error result when a capture document is missing.
+
+        Args:
+            run_id: Unique run ID.
+            timestamp: ISO 8601 timestamp for the result.
+
+        Returns:
+            ComparisonResult with passed=False and settled=True.
+        """
+        # WHY: the settle gate passed, so settled is True even though comparison failed
+        return ComparisonResult(  # WHY: error result
+            passed=False,  # WHY: comparison failed
+            run_id=run_id,  # WHY: run identifier
+            settled=True,  # WHY: settled but capture missing
+            timestamp=timestamp,  # WHY: result timestamp
+        )  # WHY: result
+
     def _check_settle_gate(
         self,
         run_id: str,  # WHY: run identifier
@@ -386,7 +526,7 @@ class ComparisonService:
         Returns:
             Pre-capture document or None if not found.
 
-        WHY: retrieves baseline snapshot for comparison.
+        WHY: retrieves baseline capture for comparison.
         """
         # WHY: placeholder for actual database fetch
         # In production: query ArangoDB with filter (run_id, capture_type="pre")
@@ -395,7 +535,7 @@ class ComparisonService:
             "run_id": run_id,  # WHY: run identifier
             "capture_type": "pre",  # WHY: capture type
             "timestamp": datetime.now(UTC).isoformat(),  # WHY: timestamp
-            "device_snapshots": [],  # WHY: snapshots array
+            "device_captures": [],  # WHY: captures array
         }  # WHY: document
 
     def _fetch_post_capture(self, run_id: str) -> dict[str, Any] | None:  # WHY: return post-capture or None
@@ -407,7 +547,7 @@ class ComparisonService:
         Returns:
             Post-capture document or None if not found.
 
-        WHY: retrieves post-upgrade snapshot for comparison.
+        WHY: retrieves post-upgrade capture for comparison.
         """
         # WHY: placeholder for actual database fetch
         # In production: query ArangoDB with filter (run_id, capture_type="post")
@@ -416,13 +556,13 @@ class ComparisonService:
             "run_id": run_id,  # WHY: run identifier
             "capture_type": "post",  # WHY: capture type
             "timestamp": datetime.now(UTC).isoformat(),  # WHY: timestamp
-            "device_snapshots": [],  # WHY: snapshots array
+            "device_captures": [],  # WHY: captures array
         }  # WHY: document
 
     def _calculate_deltas(
         self,
-        pre_capture: dict[str, Any],  # WHY: pre-upgrade snapshot
-        post_capture: dict[str, Any],  # WHY: post-upgrade snapshot
+        pre_capture: dict[str, Any],  # WHY: pre-upgrade capture
+        post_capture: dict[str, Any],  # WHY: post-upgrade capture
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:  # WHY: return deltas and summary
         """Calculate deltas between pre- and post-capture.
 
@@ -446,7 +586,7 @@ class ComparisonService:
         }  # WHY: summary complete
 
         # WHY: placeholder for actual delta calculation
-        # In production: compare device snapshots field by field
+        # In production: compare device captures field by field
         # For now, return empty results
         return deltas, summary  # WHY: return results
 
@@ -535,8 +675,8 @@ class ComparisonResultService:
     def analyze_deltas(
         self,  # WHY: instance method
         run_id: str,  # WHY: unique run identifier
-        pre_capture: dict[str, Any],  # WHY: pre-upgrade snapshot
-        post_capture: dict[str, Any],  # WHY: post-upgrade snapshot
+        pre_capture: dict[str, Any],  # WHY: pre-upgrade capture
+        post_capture: dict[str, Any],  # WHY: post-upgrade capture
         user_id: str = "",  # WHY: audit trail user context
     ) -> DetailedComparisonResult:  # WHY: return detailed comparison result
         """Analyze field-level deltas between pre and post captures.
@@ -553,8 +693,8 @@ class ComparisonResultService:
 
         Args:
             run_id: Unique run ID.
-            pre_capture: Pre-upgrade snapshot document.
-            post_capture: Post-upgrade snapshot document.
+            pre_capture: Pre-upgrade capture document.
+            post_capture: Post-upgrade capture document.
             user_id: User initiating comparison (audit trail).
 
         Returns:
@@ -594,8 +734,8 @@ class ComparisonResultService:
             # WHY: analyze inventory deltas
             logger.info("analyzing_inventory_deltas", run_id=run_id)  # WHY: phase start
             inventory_deltas = self._analyze_inventory_deltas(  # WHY: analyze devices
-                pre_capture=pre_capture,  # WHY: pre-snapshot
-                post_capture=post_capture,  # WHY: post-snapshot
+                pre_capture=pre_capture,  # WHY: pre-capture
+                post_capture=post_capture,  # WHY: post-capture
             )  # WHY: inventory analysis result
             deltas.extend(inventory_deltas)  # WHY: add to deltas
             cast(dict[str, int], summary["by_type"])["inventory"] = len(
@@ -605,8 +745,8 @@ class ComparisonResultService:
             # WHY: analyze firmware deltas
             logger.info("analyzing_firmware_deltas", run_id=run_id)  # WHY: phase start
             firmware_deltas = self._analyze_firmware_deltas(  # WHY: analyze firmware
-                pre_capture=pre_capture,  # WHY: pre-snapshot
-                post_capture=post_capture,  # WHY: post-snapshot
+                pre_capture=pre_capture,  # WHY: pre-capture
+                post_capture=post_capture,  # WHY: post-capture
             )  # WHY: firmware analysis result
             deltas.extend(firmware_deltas)  # WHY: add to deltas
             cast(dict[str, int], summary["by_type"])["firmware"] = len(
@@ -616,8 +756,8 @@ class ComparisonResultService:
             # WHY: analyze radio config deltas
             logger.info("analyzing_radio_config_deltas", run_id=run_id)  # WHY: phase start
             radio_deltas = self._analyze_radio_config_deltas(  # WHY: analyze radio
-                pre_capture=pre_capture,  # WHY: pre-snapshot
-                post_capture=post_capture,  # WHY: post-snapshot
+                pre_capture=pre_capture,  # WHY: pre-capture
+                post_capture=post_capture,  # WHY: post-capture
             )  # WHY: radio analysis result
             deltas.extend(radio_deltas)  # WHY: add to deltas
             cast(dict[str, int], summary["by_type"])["radio_config"] = len(
@@ -627,8 +767,8 @@ class ComparisonResultService:
             # WHY: analyze policy deltas
             logger.info("analyzing_policy_deltas", run_id=run_id)  # WHY: phase start
             policy_deltas = self._analyze_policy_deltas(  # WHY: analyze policy
-                pre_capture=pre_capture,  # WHY: pre-snapshot
-                post_capture=post_capture,  # WHY: post-snapshot
+                pre_capture=pre_capture,  # WHY: pre-capture
+                post_capture=post_capture,  # WHY: post-capture
             )  # WHY: policy analysis result
             deltas.extend(policy_deltas)  # WHY: add to deltas
             cast(dict[str, int], summary["by_type"])["policy"] = len(policy_deltas)  # WHY: count  # WHY: count complete
@@ -636,8 +776,8 @@ class ComparisonResultService:
             # WHY: analyze neighbor deltas
             logger.info("analyzing_neighbor_deltas", run_id=run_id)  # WHY: phase start
             neighbor_deltas = self._analyze_neighbor_deltas(  # WHY: analyze neighbors
-                pre_capture=pre_capture,  # WHY: pre-snapshot
-                post_capture=post_capture,  # WHY: post-snapshot
+                pre_capture=pre_capture,  # WHY: pre-capture
+                post_capture=post_capture,  # WHY: post-capture
             )  # WHY: neighbor analysis result
             deltas.extend(neighbor_deltas)  # WHY: add to deltas
             cast(dict[str, int], summary["by_type"])["neighbors"] = len(
@@ -710,16 +850,16 @@ class ComparisonResultService:
 
     def _analyze_inventory_deltas(
         self,  # WHY: instance method
-        pre_capture: dict[str, Any],  # WHY: pre-snapshot
-        post_capture: dict[str, Any],  # WHY: post-snapshot
+        pre_capture: dict[str, Any],  # WHY: pre-capture
+        post_capture: dict[str, Any],  # WHY: post-capture
     ) -> list[dict[str, Any]]:  # WHY: return list of inventory deltas
         """Analyze device inventory changes.
 
         Detects: devices added, removed, model changes.
 
         Args:
-            pre_capture: Pre-upgrade snapshot.
-            post_capture: Post-upgrade snapshot.
+            pre_capture: Pre-upgrade capture.
+            post_capture: Post-upgrade capture.
 
         Returns:
             List of inventory delta dicts.
@@ -732,78 +872,21 @@ class ComparisonResultService:
         deltas: list[dict[str, Any]] = []  # WHY: result list
 
         # WHY: extract device lists
-        pre_devices = pre_capture.get("devices", [])  # WHY: pre-snapshot devices
-        post_devices = post_capture.get("devices", [])  # WHY: post-snapshot devices
+        pre_devices = pre_capture.get("devices", [])  # WHY: pre-capture devices
+        post_devices = post_capture.get("devices", [])  # WHY: post-capture devices
 
         # WHY: build device maps by ID
         pre_map = {d.get("device_id"): d for d in pre_devices}  # WHY: pre-map
         post_map = {d.get("device_id"): d for d in post_devices}  # WHY: post-map
 
         # WHY: detect removed devices
-        for device_id, pre_dev in pre_map.items():  # WHY: iterate pre-devices
-            # WHY: check if device exists in post-capture
-            if device_id not in post_map:  # WHY: device missing
-                # WHY: create delta for removed device
-                delta = {  # WHY: delta dict
-                    "device_id": device_id,  # WHY: device identifier
-                    "field": "inventory",  # WHY: field type
-                    "delta_type": "device_removed",  # WHY: change type
-                    "pre_value": pre_dev.get("name", device_id),  # WHY: pre-value
-                    "post_value": None,  # WHY: device removed
-                    "severity": self.SEVERITY_LEVELS.get("device_removed", "high"),  # WHY: severity
-                }  # WHY: delta complete
-                deltas.append(delta)  # WHY: add to results
-                logger.warning(
-                    "device_removed",  # WHY: event type
-                    device_id=device_id,  # WHY: context
-                    device_name=pre_dev.get("name"),  # WHY: human-readable
-                )  # WHY: event logged
+        deltas.extend(self._detect_removed_devices(pre_map, post_map))  # WHY: removals
 
         # WHY: detect added devices
-        for device_id, post_dev in post_map.items():  # WHY: iterate post-devices
-            # WHY: check if device exists in pre-capture
-            if device_id not in pre_map:  # WHY: device new
-                # WHY: create delta for added device
-                delta = {  # WHY: delta dict
-                    "device_id": device_id,  # WHY: device identifier
-                    "field": "inventory",  # WHY: field type
-                    "delta_type": "device_added",  # WHY: change type
-                    "pre_value": None,  # WHY: device new
-                    "post_value": post_dev.get("name", device_id),  # WHY: post-value
-                    "severity": self.SEVERITY_LEVELS.get("device_added", "medium"),  # WHY: severity
-                }  # WHY: delta complete
-                deltas.append(delta)  # WHY: add to results
-                logger.info(
-                    "device_added",  # WHY: event type
-                    device_id=device_id,  # WHY: context
-                    device_name=post_dev.get("name"),  # WHY: human-readable
-                )  # WHY: event logged
+        deltas.extend(self._detect_added_devices(pre_map, post_map))  # WHY: additions
 
         # WHY: detect model changes for existing devices
-        for device_id, pre_dev in pre_map.items():  # WHY: iterate pre-devices
-            # WHY: check if device exists in post-capture
-            if device_id in post_map:  # WHY: device exists
-                post_dev = post_map[device_id]  # WHY: get post-device
-                pre_model = pre_dev.get("model")  # WHY: pre-model
-                post_model = post_dev.get("model")  # WHY: post-model
-                # WHY: check for model change
-                if pre_model and post_model and pre_model != post_model:  # WHY: model changed
-                    # WHY: create delta for model change
-                    delta = {  # WHY: delta dict
-                        "device_id": device_id,  # WHY: device identifier
-                        "field": "model",  # WHY: field type
-                        "delta_type": "model_change",  # WHY: change type
-                        "pre_value": pre_model,  # WHY: pre-value
-                        "post_value": post_model,  # WHY: post-value
-                        "severity": "high",  # WHY: model changes are critical
-                    }  # WHY: delta complete
-                    deltas.append(delta)  # WHY: add to results
-                    logger.warning(
-                        "device_model_changed",  # WHY: event type
-                        device_id=device_id,  # WHY: context
-                        pre_model=pre_model,  # WHY: old value
-                        post_model=post_model,  # WHY: new value
-                    )  # WHY: event logged
+        deltas.extend(self._detect_model_changes(pre_map, post_map))  # WHY: model changes
 
         # WHY: log inventory analysis complete
         logger.debug(
@@ -813,18 +896,153 @@ class ComparisonResultService:
 
         return deltas  # WHY: return results
 
+    def _detect_removed_devices(
+        self,  # WHY: instance method
+        pre_map: dict[str, Any],  # WHY: pre-capture device map
+        post_map: dict[str, Any],  # WHY: post-capture device map
+    ) -> list[dict[str, Any]]:  # WHY: return removed device deltas
+        """Detect devices present pre-upgrade but missing post-upgrade.
+
+        Args:
+            pre_map: Device map keyed by device_id from pre-capture.
+            post_map: Device map keyed by device_id from post-capture.
+
+        Returns:
+            List of delta dicts for removed devices.
+        """
+        # WHY: result list for removed devices
+        removed: list[dict[str, Any]] = []  # WHY: removed deltas
+
+        # WHY: iterate pre-capture devices
+        for device_id, pre_dev in pre_map.items():  # WHY: each pre-device
+            # WHY: skip devices still present post-upgrade
+            if device_id in post_map:  # WHY: device exists
+                continue  # WHY: not removed
+
+            # WHY: build delta for removed device
+            removed.append(  # WHY: add delta
+                {  # WHY: delta dict
+                    "device_id": device_id,  # WHY: identifier
+                    "field": "inventory",  # WHY: field type
+                    "delta_type": "device_removed",  # WHY: change type
+                    "pre_value": pre_dev.get("name", device_id),  # WHY: pre-value
+                    "post_value": None,  # WHY: device gone
+                    "severity": self.SEVERITY_LEVELS.get("device_removed", "high"),  # WHY: level
+                }  # WHY: delta complete
+            )  # WHY: appended
+            logger.warning(  # WHY: log removal
+                "device_removed",  # WHY: event type
+                device_id=device_id,  # WHY: context
+                device_name=pre_dev.get("name"),  # WHY: human-readable
+            )  # WHY: logged
+
+        return removed  # WHY: return removed deltas
+
+    def _detect_added_devices(
+        self,  # WHY: instance method
+        pre_map: dict[str, Any],  # WHY: pre-capture device map
+        post_map: dict[str, Any],  # WHY: post-capture device map
+    ) -> list[dict[str, Any]]:  # WHY: return added device deltas
+        """Detect devices present post-upgrade but absent pre-upgrade.
+
+        Args:
+            pre_map: Device map keyed by device_id from pre-capture.
+            post_map: Device map keyed by device_id from post-capture.
+
+        Returns:
+            List of delta dicts for added devices.
+        """
+        # WHY: result list for added devices
+        added: list[dict[str, Any]] = []  # WHY: added deltas
+
+        # WHY: iterate post-capture devices
+        for device_id, post_dev in post_map.items():  # WHY: each post-device
+            # WHY: skip devices already present pre-upgrade
+            if device_id in pre_map:  # WHY: device existed
+                continue  # WHY: not new
+
+            # WHY: build delta for added device
+            added.append(  # WHY: add delta
+                {  # WHY: delta dict
+                    "device_id": device_id,  # WHY: identifier
+                    "field": "inventory",  # WHY: field type
+                    "delta_type": "device_added",  # WHY: change type
+                    "pre_value": None,  # WHY: device new
+                    "post_value": post_dev.get("name", device_id),  # WHY: post-value
+                    "severity": self.SEVERITY_LEVELS.get("device_added", "medium"),  # WHY: level
+                }  # WHY: delta complete
+            )  # WHY: appended
+            logger.info(  # WHY: log addition
+                "device_added",  # WHY: event type
+                device_id=device_id,  # WHY: context
+                device_name=post_dev.get("name"),  # WHY: human-readable
+            )  # WHY: logged
+
+        return added  # WHY: return added deltas
+
+    def _detect_model_changes(
+        self,  # WHY: instance method
+        pre_map: dict[str, Any],  # WHY: pre-capture device map
+        post_map: dict[str, Any],  # WHY: post-capture device map
+    ) -> list[dict[str, Any]]:  # WHY: return model change deltas
+        """Detect devices whose model changed between captures.
+
+        Args:
+            pre_map: Device map keyed by device_id from pre-capture.
+            post_map: Device map keyed by device_id from post-capture.
+
+        Returns:
+            List of delta dicts for model changes.
+        """
+        # WHY: result list for model changes
+        changes: list[dict[str, Any]] = []  # WHY: change deltas
+
+        # WHY: iterate pre-capture devices that also exist post-upgrade
+        for device_id, pre_dev in pre_map.items():  # WHY: each pre-device
+            # WHY: skip devices not present post-upgrade
+            if device_id not in post_map:  # WHY: device gone
+                continue  # WHY: no comparison possible
+
+            # WHY: extract model values
+            pre_model = pre_dev.get("model")  # WHY: pre-model
+            post_model = post_map[device_id].get("model")  # WHY: post-model
+
+            # WHY: only flag when both models exist and differ
+            if not (pre_model and post_model and pre_model != post_model):  # WHY: no change
+                continue  # WHY: skip
+
+            # WHY: build delta for model change
+            changes.append(  # WHY: add delta
+                {  # WHY: delta dict
+                    "device_id": device_id,  # WHY: identifier
+                    "field": "model",  # WHY: field type
+                    "delta_type": "model_change",  # WHY: change type
+                    "pre_value": pre_model,  # WHY: old value
+                    "post_value": post_model,  # WHY: new value
+                    "severity": "high",  # WHY: critical change
+                }  # WHY: delta complete
+            )  # WHY: appended
+            logger.warning(  # WHY: log change
+                "device_model_changed",  # WHY: event type
+                device_id=device_id,  # WHY: context
+                pre_model=pre_model,  # WHY: old value
+                post_model=post_model,  # WHY: new value
+            )  # WHY: logged
+
+        return changes  # WHY: return change deltas
+
     def _analyze_firmware_deltas(
         self,  # WHY: instance method
-        pre_capture: dict[str, Any],  # WHY: pre-snapshot
-        post_capture: dict[str, Any],  # WHY: post-snapshot
+        pre_capture: dict[str, Any],  # WHY: pre-capture
+        post_capture: dict[str, Any],  # WHY: post-capture
     ) -> list[dict[str, Any]]:  # WHY: return list of firmware deltas
         """Analyze firmware version changes.
 
         Detects: version mismatch, unexpected rollback, firmware upgrade.
 
         Args:
-            pre_capture: Pre-upgrade snapshot.
-            post_capture: Post-upgrade snapshot.
+            pre_capture: Pre-upgrade capture.
+            post_capture: Post-upgrade capture.
 
         Returns:
             List of firmware delta dicts.
@@ -837,8 +1055,8 @@ class ComparisonResultService:
         deltas: list[dict[str, Any]] = []  # WHY: result list
 
         # WHY: extract device lists
-        pre_devices = pre_capture.get("devices", [])  # WHY: pre-snapshot devices
-        post_devices = post_capture.get("devices", [])  # WHY: post-snapshot devices
+        pre_devices = pre_capture.get("devices", [])  # WHY: pre-capture devices
+        post_devices = post_capture.get("devices", [])  # WHY: post-capture devices
 
         # WHY: build device map by ID for post-capture
         post_map = {d.get("device_id"): d for d in post_devices}  # WHY: post-map
@@ -898,16 +1116,16 @@ class ComparisonResultService:
 
     def _analyze_radio_config_deltas(
         self,  # WHY: instance method
-        pre_capture: dict[str, Any],  # WHY: pre-snapshot
-        post_capture: dict[str, Any],  # WHY: post-snapshot
+        pre_capture: dict[str, Any],  # WHY: pre-capture
+        post_capture: dict[str, Any],  # WHY: post-capture
     ) -> list[dict[str, Any]]:  # WHY: return list of radio config deltas
         """Analyze radio configuration changes.
 
         Detects: channel, power, band changes.
 
         Args:
-            pre_capture: Pre-upgrade snapshot.
-            post_capture: Post-upgrade snapshot.
+            pre_capture: Pre-upgrade capture.
+            post_capture: Post-upgrade capture.
 
         Returns:
             List of radio config delta dicts.
@@ -920,7 +1138,7 @@ class ComparisonResultService:
         deltas: list[dict[str, Any]] = []  # WHY: result list
 
         # WHY: placeholder for radio config analysis
-        # In production: compare radio config fields between snapshots
+        # In production: compare radio config fields between captures
         # Currently returns empty list (can be extended)
 
         # WHY: log radio analysis complete
@@ -933,16 +1151,16 @@ class ComparisonResultService:
 
     def _analyze_policy_deltas(
         self,  # WHY: instance method
-        pre_capture: dict[str, Any],  # WHY: pre-snapshot
-        post_capture: dict[str, Any],  # WHY: post-snapshot
+        pre_capture: dict[str, Any],  # WHY: pre-capture
+        post_capture: dict[str, Any],  # WHY: post-capture
     ) -> list[dict[str, Any]]:  # WHY: return list of policy deltas
         """Analyze policy changes.
 
         Detects: security policy changes, binding changes.
 
         Args:
-            pre_capture: Pre-upgrade snapshot.
-            post_capture: Post-upgrade snapshot.
+            pre_capture: Pre-upgrade capture.
+            post_capture: Post-upgrade capture.
 
         Returns:
             List of policy delta dicts.
@@ -955,7 +1173,7 @@ class ComparisonResultService:
         deltas: list[dict[str, Any]] = []  # WHY: result list
 
         # WHY: placeholder for policy analysis
-        # In production: compare policy fields between snapshots
+        # In production: compare policy fields between captures
         # Currently returns empty list (can be extended)
 
         # WHY: log policy analysis complete
@@ -968,16 +1186,16 @@ class ComparisonResultService:
 
     def _analyze_neighbor_deltas(
         self,  # WHY: instance method
-        pre_capture: dict[str, Any],  # WHY: pre-snapshot
-        post_capture: dict[str, Any],  # WHY: post-snapshot
+        pre_capture: dict[str, Any],  # WHY: pre-capture
+        post_capture: dict[str, Any],  # WHY: post-capture
     ) -> list[dict[str, Any]]:  # WHY: return list of neighbor deltas
         """Analyze LLDP neighbor topology changes.
 
         Detects: neighbor additions, removals, topology changes.
 
         Args:
-            pre_capture: Pre-upgrade snapshot.
-            post_capture: Post-upgrade snapshot.
+            pre_capture: Pre-upgrade capture.
+            post_capture: Post-upgrade capture.
 
         Returns:
             List of neighbor delta dicts.
@@ -990,7 +1208,7 @@ class ComparisonResultService:
         deltas: list[dict[str, Any]] = []  # WHY: result list
 
         # WHY: placeholder for neighbor analysis
-        # In production: compare LLDP neighbor fields between snapshots
+        # In production: compare LLDP neighbor fields between captures
         # Currently returns empty list (can be extended)
 
         # WHY: log neighbor analysis complete

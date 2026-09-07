@@ -84,25 +84,38 @@ class SecretMasker:
         # WHY: iterate and mask all values
         masked = {}  # WHY: new dict for masked output
         for key, value in data.items():  # WHY: process each field
-            # WHY: detect and mask sensitive keys
-            if self._is_sensitive_key(key) and not isinstance(value, (dict, list)):  # WHY: mask scalar secrets only
-                masked[key] = self.mask_string(str(value)) if value else None  # WHY: redact sensitive field
-            # WHY: recursively process nested dicts
-            elif isinstance(value, dict):  # WHY: handle nested objects
-                masked[key] = self.mask_dict(value)  # WHY: recursive masking
-            # WHY: process list items for nested sensitive data
-            elif isinstance(value, list):  # WHY: handle arrays
-                masked[key] = [  # WHY: mask items in list
-                    self.mask_dict(item) if isinstance(item, dict) else item  # WHY: recursively mask dict items
-                    for item in value  # WHY: iterate list
-                ]  # WHY: list comprehension for efficiency
-            else:
-                # WHY: check string values for token patterns
-                if isinstance(value, str) and self._contains_secret(value):  # WHY: pattern matching
-                    masked[key] = self._mask_matches(value)  # WHY: redact matched patterns
-                else:
-                    masked[key] = value  # WHY: pass through non-sensitive values
+            masked[key] = self._mask_value(key, value)  # WHY: per-value masking keeps this loop simple
         return masked  # WHY: return masked output
+
+    def _mask_value(self, key: str, value: Any) -> Any:
+        """Mask a single dictionary value by key and type.
+
+        Args:
+            key: Dictionary key that may indicate a sensitive field.
+            value: Value to mask (scalar, dict, list, or string).
+
+        Returns:
+            Masked value, or the original value when it is not sensitive.
+
+        WHY: per-value extraction keeps mask_dict under the complexity limit
+        while preserving the exact masking order and output.
+        """
+        # WHY: detect and mask sensitive keys
+        if self._is_sensitive_key(key) and not isinstance(value, (dict, list)):  # WHY: mask scalar secrets only
+            return self.mask_string(str(value)) if value else None  # WHY: redact sensitive field
+        # WHY: recursively process nested dicts
+        if isinstance(value, dict):  # WHY: handle nested objects
+            return self.mask_dict(value)  # WHY: recursive masking
+        # WHY: process list items for nested sensitive data
+        if isinstance(value, list):  # WHY: handle arrays
+            return [  # WHY: mask items in list
+                self.mask_dict(item) if isinstance(item, dict) else item  # WHY: recursively mask dict items
+                for item in value  # WHY: iterate list
+            ]  # WHY: list comprehension for efficiency
+        # WHY: check string values for token patterns
+        if isinstance(value, str) and self._contains_secret(value):  # WHY: pattern matching
+            return self._mask_matches(value)  # WHY: redact matched patterns
+        return value  # WHY: pass through non-sensitive values
 
     def _is_sensitive_key(self, key: str) -> bool:
         """Check if a key name indicates sensitive data.

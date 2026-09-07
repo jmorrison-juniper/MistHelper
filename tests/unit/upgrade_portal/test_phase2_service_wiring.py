@@ -13,15 +13,12 @@ Why:
 """
 
 import logging  # The tests verify logging behavior.
-from typing import Any  # Config values are free-form.
 from unittest.mock import MagicMock, patch  # Mock modules and Flask config.
 
 import pytest  # The test framework of the project.
 from flask import Flask  # The Flask application for config injection.
 
 from src.upgrade_portal.app import factory, wiring  # The units under test.
-from src.upgrade_portal.runtime import identity  # Needed for SessionOwner fixture.
-
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +48,7 @@ class TestServiceWiring:
         app.config["TESTING"] = True  # Enable testing mode
         yield app
 
-    def test_install_seams_calls_service_installers(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_install_seams_calls_service_installers(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """install_seams() should call _install_capture_service and _install_upgrade_service.
 
         Why:
@@ -63,26 +58,22 @@ class TestServiceWiring:
         """
         # WHY: Create a mock app to track config setdefault calls
         mock_app = MagicMock()  # Create a mock Flask application
-        
+
         # WHY: Mock the helper functions to verify they're called
         mock_capture_installer = MagicMock()  # Mock capture service installer
         mock_upgrade_installer = MagicMock()  # Mock upgrade service installer
-        
+
         # WHY: Mock prepare_storage to avoid database calls in this test
         mock_prepare_storage = MagicMock()  # Mock storage preparation function
-        
+
         # WHY: Patch the installer functions to use our mocks
-        monkeypatch.setattr(
-            wiring, "_install_capture_service", mock_capture_installer
-        )  # Replace capture installer
-        monkeypatch.setattr(
-            wiring, "_install_upgrade_service", mock_upgrade_installer
-        )  # Replace upgrade installer
+        monkeypatch.setattr(wiring, "_install_capture_service", mock_capture_installer)  # Replace capture installer
+        monkeypatch.setattr(wiring, "_install_upgrade_service", mock_upgrade_installer)  # Replace upgrade installer
         monkeypatch.setattr(wiring, "prepare_storage", mock_prepare_storage)  # Replace storage prep
-        
+
         # WHY: Call install_seams to trigger service installation
         wiring.install_seams(mock_app)  # This should call our mocked installers
-        
+
         # WHY: Verify both capture and upgrade service installers were called with the app
         mock_capture_installer.assert_called_once_with(mock_app)  # Capture installer called
         mock_upgrade_installer.assert_called_once_with(mock_app)  # Upgrade installer called
@@ -97,11 +88,9 @@ class TestServiceWiring:
         """
         # WHY: Import the capture routes module to check its constant
         from src.upgrade_portal.app.routes import capture  # Import routes module
-        
+
         # WHY: Verify the seam key constants match between wiring and routes
-        assert (
-            wiring.CAPTURE_SERVICE_KEY == capture.CAPTURE_SERVICE_KEY
-        )  # Keys must match for injection
+        assert wiring.CAPTURE_SERVICE_KEY == capture.CAPTURE_SERVICE_KEY  # Keys must match for injection
 
     def test_upgrade_service_key_constant_matches_routes(self) -> None:
         """Verify UPGRADE_SERVICE_KEY constant matches the routes module.
@@ -113,11 +102,9 @@ class TestServiceWiring:
         """
         # WHY: Import the upgrade routes module to check its constant
         from src.upgrade_portal.app.routes import upgrade  # Import routes module
-        
+
         # WHY: Verify the seam key constants match between wiring and routes
-        assert (
-            wiring.UPGRADE_SERVICE_KEY == upgrade.UPGRADE_SERVICE_KEY
-        )  # Keys must match for injection
+        assert wiring.UPGRADE_SERVICE_KEY == upgrade.UPGRADE_SERVICE_KEY  # Keys must match for injection
 
     def test_capture_service_module_constant_is_defined(self) -> None:
         """Verify CAPTURE_SERVICE_MODULE constant is defined in wiring.py.
@@ -160,15 +147,13 @@ class TestServiceWiring:
         # WHY: Call the installer function directly with a real app
         with caplog.at_level(logging.WARNING):  # Capture warning logs
             # WHY: Patch load_module to return None (simulate missing module)
-            with patch.object(
-                wiring, "load_module", return_value=None
-            ):  # Make load_module fail
+            with patch.object(wiring, "load_module", return_value=None):  # Make load_module fail
                 wiring._install_capture_service(app)  # Call installer with missing module
-        
+
         # WHY: Verify a warning was logged about missing module
         assert "capture" in caplog.text.lower()  # Log mentions capture
         assert "absent" in caplog.text.lower() or "missing" in caplog.text.lower()  # Log mentions missing
-        
+
         # WHY: Verify the service was NOT added to Flask config (no substitute installed)
         assert app.config.get(CAPTURE_SERVICE_KEY) is None  # No service in config
 
@@ -185,14 +170,12 @@ class TestServiceWiring:
         # WHY: Call the installer function directly with a real app
         with caplog.at_level(logging.WARNING):  # Capture warning logs
             # WHY: Patch load_module to return None (simulate missing module)
-            with patch.object(
-                wiring, "load_module", return_value=None
-            ):  # Make load_module fail
+            with patch.object(wiring, "load_module", return_value=None):  # Make load_module fail
                 wiring._install_upgrade_service(app)  # Call installer with missing module
-        
+
         # WHY: Verify a warning was logged about missing module
         assert "upgrade" in caplog.text.lower()  # Log mentions upgrade
         assert "absent" in caplog.text.lower() or "missing" in caplog.text.lower()  # Log mentions missing
-        
+
         # WHY: Verify the service was NOT added to Flask config (no substitute installed)
         assert app.config.get(UPGRADE_SERVICE_KEY) is None  # No service in config

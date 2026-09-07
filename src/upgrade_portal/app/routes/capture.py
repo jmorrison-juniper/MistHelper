@@ -1093,12 +1093,12 @@ def refusal_for(load: Any) -> tuple[Response, int]:
 @capture_bp.post(CAPTURE_PRE_UPGRADE_PATH)  # Phase 2 T-006: POST /api/runs/<run_id>/capture/start
 @identity.require_session  # Ensure operator is authenticated
 def capture_pre_upgrade_for_run(run_id: str) -> tuple[Response, int]:
-    """Start a pre-upgrade device snapshot capture for a specific run.
+    """Start a pre-upgrade device capture capture for a specific run.
 
     Why:
         T-006 requires capturing device state before upgrade: inventory, firmware versions,
         policies, radio settings, LLDP neighbors. This handler invokes CaptureService to
-        fetch device snapshots from Mist API and store in ArangoDB with composite key
+        fetch device captures from Mist API and store in ArangoDB with composite key
         (run_id, capture_type="pre", timestamp). Retry logic handles transient API timeouts.
 
     Args:
@@ -1139,7 +1139,7 @@ def capture_pre_upgrade_for_run(run_id: str) -> tuple[Response, int]:
         )  # BEFORE service call
 
         # WHY: Invoke CaptureService.capture_pre_upgrade() to fetch device state from Mist API
-        # This returns capture result with snapshot data stored in ArangoDB
+        # This returns capture result with capture data stored in ArangoDB
         capture_result = capture_service.capture_pre_upgrade(
             run_id=run_id, device_ids=device_ids, org_id=org_id, site_id=site_id, tier=tier
         )

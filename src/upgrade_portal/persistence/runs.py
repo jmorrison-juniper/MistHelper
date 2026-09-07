@@ -28,6 +28,45 @@ class UpgradeRunsService:
         # WHY: log initialization
         logger.info("upgrade_runs_service_initialized", db_available=db_router is not None)  # WHY: startup event
 
+    def _validate_create_run_inputs(self, user_id: str, site_id: str, device_ids: list[str]) -> str | None:
+        """Validate create_run inputs and log the first failure.
+
+        Args:
+            user_id: User ID who initiated the run.
+            site_id: Selected site ID.
+            device_ids: List of selected device IDs.
+
+        Returns:
+            Error event name if invalid, None if all inputs are valid.
+
+        WHY: keeps create_run under the complexity limit by moving
+        validation into one place.
+        """
+        # WHY: check user_id
+        if not user_id or not isinstance(user_id, str):  # WHY: user_id must be a string
+            logger.error("create_run_invalid_user_id", user_id=user_id)  # WHY: validation error
+            return "invalid_user_id"  # WHY: first failure
+
+        # WHY: check site_id
+        if not site_id or not isinstance(site_id, str):  # WHY: site_id must be a string
+            logger.error("create_run_invalid_site_id", site_id=site_id)  # WHY: validation error
+            return "invalid_site_id"  # WHY: first failure
+
+        # WHY: check devices
+        if not device_ids or not isinstance(device_ids, list) or len(device_ids) == 0:  # WHY: at least one device
+            logger.error(
+                "create_run_no_devices", device_count=len(device_ids) if device_ids else 0
+            )  # WHY: validation error
+            return "no_devices"  # WHY: first failure
+
+        # WHY: check database availability
+        if not self.db_router:  # WHY: persistence requires a router
+            logger.error("db_router_unavailable_create_run")  # WHY: no database
+            return "no_db_router"  # WHY: first failure
+
+        # WHY: all checks passed
+        return None  # WHY: inputs are valid
+
     def create_run(
         self, user_id: str, org_id: str, site_id: str, device_ids: list[str], notes: str | None = None
     ) -> str | None:
@@ -49,27 +88,12 @@ class UpgradeRunsService:
         logger.info(
             "create_upgrade_run_start", user_id=user_id, site_id=site_id, device_count=len(device_ids)
         )  # WHY: pre-operation log
+        # WHY: validate inputs before any write
+        validation_error = self._validate_create_run_inputs(user_id, site_id, device_ids)  # WHY: input check
+        if validation_error:  # WHY: fail fast on invalid input
+            return None  # WHY: reject invalid run
+
         try:
-            # WHY: validate inputs
-            if not user_id or not isinstance(user_id, str):  # WHY: check user_id
-                logger.error("create_run_invalid_user_id", user_id=user_id)  # WHY: validation error
-                return None  # WHY: fail
-
-            if not site_id or not isinstance(site_id, str):  # WHY: check site_id
-                logger.error("create_run_invalid_site_id", site_id=site_id)  # WHY: validation error
-                return None  # WHY: fail
-
-            if not device_ids or not isinstance(device_ids, list) or len(device_ids) == 0:  # WHY: check devices
-                logger.error(
-                    "create_run_no_devices", device_count=len(device_ids) if device_ids else 0
-                )  # WHY: validation error
-                return None  # WHY: fail
-
-            # WHY: check if database available
-            if not self.db_router:  # WHY: check router
-                logger.error("db_router_unavailable_create_run")  # WHY: no database
-                return None  # WHY: fail
-
             # WHY: generate unique run ID
             run_id = str(uuid.uuid4())  # WHY: UUID for run
             # WHY: get current timestamp

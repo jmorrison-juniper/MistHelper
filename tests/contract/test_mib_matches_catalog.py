@@ -115,9 +115,13 @@ class TestMibRoot:
 
     def test_the_module_root_matches_the_agent_base_oid(self, mib_text: str) -> None:
         """A different root makes every translation wrong."""
-        match = re.search(r"::=\s*\{\s*enterprises\s+(\d+)\s+(\d+)\s*\}", mib_text)
+        match = re.search(  # The module root names the branch below enterprises
+            r"::=\s*\{\s*enterprises\s+(\d+(?:\s+\d+)*)\s*\}",  # One or more numbers
+            mib_text,  # Search the MIB text
+        )  # Match result
         assert match, "The MIB does not assign the module root below `enterprises`"
-        root = f".1.3.6.1.4.1.{match.group(1)}.{match.group(2)}"
+        tail = match.group(1).split()  # The branch numbers, outermost first
+        root = "." + ".".join(["1", "3", "6", "1", "4", "1"] + tail)  # Full dotted OID
         assert root == DEFAULT_BASE_OID
 
 
