@@ -156,6 +156,7 @@ __all__ = [
     "DeviceUtils",
     "DisplayUtils",
     "E911BSSIDReportGenerator",
+    "SSIDBroadcastGapReport",
     "EndpointConfig",
     "EnhancedSSHRunner",
     "EnvironmentUtils",
@@ -615,6 +616,7 @@ from src.reports.offline_device_reporter import (
 from src.reports.sfp_transceiver_data_processor import (
     SFPTransceiverDataProcessor,  # Cat B (1013 SC-001 position 27) -- re-export
 )
+from src.reports.ssid_broadcast_gap_report import SSIDBroadcastGapReport  # Menu 242 SSID coverage report.
 from src.reports.wired_client_manufacturer_report_generator import (
     WiredClientManufacturerReportGenerator,  # Cat B (1013 SC-001 position 26) -- re-export
 )
@@ -3761,6 +3763,16 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         lambda: _launch_metrics_gateway(),
         "Serve Mist Cloud health to a monitoring system on port 8057 (Prometheus and SNMP)",
     ),
+    "242": (
+        SSIDBroadcastGapReport.execute,
+        "Find sites where an SSID is not broadcast by any AP",
+    ),
+    "243": (
+        # WHY: the generator lives in another module, so a lambda defers the import to the moment a
+        # person selects the entry. The dict is built the moment this module loads.
+        lambda: _launch_mib_generator(),
+        "Generate the SNMP MIB from the Mist OpenAPI file and the metric catalog",
+    ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
     "46": (OrgConfigExporter.wlans, "Export WLAN configuration for the organization"),
@@ -5009,6 +5021,21 @@ def _metrics_gateway_org_id(settings: Any) -> str:
     return str(org_id or "")
 
 
+def _launch_mib_generator() -> None:
+    """Generate the SNMP MIB from the checked-in inputs.
+
+    Why:
+        Menu 243 and the --mib-generate flag need one shared start path, the
+        same rule that menu 241 and --metrics-gateway follow.
+    """
+    from src.mib_generator.runner import DEFAULT_OUTPUT, MibGeneratorRunner
+
+    logging.info("MIB_GENERATOR: Menu 243 started the generator")  # Log before the action.
+    text = MibGeneratorRunner().generate(DEFAULT_OUTPUT)  # The runner reads the three checked-in inputs.
+    echo(f"  Wrote {len(text)} characters to {DEFAULT_OUTPUT}")
+    logging.info("MIB_GENERATOR: Menu 243 wrote %d characters to %s", len(text), DEFAULT_OUTPUT)  # Log the result.
+
+
 def _launch_metrics_gateway(dev_debug: bool = False) -> None:
     """Serve Mist Cloud health to a monitoring system on port 8057.
 
@@ -5031,6 +5058,11 @@ def _launch_metrics_gateway(dev_debug: bool = False) -> None:
         logging.error("METRICS_GATEWAY: No organization selected - abort the launch")  # Log the refusal
         return
     settings = settings.with_org_id(resolved)  # Carry the chosen org into the frozen record
+    # Reuse the shared token-based initializer (handles retries, rate limits, and the legacy fallback).
+    if not MistSessionInitializer.initialize():  # Populates the module-level `apisession` global on success.
+        echo("  X Could not authenticate to Mist Cloud - the metrics gateway cannot start")
+        logging.error("METRICS_GATEWAY: Mist API session initialization failed - abort the launch")
+        return
     cache = build_cache(apisession, settings)  # The cache holds the reading that both output paths serve
     start_refresh_thread(cache, threading.Event())  # A daemon thread keeps the reading fresh ahead of a poll
     logging.info("METRICS_GATEWAY: Building the application for %s:%s", settings.host, settings.port)
@@ -5060,16 +5092,74 @@ def _run_metrics_snmp(_args: argparse.Namespace) -> None:
 
     protect_protocol_streams()  # First call of this mode. A later call cannot recall a sent record.
 
-    from src.metrics_gateway.service import GatewaySettings, build_cache
+    from src.metrics_gateway.service import GatewaySettings, build_cache, start_refresh_thread
+    from src.utils.environment_utils import EnvironmentUtils  # Import EnvironmentUtils for container detection
 
     logging.info("METRICS_SNMP: Starting the pass_persist responder")  # Log to the file, never to a stream
     settings = GatewaySettings.from_environment(EnvironmentUtils.is_running_in_container())
     if not settings.org_id:  # snmpd cannot answer a prompt, so the setting is the only source here
         logging.error("METRICS_SNMP: METRICS_ORG_ID is not set - abort")  # Log the refusal
         sys.exit(1)
-    responder = SnmpPassPersistResponder(build_cache(apisession, settings), settings.base_oid)
+    # Reuse the shared token-based initializer instead of calling mistapi directly. It is the same
+    # seam every other MistHelper mode uses, so it inherits the retry, rate-limit, and fallback logic
+    # for free and it writes the session to the module-level `apisession` global that build_cache reads.
+    if not MistSessionInitializer.initialize():
+        logging.error("METRICS_SNMP: Mist API session initialization failed - abort")  # Log the refusal
+        sys.exit(1)
+    cache = build_cache(apisession, settings)  # The cache holds the reading that the responder serves.
+    start_refresh_thread(cache, threading.Event())  # Mist Cloud access runs away from the SNMP protocol.
+    responder = SnmpPassPersistResponder(cache, settings.base_oid)
     responder.run(sys.stdin, sys.stdout)  # Blocks until snmpd closes the pipe
     sys.exit(0)
+
+
+def _run_mib_generator_mode(args: argparse.Namespace) -> None:
+    """Run the SNMP MIB generator, then exit.
+
+    Why:
+        A hand-edited MIB drifts away from the metric catalog, and a poller then
+        reads a name that the agent does not answer. The generator reads the
+        Mist OpenAPI file, the catalog, and the OID ledger, so the module always
+        agrees with the running agent.
+
+    Args:
+        args: The parsed command line.
+    """
+    from pathlib import Path  # A local import keeps the start of the tool free of the generator modules.
+
+    from src.mib_generator.runner import DEFAULT_OUTPUT, MibGeneratorRunner
+
+    logging.info("MIB_GENERATOR: Starting the MIB generator")  # Log before the action.
+    runner = MibGeneratorRunner()  # The runner reads the three checked-in inputs from their default paths.
+    output = Path(args.mib_output) if getattr(args, "mib_output", None) else DEFAULT_OUTPUT
+    code = _report_mib_result(runner, args, output)  # One helper keeps this function inside the line limit.
+    logging.info("MIB_GENERATOR: The generator finished with exit code %s", code)  # Log the result.
+    sys.exit(code)
+
+
+def _report_mib_result(runner: Any, args: argparse.Namespace, output: Any) -> int:
+    """Run the action the operator selected and print its result.
+
+    Args:
+        runner: The MIB generator runner.
+        args: The parsed command line.
+        output: The path of the MIB file.
+
+    Returns:
+        The process exit code. A check that finds a problem returns 1.
+    """
+    if getattr(args, "mib_check", False):  # The continuous integration path must fail on a stale file.
+        problems = runner.check(output)
+        print("\n".join(problems) if problems else "The MIB agrees with the Mist file and the metric catalog.")
+        return 1 if problems else 0
+    if getattr(args, "mib_report", False):  # The report path lists work for a person to review.
+        for row in runner.report():  # One line for each field the catalog does not yet serve.
+            print(f"{row.scope}\t{row.path}\t{row.json_type}\t{row.description[:60]}")
+        return 0
+    dry = bool(getattr(args, "mib_dry_run", False))  # A dry run prints the text and leaves the disk alone.
+    text = runner.generate(output, dry_run=dry)
+    print(text if dry else f"Wrote {len(text)} characters to {output}.")
+    return 0
 
 
 def _report_tqdm_status() -> None:
@@ -5266,6 +5356,31 @@ def _add_interface_mode_flags(parser: argparse.ArgumentParser) -> None:
             "Answer Net-SNMP pass_persist requests on standard input. Start this from snmpd.conf, not by hand"
         ),  # SNMP output path of the metrics gateway
     )
+    parser.add_argument(
+        "--mib-generate",
+        action="store_true",
+        help="Generate documentation/mibs/MISTHELPER-MIB.mib from the Mist OpenAPI file and the metric catalog",
+    )  # Write the SNMP MIB, menu 243
+    parser.add_argument(
+        "--mib-dry-run",
+        action="store_true",
+        help="Print the generated MIB to standard output and write nothing to the disk",
+    )  # Review path of the generator
+    parser.add_argument(
+        "--mib-output",
+        default=None,
+        help="Write the generated MIB to this path instead of documentation/mibs/MISTHELPER-MIB.mib",
+    )  # Output path of the generator
+    parser.add_argument(
+        "--mib-report",
+        action="store_true",
+        help="List the Mist fields that the metric catalog does not yet serve",
+    )  # Candidate report of the generator
+    parser.add_argument(
+        "--mib-check",
+        action="store_true",
+        help="Exit with status 1 when the stored MIB disagrees with the Mist file or the metric catalog",
+    )  # Continuous integration path of the generator
 
 
 def _add_auth_and_backend_flags(parser: argparse.ArgumentParser) -> None:
@@ -5966,6 +6081,13 @@ def _dispatch_main_mode(args: argparse.Namespace) -> None:
         (lambda a: bool(getattr(a, "capture_portal", False)), _run_capture_portal_mode),
         # The SNMP responder owns standard output, so it must match before any handler that prints.
         (lambda a: bool(getattr(a, "metrics_snmp", False)), _run_metrics_snmp),
+        # The generator writes a file and prints a report, so it must match before the general CLI handler.
+        (
+            lambda a: any(
+                bool(getattr(a, name, False)) for name in ("mib_generate", "mib_dry_run", "mib_report", "mib_check")
+            ),
+            _run_mib_generator_mode,
+        ),
         (lambda a: bool(getattr(a, "metrics_gateway", False)), _run_metrics_gateway_mode),
         (_has_meaningful_cli_args, _run_cli_mode),
     )

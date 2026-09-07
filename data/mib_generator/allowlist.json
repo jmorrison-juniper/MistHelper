@@ -1,0 +1,345 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "operation_id": "getOrgStats",
+      "scope": "org",
+      "notes": "Original endpoint serving org-level source fields (num_sites, num_devices, num_inventory, etc.)"
+    },
+    {
+      "operation_id": "listOrgSiteStats",
+      "scope": "site",
+      "notes": "Original endpoint serving site-level source fields"
+    },
+    {
+      "operation_id": "listOrgDevicesStats",
+      "scope": "device",
+      "notes": "Original endpoint serving device-level source fields"
+    },
+    {
+      "operation_id": "countOrgAssetsByDistanceField",
+      "scope": "org",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/orgs/{org_id}/stats/assets/count"
+    },
+    {
+      "operation_id": "countOrgBgpStats",
+      "scope": "org",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/orgs/{org_id}/stats/bgp_peers/count"
+    },
+    {
+      "operation_id": "countOrgOspfStats",
+      "scope": "org",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/orgs/{org_id}/stats/ospf_peers/count"
+    },
+    {
+      "operation_id": "countOrgPeerPathStats",
+      "scope": "org",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/orgs/{org_id}/stats/vpn_peers/count"
+    },
+    {
+      "operation_id": "countOrgSwOrGwPorts",
+      "scope": "org",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/orgs/{org_id}/stats/ports/count"
+    },
+    {
+      "operation_id": "countOrgTunnelsStats",
+      "scope": "org",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/orgs/{org_id}/stats/tunnels/count"
+    },
+    {
+      "operation_id": "countSiteApps",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/apps/count"
+    },
+    {
+      "operation_id": "countSiteAssets",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/assets/count"
+    },
+    {
+      "operation_id": "countSiteBgpStats",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/bgp_peers/count"
+    },
+    {
+      "operation_id": "countSiteCalls",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/calls/count"
+    },
+    {
+      "operation_id": "countSiteDiscoveredSwitches",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/discovered_switches/count"
+    },
+    {
+      "operation_id": "countSiteOspfStats",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/ospf_peers/count"
+    },
+    {
+      "operation_id": "countSiteSwOrGwPorts",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/ports/count"
+    },
+    {
+      "operation_id": "getOrgMxEdgeStats",
+      "scope": "org",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/orgs/{org_id}/stats/mxedges/{mxedge_id}"
+    },
+    {
+      "operation_id": "getOrgOtherDeviceStats",
+      "scope": "org",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/orgs/{org_id}/stats/otherdevices/{device_mac}"
+    },
+    {
+      "operation_id": "getOrgStats",
+      "scope": "org",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/orgs/{org_id}/stats"
+    },
+    {
+      "operation_id": "getSiteAllClientsStatsByDevice",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/devices/{device_id}/clients"
+    },
+    {
+      "operation_id": "getSiteAssetStats",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/assets/{asset_id}"
+    },
+    {
+      "operation_id": "getSiteAssetsOfInterest",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/filtered_assets"
+    },
+    {
+      "operation_id": "getSiteCallsSummary",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/calls/summary"
+    },
+    {
+      "operation_id": "getSiteDeviceStats",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/devices/{device_id}"
+    },
+    {
+      "operation_id": "getSiteDiscoveredAssetByMap",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/maps/{map_id}/discovered_assets"
+    },
+    {
+      "operation_id": "getSiteGatewayMetrics",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/gateways/metrics"
+    },
+    {
+      "operation_id": "getSiteInsightMetricsForGateway",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/insights/gateway/{device_id}/stats/{metric}"
+    },
+    {
+      "operation_id": "getSiteMxEdgeStats",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/mxedges/{mxedge_id}"
+    },
+    {
+      "operation_id": "getSiteRssiZoneStats",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/rssizones/{zone_id}"
+    },
+    {
+      "operation_id": "getSiteSdkStats",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/sdkclients/{sdkclient_id}"
+    },
+    {
+      "operation_id": "getSiteSdkStatsByMap",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/maps/{map_id}/sdkclients"
+    },
+    {
+      "operation_id": "getSiteStats",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats"
+    },
+    {
+      "operation_id": "getSiteSwitchesMetrics",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/switches/metrics"
+    },
+    {
+      "operation_id": "getSiteWirelessClientStats",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/clients/{client_mac}"
+    },
+    {
+      "operation_id": "getSiteWirelessClientsStatsByMap",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/maps/{map_id}/clients"
+    },
+    {
+      "operation_id": "getSiteWxRulesUsage",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/wxrules"
+    },
+    {
+      "operation_id": "getSiteZoneStats",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/zones/{zone_id}"
+    },
+    {
+      "operation_id": "listOrgAssetsStats",
+      "scope": "org",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/orgs/{org_id}/stats/assets"
+    },
+    {
+      "operation_id": "listOrgDevicesStats",
+      "scope": "org",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/orgs/{org_id}/stats/devices"
+    },
+    {
+      "operation_id": "listOrgMxEdgesStats",
+      "scope": "org",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/orgs/{org_id}/stats/mxedges"
+    },
+    {
+      "operation_id": "listOrgSiteStats",
+      "scope": "org",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/orgs/{org_id}/stats/sites"
+    },
+    {
+      "operation_id": "listSiteAssetsStats",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/assets"
+    },
+    {
+      "operation_id": "listSiteBeaconsStats",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/beacons"
+    },
+    {
+      "operation_id": "listSiteDevicesStats",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/devices"
+    },
+    {
+      "operation_id": "listSiteDiscoveredAssets",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/discovered_assets"
+    },
+    {
+      "operation_id": "listSiteDiscoveredSwitchesMetrics",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/discovered_switches/metrics"
+    },
+    {
+      "operation_id": "listSiteMxEdgesStats",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/mxedges"
+    },
+    {
+      "operation_id": "listSiteRssiZonesStats",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/rssizones"
+    },
+    {
+      "operation_id": "listSiteSlesMetrics",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metrics"
+    },
+    {
+      "operation_id": "listSiteSpectrumAnalysis",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/analyze_spectrum"
+    },
+    {
+      "operation_id": "listSiteTroubleshootCalls",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/calls/troubleshoot"
+    },
+    {
+      "operation_id": "listSiteUnconnectedClientStats",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/maps/{map_id}/unconnected_clients"
+    },
+    {
+      "operation_id": "listSiteWirelessClientsStats",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/clients"
+    },
+    {
+      "operation_id": "listSiteZonesStats",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/zones"
+    },
+    {
+      "operation_id": "searchOrgAssets",
+      "scope": "org",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/orgs/{org_id}/stats/assets/search"
+    },
+    {
+      "operation_id": "searchOrgBgpStats",
+      "scope": "org",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/orgs/{org_id}/stats/bgp_peers/search"
+    },
+    {
+      "operation_id": "searchOrgOspfStats",
+      "scope": "org",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/orgs/{org_id}/stats/ospf_peers/search"
+    },
+    {
+      "operation_id": "searchOrgPeerPathStats",
+      "scope": "org",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/orgs/{org_id}/stats/vpn_peers/search"
+    },
+    {
+      "operation_id": "searchOrgSwOrGwPorts",
+      "scope": "org",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/orgs/{org_id}/stats/ports/search"
+    },
+    {
+      "operation_id": "searchOrgTunnelsStats",
+      "scope": "org",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/orgs/{org_id}/stats/tunnels/search"
+    },
+    {
+      "operation_id": "searchSiteAssets",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/assets/search"
+    },
+    {
+      "operation_id": "searchSiteBgpStats",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/bgp_peers/search"
+    },
+    {
+      "operation_id": "searchSiteCalls",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/calls/search"
+    },
+    {
+      "operation_id": "searchSiteDiscoveredSwitches",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/discovered_switches/search"
+    },
+    {
+      "operation_id": "searchSiteDiscoveredSwitchesMetrics",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/discovered_switch_metrics/search"
+    },
+    {
+      "operation_id": "searchSiteOspfStats",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/ospf_peers/search"
+    },
+    {
+      "operation_id": "searchSiteSwOrGwPorts",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/ports/search"
+    },
+    {
+      "operation_id": "troubleshootSiteCall",
+      "scope": "site",
+      "notes": "Auto-generated from OpenAPI GET path /api/v1/sites/{site_id}/stats/calls/client/{client_mac}/troubleshoot"
+    }
+  ]
+}

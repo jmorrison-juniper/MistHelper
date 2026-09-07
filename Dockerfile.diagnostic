@@ -1,0 +1,12 @@
+FROM python:3.13-slim
+
+# Reproduce the exact apt-get steps from the main Dockerfile
+RUN apt-get update && \
+    apt-get install -y ca-certificates openssh-server sudo snmpd && \
+    rm -rf /var/lib/apt/lists/*
+
+# Verify snmpd is installed
+RUN which snmpd && echo "snmpd installation successful" || echo "snmpd NOT found"
+RUN dpkg -l | grep snmp || echo "No snmp packages found in dpkg"
+
+CMD ["/bin/bash"]

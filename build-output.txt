@@ -1,0 +1,902 @@
+STEP 1/54: FROM python:3.13-slim
+STEP 2/54: LABEL org.opencontainers.image.title="MistHelper"
+--> 62dcbd982c60
+STEP 3/54: LABEL org.opencontainers.image.description="Juniper Mist API data export tool with SSH access for corporate environments"
+--> 7dc126a73c24
+STEP 4/54: LABEL org.opencontainers.image.version="2.1.0"
+--> 357917d3b197
+STEP 5/54: LABEL org.opencontainers.image.vendor="Joseph Morrison"
+--> fb206707167a
+STEP 6/54: LABEL org.opencontainers.image.authors="Joseph Morrison <jmorrison@juniper.net>"
+--> 76ce933bf014
+STEP 7/54: LABEL org.opencontainers.image.licenses="CC-BY-NC-SA-4.0"
+--> 82ec77fa8fb0
+STEP 8/54: LABEL org.opencontainers.image.documentation="https://github.com/jmorrison-juniper/MistHelper"
+--> 63a21d808d22
+STEP 9/54: LABEL org.opencontainers.image.source="https://github.com/jmorrison-juniper/MistHelper"
+--> 834ca1d964a0
+STEP 10/54: LABEL maintainer="MistHelper Development Team"
+--> ce025a6ef601
+STEP 11/54: RUN apt-get update &&     apt-get install -y ca-certificates openssh-server sudo &&     rm -rf /var/lib/apt/lists/*
+Hit:1 http://deb.debian.org/debian trixie InRelease
+Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
+Get:4 http://deb.debian.org/debian trixie/main amd64 Packages [9673 kB]
+Get:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages [4412 B]
+Get:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages [251 kB]
+Fetched 10.0 MB in 4s (2672 kB/s)
+Reading package lists...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+ca-certificates is already the newest version (20250419).
+The following additional packages will be installed:
+  dbus dbus-bin dbus-daemon dbus-session-bus-common dbus-system-bus-common
+  dbus-user-session dmsetup krb5-locales libapparmor1 libcbor0.10 libcom-err2
+  libcryptsetup12 libdbus-1-3 libdevmapper1.02.1 libedit2 libexpat1 libfido2-1
+  libgssapi-krb5-2 libjson-c5 libk5crypto3 libkeyutils1 libkmod2 libkrb5-3
+  libkrb5support0 libnss-systemd libpam-systemd libproc2-0 libsystemd-shared
+  libtext-charwidth-perl libtext-wrapi18n-perl libwrap0 libwtmpdb0 libx11-6
+  libx11-data libxau6 libxcb1 libxdmcp6 libxext6 libxmuu1
+  linux-sysctl-defaults ncurses-term openssh-client openssh-sftp-server procps
+  psmisc runit-helper sensible-utils systemd systemd-cryptsetup systemd-sysv
+  systemd-timesyncd ucf xauth
+Suggested packages:
+  krb5-doc krb5-user libidn2-0 libp11-kit0 libtss2-rc0t64 libarchive13t64
+  libbpf1 libdw1t64 libelf1t64 libgcrypt20 libip4tc2 libpwquality1
+  libqrencode4 keychain libpam-ssh monkeysphere ssh-askpass molly-guard ufw
+  systemd-container systemd-homed systemd-userdbd systemd-boot
+  systemd-resolved systemd-repart libtss2-tcti-device0 polkitd
+The following NEW packages will be installed:
+  dbus dbus-bin dbus-daemon dbus-session-bus-common dbus-system-bus-common
+  dbus-user-session dmsetup krb5-locales libapparmor1 libcbor0.10 libcom-err2
+  libcryptsetup12 libdbus-1-3 libdevmapper1.02.1 libedit2 libexpat1 libfido2-1
+  libgssapi-krb5-2 libjson-c5 libk5crypto3 libkeyutils1 libkmod2 libkrb5-3
+  libkrb5support0 libnss-systemd libpam-systemd libproc2-0 libsystemd-shared
+  libtext-charwidth-perl libtext-wrapi18n-perl libwrap0 libwtmpdb0 libx11-6
+  libx11-data libxau6 libxcb1 libxdmcp6 libxext6 libxmuu1
+  linux-sysctl-defaults ncurses-term openssh-client openssh-server
+  openssh-sftp-server procps psmisc runit-helper sensible-utils sudo systemd
+  systemd-cryptsetup systemd-sysv systemd-timesyncd ucf xauth
+0 upgraded, 55 newly installed, 0 to remove and 0 not upgraded.
+Need to get 15.5 MB of archives.
+After this operation, 54.4 MB of additional disk space will be used.
+Get:1 http://deb.debian.org/debian trixie/main amd64 libsystemd-shared amd64 257.13-1~deb13u1 [2155 kB]
+Get:2 http://deb.debian.org/debian trixie/main amd64 libapparmor1 amd64 4.1.0-1 [43.7 kB]
+Get:3 http://deb.debian.org/debian trixie/main amd64 systemd amd64 257.13-1~deb13u1 [3094 kB]
+Get:4 http://deb.debian.org/debian trixie/main amd64 systemd-sysv amd64 257.13-1~deb13u1 [64.9 kB]
+Get:5 http://deb.debian.org/debian trixie/main amd64 libdbus-1-3 amd64 1.16.2-2 [178 kB]
+Get:6 http://deb.debian.org/debian trixie/main amd64 dbus-bin amd64 1.16.2-2 [80.0 kB]
+Get:7 http://deb.debian.org/debian trixie/main amd64 dbus-session-bus-common all 1.16.2-2 [52.3 kB]
+Get:8 http://deb.debian.org/debian-security trixie-security/main amd64 libexpat1 amd64 2.8.3-1~deb13u1 [123 kB]
+Get:9 http://deb.debian.org/debian trixie/main amd64 dbus-daemon amd64 1.16.2-2 [159 kB]
+Get:10 http://deb.debian.org/debian trixie/main amd64 dbus-system-bus-common all 1.16.2-2 [53.5 kB]
+Get:11 http://deb.debian.org/debian trixie/main amd64 dbus amd64 1.16.2-2 [71.6 kB]
+Get:12 http://deb.debian.org/debian trixie/main amd64 libedit2 amd64 3.1-20250104-1 [93.8 kB]
+Get:13 http://deb.debian.org/debian trixie/main amd64 libcbor0.10 amd64 0.10.2-2 [28.3 kB]
+Get:14 http://deb.debian.org/debian trixie/main amd64 libfido2-1 amd64 1.15.0-1+b1 [78.7 kB]
+Get:15 http://deb.debian.org/debian trixie/main amd64 libkrb5support0 amd64 1.21.3-5+deb13u1 [33.1 kB]
+Get:16 http://deb.debian.org/debian trixie/main amd64 libcom-err2 amd64 1.47.2-3+b11 [25.0 kB]
+Get:17 http://deb.debian.org/debian trixie/main amd64 libk5crypto3 amd64 1.21.3-5+deb13u1 [81.2 kB]
+Get:18 http://deb.debian.org/debian trixie/main amd64 libkeyutils1 amd64 1.6.3-6 [9456 B]
+Get:19 http://deb.debian.org/debian trixie/main amd64 libkrb5-3 amd64 1.21.3-5+deb13u1 [326 kB]
+Get:20 http://deb.debian.org/debian trixie/main amd64 libgssapi-krb5-2 amd64 1.21.3-5+deb13u1 [138 kB]
+Get:21 http://deb.debian.org/debian trixie/main amd64 openssh-client amd64 1:10.0p1-7+deb13u4 [990 kB]
+Get:22 http://deb.debian.org/debian trixie/main amd64 openssh-sftp-server amd64 1:10.0p1-7+deb13u4 [65.3 kB]
+Get:23 http://deb.debian.org/debian trixie/main amd64 libproc2-0 amd64 2:4.0.4-9 [65.6 kB]
+Get:24 http://deb.debian.org/debian trixie/main amd64 procps amd64 2:4.0.4-9 [882 kB]
+Get:25 http://deb.debian.org/debian trixie/main amd64 libtext-charwidth-perl amd64 0.04-11+b4 [9476 B]
+Get:26 http://deb.debian.org/debian trixie/main amd64 libtext-wrapi18n-perl all 0.06-10 [8808 B]
+Get:27 http://deb.debian.org/debian trixie/main amd64 sensible-utils all 0.0.25 [25.0 kB]
+Get:28 http://deb.debian.org/debian trixie/main amd64 ucf all 3.0052 [43.3 kB]
+Get:29 http://deb.debian.org/debian trixie/main amd64 runit-helper all 2.16.4 [7296 B]
+Get:30 http://deb.debian.org/debian trixie/main amd64 libwrap0 amd64 7.6.q-36 [55.3 kB]
+Get:31 http://deb.debian.org/debian trixie/main amd64 libwtmpdb0 amd64 0.73.0-3+deb13u1 [13.1 kB]
+Get:32 http://deb.debian.org/debian trixie/main amd64 openssh-server amd64 1:10.0p1-7+deb13u4 [602 kB]
+Get:33 http://deb.debian.org/debian trixie/main amd64 sudo amd64 1.9.16p2-3+deb13u2 [2086 kB]
+Get:34 http://deb.debian.org/debian trixie/main amd64 linux-sysctl-defaults all 4.12.1 [5724 B]
+Get:35 http://deb.debian.org/debian trixie/main amd64 krb5-locales all 1.21.3-5+deb13u1 [101 kB]
+Get:36 http://deb.debian.org/debian trixie/main amd64 libnss-systemd amd64 257.13-1~deb13u1 [220 kB]
+Get:37 http://deb.debian.org/debian trixie/main amd64 libpam-systemd amd64 257.13-1~deb13u1 [297 kB]
+Get:38 http://deb.debian.org/debian trixie/main amd64 ncurses-term all 6.5+20250216-2 [518 kB]
+Get:39 http://deb.debian.org/debian trixie/main amd64 systemd-timesyncd amd64 257.13-1~deb13u1 [93.3 kB]
+Get:40 http://deb.debian.org/debian trixie/main amd64 dbus-user-session amd64 1.16.2-2 [52.1 kB]
+Get:41 http://deb.debian.org/debian trixie/main amd64 libdevmapper1.02.1 amd64 2:1.02.205-2 [135 kB]
+Get:42 http://deb.debian.org/debian trixie/main amd64 dmsetup amd64 2:1.02.205-2 [82.3 kB]
+Get:43 http://deb.debian.org/debian trixie/main amd64 libjson-c5 amd64 0.18+ds-1 [46.0 kB]
+Get:44 http://deb.debian.org/debian trixie/main amd64 libcryptsetup12 amd64 2:2.7.5-2 [254 kB]
+Get:45 http://deb.debian.org/debian trixie/main amd64 libkmod2 amd64 34.2-2 [63.2 kB]
+Get:46 http://deb.debian.org/debian trixie/main amd64 libxau6 amd64 1:1.0.11-1 [20.4 kB]
+Get:47 http://deb.debian.org/debian trixie/main amd64 libxdmcp6 amd64 1:1.1.5-1 [27.8 kB]
+Get:48 http://deb.debian.org/debian trixie/main amd64 libxcb1 amd64 1.17.0-2+b1 [144 kB]
+Get:49 http://deb.debian.org/debian trixie/main amd64 libx11-data all 2:1.8.12-1 [343 kB]
+Get:50 http://deb.debian.org/debian trixie/main amd64 libx11-6 amd64 2:1.8.12-1 [815 kB]
+Get:51 http://deb.debian.org/debian trixie/main amd64 libxext6 amd64 2:1.3.4-1+b3 [50.4 kB]
+Get:52 http://deb.debian.org/debian trixie/main amd64 libxmuu1 amd64 2:1.1.3-3+b4 [21.9 kB]
+Get:53 http://deb.debian.org/debian trixie/main amd64 psmisc amd64 23.7-2 [267 kB]
+Get:54 http://deb.debian.org/debian trixie/main amd64 systemd-cryptsetup amd64 257.13-1~deb13u1 [173 kB]
+Get:55 http://deb.debian.org/debian trixie/main amd64 xauth amd64 1:1.1.2-1.1 [35.9 kB]
+debconf: unable to initialize frontend: Dialog
+debconf: (TERM is not set, so the dialog frontend is not usable.)
+debconf: falling back to frontend: Readline
+debconf: unable to initialize frontend: Readline
+debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC entries checked: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.40.1 /usr/local/share/perl/5.40.1 /usr/lib/x86_64-linux-gnu/perl5/5.40 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.40 /usr/share/perl/5.40 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 8, <STDIN> line 55.)
+debconf: falling back to frontend: Teletype
+debconf: unable to initialize frontend: Teletype
+debconf: (This frontend requires a controlling tty.)
+debconf: falling back to frontend: Noninteractive
+Preconfiguring packages ...
+Fetched 15.5 MB in 4s (4093 kB/s)
+Selecting previously unselected package libsystemd-shared:amd64.
+(Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 5652 files and directories currently installed.)
+Preparing to unpack .../libsystemd-shared_257.13-1~deb13u1_amd64.deb ...
+Unpacking libsystemd-shared:amd64 (257.13-1~deb13u1) ...
+Selecting previously unselected package libapparmor1:amd64.
+Preparing to unpack .../libapparmor1_4.1.0-1_amd64.deb ...
+Unpacking libapparmor1:amd64 (4.1.0-1) ...
+Setting up libsystemd-shared:amd64 (257.13-1~deb13u1) ...
+Selecting previously unselected package systemd.
+(Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 5665 files and directories currently installed.)
+Preparing to unpack .../systemd_257.13-1~deb13u1_amd64.deb ...
+Unpacking systemd (257.13-1~deb13u1) ...
+Setting up libapparmor1:amd64 (4.1.0-1) ...
+Setting up systemd (257.13-1~deb13u1) ...
+Created symlink '/etc/systemd/system/getty.target.wants/getty@tty1.service' → '/usr/lib/systemd/system/getty@.service'.
+Created symlink '/etc/systemd/system/multi-user.target.wants/remote-fs.target' → '/usr/lib/systemd/system/remote-fs.target'.
+Created symlink '/etc/systemd/system/sysinit.target.wants/systemd-pstore.service' → '/usr/lib/systemd/system/systemd-pstore.service'.
+Initializing machine ID from random generator.
+Creating group 'systemd-journal' with GID 999.
+Creating group 'systemd-network' with GID 998.
+Creating user 'systemd-network' (systemd Network Management) with UID 998 and GID 998.
+/usr/lib/tmpfiles.d/legacy.conf:14: Duplicate line for path "/run/lock", ignoring.
+Selecting previously unselected package systemd-sysv.
+(Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6602 files and directories currently installed.)
+Preparing to unpack .../00-systemd-sysv_257.13-1~deb13u1_amd64.deb ...
+Unpacking systemd-sysv (257.13-1~deb13u1) ...
+Selecting previously unselected package libdbus-1-3:amd64.
+Preparing to unpack .../01-libdbus-1-3_1.16.2-2_amd64.deb ...
+Unpacking libdbus-1-3:amd64 (1.16.2-2) ...
+Selecting previously unselected package dbus-bin.
+Preparing to unpack .../02-dbus-bin_1.16.2-2_amd64.deb ...
+Unpacking dbus-bin (1.16.2-2) ...
+Selecting previously unselected package dbus-session-bus-common.
+Preparing to unpack .../03-dbus-session-bus-common_1.16.2-2_all.deb ...
+Unpacking dbus-session-bus-common (1.16.2-2) ...
+Selecting previously unselected package libexpat1:amd64.
+Preparing to unpack .../04-libexpat1_2.8.3-1~deb13u1_amd64.deb ...
+Unpacking libexpat1:amd64 (2.8.3-1~deb13u1) ...
+Selecting previously unselected package dbus-daemon.
+Preparing to unpack .../05-dbus-daemon_1.16.2-2_amd64.deb ...
+Unpacking dbus-daemon (1.16.2-2) ...
+Selecting previously unselected package dbus-system-bus-common.
+Preparing to unpack .../06-dbus-system-bus-common_1.16.2-2_all.deb ...
+Unpacking dbus-system-bus-common (1.16.2-2) ...
+Selecting previously unselected package dbus.
+Preparing to unpack .../07-dbus_1.16.2-2_amd64.deb ...
+Unpacking dbus (1.16.2-2) ...
+Selecting previously unselected package libedit2:amd64.
+Preparing to unpack .../08-libedit2_3.1-20250104-1_amd64.deb ...
+Unpacking libedit2:amd64 (3.1-20250104-1) ...
+Selecting previously unselected package libcbor0.10:amd64.
+Preparing to unpack .../09-libcbor0.10_0.10.2-2_amd64.deb ...
+Unpacking libcbor0.10:amd64 (0.10.2-2) ...
+Selecting previously unselected package libfido2-1:amd64.
+Preparing to unpack .../10-libfido2-1_1.15.0-1+b1_amd64.deb ...
+Unpacking libfido2-1:amd64 (1.15.0-1+b1) ...
+Selecting previously unselected package libkrb5support0:amd64.
+Preparing to unpack .../11-libkrb5support0_1.21.3-5+deb13u1_amd64.deb ...
+Unpacking libkrb5support0:amd64 (1.21.3-5+deb13u1) ...
+Selecting previously unselected package libcom-err2:amd64.
+Preparing to unpack .../12-libcom-err2_1.47.2-3+b11_amd64.deb ...
+Unpacking libcom-err2:amd64 (1.47.2-3+b11) ...
+Selecting previously unselected package libk5crypto3:amd64.
+Preparing to unpack .../13-libk5crypto3_1.21.3-5+deb13u1_amd64.deb ...
+Unpacking libk5crypto3:amd64 (1.21.3-5+deb13u1) ...
+Selecting previously unselected package libkeyutils1:amd64.
+Preparing to unpack .../14-libkeyutils1_1.6.3-6_amd64.deb ...
+Unpacking libkeyutils1:amd64 (1.6.3-6) ...
+Selecting previously unselected package libkrb5-3:amd64.
+Preparing to unpack .../15-libkrb5-3_1.21.3-5+deb13u1_amd64.deb ...
+Unpacking libkrb5-3:amd64 (1.21.3-5+deb13u1) ...
+Selecting previously unselected package libgssapi-krb5-2:amd64.
+Preparing to unpack .../16-libgssapi-krb5-2_1.21.3-5+deb13u1_amd64.deb ...
+Unpacking libgssapi-krb5-2:amd64 (1.21.3-5+deb13u1) ...
+Selecting previously unselected package openssh-client.
+Preparing to unpack .../17-openssh-client_1%3a10.0p1-7+deb13u4_amd64.deb ...
+Unpacking openssh-client (1:10.0p1-7+deb13u4) ...
+Selecting previously unselected package openssh-sftp-server.
+Preparing to unpack .../18-openssh-sftp-server_1%3a10.0p1-7+deb13u4_amd64.deb ...
+Unpacking openssh-sftp-server (1:10.0p1-7+deb13u4) ...
+Selecting previously unselected package libproc2-0:amd64.
+Preparing to unpack .../19-libproc2-0_2%3a4.0.4-9_amd64.deb ...
+Unpacking libproc2-0:amd64 (2:4.0.4-9) ...
+Selecting previously unselected package procps.
+Preparing to unpack .../20-procps_2%3a4.0.4-9_amd64.deb ...
+Unpacking procps (2:4.0.4-9) ...
+Selecting previously unselected package libtext-charwidth-perl:amd64.
+Preparing to unpack .../21-libtext-charwidth-perl_0.04-11+b4_amd64.deb ...
+Unpacking libtext-charwidth-perl:amd64 (0.04-11+b4) ...
+Selecting previously unselected package libtext-wrapi18n-perl.
+Preparing to unpack .../22-libtext-wrapi18n-perl_0.06-10_all.deb ...
+Unpacking libtext-wrapi18n-perl (0.06-10) ...
+Selecting previously unselected package sensible-utils.
+Preparing to unpack .../23-sensible-utils_0.0.25_all.deb ...
+Unpacking sensible-utils (0.0.25) ...
+Selecting previously unselected package ucf.
+Preparing to unpack .../24-ucf_3.0052_all.deb ...
+Moving old data out of the way
+Unpacking ucf (3.0052) ...
+Selecting previously unselected package runit-helper.
+Preparing to unpack .../25-runit-helper_2.16.4_all.deb ...
+Unpacking runit-helper (2.16.4) ...
+Selecting previously unselected package libwrap0:amd64.
+Preparing to unpack .../26-libwrap0_7.6.q-36_amd64.deb ...
+Unpacking libwrap0:amd64 (7.6.q-36) ...
+Selecting previously unselected package libwtmpdb0:amd64.
+Preparing to unpack .../27-libwtmpdb0_0.73.0-3+deb13u1_amd64.deb ...
+Unpacking libwtmpdb0:amd64 (0.73.0-3+deb13u1) ...
+Selecting previously unselected package openssh-server.
+Preparing to unpack .../28-openssh-server_1%3a10.0p1-7+deb13u4_amd64.deb ...
+Unpacking openssh-server (1:10.0p1-7+deb13u4) ...
+Selecting previously unselected package sudo.
+Preparing to unpack .../29-sudo_1.9.16p2-3+deb13u2_amd64.deb ...
+Unpacking sudo (1.9.16p2-3+deb13u2) ...
+Selecting previously unselected package linux-sysctl-defaults.
+Preparing to unpack .../30-linux-sysctl-defaults_4.12.1_all.deb ...
+Unpacking linux-sysctl-defaults (4.12.1) ...
+Selecting previously unselected package krb5-locales.
+Preparing to unpack .../31-krb5-locales_1.21.3-5+deb13u1_all.deb ...
+Unpacking krb5-locales (1.21.3-5+deb13u1) ...
+Selecting previously unselected package libnss-systemd:amd64.
+Preparing to unpack .../32-libnss-systemd_257.13-1~deb13u1_amd64.deb ...
+Unpacking libnss-systemd:amd64 (257.13-1~deb13u1) ...
+Selecting previously unselected package libpam-systemd:amd64.
+Preparing to unpack .../33-libpam-systemd_257.13-1~deb13u1_amd64.deb ...
+Unpacking libpam-systemd:amd64 (257.13-1~deb13u1) ...
+Selecting previously unselected package ncurses-term.
+Preparing to unpack .../34-ncurses-term_6.5+20250216-2_all.deb ...
+Unpacking ncurses-term (6.5+20250216-2) ...
+Selecting previously unselected package systemd-timesyncd.
+Preparing to unpack .../35-systemd-timesyncd_257.13-1~deb13u1_amd64.deb ...
+Unpacking systemd-timesyncd (257.13-1~deb13u1) ...
+Selecting previously unselected package dbus-user-session.
+Preparing to unpack .../36-dbus-user-session_1.16.2-2_amd64.deb ...
+Unpacking dbus-user-session (1.16.2-2) ...
+Selecting previously unselected package libdevmapper1.02.1:amd64.
+Preparing to unpack .../37-libdevmapper1.02.1_2%3a1.02.205-2_amd64.deb ...
+Unpacking libdevmapper1.02.1:amd64 (2:1.02.205-2) ...
+Selecting previously unselected package dmsetup.
+Preparing to unpack .../38-dmsetup_2%3a1.02.205-2_amd64.deb ...
+Unpacking dmsetup (2:1.02.205-2) ...
+Selecting previously unselected package libjson-c5:amd64.
+Preparing to unpack .../39-libjson-c5_0.18+ds-1_amd64.deb ...
+Unpacking libjson-c5:amd64 (0.18+ds-1) ...
+Selecting previously unselected package libcryptsetup12:amd64.
+Preparing to unpack .../40-libcryptsetup12_2%3a2.7.5-2_amd64.deb ...
+Unpacking libcryptsetup12:amd64 (2:2.7.5-2) ...
+Selecting previously unselected package libkmod2:amd64.
+Preparing to unpack .../41-libkmod2_34.2-2_amd64.deb ...
+Unpacking libkmod2:amd64 (34.2-2) ...
+Selecting previously unselected package libxau6:amd64.
+Preparing to unpack .../42-libxau6_1%3a1.0.11-1_amd64.deb ...
+Unpacking libxau6:amd64 (1:1.0.11-1) ...
+Selecting previously unselected package libxdmcp6:amd64.
+Preparing to unpack .../43-libxdmcp6_1%3a1.1.5-1_amd64.deb ...
+Unpacking libxdmcp6:amd64 (1:1.1.5-1) ...
+Selecting previously unselected package libxcb1:amd64.
+Preparing to unpack .../44-libxcb1_1.17.0-2+b1_amd64.deb ...
+Unpacking libxcb1:amd64 (1.17.0-2+b1) ...
+Selecting previously unselected package libx11-data.
+Preparing to unpack .../45-libx11-data_2%3a1.8.12-1_all.deb ...
+Unpacking libx11-data (2:1.8.12-1) ...
+Selecting previously unselected package libx11-6:amd64.
+Preparing to unpack .../46-libx11-6_2%3a1.8.12-1_amd64.deb ...
+Unpacking libx11-6:amd64 (2:1.8.12-1) ...
+Selecting previously unselected package libxext6:amd64.
+Preparing to unpack .../47-libxext6_2%3a1.3.4-1+b3_amd64.deb ...
+Unpacking libxext6:amd64 (2:1.3.4-1+b3) ...
+Selecting previously unselected package libxmuu1:amd64.
+Preparing to unpack .../48-libxmuu1_2%3a1.1.3-3+b4_amd64.deb ...
+Unpacking libxmuu1:amd64 (2:1.1.3-3+b4) ...
+Selecting previously unselected package psmisc.
+Preparing to unpack .../49-psmisc_23.7-2_amd64.deb ...
+Unpacking psmisc (23.7-2) ...
+Selecting previously unselected package systemd-cryptsetup.
+Preparing to unpack .../50-systemd-cryptsetup_257.13-1~deb13u1_amd64.deb ...
+Unpacking systemd-cryptsetup (257.13-1~deb13u1) ...
+Selecting previously unselected package xauth.
+Preparing to unpack .../51-xauth_1%3a1.1.2-1.1_amd64.deb ...
+Unpacking xauth (1:1.1.2-1.1) ...
+Setting up libexpat1:amd64 (2.8.3-1~deb13u1) ...
+Setting up libtext-charwidth-perl:amd64 (0.04-11+b4) ...
+Setting up runit-helper (2.16.4) ...
+Setting up systemd-sysv (257.13-1~deb13u1) ...
+Setting up libxau6:amd64 (1:1.0.11-1) ...
+Setting up libxdmcp6:amd64 (1:1.1.5-1) ...
+Setting up libkeyutils1:amd64 (1.6.3-6) ...
+Setting up libxcb1:amd64 (1.17.0-2+b1) ...
+Setting up psmisc (23.7-2) ...
+Setting up libcbor0.10:amd64 (0.10.2-2) ...
+Setting up libedit2:amd64 (3.1-20250104-1) ...
+Setting up libnss-systemd:amd64 (257.13-1~deb13u1) ...
+Setting up krb5-locales (1.21.3-5+deb13u1) ...
+Setting up libcom-err2:amd64 (1.47.2-3+b11) ...
+Setting up libtext-wrapi18n-perl (0.06-10) ...
+Setting up libkrb5support0:amd64 (1.21.3-5+deb13u1) ...
+Setting up linux-sysctl-defaults (4.12.1) ...
+Setting up libwrap0:amd64 (7.6.q-36) ...
+Setting up libx11-data (2:1.8.12-1) ...
+Setting up libdbus-1-3:amd64 (1.16.2-2) ...
+Setting up libproc2-0:amd64 (2:4.0.4-9) ...
+Setting up systemd-timesyncd (257.13-1~deb13u1) ...
+Creating group 'systemd-timesync' with GID 997.
+Creating user 'systemd-timesync' (systemd Time Synchronization) with UID 997 and GID 997.
+Created symlink '/etc/systemd/system/dbus-org.freedesktop.timesync1.service' → '/usr/lib/systemd/system/systemd-timesyncd.service'.
+Created symlink '/etc/systemd/system/sysinit.target.wants/systemd-timesyncd.service' → '/usr/lib/systemd/system/systemd-timesyncd.service'.
+Setting up sudo (1.9.16p2-3+deb13u2) ...
+invoke-rc.d: could not determine current runlevel
+invoke-rc.d: policy-rc.d denied execution of start.
+Setting up libk5crypto3:amd64 (1.21.3-5+deb13u1) ...
+Setting up sensible-utils (0.0.25) ...
+Setting up dbus-session-bus-common (1.16.2-2) ...
+Setting up procps (2:4.0.4-9) ...
+Setting up libx11-6:amd64 (2:1.8.12-1) ...
+Setting up libwtmpdb0:amd64 (0.73.0-3+deb13u1) ...
+Setting up libkrb5-3:amd64 (1.21.3-5+deb13u1) ...
+Setting up dbus-system-bus-common (1.16.2-2) ...
+Creating group 'messagebus' with GID 996.
+Creating user 'messagebus' (System Message Bus) with UID 996 and GID 996.
+Setting up libfido2-1:amd64 (1.15.0-1+b1) ...
+Setting up libjson-c5:amd64 (0.18+ds-1) ...
+Setting up libxmuu1:amd64 (2:1.1.3-3+b4) ...
+Setting up dbus-bin (1.16.2-2) ...
+Setting up libkmod2:amd64 (34.2-2) ...
+Setting up ncurses-term (6.5+20250216-2) ...
+Setting up libxext6:amd64 (2:1.3.4-1+b3) ...
+Setting up dbus-daemon (1.16.2-2) ...
+Setting up dbus (1.16.2-2) ...
+invoke-rc.d: could not determine current runlevel
+invoke-rc.d: policy-rc.d denied execution of start.
+Setting up libgssapi-krb5-2:amd64 (1.21.3-5+deb13u1) ...
+Setting up ucf (3.0052) ...
+Setting up xauth (1:1.1.2-1.1) ...
+Setting up libpam-systemd:amd64 (257.13-1~deb13u1) ...
+debconf: unable to initialize frontend: Dialog
+debconf: (TERM is not set, so the dialog frontend is not usable.)
+debconf: falling back to frontend: Readline
+debconf: unable to initialize frontend: Readline
+debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC entries checked: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.40.1 /usr/local/share/perl/5.40.1 /usr/lib/x86_64-linux-gnu/perl5/5.40 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.40 /usr/share/perl/5.40 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 8.)
+debconf: falling back to frontend: Teletype
+debconf: unable to initialize frontend: Teletype
+debconf: (This frontend requires a controlling tty.)
+debconf: falling back to frontend: Noninteractive
+Setting up openssh-client (1:10.0p1-7+deb13u4) ...
+Created symlink '/etc/systemd/user/sockets.target.wants/ssh-agent.socket' → '/usr/lib/systemd/user/ssh-agent.socket'.
+Setting up dbus-user-session (1.16.2-2) ...
+Setting up openssh-sftp-server (1:10.0p1-7+deb13u4) ...
+Setting up openssh-server (1:10.0p1-7+deb13u4) ...
+debconf: unable to initialize frontend: Dialog
+debconf: (TERM is not set, so the dialog frontend is not usable.)
+debconf: falling back to frontend: Readline
+debconf: unable to initialize frontend: Readline
+debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC entries checked: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.40.1 /usr/local/share/perl/5.40.1 /usr/lib/x86_64-linux-gnu/perl5/5.40 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.40 /usr/share/perl/5.40 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 8.)
+debconf: falling back to frontend: Teletype
+debconf: unable to initialize frontend: Teletype
+debconf: (This frontend requires a controlling tty.)
+debconf: falling back to frontend: Noninteractive
+Creating config file /etc/ssh/sshd_config with new version
+Creating SSH2 RSA key; this may take some time ...
+3072 SHA256:p5rAKryaT12e3Mus616s8w+sI55Ny3izegEep7xN+PI root@8201a9ee1b3d (RSA)
+Creating SSH2 ECDSA key; this may take some time ...
+256 SHA256:YJumSR1/OptNyyeGgVaGq4p6kNsA5T6DzOAI4h6k4Hg root@8201a9ee1b3d (ECDSA)
+Creating SSH2 ED25519 key; this may take some time ...
+256 SHA256:nQP1IwtJJKa/KrtU6HEDHmOIEgA1k5txeN1gFi+MI4o root@8201a9ee1b3d (ED25519)
+Creating user 'sshd' (sshd user) with UID 995 and GID 65534.
+runit: ssh: start action denied by policy-rc.d
+invoke-rc.d: could not determine current runlevel
+invoke-rc.d: policy-rc.d denied execution of start.
+Created symlink '/etc/systemd/system/sshd.service' → '/usr/lib/systemd/system/ssh.service'.
+Created symlink '/etc/systemd/system/multi-user.target.wants/ssh.service' → '/usr/lib/systemd/system/ssh.service'.
+Created symlink '/etc/systemd/system/ssh.service.wants/sshd-keygen.service' → '/usr/lib/systemd/system/sshd-keygen.service'.
+Created symlink '/etc/systemd/system/sshd.service.wants/sshd-keygen.service' → '/usr/lib/systemd/system/sshd-keygen.service'.
+Created symlink '/etc/systemd/system/sshd@.service.wants/sshd-keygen.service' → '/usr/lib/systemd/system/sshd-keygen.service'.
+Created symlink '/etc/systemd/system/ssh.socket.wants/sshd-keygen.service' → '/usr/lib/systemd/system/sshd-keygen.service'.
+Setting up dmsetup (2:1.02.205-2) ...
+Setting up libdevmapper1.02.1:amd64 (2:1.02.205-2) ...
+Setting up libcryptsetup12:amd64 (2:2.7.5-2) ...
+Setting up systemd-cryptsetup (257.13-1~deb13u1) ...
+Processing triggers for libc-bin (2.41-12+deb13u3) ...
+Processing triggers for systemd (257.13-1~deb13u1) ...
+--> 05c6f2f4b34d
+STEP 12/54: RUN groupadd -r misthelper && useradd -r -g misthelper -m -s /bin/bash misthelper
+--> 116145d4161b
+STEP 13/54: RUN mkdir -p /var/run/sshd &&     mkdir -p /etc/ssh/sshd_config.d &&     echo "Port 2200" > /etc/ssh/sshd_config.d/misthelper.conf &&     echo "PermitRootLogin no" >> /etc/ssh/sshd_config.d/misthelper.conf &&     echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config.d/misthelper.conf &&     echo "PubkeyAuthentication yes" >> /etc/ssh/sshd_config.d/misthelper.conf &&     echo "AuthorizedKeysFile .ssh/authorized_keys" >> /etc/ssh/sshd_config.d/misthelper.conf &&     echo "X11Forwarding no" >> /etc/ssh/sshd_config.d/misthelper.conf &&     echo "PermitTTY yes" >> /etc/ssh/sshd_config.d/misthelper.conf &&     echo "PermitUserEnvironment no" >> /etc/ssh/sshd_config.d/misthelper.conf &&     echo "UsePAM yes" >> /etc/ssh/sshd_config.d/misthelper.conf &&     echo "AllowUsers misthelper" >> /etc/ssh/sshd_config.d/misthelper.conf &&     echo "ForceCommand /usr/local/bin/misthelper-session" >> /etc/ssh/sshd_config.d/misthelper.conf &&     ssh-keygen -A
+--> dec7582d5495
+STEP 14/54: RUN echo "misthelper:misthelper123!" | chpasswd &&     usermod -aG sudo misthelper &&     echo "misthelper ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+--> 8f28467db5d7
+STEP 15/54: COPY container/scripts/misthelper-session.sh /usr/local/bin/misthelper-session
+--> 5f5deaa1566c
+STEP 16/54: COPY container/scripts/welcome.sh /home/misthelper/welcome.sh
+--> 179146d48748
+STEP 17/54: RUN chmod +x /usr/local/bin/misthelper-session /home/misthelper/welcome.sh &&     echo '~/welcome.sh' >> /home/misthelper/.bashrc &&     chown misthelper:misthelper /home/misthelper/welcome.sh /home/misthelper/.bashrc
+--> 319f32af4fba
+STEP 18/54: WORKDIR /app
+--> 9cb6502ae324
+STEP 19/54: RUN mkdir -p /app/data && chown -R misthelper:misthelper /app/data
+--> 1da33f32c029
+STEP 20/54: RUN mkdir -p /home/misthelper/.ssh &&     touch /home/misthelper/.ssh/known_hosts &&     chown -R misthelper:misthelper /home/misthelper/.ssh &&     chmod 700 /home/misthelper/.ssh &&     chmod 600 /home/misthelper/.ssh/known_hosts
+--> c0739d36d3ab
+STEP 21/54: ARG INSTALL_CORPORATE_CA=false
+--> 1faff5987b39
+STEP 22/54: ARG CORPORATE_CA_FILE=zscaler-root-ca.crt
+--> ae97f87863bc
+STEP 23/54: COPY ${CORPORATE_CA_FILE} /tmp/corporate-root-ca.crt
+--> c9ea94477f3f
+STEP 24/54: RUN if [ "${INSTALL_CORPORATE_CA}" = "true" ]; then         echo "[TLS] Adding the corporate root certificate to the trust store" &&         cp /tmp/corporate-root-ca.crt /usr/local/share/ca-certificates/corporate-root-ca.crt &&         update-ca-certificates ;     else         echo "[TLS] Skipping the corporate root certificate. The default trust store applies." ;     fi &&     rm -f /tmp/corporate-root-ca.crt
+[TLS] Skipping the corporate root certificate. The default trust store applies.
+--> a747f446c1c5
+STEP 25/54: COPY requirements.txt ./
+--> c55cbe40b659
+STEP 26/54: COPY pyproject.toml ./
+--> 2d61237a5a54
+STEP 27/54: RUN pip install --no-cache-dir -r requirements.txt
+Ignoring waitress: markers 'sys_platform == "win32"' don't match your environment
+Collecting mistapi>=0.63.1 (from -r requirements.txt (line 5))
+  Downloading mistapi-0.63.3-py3-none-any.whl.metadata (36 kB)
+Collecting requests (from -r requirements.txt (line 6))
+  Downloading requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)
+Collecting websocket-client>=1.8.0 (from -r requirements.txt (line 7))
+  Downloading websocket_client-1.9.2-py3-none-any.whl.metadata (8.3 kB)
+Collecting urllib3 (from -r requirements.txt (line 8))
+  Downloading urllib3-2.7.0-py3-none-any.whl.metadata (6.9 kB)
+Collecting paramiko (from -r requirements.txt (line 11))
+  Downloading paramiko-5.0.0-py3-none-any.whl.metadata (3.7 kB)
+Collecting keyring (from -r requirements.txt (line 14))
+  Downloading keyring-25.7.0-py3-none-any.whl.metadata (21 kB)
+Collecting prettytable (from -r requirements.txt (line 17))
+  Downloading prettytable-3.18.0-py3-none-any.whl.metadata (37 kB)
+Collecting tqdm (from -r requirements.txt (line 18))
+  Downloading tqdm-4.70.0-py3-none-any.whl.metadata (57 kB)
+Collecting sshkeyboard (from -r requirements.txt (line 19))
+  Downloading sshkeyboard-2.3.1-py3-none-any.whl.metadata (11 kB)
+Collecting rich (from -r requirements.txt (line 20))
+  Downloading rich-15.0.0-py3-none-any.whl.metadata (18 kB)
+Collecting tabulate (from -r requirements.txt (line 21))
+  Downloading tabulate-0.10.0-py3-none-any.whl.metadata (40 kB)
+Collecting numpy (from -r requirements.txt (line 24))
+  Downloading numpy-2.5.2-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (6.6 kB)
+Collecting python-dotenv (from -r requirements.txt (line 25))
+  Downloading python_dotenv-1.2.3-py3-none-any.whl.metadata (29 kB)
+Collecting PyYAML (from -r requirements.txt (line 26))
+  Downloading pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.4 kB)
+Collecting openai>=3.5.0 (from -r requirements.txt (line 29))
+  Downloading openai-3.8.0-py3-none-any.whl.metadata (41 kB)
+Collecting pyte (from -r requirements.txt (line 32))
+  Downloading pyte-0.8.2-py3-none-any.whl.metadata (3.0 kB)
+Collecting usaddress-scourgify (from -r requirements.txt (line 35))
+  Downloading usaddress_scourgify-0.7.1-py3-none-any.whl.metadata (867 bytes)
+Collecting rapidfuzz (from -r requirements.txt (line 36))
+  Downloading rapidfuzz-3.14.6-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (12 kB)
+Collecting Flask (from -r requirements.txt (line 39))
+  Downloading flask-3.1.3-py3-none-any.whl.metadata (3.2 kB)
+Collecting gunicorn (from -r requirements.txt (line 40))
+  Downloading gunicorn-26.2.0-py3-none-any.whl.metadata (5.5 kB)
+Collecting flask-wtf (from -r requirements.txt (line 41))
+  Downloading flask_wtf-1.3.0-py3-none-any.whl.metadata (3.4 kB)
+Collecting dash (from -r requirements.txt (line 50))
+  Downloading dash-4.4.1-py3-none-any.whl.metadata (11 kB)
+Collecting plotly (from -r requirements.txt (line 51))
+  Downloading plotly-7.0.0-py3-none-any.whl.metadata (8.7 kB)
+Collecting matplotlib (from -r requirements.txt (line 52))
+  Downloading matplotlib-3.11.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (80 kB)
+Collecting pillow (from -r requirements.txt (line 53))
+  Downloading pillow-12.3.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (9.1 kB)
+Collecting kaleido (from -r requirements.txt (line 54))
+  Downloading kaleido-1.4.0-py3-none-any.whl.metadata (7.5 kB)
+Collecting python-arango>=8.3.2 (from -r requirements.txt (line 57))
+  Downloading python_arango-8.3.5-py3-none-any.whl.metadata (8.3 kB)
+Collecting redis>=7.4.0 (from redis[hiredis]>=7.4.0->-r requirements.txt (line 58))
+  Downloading redis-8.1.0-py3-none-any.whl.metadata (16 kB)
+Collecting structlog (from -r requirements.txt (line 61))
+  Downloading structlog-26.1.0-py3-none-any.whl.metadata (9.7 kB)
+Collecting Pygments>=2.21.0 (from -r requirements.txt (line 64))
+  Downloading pygments-2.21.0-py3-none-any.whl.metadata (2.5 kB)
+Collecting pytest (from -r requirements.txt (line 67))
+  Downloading pytest-9.1.1-py3-none-any.whl.metadata (7.6 kB)
+Collecting hypothesis>=6.151.12 (from -r requirements.txt (line 68))
+  Downloading hypothesis-6.167.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (5.7 kB)
+Collecting libcst>=1.5 (from -r requirements.txt (line 71))
+  Downloading libcst-1.9.0-cp313-cp313-manylinux_2_28_x86_64.whl.metadata (15 kB)
+Collecting deprecation>=2.1.0 (from mistapi>=0.63.1->-r requirements.txt (line 5))
+  Downloading deprecation-2.1.0-py2.py3-none-any.whl.metadata (4.6 kB)
+Collecting hvac>=2.3.0 (from mistapi>=0.63.1->-r requirements.txt (line 5))
+  Downloading hvac-2.4.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting charset_normalizer<4,>=2 (from requests->-r requirements.txt (line 6))
+  Downloading charset_normalizer-3.5.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (45 kB)
+Collecting idna<4,>=2.5 (from requests->-r requirements.txt (line 6))
+  Downloading idna-3.19-py3-none-any.whl.metadata (9.2 kB)
+Collecting certifi>=2023.5.7 (from requests->-r requirements.txt (line 6))
+  Downloading certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+Collecting bcrypt>=3.2 (from paramiko->-r requirements.txt (line 11))
+  Downloading bcrypt-5.0.0-cp39-abi3-manylinux_2_34_x86_64.whl.metadata (10 kB)
+Collecting cryptography>=3.3 (from paramiko->-r requirements.txt (line 11))
+  Downloading cryptography-50.0.1-cp311-abi3-manylinux_2_34_x86_64.whl.metadata (4.3 kB)
+Collecting invoke>=2.0 (from paramiko->-r requirements.txt (line 11))
+  Downloading invoke-3.0.3-py3-none-any.whl.metadata (3.2 kB)
+Collecting pynacl>=1.5 (from paramiko->-r requirements.txt (line 11))
+  Downloading pynacl-1.6.2-cp38-abi3-manylinux_2_34_x86_64.whl.metadata (10.0 kB)
+Collecting SecretStorage>=3.2 (from keyring->-r requirements.txt (line 14))
+  Downloading secretstorage-3.5.0-py3-none-any.whl.metadata (4.0 kB)
+Collecting jeepney>=0.4.2 (from keyring->-r requirements.txt (line 14))
+  Downloading jeepney-0.9.0-py3-none-any.whl.metadata (1.2 kB)
+Collecting jaraco.classes (from keyring->-r requirements.txt (line 14))
+  Downloading jaraco.classes-3.4.0-py3-none-any.whl.metadata (2.6 kB)
+Collecting jaraco.functools (from keyring->-r requirements.txt (line 14))
+  Downloading jaraco_functools-4.6.0-py3-none-any.whl.metadata (2.9 kB)
+Collecting jaraco.context (from keyring->-r requirements.txt (line 14))
+  Downloading jaraco_context-6.1.2-py3-none-any.whl.metadata (4.2 kB)
+Collecting wcwidth>=0.3.5 (from prettytable->-r requirements.txt (line 17))
+  Downloading wcwidth-0.8.3-py3-none-any.whl.metadata (43 kB)
+Collecting markdown-it-py>=2.2.0 (from rich->-r requirements.txt (line 20))
+  Downloading markdown_it_py-4.2.0-py3-none-any.whl.metadata (7.4 kB)
+Collecting anyio<5,>=4.10.0 (from openai>=3.5.0->-r requirements.txt (line 29))
+  Downloading anyio-4.15.0-py3-none-any.whl.metadata (4.7 kB)
+Collecting httpx2<3,>=2.7.0 (from openai>=3.5.0->-r requirements.txt (line 29))
+  Downloading httpx2-2.12.0-py3-none-any.whl.metadata (9.5 kB)
+Collecting jiter<1,>=0.16.0 (from openai>=3.5.0->-r requirements.txt (line 29))
+  Downloading jiter-0.16.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (5.2 kB)
+Collecting pydantic!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.*,<3,>=1.10.13 (from openai>=3.5.0->-r requirements.txt (line 29))
+  Downloading pydantic-2.13.5-py3-none-any.whl.metadata (110 kB)
+Collecting sniffio (from openai>=3.5.0->-r requirements.txt (line 29))
+  Downloading sniffio-1.3.1-py3-none-any.whl.metadata (3.9 kB)
+Collecting typing-extensions<5,>=4.14 (from openai>=3.5.0->-r requirements.txt (line 29))
+  Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting httpcore2==2.12.0 (from httpx2<3,>=2.7.0->openai>=3.5.0->-r requirements.txt (line 29))
+  Downloading httpcore2-2.12.0-py3-none-any.whl.metadata (25 kB)
+Collecting truststore>=0.10 (from httpx2<3,>=2.7.0->openai>=3.5.0->-r requirements.txt (line 29))
+  Downloading truststore-0.10.4-py3-none-any.whl.metadata (4.4 kB)
+Collecting h11>=0.16 (from httpcore2==2.12.0->httpx2<3,>=2.7.0->openai>=3.5.0->-r requirements.txt (line 29))
+  Downloading h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+Collecting annotated-types>=0.6.0 (from pydantic!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.*,<3,>=1.10.13->openai>=3.5.0->-r requirements.txt (line 29))
+  Downloading annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+Collecting pydantic-core==2.46.5 (from pydantic!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.*,<3,>=1.10.13->openai>=3.5.0->-r requirements.txt (line 29))
+  Downloading pydantic_core-2.46.5-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.6 kB)
+Collecting typing-inspection>=0.4.2 (from pydantic!=2.0.*,!=2.1.*,!=2.2.*,!=2.3.*,<3,>=1.10.13->openai>=3.5.0->-r requirements.txt (line 29))
+  Downloading typing_inspection-0.4.4-py3-none-any.whl.metadata (2.6 kB)
+Collecting usaddress>=0.5.9 (from usaddress-scourgify->-r requirements.txt (line 35))
+  Downloading usaddress-0.5.16-py3-none-any.whl.metadata (6.7 kB)
+Collecting yaml-config>=0.1.2 (from usaddress-scourgify->-r requirements.txt (line 35))
+  Downloading yaml_config-0.1.5-py2.py3-none-any.whl.metadata (964 bytes)
+Collecting blinker>=1.9.0 (from Flask->-r requirements.txt (line 39))
+  Downloading blinker-1.9.0-py3-none-any.whl.metadata (1.6 kB)
+Collecting click>=8.1.3 (from Flask->-r requirements.txt (line 39))
+  Downloading click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+Collecting itsdangerous>=2.2.0 (from Flask->-r requirements.txt (line 39))
+  Downloading itsdangerous-2.2.0-py3-none-any.whl.metadata (1.9 kB)
+Collecting jinja2>=3.1.2 (from Flask->-r requirements.txt (line 39))
+  Downloading jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+Collecting markupsafe>=2.1.1 (from Flask->-r requirements.txt (line 39))
+  Downloading markupsafe-3.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.7 kB)
+Collecting werkzeug>=3.1.0 (from Flask->-r requirements.txt (line 39))
+  Downloading werkzeug-3.1.8-py3-none-any.whl.metadata (4.0 kB)
+Collecting wtforms (from flask-wtf->-r requirements.txt (line 41))
+  Downloading wtforms-3.2.2-py3-none-any.whl.metadata (4.9 kB)
+Collecting importlib-metadata (from dash->-r requirements.txt (line 50))
+  Downloading importlib_metadata-9.0.1-py3-none-any.whl.metadata (4.5 kB)
+Collecting retrying (from dash->-r requirements.txt (line 50))
+  Downloading retrying-1.4.2-py3-none-any.whl.metadata (5.5 kB)
+Collecting nest-asyncio (from dash->-r requirements.txt (line 50))
+  Downloading nest_asyncio-1.6.0-py3-none-any.whl.metadata (2.8 kB)
+Collecting setuptools (from dash->-r requirements.txt (line 50))
+  Downloading setuptools-84.0.0-py3-none-any.whl.metadata (6.6 kB)
+Collecting janus>=1.0.0 (from dash->-r requirements.txt (line 50))
+  Downloading janus-2.0.0-py3-none-any.whl.metadata (5.3 kB)
+Collecting comm (from dash->-r requirements.txt (line 50))
+  Downloading comm-0.2.3-py3-none-any.whl.metadata (3.7 kB)
+Collecting narwhals>=1.15.1 (from plotly->-r requirements.txt (line 51))
+  Downloading narwhals-2.25.0-py3-none-any.whl.metadata (15 kB)
+Collecting packaging (from plotly->-r requirements.txt (line 51))
+  Downloading packaging-26.3-py3-none-any.whl.metadata (3.5 kB)
+Collecting contourpy>=1.0.1 (from matplotlib->-r requirements.txt (line 52))
+  Downloading contourpy-1.3.3-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (5.5 kB)
+Collecting cycler>=0.10 (from matplotlib->-r requirements.txt (line 52))
+  Downloading cycler-0.12.1-py3-none-any.whl.metadata (3.8 kB)
+Collecting fonttools>=4.28.2 (from matplotlib->-r requirements.txt (line 52))
+  Downloading fonttools-4.64.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (123 kB)
+Collecting kiwisolver>=1.3.1 (from matplotlib->-r requirements.txt (line 52))
+  Downloading kiwisolver-1.5.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (5.2 kB)
+Collecting pyparsing>=3 (from matplotlib->-r requirements.txt (line 52))
+  Downloading pyparsing-3.3.2-py3-none-any.whl.metadata (5.8 kB)
+Collecting python-dateutil>=2.7 (from matplotlib->-r requirements.txt (line 52))
+  Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB)
+Collecting choreographer>=1.3.0 (from kaleido->-r requirements.txt (line 54))
+  Downloading choreographer-1.3.0-py3-none-any.whl.metadata (6.9 kB)
+Collecting logistro>=1.0.8 (from kaleido->-r requirements.txt (line 54))
+  Downloading logistro-2.0.1-py3-none-any.whl.metadata (3.9 kB)
+Collecting orjson>=3.10.15 (from kaleido->-r requirements.txt (line 54))
+  Downloading orjson-3.12.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (41 kB)
+Collecting requests_toolbelt (from python-arango>=8.3.2->-r requirements.txt (line 57))
+  Downloading requests_toolbelt-1.0.0-py2.py3-none-any.whl.metadata (14 kB)
+Collecting PyJWT>=2.10.0 (from python-arango>=8.3.2->-r requirements.txt (line 57))
+  Downloading pyjwt-2.13.0-py3-none-any.whl.metadata (3.4 kB)
+Collecting iniconfig>=1.0.1 (from pytest->-r requirements.txt (line 67))
+  Downloading iniconfig-2.3.0-py3-none-any.whl.metadata (2.5 kB)
+Collecting pluggy<2,>=1.5 (from pytest->-r requirements.txt (line 67))
+  Downloading pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+Collecting sortedcontainers<3.0.0,>=2.1.0 (from hypothesis>=6.151.12->-r requirements.txt (line 68))
+  Downloading sortedcontainers-2.4.0-py2.py3-none-any.whl.metadata (10 kB)
+Collecting pyyaml-ft>=8.0.0 (from libcst>=1.5->-r requirements.txt (line 71))
+  Downloading pyyaml_ft-8.0.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (8.4 kB)
+Collecting platformdirs>=4.3.6 (from choreographer>=1.3.0->kaleido->-r requirements.txt (line 54))
+  Downloading platformdirs-4.11.7-py3-none-any.whl.metadata (5.5 kB)
+Collecting simplejson>=3.19.3 (from choreographer>=1.3.0->kaleido->-r requirements.txt (line 54))
+  Downloading simplejson-4.1.2-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (3.8 kB)
+Collecting cffi>=2.0.0 (from cryptography>=3.3->paramiko->-r requirements.txt (line 11))
+  Downloading cffi-2.1.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.5 kB)
+Collecting pycparser (from cffi>=2.0.0->cryptography>=3.3->paramiko->-r requirements.txt (line 11))
+  Downloading pycparser-3.0-py3-none-any.whl.metadata (8.2 kB)
+Collecting mdurl~=0.1 (from markdown-it-py>=2.2.0->rich->-r requirements.txt (line 20))
+  Downloading mdurl-0.1.2-py3-none-any.whl.metadata (1.6 kB)
+Collecting six>=1.5 (from python-dateutil>=2.7->matplotlib->-r requirements.txt (line 52))
+  Downloading six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+Collecting hiredis>=3.2.0 (from redis[hiredis]>=7.4.0->-r requirements.txt (line 58))
+  Downloading hiredis-3.4.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (7.5 kB)
+Collecting python-crfsuite>=0.7 (from usaddress>=0.5.9->usaddress-scourgify->-r requirements.txt (line 35))
+  Downloading python_crfsuite-0.9.12-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl.metadata (4.3 kB)
+Collecting probableparsing (from usaddress>=0.5.9->usaddress-scourgify->-r requirements.txt (line 35))
+  Downloading probableparsing-0.0.1-py2.py3-none-any.whl.metadata (908 bytes)
+Collecting zipp>=3.20 (from importlib-metadata->dash->-r requirements.txt (line 50))
+  Downloading zipp-4.1.0-py3-none-any.whl.metadata (3.6 kB)
+Collecting more-itertools (from jaraco.classes->keyring->-r requirements.txt (line 14))
+  Downloading more_itertools-11.1.0-py3-none-any.whl.metadata (41 kB)
+Downloading mistapi-0.63.3-py3-none-any.whl (372 kB)
+Downloading requests-2.34.2-py3-none-any.whl (73 kB)
+Downloading urllib3-2.7.0-py3-none-any.whl (131 kB)
+Downloading charset_normalizer-3.5.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (250 kB)
+Downloading idna-3.19-py3-none-any.whl (68 kB)
+Downloading websocket_client-1.9.2-py3-none-any.whl (95 kB)
+Downloading paramiko-5.0.0-py3-none-any.whl (208 kB)
+Downloading keyring-25.7.0-py3-none-any.whl (39 kB)
+Downloading prettytable-3.18.0-py3-none-any.whl (37 kB)
+Downloading tqdm-4.70.0-py3-none-any.whl (80 kB)
+Downloading sshkeyboard-2.3.1-py3-none-any.whl (12 kB)
+Downloading rich-15.0.0-py3-none-any.whl (310 kB)
+Downloading pygments-2.21.0-py3-none-any.whl (1.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.3/1.3 MB 4.7 MB/s  0:00:00
+Downloading tabulate-0.10.0-py3-none-any.whl (39 kB)
+Downloading numpy-2.5.2-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.7/16.7 MB 2.2 MB/s  0:00:07
+Downloading python_dotenv-1.2.3-py3-none-any.whl (22 kB)
+Downloading pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (801 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 801.6/801.6 kB 2.5 MB/s  0:00:00
+Downloading openai-3.8.0-py3-none-any.whl (1.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.7/1.7 MB 2.0 MB/s  0:00:00
+Downloading anyio-4.15.0-py3-none-any.whl (131 kB)
+Downloading httpx2-2.12.0-py3-none-any.whl (95 kB)
+Downloading httpcore2-2.12.0-py3-none-any.whl (83 kB)
+Downloading jiter-0.16.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (343 kB)
+Downloading pydantic-2.13.5-py3-none-any.whl (472 kB)
+Downloading pydantic_core-2.46.5-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 1.4 MB/s  0:00:01
+Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Downloading pyte-0.8.2-py3-none-any.whl (31 kB)
+Downloading usaddress_scourgify-0.7.1-py3-none-any.whl (28 kB)
+Downloading rapidfuzz-3.14.6-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (3.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.2/3.2 MB 1.9 MB/s  0:00:01
+Downloading flask-3.1.3-py3-none-any.whl (103 kB)
+Downloading gunicorn-26.2.0-py3-none-any.whl (228 kB)
+Downloading flask_wtf-1.3.0-py3-none-any.whl (13 kB)
+Downloading dash-4.4.1-py3-none-any.whl (8.9 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 8.9/8.9 MB 1.3 MB/s  0:00:06
+Downloading werkzeug-3.1.8-py3-none-any.whl (226 kB)
+Downloading plotly-7.0.0-py3-none-any.whl (9.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 9.1/9.1 MB 1.4 MB/s  0:00:06
+Downloading matplotlib-3.11.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (10.0 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 10.0/10.0 MB 13.2 MB/s  0:00:00
+Downloading pillow-12.3.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (6.9 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.9/6.9 MB 8.8 MB/s  0:00:00
+Downloading kaleido-1.4.0-py3-none-any.whl (56 kB)
+Downloading python_arango-8.3.5-py3-none-any.whl (116 kB)
+Downloading redis-8.1.0-py3-none-any.whl (560 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 560.6/560.6 kB 7.1 MB/s  0:00:00
+Downloading structlog-26.1.0-py3-none-any.whl (73 kB)
+Downloading pytest-9.1.1-py3-none-any.whl (386 kB)
+Downloading pluggy-1.6.0-py3-none-any.whl (20 kB)
+Downloading hypothesis-6.167.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (1.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 9.6 MB/s  0:00:00
+Downloading sortedcontainers-2.4.0-py2.py3-none-any.whl (29 kB)
+Downloading libcst-1.9.0-cp313-cp313-manylinux_2_28_x86_64.whl (2.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.3/2.3 MB 12.6 MB/s  0:00:00
+Downloading annotated_types-0.8.0-py3-none-any.whl (13 kB)
+Downloading bcrypt-5.0.0-cp39-abi3-manylinux_2_34_x86_64.whl (278 kB)
+Downloading blinker-1.9.0-py3-none-any.whl (8.5 kB)
+Downloading certifi-2026.7.22-py3-none-any.whl (136 kB)
+Downloading choreographer-1.3.0-py3-none-any.whl (52 kB)
+Downloading click-8.5.0-py3-none-any.whl (125 kB)
+Downloading contourpy-1.3.3-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (362 kB)
+Downloading cryptography-50.0.1-cp311-abi3-manylinux_2_34_x86_64.whl (4.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.7/4.7 MB 12.8 MB/s  0:00:00
+Downloading cffi-2.1.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (221 kB)
+Downloading cycler-0.12.1-py3-none-any.whl (8.3 kB)
+Downloading deprecation-2.1.0-py2.py3-none-any.whl (11 kB)
+Downloading fonttools-4.64.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (5.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.4/5.4 MB 15.1 MB/s  0:00:00
+Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+Downloading hvac-2.4.0-py3-none-any.whl (155 kB)
+Downloading iniconfig-2.3.0-py3-none-any.whl (7.5 kB)
+Downloading invoke-3.0.3-py3-none-any.whl (160 kB)
+Downloading itsdangerous-2.2.0-py3-none-any.whl (16 kB)
+Downloading janus-2.0.0-py3-none-any.whl (12 kB)
+Downloading jeepney-0.9.0-py3-none-any.whl (49 kB)
+Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+Downloading kiwisolver-1.5.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (1.5 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.5/1.5 MB 10.9 MB/s  0:00:00
+Downloading logistro-2.0.1-py3-none-any.whl (8.6 kB)
+Downloading markdown_it_py-4.2.0-py3-none-any.whl (91 kB)
+Downloading mdurl-0.1.2-py3-none-any.whl (10.0 kB)
+Downloading markupsafe-3.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (22 kB)
+Downloading narwhals-2.25.0-py3-none-any.whl (467 kB)
+Downloading orjson-3.12.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (131 kB)
+Downloading packaging-26.3-py3-none-any.whl (129 kB)
+Downloading platformdirs-4.11.7-py3-none-any.whl (23 kB)
+Downloading pyjwt-2.13.0-py3-none-any.whl (31 kB)
+Downloading pynacl-1.6.2-cp38-abi3-manylinux_2_34_x86_64.whl (1.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.4/1.4 MB 19.6 MB/s  0:00:00
+Downloading pyparsing-3.3.2-py3-none-any.whl (122 kB)
+Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+Downloading pyyaml_ft-8.0.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (778 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 778.7/778.7 kB 14.2 MB/s  0:00:00
+Downloading hiredis-3.4.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (313 kB)
+Downloading secretstorage-3.5.0-py3-none-any.whl (15 kB)
+Downloading simplejson-4.1.2-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (196 kB)
+Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+Downloading truststore-0.10.4-py3-none-any.whl (18 kB)
+Downloading typing_inspection-0.4.4-py3-none-any.whl (14 kB)
+Downloading usaddress-0.5.16-py3-none-any.whl (70 kB)
+Downloading python_crfsuite-0.9.12-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (1.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 12.6 MB/s  0:00:00
+Downloading wcwidth-0.8.3-py3-none-any.whl (331 kB)
+Downloading yaml_config-0.1.5-py2.py3-none-any.whl (9.5 kB)
+Downloading comm-0.2.3-py3-none-any.whl (7.3 kB)
+Downloading importlib_metadata-9.0.1-py3-none-any.whl (27 kB)
+Downloading zipp-4.1.0-py3-none-any.whl (10 kB)
+Downloading jaraco.classes-3.4.0-py3-none-any.whl (6.8 kB)
+Downloading jaraco_context-6.1.2-py3-none-any.whl (7.9 kB)
+Downloading jaraco_functools-4.6.0-py3-none-any.whl (11 kB)
+Downloading more_itertools-11.1.0-py3-none-any.whl (72 kB)
+Downloading nest_asyncio-1.6.0-py3-none-any.whl (5.2 kB)
+Downloading probableparsing-0.0.1-py2.py3-none-any.whl (3.1 kB)
+Downloading pycparser-3.0-py3-none-any.whl (48 kB)
+Downloading requests_toolbelt-1.0.0-py2.py3-none-any.whl (54 kB)
+Downloading retrying-1.4.2-py3-none-any.whl (10 kB)
+Downloading setuptools-84.0.0-py3-none-any.whl (818 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 818.2/818.2 kB 20.6 MB/s  0:00:00
+Downloading sniffio-1.3.1-py3-none-any.whl (10 kB)
+Downloading wtforms-3.2.2-py3-none-any.whl (158 kB)
+Installing collected packages: sortedcontainers, probableparsing, zipp, websocket-client, wcwidth, urllib3, typing-extensions, truststore, tqdm, tabulate, structlog, sshkeyboard, sniffio, six, simplejson, setuptools, retrying, redis, rapidfuzz, pyyaml-ft, PyYAML, python-dotenv, python-crfsuite, pyparsing, PyJWT, Pygments, pycparser, pluggy, platformdirs, pillow, packaging, orjson, numpy, nest-asyncio, narwhals, more-itertools, mdurl, markupsafe, logistro, kiwisolver, jiter, jeepney, jaraco.context, janus, itsdangerous, invoke, iniconfig, idna, hypothesis, hiredis, h11, gunicorn, fonttools, cycler, comm, click, charset_normalizer, certifi, blinker, bcrypt, annotated-types, yaml-config, wtforms, werkzeug, usaddress, typing-inspection, requests, python-dateutil, pytest, pyte, pydantic-core, prettytable, plotly, markdown-it-py, libcst, jinja2, jaraco.functools, jaraco.classes, importlib-metadata, httpcore2, deprecation, contourpy, choreographer, cffi, anyio, usaddress-scourgify, rich, requests_toolbelt, pynacl, pydantic, matplotlib, kaleido, hvac, httpx2, Flask, cryptography, SecretStorage, python-arango, paramiko, openai, flask-wtf, dash, keyring, mistapi
+Successfully installed Flask-3.1.3 PyJWT-2.13.0 PyYAML-6.0.3 Pygments-2.21.0 SecretStorage-3.5.0 annotated-types-0.8.0 anyio-4.15.0 bcrypt-5.0.0 blinker-1.9.0 certifi-2026.7.22 cffi-2.1.1 charset_normalizer-3.5.1 choreographer-1.3.0 click-8.5.0 comm-0.2.3 contourpy-1.3.3 cryptography-50.0.1 cycler-0.12.1 dash-4.4.1 deprecation-2.1.0 flask-wtf-1.3.0 fonttools-4.64.0 gunicorn-26.2.0 h11-0.16.0 hiredis-3.4.1 httpcore2-2.12.0 httpx2-2.12.0 hvac-2.4.0 hypothesis-6.167.1 idna-3.19 importlib-metadata-9.0.1 iniconfig-2.3.0 invoke-3.0.3 itsdangerous-2.2.0 janus-2.0.0 jaraco.classes-3.4.0 jaraco.context-6.1.2 jaraco.functools-4.6.0 jeepney-0.9.0 jinja2-3.1.6 jiter-0.16.0 kaleido-1.4.0 keyring-25.7.0 kiwisolver-1.5.1 libcst-1.9.0 logistro-2.0.1 markdown-it-py-4.2.0 markupsafe-3.0.3 matplotlib-3.11.1 mdurl-0.1.2 mistapi-0.63.3 more-itertools-11.1.0 narwhals-2.25.0 nest-asyncio-1.6.0 numpy-2.5.2 openai-3.8.0 orjson-3.12.0 packaging-26.3 paramiko-5.0.0 pillow-12.3.0 platformdirs-4.11.7 plotly-7.0.0 pluggy-1.6.0 prettytable-3.18.0 probableparsing-0.0.1 pycparser-3.0 pydantic-2.13.5 pydantic-core-2.46.5 pynacl-1.6.2 pyparsing-3.3.2 pyte-0.8.2 pytest-9.1.1 python-arango-8.3.5 python-crfsuite-0.9.12 python-dateutil-2.9.0.post0 python-dotenv-1.2.3 pyyaml-ft-8.0.0 rapidfuzz-3.14.6 redis-8.1.0 requests-2.34.2 requests_toolbelt-1.0.0 retrying-1.4.2 rich-15.0.0 setuptools-84.0.0 simplejson-4.1.2 six-1.17.0 sniffio-1.3.1 sortedcontainers-2.4.0 sshkeyboard-2.3.1 structlog-26.1.0 tabulate-0.10.0 tqdm-4.70.0 truststore-0.10.4 typing-extensions-4.16.0 typing-inspection-0.4.4 urllib3-2.7.0 usaddress-0.5.16 usaddress-scourgify-0.7.1 wcwidth-0.8.3 websocket-client-1.9.2 werkzeug-3.1.8 wtforms-3.2.2 yaml-config-0.1.5 zipp-4.1.0
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+--> 2c7dd97906c0
+STEP 28/54: COPY MistHelper.py __init__.py wsgi.py wsgi_capture.py ./
+--> fe15b545e989
+STEP 29/54: COPY src/ ./src/
+--> 28560d5d2555
+STEP 30/54: COPY scripts/ ./scripts/
+--> ed7f96cde40c
+STEP 31/54: COPY web_portal/ ./web_portal/
+--> acae4cb22130
+STEP 32/54: RUN chown -R misthelper:misthelper /app
+--> fa66ae9f8d71
+STEP 33/54: COPY container/scripts/start.sh /start.sh
+--> f19794335bec
+STEP 34/54: COPY container/scripts/write-session-env.sh /usr/local/bin/write-session-env.sh
+--> 7e23b8d68e49
+STEP 35/54: RUN chmod +x /start.sh /usr/local/bin/write-session-env.sh
+--> f0bc91a92a5c
+STEP 36/54: USER misthelper
+--> bcaf590a355a
+STEP 37/54: ENV PYTHONUNBUFFERED=1
+--> ec32e49d9c5d
+STEP 38/54: ENV OUTPUT_FORMAT=sqlite
+--> dd3d840132e6
+STEP 39/54: ENV DATABASE_PATH=/app/data/mist_data.db
+--> 707083c1323c
+STEP 40/54: ENV PYTHONHTTPSVERIFY=1
+--> 4ed8f8f346c2
+STEP 41/54: ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+--> dcdbcb90b070
+STEP 42/54: ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+--> eafeea2a46d6
+STEP 43/54: ENV CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+--> 1c3b29a2cd04
+STEP 44/54: ENV DISABLE_UV_CHECK=true
+--> fc6fb0ad897f
+STEP 45/54: ENV DISABLE_AUTO_INSTALL=true
+--> c8de1361f9a0
+STEP 46/54: ENV AUTO_UPGRADE_UV=false
+--> 1d9498abacbf
+STEP 47/54: ENV AUTO_UPGRADE_DEPENDENCIES=false
+--> c86353dad685
+STEP 48/54: ENV WEB_PORT=8055
+--> cd64b47a5ee6
+STEP 49/54: ENV CAPTURE_PORT=8056
+--> 972b082318f9
+STEP 50/54: VOLUME ["/app/data"]
+--> 8d838fa42125
+STEP 51/54: EXPOSE 2200 8055 8056
+--> fdb708334355
+STEP 52/54: HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3     CMD ["python", "-c", "import os,urllib.request;urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('WEB_PORT','8055')+'/ready',timeout=8)"]
+time="2026-09-04T18:41:42-05:00" level=warning msg="HEALTHCHECK is not supported for OCI image format and will be ignored. Must use `docker` format"
+--> a76999daa45c
+STEP 53/54: USER root
+time="2026-09-04T18:41:42-05:00" level=warning msg="HEALTHCHECK is not supported for OCI image format and will be ignored. Must use `docker` format"
+--> 127f880e2655
+STEP 54/54: CMD ["/start.sh"]
+COMMIT misthelper:final
+time="2026-09-04T18:41:42-05:00" level=warning msg="HEALTHCHECK is not supported for OCI image format and will be ignored. Must use `docker` format"
+--> 45dead46e851
+Successfully tagged localhost/misthelper:final
+45dead46e851a4a3f9e59927ceaf55a3d83fb5b9c8b579385547f968c8b00e29

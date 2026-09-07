@@ -375,6 +375,27 @@ disallow_any_generics = false
 warn_return_any = false
 
 [[tool.mypy.overrides]]
+# Upgrade portal modules use Flask and injected service dependencies that expose
+# dynamic attributes and untyped SDK return values. Keep strict checking active
+# for all other source modules while this package graduates to full annotations.
+module = ["src.upgrade_portal", "src.upgrade_portal.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disallow_any_generics = false
+warn_return_any = false
+no_implicit_optional = false
+disable_error_code = [
+    "attr-defined",
+    "arg-type",
+    "assignment",
+    "no-any-return",
+    "return-value",
+    "type-arg",
+    "union-attr",
+]
+
+[[tool.mypy.overrides]]
 # Wave 2 extracted modules: legacy code extracted as-is from MistHelper.py monolith.
 # Uses module-level dependency injection (Any-typed globals) and mixin patterns that
 # produce attr-defined errors. Relax strict checks per module with narrower per-flag
@@ -564,6 +585,7 @@ good-names = ["db", "ok"]
 
 # --- pydocstyle ---
 [tool.pydocstyle]
+add-ignore = ["D202"]  # Black inserts one blank line after nested function docstrings.
 convention = "google"
 match-dir = "(?!tests|\\.).*"
 
