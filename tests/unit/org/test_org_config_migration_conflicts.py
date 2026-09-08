@@ -391,13 +391,15 @@ class TestRemapping:
         cases = [
             ("vpns", {"networks": {"n": {"id": "src"}}}),
             ("gateway_templates", {"networks": {"n": {"id": "src"}}}),
+            ("device_profiles", {"gateway_template_id": "src"}),
             ("service_policies", {"services": [{"id": "src"}]}),
         ]
-        for type_key, obj in cases:  # WHY: one loop keeps the three routes in one assertion.
+        for type_key, obj in cases:  # WHY: one loop keeps the four routes in one assertion.
             manager._remap_object_references(obj, type_key)  # WHY: drive the dispatcher.
         assert cases[0][1]["networks"]["n"]["id"] == "dest"  # WHY: the VPN route must fire.
         assert cases[1][1]["networks"]["n"]["id"] == "dest"  # WHY: the template route must fire.
-        assert cases[2][1]["services"][0]["id"] == "dest"  # WHY: the policy route must fire.
+        assert cases[2][1]["gateway_template_id"] == "dest"  # WHY: the profile route must fire.
+        assert cases[3][1]["services"][0]["id"] == "dest"  # WHY: the policy route must fire.
 
     def test_the_dispatcher_returns_a_type_it_does_not_repair(self, manager: OrgConfigMigrationManager) -> None:
         """A network holds no outward reference, so it passes through unchanged."""
