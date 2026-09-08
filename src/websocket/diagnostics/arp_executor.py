@@ -33,7 +33,7 @@ _TIMEOUT_TABLE: dict[str, tuple[int, str]] = {  # WHY: table-driven timeout disp
 _COMPAT_NOTES: dict[str, tuple[str, str]] = {  # WHY: table-driven compat-note dispatch.
     "gateway": (
         "!? Gateway detected (Model: {model})",
-        "   -> Gateways have good WebSocket ARP support\n" "   -> Results may differ from Access Points",
+        ("   -> Gateways have good WebSocket ARP support\n" "   -> Results may differ from Access Points"),
     ),
     "ap": (
         "!? Access Point detected (Model: {model})",

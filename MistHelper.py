@@ -3224,29 +3224,29 @@ def _get_duc_instance() -> DeviceUtilityCommands:  # Build DeviceUtilityCommands
 
 def _build_gateway_export_kwargs() -> dict[str, Any]:
     """Build the kwargs dict passed to configure_gateway_export_utils_dependencies()."""
-    return dict(  # Single dependency-wiring payload assembled in one place.
-        apisession_dependency=apisession,  # Live mistapi session.
-        mistapi_dependency=mistapi,  # mistapi root module.
-        config_utils=ConfigUtils,  # Shared config helpers.
-        cache_utils=CacheUtils,  # Disk-cache helpers.
-        file_path_utils=FilePathUtils,  # Path helpers.
-        data_exporter=DataExporter,  # Output backend writer.
-        data_processing_utils=DataProcessingUtils,  # Flatten/normalize helpers.
-        api_fetch_utils=APIFetchUtils,  # Paged fetch helpers.
-        api_core_fetch_utils=APICoreFetchUtils,  # Core unwrap helpers.
-        org_inventory_exporter=OrgInventoryExporter,  # For inventory lookups.
-        org_site_exporter=OrgSiteExporter,  # For site lookups.
-        input_utils=InputUtils,  # safe_input + prompts.
-        execute_fn=ConnectionPoolExecutor.execute,  # Pool executor (1012 SC-003).
-        validation_utils=ValidationUtils,  # Input validation.
-        rate_limiting_utils=RateLimitingUtils,  # Adaptive delay.
-        mist_wan_target_ports=MistWanTargetPorts.VALUE,  # Port list from extracted class attribute.
-        mist_site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,  # Site filter prefix.
-        fast_mode_max_retries=FAST_MODE_MAX_RETRIES,  # Retry cap.
-        fast_mode_retry_delay=FAST_MODE_RETRY_DELAY,  # Delay between retries.
-        api_usage_cache=_api_usage_cache,  # Shared API usage cache.
-        tqdm_module=tqdm,  # Progress bar dependency.
-    )
+    return {  # Single dependency-wiring payload assembled in one place.
+        "apisession_dependency": apisession,  # Live mistapi session.
+        "mistapi_dependency": mistapi,  # mistapi root module.
+        "config_utils": ConfigUtils,  # Shared config helpers.
+        "cache_utils": CacheUtils,  # Disk-cache helpers.
+        "file_path_utils": FilePathUtils,  # Path helpers.
+        "data_exporter": DataExporter,  # Output backend writer.
+        "data_processing_utils": DataProcessingUtils,  # Flatten/normalize helpers.
+        "api_fetch_utils": APIFetchUtils,  # Paged fetch helpers.
+        "api_core_fetch_utils": APICoreFetchUtils,  # Core unwrap helpers.
+        "org_inventory_exporter": OrgInventoryExporter,  # For inventory lookups.
+        "org_site_exporter": OrgSiteExporter,  # For site lookups.
+        "input_utils": InputUtils,  # safe_input + prompts.
+        "execute_fn": ConnectionPoolExecutor.execute,  # Pool executor (1012 SC-003).
+        "validation_utils": ValidationUtils,  # Input validation.
+        "rate_limiting_utils": RateLimitingUtils,  # Adaptive delay.
+        "mist_wan_target_ports": MistWanTargetPorts.VALUE,  # Port list from extracted class attribute.
+        "mist_site_exclude_prefix": MIST_SITE_EXCLUDE_PREFIX,  # Site filter prefix.
+        "fast_mode_max_retries": FAST_MODE_MAX_RETRIES,  # Retry cap.
+        "fast_mode_retry_delay": FAST_MODE_RETRY_DELAY,  # Delay between retries.
+        "api_usage_cache": _api_usage_cache,  # Shared API usage cache.
+        "tqdm_module": tqdm,  # Progress bar dependency.
+    }
 
 
 def _configure_gateway_module() -> None:
@@ -3396,19 +3396,19 @@ def _build_org_ap_upgrader(**overrides: Any) -> _OrgLevelAPFirmwareUpgrader:
     """
     # WHY: read-only references to module globals msp_privileges/apisession/selected_msp.
     # No assignment means `global` is unnecessary (drops PLW0602 site, initiative 1016).
-    kwargs: dict[str, Any] = dict(  # WHY: build DI kwargs dict for src class
-        org_id=ConfigUtils.get_cached_or_prompted_org_id() or "",
-        apisession=apisession,
-        dry_run=getattr(globals().get("args", None), "dry_run", False),
-        safe_input_fn=InputUtils.safe_input,
-        check_stop_fn=ConfigUtils.check_stop_signal,
-        get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
-        fetch_sites_fn=APICoreFetchUtils.all_sites_with_limit,
-        write_results_fn=DataExporter.write_with_format_selection,
-        is_debug_fn=IsDebugMode.check,
-        msp_privileges=msp_privileges if msp_privileges else [],
-        selected_msp=selected_msp if selected_msp else None,
-    )
+    kwargs: dict[str, Any] = {  # WHY: build DI kwargs dict for src class
+        "org_id": ConfigUtils.get_cached_or_prompted_org_id() or "",
+        "apisession": apisession,
+        "dry_run": getattr(globals().get("args", None), "dry_run", False),
+        "safe_input_fn": InputUtils.safe_input,
+        "check_stop_fn": ConfigUtils.check_stop_signal,
+        "get_org_id_fn": ConfigUtils.get_cached_or_prompted_org_id,
+        "fetch_sites_fn": APICoreFetchUtils.all_sites_with_limit,
+        "write_results_fn": DataExporter.write_with_format_selection,
+        "is_debug_fn": IsDebugMode.check,
+        "msp_privileges": msp_privileges if msp_privileges else [],
+        "selected_msp": selected_msp if selected_msp else None,
+    }
     kwargs.update(overrides)  # WHY: caller overrides win over defaults
     return _OrgLevelAPFirmwareUpgrader(**kwargs)  # WHY: single src-class construction path
 
@@ -4574,26 +4574,34 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "193": (OrgTicketManager.export_ticket_details, "Export all tickets with full details and comments"),
     "194": (
         DeviceConfigTemplateClonerManager.clone,  # Delegate to extracted implementation class
-        " DESTRUCTIVE: Clone Device Config to Gateway Template"
-        " - Select a gateway, extract its local config, and create a new org gateway template"
-        " (Requires typing 'CREATE' to confirm)",
+        (
+            " DESTRUCTIVE: Clone Device Config to Gateway Template"
+            " - Select a gateway, extract its local config, and create a new org gateway template"
+            " (Requires typing 'CREATE' to confirm)"
+        ),
     ),
     "206": (
         lambda: manage_org_synthetic_probes(apisession, ConfigUtils.get_cached_or_prompted_org_id()),
-        " DESTRUCTIVE: Manage org Zscaler synthetic probes"
-        " - Build/merge/swap synthetic_test.custom_probes from curated Zscaler catalogue",
+        (
+            " DESTRUCTIVE: Manage org Zscaler synthetic probes"
+            " - Build/merge/swap synthetic_test.custom_probes from curated Zscaler catalogue"
+        ),
     ),
     "207": (
         lambda: APProfileMigrationManager.migrate_aps_between_device_profiles(apisession),
-        " DESTRUCTIVE: Migrate APs between device profiles"
-        " - Reassign every AP bound to a source device profile to a chosen target profile"
-        " (Requires typing 'MIGRATE' or 'DRY-RUN' to confirm)",
+        (
+            " DESTRUCTIVE: Migrate APs between device profiles"
+            " - Reassign every AP bound to a source device profile to a chosen target profile"
+            " (Requires typing 'MIGRATE' or 'DRY-RUN' to confirm)"
+        ),
     ),
     "208": (
         lambda: APProfileMigrationManager.revert_ap_profile_migration(apisession),
-        " DESTRUCTIVE: Revert an AP profile migration from a backup file"
-        " - Reassign each listed AP back to its original device profile"
-        " (Requires typing 'REVERT' to confirm)",
+        (
+            " DESTRUCTIVE: Revert an AP profile migration from a backup file"
+            " - Reassign each listed AP back to its original device profile"
+            " (Requires typing 'REVERT' to confirm)"
+        ),
     ),
 }
 

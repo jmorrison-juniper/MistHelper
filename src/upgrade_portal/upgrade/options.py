@@ -167,13 +167,17 @@ _P2P_SIZE_HIGHEST = 1000
 OPTION_HELP: Mapping[str, tuple[str, str]] = {
     "start_time": (
         "Begin the firmware download after this much time",
-        "Write a number and a unit. Use s for seconds, m for minutes, h for hours, and d for days. "
-        "An example is 8h.",
+        (
+            "Write a number and a unit. Use s for seconds, m for minutes, h for hours, and d for days. "
+            "An example is 8h."
+        ),
     ),
     "reboot_at": (
         "Reboot each switch and each gateway after this much time",
-        "Write a number and a unit. Use s for seconds, m for minutes, h for hours, and d for days. "
-        "An example is 8h.",
+        (
+            "Write a number and a unit. Use s for seconds, m for minutes, h for hours, and d for days. "
+            "An example is 8h."
+        ),
     ),
     "canary_phases": (
         "Phases of the staged upgrade",
