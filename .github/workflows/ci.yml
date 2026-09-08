@@ -76,7 +76,10 @@ env:
   # MistHelper.py is genuinely checked here, proved by injecting a type error and
   # watching the gate catch it. Excludes starlink_dashboard.py (76 errors),
   # web_portal (168), and tools (61). See [tool.mypy] exclude in pyproject.toml.
-  MYPY_PATHS: 'src/ MistHelper.py wsgi.py'
+  # The two openai-importing script packages (issue #1948) pass explicitly with a
+  # targeted override in pyproject.toml, so a dependency bump cannot merge with no
+  # gate above the code it changes.
+  MYPY_PATHS: 'src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py'
   # radon: no block passes complexity 10 in src/, MistHelper.py, wsgi.py, or
   # starlink_dashboard.py. Excludes web_portal (2 blocks) and tools (20 blocks).
   RADON_PATHS: 'src/ MistHelper.py wsgi.py starlink_dashboard.py'
