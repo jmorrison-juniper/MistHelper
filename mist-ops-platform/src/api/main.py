@@ -45,13 +45,11 @@ def create_app() -> FastAPI:
 def _mount_middleware(app: FastAPI, settings) -> None:  # noqa: ANN001
     """Register middleware layers in order (outermost first)."""
     from src.api.middleware.logging import StructuredLoggingMiddleware
-    from src.api.middleware.rate_limit import RateLimitMiddleware
 
     app.add_middleware(StructuredLoggingMiddleware)
-    app.add_middleware(
-        RateLimitMiddleware,
-        redis_url=settings.redis_url,
-    )
+    # WHY: issue #2049. Per-org rate limiting moved to a dependency that runs
+    # after auth, so an anonymous caller can no longer burn any org's budget.
+    # See get_scoped_org_id in src/api/deps.py.
 
 
 def _mount_routers(app: FastAPI) -> None:

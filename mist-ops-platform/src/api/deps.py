@@ -11,14 +11,14 @@ from collections.abc import AsyncIterator
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, Query, Request
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.api.middleware.auth import (
     CurrentUser,
     get_current_user,
     require_org_access,
 )
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from src.api.middleware.rate_limit import get_org_rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +59,9 @@ async def get_scoped_org_id(
     reads ``org_id`` directly from ``Query`` exposes the data of every other
     organization, so no route may do that.
     """
-    logger.debug("Checking organization membership for %s", org_id)  # Record the check before it runs
+    logger.debug("Checking organization membership for %s", org_id)  # Record the check first
     try:
-        require_org_access(str(org_id), user)  # Raise 403 when the caller is outside the organization
+        require_org_access(str(org_id), user)  # Raise 403 when the caller is outside the org
     except HTTPException:
         logger.warning(  # Record the denial, because a denial is a security event
             "Denied cross-organization access to %s for %s",
@@ -70,4 +70,8 @@ async def get_scoped_org_id(
         )
         raise  # Preserve the 403 status and the original detail text
     logger.debug("Granted access to organization %s", org_id)  # Record the allow decision
+    # WHY: issue #2049. The old middleware counted requests before auth ran, so
+    # an anonymous caller could burn any org's budget. This check runs after
+    # the membership check, so it counts only a verified caller and its org.
+    await get_org_rate_limiter().check(org_id)  # Raise 429 when the org is over budget
     return org_id  # Hand the checked value to the route
