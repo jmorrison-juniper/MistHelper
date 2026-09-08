@@ -63,3 +63,38 @@
 - Remaining work: none for this issue.
 - Blockers: none.
 - Exact next action: open a pull request from `jmorrison-juniper-literate-fiesta` into `main` when repository policy permits.
+
+## Run record: 2026-09-08 (issue #1948)
+
+- **Pokémon identity**: Umbreon
+- **Issue number**: #1948 (item 2: gate the two openai-importing script packages)
+- **Ownership status**: released. No agent owns issue #1948 or the paths below.
+- **Branch**: `jmorrison-juniper-miniature-fiesta`
+- **Worktree**: `jmorrison-juniper-miniature-fiesta`
+- **Affected paths**:
+  - `.github/workflows/ci.yml` (MYPY_PATHS env value)
+  - `pyproject.toml` (new mypy override block)
+  - `tests/guardrails/test_mypy_paths_openai_scripts.py` (new guardrail test)
+- **Completed work**:
+  - Added a targeted mypy override for `mist_ideas_analyzer_pkg` and
+    `mist_ideas_distiller_v2_pkg`, with a measured 264-error census and
+    per-flag opt-outs.
+  - Added both `__init__.py` paths to `MYPY_PATHS` in the CI workflow.
+  - Added a guardrail test that holds both paths in `MYPY_PATHS`.
+- **Verification results**:
+  - `mypy` (full CI command, 432 source files): clean.
+  - Gate proof: an injected type error was caught, then reverted.
+  - `ruff check`, `black --check`, `py_compile` on the new test: pass.
+  - `pytest tests/guardrails/` (111 tests) and
+    `tests/unit/scripts/test_script_imports.py` (4 tests): pass.
+- **Live API validation status**: not required.
+- **Commit**: `8a66ac2cabb321879b691ab74e6bdbdbb2995758`
+- **Push status**: pushed to `origin/jmorrison-juniper-miniature-fiesta`.
+- **Remaining work**:
+  - Item 4 of #1948 (hold major bumps until a gate covers the affected code)
+    is a process rule that applies once this branch merges.
+  - No pull request was opened, per the run policy for this agent.
+- **Blockers**: none.
+- **Exact next action**: open a pull request from
+  `jmorrison-juniper-miniature-fiesta` into `main` when the repository policy
+  authorizes it.
