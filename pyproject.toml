@@ -396,6 +396,43 @@ disable_error_code = [
 ]
 
 [[tool.mypy.overrides]]
+# OpenAI script packages: mist_ideas_analyzer_pkg and mist_ideas_distiller_v2_pkg
+# are dev tooling that imports the openai SDK (issue #1948). They sit in scripts/,
+# which stays excluded from the default scan, but the CI mypy gate passes their
+# __init__.py files explicitly through MYPY_PATHS so a dependency bump cannot
+# merge with no gate above the code it changes.
+#
+# Error census at strict mypy, measured 2026-09-08 (264 errors across 2 files):
+#   type-arg (236), no-any-return (17), arg-type (3), no-untyped-def (3),
+#   assignment (2), index (2), no-untyped-call (1).
+# The per-flag opt-outs below cover the def/call/return/generic codes, and
+# disable_error_code covers the remaining three. Every other error category
+# still fires, so a regression in these packages still fails the gate.
+#
+# Module names: explicit_package_bases = true anchors resolution at the repo
+# root, so mypy names these scripts.* submodules even though the launcher
+# scripts prepend scripts/ to sys.path at runtime.
+#
+# scripts/ stays in the global exclude. The CI gate passes the __init__.py
+# files explicitly, so mypy scans them and this override applies. The gate
+# names no submodules, so no wildcard patterns are listed (warn_unused_configs
+# = true would flag them as dead).
+module = [
+    "scripts.mist_ideas_analyzer_pkg",
+    "scripts.mist_ideas_distiller_v2_pkg",
+]
+disallow_untyped_defs = false      # 3 no-untyped-def: legacy functions lack annotations.
+disallow_incomplete_defs = false   # 2 no-untyped-def: partially annotated legacy defs.
+disallow_untyped_calls = false     # 1 no-untyped-call: callee is still untyped.
+disallow_any_generics = false      # 236 type-arg: legacy bare list/dict/Queue usage.
+warn_return_any = false            # 17 no-any-return: openai SDK returns Any.
+disable_error_code = [
+    "arg-type",   # 3 errs: Any-typed SDK results flow into typed callees.
+    "assignment", # 2 errs: Any values assigned into typed slots.
+    "index",      # 2 errs: legacy code indexes Any-typed dicts.
+]
+
+[[tool.mypy.overrides]]
 # Wave 2 extracted modules: legacy code extracted as-is from MistHelper.py monolith.
 # Uses module-level dependency injection (Any-typed globals) and mixin patterns that
 # produce attr-defined errors. Relax strict checks per module with narrower per-flag
