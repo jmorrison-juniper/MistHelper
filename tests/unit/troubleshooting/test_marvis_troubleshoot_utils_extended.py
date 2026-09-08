@@ -58,16 +58,16 @@ def _make_deps(**overrides: Any) -> MarvisTroubleshootDeps:
             )
         )
     )
-    kwargs = dict(  # WHY: baseline kwargs dictionary; overrides mutate individual slots.
-        apisession=object(),
-        mistapi=mistapi,
-        config_utils=config_utils,
-        prompt_client_utils=prompt_client_utils,
-        prompt_utils=prompt_utils,
-        data_exporter=data_exporter,
-        marvis_data_utils=marvis_data_utils,
-        data_processing_utils=data_processing_utils,
-    )
+    kwargs = {  # WHY: baseline kwargs dictionary; overrides mutate individual slots.
+        "apisession": object(),
+        "mistapi": mistapi,
+        "config_utils": config_utils,
+        "prompt_client_utils": prompt_client_utils,
+        "prompt_utils": prompt_utils,
+        "data_exporter": data_exporter,
+        "marvis_data_utils": marvis_data_utils,
+        "data_processing_utils": data_processing_utils,
+    }
     kwargs.update(overrides)  # WHY: apply caller-provided overrides.
     return MarvisTroubleshootDeps(**kwargs)  # WHY: instantiate dataclass with merged kwargs.
 
