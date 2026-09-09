@@ -447,6 +447,9 @@ from src.export.org_site_exporter import (
 from src.export.org_template_exporter import (
     OrgTemplateExporter,  # Cat B (1013 SC-001 position 22) -- re-export for MistHelper.OrgTemplateExporter callers
 )
+from src.export.self_account_exporter import (
+    SelfAccountExporter,  # Issue #1415 -- verify an email change token, menu 247
+)
 from src.export.self_export_utils import (
     SelfExportUtils,  # Cat B (1013 SC-001 position 7) -- re-export for menu tuple at MistHelper:18167
 )
@@ -3787,6 +3790,10 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "246": (
         SiteSearchExporter.troubleshoot_call,
         "Troubleshoot a call for a site, client MAC, and meeting ID (troubleshootSiteCall)",
+    ),
+    "247": (
+        SelfAccountExporter.verify_email,
+        "Verify an email change token from the Mist email (verifySelfEmail)",
     ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),

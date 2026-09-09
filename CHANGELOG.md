@@ -7,6 +7,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Verify an email change token (menu 247)
+
+- **Added**: Menu 247 verifies a single-use email change token through the
+  `verifySelfEmail` endpoint. The menu prompts for the token, calls the
+  endpoint once, reports the status, and records one audit row. The token is
+  never logged and never written to the audit row. Issue #1415.
+- **Added**: The `verifySelfEmail` primary-key strategy
+  (`auto_increment_with_unique`), because the response holds no stable API
+  identifier.
+- **Added**: 19 mocked unit tests under
+  `tests/unit/export/test_self_account_exporter.py`. They cover the prompt,
+  the 200 and 400 bodies, the audit row, the write, the SDK error path, and
+  the rule that the token never reaches the log.
+
 ### Troubleshoot a call for one client meeting
 
 - **Added**: Menu 246 prompts for a site, a client MAC, and a meeting ID, then

@@ -2079,6 +2079,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "One organization security intelligence profile, read by id (issue #1148)",
     },
+    "verifySelfEmail": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "status_code"],
+        "unique_constraints": [],
+        "description": "One email change token verification event, no stable API id (issue #1415)",
+    },
     "listOrgSecIntelProfiles": {
         "type": "natural_pk",
         "primary_key": ["id"],
