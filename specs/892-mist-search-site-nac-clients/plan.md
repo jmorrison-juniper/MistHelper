@@ -6,7 +6,7 @@
 
 ## Summary
 
-Add menu 249 for the read-only `searchSiteNacClients` site search. Reuse
+Add menu 258 for the read-only `searchSiteNacClients` site search. Reuse
 `SiteSearchExporter._run_site_search` for site selection, pagination,
 flattening, logging, and multi-backend export. The existing composite primary
 key and Arango mapping already cover this operation.
@@ -26,7 +26,7 @@ key and Arango mapping already cover this operation.
 
 1. Use `SiteSearchExporter` because this endpoint matches the existing
    site-scoped search flow.
-2. Use menu 249 because menu 248 is claimed by an active PR for issue #1372.
+2. Use menu 258 because menus 248-257 are claimed or reserved by the proposed sequence.
 3. Use the existing `searchSiteNacClients` composite key of `mac` and
    `timestamp`.
 4. Call the installed SDK path

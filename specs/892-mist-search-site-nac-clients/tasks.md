@@ -5,14 +5,14 @@
 
 ## Phase 1: Setup
 
-- [X] T001 Confirm menu 249 avoids the active menu 248 conflict.
+- [X] T001 Confirm menu 258 avoids the proposed menu sequence.
 - [X] T002 Confirm the existing primary-key and Arango mappings.
 
 ## Phase 2: Implementation
 
 - [X] T003 Add `searchSiteNacClients` to the site search exporter bindings.
-- [X] T004 Register menu 248 in `MistHelper.py`.
-- [X] T005 Register menu 248 as `interactive_safe`.
+- [X] T004 Register menu 258 in `MistHelper.py`.
+- [X] T005 Register menu 258 as `interactive_safe`.
 - [X] T006 Add focused endpoint binding tests.
 
 ## Phase 3: Documentation

@@ -23,7 +23,7 @@ Covered operations:
     - ``searchSiteDiscoveredSwitches`` (menu 228)
     - ``searchSiteZoneSessions`` (menu 229)
     - ``searchSiteServicePathEvents`` (menu 244)
-    - ``searchSiteNacClients`` (menu 249)
+    - ``searchSiteNacClients`` (menu 258)
 
 Why:
     Nearly all of these endpoints take the same arguments, a session and a site,
@@ -452,7 +452,7 @@ class SiteSearchExporter:
 
     @staticmethod
     def nac_clients() -> None:
-        """Search NAC clients for a site and export them (menu 249).
+        """Search NAC clients for a site and export them (menu 258).
 
         Added for spec 892 and issue #1400. The endpoint is read-only and
         uses the shared site search flow for consistent output.
