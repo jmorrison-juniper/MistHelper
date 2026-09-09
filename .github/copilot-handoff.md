@@ -2,6 +2,47 @@
 
 ## Current run
 
+- Agent: Sylveon
+- Issue: #1404 (Spec 896: add `searchSiteServicePathEvents` as a menu operation)
+- Coordination issue: #2295
+- Coordination sub-issue: #2351
+- Ownership status: released
+- Branch: `jmorrison-juniper-fuzzy-system`
+- Worktree: `C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\copilot-worktrees\MistHelper\jmorrison-juniper-fuzzy-system`
+- Affected paths:
+  - `src/export/site_search_exporter.py` (new `service_path_events` entry)
+  - `MistHelper.py` (menu 244 binding)
+  - `src/utils/operation_registry.py` (menu 244 row, `interactive_safe`)
+  - `tests/unit/export/test_site_search_exporter.py` (one MENU_BINDINGS row)
+  - `README.md`, `CHANGELOG.md`, `documentation/menu-highlights.md`
+  - `documentation/menu_reference.md`, `documentation/wiki/Menu-Reference.md` (regenerated)
+- Completed work:
+  - Menu 244 calls the read-only `searchSiteServicePathEvents` endpoint for a
+    selected site and exports the rows through the DataExporter pipeline.
+  - The primary key strategy and the ArangoDB mappings for this endpoint
+    already existed, so no database change was needed.
+- Verification results:
+  - `python -m py_compile MistHelper.py`: pass.
+  - `python -m ruff check` on all changed files: pass.
+  - `python -m black --check` on all changed files: pass.
+  - `python -m mypy src/ MistHelper.py wsgi.py --config-file pyproject.toml`:
+    3 errors, all pre-existing paramiko stub errors, confirmed present on the
+    unmodified base.
+  - `pytest tests/unit/export/test_site_search_exporter.py`: 38 passed
+    (includes the new endpoint, persist, and abort-on-None coverage).
+  - `pytest tests/unit/utils/`: 281 passed (includes the prompting-menus
+    guard).
+- Live API validation: unavailable (no Mist credentials in this environment).
+  All behavior is validated through mocks and fixtures.
+- Commit: `602c9ca`
+- Push status: pushed to `origin/jmorrison-juniper-fuzzy-system`
+- Remaining work: none for this issue.
+- Blockers: none.
+- Exact next action: open a pull request from `jmorrison-juniper-fuzzy-system`
+  into `main` when repository policy permits.
+
+## Previous run
+
 - Agent: Nidoran
 - Issue: #1795 (lint: five small correctness rule families report 137 findings that no gate sees)
 - Coordination issue: #2295
@@ -36,7 +77,7 @@
 - Blockers: none.
 - Exact next action: open a pull request from `jmorrison-juniper-reimagined-meme` into `main` when repository policy permits.
 
-## Previous run
+## Older run
 
 - Agent: Jigglypuff
 - Issue: #1961 (test: two Mist write modules hold large uncovered blocks)
@@ -98,3 +139,4 @@
 - **Exact next action**: open a pull request from
   `jmorrison-juniper-miniature-fiesta` into `main` when the repository policy
   authorizes it.
+- Exact next action: open a pull request from `jmorrison-juniper-literate-fiesta` into `main` when repository policy permits.
