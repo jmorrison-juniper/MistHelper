@@ -216,4 +216,4 @@ Searches for sites within the organization using various filters.
 
 ## MistHelper Notes
 
-Used by MistHelper via `searchOrgSites` in Menu 56.
+Used by MistHelper via `searchOrgSites` in Menu 248.

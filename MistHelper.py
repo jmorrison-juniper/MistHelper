@@ -3795,6 +3795,10 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         SelfAccountExporter.verify_email,
         "Verify an email change token from the Mist email (verifySelfEmail)",
     ),
+    "248": (
+        OrgSearchExporter.sites,
+        "Search sites for the organization (searchOrgSites)",
+    ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
     "46": (OrgConfigExporter.wlans, "Export WLAN configuration for the organization"),
