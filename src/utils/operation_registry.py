@@ -337,6 +337,11 @@ class OperationRegistry:
             "category": "interactive_safe",
             "skip_reason": "Requires an org selection",
         },
+        # WHY: menu 246 reads one call troubleshooting record and never writes Mist Cloud.
+        "246": {
+            "category": "interactive_safe",
+            "skip_reason": "Requires a site, a client MAC, and a meeting ID",
+        },
         # WHY: menu 239 starts a local web server and drives a firmware upgrade, so it writes
         # device state. The fail-closed guardrail needs this row or the build breaks.
         #

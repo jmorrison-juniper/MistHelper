@@ -1383,13 +1383,6 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Organization settings snapshot",
     },
-    "testOrgCradlepointConnection": {
-        "type": "auto_increment_with_unique",
-        "primary_key": ["misthelper_internal_id"],
-        "indexes": ["org_id"],
-        "unique_constraints": [],
-        "description": "Cradlepoint integration status snapshot",
-    },
     "getOrgStats": {
         "type": "auto_increment_with_unique",
         "primary_key": ["misthelper_internal_id"],
@@ -2292,6 +2285,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "indexes": ["site_id", "app"],
         "unique_constraints": [],
         "description": "Site call troubleshooting diagnostics",
+    },
+    "troubleshootSiteCall": {
+        "type": "composite_pk",
+        "primary_key": ["meeting_id", "mac"],
+        "indexes": ["site_id", "app"],
+        "unique_constraints": [],
+        "description": "Site call troubleshooting diagnostics (troubleshootSiteCall)",
     },
     # -- Issue #185: SLE impacted entity endpoints --
     "listSiteSlesMetrics": {
