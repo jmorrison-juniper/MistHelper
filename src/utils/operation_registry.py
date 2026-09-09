@@ -352,6 +352,7 @@ class OperationRegistry:
         },
         "248": {"category": "safe"},
         "249": {"category": "safe"},  # Classify the read-only organization device search for automated tests.
+        "250": {"category": "interactive_safe"},
         # WHY: menu 239 starts a local web server and drives a firmware upgrade, so it writes
         # device state. The fail-closed guardrail needs this row or the build breaks.
         #

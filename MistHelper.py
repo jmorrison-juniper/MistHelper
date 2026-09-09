@@ -489,6 +489,9 @@ from src.export.site_mist_edge_events_exporter import (
 from src.export.site_nac_client_events_exporter import (
     SiteNacClientEventsExporter,  # Spec 891 / issue #1399 -- searchSiteNacClientEvents menu 202
 )
+from src.export.site_other_device_events_exporter import (
+    SiteOtherDeviceEventsExporter,  # Spec 894 / issue #1402 -- searchSiteOtherDeviceEvents menu 248
+)
 from src.export.site_search_exporter import (
     SiteSearchExporter,  # Specs 879-882/897 / issues #1387-#1390, #1405 -- site search menus 215-219
 )
@@ -3802,6 +3805,10 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "249": (
         OrgSearchExporter.devices,  # Spec 863 / issue #1371 -- search organization devices.
         "Search devices for the organization (searchOrgDevices)",  # Expose the read-only endpoint in the menu.
+    ),
+    "250": (
+        SiteOtherDeviceEventsExporter.other_device_events,
+        "Search other-device events for a selected site (searchSiteOtherDeviceEvents)",
     ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
