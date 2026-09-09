@@ -23,6 +23,15 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Added**: Unit coverage for the SDK binding, pagination, export path, empty
   results, unresolved organizations, and API errors.
 
+### Search organization variables (menu 250)
+
+- **Added**: Menu 250 calls `searchOrgVars` and exports organization variable
+  rows through the standard CSV, SQLite, and ArangoDB backends. Issue #1381.
+- **Added**: The `searchOrgVars` composite key uses `site_id`, `var`, and `src`
+  from the Mist response. This prevents duplicate rows during SQLite upserts.
+- **Added**: Unit coverage for the SDK call, pagination, persistence, empty
+  results, unresolved organizations, and API errors.
+
 ### Verify an email change token (menu 247)
 
 - **Added**: Menu 247 verifies a single-use email change token through the

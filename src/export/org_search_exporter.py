@@ -181,3 +181,13 @@ class OrgSearchExporter:
             "OrgSitesSearch",  # Use a stable filename prefix for the export.
             "site",  # Report the result type in operator messages.
         )
+
+    @staticmethod
+    def org_vars() -> None:
+        """Search organization variables (menu 250)."""
+        OrgSearchExporter._run_org_search(
+            mistapi.api.v1.orgs.vars.searchOrgVars,
+            "searchOrgVars",
+            "OrgVars",
+            "organization variable",
+        )

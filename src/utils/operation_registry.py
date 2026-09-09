@@ -351,7 +351,12 @@ class OperationRegistry:
             "skip_reason": "Requires an email change token from the Mist email",
         },
         "248": {"category": "safe"},
-        "249": {"category": "safe"},  # Classify the read-only organization device search for automated tests.
+        # WHY: menu 249 reads organization devices and writes only local export data.
+        "249": {"category": "safe"},
+        # WHY: menu 250 reads organization variables and writes only local export data.
+        "250": {
+            "category": "safe",
+        },
         # WHY: menu 239 starts a local web server and drives a firmware upgrade, so it writes
         # device state. The fail-closed guardrail needs this row or the build breaks.
         #

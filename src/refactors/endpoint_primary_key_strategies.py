@@ -1363,7 +1363,7 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
     },
     "searchOrgVars": {
         "type": "composite_pk",
-        "primary_key": ["site_id", "name"],
+        "primary_key": ["site_id", "var", "src"],
         "indexes": ["org_id"],
         "unique_constraints": [],
         "description": "Organization variable search results",
