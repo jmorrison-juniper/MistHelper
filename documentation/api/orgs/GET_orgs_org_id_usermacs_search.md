@@ -145,7 +145,7 @@ Standard Mist API rate limits apply.
 
 ## mistapi SDK
 
-`mistapi.api.v1.orgs.user_macs.searchOrgUserMacs()`
+`mistapi.api.v1.orgs.usermacs.searchOrgUserMacs()`
 
 ## Usage Context
 

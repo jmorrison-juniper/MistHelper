@@ -1,7 +1,7 @@
 """OrgSearchExporter -- organization-scoped search export operations.
 
-Added for specs 878, 877, 875, 874, 879, and 870 (issues #1386, #1385, #1383,
-#1382, #1379, and #1378). Wraps read-only Mist API search endpoints so operators reach them
+Added for specs 878, 877, 875, 874, 879, and 872 (issues #1386, #1385,
+#1383, #1382, #1379, and #1380). Wraps read-only Mist API search endpoints so operators reach them
 through the standard MistHelper menu and DataExporter pipeline (CSV, SQLite, or
 ArangoDB).
 
@@ -13,9 +13,11 @@ Covered operations:
     - ``searchOrgWanClientEvents`` (menu 233)
     - ``searchOrgSystemEvents`` (menu 234)
     - ``searchOrgSites`` (menu 248)
+    - ``searchOrgUserMacs`` (menu 250)
+    - ``searchOrgMxEdges`` (menu 252)
 
 Why:
-    Every endpoint takes a session and an organization and returns
+    Every one of these endpoints takes a session and an organization and returns
     a paginated row set. One shared helper therefore runs the whole resolve,
     fetch, and persist sequence, and each menu entry supplies only the parts that
     differ. This mirrors ``SiteSearchExporter`` for the site-scoped peers.
@@ -173,11 +175,83 @@ class OrgSearchExporter:
         )
 
     @staticmethod
+    def _prompt_mxedge_filters() -> dict[str, Any]:
+        """Prompt for optional searchOrgMxEdges filters and omit blank values."""
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the safe prompt helper.
+        prompts = {
+            "mxedge_id": "MxEdge ID",
+            "site_id": "site ID",
+            "mxcluster_id": "MxCluster ID",
+            "model": "model",
+            "distro": "distro",
+            "tunterm_version": "tunterm version",
+            "stats": "stats (true/false)",
+            "limit": "limit",
+            "start": "start time",
+            "end": "end time",
+            "duration": "duration",
+            "sort": "sort",
+            "search_after": "search_after cursor",
+        }  # Keep the prompt order aligned with the endpoint contract.
+        filters: dict[str, Any] = {}  # Blank optional filters stay out of the SDK call.
+        for name, label in prompts.items():  # Ask for each optional filter without using bare input().
+            answer = mh.InputUtils.safe_input(  # safe_input keeps SSH, EOF, and Ctrl-C paths clean.
+                f"Enter {label} for searchOrgMxEdges (optional): ",
+                context=f"org_search_exporter.searchOrgMxEdges.{name}",
+            ).strip()
+            logging.debug("searchOrgMxEdges filter %s present=%s", name, bool(answer))  # Prompt result trace.
+            if not answer:  # An empty optional filter means the SDK default.
+                continue
+            if name == "stats":  # Convert the documented boolean text to the SDK boolean type.
+                filters[name] = answer.lower() in {"1", "true", "yes", "y"}  # Normalize common true values.
+            elif name == "limit":  # Convert the documented integer text before the request.
+                try:
+                    filters[name] = int(answer)  # Keep the SDK call type-safe for the limit.
+                except ValueError:
+                    logging.warning("Ignoring invalid searchOrgMxEdges limit: %s", answer)  # Surface bad input.
+            else:
+                filters[name] = answer  # Forward string filters exactly as entered.
+        return filters
+
+    @staticmethod
+    def mx_edges() -> None:
+        """Search organization MxEdges and export the result (menu 252)."""
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of shared session and export helpers.
+        logging.info("Organization MxEdge Search:")  # Menu header echoed to the operator.
+        logging.info("Starting the searchOrgMxEdges export...")  # Pre-call trace.
+        org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the organization context.
+        if not org_id:  # The operator declined, or no organization could be resolved.
+            logging.error("No org_id available for searchOrgMxEdges. Exiting.")  # Abort reason.
+            logging.info("! No organization selected. Exiting.")  # User-facing cancel line.
+            return
+        filters = OrgSearchExporter._prompt_mxedge_filters()  # Collect optional query filters safely.
+        try:
+            logging.info("Calling searchOrgMxEdges for org_id=%s", org_id)  # Pre-call log.
+            response = mistapi.api.v1.orgs.mxedges.searchOrgMxEdges(  # Invoke the installed SDK endpoint.
+                mh.apisession, org_id, **filters
+            )
+            rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page through all rows.
+            OrgSearchExporter._persist(rawdata, "OrgMxEdges", "searchOrgMxEdges", "MxEdge")  # Persist results.
+        except Exception as e:  # Surface SDK or network errors without crashing the menu loop.
+            logging.error("Error fetching MxEdge data for org %s: %s", org_id, e)  # Failure context.
+            logging.info("! Error fetching MxEdge data: %s", e)  # ASCII-only user notice.
+
+    @staticmethod
+    def user_macs() -> None:
+        """Search user MAC assignments for an organization (menu 250)."""
+        OrgSearchExporter._run_org_search(
+            mistapi.api.v1.orgs.usermacs.searchOrgUserMacs,
+            "searchOrgUserMacs",
+            "OrgUserMacs",
+            "user MAC",
+        )
+
+    @staticmethod
     def sites() -> None:
         """Search the sites for an organization (menu 248)."""
-        OrgSearchExporter._run_org_search(  # Reuse the standard org search pipeline for consistent output.
-            mistapi.api.v1.orgs.sites.searchOrgSites,  # Call the Mist site search endpoint exposed by the SDK.
-            "searchOrgSites",  # Route output storage through the endpoint strategy.
-            "OrgSitesSearch",  # Use a stable filename prefix for the export.
-            "site",  # Report the result type in operator messages.
+        OrgSearchExporter._run_org_search(
+            mistapi.api.v1.orgs.sites.searchOrgSites,
+            "searchOrgSites",
+            "OrgSitesSearch",
+            "site",
         )

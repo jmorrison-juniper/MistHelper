@@ -127,6 +127,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "System events with composite key for uniqueness",
     },
+    "searchOrgMxEdges": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac"],
+        "indexes": ["org_id", "site_id", "name", "model"],
+        "unique_constraints": [],
+        "description": "MxEdge search results",
+    },
     "listOrgDevicesStats": {
         "type": "composite_pk",
         "primary_key": ["device_id", "timestamp"],
@@ -284,6 +291,11 @@ class TestEndpointPrimaryKeyStrategies:
         assert "default" in ENDPOINT_PRIMARY_KEY_STRATEGIES
         default = ENDPOINT_PRIMARY_KEY_STRATEGIES["default"]
         assert default["type"] == "auto_increment_with_unique"
+
+    def test_other_device_events_strategy_exists(self):
+        strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES["searchOrgOtherDeviceEvents"]
+        assert strategy["type"] == "composite_pk"
+        assert strategy["primary_key"] == ["id", "mac", "timestamp"]
 
     def test_no_duplicate_endpoint_names(self):
         """Dict keys are inherently unique, but verify count matches."""
