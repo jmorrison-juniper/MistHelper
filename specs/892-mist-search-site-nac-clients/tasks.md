@@ -5,14 +5,14 @@
 
 ## Phase 1: Setup
 
-- [X] T001 Confirm menu 249 avoids the active menu 248 conflict.
+- [X] T001 Confirm menu 257 avoids the active menu conflicts (248-256 claimed by concurrent PRs).
 - [X] T002 Confirm the existing primary-key and Arango mappings.
 
 ## Phase 2: Implementation
 
 - [X] T003 Add `searchSiteNacClients` to the site search exporter bindings.
-- [X] T004 Register menu 248 in `MistHelper.py`.
-- [X] T005 Register menu 248 as `interactive_safe`.
+- [X] T004 Register menu 257 in `MistHelper.py`.
+- [X] T005 Register menu 257 as `interactive_safe`.
 - [X] T006 Add focused endpoint binding tests.
 
 ## Phase 3: Documentation
@@ -24,6 +24,8 @@
 ## Phase 4: Validation and Delivery
 
 - [X] T010 Run focused tests and quality checks.
-- [ ] T011 Commit and push the feature branch.
-- [ ] T012 Open a PR that closes #1400.
-- [ ] T013 Merge after required checks pass, if policy permits.
+- [X] T011 Commit and push the feature branch.
+- [X] T012 Open PR #2390 that closes #1400.
+- [X] T013 Merge after required checks pass. Rebased onto `main` after menus
+      254-256 landed, moved this feature to the next free number (257), and
+      re-ran the full guardrail suite before merge.

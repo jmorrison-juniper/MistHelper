@@ -6,7 +6,7 @@
 
 ## Summary
 
-Add menu 249 for the read-only `searchSiteNacClients` site search. Reuse
+Add menu 257 for the read-only `searchSiteNacClients` site search. Reuse
 `SiteSearchExporter._run_site_search` for site selection, pagination,
 flattening, logging, and multi-backend export. The existing composite primary
 key and Arango mapping already cover this operation.
@@ -14,8 +14,8 @@ key and Arango mapping already cover this operation.
 ## Files
 
 - `src/export/site_search_exporter.py`: Add the endpoint binding and label.
-- `MistHelper.py`: Register menu 248.
-- `src/utils/operation_registry.py`: Classify menu 248 as `interactive_safe`.
+- `MistHelper.py`: Register menu 257.
+- `src/utils/operation_registry.py`: Classify menu 257 as `interactive_safe`.
 - `tests/unit/export/test_site_search_exporter.py`: Test the endpoint binding.
 - `README.md`: Update the operation count and menu description.
 - `CHANGELOG.md`: Record the new menu operation.
@@ -26,7 +26,9 @@ key and Arango mapping already cover this operation.
 
 1. Use `SiteSearchExporter` because this endpoint matches the existing
    site-scoped search flow.
-2. Use menu 249 because menu 248 is claimed by an active PR for issue #1372.
+2. Use menu 257, the first free number after menus 248-256 were claimed by
+   concurrent PRs (issues #1371, #1381, #1380, #1376, #1378, #1372, #1377,
+   and #1384).
 3. Use the existing `searchSiteNacClients` composite key of `mac` and
    `timestamp`.
 4. Call the installed SDK path
