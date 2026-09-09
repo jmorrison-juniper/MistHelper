@@ -157,11 +157,17 @@ class StrandedBranchReporter:
         self._list_open_heads = list_open_heads  # Answers the head name of every open pull request.
         self._min_age_days = min_age_days  # The age below which the report stays quiet.
 
-    def find(self, base_branch: str = DEFAULT_BASE_BRANCH) -> list[BranchRecord]:
-        """Report every stranded branch, ordered from the oldest head first."""
+    def find(self, base_branch: str = DEFAULT_BASE_BRANCH, now: datetime | None = None) -> list[BranchRecord]:
+        """Report every stranded branch, ordered from the oldest head first.
+
+        The `now` parameter names the instant that every age test measures
+        against. A caller that passes no instant reads the live clock, so a
+        production call keeps its behavior. A test passes a fixed instant, so
+        the result stays the same on every date.
+        """
         _LOG.info("Searching for a branch with no pull request")  # Report the plan before the work.
         open_heads = self._list_open_heads()  # Read the protection set one time, not per branch.
-        now = datetime.now(UTC)  # Read the clock one time, so every age uses the same instant.
+        now = self._reference_time(now)  # Use the caller instant, or read the clock one time.
         stranded: list[BranchRecord] = []  # Collect the branches that fail every protection test.
         for name in self._list_branches():  # Test each branch in the repository.
             if name == base_branch:  # The base branch is never stranded against itself.
@@ -175,12 +181,17 @@ class StrandedBranchReporter:
         _LOG.debug("Found %d stranded branches", len(stranded))  # Record the count after the search.
         return stranded
 
-    def render(self, stranded: list[BranchRecord]) -> str:
-        """Build the Markdown report that an operator or an issue body reads."""
+    def render(self, stranded: list[BranchRecord], now: datetime | None = None) -> str:
+        """Build the Markdown report that an operator or an issue body reads.
+
+        The `now` parameter names the instant that every age column measures
+        against. It defaults to the live clock, so a production call keeps its
+        behavior.
+        """
         _LOG.info("Rendering the report for %d branches", len(stranded))  # Report before the build.
         if not stranded:  # A clean repository still needs a clear answer.
             return "Every branch with work above the base branch has an open pull request.\n"
-        now = datetime.now(UTC)  # Read the clock one time, so every age column agrees.
+        now = self._reference_time(now)  # Use the caller instant, so every age column agrees.
         lines = [
             "The branches below hold commits above the base branch and have no open",
             "pull request. Open a pull request for each one before any cleanup, because",
@@ -192,6 +203,15 @@ class StrandedBranchReporter:
         for record in stranded:  # Add one row for each stranded branch.
             lines.append(f"| `{record.name}` | {record.ahead_by} | {record.age_days(now)} |")
         return "\n".join(lines) + "\n"  # A trailing newline keeps the Markdown well formed.
+
+    @staticmethod
+    def _reference_time(now: datetime | None) -> datetime:
+        """Answer the instant the caller chose, or the live UTC clock."""
+        if now is not None:  # A caller instant keeps a test hermetic on every date.
+            _LOG.debug("Using the caller reference time %s", now)  # Record the chosen instant.
+            return now
+        _LOG.debug("Reading the live UTC clock for the reference time")  # Record the default path.
+        return datetime.now(UTC)  # Read the clock one time, so every age uses the same instant.
 
 
 def _head_ref(row: dict[str, object]) -> str:
