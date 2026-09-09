@@ -24,6 +24,7 @@ never runs in an automated test pass.
 |---|---|---|
 | 60-96, 195-203, 209-229, 235-238, 240-242, 244-247 | Interactive safe | 78 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-249 | Safe org exports | 67 operations. Read-only org exports. The --test run includes them. |
+| 250 | Interactive safe | 1 operation. Read-only, but it prompts for a site or a device. The --testinteractive run includes it. |
 | 154-187, 189-191, 194, 206-208, 239 | Destructive | 42 operations. They change the Mist cloud configuration. Each one needs a typed confirmation. |
 | 0, 124-150, 192 | Interactive | 29 operations. They prompt the operator, so no automated run includes them. |
 | 102-123 | WebSocket | 22 operations. They open a WebSocket stream to a device. |
@@ -283,6 +284,7 @@ never runs in an automated test pass.
 | 247 | Verify an email change token from the Mist email (verifySelfEmail) | Interactive safe | `SelfAccountExporter.verify_email` |
 | 248 | Search sites for the organization (searchOrgSites) | Safe org exports | `OrgSearchExporter.sites` |
 | 249 | Search devices for the organization (searchOrgDevices) | Safe org exports | `OrgSearchExporter.devices` |
+| 250 | Search other-device events for a selected site (searchSiteOtherDeviceEvents) | Interactive safe | `SiteOtherDeviceEventsExporter.other_device_events` |
 
 This page should be regenerated whenever `menu_actions` or the operation registry
 changes, so the wiki stays aligned with the code.
