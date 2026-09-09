@@ -189,6 +189,7 @@ jobs:
       - vulture
       - interrogate
       - diagram_lint
+      - mermaid_lint
       - bandit
       - pydocstyle
     if: ${{ always() }}
@@ -340,6 +341,7 @@ jobs:
       - vulture
       - interrogate
       - diagram_lint
+      - mermaid_lint
       - bandit
       - pydocstyle
     if: ${{ always() }}
@@ -507,6 +509,25 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: python scripts/lint_diagram_refs.py
+
+  mermaid_lint:
+    name: "Mermaid syntax lint"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: scripts/mermaid/package-lock.json
+      - name: Install Mermaid parser dependencies
+        working-directory: scripts/mermaid
+        run: npm ci
+      - name: Parse Mermaid blocks
+        run: node scripts/mermaid/lint_mermaid.mjs
 
   citation_lint:
     name: "Citation reference lint"
