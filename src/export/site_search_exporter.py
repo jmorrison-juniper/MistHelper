@@ -22,6 +22,7 @@ Covered operations:
     - ``searchSiteDeviceConfigHistory`` (menu 227)
     - ``searchSiteDiscoveredSwitches`` (menu 228)
     - ``searchSiteZoneSessions`` (menu 229)
+    - ``searchSiteServicePathEvents`` (menu 244)
 
 Why:
     Nearly all of these endpoints take the same arguments, a session and a site,
@@ -431,4 +432,19 @@ class SiteSearchExporter:
             f"SiteZoneSessions_{zone_type}",
             "zone session",
             extra_args=(zone_type,),
+        )
+
+    @staticmethod
+    def service_path_events() -> None:
+        """Search the service path events for a site and export them (menu 244).
+
+        Added for spec 896 (issue #1404). The endpoint is read-only and takes
+        no extra arguments, so the shared search helper runs the whole
+        prompt, fetch, and persist sequence.
+        """
+        SiteSearchExporter._run_site_search(
+            mistapi.api.v1.sites.services.searchSiteServicePathEvents,
+            "searchSiteServicePathEvents",
+            "SiteServicePathEvents",
+            "service path event",
         )
