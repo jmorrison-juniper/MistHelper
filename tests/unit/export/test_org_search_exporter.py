@@ -1,7 +1,7 @@
 """Unit tests for the organization-scoped search exporter.
 
-Covers specs 874 to 879 (issues #1379, #1382, #1383, #1385 and #1386), which are
-menus 230 to 234.
+Covers specs 872 and 874 to 879 (issues #1379, #1380, #1382, #1383, #1385 and
+#1386), which are menus 230 to 234 and 248.
 
 The five operations share one helper, so the shared behavior is tested once and
 each menu entry is checked for the binding that makes it distinct.
@@ -40,6 +40,7 @@ MENU_BINDINGS = [
         ("wan_clients", "searchOrgWanClientEvents"),
     ),
     ("system_events", "searchOrgSystemEvents", "OrgSystemEvents", ("events", "searchOrgSystemEvents")),
+    ("user_macs", "searchOrgUserMacs", "OrgUserMacs", ("usermacs", "searchOrgUserMacs")),
 ]
 
 
@@ -157,3 +158,52 @@ class TestSharedBehavior:
         OrgSearchExporter.system_events()
 
         wired["mistapi"].get_all.assert_called_once_with(response=[{"id": "row-1"}], mist_session=wired["apisession"])
+
+
+class TestMxEdgeSearch:
+    """Cover the organization MxEdge search filters and export binding."""
+
+    def test_mx_edges_forwards_optional_filters(self, wired: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+        """The menu entry must convert and forward entered filters to the SDK."""
+        target = wired["mistapi"].api.v1.orgs.mxedges.searchOrgMxEdges
+        target.return_value = [{"id": "edge-1"}]
+        answers = iter(["edge-1", "site-1", "", "SSR", "", "1.2.3", "true", "25", "-1d", "", "7d", "-last_seen", ""])
+        safe_input = MagicMock(side_effect=lambda *args, **kwargs: next(answers))
+        monkeypatch.setattr("MistHelper.InputUtils", MagicMock(safe_input=safe_input), raising=False)
+
+        OrgSearchExporter.mx_edges()
+
+        target.assert_called_once_with(
+            wired["apisession"],
+            "org-1",
+            mxedge_id="edge-1",
+            site_id="site-1",
+            model="SSR",
+            tunterm_version="1.2.3",
+            stats=True,
+            limit=25,
+            start="-1d",
+            duration="7d",
+            sort="-last_seen",
+        )
+        wired["DataExporter"].write_with_format_selection.assert_called_once_with(
+            [{"id": "edge-1"}],
+            "OrgMxEdges.csv",
+            api_function_name="searchOrgMxEdges",
+        )
+
+    def test_mx_edges_with_empty_filters_uses_sdk_defaults(
+        self, wired: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """EOF-safe empty answers must still run one unfiltered organization search."""
+        target = wired["mistapi"].api.v1.orgs.mxedges.searchOrgMxEdges
+        target.return_value = [{"id": "edge-1"}]
+        monkeypatch.setattr(
+            "MistHelper.InputUtils",
+            MagicMock(safe_input=MagicMock(return_value="")),
+            raising=False,
+        )
+
+        OrgSearchExporter.mx_edges()
+
+        target.assert_called_once_with(wired["apisession"], "org-1")

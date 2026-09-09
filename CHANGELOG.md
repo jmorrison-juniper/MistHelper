@@ -7,6 +7,23 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Search organization Mist Edges (menu 250)
+
+- **Added**: Menu 250 calls `searchOrgMxEdges` for an organization, prompts
+  safely for its optional filters, follows all response pages, and exports the
+  rows through CSV, SQLite, or ArangoDB. Issue #1375.
+- **Added**: Unit coverage for typed filter forwarding, empty-filter defaults,
+  pagination, and the standard `DataExporter` write path.
+
+### Search user MAC assignments for an organization (menu 248)
+
+- **Added**: Menu 248 calls the read-only `searchOrgUserMacs` endpoint and
+  exports all paginated organization user-MAC records through CSV, SQLite, or
+  ArangoDB. Issue #1380.
+- **Added**: Unit coverage for the SDK binding, pagination, empty results, and
+  export pipeline. The existing `searchOrgUserMacs` primary-key strategy
+  provides stable upserts by record ID and MAC address.
+
 ### Verify an email change token (menu 247)
 
 - **Added**: Menu 247 verifies a single-use email change token through the
