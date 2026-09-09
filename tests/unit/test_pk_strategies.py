@@ -22,6 +22,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Organization sites with stable UUID identifiers",
     },
+    "searchOrgSites": {
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name", "country_code"],
+        "unique_constraints": [],
+        "description": "Organization sites with stable UUID identifiers",
+    },
     "listSiteDevices": {
         "type": "natural_pk",
         "primary_key": ["id"],

@@ -7,6 +7,15 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Search sites for an organization (menu 248)
+
+- **Added**: Menu 248 calls `searchOrgSites` and exports organization site
+  search results through CSV, SQLite, or ArangoDB. Issue #1378.
+- **Added**: The `searchOrgSites` primary-key strategy uses the stable site
+  `id` field for upserts without duplicate rows.
+- **Added**: Unit coverage for the SDK binding, pagination, export path, empty
+  results, unresolved organizations, and API errors.
+
 ### Verify an email change token (menu 247)
 
 - **Added**: Menu 247 verifies a single-use email change token through the
