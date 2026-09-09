@@ -105,6 +105,80 @@ class TestReadinessDataDirectory:
         assert leftovers == [], "The probe file must not stay in the data directory"
 
 
+class TestReadinessOutputBackend:
+    """Verify readiness checks match the configured output backend."""
+
+    def test_ready_checks_arango_and_redis_for_polyglot(
+        self,
+        writable_data_dir: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A polyglot deployment must check both database services."""
+        monkeypatch.setenv("OUTPUT_FORMAT", "polyglot")
+        monkeypatch.setattr(dashboard_module, "_check_arangodb", lambda: {"ok": True, "detail": "ok"})
+        monkeypatch.setattr(dashboard_module, "_check_redis", lambda: {"ok": True, "detail": "ok"})
+        client = _build_test_app(writable_data_dir).test_client()
+
+        payload = client.get("/ready").get_json()
+
+        assert payload["output_format"] == "polyglot"
+        assert payload["checks"]["arangodb"]["ok"] is True
+        assert payload["checks"]["redis"]["ok"] is True
+        assert "sqlite_database" not in payload["checks"]
+
+    def test_ready_returns_503_when_polyglot_arangodb_is_down(
+        self,
+        writable_data_dir: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A failed ArangoDB check must make a polyglot deployment not ready."""
+        monkeypatch.setenv("OUTPUT_FORMAT", "polyglot")
+        monkeypatch.setattr(
+            dashboard_module,
+            "_check_arangodb",
+            lambda: {"ok": False, "detail": "ArangoDB is down"},
+        )
+        monkeypatch.setattr(dashboard_module, "_check_redis", lambda: {"ok": True, "detail": "ok"})
+        client = _build_test_app(writable_data_dir).test_client()
+
+        response = client.get("/ready")
+
+        assert response.status_code == 503
+        assert response.get_json()["failed_checks"] == ["arangodb"]
+
+    def test_ready_checks_sqlite_for_sqlite_output(
+        self,
+        writable_data_dir: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A SQLite deployment must check SQLite and no polyglot service."""
+        monkeypatch.setenv("OUTPUT_FORMAT", "sqlite")
+        client = _build_test_app(writable_data_dir).test_client()
+
+        payload = client.get("/ready").get_json()
+
+        assert payload["output_format"] == "sqlite"
+        assert "sqlite_database" in payload["checks"]
+        assert "arangodb" not in payload["checks"]
+        assert "redis" not in payload["checks"]
+
+    def test_ready_skips_database_checks_for_csv_output(
+        self,
+        writable_data_dir: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A CSV deployment must not require an unused database."""
+        monkeypatch.setenv("OUTPUT_FORMAT", "csv")
+        client = _build_test_app(writable_data_dir).test_client()
+
+        payload = client.get("/ready").get_json()
+
+        assert payload["output_format"] == "csv"
+        assert "sqlite_database" not in payload["checks"]
+        assert "arangodb" not in payload["checks"]
+        assert "redis" not in payload["checks"]
+
+
 class TestReadinessSqliteDatabase:
     """Verify the readiness endpoint reports a SQLite database failure."""
 
