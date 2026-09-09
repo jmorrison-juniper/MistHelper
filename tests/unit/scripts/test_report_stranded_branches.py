@@ -121,7 +121,7 @@ def test_the_report_names_every_stranded_branch() -> None:
     records = [_record("fix/a-defect"), _record("feat/protected"), _record("chore/fresh", age_days=1)]
     reporter = _reporter(records, frozenset({"feat/protected"}))  # One branch has a pull request.
 
-    text = reporter.render(reporter.find())  # Find the branches, then render the Markdown.
+    text = reporter.render(reporter.find(now=_NOW), _NOW)  # Find, then render, against one instant.
     logging.debug("The report is %r", text)  # Record the report for a failure read.
 
     assert "`fix/a-defect`" in text, "the stranded branch must appear"
@@ -135,10 +135,50 @@ def test_the_report_orders_the_oldest_head_first() -> None:
     records = [_record("feat/newer", age_days=10), _record("feat/older", age_days=200)]
     reporter = _reporter(records, frozenset())  # Neither branch has a pull request.
 
-    names = [record.name for record in reporter.find()]  # Read the order the reporter chose.
+    names = [record.name for record in reporter.find(now=_NOW)]  # Read the order the reporter chose.
     logging.debug("The report order is %r", names)  # Record the order for a failure read.
 
     assert names == ["feat/older", "feat/newer"], "the oldest head must come first"
+
+
+def test_the_reference_time_controls_the_age_classification() -> None:
+    """The instant the caller passes MUST decide the age, not the real clock."""
+    logging.info("Checking that the caller instant decides the age")  # Report the plan.
+    reporter = _reporter([_record("chore/fresh", age_days=1)], frozenset())  # One young branch.
+
+    inside = [record.name for record in reporter.find(now=_NOW)]  # One day old at the fixed instant.
+    outside = [record.name for record in reporter.find(now=_NOW + timedelta(days=30))]  # Older later.
+    logging.debug("The result is %r at the fixed instant and %r later", inside, outside)  # Record both.
+
+    assert inside == [], "a branch inside the quiet period must not appear"
+    assert outside == ["chore/fresh"], "the later instant must move the branch past the threshold"
+
+
+def test_the_report_age_column_reads_the_reference_time() -> None:
+    """The age column MUST measure against the instant the caller passes."""
+    logging.info("Checking the age column against a fixed instant")  # Report the plan.
+    reporter = _reporter([_record("fix/a-defect", age_days=30)], frozenset())  # One stranded branch.
+
+    text = reporter.render(reporter.find(now=_NOW), _NOW)  # Render against the same fixed instant.
+    logging.debug("The report is %r", text)  # Record the report for a failure read.
+
+    assert "| `fix/a-defect` | 3 | 30 |" in text, "the age column must report the fixture age"
+
+
+def test_the_default_reference_time_reads_the_real_clock() -> None:
+    """A call with no instant MUST measure against the real UTC clock."""
+    logging.info("Checking the default reference time")  # Report the plan before the work.
+    real_now = datetime.now(UTC)  # Read the real clock that the default path must also read.
+    records = [
+        BranchRecord("feat/today", "b" * 40, 3, real_now),  # Pushed now, so the branch is active.
+        BranchRecord("fix/old", "c" * 40, 3, real_now - timedelta(days=30)),  # Older than the period.
+    ]
+    reporter = _reporter(records, frozenset())  # Neither branch has a pull request.
+
+    names = [record.name for record in reporter.find()]  # Call with no instant, so the clock decides.
+    logging.debug("The default path reported %r", names)  # Record the result for a failure read.
+
+    assert names == ["fix/old"], "the default path must measure against the real clock"
 
 
 def test_a_clean_repository_answers_a_clear_sentence() -> None:
@@ -169,7 +209,7 @@ def test_an_unreadable_branch_is_skipped() -> None:
         frozenset,  # No open pull request protects either branch.
     )
 
-    names = [record.name for record in reporter.find()]  # Read the branches the reporter kept.
+    names = [record.name for record in reporter.find(now=_NOW)]  # Read the branches the reporter kept.
 
     assert names == ["fix/a-defect"], "an unreadable branch must not stop the report"
 
