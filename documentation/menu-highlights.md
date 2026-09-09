@@ -61,7 +61,7 @@ This page names the operations that arrived most recently.
 | 245 | Export the Cradlepoint connection status for an organization (`testOrgCradlepointConnection`) | `interactive_safe` |
 | 246 | Troubleshoot a call for a site, client MAC, and meeting ID (`troubleshootSiteCall`) | `interactive_safe` |
 | 247 | Verify an email change token from the Mist email (`verifySelfEmail`) | `interactive_safe` |
-| 248 | Search user MAC assignments for the organization (`searchOrgUserMacs`) | `safe` |
+| 249 | Search user MAC assignments for the organization (`searchOrgUserMacs`) | `safe` |
 | 249 | Search other-device events for the organization (`searchOrgOtherDeviceEvents`) | `safe` |
 | 250 | Search Mist Edges for the organization (`searchOrgMxEdges`) | `safe` |
 

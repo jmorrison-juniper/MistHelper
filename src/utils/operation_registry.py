@@ -350,12 +350,17 @@ class OperationRegistry:
             "category": "interactive_safe",
             "skip_reason": "Requires an email change token from the Mist email",
         },
-        # WHY: menu 248 reads organization user-MAC data and writes an export without changing Mist Cloud.
-        "248": {"category": "safe"},
-        # WHY: menu 249 reads organization event data and writes an export without changing Mist Cloud.
+        # WHY: menu 248 is a read-only inventory search that prompts for optional filters.
+        "248": {
+            "category": "interactive_safe",
+            "skip_reason": "Requires an organization selection and optional search filters",
+        },
+        # WHY: menu 249 reads organization user-MAC data and writes an export without changing Mist Cloud.
         "249": {"category": "safe"},
-        # WHY: menu 250 reads organization MxEdge data and writes an export without changing Mist Cloud.
+        # WHY: menu 250 reads organization event data and writes an export without changing Mist Cloud.
         "250": {"category": "safe"},
+        # WHY: menu 251 reads organization MxEdge data and writes an export without changing Mist Cloud.
+        "251": {"category": "safe"},
         # WHY: menu 239 starts a local web server and drives a firmware upgrade, so it writes
         # device state. The fail-closed guardrail needs this row or the build breaks.
         #

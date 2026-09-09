@@ -12,7 +12,7 @@ Covered operations:
     - ``searchOrgWanClientEvents`` (menu 233)
     - ``searchOrgSystemEvents`` (menu 234)
     - ``searchOrgMxEdges`` (menu 250)
-    - ``searchOrgUserMacs`` (menu 248)
+    - ``searchOrgUserMacs`` (menu 249)
 
 Why:
     Every one of these endpoints takes a session and an organization and returns
@@ -226,7 +226,7 @@ class OrgSearchExporter:
 
     @staticmethod
     def user_macs() -> None:
-        """Search user MAC assignments for an organization (menu 248)."""
+        """Search user MAC assignments for an organization (menu 249)."""
         OrgSearchExporter._run_org_search(
             mistapi.api.v1.orgs.usermacs.searchOrgUserMacs,
             "searchOrgUserMacs",

@@ -435,6 +435,9 @@ from src.export.org_export_utils import (
 from src.export.org_inventory_exporter import (
     OrgInventoryExporter,  # Cat E canonical (1015 T-06) -- re-export for MistHelper.OrgInventoryExporter callers
 )
+from src.export.org_inventory_search_exporter import (
+    OrgInventorySearchExporter,  # Spec 864 / issue #1372 -- organization inventory search menu 248
+)
 from src.export.org_search_exporter import (
     OrgSearchExporter,  # Specs 872, 874-879; issues #1379, #1380, #1382, #1383, #1385, #1386.
 )
@@ -3796,14 +3799,18 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         "Verify an email change token from the Mist email (verifySelfEmail)",
     ),
     "248": (
+        OrgInventorySearchExporter.inventory,
+        "Search organization inventory with optional filters (searchOrgInventory)",
+    ),
+    "249": (
         OrgSearchExporter.user_macs,
         "Search user MAC assignments for the organization (searchOrgUserMacs)",
     ),
-    "249": (
+    "250": (
         OrgExportUtils.other_device_events,
         "Search other-device events for the organization (searchOrgOtherDeviceEvents)",
     ),
-    "250": (
+    "251": (
         OrgSearchExporter.mx_edges,
         "Search Mist Edges for the organization (searchOrgMxEdges)",
     ),

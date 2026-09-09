@@ -15,14 +15,25 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Added**: Unit coverage for typed filter forwarding, empty-filter defaults,
   pagination, and the standard `DataExporter` write path.
 
-### Search user MAC assignments for an organization (menu 248)
+### Search user MAC assignments for an organization (menu 249)
 
-- **Added**: Menu 248 calls the read-only `searchOrgUserMacs` endpoint and
+- **Added**: Menu 249 calls the read-only `searchOrgUserMacs` endpoint and
   exports all paginated organization user-MAC records through CSV, SQLite, or
   ArangoDB. Issue #1380.
 - **Added**: Unit coverage for the SDK binding, pagination, empty results, and
   export pipeline. The existing `searchOrgUserMacs` primary-key strategy
   provides stable upserts by record ID and MAC address.
+
+### Search organization inventory (menu 248)
+
+- **Added**: Menu 248 searches organization inventory with optional type, MAC,
+  model, name, site, serial, status, version, SKU, text, sort, and pagination
+  filters through `searchOrgInventory`. Results use the standard CSV, SQLite,
+  or ArangoDB output pipeline. Issue #1372.
+- **Updated**: The existing `searchOrgInventory` composite primary-key strategy
+  continues to route search rows through the standard storage pipeline.
+- **Added**: Unit tests for filter forwarding, pagination, empty results,
+  cancellation, persistence, and SDK errors.
 
 ### Verify an email change token (menu 247)
 
@@ -1813,7 +1824,7 @@ that runs without a proxy needs no action.
   per-menu bindings are checked by a parametrized case, so each entry is proven
   to call its own endpoint and write its own file.
 
-### Add five site-scoped search operations, menus 225 to 229 (issues #1401, #1393, #1391, #1396, #1412)
+### Add five site-scoped search operations, menus 225 to 229 (issues #1401, #1393, #1391, #1395, #1412)
 
 - **Menu 225 (Added)**: `searchSiteOspfStats` searches the OSPF neighbor
   statistics for a site. Spec 893, issue #1401.
@@ -1822,7 +1833,7 @@ that runs without a proxy needs no action.
 - **Menu 227 (Added)**: `searchSiteDeviceConfigHistory` searches the device
   configuration history for a site. Spec 883, issue #1391.
 - **Menu 228 (Added)**: `searchSiteDiscoveredSwitches` searches the discovered
-  switches for a site. Spec 887, issue #1396.
+  switches for a site. Spec 887, issue #1395.
 - **Menu 229 (Added)**: `searchSiteZoneSessions` searches the zone sessions for a
   site. Spec 904, issue #1412.
 - **Zone type prompt (Added)**: `searchSiteZoneSessions` puts a zone type in the

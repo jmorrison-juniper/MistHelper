@@ -3,9 +3,9 @@
 This page is generated. Run `python scripts/generate_menu_wiki.py` after any
 change to `menu_actions` in `MistHelper.py` or to `src/utils/operation_registry.py`.
 
-MistHelper defines **249 actionable menu entries**, numbered
-1 to 250 with gaps at 152.
-Menu 0 is Exit, so the registry holds 250 entries in total.
+MistHelper defines **250 actionable menu entries**, numbered
+1 to 251 with gaps at 152.
+Menu 0 is Exit, so the registry holds 251 entries in total.
 
 The Safety column reads from `src/utils/operation_registry.py`, which is the
 single source of truth. The classifier fails closed, so an unregistered option
@@ -22,8 +22,8 @@ never runs in an automated test pass.
 
 | Menu numbers | Category | Summary |
 |---|---|---|
-| 60-96, 195-203, 209-229, 235-238, 240-242, 244-247 | Interactive safe | 78 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
-| 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-250 | Safe org exports | 68 operations. Read-only org exports. The --test run includes them. |
+| 60-96, 195-203, 209-229, 235-238, 240-242, 244-248 | Interactive safe | 79 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
+| 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 249-251 | Safe org exports | 68 operations. Read-only org exports. The --test run includes them. |
 | 154-187, 189-191, 194, 206-208, 239 | Destructive | 42 operations. They change the Mist cloud configuration. Each one needs a typed confirmation. |
 | 0, 124-150, 192 | Interactive | 29 operations. They prompt the operator, so no automated run includes them. |
 | 102-123 | WebSocket | 22 operations. They open a WebSocket stream to a device. |
@@ -281,9 +281,10 @@ never runs in an automated test pass.
 | 245 | Export the Cradlepoint connection status for an organization (testOrgCradlepointConnection) | Interactive safe | `OrgCradlepointConnectionExporter.status` |
 | 246 | Troubleshoot a call for a site, client MAC, and meeting ID (troubleshootSiteCall) | Interactive safe | `SiteSearchExporter.troubleshoot_call` |
 | 247 | Verify an email change token from the Mist email (verifySelfEmail) | Interactive safe | `SelfAccountExporter.verify_email` |
-| 248 | Search user MAC assignments for the organization (searchOrgUserMacs) | Safe org exports | `OrgSearchExporter.user_macs` |
-| 249 | Search other-device events for the organization (searchOrgOtherDeviceEvents) | Safe org exports | `OrgExportUtils.other_device_events` |
-| 250 | Search Mist Edges for the organization (searchOrgMxEdges) | Safe org exports | `OrgSearchExporter.mx_edges` |
+| 248 | Search organization inventory with optional filters (searchOrgInventory) | Interactive safe | `OrgInventorySearchExporter.inventory` |
+| 249 | Search user MAC assignments for the organization (searchOrgUserMacs) | Safe org exports | `OrgSearchExporter.user_macs` |
+| 250 | Search other-device events for the organization (searchOrgOtherDeviceEvents) | Safe org exports | `OrgExportUtils.other_device_events` |
+| 251 | Search Mist Edges for the organization (searchOrgMxEdges) | Safe org exports | `OrgSearchExporter.mx_edges` |
 
 This page should be regenerated whenever `menu_actions` or the operation registry
 changes, so the wiki stays aligned with the code.
