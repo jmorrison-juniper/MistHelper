@@ -635,7 +635,9 @@ class WAN2MigrationManager:  # WHY: consolidated Menu 103/104 flow into a single
         """Generate and save the site variable report."""
         report_data = self._build_report_data(results)  # WHY: shape rows for DataExporter.
         output_file = "WAN2_SiteVariable_Report.csv"  # WHY: fixed report filename per Menu #149 spec.
-        DataExporter.write_with_format_selection(report_data, output_file)  # WHY: persist to disk.
+        DataExporter.write_with_format_selection(
+            report_data, output_file, api_function_name="getSiteDeviceWan2"
+        )  # WHY: persist to disk.
         self._print_site_variable_summary(results, output_file)  # WHY: emit summary block to operator.
 
     def _build_report_data(self, results: list[dict[str, Any]]) -> list[dict[str, Any]]:

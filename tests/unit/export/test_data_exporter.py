@@ -205,7 +205,7 @@ class TestWriteWithFormatSelection:
             patch.object(DataExporter, "_dispatch_format_write") as dispatch,
             patch.object(DataExporter, "_route_to_polyglot") as route,
         ):
-            ok = DataExporter.write_with_format_selection([], "target")
+            ok = DataExporter.write_with_format_selection([], "target", api_function_name="listStuff")
         assert ok is False
         dispatch.assert_not_called()
         route.assert_not_called()
@@ -228,7 +228,7 @@ class TestWriteWithFormatSelection:
             patch.object(DataExporter, "_validate_write_inputs", return_value=False),
             patch.object(DataExporter, "_dispatch_format_write"),
         ):
-            ok = DataExporter.write_with_format_selection(None, "target")
+            ok = DataExporter.write_with_format_selection(None, "target", api_function_name="listStuff")
         assert ok is False
 
 
@@ -560,10 +560,10 @@ class TestWriteCsvWithExceptionHandling:
 
 class TestExportWithProcessing:
     def test_empty_data_returns_zero(self):
-        assert DataExporter.export_with_processing([], "target") == 0
+        assert DataExporter.export_with_processing([], "target", api_function_name="listStuff") == 0
 
     def test_none_data_returns_zero(self):
-        assert DataExporter.export_with_processing(None, "target") == 0
+        assert DataExporter.export_with_processing(None, "target", api_function_name="listStuff") == 0
 
     def test_flow_calls_write_with_format_selection(self, monkeypatch):
         raw_rows = [{"a": 1, "b": 2}]
@@ -592,7 +592,7 @@ class TestExportWithProcessing:
             MagicMock(return_value=[{"a": 1}]),
         )
         with patch.object(DataExporter, "write_with_format_selection", return_value=False):
-            assert DataExporter.export_with_processing([{"a": 1}], "target") == 0
+            assert DataExporter.export_with_processing([{"a": 1}], "target", api_function_name="listStuff") == 0
 
     def test_non_dict_entries_filtered_out(self, monkeypatch):
         monkeypatch.setattr(
@@ -604,7 +604,11 @@ class TestExportWithProcessing:
             MagicMock(side_effect=lambda rows: rows),
         )
         with patch.object(DataExporter, "write_with_format_selection", return_value=True) as writer:
-            count = DataExporter.export_with_processing([{"a": 1}, "not a dict", 42, {"b": 2}], "target")
+            count = DataExporter.export_with_processing(
+                [{"a": 1}, "not a dict", 42, {"b": 2}],
+                "target",
+                api_function_name="listStuff",
+            )
         assert count == 2
         # Ensure only dicts made it to the write
         rows_arg = writer.call_args.args[0]

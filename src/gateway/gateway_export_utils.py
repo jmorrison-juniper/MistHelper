@@ -384,7 +384,9 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
             }
             for row in results  # WHY: rename internal keys to legacy CSV column headers.
         ]
-        DataExporter.write_with_format_selection(final_results, "GatewayManagementIPs.csv")  # WHY: persist.
+        DataExporter.write_with_format_selection(
+            final_results, "GatewayManagementIPs.csv", api_function_name="listSiteDevices"
+        )  # WHY: persist.
 
     @staticmethod
     def _emit_management_ip_summary(gateways_processed: int, gateways_with_mgmt_ip: int) -> None:
@@ -453,7 +455,9 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
             logging.debug("Sample filtered row: %s", filtered_rows[0])
         logging.info("Saving filtered gateway port configs to FilteredGatewayPortConfigs.csv")  # WHY: pre-log.
         DataExporter.write_with_format_selection(
-            filtered_rows, "FilteredGatewayPortConfigs.csv"
+            filtered_rows,
+            "FilteredGatewayPortConfigs.csv",
+            api_function_name="searchSiteSwOrGwPorts",
         )  # WHY: persist filtered set through configured exporter.
         logging.info(" Filtered gateway port configs saved to FilteredGatewayPortConfigs.csv")  # WHY: post-log.
 
@@ -469,7 +473,9 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
         flattened = DataProcessingUtils.flatten_nested_fields(data)  # WHY: flatten nested JSON to flat cells.
         sanitized = DataProcessingUtils.escape_multiline(flattened)  # WHY: escape multiline cells for CSV.
         logging.info("Saving sanitized gateway configs to AllSiteGatewayConfigs.csv")  # WHY: pre-write log.
-        DataExporter.write_with_format_selection(sanitized, "AllSiteGatewayConfigs.csv")  # WHY: persist full.
+        DataExporter.write_with_format_selection(
+            sanitized, "AllSiteGatewayConfigs.csv", api_function_name="listSiteDevices"
+        )  # WHY: persist full.
         logging.info(" Device configs saved to AllSiteGatewayConfigs.csv")  # WHY: post-write log.
         filtered_rows = GatewayExportUtils._build_filtered_port_rows(sanitized)  # WHY: build port-config subset.
         GatewayExportUtils._save_filtered_port_configs(filtered_rows, debug)  # WHY: persist filtered subset.
@@ -490,7 +496,9 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
             return
         templates = DataProcessingUtils.flatten_nested_fields(templates)  # WHY: flatten nested JSON to cells.
         templates = DataProcessingUtils.escape_multiline(templates)  # WHY: escape multiline cells for CSV.
-        DataExporter.write_with_format_selection(templates, "OrgGatewayTemplates.csv")  # WHY: persist output.
+        DataExporter.write_with_format_selection(
+            templates, "OrgGatewayTemplates.csv", api_function_name="listOrgGatewayTemplates"
+        )  # WHY: persist output.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! %d gateway templates exported to OrgGatewayTemplates.csv", len(templates))
         logging.info(" Gateway templates exported to OrgGatewayTemplates.csv")  # WHY: audit log for exit.

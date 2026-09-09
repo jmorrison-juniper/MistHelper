@@ -480,6 +480,7 @@ class BulkRadiusWLANConfigManager:
             rows,
             filename,
             fieldnames=self._SNAPSHOT_FIELDS,
+            api_function_name="listSiteWlans",
         )
         if ok:  # The export succeeded
             print(f"[+] Scan snapshot of {len(rows)} RADIUS WLAN(s) saved to data/{filename}")  # Show the location

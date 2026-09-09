@@ -233,7 +233,9 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
     ) -> None:  # WHY: insight-rows CSV writer.
         """Write insight rows to CSV, emitting operator messages for empty-payload cases."""
         if rows:  # WHY: happy-path when metric availability payload had data.
-            self.DataExporter.write_with_format_selection(rows, filename)  # WHY: persist rows.
+            self.DataExporter.write_with_format_selection(
+                rows, filename, api_function_name="listSiteSlesMetrics"
+            )  # WHY: persist rows.
             # WHY: preserve legacy operator record-count notice verbatim.
             logging.info("! %s records exported to data\\%s", len(rows), filename)
             logging.info(
@@ -243,7 +245,9 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
         # WHY: preserve legacy empty-payload operator notice verbatim.
         logging.warning("! 0 records exported to data\\%s (no metrics available)", filename)
         logging.warning("No site SLE metric insight data available for site %s", site_name)  # WHY: warn empty.
-        self.DataExporter.write_with_format_selection([], filename)  # WHY: still emit empty file for pipeline.
+        self.DataExporter.write_with_format_selection(
+            [], filename, api_function_name="listSiteSlesMetrics"
+        )  # WHY: still emit empty file for pipeline.
 
     def _resolve_insights_site_name(self, site_id: str) -> str:  # WHY: insights-flow name resolver with fallback.
         """Resolve site display name for insights export with fallback on API failure."""
@@ -303,7 +307,9 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
             logging.info("Fetched %s raw records for %s from site %s.", len(rawdata), data_type, site_name)
             data = self._prepare_rows(rawdata, sort_key)  # WHY: sort, flatten, escape.
             logging.info("Saving exported site data to %s", filename)  # WHY: pre-save log.
-            self.DataExporter.write_with_format_selection(data, filename)  # WHY: legacy writer entry.
+            self.DataExporter.write_with_format_selection(
+                data, filename, api_function_name=api_call.__name__
+            )  # WHY: legacy writer entry.
             # WHY: preserve legacy operator record-count notice verbatim.
             logging.info("! %s records exported to %s", len(data), _resolve_site_display_path(filename))
             logging.info("Site %s data written to %s (%s rows).", data_type, filename, len(data))
@@ -333,7 +339,9 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
             # WHY: preserve legacy operator error notice verbatim.
             logging.error("! Error exporting site SLE metric insights: %s", exception)
             logging.error("Failed to export site SLE metric insights for site %s: %s", site_name, exception)
-            self.DataExporter.write_with_format_selection([], filename)  # WHY: empty file preserves pipeline.
+            self.DataExporter.write_with_format_selection(
+                [], filename, api_function_name="listSiteSlesMetrics"
+            )  # WHY: empty file preserves pipeline.
 
     def _system_events(self) -> None:
         """Export system events for a site to SiteSystemEvents.csv."""

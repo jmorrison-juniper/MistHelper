@@ -307,7 +307,9 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
             return  # WHY: short-circuit empty payload path.
         sanitized = GatewayStatsExporter._flatten_stats(all_stats)  # WHY: CSV-safe rows.
         logging.info("Saving sanitized gateway stats to %s", STATS_CSV_FILENAME)  # WHY: pre-save log.
-        DataExporter.write_with_format_selection(sanitized, STATS_CSV_FILENAME)  # WHY: persist rows.
+        DataExporter.write_with_format_selection(
+            sanitized, STATS_CSV_FILENAME, api_function_name="getSiteDeviceStats"
+        )  # WHY: persist rows.
         GatewayStatsExporter._log_export_summary(all_stats, gateway_devices)  # WHY: legacy tallies.
 
     @staticmethod
@@ -453,7 +455,9 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
             logging.info(" No internal WAN port IP conflicts found - healthy WAN port configurations")
             return
         conflicts_found.sort(key=lambda x: (x.get("device_name", ""), x.get("port_name", "")))  # WHY: stable.
-        DataExporter.write_with_format_selection(conflicts_found, CONFLICTS_CSV_FILENAME)  # WHY: persist rows.
+        DataExporter.write_with_format_selection(
+            conflicts_found, CONFLICTS_CSV_FILENAME, api_function_name="getSiteDeviceStats"
+        )  # WHY: persist rows.
         unique_gateways = {row.get("device_name", UNKNOWN_LABEL) for row in conflicts_found}  # WHY: dedupe.
         logging.info("! Exported %s conflicts from %s gateways", len(conflicts_found), len(unique_gateways))
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.

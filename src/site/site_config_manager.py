@@ -231,10 +231,14 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
         print("========================================\n")  # WHY: close banner.
         deps = _deps()  # WHY: reuse locally to avoid repeated getter calls.
         if created:  # WHY: only export non-empty datasets to keep artefacts clean.
-            deps.data_exporter.write_with_format_selection(created, "CreatedTestSites.csv")  # WHY: export success.
+            deps.data_exporter.write_with_format_selection(
+                created, "CreatedTestSites.csv", api_function_name="createOrgSite"
+            )  # WHY: export success.
             print(" Created sites exported to CreatedTestSites.csv")  # WHY: confirm export location.
         if failed:  # WHY: same rationale for failure export.
-            deps.data_exporter.write_with_format_selection(failed, "FailedTestSites.csv")  # WHY: export failure.
+            deps.data_exporter.write_with_format_selection(
+                failed, "FailedTestSites.csv", api_function_name="createOrgSite"
+            )  # WHY: export failure.
             print(" Failed sites exported to FailedTestSites.csv")  # WHY: confirm export location.
 
     # -------------------------------------------------------------------------
@@ -641,9 +645,15 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
         print(f"  Sites Skipped (no country): {len(report.skipped)}")  # WHY: skipped tally.
         deps = _deps()  # WHY: local ref for exporter calls.
         if report.success:  # WHY: only export non-empty datasets.
-            deps.data_exporter.write_with_format_selection(report.success, "SuccessfulRFTemplateAssignments.csv")
+            deps.data_exporter.write_with_format_selection(
+                report.success,
+                "SuccessfulRFTemplateAssignments.csv",
+                api_function_name="assignOrgDeviceProfile",
+            )
         if report.failed:  # WHY: same rationale for failure export.
-            deps.data_exporter.write_with_format_selection(report.failed, "FailedRFTemplateAssignments.csv")
+            deps.data_exporter.write_with_format_selection(
+                report.failed, "FailedRFTemplateAssignments.csv", api_function_name="assignOrgDeviceProfile"
+            )
 
     # -------------------------------------------------------------------------
     # Device Profile Creation (Menu 173)
@@ -851,9 +861,15 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
         print(f"  Device Profiles Skipped: {len(skipped)}")  # WHY: skipped tally.
         deps = _deps()  # WHY: local ref for exporter.
         if created:  # WHY: export only non-empty.
-            deps.data_exporter.write_with_format_selection(created, "CreatedAPModelDeviceProfiles.csv")
+            deps.data_exporter.write_with_format_selection(
+                created,
+                "CreatedAPModelDeviceProfiles.csv",
+                api_function_name="createOrgDeviceProfile",
+            )
         if failed:  # WHY: export only non-empty.
-            deps.data_exporter.write_with_format_selection(failed, "FailedAPModelDeviceProfiles.csv")
+            deps.data_exporter.write_with_format_selection(
+                failed, "FailedAPModelDeviceProfiles.csv", api_function_name="createOrgDeviceProfile"
+            )
 
     # -------------------------------------------------------------------------
     # Device Profile Assignment (Menu 174)
@@ -1083,8 +1099,16 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
         print(f"  APs Skipped (no model info): {len(without_model)}")  # WHY: no-model tally.
         deps = _deps()  # WHY: local ref for exporter.
         if success:  # WHY: export only non-empty datasets.
-            deps.data_exporter.write_with_format_selection(success, "SuccessfulAPProfileAssignments.csv")
+            deps.data_exporter.write_with_format_selection(
+                success, "SuccessfulAPProfileAssignments.csv", api_function_name="assignOrgDeviceProfile"
+            )
         if failed:  # WHY: same rationale for failures.
-            deps.data_exporter.write_with_format_selection(failed, "FailedAPProfileAssignments.csv")
+            deps.data_exporter.write_with_format_selection(
+                failed,
+                "FailedAPProfileAssignments.csv",
+                api_function_name="assignOrgDeviceProfile",
+            )
         if without_profile:  # WHY: skipped-no-profile bucket exported for follow-up.
-            deps.data_exporter.write_with_format_selection(without_profile, "SkippedAPsNoMatchingProfile.csv")
+            deps.data_exporter.write_with_format_selection(
+                without_profile, "SkippedAPsNoMatchingProfile.csv", api_function_name="assignOrgDeviceProfile"
+            )

@@ -157,10 +157,14 @@ class OrgConfigExporter:
         if not orgs_data:  # No orgs.
             print("  No organizations found under this MSP")  # Tell the user.
             logging.info("MSP has no organizations")  # Log it.
-            mh.DataExporter.write_with_format_selection([], "MspOrganizations.csv")  # Empty write.
+            mh.DataExporter.write_with_format_selection(
+                [], "MspOrganizations.csv", api_function_name="listMspOrgs"
+            )  # Empty write.
             return  # Done.
         processed = OrgConfigExporter._process_msp_orgs(orgs_data, msp_id, msp_name)  # Flatten + tag.
-        mh.DataExporter.write_with_format_selection(processed, "MspOrganizations.csv")  # Persist.
+        mh.DataExporter.write_with_format_selection(
+            processed, "MspOrganizations.csv", api_function_name="listMspOrgs"
+        )  # Persist.
         print(f"  + {len(processed)} organizations exported to MspOrganizations.csv")  # Tell.
         logging.info("Exported %s MSP organizations to MspOrganizations.csv", len(processed))  # Log.
         OrgConfigExporter._print_msp_orgs_summary(msp_name, orgs_data)  # Show first 10.

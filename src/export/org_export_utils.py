@@ -85,7 +85,9 @@ class OrgExportUtils:
         if all_sites_sle_data:  # Have data -- flatten + write + tell user.
             processed = DataProcessingUtils.flatten_nested_fields(all_sites_sle_data)  # Flatten nested fields.
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # CSV-safe.
-            mh.DataExporter.write_with_format_selection(processed, "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
+            mh.DataExporter.write_with_format_selection(
+                processed, "OrgSitesSLESummary.csv", api_function_name="getOrgSitesSle"
+            )  # type: ignore[no-untyped-call]
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("! %d sites SLE summary exported to OrgSitesSLESummary.csv", len(processed))  # Tell the user.
             logging.info("Exported %s sites SLE summary to OrgSitesSLESummary.csv", len(processed))  # Log count.
@@ -95,7 +97,7 @@ class OrgExportUtils:
             "! 0 sites SLE summary exported to OrgSitesSLESummary.csv (no data available)"
         )  # Tell user zero.
         logging.warning("No sites SLE data available for organization")  # Warn no data.
-        mh.DataExporter.write_with_format_selection([], "OrgSitesSLESummary.csv")  # type: ignore[no-untyped-call]
+        mh.DataExporter.write_with_format_selection([], "OrgSitesSLESummary.csv", api_function_name="getOrgSitesSle")  # type: ignore[no-untyped-call]
 
     @staticmethod
     def _gather_all_sites_sle(org_id: str, sle_types: list, emitter: Any) -> tuple[list, int]:
@@ -412,7 +414,7 @@ class OrgExportUtils:
         ]
         for rows, filename, label in outputs:  # Write each normalized bucket to its CSV.
             processed = DataProcessingUtils.escape_multiline(rows)  # type: ignore[no-untyped-call]  # Escape newlines.
-            mh.DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]  # Write it.
+            mh.DataExporter.write_with_format_selection(processed, filename, api_function_name="getOrgSle")  # type: ignore[no-untyped-call]  # Write it.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("  !? %d %s records -> %s", len(processed), label, filename)  # Report row count.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
@@ -433,7 +435,9 @@ class OrgExportUtils:
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter helpers.
         processed_combined = DataProcessingUtils.flatten_nested_fields(all_insight_data)  # Flatten for combined.
         processed_combined = DataProcessingUtils.escape_multiline(processed_combined)  # type: ignore[no-untyped-call]
-        mh.DataExporter.write_with_format_selection(processed_combined, "OrgInsightMetrics_Legacy.csv")  # type: ignore[no-untyped-call]
+        mh.DataExporter.write_with_format_selection(
+            processed_combined, "OrgInsightMetrics_Legacy.csv", api_function_name="getOrgSle"
+        )  # type: ignore[no-untyped-call]
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  !? Legacy format maintained -> OrgInsightMetrics_Legacy.csv")  # Confirm the file write.
 
@@ -450,7 +454,7 @@ class OrgExportUtils:
         if include_legacy:  # The no-data and error paths also write the legacy combined file.
             files.append("OrgInsightMetrics_Legacy.csv")  # Include the legacy file when requested.
         for filename in files:  # Write an empty dataset to each output file.
-            mh.DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # Empty write.
+            mh.DataExporter.write_with_format_selection([], filename, api_function_name="getOrgSle")  # type: ignore[no-untyped-call]  # Empty write.
 
     @staticmethod
     def _insight_setup_or_empty() -> list[str] | None:
@@ -718,7 +722,7 @@ class OrgExportUtils:
                 return  # Abort.
             data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
             data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
-            mh.DataExporter.write_with_format_selection(data, "OrgAuditLogs.csv")  # type: ignore[no-untyped-call]
+            mh.DataExporter.write_with_format_selection(data, "OrgAuditLogs.csv", api_function_name="listOrgAuditLogs")  # type: ignore[no-untyped-call]
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("! %d audit logs exported to OrgAuditLogs.csv", len(data))  # Tell the user.
             logging.info("Completed audit logs export and wrote results to OrgAuditLogs.csv.")  # Log completion.
