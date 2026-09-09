@@ -140,3 +140,31 @@
   `jmorrison-juniper-miniature-fiesta` into `main` when the repository policy
   authorizes it.
 - Exact next action: open a pull request from `jmorrison-juniper-literate-fiesta` into `main` when repository policy permits.
+
+## Run record: 2026-09-09 (issue #2364)
+
+- **Pokémon identity**: Lapras
+- **Coordination issue**: #2364 (parent #2295)
+- **Scope**: local Git state only. No remote branch deletions, no PR or issue state changes, no Podman changes.
+- **Branches inspected**: 8 (main, 4 dependabot, fix/1763-mermaid-lint, jmorrison-juniper-musical-guide, jmorrison-juniper-urban-eureka)
+- **Worktrees inspected**: 4 registered (Code/MistHelper, Code/sync-rebase-batch, mermaid-gate, urban-eureka), 5 orphaned directories, 1 standalone clone (supreme-chainsaw)
+- **Worktrees removed**: 0
+- **Stale worktree entries pruned**: 0 (dry-run reported none)
+- **Local branches deleted**: 0
+- **Remote branches deleted**: 0
+- **Preserved resources and reasons**:
+  - dependabot/pip/hypothesis-6.167.1 (tip 0e87d15b): tip not reachable from any remote ref after fetch --prune.
+  - dependabot/pip/pylint-4.0.8 (tip 7b79a472): tip not reachable from any remote ref after fetch --prune.
+  - dependabot/pip/ruff-0.16.6 (tip f8f8cc08): tip not reachable from any remote ref after fetch --prune.
+  - dependabot/pip/openai-gte-3.8.0 (tip 0949c1c4) and worktree Code/sync-rebase-batch: tip not reachable from any remote ref; issue #2341 records an active rebase.
+  - fix/1763-mermaid-lint (tip 3cfd6d89) and worktree mermaid-gate: PR #2365 open, issue #1763 open.
+  - jmorrison-juniper-musical-guide (tip 3df52783): issue #2088 open.
+  - jmorrison-juniper-urban-eureka (tip 89f23dd6) and worktree urban-eureka: issue #2050 open.
+  - Orphaned directories automatic-guide, crispy-spork, redesigned-winner, bookish-meme, glowing-spoon: not registered worktrees; contain recoverable content; removal requires filesystem tools, which this run prohibits.
+  - supreme-chainsaw: standalone clone with its own .git directory, not a worktree of this repository.
+- **Unpublished or ambiguous work found**: 4 dependabot branch tips unreachable from durable remote refs (squash-merge rewrote history).
+- **Active ownership detected**: issue #2341 (Heracross) references sync-rebase-batch as an active rebase.
+- **Validation results**: git fsck --no-reflogs exit 0 (dangling objects only, no garbage collection run); git status shows 4 untracked files in the main checkout (preserved); git worktree list unchanged; reachability rechecked after fetch.
+- **Blockers**: none.
+- **Ownership status**: released. No agent owns the resources above after this run.
+- **Exact next action**: none required. Revisit the 4 dependabot branches after their PRs are confirmed merged and their tips are republished to durable remote refs.
