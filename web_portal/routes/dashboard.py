@@ -6,10 +6,12 @@ readiness endpoint that the container health probe calls.
 
 import logging
 import os
+import socket
 import sqlite3
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from urllib.parse import urlsplit
 
 from flask import Blueprint, current_app, jsonify, render_template
 
@@ -22,6 +24,13 @@ SQLITE_DATABASE_FILENAME = "mist_data.db"
 READINESS_PROBE_PREFIX = ".readiness-probe-"
 
 READINESS_QUERY_TIMEOUT_SECONDS = 2
+
+DEFAULT_ARANGO_HOST = "misthelper-arangodb"
+DEFAULT_ARANGO_PORT = 9529
+DEFAULT_REDIS_HOST = "misthelper-redis"
+DEFAULT_REDIS_PORT = 9379
+POLYGLOT_OUTPUT_FORMAT = "polyglot"
+SQLITE_OUTPUT_FORMATS = {"sqlite", "standalone"}
 
 
 @dashboard_bp.route("/")
@@ -66,10 +75,12 @@ def ready():
     checks = _run_readiness_checks(data_dir, apisession)  # WHY: test each resource that can block the portal.
     failed = _collect_failed_check_names(checks)  # WHY: the operator needs the name of each failed check.
     status_code = 503 if failed else 200  # WHY: a monitor acts on 503, and it ignores 200.
+    output_format = _configured_output_format()  # WHY: remote readers must know which backend the probe tested.
     payload = {
         "status": "not ready" if failed else "ready",  # WHY: one word gives the operator the verdict.
         "failed_checks": failed,  # WHY: the body must name the failed check, not only the code.
         "checks": checks,  # WHY: the detail text tells the operator how to repair the resource.
+        "output_format": output_format,  # WHY: identify the active output backend beside its checks.
         "data_directory": data_dir,  # WHY: repeat the directory under test for a remote reader.
         "uptime_seconds": int(time.time() - _start_time),  # WHY: correlate the failure with a restart.
     }
@@ -82,11 +93,56 @@ def _run_readiness_checks(data_dir: str, apisession) -> dict:
     logging.info("Readiness probe starts the resource checks")  # WHY: mark the start of the check run.
     checks = {
         "data_directory_writable": _check_data_dir_writable(data_dir),  # WHY: the documented failure.
-        "sqlite_database": _check_sqlite_database(data_dir),  # WHY: the local database holds the results.
         "mist_api_session": _check_mist_api_session(apisession),  # WHY: a broken session blocks every operation.
     }
+    output_format = _configured_output_format()  # WHY: select checks that match the configured writer.
+    if output_format in SQLITE_OUTPUT_FORMATS:  # WHY: SQLite is active only in local database modes.
+        checks["sqlite_database"] = _check_sqlite_database(data_dir)  # WHY: validate the selected SQLite backend.
+    elif output_format == POLYGLOT_OUTPUT_FORMAT:  # WHY: polyglot writes to both configured services.
+        checks["arangodb"] = _check_arangodb()  # WHY: validate the document backend before accepting traffic.
+        checks["redis"] = _check_redis()  # WHY: validate the time-series and JSON backend before accepting traffic.
     logging.debug("Readiness probe completed %d checks", len(checks))  # WHY: record the check count.
     return checks
+
+
+def _configured_output_format() -> str:
+    """Return the normalized output format selected by the process environment."""
+    output_format = os.environ.get("OUTPUT_FORMAT", "sqlite").strip().lower()  # WHY: preserve the portal default.
+    logging.debug("Readiness probe uses output format %s", output_format)  # WHY: make backend selection observable.
+    return output_format
+
+
+def _check_arangodb() -> dict:
+    """Test the configured ArangoDB endpoint."""
+    raw_host = os.environ.get("ARANGO_HOST", f"http://{DEFAULT_ARANGO_HOST}:{DEFAULT_ARANGO_PORT}")
+    address = urlsplit(raw_host if "//" in raw_host else f"//{raw_host}")  # WHY: support URLs and bare host values.
+    host = address.hostname or DEFAULT_ARANGO_HOST  # WHY: retain the project host when configuration is incomplete.
+    port = address.port or DEFAULT_ARANGO_PORT  # WHY: apply the project port when configuration omits one.
+    return _check_backend_socket("arangodb", host, port)  # WHY: test the service selected by the writer.
+
+
+def _check_redis() -> dict:
+    """Test the configured Redis endpoint."""
+    host = os.environ.get("REDIS_HOST", DEFAULT_REDIS_HOST).strip()  # WHY: use the same host as the Redis writer.
+    raw_port = os.environ.get("REDIS_PORT", str(DEFAULT_REDIS_PORT)).strip()  # WHY: read the project port setting.
+    try:
+        port = int(raw_port)  # WHY: convert the environment value before opening a socket.
+    except ValueError:
+        return {"ok": False, "detail": f"REDIS_PORT is not an integer: {raw_port}"}
+    return _check_backend_socket("redis", host, port)  # WHY: test the service selected by the writer.
+
+
+def _check_backend_socket(backend: str, host: str, port: int) -> dict:
+    """Return a readiness result for a configured TCP backend."""
+    logging.info("Readiness probe tests %s at %s:%s", backend, host, port)  # WHY: log before the network action.
+    try:
+        with socket.create_connection((host, port), timeout=READINESS_QUERY_TIMEOUT_SECONDS):  # WHY: bound probe time.
+            result = {"ok": True, "detail": f"{backend} answered at {host}:{port}"}
+    except OSError as exc:
+        logging.warning("Readiness probe cannot reach %s at %s:%s: %s", backend, host, port, exc)
+        result = {"ok": False, "detail": f"cannot reach {backend} at {host}:{port}: {exc}"}
+    logging.debug("Readiness probe completed %s check with ok=%s", backend, result["ok"])  # WHY: record the result.
+    return result
 
 
 def _collect_failed_check_names(checks: dict) -> list:
@@ -103,9 +159,9 @@ def _check_data_dir_writable(data_dir: str) -> dict:
         _write_and_remove_probe_file(probe_path)  # WHY: only a real write proves the mount is writable.
     except OSError as exc:
         logging.warning("Readiness probe cannot write in %s: %s", data_dir, exc)  # WHY: name the failure.
-        return {"ok": False, "detail": "cannot write in %s: %s" % (data_dir, exc)}
+        return {"ok": False, "detail": f"cannot write in {data_dir}: {exc}"}
     logging.debug("Readiness probe wrote and removed %s", probe_path)  # WHY: record the successful write.
-    return {"ok": True, "detail": "write access confirmed in %s" % data_dir}
+    return {"ok": True, "detail": f"write access confirmed in {data_dir}"}
 
 
 def _write_and_remove_probe_file(probe_path: str) -> None:
@@ -127,14 +183,15 @@ def _check_sqlite_database(data_dir: str) -> dict:
         _query_sqlite_database(db_path)  # WHY: one query proves the file opens and answers.
     except sqlite3.Error as exc:
         logging.warning("Readiness probe cannot read %s: %s", db_path, exc)  # WHY: name the failure.
-        return {"ok": False, "detail": "cannot read %s: %s" % (db_path, exc)}
+        return {"ok": False, "detail": f"cannot read {db_path}: {exc}"}
     logging.debug("Readiness probe read the database at %s", db_path)  # WHY: record the successful read.
     return {"ok": True, "detail": "database answered a query"}
 
 
 def _query_sqlite_database(db_path: str) -> None:
     """Open the database read-only and read the schema table."""
-    uri = "file:%s?mode=ro" % db_path.replace("\\", "/")  # WHY: a SQLite URI accepts forward slashes only.
+    normalized_path = db_path.replace("\\", "/")  # WHY: a SQLite URI accepts forward slashes only.
+    uri = f"file:{normalized_path}?mode=ro"  # WHY: read the existing database without creating it.
     connection = sqlite3.connect(uri, uri=True, timeout=READINESS_QUERY_TIMEOUT_SECONDS)  # WHY: read-only is safe.
     try:
         # WHY: this query reads a real page, so SQLite validates the file header.
@@ -163,7 +220,7 @@ def _check_mist_api_session(apisession) -> dict:
         logging.warning("Readiness probe found a Mist API session with no cloud host")  # WHY: name the failure.
         return {"ok": False, "detail": "Mist API session has no cloud host"}
     logging.debug("Readiness probe found the Mist cloud host %s", host)  # WHY: record the configured host.
-    return {"ok": True, "detail": "Mist API session targets %s" % host}
+    return {"ok": True, "detail": f"Mist API session targets {host}"}
 
 
 def _build_data_summary(data_dir: str) -> dict:
@@ -227,5 +284,5 @@ def _format_timestamp(epoch: float) -> str:
     """Format epoch timestamp into readable date string."""
     if not epoch:
         return ""
-    date = datetime.fromtimestamp(epoch, tz=timezone.utc)
+    date = datetime.fromtimestamp(epoch, tz=UTC)
     return date.strftime("%Y-%m-%d %H:%M:%S UTC")
