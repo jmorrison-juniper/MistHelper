@@ -1,9 +1,9 @@
 """OrgSearchExporter -- organization-scoped search export operations.
 
-Added for specs 878, 877, 875, 874, 879, 870, and 872 (issues #1386, #1385,
-#1383, #1382, #1379, #1378, and #1380). Wraps read-only Mist API search endpoints so operators
-reach them through the standard MistHelper menu and DataExporter pipeline (CSV, SQLite, or
-ArangoDB).
+Added for specs 878, 877, 875, 874, 879, 870, 872, and 869 (issues #1386, #1385,
+#1383, #1382, #1379, #1378, #1380, and #1377). Wraps read-only Mist API search
+endpoints so operators reach them through the standard MistHelper menu and
+DataExporter pipeline (CSV, SQLite, or ArangoDB).
 
 Covered operations:
     - ``searchOrgDevices`` (menu 249)
@@ -15,6 +15,7 @@ Covered operations:
     - ``searchOrgSites`` (menu 248)
     - ``searchOrgUserMacs`` (menu 251)
     - ``searchOrgMxEdges`` (menu 253)
+    - ``searchOrgPskPortalLogs`` (menu 255)
 
 Why:
     Every endpoint takes a session and an organization and returns
@@ -319,3 +320,14 @@ class OrgSearchExporter:
             "OrgVars",
             "organization variable",
         )
+
+    @staticmethod
+    def psk_portal_logs() -> None:
+        """Search PSK portal logs for an organization (menu 255)."""
+        OrgSearchExporter._run_org_search(
+            mistapi.api.v1.orgs.pskportals.searchOrgPskPortalLogs,
+            "searchOrgPskPortalLogs",
+            "OrgPskPortalLogs",
+            "PSK portal log",
+        )
+
