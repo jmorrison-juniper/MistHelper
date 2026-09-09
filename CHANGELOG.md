@@ -15,6 +15,14 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   `id` field for upserts without duplicate rows.
 - **Added**: Unit coverage for the SDK binding, pagination, export path, empty
   results, unresolved organizations, and API errors.
+ 
+### Search site other-device events (menu 249)
+
+- **Added**: Menu 249 calls `searchSiteOtherDeviceEvents` for a selected site
+  and exports the event rows through the CSV, SQLite, or ArangoDB backend.
+  Issue #1402.
+- **Added**: The endpoint uses the existing composite primary-key strategy
+  based on `mac` and `timestamp` for repeatable SQLite upserts.
 
 ### Verify an email change token (menu 247)
 
