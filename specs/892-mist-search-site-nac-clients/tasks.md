@@ -24,6 +24,6 @@
 ## Phase 4: Validation and Delivery
 
 - [X] T010 Run focused tests and quality checks.
-- [ ] T011 Commit and push the feature branch.
-- [ ] T012 Open a PR that closes #1400.
-- [ ] T013 Merge after required checks pass, if policy permits.
+- [X] T011 Commit and push the feature branch.
+- [X] T012 Open PR #2390 that closes #1400.
+- [ ] T013 Merge after required checks pass, if policy permits. Blocked: PR #2390 currently has `mergeable_state=dirty`; resolve the base-branch conflict, push the resolution, then merge.
