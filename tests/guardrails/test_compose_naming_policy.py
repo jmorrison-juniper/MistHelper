@@ -132,6 +132,18 @@ class TestStoreAddresses:
         assert "9379" in redis_probe
 
 
+class TestMetricsGateway:
+    """The metrics gateway must reach monitoring clients outside the container."""
+
+    def test_the_metrics_gateway_publishes_and_binds_its_host_port(self, compose: dict[str, Any]) -> None:
+        """The published port and container bind must agree with the documented endpoint."""
+        service = compose["services"]["misthelper"]
+        environment = service["environment"]
+        assert "8057:8057" in service["ports"]
+        assert "METRICS_PORT=8057" in environment
+        assert "METRICS_HOST=0.0.0.0" in environment
+
+
 class TestNetwork:
     """The project network holds its own address range."""
 

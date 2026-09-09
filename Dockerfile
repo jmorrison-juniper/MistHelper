@@ -140,8 +140,8 @@ ENV AUTO_UPGRADE_DEPENDENCIES=false
 # Volume for data persistence
 VOLUME ["/app/data"]
 
-# Expose SSH port 2200, Dash web viewer port 8055, and SNMP port 1161 (UDP)
-EXPOSE 2200 8055 1161/udp
+# Expose SSH, web, capture, metrics, and SNMP service ports
+EXPOSE 2200 8055 8056 8057 1161/udp
 
 # Health probe for the web portal readiness endpoint (issue #1863).
 # The image installs no curl, so the probe uses the Python interpreter that
