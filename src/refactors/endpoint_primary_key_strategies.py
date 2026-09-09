@@ -1313,11 +1313,11 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "description": "MxEdge search results",
     },
     "searchOrgSites": {
-        "type": "composite_pk",
-        "primary_key": ["id", "name"],
-        "indexes": ["org_id", "country_code"],
+        "type": "natural_pk",
+        "primary_key": ["id"],
+        "indexes": ["org_id", "name", "country_code"],
         "unique_constraints": [],
-        "description": "Organization site search results",
+        "description": "Organization sites with stable UUID identifiers",
     },
     "searchOrgOspfStats": {
         "type": "composite_pk",
@@ -1363,7 +1363,7 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
     },
     "searchOrgVars": {
         "type": "composite_pk",
-        "primary_key": ["site_id", "name"],
+        "primary_key": ["site_id", "var", "src"],
         "indexes": ["org_id"],
         "unique_constraints": [],
         "description": "Organization variable search results",
