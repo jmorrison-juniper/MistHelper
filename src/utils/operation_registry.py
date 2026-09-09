@@ -337,6 +337,11 @@ class OperationRegistry:
             "category": "interactive_safe",
             "skip_reason": "Requires an org selection",
         },
+        # WHY: menu 246 reads one call troubleshooting record and never writes Mist Cloud.
+        "246": {
+            "category": "interactive_safe",
+            "skip_reason": "Requires a site, a client MAC, and a meeting ID",
+        },
         # WHY: menu 247 verifies a single-use email change token. The call applies the email
         # change on a 200, so the row is `interactive_safe` and not `destructive`, because it
         # targets the operator's own account and the token is the authorization. An automated

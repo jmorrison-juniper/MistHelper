@@ -2293,6 +2293,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Site call troubleshooting diagnostics",
     },
+    "troubleshootSiteCall": {
+        "type": "composite_pk",
+        "primary_key": ["meeting_id", "mac"],
+        "indexes": ["site_id", "app"],
+        "unique_constraints": [],
+        "description": "Site call troubleshooting diagnostics (troubleshootSiteCall)",
+    },
     # -- Issue #185: SLE impacted entity endpoints --
     "listSiteSlesMetrics": {
         "type": "auto_increment_with_unique",

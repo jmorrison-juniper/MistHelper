@@ -272,6 +272,120 @@ class SiteSearchExporter:
         )
 
     @staticmethod
+    def _prompt_identifier(prompt_text: str, context: str) -> str | None:
+        """Prompt for one required identifier and reject an empty answer.
+
+        Why:
+            The troubleshoot endpoint cannot run without its identifiers, and
+            ``safe_input`` keeps the prompt safe under SSH and container EOF.
+
+        Args:
+            prompt_text: The text shown to the operator.
+            context: A tag recorded in the logs to locate the prompt.
+
+        Returns:
+            The trimmed identifier, or None when the operator gave no answer.
+        """
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils keeps the import acyclic.
+        logging.info("Prompting the operator for %s", context)  # Action log before the prompt.
+        value = str(  # WHY: the lazy module attribute is untyped, so pin the declared str return.
+            mh.InputUtils.safe_input(  # safe_input enforces EOF-safe prompting.
+                prompt_text,
+                allow_empty=False,  # An empty identifier is invalid for the API path.
+                context=context,
+            )
+        ).strip()  # Strip whitespace so stray spaces do not pass validation.
+        logging.debug("Completed the %s prompt with value_present=%s", context, bool(value))  # Prompt result trace.
+        if not value:  # A blank answer, an EOF, or an interrupt must abort before any API call.
+            logging.error("No value provided for %s. Exiting.", context)  # Abort reason.
+            logging.info("! No identifier supplied. Exiting.")  # User-facing cancel line.
+            return None
+        return value
+
+    @staticmethod
+    def _normalize_payload(response_payload: Any) -> list[dict[str, Any]]:
+        """Normalize a troubleshoot payload to a list of dict rows.
+
+        Why:
+            The endpoint returns one object with a ``results`` array, but
+            ``DataExporter`` expects iterable rows. Wrapping here keeps the
+            caller uniform with the search operations.
+
+        Args:
+            response_payload: The decoded body from the SDK response. May be a
+                dict, a list, or None.
+
+        Returns:
+            A list of dict rows, which is empty when the payload carries no data.
+        """
+        if response_payload is None:  # An empty body is a legitimate result, so return no rows.
+            return []
+        if isinstance(response_payload, list):  # Defensive support for list payloads from wrappers and mocks.
+            rows = [row for row in response_payload if isinstance(row, dict)]  # Keep only dict rows.
+            logging.debug("Normalized list payload to %d dict rows", len(rows))  # Coercion trace.
+            return rows
+        if isinstance(response_payload, dict):  # The expected SDK path returns one object as a dict.
+            if isinstance(response_payload.get("results"), list):  # The documented shape nests the rows under results.
+                rows = [row for row in response_payload["results"] if isinstance(row, dict)]  # Keep only dict rows.
+                if rows:  # A non-empty results array is the row set to export.
+                    logging.debug("Normalized results array to %d dict rows", len(rows))  # Coercion trace.
+                    return rows
+            logging.debug("Normalized dict payload to a single-row list")  # Coercion trace.
+            return [response_payload]
+        logging.warning(  # An unexpected type means the SDK contract changed, so say so instead of failing.
+            "Unexpected payload type %s; treating it as an empty result",
+            type(response_payload).__name__,
+        )
+        return []
+
+    @staticmethod
+    def troubleshoot_call() -> None:
+        """Export the call troubleshooting diagnostics for one client meeting (menu 246).
+
+        Why:
+            Interactive menu entry point for ``troubleshootSiteCall``. The
+            endpoint needs a site, a client MAC, and a meeting ID, so it prompts
+            for the two identifiers before it calls the SDK.
+        """
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession and the shared helpers.
+        logging.info("Site Call Troubleshoot:")  # Menu header echoed to the operator.
+        logging.info("Starting the troubleshootSiteCall export...")  # Pre-call trace.
+        resolved = mh.SiteDeviceExporter._resolve_site_for_stats("call troubleshoot")  # Shared site prompt.
+        if resolved is None:  # The operator declined, and the shared helper already logged the reason.
+            return
+        site_id, site_name = resolved  # Unpack the resolved identifiers for the API call.
+        client_mac = SiteSearchExporter._prompt_identifier(  # Ask for the required client MAC.
+            "Enter Client MAC for troubleshootSiteCall (e.g. 98:3a:78:ea:4a:44): ",
+            "site_search_exporter.troubleshootSiteCall.client_mac",
+        )
+        if client_mac is None:  # The prompt helper already logged the cancellation.
+            return
+        meeting_id = SiteSearchExporter._prompt_identifier(  # Ask for the required meeting ID.
+            "Enter Meeting ID for troubleshootSiteCall (UUID): ",
+            "site_search_exporter.troubleshootSiteCall.meeting_id",
+        )
+        if meeting_id is None:  # The prompt helper already logged the cancellation.
+            return
+        try:
+            logging.info(  # Pre-call log with full context.
+                "Calling troubleshootSiteCall for site_id=%s client_mac=%s meeting_id=%s",
+                site_id,
+                client_mac,
+                meeting_id,
+            )
+            response = mistapi.api.v1.sites.stats.troubleshootSiteCall(  # SDK troubleshoot call.
+                mh.apisession, site_id, client_mac, meeting_id
+            )
+            payload = getattr(response, "data", response)  # Support both object and dict responses.
+            rows = SiteSearchExporter._normalize_payload(payload)  # Normalize the payload to rows.
+            SiteSearchExporter._persist(  # Persist or report empty through the shared helper.
+                rows, site_name, "SiteTroubleshootCall", "troubleshootSiteCall", "call troubleshoot"
+            )  # The helper builds the per-site filename from the prefix and site name.
+        except Exception as e:  # surface any SDK or network error rather than crashing the menu.
+            logging.error("Error fetching call troubleshoot for site %s: %s", site_name, e)  # Failure context.
+            logging.info("! Error fetching call troubleshoot data: %s", e)  # ASCII-only user notice.
+
+    @staticmethod
     def _prompt_zone_type() -> str | None:
         """Ask which zone family to search and reject anything outside the two valid values.
 

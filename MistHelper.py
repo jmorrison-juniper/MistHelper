@@ -3787,6 +3787,10 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         OrgCradlepointConnectionExporter.status,
         "Export the Cradlepoint connection status for an organization (testOrgCradlepointConnection)",
     ),
+    "246": (
+        SiteSearchExporter.troubleshoot_call,
+        "Troubleshoot a call for a site, client MAC, and meeting ID (troubleshootSiteCall)",
+    ),
     "247": (
         SelfAccountExporter.verify_email,
         "Verify an email change token from the Mist email (verifySelfEmail)",
