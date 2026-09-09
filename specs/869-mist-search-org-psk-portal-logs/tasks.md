@@ -7,5 +7,6 @@
 - [x] Add unit coverage for binding, export, pagination, empty results, and errors.
 - [x] Update README, menu references, and CHANGELOG.
 - [x] Run targeted tests and repository quality checks.
-- [ ] Commit and push the feature branch.
-- [ ] Create and merge the pull request when repository permissions allow.
+- [x] Commit and push the feature branch.
+- [x] Create the pull request; merge is blocked while 13 required GitHub checks
+  remain in the expected state without status contexts.
