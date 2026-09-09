@@ -7,6 +7,12 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Search the service path events for a site
+
+- **Added**: Menu 244 calls `searchSiteServicePathEvents` for a selected site
+  and exports the rows through the standard DataExporter pipeline (CSV,
+  SQLite, or ArangoDB). The endpoint is read-only. Issue #1404.
+
 ### Rehearse the upgrade portal against a stand-in cloud
 
 - **Added**: A rehearsal harness under `tests/support/rehearsal/`. The harness

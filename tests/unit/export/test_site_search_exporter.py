@@ -54,6 +54,12 @@ MENU_BINDINGS = [
         "SiteDiscoveredSwitches",
         ("stats", "searchSiteDiscoveredSwitches"),
     ),
+    (
+        "service_path_events",
+        "searchSiteServicePathEvents",
+        "SiteServicePathEvents",
+        ("services", "searchSiteServicePathEvents"),
+    ),
 ]
 
 

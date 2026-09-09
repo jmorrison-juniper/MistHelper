@@ -3773,6 +3773,10 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         lambda: _launch_mib_generator(),
         "Generate the SNMP MIB from the Mist OpenAPI file and the metric catalog",
     ),
+    "244": (
+        SiteSearchExporter.service_path_events,
+        "Search service path events for a selected site (searchSiteServicePathEvents)",
+    ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
     "46": (OrgConfigExporter.wlans, "Export WLAN configuration for the organization"),

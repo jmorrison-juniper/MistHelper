@@ -324,6 +324,12 @@ class OperationRegistry:
         "243": {
             "category": "safe",
         },
+        # WHY: menu 244 is a read-only Mist Cloud search that prompts for a site, so it is
+        # `interactive_safe` like the other site-scoped search menus (215-229).
+        "244": {
+            "category": "interactive_safe",
+            "skip_reason": "Requires site selection",
+        },
         # WHY: menu 239 starts a local web server and drives a firmware upgrade, so it writes
         # device state. The fail-closed guardrail needs this row or the build breaks.
         #
