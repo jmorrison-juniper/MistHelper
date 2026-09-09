@@ -1298,6 +1298,7 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "MistEdge event search results",
     },
+    # Spec 868 / issue #1376: event identity requires the device MAC and timestamp.
     "searchOrgOtherDeviceEvents": {
         "type": "composite_pk",
         "primary_key": ["id", "mac", "timestamp"],

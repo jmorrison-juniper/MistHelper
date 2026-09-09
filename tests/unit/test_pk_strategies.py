@@ -211,6 +211,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Sites with APs where switches or gateways are offline",
     },
+    "searchOrgOtherDeviceEvents": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac", "timestamp"],
+        "indexes": ["org_id", "site_id", "type"],
+        "unique_constraints": [],
+        "description": "Other device event search results",
+    },
     "default": {
         "type": "auto_increment_with_unique",
         "primary_key": ["misthelper_internal_id"],
@@ -277,6 +284,11 @@ class TestEndpointPrimaryKeyStrategies:
         assert "default" in ENDPOINT_PRIMARY_KEY_STRATEGIES
         default = ENDPOINT_PRIMARY_KEY_STRATEGIES["default"]
         assert default["type"] == "auto_increment_with_unique"
+
+    def test_other_device_events_strategy_exists(self):
+        strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES["searchOrgOtherDeviceEvents"]
+        assert strategy["type"] == "composite_pk"
+        assert strategy["primary_key"] == ["id", "mac", "timestamp"]
 
     def test_no_duplicate_endpoint_names(self):
         """Dict keys are inherently unique, but verify count matches."""

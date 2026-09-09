@@ -85,6 +85,21 @@ class TestExportData:
         assert "limit" not in kwargs
         assert kwargs["filename"] == "OrgE911Report.csv"
 
+    def test_other_device_events_uses_the_expected_sdk_operation(self, fake_mh, monkeypatch):
+        """The Spec 868 entry must bind the SDK operation and event sort order."""
+        from src.export import org_export_utils as module
+        from src.export.org_export_utils import OrgExportUtils
+
+        endpoint = MagicMock(name="searchOrgOtherDeviceEvents")  # Represent the installed SDK operation.
+        monkeypatch.setattr(module.mistapi.api.v1.orgs.otherdevices, "searchOrgOtherDeviceEvents", endpoint)
+
+        OrgExportUtils.other_device_events()
+
+        kwargs = fake_mh.APIDataFetcher.call_args.kwargs  # Inspect the shared export pipeline binding.
+        assert kwargs["api_call"] is endpoint  # Confirm the operation reaches the expected SDK callable.
+        assert kwargs["filename"] == "OrgOtherdeviceevents.csv"  # Confirm the shared filename convention.
+        assert kwargs["sort_key"] == "timestamp"  # Confirm time-series ordering.
+
 
 # ---------------------------------------------------------------------------
 # SLE summary block
