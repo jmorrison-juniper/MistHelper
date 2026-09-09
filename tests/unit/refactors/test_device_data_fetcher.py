@@ -124,7 +124,7 @@ class TestDeviceDataFetcherFetchOrchestration:
         wired_misthelper["DataProcessingUtils"].flatten_nested_fields.assert_called_once_with([{"id": "row"}])
         wired_misthelper["DataProcessingUtils"].escape_multiline.assert_called_once_with([{"id": "row"}])
         wired_misthelper["DataExporter"].write_with_format_selection.assert_called_once_with(
-            [{"id": "row"}], "devices.csv"
+            [{"id": "row"}], "devices.csv", api_function_name="fetch_devices_v1"
         )
         wired_misthelper["DisplayUtils"].dict_list_as_pretty_table.assert_called_once_with([{"id": "row"}])
         # WHY: prompts never invoked because caller supplied both ids.

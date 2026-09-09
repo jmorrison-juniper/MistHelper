@@ -282,7 +282,9 @@ def test_persist_csv_writes_and_prints(caplog: Any) -> None:
     """CSV persistence delegates to data_exporter and prints a confirmation."""
     deps = _make_deps()  # WHY: fresh deps for interaction assertions.
     MarvisTroubleshootUtils._persist_csv(deps, [{"row": 1}], "file.csv", "client")  # WHY: exercise happy path.
-    deps.data_exporter.write_with_format_selection.assert_called_once_with([{"row": 1}], "file.csv")
+    deps.data_exporter.write_with_format_selection.assert_called_once_with(
+        [{"row": 1}], "file.csv", api_function_name="getSiteMarvisInsights"
+    )
     output = caplog.text  # WHY: capture logged records.
     assert "file.csv" in output  # WHY: user confirmation includes filename.
 
@@ -291,7 +293,9 @@ def test_persist_csv_handles_none_rows(caplog: Any) -> None:
     """CSV persistence tolerates None rows (len() guard exercised)."""
     deps = _make_deps()  # WHY: fresh deps.
     MarvisTroubleshootUtils._persist_csv(deps, None, "file.csv", "device")  # WHY: exercise None-guard branch.
-    deps.data_exporter.write_with_format_selection.assert_called_once_with(None, "file.csv")
+    deps.data_exporter.write_with_format_selection.assert_called_once_with(
+        None, "file.csv", api_function_name="getSiteMarvisInsights"
+    )
 
 
 # ---------- _handle_client_response -------------------------------------------------------------
@@ -726,7 +730,9 @@ def test_persist_insight_csv_writes_and_prints(caplog: Any) -> None:
     """Insight CSV persistence delegates to data_exporter and prints confirmation."""
     deps = _make_deps()  # WHY: fresh deps.
     MarvisTroubleshootUtils._persist_insight_csv(deps, [{"row": 1}], "file.csv")  # WHY: exercise happy path.
-    deps.data_exporter.write_with_format_selection.assert_called_once_with([{"row": 1}], "file.csv")
+    deps.data_exporter.write_with_format_selection.assert_called_once_with(
+        [{"row": 1}], "file.csv", api_function_name="getSiteMarvisInsights"
+    )
     output = caplog.text  # WHY: capture logged records.
     assert "file.csv" in output  # WHY: filename echoed.
 
