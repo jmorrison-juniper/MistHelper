@@ -13,7 +13,7 @@ devices, and your clients, and it writes what it finds to a file or to a
 database. It also runs a small set of change operations, such as a firmware
 upgrade.
 
-The tool holds **252 operations**, numbered 1 to 253 with one gap at 152. Menu 0
+The tool holds **253 operations**, numbered 1 to 254 with one gap at 152. Menu 0
 is Exit. Read [the menu reference](documentation/menu_reference.md) for the full
 list, which is generated from the code.
 
