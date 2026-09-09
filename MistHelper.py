@@ -435,6 +435,9 @@ from src.export.org_export_utils import (
 from src.export.org_inventory_exporter import (
     OrgInventoryExporter,  # Cat E canonical (1015 T-06) -- re-export for MistHelper.OrgInventoryExporter callers
 )
+from src.export.org_inventory_search_exporter import (
+    OrgInventorySearchExporter,  # Spec 864 / issue #1372 -- organization inventory search menu 249
+)
 from src.export.org_search_exporter import (
     OrgSearchExporter,  # Specs 874-879 / issues #1379, #1382, #1383, #1385, #1386 -- org search menus 230-234
 )
@@ -3798,6 +3801,10 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "248": (
         OrgSearchExporter.sites,
         "Search sites for the organization (searchOrgSites)",
+    ),
+    "249": (
+        OrgInventorySearchExporter.inventory,
+        "Search organization inventory with optional filters (searchOrgInventory)",
     ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),

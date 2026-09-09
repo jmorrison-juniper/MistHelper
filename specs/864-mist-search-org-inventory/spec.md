@@ -2,7 +2,7 @@
 
 **Feature Branch**: `864-mist-search-org-inventory`
 **Created**: 2026-06-29
-**Status**: Draft
+**Status**: Complete
 **Input**: User description: "Catalog the missing Mist API GET endpoint `searchOrgInventory` and add it as a new MistHelper menu item."
 
 ## Source Endpoint
