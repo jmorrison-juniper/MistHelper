@@ -1813,7 +1813,7 @@ that runs without a proxy needs no action.
   per-menu bindings are checked by a parametrized case, so each entry is proven
   to call its own endpoint and write its own file.
 
-### Add five site-scoped search operations, menus 225 to 229 (issues #1401, #1393, #1391, #1396, #1412)
+### Add five site-scoped search operations, menus 225 to 229 (issues #1401, #1393, #1391, #1395, #1412)
 
 - **Menu 225 (Added)**: `searchSiteOspfStats` searches the OSPF neighbor
   statistics for a site. Spec 893, issue #1401.
