@@ -7,6 +7,25 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Search organization devices (menu 249)
+
+- **Added**: Menu 249 calls `searchOrgDevices` for the active organization and
+  exports the device rows through CSV, SQLite, or ArangoDB. Issue #1371.
+- **Added**: The `searchOrgDevices` composite primary-key strategy uses `id` and
+  `mac` to prevent duplicate device rows during repeated exports.
+- **Added**: Unit coverage for the SDK binding, pagination, empty results,
+  errors, flattening, and persistence.
+
+### Search organization PSK portal logs (menu 250)
+
+- **Added**: Menu 250 calls `searchOrgPskPortalLogs` for the selected
+  organization and exports the paginated rows through the standard CSV,
+  SQLite, or ArangoDB backends. Issue #1377.
+- **Added**: The endpoint uses the composite `id` and `timestamp` primary-key
+  strategy so repeated exports upsert the same log records.
+- **Added**: Unit coverage for the SDK binding, pagination, empty-result path,
+  error logging, and standard data export.
+
 ### Verify an email change token (menu 247)
 
 - **Added**: Menu 247 verifies a single-use email change token through the

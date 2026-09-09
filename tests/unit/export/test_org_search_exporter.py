@@ -1,9 +1,9 @@
 """Unit tests for the organization-scoped search exporter.
 
-Covers specs 874 to 879 (issues #1379, #1382, #1383, #1385 and #1386), which are
-menus 230 to 234.
+Covers specs 863, 869 and 874 to 879 (issues #1371, #1377, #1379, #1382,
+#1383, #1385 and #1386), which are menus 230 to 234, 249 and 250.
 
-The five operations share one helper, so the shared behavior is tested once and
+The registered operations share one helper, so the shared behavior is tested once and
 each menu entry is checked for the binding that makes it distinct.
 """
 
@@ -20,6 +20,7 @@ from src.export.org_search_exporter import OrgSearchExporter
 # Each row maps a menu entry to the operationId, the filename prefix, and the
 # SDK attribute chain that the entry must call.
 MENU_BINDINGS = [
+    ("devices", "searchOrgDevices", "OrgDevices", ("devices", "searchOrgDevices")),
     (
         "wireless_client_sessions",
         "searchOrgWirelessClientSessions",
@@ -40,6 +41,7 @@ MENU_BINDINGS = [
         ("wan_clients", "searchOrgWanClientEvents"),
     ),
     ("system_events", "searchOrgSystemEvents", "OrgSystemEvents", ("events", "searchOrgSystemEvents")),
+    ("psk_portal_logs", "searchOrgPskPortalLogs", "OrgPskPortalLogs", ("pskportals", "searchOrgPskPortalLogs")),
 ]
 
 

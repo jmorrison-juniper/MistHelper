@@ -436,7 +436,9 @@ from src.export.org_inventory_exporter import (
     OrgInventoryExporter,  # Cat E canonical (1015 T-06) -- re-export for MistHelper.OrgInventoryExporter callers
 )
 from src.export.org_search_exporter import (
-    OrgSearchExporter,  # Specs 874-879 / issues #1379, #1382, #1383, #1385, #1386 -- org search menus 230-234
+    # Specs 863, 869, 874-879 / issues #1371, #1377, #1379, #1382, #1383,
+    # #1385, #1386 -- org search menus 230-234, 249-250.
+    OrgSearchExporter,
 )
 from src.export.org_sec_intel_profile_exporter import (
     OrgSecIntelProfileExporter,  # Issue #1148 -- one SecIntel profile read by id, menu 240
@@ -3794,6 +3796,14 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "247": (
         SelfAccountExporter.verify_email,
         "Verify an email change token from the Mist email (verifySelfEmail)",
+    ),
+    "250": (
+        OrgSearchExporter.psk_portal_logs,
+        "Search PSK portal logs for the organization (searchOrgPskPortalLogs)",
+    ),
+    "249": (
+        OrgSearchExporter.devices,  # Spec 863 / issue #1371 -- search organization devices.
+        "Search devices for the organization (searchOrgDevices)",  # Expose the read-only endpoint in the menu.
     ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
