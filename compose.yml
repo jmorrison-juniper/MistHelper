@@ -79,6 +79,8 @@ services:
       - "8055:8055"
       # Upgrade capture portal for pre-check and post-check work
       - "8056:8056"
+      # Prometheus metrics gateway for host monitoring clients
+      - "8057:8057"
       # SNMP service on an unprivileged container port
       - "1161:1161/udp"
     volumes:
@@ -98,6 +100,8 @@ services:
       - CAPTURE_PORT=8056
       # Metrics gateway HTTP port
       - METRICS_PORT=8057
+      # Bind the metrics gateway to the container interface for port publishing
+      - METRICS_HOST=0.0.0.0
       # SNMP service port and community. Set SNMP_COMMUNITY in .env for production.
       - SNMP_PORT=1161
       - SNMP_COMMUNITY=${SNMP_COMMUNITY:-misthelper}
