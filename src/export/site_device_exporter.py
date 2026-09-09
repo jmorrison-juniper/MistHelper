@@ -63,7 +63,7 @@ class SiteDeviceExporter:
         inventory = DataProcessingUtils.flatten_nested_fields(inventory)  # Flatten nested fields.
         inventory = DataProcessingUtils.escape_multiline(inventory)
         fields = DataProcessingUtils.get_unique_keys(inventory)
-        mh.DataExporter.write_with_format_selection(inventory, csv_filename)
+        mh.DataExporter.write_with_format_selection(inventory, csv_filename, api_function_name="listSiteDevicesStats")
         logging.info("Device inventory written to %s (%s rows)", csv_filename, len(inventory))  # Log the write.
         SiteDeviceExporter._display_inventory_table(inventory, fields)  # Debug-log a PrettyTable of the inventory.
 
@@ -106,7 +106,9 @@ class SiteDeviceExporter:
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # CSV-safe.
         filename = f"SiteDeviceStats_{site_name.replace(' ', '_')}.csv"  # Build per-site CSV name.
-        mh.DataExporter.write_with_format_selection(sanitized_data, filename)  # Persist.
+        mh.DataExporter.write_with_format_selection(
+            sanitized_data, filename, api_function_name="listSiteDevicesStats"
+        )  # Persist.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! %d device stats exported to %s", len(rawdata), filename)  # User notice with count.
 
@@ -229,7 +231,9 @@ class SiteDeviceExporter:
             flattened = DataProcessingUtils.flatten_nested_fields(vc_data)  # Flatten nested fields.
             sanitized = DataProcessingUtils.escape_multiline(flattened)
             filename = f"VirtualChassis_{device_name.replace(' ', '_')}.csv"  # Build the CSV name.
-            mh.DataExporter.write_with_format_selection(sanitized, filename)
+            mh.DataExporter.write_with_format_selection(
+                sanitized, filename, api_function_name="getSiteDeviceVirtualChassis"
+            )
             logging.info("! Virtual chassis information exported to %s", filename)  # Log the export.
             SiteDeviceExporter._print_vc_summary(sanitized, device_name, filename)  # Print a short operator summary.
         except Exception as e:  # Export failed.
@@ -266,7 +270,9 @@ class SiteDeviceExporter:
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # CSV-safe.
         filename = f"SiteDevices_{site_name.replace(' ', '_')}.csv"  # Per-site CSV name.
-        mh.DataExporter.write_with_format_selection(sanitized_data, filename)  # Persist.
+        mh.DataExporter.write_with_format_selection(
+            sanitized_data, filename, api_function_name="listSiteDevices"
+        )  # Persist.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! %d devices exported to %s", len(rawdata), filename)  # User notice with count.
 

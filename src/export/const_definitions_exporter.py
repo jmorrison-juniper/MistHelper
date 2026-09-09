@@ -318,7 +318,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             print(f"  ! Error exporting {config.description.lower()}: {error}")  # Tell the user.
             logging.error("Failed to export %s from %s: %s", config.description.lower(), config.endpoint_name, error)
             mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter helper.
-            mh.DataExporter.write_with_format_selection([], config.filename)  # type: ignore[no-untyped-call]
+            mh.DataExporter.write_with_format_selection([], config.filename, api_function_name=config.function_name)  # type: ignore[no-untyped-call]
             self.endpoints_failed += 1  # Count failed.
 
     def _fetch_endpoint_data(self, config: EndpointConfig):  # Dispatch the fetch type.
@@ -674,13 +674,13 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         if not const_data:  # No data.
             print(f"  ! 0 {config.description.lower()} exported to {config.filename} (no data available)")
             logging.warning("No %s data available from %s endpoint", config.description.lower(), config.endpoint_name)
-            mh.DataExporter.write_with_format_selection([], config.filename)  # type: ignore[no-untyped-call]
+            mh.DataExporter.write_with_format_selection([], config.filename, api_function_name=config.function_name)  # type: ignore[no-untyped-call]
             self.endpoints_updated += 1  # Count updated.
             return  # Abort.
 
         data_list = self._convert_to_list(config.endpoint_name, const_data)  # Normalize to a list.
         processed = DataProcessingUtils.escape_multiline(data_list)  # type: ignore[no-untyped-call]
-        mh.DataExporter.write_with_format_selection(processed, config.filename)  # type: ignore[no-untyped-call]
+        mh.DataExporter.write_with_format_selection(processed, config.filename, api_function_name=config.function_name)  # type: ignore[no-untyped-call]
 
         print(f"  ! {len(processed)} {config.description.lower()} exported to {config.filename}")  # Tell the user.
         logging.info("Exported %s fresh %s to %s", len(processed), config.description.lower(), config.filename)

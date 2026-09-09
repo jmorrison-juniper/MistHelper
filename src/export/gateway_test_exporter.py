@@ -308,7 +308,7 @@ class GatewayTestExporter:
         filename = "AllGatewaySyntheticTests.csv"  # Build the CSV name.
         flattened = DataProcessingUtils.flatten_nested_fields(all_stats)  # Flatten nested fields.
         sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
-        mh.DataExporter.write_with_format_selection(sanitized, filename)  # type: ignore[no-untyped-call]
+        mh.DataExporter.write_with_format_selection(sanitized, filename, api_function_name="getSiteDeviceSyntheticTest")  # type: ignore[no-untyped-call]
         logging.info("! %s gateway synthetic test results exported to %s", len(all_stats), filename)  # Tell user.
         logging.info("! Synthetic test results saved to %s (%s records).", filename, len(all_stats))
         logging.info(  # Log the optimization summary.

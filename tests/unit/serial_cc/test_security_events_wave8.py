@@ -139,8 +139,8 @@ def test_export_flattened_dataset_empty_writes_empty_file(caplog: pytest.LogCapt
     with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT uses logging.info at root logger
         SecurityEventsService._export_flattened_dataset(deps, spec)  # WHY: exercise the empty guard
     deps.DataExporter.write_with_format_selection.assert_called_once_with(
-        [], "OrgSecurityPolicies.csv"
-    )  # WHY: empty write
+        [], "OrgSecurityPolicies.csv", api_function_name="listOrgSecPolicies"
+    )  # WHY: empty write keeps endpoint metadata.
     out = "\n".join(record.getMessage() for record in caplog.records)  # WHY: aggregate captured log lines
     assert "no policies found" in out  # WHY: empty summary logged
 
@@ -316,7 +316,9 @@ def test_export_rogue_combined_empty_writes_empty(caplog: pytest.LogCaptureFixtu
     deps = _make_deps()  # WHY: default bundle
     with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT uses logging.info at root logger
         SecurityEventsService._export_rogue_combined(deps, [])  # WHY: exercise empty guard
-    deps.DataExporter.write_with_format_selection.assert_called_once_with([], "OrgRogueData.csv")  # WHY: empty write
+    deps.DataExporter.write_with_format_selection.assert_called_once_with(
+        [], "OrgRogueData.csv", api_function_name="listSiteRogueClients"
+    )  # WHY: empty write keeps endpoint metadata.
     out = "\n".join(record.getMessage() for record in caplog.records)  # WHY: aggregate captured log lines
     assert "0 rogue devices" in out  # WHY: zero summary logged
 
@@ -329,7 +331,9 @@ def test_export_rogue_combined_populated_flattens_and_exports(caplog: pytest.Log
     rogue = [{"mac": "aa", "rogue_type": "AP"}, {"mac": "bb", "rogue_type": "Client"}]  # WHY: two records
     with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT uses logging.info at root logger
         SecurityEventsService._export_rogue_combined(deps, rogue)  # WHY: exercise populated branch
-    deps.DataExporter.write_with_format_selection.assert_called_once_with(rogue, "OrgRogueData.csv")  # WHY: write
+    deps.DataExporter.write_with_format_selection.assert_called_once_with(
+        rogue, "OrgRogueData.csv", api_function_name="listSiteRogueClients"
+    )  # WHY: write keeps endpoint metadata.
     out = "\n".join(record.getMessage() for record in caplog.records)  # WHY: aggregate captured log lines
     assert "2 rogue devices exported" in out  # WHY: count summary logged
 

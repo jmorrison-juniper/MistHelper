@@ -498,4 +498,6 @@ def test_export_empty_result_branch_writes_zero_rows_and_returns(tmp_path: Path,
     data_exporter = MagicMock()
     exporter = _build_exporter(mistapi=mistapi, data_processing_utils=utils, data_exporter=data_exporter)
     exporter.export()  # Trigger empty-result branch
-    data_exporter.write_with_format_selection.assert_called_once_with([], "OrgDeviceEvents_52w.csv")
+    data_exporter.write_with_format_selection.assert_called_once_with(
+        [], "OrgDeviceEvents_52w.csv", api_function_name="searchOrgDeviceEvents"
+    )  # WHY: empty write keeps endpoint metadata.

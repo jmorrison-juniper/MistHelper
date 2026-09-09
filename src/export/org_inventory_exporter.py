@@ -616,7 +616,9 @@ class OrgInventoryExporter:  # Org inventory exporters.
         devices = DataProcessingUtils.flatten_nested_fields(devices)  # Flatten enriched fields.
         devices = DataProcessingUtils.escape_multiline(devices)  # type: ignore[no-untyped-call]
         devices = sorted(devices, key=lambda x: x.get("site_name", ""))  # Sort by site name.
-        mh.DataExporter.write_with_format_selection(devices, "AllDevicesWithSiteInfo.csv")  # type: ignore[no-untyped-call]
+        mh.DataExporter.write_with_format_selection(
+            devices, "AllDevicesWithSiteInfo.csv", api_function_name="getOrgInventory"
+        )  # type: ignore[no-untyped-call]
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! %s devices exported to AllDevicesWithSiteInfo.csv", len(devices))  # Confirm export to operator.
         logging.info("All device data written to AllDevicesWithSiteInfo.csv (%s records).", len(devices))  # Log write.
@@ -696,7 +698,9 @@ class OrgInventoryExporter:  # Org inventory exporters.
         gateways = DataProcessingUtils.flatten_nested_fields(gateways)  # Flatten gateway fields.
         gateways = DataProcessingUtils.escape_multiline(gateways)  # type: ignore[no-untyped-call]
         gateways = sorted(gateways, key=lambda x: x.get("site_name", ""))  # Sort by site name.
-        mh.DataExporter.write_with_format_selection(gateways, "GatewaysWithSiteInfo.csv")  # type: ignore[no-untyped-call]
+        mh.DataExporter.write_with_format_selection(
+            gateways, "GatewaysWithSiteInfo.csv", api_function_name="getOrgInventory"
+        )  # type: ignore[no-untyped-call]
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! %s gateways exported to GatewaysWithSiteInfo.csv", len(gateways))  # Confirm export to operator.
         logging.info("Gateway data written to GatewaysWithSiteInfo.csv")  # Log write success.

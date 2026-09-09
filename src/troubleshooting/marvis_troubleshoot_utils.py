@@ -368,7 +368,9 @@ class MarvisTroubleshootUtils:
             kind: human-readable category (``client``/``device``/``network``).
         """
         logging.info("Saving Marvis %s CSV to %s", kind, filename)  # WHY: pre-write log with category.
-        deps.data_exporter.write_with_format_selection(data, filename)  # WHY: persist results.
+        deps.data_exporter.write_with_format_selection(
+            data, filename, api_function_name="getSiteMarvisInsights"
+        )  # WHY: persist results.
         row_count = len(data) if data else 0  # WHY: guard against None/empty rows before len().
         logging.debug("Marvis %s CSV saved (rows=%s)", kind, row_count)  # WHY: post-write log.
         logging.warning("! Results saved to %s", filename)  # WHY: user confirmation.
@@ -987,7 +989,9 @@ class MarvisTroubleshootUtils:
             filename: output filename (already sanitised).
         """
         logging.info("Saving insights CSV: %s", filename)  # WHY: pre-write log.
-        deps.data_exporter.write_with_format_selection(formatted_insights, filename)  # WHY: persist.
+        deps.data_exporter.write_with_format_selection(
+            formatted_insights, filename, api_function_name="getSiteMarvisInsights"
+        )  # WHY: persist.
         row_count = len(formatted_insights) if formatted_insights else 0  # WHY: guard against None/empty.
         logging.debug("Insights CSV saved (rows=%s)", row_count)  # WHY: post-write log.
         logging.warning("  Full insights saved to %s", filename)  # WHY: user confirmation.

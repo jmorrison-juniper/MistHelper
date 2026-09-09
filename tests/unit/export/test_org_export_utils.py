@@ -147,7 +147,9 @@ class TestPersistSitesSleSummary:
             caplog.at_level(logging.INFO, logger=LOGGER_NAME),
         ):
             OrgExportUtils._persist_sites_sle_summary(rows)
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(rows, "OrgSitesSLESummary.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            rows, "OrgSitesSLESummary.csv", api_function_name="getOrgSitesSle"
+        )  # WHY: export keeps endpoint metadata.
         # WHY: slice 92 migrated print()->logger.info; assertion now reads caplog, not stdout.
         assert "1 sites SLE summary exported" in caplog.text
 
@@ -157,7 +159,9 @@ class TestPersistSitesSleSummary:
 
         with caplog.at_level(logging.WARNING, logger=LOGGER_NAME):
             OrgExportUtils._persist_sites_sle_summary([])
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with([], "OrgSitesSLESummary.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            [], "OrgSitesSLESummary.csv", api_function_name="getOrgSitesSle"
+        )  # WHY: empty write keeps endpoint metadata.
         # WHY: slice 92 migrated print()->logger.warning; assertion now reads caplog, not stdout.
         assert "0 sites SLE summary" in caplog.text
 
@@ -651,8 +655,8 @@ class TestInsightWriteCombined:
         ):
             OrgExportUtils._insight_write_combined([{"a": 1}])
         fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
-            [{"a": 1}], "OrgInsightMetrics_Legacy.csv"
-        )
+            [{"a": 1}], "OrgInsightMetrics_Legacy.csv", api_function_name="getOrgSle"
+        )  # WHY: legacy export still records the API identifier.
 
 
 class TestInsightWriteEmptyOutputs:
@@ -903,7 +907,9 @@ class TestAuditLogs:
             caplog.at_level(logging.INFO, logger=LOGGER_NAME),
         ):
             OrgExportUtils.audit_logs(full_history=False, duration="1h")
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with([{"a": 1}], "OrgAuditLogs.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            [{"a": 1}], "OrgAuditLogs.csv", api_function_name="listOrgAuditLogs"
+        )  # WHY: export keeps endpoint metadata.
         # WHY: slice 92 migrated print()->logger.info; assertion now reads caplog, not stdout.
         assert "1 audit logs exported" in caplog.text
 

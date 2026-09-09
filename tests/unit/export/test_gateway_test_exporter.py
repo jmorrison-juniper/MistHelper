@@ -392,7 +392,9 @@ class TestExportSyntheticResults:
             dp.escape_multiline.return_value = rows
             with caplog.at_level(logging.INFO):
                 GatewayTestExporter._export_synthetic_results(rows, [("s", "d", "dn", "sn")])
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(rows, "AllGatewaySyntheticTests.csv")  # type: ignore[attr-defined]
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(  # type: ignore[attr-defined]  # WHY: export keeps endpoint metadata.
+            rows, "AllGatewaySyntheticTests.csv", api_function_name="getSiteDeviceSyntheticTest"
+        )
         assert "exported to AllGatewaySyntheticTests.csv" in caplog.text
 
 

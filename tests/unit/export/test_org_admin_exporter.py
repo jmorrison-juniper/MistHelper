@@ -205,7 +205,9 @@ def test_licenses_best_effort_empty_write_on_fetch_failure_then_reraises() -> No
     ):
         with pytest.raises(RuntimeError, match="fetch failed"):
             OrgAdminExporter.licenses()
-    fake_mh.DataExporter.write_with_format_selection.assert_called_once_with([], "OrgLicenses.csv")
+    fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+        [], "OrgLicenses.csv", api_function_name="listOrgLicenses"
+    )  # WHY: empty write keeps endpoint metadata.
 
 
 def test_licenses_swallows_secondary_write_failure() -> None:

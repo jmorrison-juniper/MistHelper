@@ -60,7 +60,9 @@ class OverrideReportWriter:
         """Write entries via DataExporter and print the legacy operator-facing summary block."""
         logging.info("Writing %d override entries to %s", len(entries), OUTPUT_FILENAME)  # before action
         _deps.DataExporter.write_with_format_selection(
-            entries, OUTPUT_FILENAME
+            entries,
+            OUTPUT_FILENAME,
+            api_function_name="getSiteDeviceStats",
         )  # Multi-backend writer (CSV/SQLite/etc)
         logging.debug("Override entries persisted via DataExporter")  # after action confirmation
         OverrideReportWriter._log_summary(entries, total_gateways, devices_with_overrides_count)  # Legacy logs

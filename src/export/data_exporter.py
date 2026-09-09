@@ -141,7 +141,7 @@ class DataExporter:  # Multi-backend export facade.
     def write_with_format_selection(  # Public export entry point.
         data: list[dict[str, Any]],
         filename_or_table: str,
-        api_function_name: str | None = None,
+        api_function_name: str,
         fieldnames: list[str] | None = None,
         backend_options: ExportBackendOptions | None = None,
     ) -> bool:
@@ -471,7 +471,9 @@ class DataExporter:  # Multi-backend export facade.
     # and accepts the identical (data, filename, api_function_name=) form.
 
     @staticmethod
-    def export_with_processing(data, filename, sort_key=None, api_function_name=None):  # Process then export records.
+    def export_with_processing(
+        data, filename, sort_key=None, *, api_function_name: str
+    ):  # Process then export records.
         """Flatten, optionally sort, and export records via the selected backend.
 
         Returns the number of records exported (0 when there is no data or the export fails).

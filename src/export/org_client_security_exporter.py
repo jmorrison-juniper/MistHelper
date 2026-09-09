@@ -200,7 +200,7 @@ class OrgClientSecurityExporter:
         if rogues:  # At least one rogue was found
             flattened = DataProcessingUtils.flatten_nested_fields(rogues)  # Flatten nested JSON to CSV rows
             sanitized = DataProcessingUtils.escape_multiline(flattened)
-            mh.DataExporter.write_with_format_selection(sanitized, csv_basename)
+            mh.DataExporter.write_with_format_selection(sanitized, csv_basename, api_function_name="listSiteRogueAPs")
             logging.info("! %s %s exported to %s", len(rogues), label, csv_basename)  # Log the export
             # User-facing export count banner.
             logging.info("! %d %s exported to %s", len(rogues), label, csv_basename)

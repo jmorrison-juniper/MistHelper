@@ -70,7 +70,9 @@ class TestWriteFull:
                 devices_with_overrides_count=1,
                 target_ports=["ge-0/0/0", "ge-0/0/1"],
             )
-        fake_data_exporter.write_with_format_selection.assert_called_once_with(entries, OUTPUT_FILENAME)  # Deleg.
+        fake_data_exporter.write_with_format_selection.assert_called_once_with(
+            entries, OUTPUT_FILENAME, api_function_name="getSiteDeviceStats"
+        )  # Deleg. Keep endpoint metadata.
         stdout = "\n".join(record.getMessage() for record in caplog.records)  # Aggregate log output.
         assert f"! Gateway override report written to {OUTPUT_FILENAME}" in stdout  # Console line 1.
         assert "Found 2 overridden ports across 1 of 10" in stdout  # Console line 2 (distinct-device math).

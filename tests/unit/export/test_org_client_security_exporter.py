@@ -238,7 +238,9 @@ class TestExportRogues:
             OrgClientSecurityExporter._export_rogues(rogues, "OrgRogueAPs", "rogue APs")
         flat.assert_called_once_with(rogues)
         esc.assert_called_once_with(rogues)
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(rogues, "OrgRogueAPs")  # type: ignore[attr-defined]
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(  # type: ignore[attr-defined]  # WHY: export keeps endpoint metadata.
+            rogues, "OrgRogueAPs", api_function_name="listSiteRogueAPs"
+        )
         assert "2 rogue APs exported" in caplog.text
 
     def test_empty_rogues_logs_only(self, fake_mh: ModuleType, caplog: pytest.LogCaptureFixture) -> None:

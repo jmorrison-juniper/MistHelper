@@ -421,7 +421,9 @@ class TestFetchAndExportEndpoint:
         cfg = _endpoint_config()
         with patch.object(exporter, "_fetch_endpoint_data", side_effect=RuntimeError("boom")):
             exporter._fetch_and_export_endpoint(cfg)
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with([], cfg.filename)
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            [], cfg.filename, api_function_name="listStuff"
+        )  # WHY: empty write keeps endpoint metadata.
         assert exporter.endpoints_failed == 1
 
 
@@ -797,7 +799,9 @@ class TestExportData:
     def test_empty_data_writes_empty(self, exporter, fake_mh):
         cfg = _endpoint_config()
         exporter._export_data(cfg, {})
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with([], cfg.filename)
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            [], cfg.filename, api_function_name="listStuff"
+        )  # WHY: empty write keeps endpoint metadata.
         assert exporter.endpoints_updated == 1
 
     def test_writes_processed_data(self, exporter, fake_mh):

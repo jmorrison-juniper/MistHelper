@@ -90,7 +90,7 @@ class PromptUtils:  # General prompt helpers.
         inventory = sorted(rawdata, key=lambda x: x.get("model", ""))  # Sort by model.
         inventory = DataProcessingUtils.flatten_nested_fields(inventory)  # Flatten nested fields.
         inventory = DataProcessingUtils.escape_multiline(inventory)  # type: ignore[no-untyped-call]
-        mh.DataExporter.write_with_format_selection(inventory, csv_filename)  # type: ignore[no-untyped-call]
+        mh.DataExporter.write_with_format_selection(inventory, csv_filename, api_function_name="getOrgInventory")  # type: ignore[no-untyped-call]
         logging.info("Device inventory for site_id written to %s", csv_filename)  # Log CSV write location.
         table = PrettyTable()  # Build selection table.
         table.field_names = ["Index", "name", "mac", "model", "serial"]  # Columns.

@@ -70,14 +70,14 @@ class SiteConfigExporter:
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter helpers.
         if not rawdata:  # No rows.
             logging.warning("No data provided for output to %s", filename)  # Warn none.
-            mh.DataExporter.write_with_format_selection([], filename)  # Empty CSV.
+            mh.DataExporter.write_with_format_selection([], filename, api_function_name="listSiteWlans")  # Empty CSV.
             # WHY: Preserve user-facing zero-record notice verbatim. INFO-level structured emit.
             logging.info("! 0 records exported to data\\%s", filename)
             return  # Done.
         processed = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
         processed = DataProcessingUtils.escape_multiline(processed)  # CSV-safe.
         processed = sorted(processed, key=lambda row: row.get("ssid", ""))  # Sort by SSID.
-        mh.DataExporter.write_with_format_selection(processed, filename)  # Persist.
+        mh.DataExporter.write_with_format_selection(processed, filename, api_function_name="listSiteWlans")  # Persist.
         # WHY: Preserve user-facing record-count notice verbatim.
         logging.info("! %s records exported to data\\%s", len(processed), filename)
         logging.info("Exported %s WLAN records for site %s to %s", len(processed), site_name, filename)
@@ -159,7 +159,9 @@ class SiteConfigExporter:
             logging.info("Fetched settings for %s sites. Flattening and sanitizing data...", len(data))
             data = DataProcessingUtils.flatten_nested_fields(data)  # Flatten nested fields.
             data = DataProcessingUtils.escape_multiline(data)  # CSV-safe.
-            mh.DataExporter.write_with_format_selection(data, "AllSiteConfigs.csv")  # Persist.
+            mh.DataExporter.write_with_format_selection(
+                data, "AllSiteConfigs.csv", api_function_name="listSiteSettings"
+            )  # Persist.
             # WHY: Preserve user-facing record-count notice verbatim.
             logging.info("! %s site configurations exported to AllSiteConfigs.csv", len(data))
             logging.info(" Site configs saved to AllSiteConfigs.csv")  # Log the save.

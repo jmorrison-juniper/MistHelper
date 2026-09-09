@@ -220,7 +220,9 @@ def test_finalize_merge_output_writes_via_backend_and_notifies_user(
     caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     with patch("src.reports.sfp_transceiver_data_processor.importlib.import_module", return_value=fake_mh):
         P._finalize_merge_output(rows)
-    fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(rows, "MergedTransceiverData.csv")
+    fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+        rows, "MergedTransceiverData.csv", api_function_name="listSiteDevices"
+    )
     assert "Merged data written to MergedTransceiverData.csv" in caplog.text
 
 

@@ -219,7 +219,7 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
         if data_list:  # At least one metric returned data.
             processed = DataProcessingUtils.flatten_nested_fields(data_list)  # Flatten nested fields.
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-            mh.DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
+            mh.DataExporter.write_with_format_selection(processed, filename, api_function_name="listSiteAnomalyEvents")  # type: ignore[no-untyped-call]
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("! %s %s types exported to %s", success_count, label, filename)  # Tell the user the count.
             logger.info("Exported %s %s types for %s to %s", success_count, label, scope_name, filename)  # Log.
@@ -227,7 +227,7 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! 0 %ss exported to %s (no data available)", label, filename)  # Tell the user zero.
             logger.warning("No %s available for %s", label, scope_name)  # Warn about the empty result.
-            mh.DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
+            mh.DataExporter.write_with_format_selection([], filename, api_function_name="listSiteAnomalyEvents")  # type: ignore[no-untyped-call]
 
     _CLIENT_ANOMALY_METRICS = (  # Client-specific anomaly metrics (verified working) shared by the count + loop.
         "successful_connect",  # Note: uses underscore, not hyphen for the client endpoint.
@@ -358,7 +358,9 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
         if all_data:  # At least one metric returned data.
             processed = DataProcessingUtils.flatten_nested_fields(all_data)  # Flatten nested fields.
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-            mh.DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
+            mh.DataExporter.write_with_format_selection(
+                processed, filename, api_function_name="getSiteAnomalyEventsForClient"
+            )  # type: ignore[no-untyped-call]
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("! %s client anomaly event types exported to %s", metrics_retrieved, filename)  # Tell the user.
             logger.info(
@@ -370,7 +372,7 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
                 "! 0 client anomaly events exported to %s (no data available)", filename
             )  # Tell the user zero.
             logger.warning("No client anomaly events available for %s", client_mac)  # Warn none.
-            mh.DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # Empty file.
+            mh.DataExporter.write_with_format_selection([], filename, api_function_name="getSiteAnomalyEventsForClient")  # type: ignore[no-untyped-call]  # Empty file.
 
     @staticmethod
     def _anomaly_prepare() -> tuple | None:  # type: ignore[type-arg]

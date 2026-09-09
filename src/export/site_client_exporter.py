@@ -50,7 +50,9 @@ class SiteClientExporter:
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # CSV-safe.
         filename = f"SiteClients_{site_name.replace(' ', '_')}.csv"  # Per-site CSV name.
-        mh.DataExporter.write_with_format_selection(sanitized_data, filename)  # Persist.
+        mh.DataExporter.write_with_format_selection(
+            sanitized_data, filename, api_function_name="listSiteWirelessClientsStats"
+        )  # Persist.
         # WHY: user notice with count.
         logging.info("! %d client records exported to %s", len(rawdata), filename)
 

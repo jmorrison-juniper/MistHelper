@@ -627,7 +627,9 @@ class TestGatewayExportUtilsStaticMethods:
         configure_gateway_export_utils_dependencies(**bundle)
         rows = [{"name": "gw1", "port_config_ge-0/0/1_speed": "1G"}]  # WHY: non-empty set.
         GatewayExportUtils._save_filtered_port_configs(rows, debug=True)  # WHY: also triggers sample log.
-        writer.assert_called_once_with(rows, "FilteredGatewayPortConfigs.csv")  # WHY: verify args.
+        writer.assert_called_once_with(
+            rows, "FilteredGatewayPortConfigs.csv", api_function_name="searchSiteSwOrGwPorts"
+        )  # WHY: verify args and endpoint metadata.
 
     def test_device_configs_returns_early_when_api_returns_nothing(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture

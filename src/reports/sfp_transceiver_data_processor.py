@@ -158,7 +158,9 @@ class SFPTransceiverDataProcessor:
         """Write merged rows to disk and emit the success-path INFO and user-facing messages."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter helper.
         mh.DataExporter.write_with_format_selection(
-            merged_data, SFPTransceiverDataProcessor.OUTPUT_FILENAME
+            merged_data,
+            SFPTransceiverDataProcessor.OUTPUT_FILENAME,
+            api_function_name="listSiteDevices",
         )  # Write merged rows to backend
         logging.info(
             "Wrote %s rows to %s", len(merged_data), SFPTransceiverDataProcessor.OUTPUT_FILENAME
