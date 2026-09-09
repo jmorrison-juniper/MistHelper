@@ -147,8 +147,9 @@ ENV CAPTURE_PORT=8056
 # Volume for data persistence
 VOLUME ["/app/data"]
 
-# Expose SSH port 2200, web portal port 8055, and capture portal port 8056
-EXPOSE 2200 8055 8056
+# Expose SSH, web, capture, metrics, and SNMP service ports. compose.yml
+# publishes these same five ports for misthelper-app (issue #2408).
+EXPOSE 2200 8055 8056 8057 1161/udp
 
 # Health probe for the web portal readiness endpoint (issue #1863).
 # The image installs no curl, so the probe uses the Python interpreter that
