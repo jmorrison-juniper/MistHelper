@@ -1,9 +1,9 @@
 """Unit tests for the organization-scoped search exporter.
 
-Covers specs 874 to 879 (issues #1379, #1382, #1383, #1385 and #1386), which are
-menus 230 to 234.
+Covers specs 870 and 873 to 879 (issues #1378, #1379, #1381, #1382, #1383,
+#1385, and #1386), which are menus 230 to 234 and 248 to 249.
 
-The five operations share one helper, so the shared behavior is tested once and
+The six operations share one helper, so the shared behavior is tested once and
 each menu entry is checked for the binding that makes it distinct.
 """
 
@@ -41,6 +41,7 @@ MENU_BINDINGS = [
         ("wan_clients", "searchOrgWanClientEvents"),
     ),
     ("system_events", "searchOrgSystemEvents", "OrgSystemEvents", ("events", "searchOrgSystemEvents")),
+    ("sites", "searchOrgSites", "OrgSitesSearch", ("sites", "searchOrgSites")),
     ("org_vars", "searchOrgVars", "OrgVars", ("vars", "searchOrgVars")),
 ]
 
@@ -79,11 +80,12 @@ def wired(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     }
 
 
-def _sdk_target(mistapi_mod: MagicMock, chain: tuple[str, str]) -> MagicMock:
+def _sdk_target(mistapi_mod: MagicMock, chain: tuple[str, ...]) -> MagicMock:
     """Return the SDK callable double that a menu entry is expected to call."""
-    module_attribute, function_name = chain  # Split the module and the function halves.
-    module = getattr(mistapi_mod.api.v1.orgs, module_attribute)  # Walk to the SDK submodule double.
-    return getattr(module, function_name)  # Return the function double itself.
+    target: Any = mistapi_mod.api.v1.orgs  # Start at the organization API namespace.
+    for attribute in chain:  # Walk the SDK module path for the selected endpoint.
+        target = getattr(target, attribute)  # Resolve one SDK namespace or function.
+    return target  # Return the function double for the test assertion.
 
 
 class TestMenuBindings:
@@ -91,7 +93,7 @@ class TestMenuBindings:
 
     @pytest.mark.parametrize(("method", "operation", "prefix", "chain"), MENU_BINDINGS)
     def test_entry_calls_its_endpoint_and_persists(
-        self, wired: dict[str, Any], method: str, operation: str, prefix: str, chain: tuple[str, str]
+        self, wired: dict[str, Any], method: str, operation: str, prefix: str, chain: tuple[str, ...]
     ) -> None:
         """The entry must call its endpoint once and write with its own operationId."""
         target = _sdk_target(wired["mistapi"], chain)
@@ -108,7 +110,7 @@ class TestMenuBindings:
 
     @pytest.mark.parametrize(("method", "operation", "prefix", "chain"), MENU_BINDINGS)
     def test_entry_aborts_when_org_is_unresolved(
-        self, wired: dict[str, Any], method: str, operation: str, prefix: str, chain: tuple[str, str]
+        self, wired: dict[str, Any], method: str, operation: str, prefix: str, chain: tuple[str, ...]
     ) -> None:
         """An unresolved organization must stop before any API call."""
         wired["ConfigUtils"].get_cached_or_prompted_org_id.return_value = None
@@ -167,11 +169,11 @@ class TestSharedBehavior:
         assert strategy["primary_key"] == ["site_id", "var", "src"]  # Match the documented response fields.
 
     def test_org_vars_menu_is_registered_as_safe(self) -> None:
-        """Menu 248 must route to organization variable export as a safe operation."""
+        """Menu 249 must route to organization variable export as a safe operation."""
         import MistHelper  # Import the runtime menu registry under test.
         from src.utils.operation_registry import OperationRegistry  # Read the safety classification.
 
-        action, description = MistHelper.menu_actions["248"]  # Read the menu dispatch tuple.
+        action, description = MistHelper.menu_actions["249"]  # Read the menu dispatch tuple.
         assert action is OrgSearchExporter.org_vars  # Require the new menu to call the exporter.
         assert "searchOrgVars" in description  # Expose the operation identifier to operators.
-        assert OperationRegistry.get("248")["category"] == "safe"  # Keep the read-only operation automated.
+        assert OperationRegistry.get("249")["category"] == "safe"  # Keep the read-only operation automated.

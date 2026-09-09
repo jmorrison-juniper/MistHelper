@@ -17,7 +17,7 @@
 
 ## Design decision
 
-Add organization variable export as menu 248. Reuse `OrgSearchExporter` so the
+Add organization variable export as menu 249. Reuse `OrgSearchExporter` so the
 new operation receives the same pagination, flattening, output, logging, and
 error handling as the existing organization search menus.
 
