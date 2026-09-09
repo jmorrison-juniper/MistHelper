@@ -110,6 +110,14 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Added**: Unit coverage for the SDK call, pagination, persistence, empty
   results, unresolved organizations, and API errors.
 
+### Search organization webhook deliveries (menu 256)
+
+- **Added**: Menu 256 calls `searchOrgWebhooksDeliveries` for one organization
+  webhook and exports delivery rows through the standard storage backends.
+  Issue #1384.
+- **Added**: Unit coverage for webhook selection, pagination, persistence, and
+  SDK error handling.
+
 ### Search organization PSK portal logs (menu 255)
 
 - **Added**: Menu 255 calls `searchOrgPskPortalLogs` for the selected
