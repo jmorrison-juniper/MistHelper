@@ -330,6 +330,13 @@ class OperationRegistry:
             "category": "interactive_safe",
             "skip_reason": "Requires site selection",
         },
+        # WHY: menu 245 reads one org status object and writes one row. It never writes Mist Cloud,
+        # so the row is `interactive_safe` and not `destructive`. The org prompt keeps it out of
+        # the plain `safe` set, like menu 238.
+        "245": {
+            "category": "interactive_safe",
+            "skip_reason": "Requires an org selection",
+        },
         # WHY: menu 239 starts a local web server and drives a firmware upgrade, so it writes
         # device state. The fail-closed guardrail needs this row or the build breaks.
         #

@@ -1383,6 +1383,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Organization settings snapshot",
     },
+    "testOrgCradlepointConnection": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id"],
+        "unique_constraints": [],
+        "description": "Cradlepoint integration status snapshot",
+    },
     "getOrgStats": {
         "type": "auto_increment_with_unique",
         "primary_key": ["misthelper_internal_id"],
