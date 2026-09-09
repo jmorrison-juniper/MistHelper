@@ -1383,13 +1383,6 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Organization settings snapshot",
     },
-    "testOrgCradlepointConnection": {
-        "type": "auto_increment_with_unique",
-        "primary_key": ["misthelper_internal_id"],
-        "indexes": ["org_id"],
-        "unique_constraints": [],
-        "description": "Cradlepoint integration status snapshot",
-    },
     "getOrgStats": {
         "type": "auto_increment_with_unique",
         "primary_key": ["misthelper_internal_id"],
@@ -2085,6 +2078,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "indexes": ["org_id", "name"],
         "unique_constraints": [],
         "description": "One organization security intelligence profile, read by id (issue #1148)",
+    },
+    "verifySelfEmail": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["org_id", "status_code"],
+        "unique_constraints": [],
+        "description": "One email change token verification event, no stable API id (issue #1415)",
     },
     "listOrgSecIntelProfiles": {
         "type": "natural_pk",
