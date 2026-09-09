@@ -3885,6 +3885,10 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         OrgWebhookDeliveriesExporter.deliveries,  # Spec 876 / issue #1384 -- search organization webhook deliveries.
         "Search organization webhook deliveries (searchOrgWebhooksDeliveries)",  # Operation ID shown to operators.
     ),
+    "257": (
+        SiteSearchExporter.nac_clients,  # Spec 892 / issue #1400 -- search NAC clients for a site.
+        "Search NAC clients for a selected site (searchSiteNacClients)",  # Operation ID shown to operators.
+    ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
     "46": (OrgConfigExporter.wlans, "Export WLAN configuration for the organization"),
