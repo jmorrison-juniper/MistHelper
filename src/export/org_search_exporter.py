@@ -159,3 +159,13 @@ class OrgSearchExporter:
             "OrgSystemEvents",
             "system event",
         )
+
+    @staticmethod
+    def org_vars() -> None:
+        """Search organization variables (menu 248)."""
+        OrgSearchExporter._run_org_search(
+            mistapi.api.v1.orgs.vars.searchOrgVars,
+            "searchOrgVars",
+            "OrgVars",
+            "organization variable",
+        )

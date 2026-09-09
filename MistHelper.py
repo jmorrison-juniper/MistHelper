@@ -3737,6 +3737,10 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         OrgSearchExporter.system_events,
         "Search system events for the organization (searchOrgSystemEvents)",
     ),
+    "248": (
+        OrgSearchExporter.org_vars,
+        "Search organization variables (searchOrgVars)",
+    ),
     "235": (
         CountExporter.org_counts,
         "Run any org-scoped Mist count endpoint (35 operations, issue #1802)",

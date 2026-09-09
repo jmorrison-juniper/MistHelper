@@ -16,6 +16,7 @@ from unittest.mock import MagicMock  # WHY: collaborator doubles and call assert
 import pytest  # WHY: monkeypatch and caplog fixtures.
 
 from src.export.org_search_exporter import OrgSearchExporter
+from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 
 # Each row maps a menu entry to the operationId, the filename prefix, and the
 # SDK attribute chain that the entry must call.
@@ -40,6 +41,7 @@ MENU_BINDINGS = [
         ("wan_clients", "searchOrgWanClientEvents"),
     ),
     ("system_events", "searchOrgSystemEvents", "OrgSystemEvents", ("events", "searchOrgSystemEvents")),
+    ("org_vars", "searchOrgVars", "OrgVars", ("vars", "searchOrgVars")),
 ]
 
 
@@ -157,3 +159,19 @@ class TestSharedBehavior:
         OrgSearchExporter.system_events()
 
         wired["mistapi"].get_all.assert_called_once_with(response=[{"id": "row-1"}], mist_session=wired["apisession"])
+
+    def test_org_vars_strategy_uses_response_fields(self) -> None:
+        """The variable strategy must use fields returned by the endpoint."""
+        strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES["searchOrgVars"]  # Read the centralized database strategy.
+        assert strategy["type"] == "composite_pk"  # Require an upsert key for repeated variable exports.
+        assert strategy["primary_key"] == ["site_id", "var", "src"]  # Match the documented response fields.
+
+    def test_org_vars_menu_is_registered_as_safe(self) -> None:
+        """Menu 248 must route to organization variable export as a safe operation."""
+        import MistHelper  # Import the runtime menu registry under test.
+        from src.utils.operation_registry import OperationRegistry  # Read the safety classification.
+
+        action, description = MistHelper.menu_actions["248"]  # Read the menu dispatch tuple.
+        assert action is OrgSearchExporter.org_vars  # Require the new menu to call the exporter.
+        assert "searchOrgVars" in description  # Expose the operation identifier to operators.
+        assert OperationRegistry.get("248")["category"] == "safe"  # Keep the read-only operation automated.
