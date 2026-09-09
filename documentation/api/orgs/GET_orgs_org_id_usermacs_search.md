@@ -145,7 +145,7 @@ Standard Mist API rate limits apply.
 
 ## mistapi SDK
 
-`mistapi.api.v1.orgs.user_macs.searchOrgUserMacs()`
+`mistapi.api.v1.orgs.usermacs.searchOrgUserMacs()`
 
 ## Usage Context
 
@@ -162,4 +162,7 @@ Searches for user MAC addresses across the organization.
 
 ## MistHelper Notes
 
-Not currently used by MistHelper directly.
+Menu 251 calls this endpoint. The menu asks for the optional `mac`, `labels`,
+`limit`, and `sort` filters. A blank answer leaves the Mist default in place.
+The menu asks for no `page` number, because `mistapi.get_all` follows the pages.
+The `--test` sweep skips the prompts and searches with the Mist defaults.

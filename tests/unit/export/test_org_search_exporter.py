@@ -1,10 +1,12 @@
 """Unit tests for the organization-scoped search exporter.
 
-Covers specs 863, 870, and 873 to 879 (issues #1371, #1378, #1379, #1381,
-#1382, #1383, #1385, and #1386), which are menus 230 to 234 and 248 to 250.
+Covers specs 863, 870, 872, and 873 to 879 (issues #1371, #1378, #1379, #1380,
+#1381, #1382, #1383, #1385, and #1386), which are menus 230 to 234 and 248 to
+253.
 
-The six operations share one helper, so the shared behavior is tested once and
-each menu entry is checked for the binding that makes it distinct.
+The ten operations share one helper, so the shared behavior is tested once and
+each menu entry is checked for the binding that makes it distinct. The two
+filtered searches also get direct coverage of every optional filter.
 """
 
 from __future__ import annotations  # WHY: PEP 604 unions on Python 3.10+.
@@ -44,6 +46,8 @@ MENU_BINDINGS = [
     ("system_events", "searchOrgSystemEvents", "OrgSystemEvents", ("events", "searchOrgSystemEvents")),
     ("sites", "searchOrgSites", "OrgSitesSearch", ("sites", "searchOrgSites")),
     ("org_vars", "searchOrgVars", "OrgVars", ("vars", "searchOrgVars")),
+    ("user_macs", "searchOrgUserMacs", "OrgUserMacs", ("usermacs", "searchOrgUserMacs")),
+    ("mx_edges", "searchOrgMxEdges", "OrgMxEdges", ("mxedges", "searchOrgMxEdges")),
 ]
 
 
@@ -67,10 +71,14 @@ def wired(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     apisession = MagicMock(name="apisession")  # Forwarded into every SDK call.
     config_utils = MagicMock(name="ConfigUtils")  # Supplies get_cached_or_prompted_org_id.
     config_utils.get_cached_or_prompted_org_id.return_value = "org-1"  # Default happy path.
+    input_utils = MagicMock(name="InputUtils")  # Supplies the EOF-safe optional filter prompts.
+    input_utils.safe_input.return_value = ""  # A blank answer keeps every optional filter unset.
 
     monkeypatch.setattr("MistHelper.DataExporter", data_exporter, raising=False)
     monkeypatch.setattr("MistHelper.apisession", apisession, raising=False)
     monkeypatch.setattr("MistHelper.ConfigUtils", config_utils, raising=False)
+    monkeypatch.setattr("MistHelper.InputUtils", input_utils, raising=False)
+    monkeypatch.setattr("MistHelper.IS_TEST_MODE", False, raising=False)  # Exercise the interactive branch.
 
     return {
         "DataProcessingUtils": data_processing,
@@ -78,6 +86,7 @@ def wired(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         "DataExporter": data_exporter,
         "apisession": apisession,
         "ConfigUtils": config_utils,
+        "InputUtils": input_utils,
     }
 
 
@@ -185,3 +194,240 @@ class TestSharedBehavior:
 
         assert strategy["type"] == "composite_pk"  # Require update-safe device search storage.
         assert strategy["primary_key"] == ["id", "mac"]  # Require stable uniqueness for repeated exports.
+
+    def test_user_macs_menu_is_registered_as_safe(self) -> None:
+        """Menu 251 must route to the user MAC export as a safe operation."""
+        import MistHelper  # Import the runtime menu registry under test.
+        from src.utils.operation_registry import OperationRegistry  # Read the safety classification.
+
+        action, description = MistHelper.menu_actions["251"]  # Read the menu dispatch tuple for issue #1380.
+        assert action is OrgSearchExporter.user_macs  # Require the new menu to call the exporter.
+        assert "searchOrgUserMacs" in description  # Expose the operation identifier to operators.
+        assert OperationRegistry.get("251")["category"] == "safe"  # Keep the read-only operation automated.
+
+
+class TestMxEdgeSearch:
+    """Cover the organization MxEdge search filters and export binding."""
+
+    def test_mx_edges_forwards_optional_filters(self, wired: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+        """The menu entry must convert and forward every entered filter to the SDK."""
+        target = wired["mistapi"].api.v1.orgs.mxedges.searchOrgMxEdges
+        target.return_value = [{"id": "edge-1"}]
+        answers = iter(  # One answer per prompt, in the order of the installed SDK signature.
+            [
+                "edge-host",  # hostname, which the staged branch did not ask for.
+                "edge-1",  # mxedge_id
+                "",  # mxcluster_id, left blank on purpose.
+                "SSR",  # model
+                "",  # distro, left blank on purpose.
+                "1.2.3",  # tunterm_version
+                "site-1",  # site_id
+                "true",  # stats, which must reach the SDK as a boolean.
+                "25",  # limit, which must reach the SDK as an integer.
+                "-1d",  # start
+                "",  # end, left blank on purpose.
+                "7d",  # duration
+                "-last_seen",  # sort
+                "",  # search_after, left blank on purpose.
+            ]
+        )
+        wired["InputUtils"].safe_input.side_effect = lambda *args, **kwargs: next(answers)
+
+        OrgSearchExporter.mx_edges()
+
+        target.assert_called_once_with(
+            wired["apisession"],
+            "org-1",
+            hostname="edge-host",
+            mxedge_id="edge-1",
+            model="SSR",
+            tunterm_version="1.2.3",
+            site_id="site-1",
+            stats=True,
+            limit=25,
+            start="-1d",
+            duration="7d",
+            sort="-last_seen",
+        )
+        wired["DataExporter"].write_with_format_selection.assert_called_once_with(
+            [{"id": "edge-1"}],
+            "OrgMxEdges.csv",
+            api_function_name="searchOrgMxEdges",
+        )
+
+    def test_mx_edges_asks_for_the_hostname_filter(self, wired: dict[str, Any]) -> None:
+        """The SDK accepts a hostname, so the operator must be able to supply one."""
+        wired["mistapi"].api.v1.orgs.mxedges.searchOrgMxEdges.return_value = [{"id": "edge-1"}]
+
+        OrgSearchExporter.mx_edges()
+
+        contexts = [call.kwargs["context"] for call in wired["InputUtils"].safe_input.call_args_list]
+        assert "org_search_exporter.searchOrgMxEdges.hostname" in contexts  # Require the missing prompt.
+
+    def test_mx_edges_with_empty_filters_uses_sdk_defaults(
+        self, wired: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """EOF-safe empty answers must still run one unfiltered organization search."""
+        target = wired["mistapi"].api.v1.orgs.mxedges.searchOrgMxEdges
+        target.return_value = [{"id": "edge-1"}]
+        monkeypatch.setattr(
+            "MistHelper.InputUtils",
+            MagicMock(safe_input=MagicMock(return_value="")),
+            raising=False,
+        )
+
+        OrgSearchExporter.mx_edges()
+
+        target.assert_called_once_with(wired["apisession"], "org-1")
+
+    def test_mx_edges_menu_is_registered_as_safe(self) -> None:
+        """Menu 253 must route to the MxEdge export as a safe operation."""
+        import MistHelper  # Import the runtime menu registry under test.
+        from src.utils.operation_registry import OperationRegistry  # Read the safety classification.
+
+        action, description = MistHelper.menu_actions["253"]  # Read the menu dispatch tuple.
+        assert action is OrgSearchExporter.mx_edges  # Require the new menu to call the exporter.
+        assert "searchOrgMxEdges" in description  # Expose the operation identifier to operators.
+        assert OperationRegistry.get("253")["category"] == "safe"  # Keep the read-only operation automated.
+
+    def test_mx_edge_strategy_uses_the_id_and_mac_pair(self) -> None:
+        """MxEdge rows must upsert on the identifier and the MAC address."""
+        strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES["searchOrgMxEdges"]  # Read the catalog entry.
+
+        assert strategy["type"] == "composite_pk"  # Require update-safe MxEdge storage.
+        assert strategy["primary_key"] == ["id", "mac"]  # Require stable uniqueness for repeated exports.
+
+
+class TestUserMacSearch:
+    """Cover the organization user MAC search filters and export binding."""
+
+    def test_user_macs_forwards_optional_filters(self, wired: dict[str, Any]) -> None:
+        """The menu entry must convert and forward every entered filter to the SDK."""
+        target = wired["mistapi"].api.v1.orgs.usermacs.searchOrgUserMacs
+        target.return_value = [{"id": "mac-1"}]
+        answers = iter(["5684dae9ac8b", "byod, flr1", "50", "-timestamp"])  # One answer per prompt.
+        wired["InputUtils"].safe_input.side_effect = lambda *args, **kwargs: next(answers)
+
+        OrgSearchExporter.user_macs()
+
+        target.assert_called_once_with(
+            wired["apisession"],
+            "org-1",
+            mac="5684dae9ac8b",
+            labels=["byod", "flr1"],
+            limit=50,
+            sort="-timestamp",
+        )
+        wired["DataExporter"].write_with_format_selection.assert_called_once_with(
+            [{"id": "mac-1"}],
+            "OrgUserMacs.csv",
+            api_function_name="searchOrgUserMacs",
+        )
+
+    def test_user_macs_asks_for_the_documented_filters(self, wired: dict[str, Any]) -> None:
+        """The prompts must match the optional parameters of the installed SDK."""
+        wired["mistapi"].api.v1.orgs.usermacs.searchOrgUserMacs.return_value = [{"id": "mac-1"}]
+
+        OrgSearchExporter.user_macs()
+
+        contexts = [call.kwargs["context"] for call in wired["InputUtils"].safe_input.call_args_list]
+        assert contexts == [  # Require the exact prompt set and the exact prompt order.
+            "org_search_exporter.searchOrgUserMacs.mac",
+            "org_search_exporter.searchOrgUserMacs.labels",
+            "org_search_exporter.searchOrgUserMacs.limit",
+            "org_search_exporter.searchOrgUserMacs.sort",
+        ]
+
+    def test_user_macs_never_asks_for_a_page_number(self, wired: dict[str, Any]) -> None:
+        """mistapi.get_all owns the page walk, so a page filter must not exist."""
+        wired["mistapi"].api.v1.orgs.usermacs.searchOrgUserMacs.return_value = [{"id": "mac-1"}]
+
+        OrgSearchExporter.user_macs()
+
+        contexts = [call.kwargs["context"] for call in wired["InputUtils"].safe_input.call_args_list]
+        assert "org_search_exporter.searchOrgUserMacs.page" not in contexts  # No duplicate pagination.
+
+    def test_user_macs_omits_blank_filters(self, wired: dict[str, Any]) -> None:
+        """A blank answer must leave the SDK default in place."""
+        target = wired["mistapi"].api.v1.orgs.usermacs.searchOrgUserMacs
+        target.return_value = [{"id": "mac-1"}]
+        answers = iter(["", "  ", "", "  "])  # Blank and whitespace answers must both be dropped.
+        wired["InputUtils"].safe_input.side_effect = lambda *args, **kwargs: next(answers)
+
+        OrgSearchExporter.user_macs()
+
+        target.assert_called_once_with(wired["apisession"], "org-1")
+
+    def test_user_macs_partial_filters_reach_the_sdk(self, wired: dict[str, Any]) -> None:
+        """Only the filters that the operator supplied may reach the SDK call."""
+        target = wired["mistapi"].api.v1.orgs.usermacs.searchOrgUserMacs
+        target.return_value = [{"id": "mac-1"}]
+        answers = iter(["5684dae9", "", "", ""])  # Supply the MAC filter only.
+        wired["InputUtils"].safe_input.side_effect = lambda *args, **kwargs: next(answers)
+
+        OrgSearchExporter.user_macs()
+
+        target.assert_called_once_with(wired["apisession"], "org-1", mac="5684dae9")
+
+    def test_user_macs_drops_a_single_label(self, wired: dict[str, Any]) -> None:
+        """One label must still reach the SDK as a list, because the SDK declares a list."""
+        target = wired["mistapi"].api.v1.orgs.usermacs.searchOrgUserMacs
+        target.return_value = [{"id": "mac-1"}]
+        answers = iter(["", "byod", "", ""])  # Supply the label filter only.
+        wired["InputUtils"].safe_input.side_effect = lambda *args, **kwargs: next(answers)
+
+        OrgSearchExporter.user_macs()
+
+        target.assert_called_once_with(wired["apisession"], "org-1", labels=["byod"])
+
+    def test_user_macs_ignores_an_invalid_limit(self, wired: dict[str, Any], caplog: pytest.LogCaptureFixture) -> None:
+        """Text that is not a number must not reach the SDK as a page size."""
+        target = wired["mistapi"].api.v1.orgs.usermacs.searchOrgUserMacs
+        target.return_value = [{"id": "mac-1"}]
+        answers = iter(["", "", "many", ""])  # Supply an unusable limit only.
+        wired["InputUtils"].safe_input.side_effect = lambda *args, **kwargs: next(answers)
+
+        with caplog.at_level(logging.WARNING):
+            OrgSearchExporter.user_macs()
+
+        target.assert_called_once_with(wired["apisession"], "org-1")
+        assert "Ignoring the invalid searchOrgUserMacs limit value: many" in caplog.text
+
+    def test_user_macs_asks_for_no_filter_before_the_org_is_resolved(self, wired: dict[str, Any]) -> None:
+        """An unresolved organization must stop before the first prompt."""
+        wired["ConfigUtils"].get_cached_or_prompted_org_id.return_value = None
+
+        OrgSearchExporter.user_macs()
+
+        wired["InputUtils"].safe_input.assert_not_called()  # No prompt runs without an organization.
+
+    def test_user_mac_strategy_uses_the_id_and_mac_pair(self) -> None:
+        """User MAC rows must upsert on the identifier and the MAC address."""
+        strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES["searchOrgUserMacs"]  # Read the catalog entry.
+
+        assert strategy["type"] == "composite_pk"  # Require update-safe user MAC storage.
+        assert strategy["primary_key"] == ["id", "mac"]  # Require stable uniqueness for repeated exports.
+
+
+class TestUnattendedSweep:
+    """A `safe` menu must run under --test without reading stdin. See issue #1765."""
+
+    @pytest.mark.parametrize(
+        ("method", "chain"),
+        [
+            ("user_macs", ("usermacs", "searchOrgUserMacs")),
+            ("mx_edges", ("mxedges", "searchOrgMxEdges")),
+        ],
+    )
+    def test_test_mode_skips_every_filter_prompt(
+        self, wired: dict[str, Any], monkeypatch: pytest.MonkeyPatch, method: str, chain: tuple[str, ...]
+    ) -> None:
+        """Test mode must run one unfiltered search and never block on a prompt."""
+        monkeypatch.setattr("MistHelper.IS_TEST_MODE", True, raising=False)  # Simulate the --test sweep.
+        target = _sdk_target(wired["mistapi"], chain)
+        target.return_value = [{"id": "row-1"}]
+
+        getattr(OrgSearchExporter, method)()
+
+        wired["InputUtils"].safe_input.assert_not_called()  # No stdin read during the sweep.
+        target.assert_called_once_with(wired["apisession"], "org-1")  # The SDK defaults still apply.
