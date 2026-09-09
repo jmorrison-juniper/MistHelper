@@ -1259,9 +1259,9 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
     "searchOrgInventory": {
         "type": "composite_pk",
         "primary_key": ["id", "mac"],
-        "indexes": ["org_id", "site_id", "serial", "model", "type"],
+        "indexes": ["org_id", "site_id", "serial", "model", "name", "type", "status"],
         "unique_constraints": [],
-        "description": "Organization inventory search results",
+        "description": "Organization inventory search results keyed by device id and MAC",
     },
     "searchOrgWirelessClientEvents": {
         "type": "composite_pk",

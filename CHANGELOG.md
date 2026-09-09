@@ -22,6 +22,17 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   `id` field for upserts without duplicate rows.
 - **Added**: Unit coverage for the SDK binding, pagination, export path, empty
   results, unresolved organizations, and API errors.
+ 
+### Search organization inventory (menu 253)
+
+- **Added**: Menu 253 searches organization inventory with optional type, MAC,
+  model, name, site, serial, status, version, SKU, text, sort, and pagination
+  filters through `searchOrgInventory`. Results use the standard CSV, SQLite,
+  or ArangoDB output pipeline. Issue #1372.
+- **Updated**: The existing `searchOrgInventory` composite primary-key strategy
+  continues to route search rows through the standard storage pipeline.
+- **Added**: Unit tests for filter forwarding, pagination, empty results,
+  cancellation, persistence, and SDK errors.
 
 ### Verify an email change token (menu 247)
 
@@ -1821,7 +1832,7 @@ that runs without a proxy needs no action.
 - **Menu 227 (Added)**: `searchSiteDeviceConfigHistory` searches the device
   configuration history for a site. Spec 883, issue #1391.
 - **Menu 228 (Added)**: `searchSiteDiscoveredSwitches` searches the discovered
-  switches for a site. Spec 887, issue #1396.
+  switches for a site. Spec 887, issue #1395.
 - **Menu 229 (Added)**: `searchSiteZoneSessions` searches the zone sessions for a
   site. Spec 904, issue #1412.
 - **Zone type prompt (Added)**: `searchSiteZoneSessions` puts a zone type in the
