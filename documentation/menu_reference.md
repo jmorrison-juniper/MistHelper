@@ -283,6 +283,7 @@ never runs in an automated test pass.
 | 247 | Verify an email change token from the Mist email (verifySelfEmail) | Interactive safe | `SelfAccountExporter.verify_email` |
 | 248 | Search sites for the organization (searchOrgSites) | Safe org exports | `OrgSearchExporter.sites` |
 | 249 | Search devices for the organization (searchOrgDevices) | Safe org exports | `OrgSearchExporter.devices` |
+| 250 | Search organization webhook deliveries (searchOrgWebhooksDeliveries) | Interactive safe | `OrgWebhookDeliveriesExporter.deliveries` |
 
 This page should be regenerated whenever `menu_actions` or the operation registry
 changes, so the wiki stays aligned with the code.

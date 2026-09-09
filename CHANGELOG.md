@@ -23,6 +23,14 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Added**: Unit coverage for the SDK binding, pagination, export path, empty
   results, unresolved organizations, and API errors.
 
+### Search organization webhook deliveries (menu 249)
+
+- **Added**: Menu 249 calls `searchOrgWebhooksDeliveries` for one organization
+  webhook and exports delivery rows through the standard storage backends.
+  Issue #1384.
+- **Added**: Unit coverage for webhook selection, pagination, persistence, and
+  SDK error handling.
+
 ### Verify an email change token (menu 247)
 
 - **Added**: Menu 247 verifies a single-use email change token through the

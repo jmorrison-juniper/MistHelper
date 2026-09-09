@@ -447,6 +447,9 @@ from src.export.org_site_exporter import (
 from src.export.org_template_exporter import (
     OrgTemplateExporter,  # Cat B (1013 SC-001 position 22) -- re-export for MistHelper.OrgTemplateExporter callers
 )
+from src.export.org_webhook_deliveries_exporter import (
+    OrgWebhookDeliveriesExporter,  # Spec 876 / issue #1384 -- webhook delivery search, menu 250
+)
 from src.export.self_account_exporter import (
     SelfAccountExporter,  # Issue #1415 -- verify an email change token, menu 247
 )
@@ -3802,6 +3805,10 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "249": (
         OrgSearchExporter.devices,  # Spec 863 / issue #1371 -- search organization devices.
         "Search devices for the organization (searchOrgDevices)",  # Expose the read-only endpoint in the menu.
+    ),
+    "250": (
+        OrgWebhookDeliveriesExporter.deliveries,
+        "Search organization webhook deliveries (searchOrgWebhooksDeliveries)",
     ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
