@@ -2,7 +2,7 @@
 
 **Feature Branch**: `887-mist-search-site-discovered-switches`
 **Created**: 2026-06-29
-**Status**: Draft
+**Status**: Complete
 **Input**: User description: "Catalog the missing Mist API GET endpoint `searchSiteDiscoveredSwitches` and add it as a new MistHelper menu item."
 
 ## Source Endpoint

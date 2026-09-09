@@ -183,6 +183,29 @@ class TestSharedBehavior:
         wired["mistapi"].get_all.assert_called_once_with(response=[{"id": "row-1"}], mist_session=wired["apisession"])
 
 
+class TestDiscoveredSwitches:
+    """Protect the Spec 887 endpoint binding and persistence contract."""
+
+    def test_menu_228_calls_the_endpoint_once_and_writes_rows(
+        self, wired: dict[str, Any], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Menu 228 must call the discovered-switch endpoint and persist its rows."""
+        target = wired["mistapi"].api.v1.sites.stats.searchSiteDiscoveredSwitches  # Select the Spec 887 SDK callable.
+        target.return_value = [{"system_name": "switch-1"}]  # Return one row without contacting Mist Cloud.
+
+        with caplog.at_level(logging.DEBUG):  # Capture the before and after action logs.
+            SiteSearchExporter.discovered_switches()  # Run the menu 228 exporter path.
+
+        target.assert_called_once_with(wired["apisession"], "site-1")  # Verify one call with required arguments.
+        wired["DataExporter"].write_with_format_selection.assert_called_once_with(  # Verify standard persistence.
+            [{"system_name": "switch-1"}],  # Verify the endpoint row reaches the writer.
+            "SiteDiscoveredSwitches_HQ_Site.csv",  # Verify the operation-specific output name.
+            api_function_name="searchSiteDiscoveredSwitches",  # Verify primary-key routing metadata.
+        )
+        assert "Calling searchSiteDiscoveredSwitches" in caplog.text  # Verify the pre-call action log.
+        assert "searchSiteDiscoveredSwitches persisted 1 rows" in caplog.text  # Verify the post-call result log.
+
+
 class TestZoneSessions:
     """Menu 229 needs a zone type in the URL path, so it prompts for one.
 
