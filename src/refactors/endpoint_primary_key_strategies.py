@@ -1248,7 +1248,7 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "indexes": ["org_id", "site_id", "model", "type", "hostname"],
         "unique_constraints": [],
         "description": "Organization device search results",
-    },
+    },  # Keep device rows stable when the endpoint returns repeated MAC records.
     "searchOrgDeviceLastConfigs": {
         "type": "composite_pk",
         "primary_key": ["device_id", "timestamp"],
