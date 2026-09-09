@@ -7,6 +7,19 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Stranded branch report reference time (issue #2404)
+
+- **Fixed**: `StrandedBranchReporter.find()` and `StrandedBranchReporter.render()`
+  accept an optional `now` parameter. The parameter names the instant that every
+  age test measures against. Both methods default to the live UTC clock, so a
+  production call keeps its behavior.
+- **Fixed**: The test `test_the_report_names_every_stranded_branch` passes its
+  fixed instant to the report. The test failed on every date after the fixture
+  date, because the report read the real clock.
+- **Added**: Unit coverage that proves the injected instant controls the age
+  classification and the age column, and that the default path reads the real
+  clock.
+
 ### Search organization devices (menu 249)
 
 - **Added**: Menu 249 calls `searchOrgDevices` for the active organization and
