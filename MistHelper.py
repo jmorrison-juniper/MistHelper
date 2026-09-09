@@ -3784,6 +3784,10 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         OrgCradlepointConnectionExporter.status,
         "Export the Cradlepoint connection status for an organization (testOrgCradlepointConnection)",
     ),
+    "246": (
+        SiteSearchExporter.troubleshoot_call,
+        "Troubleshoot a call for a site, client MAC, and meeting ID (troubleshootSiteCall)",
+    ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
     "46": (OrgConfigExporter.wlans, "Export WLAN configuration for the organization"),

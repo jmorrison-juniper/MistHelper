@@ -59,6 +59,7 @@ This page names the operations that arrived most recently.
 | 240 | Export one organization security intelligence profile (`getOrgSecIntelProfile`) | `interactive_safe` |
 | 244 | Search site service path events (`searchSiteServicePathEvents`) | `interactive_safe` |
 | 245 | Export the Cradlepoint connection status for an organization (`testOrgCradlepointConnection`) | `interactive_safe` |
+| 246 | Troubleshoot a call for a site, client MAC, and meeting ID (`troubleshootSiteCall`) | `interactive_safe` |
 
 Menu 197 writes to `data/packet_captures/<mac>/vlan_<id>/`. Every other
 operation in the table writes through `DataExporter`, so it honors the CSV,

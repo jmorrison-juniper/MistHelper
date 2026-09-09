@@ -235,3 +235,91 @@ class TestZoneSessions:
         SiteSearchExporter.zone_sessions()
 
         wired["SiteDeviceExporter"]._resolve_site_for_stats.assert_not_called()
+
+
+class TestTroubleshootCall:
+    """Menu 246 needs a client MAC and a meeting ID, so it prompts for both."""
+
+    def test_entry_calls_its_endpoint_and_persists(self, wired: dict[str, Any]) -> None:
+        """The entry must call troubleshootSiteCall once and write with its operationId."""
+        wired["InputUtils"].safe_input.side_effect = ["98:3a:78:ea:4a:44", "b784d744-9a7c-4fad-9af0-f78858a319b1"]
+        target = wired["mistapi"].api.v1.sites.stats.troubleshootSiteCall
+        target.return_value = [{"id": "row-1"}]
+
+        SiteSearchExporter.troubleshoot_call()
+
+        target.assert_called_once_with(
+            wired["apisession"], "site-1", "98:3a:78:ea:4a:44", "b784d744-9a7c-4fad-9af0-f78858a319b1"
+        )
+        wired["DataExporter"].write_with_format_selection.assert_called_once_with(
+            [{"id": "row-1"}],
+            "SiteTroubleshootCall_HQ_Site.csv",
+            api_function_name="troubleshootSiteCall",
+        )
+
+    def test_aborts_when_site_resolution_returns_none(self, wired: dict[str, Any]) -> None:
+        """A declined site prompt must stop before any API call."""
+        wired["SiteDeviceExporter"]._resolve_site_for_stats.return_value = None
+
+        SiteSearchExporter.troubleshoot_call()
+
+        wired["mistapi"].api.v1.sites.stats.troubleshootSiteCall.assert_not_called()
+        wired["DataExporter"].write_with_format_selection.assert_not_called()
+
+    def test_aborts_when_the_client_mac_prompt_is_blank(self, wired: dict[str, Any]) -> None:
+        """A blank client MAC must stop the flow before the API call."""
+        wired["InputUtils"].safe_input.side_effect = ["", "b784d744-9a7c-4fad-9af0-f78858a319b1"]
+
+        SiteSearchExporter.troubleshoot_call()
+
+        wired["mistapi"].api.v1.sites.stats.troubleshootSiteCall.assert_not_called()
+        wired["DataExporter"].write_with_format_selection.assert_not_called()
+
+    def test_aborts_when_the_meeting_id_prompt_is_blank(self, wired: dict[str, Any]) -> None:
+        """A blank meeting ID must stop the flow before the API call."""
+        wired["InputUtils"].safe_input.side_effect = ["98:3a:78:ea:4a:44", ""]
+
+        SiteSearchExporter.troubleshoot_call()
+
+        wired["mistapi"].api.v1.sites.stats.troubleshootSiteCall.assert_not_called()
+        wired["DataExporter"].write_with_format_selection.assert_not_called()
+
+    def test_empty_result_writes_nothing(self, wired: dict[str, Any]) -> None:
+        """An empty result set must report the fact and skip the export."""
+        wired["InputUtils"].safe_input.side_effect = ["98:3a:78:ea:4a:44", "b784d744-9a7c-4fad-9af0-f78858a319b1"]
+        wired["mistapi"].api.v1.sites.stats.troubleshootSiteCall.return_value = []
+
+        SiteSearchExporter.troubleshoot_call()
+
+        wired["DataExporter"].write_with_format_selection.assert_not_called()
+
+    def test_results_array_payload_is_unwrapped_to_rows(self, wired: dict[str, Any]) -> None:
+        """The documented dict payload must yield its results array as the row set."""
+        wired["InputUtils"].safe_input.side_effect = ["98:3a:78:ea:4a:44", "b784d744-9a7c-4fad-9af0-f78858a319b1"]
+        rows = [{"ap_rtt": 0.1}, {"ap_rtt": 0.2}]
+        wired["mistapi"].api.v1.sites.stats.troubleshootSiteCall.return_value = {
+            "mac": "983a78ea4a44",
+            "meeting_id": "b784d744-9a7c-4fad-9af0-f78858a319b1",
+            "results": rows,
+        }
+
+        SiteSearchExporter.troubleshoot_call()
+
+        wired["DataExporter"].write_with_format_selection.assert_called_once_with(
+            rows,
+            "SiteTroubleshootCall_HQ_Site.csv",
+            api_function_name="troubleshootSiteCall",
+        )
+
+    def test_api_error_is_logged_and_does_not_raise(
+        self, wired: dict[str, Any], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """An SDK failure must surface in the log rather than crash the menu."""
+        wired["InputUtils"].safe_input.side_effect = ["98:3a:78:ea:4a:44", "b784d744-9a7c-4fad-9af0-f78858a319b1"]
+        wired["mistapi"].api.v1.sites.stats.troubleshootSiteCall.side_effect = RuntimeError("boom")
+
+        with caplog.at_level(logging.ERROR):
+            SiteSearchExporter.troubleshoot_call()
+
+        assert "Error fetching call troubleshoot for site" in caplog.text
+        wired["DataExporter"].write_with_format_selection.assert_not_called()

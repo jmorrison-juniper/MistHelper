@@ -7,6 +7,13 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Troubleshoot a call for one client meeting
+
+- **Added**: Menu 246 prompts for a site, a client MAC, and a meeting ID, then
+  exports the call troubleshooting diagnostics from `troubleshootSiteCall`.
+  The result writes through the standard CSV, SQLite, and ArangoDB backends.
+  Issue #1414.
+
 ### Export the Cradlepoint connection status (menu 245)
 
 - **Added**: Menu 245 exports the Cradlepoint integration status for one

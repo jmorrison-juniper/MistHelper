@@ -1132,6 +1132,7 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {  # WHY: map API function names to vert
     "searchOrgClientFingerprints": "fingerprints",
     "listSiteUiSettings": "ui_settings",
     "listSiteTroubleshootCalls": "troubleshoot_calls",
+    "troubleshootSiteCall": "troubleshoot_calls",
     # -- Issue #185: SLE impacted entity endpoints --
     "listSiteSlesMetrics": "sle_metrics",
     "listSiteSleMetricClassifiers": "sle_classifiers",
