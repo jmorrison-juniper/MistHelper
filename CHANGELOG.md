@@ -7,6 +7,31 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Search organization devices (menu 249)
+
+- **Added**: Menu 249 calls `searchOrgDevices` for the active organization and
+  exports the device rows through CSV, SQLite, or ArangoDB. Issue #1371.
+- **Added**: Unit coverage for the SDK binding, pagination, empty results,
+  errors, flattening, and persistence.
+
+### Search sites for an organization (menu 248)
+
+- **Added**: Menu 248 calls `searchOrgSites` and exports organization site
+  search results through CSV, SQLite, or ArangoDB. Issue #1378.
+- **Added**: The `searchOrgSites` primary-key strategy uses the stable site
+  `id` field for upserts without duplicate rows.
+- **Added**: Unit coverage for the SDK binding, pagination, export path, empty
+  results, unresolved organizations, and API errors.
+
+### Search organization variables (menu 250)
+
+- **Added**: Menu 250 calls `searchOrgVars` and exports organization variable
+  rows through the standard CSV, SQLite, and ArangoDB backends. Issue #1381.
+- **Added**: The `searchOrgVars` composite key uses `site_id`, `var`, and `src`
+  from the Mist response. This prevents duplicate rows during SQLite upserts.
+- **Added**: Unit coverage for the SDK call, pagination, persistence, empty
+  results, unresolved organizations, and API errors.
+
 ### Verify an email change token (menu 247)
 
 - **Added**: Menu 247 verifies a single-use email change token through the
@@ -1796,7 +1821,7 @@ that runs without a proxy needs no action.
   per-menu bindings are checked by a parametrized case, so each entry is proven
   to call its own endpoint and write its own file.
 
-### Add five site-scoped search operations, menus 225 to 229 (issues #1401, #1393, #1391, #1396, #1412)
+### Add five site-scoped search operations, menus 225 to 229 (issues #1401, #1393, #1391, #1395, #1412)
 
 - **Menu 225 (Added)**: `searchSiteOspfStats` searches the OSPF neighbor
   statistics for a site. Spec 893, issue #1401.
