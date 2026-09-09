@@ -3737,6 +3737,10 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         OrgSearchExporter.system_events,
         "Search system events for the organization (searchOrgSystemEvents)",
     ),
+    "250": (
+        OrgSearchExporter.org_vars,
+        "Search organization variables (searchOrgVars)",
+    ),
     "235": (
         CountExporter.org_counts,
         "Run any org-scoped Mist count endpoint (35 operations, issue #1802)",
@@ -3794,6 +3798,14 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "247": (
         SelfAccountExporter.verify_email,
         "Verify an email change token from the Mist email (verifySelfEmail)",
+    ),
+    "248": (
+        OrgSearchExporter.sites,
+        "Search sites for the organization (searchOrgSites)",
+    ),
+    "249": (
+        OrgSearchExporter.devices,  # Spec 863 / issue #1371 -- search organization devices.
+        "Search devices for the organization (searchOrgDevices)",  # Expose the read-only endpoint in the menu.
     ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
