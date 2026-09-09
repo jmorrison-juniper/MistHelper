@@ -7,6 +7,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Export the Cradlepoint connection status (menu 245)
+
+- **Added**: Menu 245 exports the Cradlepoint integration status for one
+  organization. The menu calls `testOrgCradlepointConnection`
+  (`GET /api/v1/orgs/{org_id}/setting/cradlepoint/setup`) and writes the
+  `last_status` and `error` fields to CSV, SQLite, or ArangoDB. Issue #1413.
+- **Added**: The `testOrgCradlepointConnection` primary-key strategy in
+  `ENDPOINT_PRIMARY_KEY_STRATEGIES`. The strategy is
+  `auto_increment_with_unique`, because the endpoint returns one object with
+  no stable key.
+- **Added**: Unit tests under
+  `tests/unit/export/test_org_cradlepoint_connection_exporter.py`. Every Mist
+  call is mocked, so no test reaches the live cloud.
+
 ### Search the service path events for a site
 
 - **Added**: Menu 244 calls `searchSiteServicePathEvents` for a selected site

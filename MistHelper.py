@@ -423,6 +423,9 @@ from src.export.org_client_security_exporter import (
 from src.export.org_config_exporter import (
     OrgConfigExporter,  # Cat B (1013 SC-001 position 31) -- re-export for MistHelper.OrgConfigExporter callers
 )
+from src.export.org_cradlepoint_connection_exporter import (
+    OrgCradlepointConnectionExporter,  # Issue #1413 -- Cradlepoint status read, menu 245
+)
 from src.export.org_device_stats_exporter import (
     OrgDeviceStatsExporter,  # Cat B (1013 SC-001 position 45) -- re-export
 )
@@ -3776,6 +3779,10 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "244": (
         SiteSearchExporter.service_path_events,
         "Search service path events for a selected site (searchSiteServicePathEvents)",
+    ),
+    "245": (
+        OrgCradlepointConnectionExporter.status,
+        "Export the Cradlepoint connection status for an organization (testOrgCradlepointConnection)",
     ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
