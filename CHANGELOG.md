@@ -22,6 +22,11 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   `id` field for upserts without duplicate rows.
 - **Added**: Unit coverage for the SDK binding, pagination, export path, empty
   results, unresolved organizations, and API errors.
+ 
+### Search NAC clients for a site (menu 258)
+
+- **Added**: Menu 258 calls `searchSiteNacClients` for a selected site and
+  exports NAC client records through CSV, SQLite, or ArangoDB. Issue #1400.
 
 ### Verify an email change token (menu 247)
 

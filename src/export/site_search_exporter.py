@@ -23,6 +23,7 @@ Covered operations:
     - ``searchSiteDiscoveredSwitches`` (menu 228)
     - ``searchSiteZoneSessions`` (menu 229)
     - ``searchSiteServicePathEvents`` (menu 244)
+    - ``searchSiteNacClients`` (menu 249)
 
 Why:
     Nearly all of these endpoints take the same arguments, a session and a site,
@@ -447,4 +448,18 @@ class SiteSearchExporter:
             "searchSiteServicePathEvents",
             "SiteServicePathEvents",
             "service path event",
+        )
+
+    @staticmethod
+    def nac_clients() -> None:
+        """Search NAC clients for a site and export them (menu 249).
+
+        Added for spec 892 and issue #1400. The endpoint is read-only and
+        uses the shared site search flow for consistent output.
+        """
+        SiteSearchExporter._run_site_search(  # Reuse the shared site selection and export pipeline.
+            mistapi.api.v1.sites.nac_clients.searchSiteNacClients,  # Call the installed Mist SDK endpoint.
+            "searchSiteNacClients",  # Route output to the endpoint primary-key strategy.
+            "SiteNacClients",  # Keep the per-site output filename clear.
+            "NAC client",  # Use a clear operator-facing result label.
         )

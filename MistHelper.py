@@ -3803,6 +3803,10 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         OrgSearchExporter.devices,  # Spec 863 / issue #1371 -- search organization devices.
         "Search devices for the organization (searchOrgDevices)",  # Expose the read-only endpoint in the menu.
     ),
+    "258": (
+        SiteSearchExporter.nac_clients,
+        "Search NAC clients for a selected site (searchSiteNacClients)",
+    ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
     "46": (OrgConfigExporter.wlans, "Export WLAN configuration for the organization"),
