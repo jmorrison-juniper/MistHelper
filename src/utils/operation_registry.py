@@ -350,6 +350,11 @@ class OperationRegistry:
             "category": "interactive_safe",
             "skip_reason": "Requires an email change token from the Mist email",
         },
+        # WHY: menu 248 is a read-only inventory search that prompts for optional filters.
+        "248": {
+            "category": "interactive_safe",
+            "skip_reason": "Requires an organization selection and optional search filters",
+        },
         # WHY: menu 239 starts a local web server and drives a firmware upgrade, so it writes
         # device state. The fail-closed guardrail needs this row or the build breaks.
         #
