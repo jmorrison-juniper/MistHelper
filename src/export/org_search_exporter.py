@@ -6,6 +6,7 @@ through the standard MistHelper menu and DataExporter pipeline (CSV, SQLite, or
 ArangoDB).
 
 Covered operations:
+    - ``searchOrgDevices`` (menu 248)
     - ``searchOrgWirelessClientSessions`` (menu 230)
     - ``searchOrgWirelessClientEvents`` (menu 231)
     - ``searchOrgWanClients`` (menu 232)
@@ -118,6 +119,16 @@ class OrgSearchExporter:
             "searchOrgWirelessClientSessions",
             "OrgWirelessClientSessions",
             "wireless client session",
+        )
+
+    @staticmethod
+    def devices() -> None:
+        """Search the devices for an organization and export them (menu 248)."""
+        OrgSearchExporter._run_org_search(  # Reuse the standard org search pipeline for consistent output.
+            mistapi.api.v1.orgs.devices.searchOrgDevices,  # Call the organization device search endpoint.
+            "searchOrgDevices",  # Route the response to the endpoint primary-key strategy.
+            "OrgDevices",  # Keep the output filename stable for operators and automation.
+            "device",  # Use the singular noun in empty and success messages.
         )
 
     @staticmethod

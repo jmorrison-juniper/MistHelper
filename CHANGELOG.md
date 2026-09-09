@@ -7,6 +7,13 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Search organization devices (menu 248)
+
+- **Added**: Menu 248 calls `searchOrgDevices` for the active organization and
+  exports the device rows through CSV, SQLite, or ArangoDB. Issue #1371.
+- **Added**: Unit coverage for the SDK binding, pagination, empty results,
+  errors, flattening, and persistence.
+
 ### Verify an email change token (menu 247)
 
 - **Added**: Menu 247 verifies a single-use email change token through the

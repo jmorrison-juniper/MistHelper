@@ -1,7 +1,7 @@
 """Unit tests for the organization-scoped search exporter.
 
-Covers specs 874 to 879 (issues #1379, #1382, #1383, #1385 and #1386), which are
-menus 230 to 234.
+Covers spec 863 and specs 874 to 879 (issues #1371, #1379, #1382, #1383,
+#1385 and #1386), which are menus 230 to 234 and 248.
 
 The five operations share one helper, so the shared behavior is tested once and
 each menu entry is checked for the binding that makes it distinct.
@@ -16,10 +16,12 @@ from unittest.mock import MagicMock  # WHY: collaborator doubles and call assert
 import pytest  # WHY: monkeypatch and caplog fixtures.
 
 from src.export.org_search_exporter import OrgSearchExporter
+from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 
 # Each row maps a menu entry to the operationId, the filename prefix, and the
 # SDK attribute chain that the entry must call.
 MENU_BINDINGS = [
+    ("devices", "searchOrgDevices", "OrgDevices", ("devices", "searchOrgDevices")),
     (
         "wireless_client_sessions",
         "searchOrgWirelessClientSessions",
@@ -157,3 +159,10 @@ class TestSharedBehavior:
         OrgSearchExporter.system_events()
 
         wired["mistapi"].get_all.assert_called_once_with(response=[{"id": "row-1"}], mist_session=wired["apisession"])
+
+    def test_device_search_has_a_composite_primary_key(self) -> None:
+        """Device search rows must use the existing id and MAC key pair."""
+        strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES["searchOrgDevices"]  # Read the catalog entry used by persistence.
+
+        assert strategy["type"] == "composite_pk"  # Require update-safe device search storage.
+        assert strategy["primary_key"] == ["id", "mac"]  # Require stable uniqueness for repeated exports.
