@@ -1,6 +1,6 @@
 # Quickstart: searchOrgDevices
 
-1. Run `python MistHelper.py --menu 248`.
+1. Run `python MistHelper.py --menu 249`.
 2. Select or provide the organization ID when prompted.
 3. Confirm that `data/OrgDevices.csv` contains the returned rows.
 4. Run the command again and confirm that SQLite does not create duplicate

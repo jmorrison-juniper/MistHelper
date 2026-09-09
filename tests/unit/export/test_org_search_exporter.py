@@ -1,9 +1,9 @@
 """Unit tests for the organization-scoped search exporter.
 
-Covers spec 863 and specs 874 to 879 (issues #1371, #1379, #1382, #1383,
-#1385 and #1386), which are menus 230 to 234 and 248.
+Covers specs 863 and 870 and specs 874 to 879 (issues #1371, #1378, #1379,
+#1382, #1383, #1385 and #1386), which are menus 230 to 234 and 248 to 249.
 
-The five operations share one helper, so the shared behavior is tested once and
+The six operations share one helper, so the shared behavior is tested once and
 each menu entry is checked for the binding that makes it distinct.
 """
 
@@ -42,6 +42,7 @@ MENU_BINDINGS = [
         ("wan_clients", "searchOrgWanClientEvents"),
     ),
     ("system_events", "searchOrgSystemEvents", "OrgSystemEvents", ("events", "searchOrgSystemEvents")),
+    ("sites", "searchOrgSites", "OrgSitesSearch", ("sites", "searchOrgSites")),
 ]
 
 
@@ -79,11 +80,12 @@ def wired(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     }
 
 
-def _sdk_target(mistapi_mod: MagicMock, chain: tuple[str, str]) -> MagicMock:
+def _sdk_target(mistapi_mod: MagicMock, chain: tuple[str, ...]) -> MagicMock:
     """Return the SDK callable double that a menu entry is expected to call."""
-    module_attribute, function_name = chain  # Split the module and the function halves.
-    module = getattr(mistapi_mod.api.v1.orgs, module_attribute)  # Walk to the SDK submodule double.
-    return getattr(module, function_name)  # Return the function double itself.
+    target: Any = mistapi_mod.api.v1.orgs  # Start at the organization API namespace.
+    for attribute in chain:  # Walk the SDK module path for the selected endpoint.
+        target = getattr(target, attribute)  # Resolve one SDK namespace or function.
+    return target  # Return the function double for the test assertion.
 
 
 class TestMenuBindings:
@@ -91,7 +93,7 @@ class TestMenuBindings:
 
     @pytest.mark.parametrize(("method", "operation", "prefix", "chain"), MENU_BINDINGS)
     def test_entry_calls_its_endpoint_and_persists(
-        self, wired: dict[str, Any], method: str, operation: str, prefix: str, chain: tuple[str, str]
+        self, wired: dict[str, Any], method: str, operation: str, prefix: str, chain: tuple[str, ...]
     ) -> None:
         """The entry must call its endpoint once and write with its own operationId."""
         target = _sdk_target(wired["mistapi"], chain)
@@ -108,7 +110,7 @@ class TestMenuBindings:
 
     @pytest.mark.parametrize(("method", "operation", "prefix", "chain"), MENU_BINDINGS)
     def test_entry_aborts_when_org_is_unresolved(
-        self, wired: dict[str, Any], method: str, operation: str, prefix: str, chain: tuple[str, str]
+        self, wired: dict[str, Any], method: str, operation: str, prefix: str, chain: tuple[str, ...]
     ) -> None:
         """An unresolved organization must stop before any API call."""
         wired["ConfigUtils"].get_cached_or_prompted_org_id.return_value = None

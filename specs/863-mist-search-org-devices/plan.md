@@ -4,7 +4,7 @@
 
 ## Summary
 
-Add menu 248 for the read-only `searchOrgDevices` endpoint. Reuse
+Add menu 249 for the read-only `searchOrgDevices` endpoint. Reuse
 `OrgSearchExporter` so the endpoint receives the standard organization lookup,
 SDK pagination, flattening, and multi-backend export flow.
 

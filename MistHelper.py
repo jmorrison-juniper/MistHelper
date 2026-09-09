@@ -3796,6 +3796,10 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         "Verify an email change token from the Mist email (verifySelfEmail)",
     ),
     "248": (
+        OrgSearchExporter.sites,
+        "Search sites for the organization (searchOrgSites)",
+    ),
+    "249": (
         OrgSearchExporter.devices,  # Spec 863 / issue #1371 -- search organization devices.
         "Search devices for the organization (searchOrgDevices)",  # Expose the read-only endpoint in the menu.
     ),

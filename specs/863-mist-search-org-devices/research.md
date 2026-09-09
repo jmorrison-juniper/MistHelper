@@ -20,5 +20,5 @@ No storage change is required.
 
 ## Menu placement
 
-Menu 235 is used by organization count operations. Menu 248 is the next free
+Menu 235 is used by organization count operations. Menu 249 is the next free
 menu number after the current highest operation.

@@ -1,20 +1,21 @@
 """OrgSearchExporter -- organization-scoped search export operations.
 
-Added for specs 878, 877, 875, 874 and 879 (issues #1386, #1385, #1383, #1382
-and #1379). Wraps read-only Mist API search endpoints so operators reach them
+Added for specs 878, 877, 875, 874, 879, and 870 (issues #1386, #1385, #1383,
+#1382, #1379, and #1378). Wraps read-only Mist API search endpoints so operators reach them
 through the standard MistHelper menu and DataExporter pipeline (CSV, SQLite, or
 ArangoDB).
 
 Covered operations:
-    - ``searchOrgDevices`` (menu 248)
+    - ``searchOrgDevices`` (menu 249)
     - ``searchOrgWirelessClientSessions`` (menu 230)
     - ``searchOrgWirelessClientEvents`` (menu 231)
     - ``searchOrgWanClients`` (menu 232)
     - ``searchOrgWanClientEvents`` (menu 233)
     - ``searchOrgSystemEvents`` (menu 234)
+    - ``searchOrgSites`` (menu 248)
 
 Why:
-    Every one of these endpoints takes a session and an organization and returns
+    Every endpoint takes a session and an organization and returns
     a paginated row set. One shared helper therefore runs the whole resolve,
     fetch, and persist sequence, and each menu entry supplies only the parts that
     differ. This mirrors ``SiteSearchExporter`` for the site-scoped peers.
@@ -123,7 +124,7 @@ class OrgSearchExporter:
 
     @staticmethod
     def devices() -> None:
-        """Search the devices for an organization and export them (menu 248)."""
+        """Search the devices for an organization and export them (menu 249)."""
         OrgSearchExporter._run_org_search(  # Reuse the standard org search pipeline for consistent output.
             mistapi.api.v1.orgs.devices.searchOrgDevices,  # Call the organization device search endpoint.
             "searchOrgDevices",  # Route the response to the endpoint primary-key strategy.
@@ -169,4 +170,14 @@ class OrgSearchExporter:
             "searchOrgSystemEvents",
             "OrgSystemEvents",
             "system event",
+        )
+
+    @staticmethod
+    def sites() -> None:
+        """Search the sites for an organization (menu 248)."""
+        OrgSearchExporter._run_org_search(  # Reuse the standard org search pipeline for consistent output.
+            mistapi.api.v1.orgs.sites.searchOrgSites,  # Call the Mist site search endpoint exposed by the SDK.
+            "searchOrgSites",  # Route output storage through the endpoint strategy.
+            "OrgSitesSearch",  # Use a stable filename prefix for the export.
+            "site",  # Report the result type in operator messages.
         )

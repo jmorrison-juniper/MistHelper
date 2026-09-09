@@ -4,14 +4,14 @@
 
 ## Phase 1: Foundation
 
-- [X] T001 Confirm the endpoint SDK path and select menu 248.
+- [X] T001 Confirm the endpoint SDK path and select menu 249.
 - [X] T002 Confirm the existing `searchOrgDevices` composite primary-key strategy.
-- [X] T003 Register menu 248 as a safe operation.
+- [X] T003 Register menu 249 as a safe operation.
 
 ## Phase 2: User Story 1 - Read-only device search (P1)
 
 - [X] T004 [US1] Add `OrgSearchExporter.devices` in `src/export/org_search_exporter.py`.
-- [X] T005 [US1] Add menu 248 in `MistHelper.py`.
+- [X] T005 [US1] Add menu 249 in `MistHelper.py`.
 - [X] T006 [US1] Add endpoint binding, pagination, persistence, empty-result, and error tests.
 - [X] T007 [US1] Update the README, changelog, and generated menu reference.
 
