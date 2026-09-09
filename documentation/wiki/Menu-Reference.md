@@ -281,7 +281,11 @@ never runs in an automated test pass.
 | 245 | Export the Cradlepoint connection status for an organization (testOrgCradlepointConnection) | Interactive safe | `OrgCradlepointConnectionExporter.status` |
 | 246 | Troubleshoot a call for a site, client MAC, and meeting ID (troubleshootSiteCall) | Interactive safe | `SiteSearchExporter.troubleshoot_call` |
 | 247 | Verify an email change token from the Mist email (verifySelfEmail) | Interactive safe | `SelfAccountExporter.verify_email` |
+<<<<<<< HEAD
 | 248 | Search sites for the organization (searchOrgSites) | Safe org exports | `OrgSearchExporter.sites` |
+=======
+| 248 | Search devices for the organization (searchOrgDevices) | Safe org exports | `OrgSearchExporter.devices` |
+>>>>>>> f5d40008 (feat: add searchOrgDevices export (#1371))
 
 This page should be regenerated whenever `menu_actions` or the operation registry
 changes, so the wiki stays aligned with the code.
