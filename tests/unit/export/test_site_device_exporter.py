@@ -102,7 +102,9 @@ class TestDeviceInventory:
             dpu.get_unique_keys.return_value = ["type", "model"]
             SiteDeviceExporter.device_inventory("s1", device_type="all")
 
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(rows, "SiteInventory.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            rows, "SiteInventory.csv", api_function_name="listSiteDevicesStats"
+        )  # WHY: inventory export keeps endpoint metadata.
 
     def test_type_filter_matches_writes_csv(self, fake_mh):
         """device_type='switch' → filter path returns rows and writes CSV."""
@@ -123,7 +125,9 @@ class TestDeviceInventory:
             dpu.get_unique_keys.return_value = ["type", "model"]
             SiteDeviceExporter.device_inventory("s1", device_type="switch", csv_filename="X.csv")
 
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(rows, "X.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            rows, "X.csv", api_function_name="listSiteDevicesStats"
+        )  # WHY: filtered inventory export keeps endpoint metadata.
 
 
 class TestFilterDevicesByType:
@@ -218,7 +222,9 @@ class TestPersistSiteDeviceStats:
             dpu.escape_multiline.return_value = rows
             SiteDeviceExporter._persist_site_device_stats(rows, "HQ Site")
 
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(rows, "SiteDeviceStats_HQ_Site.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            rows, "SiteDeviceStats_HQ_Site.csv", api_function_name="listSiteDevicesStats"
+        )  # WHY: stats export keeps endpoint metadata.
         assert "1 device stats exported" in caplog.text
 
 
@@ -533,7 +539,9 @@ class TestPersistSiteDevices:
             dpu.escape_multiline.return_value = rows
             SiteDeviceExporter._persist_site_devices(rows, "HQ Site")
 
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(rows, "SiteDevices_HQ_Site.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            rows, "SiteDevices_HQ_Site.csv", api_function_name="listSiteDevices"
+        )  # WHY: device export keeps endpoint metadata.
         assert "1 devices exported" in caplog.text
 
 

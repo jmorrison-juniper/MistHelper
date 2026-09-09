@@ -73,7 +73,9 @@ class TestPersistSelfAuditRows:
         # WHY: warning includes hours context per SUT log format.
         assert any("last 12 hours" in rec.message for rec in caplog.records)
         # WHY: empty file signals successful run rather than silent failure.
-        wired_deps["DataExporter"].write_with_format_selection.assert_called_once_with([], "SelfAuditLogs.csv")
+        wired_deps["DataExporter"].write_with_format_selection.assert_called_once_with(
+            [], "SelfAuditLogs.csv", api_function_name="listSelfAuditLogs"
+        )  # WHY: empty write keeps endpoint metadata.
         # WHY: no flattening should occur on the empty path.
         wired_deps["DataProcessingUtils"].flatten_nested_fields.assert_not_called()
 
@@ -121,8 +123,10 @@ class TestAuditLogsHappyPath:
 
         SelfExportUtils.audit_logs()  # WHY: exercise the empty-pagination branch.
 
-        # WHY: empty-rows persist path writes without the api_function_name kwarg.
-        wired_deps["DataExporter"].write_with_format_selection.assert_called_once_with([], "SelfAuditLogs.csv")
+        # WHY: empty-rows persist path still records the api_function_name kwarg.
+        wired_deps["DataExporter"].write_with_format_selection.assert_called_once_with(
+            [], "SelfAuditLogs.csv", api_function_name="listSelfAuditLogs"
+        )  # WHY: empty write keeps endpoint metadata.
 
 
 class TestAuditLogsExceptionPath:

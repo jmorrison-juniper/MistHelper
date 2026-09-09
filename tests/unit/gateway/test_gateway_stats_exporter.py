@@ -289,7 +289,9 @@ def test_export_stats_populated_writes_csv() -> None:
 
     GatewayStatsExporter._export_stats(stats, devices)
 
-    module.DataExporter.write_with_format_selection.assert_called_once_with(stats, STATS_CSV_FILENAME)
+    module.DataExporter.write_with_format_selection.assert_called_once_with(
+        stats, STATS_CSV_FILENAME, api_function_name="getSiteDeviceStats"
+    )  # WHY: export keeps endpoint metadata.
 
 
 def test_export_conflict_results_empty_short_circuits(caplog: pytest.LogCaptureFixture) -> None:

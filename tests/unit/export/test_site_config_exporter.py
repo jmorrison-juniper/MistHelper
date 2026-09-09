@@ -140,7 +140,9 @@ class TestPersistSiteWlansCsv:
         with caplog.at_level("INFO", logger="root"):
             SiteConfigExporter._persist_site_wlans_csv([], "SiteWlans_HQ.csv", "HQ")
 
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with([], "SiteWlans_HQ.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            [], "SiteWlans_HQ.csv", api_function_name="listSiteWlans"
+        )  # WHY: empty write keeps endpoint metadata.
         messages = " ".join(rec.getMessage() for rec in caplog.records)
         assert "0 records" in messages
 
@@ -283,6 +285,8 @@ class TestSettings:
 
         dpu.flatten_nested_fields.assert_called_once_with(rows)
         dpu.escape_multiline.assert_called_once_with(rows)
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(rows, "AllSiteConfigs.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            rows, "AllSiteConfigs.csv", api_function_name="listSiteSettings"
+        )  # WHY: export keeps endpoint metadata.
         messages = " ".join(rec.getMessage() for rec in caplog.records)
         assert "1 site configurations exported" in messages
