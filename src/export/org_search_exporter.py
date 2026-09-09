@@ -12,7 +12,7 @@ Covered operations:
     - ``searchOrgWanClients`` (menu 232)
     - ``searchOrgWanClientEvents`` (menu 233)
     - ``searchOrgSystemEvents`` (menu 234)
-    - ``searchOrgPskPortalLogs`` (menu 250)
+    - ``searchOrgPskPortalLogs`` (menu 248)
 
 Why:
     Every one of these endpoints takes a session and an organization and returns
@@ -174,7 +174,7 @@ class OrgSearchExporter:
 
     @staticmethod
     def psk_portal_logs() -> None:
-        """Search PSK portal logs for an organization (menu 250)."""
+        """Search PSK portal logs for an organization (menu 248)."""
         OrgSearchExporter._run_org_search(
             mistapi.api.v1.orgs.pskportals.searchOrgPskPortalLogs,
             "searchOrgPskPortalLogs",

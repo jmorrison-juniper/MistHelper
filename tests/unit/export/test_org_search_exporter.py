@@ -1,7 +1,7 @@
 """Unit tests for the organization-scoped search exporter.
 
 Covers specs 863, 869 and 874 to 879 (issues #1371, #1377, #1379, #1382,
-#1383, #1385 and #1386), which are menus 230 to 234, 249 and 250.
+#1383, #1385 and #1386), which are menus 230 to 234, 248 and 249.
 
 The registered operations share one helper, so the shared behavior is tested once and
 each menu entry is checked for the binding that makes it distinct.

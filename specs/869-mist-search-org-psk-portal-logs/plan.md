@@ -4,7 +4,7 @@
 
 1. Extend the existing `OrgSearchExporter` shared org-search flow with a
    `psk_portal_logs` entry that calls the installed Mist SDK binding.
-2. Register menu 250 in `MistHelper.py` because menu 249 is already used by
+2. Register menu 248 in `MistHelper.py` because menu 249 is already used by
    `searchOrgDevices` from Spec 863.
 3. Keep the existing `searchOrgPskPortalLogs` composite primary-key strategy
    (`id`, `timestamp`) so the standard writers upsert repeat results.

@@ -437,7 +437,7 @@ from src.export.org_inventory_exporter import (
 )
 from src.export.org_search_exporter import (
     # Specs 863, 869, 874-879 / issues #1371, #1377, #1379, #1382, #1383,
-    # #1385, #1386 -- org search menus 230-234, 249-250.
+    # #1385, #1386 -- org search menus 230-234, 248-249.
     OrgSearchExporter,
 )
 from src.export.org_sec_intel_profile_exporter import (
@@ -3797,7 +3797,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         SelfAccountExporter.verify_email,
         "Verify an email change token from the Mist email (verifySelfEmail)",
     ),
-    "250": (
+    "248": (
         OrgSearchExporter.psk_portal_logs,
         "Search PSK portal logs for the organization (searchOrgPskPortalLogs)",
     ),

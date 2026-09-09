@@ -51,7 +51,7 @@ This page names the operations that arrived most recently.
 | 232 | Search organization WAN clients (`searchOrgWanClients`) | `safe` |
 | 233 | Search organization WAN client events (`searchOrgWanClientEvents`) | `safe` |
 | 234 | Search organization system events (`searchOrgSystemEvents`) | `safe` |
-| 250 | Search organization PSK portal logs (`searchOrgPskPortalLogs`) | `safe` |
+| 248 | Search organization PSK portal logs (`searchOrgPskPortalLogs`) | `safe` |
 | 235 | Run any org-scoped Mist count endpoint (35 operations) | `interactive_safe` |
 | 236 | Run any site-scoped Mist count endpoint (32 operations) | `interactive_safe` |
 | 237 | Run any MSP-scoped Mist count endpoint (3 operations) | `interactive_safe` |

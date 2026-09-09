@@ -16,9 +16,9 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Added**: Unit coverage for the SDK binding, pagination, empty results,
   errors, flattening, and persistence.
 
-### Search organization PSK portal logs (menu 250)
+### Search organization PSK portal logs (menu 248)
 
-- **Added**: Menu 250 calls `searchOrgPskPortalLogs` for the selected
+- **Added**: Menu 248 calls `searchOrgPskPortalLogs` for the selected
   organization and exports the paginated rows through the standard CSV,
   SQLite, or ArangoDB backends. Issue #1377.
 - **Added**: The endpoint uses the composite `id` and `timestamp` primary-key
