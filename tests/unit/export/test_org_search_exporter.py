@@ -1,7 +1,7 @@
 """Unit tests for the organization-scoped search exporter.
 
-Covers specs 870 and 873 to 879 (issues #1378, #1379, #1381, #1382, #1383,
-#1385, and #1386), which are menus 230 to 234 and 248 to 249.
+Covers specs 863, 870, and 873 to 879 (issues #1371, #1378, #1379, #1381,
+#1382, #1383, #1385, and #1386), which are menus 230 to 234 and 248 to 250.
 
 The six operations share one helper, so the shared behavior is tested once and
 each menu entry is checked for the binding that makes it distinct.
@@ -21,6 +21,7 @@ from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_S
 # Each row maps a menu entry to the operationId, the filename prefix, and the
 # SDK attribute chain that the entry must call.
 MENU_BINDINGS = [
+    ("devices", "searchOrgDevices", "OrgDevices", ("devices", "searchOrgDevices")),
     (
         "wireless_client_sessions",
         "searchOrgWirelessClientSessions",
@@ -169,11 +170,18 @@ class TestSharedBehavior:
         assert strategy["primary_key"] == ["site_id", "var", "src"]  # Match the documented response fields.
 
     def test_org_vars_menu_is_registered_as_safe(self) -> None:
-        """Menu 249 must route to organization variable export as a safe operation."""
+        """Menu 250 must route to organization variable export as a safe operation."""
         import MistHelper  # Import the runtime menu registry under test.
         from src.utils.operation_registry import OperationRegistry  # Read the safety classification.
 
-        action, description = MistHelper.menu_actions["249"]  # Read the menu dispatch tuple.
+        action, description = MistHelper.menu_actions["250"]  # Read the menu dispatch tuple.
         assert action is OrgSearchExporter.org_vars  # Require the new menu to call the exporter.
         assert "searchOrgVars" in description  # Expose the operation identifier to operators.
-        assert OperationRegistry.get("249")["category"] == "safe"  # Keep the read-only operation automated.
+        assert OperationRegistry.get("250")["category"] == "safe"  # Keep the read-only operation automated.
+
+    def test_device_search_has_a_composite_primary_key(self) -> None:
+        """Device search rows must use the existing id and MAC key pair."""
+        strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES["searchOrgDevices"]  # Read the catalog entry used by persistence.
+
+        assert strategy["type"] == "composite_pk"  # Require update-safe device search storage.
+        assert strategy["primary_key"] == ["id", "mac"]  # Require stable uniqueness for repeated exports.
