@@ -11,6 +11,7 @@ import sqlite3
 import time
 import uuid
 from datetime import UTC, datetime
+from heapq import nlargest
 from urllib.parse import urlsplit
 
 from flask import Blueprint, current_app, jsonify, render_template
@@ -225,46 +226,66 @@ def _check_mist_api_session(apisession) -> dict:
 
 def _build_data_summary(data_dir: str) -> dict:
     """Build summary statistics for the data directory."""
-    file_count = _count_data_files(data_dir)
-    recent_files = _get_recent_files(data_dir, limit=5)
+    logging.info("Dashboard data summary scan starts for %s", data_dir)  # Log before the directory scan.
+    file_count, recent_files = _scan_data_summary(data_dir, limit=5)  # Count files and keep only displayed rows.
+    logging.debug(  # Log the result without file contents.
+        "Dashboard data summary found %d file(s) and %d recent file(s)",
+        file_count,
+        len(recent_files),
+    )
     return {
-        "file_count": file_count,
-        "recent_files": recent_files,
-        "data_dir": data_dir,
+        "file_count": file_count,  # Keep the dashboard count field stable.
+        "recent_files": recent_files,  # Keep the dashboard recent-files field stable.
+        "data_dir": data_dir,  # Keep the dashboard data-directory field stable.
     }
 
 
 def _count_data_files(data_dir: str) -> int:
     """Count non-hidden files in the data directory."""
-    if not os.path.isdir(data_dir):
-        return 0
-    count = 0
-    for entry in os.scandir(data_dir):
-        if not entry.name.startswith(".") and entry.is_file():
-            count += 1
-    return count
+    file_count, _recent_files = _scan_data_summary(data_dir, limit=0)  # Reuse the single-pass file predicate.
+    return file_count  # Preserve the integer-only helper contract.
 
 
 def _get_recent_files(data_dir: str, limit: int = 5) -> list:
     """Return the most recently modified files from data dir."""
+    _file_count, recent_files = _scan_data_summary(data_dir, limit=limit)  # Reuse the optimized scan path.
+    return recent_files  # Preserve the list-only helper contract.
+
+
+def _scan_data_summary(data_dir: str, limit: int = 5) -> tuple[int, list]:
+    """Return the visible file count and the newest files from one scan."""
     if not os.path.isdir(data_dir):
-        return []
-    files = []
+        return 0, []  # Match the existing absent-directory behavior.
+    file_count = 0  # Count every visible file, not only the files displayed.
+    file_records = []  # Keep raw values so only displayed rows get formatted.
     for entry in os.scandir(data_dir):
         if entry.name.startswith(".") or not entry.is_file():
-            continue
-        stat = entry.stat()
-        files.append(
-            {
-                "name": entry.name,
-                "size_bytes": stat.st_size,
-                "size_display": _format_file_size(stat.st_size),
-                "last_modified": stat.st_mtime,
-                "modified_display": _format_timestamp(stat.st_mtime),
-            }
-        )
-    files.sort(key=lambda f: f["last_modified"], reverse=True)
-    return files[:limit]
+            continue  # Preserve the hidden-entry and file-only rules.
+        file_count += 1  # Count before stat so count is independent from display formatting.
+        if limit == 0:
+            continue  # Skip metadata reads when the caller needs only the count.
+        stat = entry.stat()  # Read metadata once for rows that can appear on the dashboard.
+        file_records.append((stat.st_mtime, entry.name, stat.st_size))  # Store stable scan-order records.
+    recent_limit = len(file_records) if limit < 0 else limit  # Preserve list-slice behavior for negative limits.
+    recent_records = nlargest(  # Select newest rows without formatting every file.
+        recent_limit,  # Match the caller's requested recent-file count.
+        file_records,  # Use raw file metadata to reduce display formatting work.
+        key=lambda record: record[0],  # Sort only by timestamp so ties stay stable.
+    )[:limit]
+    recent_files = [_format_recent_file_record(record) for record in recent_records]  # Format only displayed files.
+    return file_count, recent_files  # Return both dashboard values from one scan.
+
+
+def _format_recent_file_record(file_record: tuple[float, str, int]) -> dict:
+    """Format one recent-file record for the dashboard template."""
+    last_modified, name, size_bytes = file_record  # Keep tuple fields explicit for review.
+    return {
+        "name": name,  # Preserve the dashboard template field name.
+        "size_bytes": size_bytes,  # Preserve numeric size sorting data for the template.
+        "size_display": _format_file_size(size_bytes),  # Format only files shown on the dashboard.
+        "last_modified": last_modified,  # Preserve raw timestamp data for tests and templates.
+        "modified_display": _format_timestamp(last_modified),  # Format only files shown on the dashboard.
+    }
 
 
 def _format_file_size(size_bytes: int) -> str:
