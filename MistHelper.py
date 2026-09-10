@@ -476,6 +476,9 @@ from src.export.org_export_utils import (
 from src.export.org_inventory_exporter import (
     OrgInventoryExporter,  # Cat E canonical (1015 T-06) -- re-export for MistHelper.OrgInventoryExporter callers
 )
+from src.export.org_inventory_search_exporter import (
+    OrgInventorySearchExporter,  # Spec 864 / issue #1372 -- organization inventory search menu 254
+)
 from src.export.org_search_exporter import (
     OrgSearchExporter,  # Specs 872, 874-879; issues #1379, #1380, #1382, #1383, #1385, #1386.
 )
@@ -3866,6 +3869,10 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "253": (
         OrgSearchExporter.mx_edges,  # Search the Mist Edges that belong to the organization.
         "Search Mist Edges for the organization (searchOrgMxEdges)",  # Expose the read-only endpoint in the menu.
+    ),
+    "254": (
+        OrgInventorySearchExporter.inventory,  # Spec 864 / issue #1372 -- search organization inventory.
+        "Search organization inventory with optional filters (searchOrgInventory)",  # Operation ID shown to operators.
     ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
