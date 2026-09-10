@@ -10,12 +10,7 @@ scripts depend on. Issue #1948 records the motivation.
 
 import types
 
-import pytest
-
-openai = pytest.importorskip(  # Skip the test if openai is not installed.
-    "openai",
-    reason="openai is not installed in this environment. The test runs in CI.",
-)
+import openai
 
 
 def test_openai_exposes_openai_class() -> None:
@@ -42,9 +37,9 @@ def test_openai_exposes_rate_limit_error() -> None:
     line 41 to catch rate-limit responses from the API. A bump that removes
     or renames that exception would raise an ImportError at startup.
     """
-    assert hasattr(
+    assert hasattr(  # Confirm the analyzer dependency exposes its imported exception.
         openai, "RateLimitError"
-    ), "openai.RateLimitError is missing. mist_ideas_analyzer_pkg cannot import it."  # analyzer imports RateLimitError.
+    ), "openai.RateLimitError is missing. mist_ideas_analyzer_pkg cannot import it."
     assert issubclass(  # Confirm the attribute is an exception subclass.
         openai.RateLimitError, BaseException
     ), "openai.RateLimitError is not an exception. The scripts expect it to be catchable."
