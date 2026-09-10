@@ -24,3 +24,6 @@ pytest-timeout>=2.3
 # starlette through fastapi, so every TestClient test raises
 # "ModuleNotFoundError: No module named 'httpx2'" without this pin.
 httpx2>=2.12.0
+
+# Run Redis Lua commands in memory without a Redis service (issue #2050).
+fakeredis[lua]>=2.31.0
