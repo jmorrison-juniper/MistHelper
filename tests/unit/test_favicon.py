@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import atexit
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 import pytest
 from flask import Flask
