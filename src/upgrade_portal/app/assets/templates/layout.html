@@ -65,6 +65,7 @@
         content="{{ csrf_token() if csrf_token is defined else '' }}">
 
   <title>{% block title %}{{ heading_text }}{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
 
   <link rel="stylesheet"
         href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}">
