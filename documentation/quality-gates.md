@@ -41,6 +41,16 @@ request must wait for CodeQL before it takes the `auto-merge` label.
 A gate that fails on `main` opens an issue with the `quality-gate` label. The
 same gate closes that issue when it passes again.
 
+## Exclusion drift report
+
+The file `quality_gate_exclusions.json` records each documented Ruff, mypy,
+Bandit, and Pylint exclusion with its recorded finding count.
+
+The `Quality exclusion drift (advisory)` job runs
+`scripts/check_exclusion_drift.py`. It compares each current count with the
+recorded count and uploads a JSON report. It reports growth and zero counts in
+the job log. It never blocks a pull request.
+
 ## Branch protection on main
 
 Branch protection names 14 required checks. They are the 13 gates above plus

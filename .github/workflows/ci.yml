@@ -576,6 +576,28 @@ jobs:
           fi
           echo "The menu reference matches the generator output."
 
+  exclusion_drift:
+    name: "Quality exclusion drift (advisory)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Measure excluded findings
+        run: python scripts/check_exclusion_drift.py --format github --output exclusion-drift.json
+      - name: Upload the machine-readable report
+        uses: actions/upload-artifact@v6
+        with:
+          name: quality-exclusion-drift
+          path: exclusion-drift.json
+
   playwright:
     name: "E2E smoke tests"
     needs:
