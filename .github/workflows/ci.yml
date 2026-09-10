@@ -964,6 +964,7 @@ jobs:
       - pydocstyle
       - interrogate
       - ops_portal
+      - ops_platform_pytest
     if: ${{ always() && contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     permissions:
@@ -1003,6 +1004,7 @@ jobs:
           RESULTS[pydocstyle]="${{ needs.pydocstyle.result }}"
           RESULTS[interrogate]="${{ needs.interrogate.result }}"
           RESULTS[ops_portal]="${{ needs.ops_portal.result }}"
+          RESULTS[ops_platform_pytest]="${{ needs.ops_platform_pytest.result }}"
 
           # Scope: a PR failure gets a scoped title (per-PR). A branch failure uses a
           # gate-only title, so repeated runs on the same branch reuse one issue.
@@ -1070,6 +1072,7 @@ jobs:
       - pydocstyle
       - interrogate
       - ops_portal
+      - ops_platform_pytest
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
@@ -1104,6 +1107,7 @@ jobs:
           RESULTS[pydocstyle]="${{ needs.pydocstyle.result }}"
           RESULTS[interrogate]="${{ needs.interrogate.result }}"
           RESULTS[ops_portal]="${{ needs.ops_portal.result }}"
+          RESULTS[ops_platform_pytest]="${{ needs.ops_platform_pytest.result }}"
 
           for gate in "${!RESULTS[@]}"; do
             result="${RESULTS[$gate]}"
