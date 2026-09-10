@@ -7,6 +7,13 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Dashboard data summary performance (issue #2439)
+
+- **Changed**: The web portal dashboard now builds the data summary with one
+  directory scan. It formats only the recent files that the page shows.
+- **Added**: Unit coverage keeps the file count, recent-file order, hidden-file
+  exclusion, absent-directory behavior, and helper slice behavior stable.
+
 ### Search organization Mist Edges (menu 253)
 
 - **Added**: Menu 253 calls `searchOrgMxEdges` for an organization, prompts
