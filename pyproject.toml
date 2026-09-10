@@ -176,28 +176,8 @@ packages = ["src", "tools", "web_portal"]
 [tool.ruff]
 line-length = 120
 target-version = "py313"
-# extend-exclude: per-entry justified under #886. Each entry is a subtree ruff
-# currently silences; the goal is to shrink this list over time as sibling
-# gates (#879 Black, #881 Bandit, #883/#884 mypy) also clean up their exclude
-# lists on the same subtrees.
-#   mist-ops-platform -- vendored subtree, 95 .py files with 183 ruff violations
-#                        (mostly UP*). Non-trivial fix; also excluded from mypy
-#                        (#884). Follow-up: dedicated vendor-sweep issue.
-#   web_portal        -- Flask app, 16 .py files with ~23 ruff violations
-#                        (UP045 etc). Also excluded from mypy (#884). Follow-up:
-#                        Phase-2 web_portal typing/lint sweep.
-#   scripts           -- dev tooling, 32 .py files with ~24 ruff violations.
-#                        Also excluded from mypy (#884). Follow-up: scripts-lint
-#                        sweep issue.
-#   src/maps          -- matplotlib/plotly viewer subtree, 27 .py files with
-#                        183 ruff violations (mostly E501). Also excluded from
-#                        mypy (#884) and coverage (#878). Follow-up: Phase-2
-#                        src/maps typing/lint sweep.
-# Dropped in #886 (this commit):
-#   ops-portal -- 0 .py files (JS/React frontend), never scanned; also dropped
-#                 from mypy in #884.
-#   specs      -- 2 .py files, ruff-clean after fixing 1 B007 and applying
-#                 ruff --fix (UP015/I001/F541).
+# Ruff exclusion counts live in quality_gate_exclusions.json.
+# Run scripts/check_exclusion_drift.py to measure them without blocking CI.
 extend-exclude = ["mist-ops-platform", "web_portal", "scripts", "src/maps"]
 
 [tool.ruff.lint]
@@ -298,7 +278,8 @@ ignore_missing_imports = true
 warn_unused_configs = true
 warn_unused_ignores = true
 explicit_package_bases = true
-# exclude: each entry justified per issue #884 AC.
+# Exclusion paths and recorded counts live in quality_gate_exclusions.json.
+# Run scripts/check_exclusion_drift.py to measure them without blocking CI.
 #   mist-ops-platform     -- vendored subtree ships its own ./src/__init__.py, which
 #                            would collide with the project's top-level src/ package if
 #                            both were scanned (duplicate-module error). Hard requirement.
@@ -577,20 +558,8 @@ target-version = ["py313"]
 [tool.pylint.main]
 fail-under = 9.5
 
-# src/maps, src/ssh, and src/ui stay out of the pylint run.
-#
-# The exclusion used to sit on the CI command line as --ignore=maps,ssh,ui, where a
-# reader of this file could not see it. Issue #891 moved it here, so one file holds
-# the whole gate configuration. Issue #889 set the same rule for bandit.
-#
-# Reason: the three packages report 529 messages. The largest groups are 123
-# import-outside-toplevel, 93 invalid-name, 71 protected-access, and 61
-# use-dict-literal. Without the exclusion the Linux score falls from 9.53 to 9.41,
-# which fails the 9.5 gate. Pull request #1723 tried the removal and reverted it.
-#
-# Removal plan: issue #891 tracks the fixes. Delete an entry below when its package
-# holds the score above 9.5 on Linux. A Windows run is not a valid check, because it
-# reports 9.71 where Linux reports 9.41 for the same commit.
+# Pylint exclusion counts live in quality_gate_exclusions.json.
+# Run scripts/check_exclusion_drift.py to measure them without blocking CI.
 ignore-paths = [
   '^src[\\/]maps[\\/].*$',
   '^src[\\/]ssh[\\/].*$',

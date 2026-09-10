@@ -119,6 +119,8 @@ class TestStoreAddresses:
         assert "ARANGO_HOST=http://misthelper-arangodb:9529" in environment
         assert "REDIS_HOST=misthelper-redis" in environment
         assert "REDIS_PORT=9379" in environment
+        redis_password = "REDIS_PASSWORD=${REDIS_PASSWORD:-misthelper}"  # Name the shared compose credential contract.
+        assert redis_password in environment  # Keep the app credential aligned with Redis.
 
     def test_the_container_never_starts_a_sibling(self, compose: dict[str, Any]) -> None:
         """A container cannot start its sibling, so auto-start is off inside one."""

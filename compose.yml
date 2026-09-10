@@ -132,6 +132,7 @@ services:
       - ARANGO_HOST=http://misthelper-arangodb:9529
       - REDIS_HOST=misthelper-redis
       - REDIS_PORT=9379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-misthelper}
       # A container cannot start a sibling container, so the portal reports a
       # stopped dependency here and never tries to repair it.
       - CAPTURE_AUTOSTART=0
