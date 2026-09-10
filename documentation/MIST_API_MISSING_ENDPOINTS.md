@@ -610,7 +610,6 @@
 | `getOrgMxEdgeUpgradeInfo` | `/api/v1/orgs/{org_id}/mxedges/versions` | getOrgMxEdgeUpgradeInfo | `mist-get-org-mx-edge-upgrade-info` |
 | `getOrgMxEdgeVmParams` | `/api/v1/orgs/{org_id}/mxedges/{mxedge_id}/vm_params` | getOrgMxEdgeVmParams | `mist-get-org-mx-edge-vm-params` |
 | `searchOrgMistEdgeEvents` | `/api/v1/orgs/{org_id}/mxedges/events/search` | searchOrgMistEdgeEvents | `mist-search-org-mist-edge-events` |
-| `searchOrgMxEdges` | `/api/v1/orgs/{org_id}/mxedges/search` | searchOrgMxEdges | `mist-search-org-mx-edges` |
 
 ### Orgs MxTunnels
 
@@ -1465,4 +1464,3 @@
 | `listOrgDeviceUpgrades` | `/api/v1/orgs/{org_id}/devices/upgrade` | listOrgDeviceUpgrades | `mist-list-org-device-upgrades` |
 | `listOrgMxEdgeUpgrades` | `/api/v1/orgs/{org_id}/mxedges/upgrade` | listOrgMxEdgeUpgrades | `mist-list-org-mx-edge-upgrades` |
 | `listSiteAvailableDeviceVersions` | `/api/v1/sites/{site_id}/devices/versions` | listSiteAvailableDeviceVersions | `mist-list-site-available-device-versions` |
-

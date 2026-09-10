@@ -196,4 +196,4 @@ Searches Mist Edge appliances across the organization.
 
 ## MistHelper Notes
 
-Not currently used by MistHelper directly.
+Used by MistHelper menu 253 through `OrgSearchExporter.mx_edges`.
