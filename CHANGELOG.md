@@ -90,6 +90,11 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Added**: Unit coverage for the SDK binding, pagination, export path, empty
   results, unresolved organizations, and API errors.
  
+### Search NAC clients for a site (menu 257)
+
+- **Added**: Menu 257 calls `searchSiteNacClients` for a selected site and
+  exports NAC client records through CSV, SQLite, or ArangoDB. Issue #1400.
+
 ### Search organization inventory (menu 254)
 
 - **Added**: Menu 254 searches organization inventory with optional type, MAC,

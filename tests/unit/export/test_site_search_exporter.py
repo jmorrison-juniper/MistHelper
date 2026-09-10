@@ -60,6 +60,8 @@ MENU_BINDINGS = [
         "SiteServicePathEvents",
         ("services", "searchSiteServicePathEvents"),
     ),
+    # Keep the NAC client operation bound to its SDK module and output prefix.
+    ("nac_clients", "searchSiteNacClients", "SiteNacClients", ("nac_clients", "searchSiteNacClients")),
 ]
 
 

@@ -3,9 +3,9 @@
 This page is generated. Run `python scripts/generate_menu_wiki.py` after any
 change to `menu_actions` in `MistHelper.py` or to `src/utils/operation_registry.py`.
 
-MistHelper defines **255 actionable menu entries**, numbered
-1 to 256 with gaps at 152.
-Menu 0 is Exit, so the registry holds 256 entries in total.
+MistHelper defines **256 actionable menu entries**, numbered
+1 to 257 with gaps at 152.
+Menu 0 is Exit, so the registry holds 257 entries in total.
 
 The Safety column reads from `src/utils/operation_registry.py`, which is the
 single source of truth. The classifier fails closed, so an unregistered option
@@ -22,7 +22,7 @@ never runs in an automated test pass.
 
 | Menu numbers | Category | Summary |
 |---|---|---|
-| 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256 | Interactive safe | 80 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
+| 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256-257 | Interactive safe | 81 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-253, 255 | Safe org exports | 72 operations. Read-only org exports. The --test run includes them. |
 | 154-187, 189-191, 194, 206-208, 239 | Destructive | 42 operations. They change the Mist cloud configuration. Each one needs a typed confirmation. |
 | 0, 124-150, 192 | Interactive | 29 operations. They prompt the operator, so no automated run includes them. |
@@ -290,6 +290,7 @@ never runs in an automated test pass.
 | 254 | Search organization inventory with optional filters (searchOrgInventory) | Interactive safe | `OrgInventorySearchExporter.inventory` |
 | 255 | Search PSK portal logs for the organization (searchOrgPskPortalLogs) | Safe org exports | `OrgSearchExporter.psk_portal_logs` |
 | 256 | Search organization webhook deliveries (searchOrgWebhooksDeliveries) | Interactive safe | `OrgWebhookDeliveriesExporter.deliveries` |
+| 257 | Search NAC clients for a selected site (searchSiteNacClients) | Interactive safe | `SiteSearchExporter.nac_clients` |
 
 This page should be regenerated whenever `menu_actions` or the operation registry
 changes, so the wiki stays aligned with the code.
