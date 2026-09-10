@@ -5058,8 +5058,13 @@ def _metrics_gateway_org_id(settings: Any) -> str:
         return str(settings.org_id)
     if org_id:  # The session already holds a selection, so reuse it rather than ask twice
         return str(org_id)
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):  # Refuse prompts without a terminal
+        logging.error("METRICS_GATEWAY: No organization and no terminal.")  # Explain the startup failure
+        logging.error("METRICS_GATEWAY: Set METRICS_ORG_ID or MIST_ORG_ID.")  # Give the operator the fix
+        return ""  # Return an empty value so the caller exits with a failure status
     logging.info("METRICS_GATEWAY: No organization is set - starting the picker")  # Log before the prompt
     _select_org_from_session()  # Writes the module-level org_id global
+    logging.debug("METRICS_GATEWAY: Picker result: %s", bool(org_id))  # Record the result safely
     return str(org_id or "")
 
 
@@ -5098,7 +5103,7 @@ def _launch_metrics_gateway(dev_debug: bool = False) -> None:
     if not resolved:  # Without an organization the gateway would serve an empty reading forever
         echo("  X No organization selected - the metrics gateway cannot start")
         logging.error("METRICS_GATEWAY: No organization selected - abort the launch")  # Log the refusal
-        return
+        raise SystemExit(1)  # Return a non-zero status so service managers report the startup failure
     settings = settings.with_org_id(resolved)  # Carry the chosen org into the frozen record
     # Reuse the shared token-based initializer (handles retries, rate limits, and the legacy fallback).
     if not MistSessionInitializer.initialize():  # Populates the module-level `apisession` global on success.
