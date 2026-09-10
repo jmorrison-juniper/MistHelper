@@ -24,6 +24,7 @@ import logging  # The portal logs with the standard library only.
 from collections.abc import Mapping  # Types each read-only record that arrives from the store.
 from typing import Any  # A stored capture document is free-form.
 
+from . import extras  # The tier 3 section names and the field lists that this module renders.
 from .export import device_entries, is_credential_field  # The two rules that the download owns as well.
 
 logger = logging.getLogger(__name__)  # One logger for each module keeps the source visible in the log.
@@ -57,6 +58,50 @@ WIRELESS_COLUMNS = ("hostname", "mac", "ip", "vlan", "parent_device", "ssid", "b
 
 WIRED_GROUP = "wired"  # The key of the wired client list in the stored document.
 WIRELESS_GROUP = "wireless"  # The key of the wireless client list in the stored document.
+GUEST_GROUP = "guest"  # The key of the guest client list in the stored document.
+
+# The columns of the guest client table. Issue #2443 reports that a guest
+# authorization holds a name, an email, a serving access point, and a network
+# name, and never an IP address or a VLAN. `capture/clients.py:_guest_record`
+# names the source fields.
+GUEST_COLUMNS = ("hostname", "mac", "username", "parent_device", "ssid")
+
+# The columns of each tier 3 table. Each tuple names the fields that
+# `capture/extras.py` already stores inside `document["extras"][<section>]`.
+# `_SWITCH_PORT_FIELDS` and `_POE_FIELDS` already carry `mac` and `port_id`,
+# because both sections read the same shared port record. `_RADIO_FIELDS`
+# excludes `mac` and `band`, because `extras._radio_record` adds both after the
+# per-band projection, so this module adds them back for the table.
+SWITCH_PORT_COLUMNS = extras._SWITCH_PORT_FIELDS
+POE_COLUMNS = extras._POE_FIELDS
+RADIO_COLUMNS = ("mac", "band") + extras._RADIO_FIELDS
+
+# The tunnel and BGP peer columns come from `documentation/mist-api-openapi3json.json`
+# (`response_tunnel_search` and `response_search_bgps`), because
+# `capture/extras.py` stores the raw cloud row for both sections.
+TUNNEL_COLUMNS = ("tunnel_name", "mac", "wan_name", "peer_host", "peer_ip", "protocol", "up", "uptime")
+BGP_PEER_COLUMNS = ("mac", "neighbor", "neighbor_as", "neighbor_mac", "state", "up", "uptime", "vrf_name")
+
+# The alarm columns come from the `alarm` schema of the same OpenAPI document.
+ALARM_COLUMNS = ("type", "group", "severity", "status", "count", "timestamp", "last_seen", "hostnames")
+
+# The three states of a tier 3 section, beside the healthy state. FR-003
+# requires that an operator can tell these three apart, so a missing table
+# never reads as a data loss and a lost read never reads as an empty site.
+STATE_NOT_REQUESTED = "not_requested"  # A tier 2 capture. The section was never asked for.
+STATE_NO_ROWS = "no_rows"  # Tier 3 ran, and the site holds no row for this section.
+STATE_UNAVAILABLE = "unavailable"  # Tier 3 ran, and the cloud call for this section failed.
+STATE_OK = "ok"  # Tier 3 ran, and the section holds one row or more.
+
+# One sentence for each reason that `capture/extras.py` may store in
+# `document["partial_reasons"]`. A code the map misses still reads as a
+# refusal, so the page never shows a blank reason.
+_UNAVAILABLE_MESSAGES: dict[str, str] = {
+    extras.REASON_CALL_FAILED: "The cloud call for this section failed.",
+    extras.REASON_ERROR_STATUS: "The cloud refused the call for this section.",
+    extras.REASON_SOURCE_ABSENT: "The read that carries this section is absent.",
+}
+_DEFAULT_UNAVAILABLE_MESSAGE = "This section could not be read."
 
 # The two client columns whose column name and source field name differ.
 # `data-model.md` section 3.4 names the source fields.
@@ -221,7 +266,7 @@ def _client_records(capture: Mapping[str, Any], group: str) -> list[Mapping[str,
 
     Args:
         capture: The stored capture document.
-        group: `wired` or `wireless`.
+        group: `wired`, `wireless`, or `guest`.
 
     Returns:
         The records of that group, or an empty list.
@@ -261,43 +306,159 @@ def capped(rows: list[dict[str, str]], name: str) -> tuple[list[dict[str, str]],
     return rows[:TABLE_ROW_CAP], held  # The page states both numbers, so no reader mistakes the cut.
 
 
-def page_tables(capture: Mapping[str, Any]) -> dict[str, Any]:
-    """Return the three row lists that the capture page paints.
+def _partial_reason(capture: Mapping[str, Any], section: str) -> str:
+    """Return the stored refusal reason for one tier 3 section.
+
+    Args:
+        capture: The stored capture document.
+        section: The section name, as `capture/extras.py` names it.
+
+    Returns:
+        The reason code, or an empty string when the capture holds none.
+    """
+    reasons: Any = capture.get("partial_reasons")  # A whole capture holds one reason list, or none at all.
+    if not isinstance(reasons, list):  # A document of a later release may hold another shape.
+        return ""  # No stored reason reads as no known reason.
+    for entry in reasons:  # Each entry names one section and one reason.
+        if isinstance(entry, Mapping) and str(entry.get("section")) == section:  # The first match wins.
+            return str(entry.get("reason") or "")  # A blank reason reads the same as no reason.
+    return ""  # The section holds no stored reason.
+
+
+def tier3_table(
+    capture: Mapping[str, Any], section: str, columns: tuple[str, ...]
+) -> tuple[list[dict[str, str]], int, str, str]:
+    """Return one tier 3 table, its held count, its state, and its message.
 
     Why:
-        The page reads one name for each table. Building all three here keeps
+        FR-003 requires that a tier 2 capture, an empty tier 3 section, and a
+        failed tier 3 read each paint their own text. `document["extras"]`
+        itself is absent for a tier 2 capture, so its absence is the first
+        check. A present section with no row is then either empty or failed,
+        and `document["partial_reasons"]` tells the two apart.
+
+    Args:
+        capture: The stored capture document.
+        section: The section name, as `capture/extras.py` names it.
+        columns: The column names of that table.
+
+    Returns:
+        The rows to paint, the count the capture held, the state name, and the
+        message to show beside an empty table.
+    """
+    logger.info("capture tables: build the %s tier 3 rows", section)  # The section name reads in the log.
+    extra_map: Any = capture.get("extras")  # Absent for a tier 2 capture, and a map for a tier 3 capture.
+    if not isinstance(extra_map, Mapping):  # A tier 2 capture never ran this section.
+        logger.debug("capture tables: %s was not requested", section)
+        return [], 0, STATE_NOT_REQUESTED, "Tier 3 was not requested for this capture."
+    records: Any = extra_map.get(section)  # A tier 3 capture still may hold no record for one section.
+    records = [record for record in records if isinstance(record, Mapping)] if isinstance(records, list) else []
+    rows = [_row(columns, readable(record)) for record in records]  # No credential field reaches a cell.
+    if rows:  # The section read at least one record.
+        capped_rows, held = capped(rows, section)
+        logger.debug("capture tables: built %s %s rows", held, section)
+        return capped_rows, held, STATE_OK, ""
+    reason_code = _partial_reason(capture, section)  # A read that failed leaves a stored reason.
+    if reason_code:  # The read failed, and the capture recorded why.
+        message = _UNAVAILABLE_MESSAGES.get(reason_code, _DEFAULT_UNAVAILABLE_MESSAGE)
+        logger.debug("capture tables: %s is unavailable (%s)", section, reason_code)
+        return [], 0, STATE_UNAVAILABLE, message
+    logger.debug("capture tables: %s holds no row", section)  # The read ran and found nothing.
+    return [], 0, STATE_NO_ROWS, "This site holds no row for this section."
+
+
+def page_tables(capture: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the row lists that the capture page paints.
+
+    Why:
+        The page reads one name for each table. Building every table here keeps
         the route short and keeps the column lists in one module.
 
         Each table also carries the count that the capture holds. A capped table
         must state what it removed, so the operator never reads a cut table as
-        the whole site.
+        the whole site. Each tier 3 table also carries a state and a message,
+        so a missing table always reads as one of the three known reasons.
 
     Args:
         capture: The stored capture document, or an empty map.
 
     Returns:
-        The device rows, the wired client rows, the wireless client rows, the
-        held count of each table, and the cap itself.
+        The device rows, the client rows of every group, the tier 3 rows of
+        every section, the held count of each table, the state and message of
+        each tier 3 table, and the cap itself.
     """
     devices, device_held = capped(device_table(capture), "device")  # Acceptance Scenario 1.
     wired, wired_held = capped(client_table(capture, WIRED_GROUP, WIRED_COLUMNS), "wired client")
     wireless, wireless_held = capped(client_table(capture, WIRELESS_GROUP, WIRELESS_COLUMNS), "wireless client")
+    guest, guest_held = capped(client_table(capture, GUEST_GROUP, GUEST_COLUMNS), "guest client")
+
+    # Every tier 3 section shares one shape: rows, the held count, the state, and the message.
+    switch_ports, switch_ports_held, switch_ports_state, switch_ports_message = tier3_table(
+        capture, extras.SECTION_SWITCH_PORTS, SWITCH_PORT_COLUMNS
+    )
+    poe, poe_held, poe_state, poe_message = tier3_table(capture, extras.SECTION_POE, POE_COLUMNS)
+    radios, radios_held, radios_state, radios_message = tier3_table(capture, extras.SECTION_RADIOS, RADIO_COLUMNS)
+    tunnels, tunnels_held, tunnels_state, tunnels_message = tier3_table(capture, extras.SECTION_TUNNELS, TUNNEL_COLUMNS)
+    bgp_peers, bgp_peers_held, bgp_peers_state, bgp_peers_message = tier3_table(
+        capture, extras.SECTION_BGP_PEERS, BGP_PEER_COLUMNS
+    )
+    alarms, alarms_held, alarms_state, alarms_message = tier3_table(capture, extras.SECTION_ALARMS, ALARM_COLUMNS)
+
     return {
         "device_rows": devices,
         "wired_rows": wired,
         "wireless_rows": wireless,
+        "guest_rows": guest,
+        "switch_port_rows": switch_ports,
+        "poe_rows": poe,
+        "radio_rows": radios,
+        "tunnel_rows": tunnels,
+        "bgp_peer_rows": bgp_peers,
+        "alarm_rows": alarms,
         # The page reads each held count beside its table, so a capped table
         # states both numbers and an uncapped table states nothing at all.
         "device_rows_held": device_held,
         "wired_rows_held": wired_held,
         "wireless_rows_held": wireless_held,
+        "guest_rows_held": guest_held,
+        "switch_port_rows_held": switch_ports_held,
+        "poe_rows_held": poe_held,
+        "radio_rows_held": radios_held,
+        "tunnel_rows_held": tunnels_held,
+        "bgp_peer_rows_held": bgp_peers_held,
+        "alarm_rows_held": alarms_held,
+        # The page reads one state and one message beside each tier 3 table,
+        # so an empty table always reads as one of the three known reasons.
+        "switch_port_state": switch_ports_state,
+        "poe_state": poe_state,
+        "radio_state": radios_state,
+        "tunnel_state": tunnels_state,
+        "bgp_peer_state": bgp_peers_state,
+        "alarm_state": alarms_state,
+        "switch_port_message": switch_ports_message,
+        "poe_message": poe_message,
+        "radio_message": radios_message,
+        "tunnel_message": tunnels_message,
+        "bgp_peer_message": bgp_peers_message,
+        "alarm_message": alarms_message,
         "table_row_cap": TABLE_ROW_CAP,
     }
 
 
 __all__ = [
+    "ALARM_COLUMNS",
+    "BGP_PEER_COLUMNS",
     "DEVICE_COLUMNS",
+    "GUEST_COLUMNS",
+    "POE_COLUMNS",
+    "RADIO_COLUMNS",
+    "STATE_NOT_REQUESTED",
+    "STATE_NO_ROWS",
+    "STATE_OK",
+    "STATE_UNAVAILABLE",
+    "SWITCH_PORT_COLUMNS",
     "TABLE_ROW_CAP",
+    "TUNNEL_COLUMNS",
     "WIRED_COLUMNS",
     "WIRELESS_COLUMNS",
     "capped",
@@ -306,4 +467,5 @@ __all__ = [
     "device_table",
     "page_tables",
     "readable",
+    "tier3_table",
 ]

@@ -179,6 +179,86 @@ def test_an_empty_capture_writes_a_header_and_no_row() -> None:
 
 
 # --------------------------------------------------------------------------
+# Issue #2443. The tier 3 rows.
+# --------------------------------------------------------------------------
+
+
+def _tier3_capture() -> dict[str, Any]:
+    """Return one stored capture that also holds a tier 3 `extras` map.
+
+    Returns:
+        One stored capture document.
+    """
+    capture = _capture()
+    capture["extras"] = {
+        "switch_ports": [{"mac": MASTER_MAC, "port_id": "ge-0/0/1", "up": True}],
+        "poe": [{"mac": MASTER_MAC, "port_id": "ge-0/0/1", "poe_on": True}],
+        "radios": [{"mac": ACCESS_POINT_MAC, "band": "5", "channel": 36}],
+        "tunnels": [{"mac": MASTER_MAC, "tunnel_name": "vpn-01", "up": True}],
+        "bgp_peers": [{"mac": MASTER_MAC, "neighbor": "10.0.0.1", "state": "Established"}],
+        "alarms": [{"type": "device_down", "severity": "critical", "hostnames": ["switch-01"]}],
+    }
+    return capture
+
+
+def test_the_file_holds_a_row_for_every_tier3_section() -> None:
+    """A tier 3 capture must export every section that Issue #2443 reports missing."""
+    rows = export.build_rows(_tier3_capture())
+    kinds = {row.kind for row in rows}
+    assert export.KIND_SWITCH_PORT in kinds
+    assert export.KIND_POE in kinds
+    assert export.KIND_RADIO in kinds
+    assert export.KIND_TUNNEL in kinds
+    assert export.KIND_BGP_PEER in kinds
+    assert export.KIND_ALARM in kinds
+
+
+def test_a_tier2_capture_writes_no_tier3_row() -> None:
+    """A tier 2 capture holds no `extras` key, so the file must carry none of those rows."""
+    rows = export.build_rows(_capture())
+    kinds = {row.kind for row in rows}
+    assert not kinds & {
+        export.KIND_SWITCH_PORT,
+        export.KIND_POE,
+        export.KIND_RADIO,
+        export.KIND_TUNNEL,
+        export.KIND_BGP_PEER,
+        export.KIND_ALARM,
+    }
+
+
+def test_a_tier3_section_with_no_row_writes_no_row() -> None:
+    """A section that read zero records still writes zero rows, and no error."""
+    capture = _tier3_capture()
+    capture["extras"]["tunnels"] = []
+    rows = export.build_rows(capture)
+    assert not any(row.kind == export.KIND_TUNNEL for row in rows)
+
+
+def test_an_alarm_row_joins_a_list_field_into_one_cell() -> None:
+    """The alarm `hostnames` field is a list, and the cell must read as one line of text."""
+    rows = _csv_rows(export.export_capture(_tier3_capture(), export.FORMAT_CSV).body)
+    alarm = next(row for row in rows if row["kind"] == export.KIND_ALARM)
+    assert alarm["hostnames"] == "switch-01"
+
+
+def test_a_tier3_row_still_names_the_capture() -> None:
+    """A tier 3 row is a row of the same file, so it carries the same five naming values."""
+    rows = _csv_rows(export.export_capture(_tier3_capture(), export.FORMAT_CSV).body)
+    switch_port = next(row for row in rows if row["kind"] == export.KIND_SWITCH_PORT)
+    assert switch_port["org_name"] == ORG_NAME
+    assert switch_port["capture_id"] == CAPTURE_ID
+
+
+def test_a_credential_tier3_field_never_reaches_a_row() -> None:
+    """The same credential filter that guards a device row guards a tier 3 row."""
+    capture = _tier3_capture()
+    capture["extras"]["radios"][0]["api_token"] = "must-not-appear"
+    body = export.export_capture(capture, export.FORMAT_JSON).body
+    assert "must-not-appear" not in body
+
+
+# --------------------------------------------------------------------------
 # The file names the capture.
 # --------------------------------------------------------------------------
 
