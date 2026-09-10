@@ -263,7 +263,7 @@ jobs:
         # it as FAILED with a traceback that names the hung call. The job limit is 15
         # minutes, so a single stalled test now fails fast and visibly instead of
         # silently consuming the full job budget.
-        run: pytest --cov=${{ env.SRC_PATH }} --cov-fail-under=${{ env.COVERAGE_THRESHOLD }} --timeout=120
+        run: pytest --ignore=tests/e2e --cov=${{ env.SRC_PATH }} --cov-fail-under=${{ env.COVERAGE_THRESHOLD }} --timeout=120
       - name: Report job timeout
         # Issue #2036: a cancelled result means the job hit timeout-minutes, not that
         # a test failed. This step writes a plain line so a reader can tell a stalled
@@ -667,7 +667,7 @@ jobs:
           REDIS_PORT: "6379"
           ARANGO_HOST: "http://127.0.0.1:8529"
           ARANGO_ROOT_PASSWORD: e2e-throwaway-password
-        run: pytest tests/e2e/ -v --timeout=180
+        run: pytest tests/e2e/ -v --base-url=http://127.0.0.1:8056 --timeout=180
 
   # ──────────────────────────────────────────────────────────────
   # OPS PORTAL (TypeScript + React)
