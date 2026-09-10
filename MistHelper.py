@@ -480,7 +480,7 @@ from src.export.org_inventory_search_exporter import (
     OrgInventorySearchExporter,  # Spec 864 / issue #1372 -- organization inventory search menu 254
 )
 from src.export.org_search_exporter import (
-    OrgSearchExporter,  # Specs 872, 874-879; issues #1379, #1380, #1382, #1383, #1385, #1386.
+    OrgSearchExporter,  # Specs 863, 872, 874-879; issues #1371, #1377, #1379, #1380, #1382, #1383, #1385, #1386.
 )
 from src.export.org_sec_intel_profile_exporter import (
     OrgSecIntelProfileExporter,  # Issue #1148 -- one SecIntel profile read by id, menu 240
@@ -3873,6 +3873,10 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "254": (
         OrgInventorySearchExporter.inventory,  # Spec 864 / issue #1372 -- search organization inventory.
         "Search organization inventory with optional filters (searchOrgInventory)",  # Operation ID shown to operators.
+    ),
+    "255": (
+        OrgSearchExporter.psk_portal_logs,  # Issue #1377 -- search organization PSK portal logs.
+        "Search PSK portal logs for the organization (searchOrgPskPortalLogs)",  # Operation ID shown to operators.
     ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),

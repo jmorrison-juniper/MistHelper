@@ -350,7 +350,7 @@ class OperationRegistry:
             "category": "interactive_safe",
             "skip_reason": "Requires an email change token from the Mist email",
         },
-        # WHY: menus 248-253 read organization data and write exports without changing Mist Cloud.
+        # WHY: menus 248-253 and 255 read organization data and write exports without changing Mist Cloud.
         "248": {"category": "safe"},
         # WHY: menu 249 reads organization devices and writes only local export data.
         "249": {"category": "safe"},
@@ -369,6 +369,8 @@ class OperationRegistry:
             "category": "interactive_safe",
             "skip_reason": "Requires an organization selection and optional search filters",
         },
+        # WHY: menu 255 reads organization PSK portal logs and writes only local export data.
+        "255": {"category": "safe"},
         # WHY: menu 239 starts a local web server and drives a firmware upgrade, so it writes
         # device state. The fail-closed guardrail needs this row or the build breaks.
         #

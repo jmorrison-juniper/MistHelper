@@ -1,12 +1,12 @@
 """Unit tests for the organization-scoped search exporter.
 
-Covers specs 863, 870, 872, and 873 to 879 (issues #1371, #1378, #1379, #1380,
-#1381, #1382, #1383, #1385, and #1386), which are menus 230 to 234 and 248 to
-253.
+Covers specs 863, 869, 870, 872, and 873 to 879 (issues #1371, #1377, #1378,
+#1379, #1380, #1381, #1382, #1383, #1385, and #1386), which are menus 230 to
+234, 248 to 253, and 255.
 
-The ten operations share one helper, so the shared behavior is tested once and
-each menu entry is checked for the binding that makes it distinct. The two
-filtered searches also get direct coverage of every optional filter.
+The registered operations share one helper, so the shared behavior is tested
+once and each menu entry is checked for the binding that makes it distinct.
+The two filtered searches also get direct coverage of every optional filter.
 """
 
 from __future__ import annotations  # WHY: PEP 604 unions on Python 3.10+.
@@ -48,6 +48,7 @@ MENU_BINDINGS = [
     ("org_vars", "searchOrgVars", "OrgVars", ("vars", "searchOrgVars")),
     ("user_macs", "searchOrgUserMacs", "OrgUserMacs", ("usermacs", "searchOrgUserMacs")),
     ("mx_edges", "searchOrgMxEdges", "OrgMxEdges", ("mxedges", "searchOrgMxEdges")),
+    ("psk_portal_logs", "searchOrgPskPortalLogs", "OrgPskPortalLogs", ("pskportals", "searchOrgPskPortalLogs")),
 ]
 
 
