@@ -35,12 +35,125 @@ def _deny_write(probe_path: str) -> None:
     raise PermissionError(13, "Permission denied", probe_path)
 
 
+class _FakeDirEntry:
+    """Directory entry test double for dashboard summary scans."""
+
+    def __init__(self, name: str, size: int, modified: float, *, is_file: bool = True) -> None:
+        """Store the entry values that the dashboard reads."""
+        self.name = name  # Match the public os.DirEntry name attribute.
+        self._size = size  # Store a deterministic size for display checks.
+        self._modified = modified  # Store a deterministic timestamp for order checks.
+        self._is_file = is_file  # Let tests prove directory exclusion.
+
+    def is_file(self) -> bool:
+        """Return whether the entry behaves as a file."""
+        return self._is_file  # Preserve the os.DirEntry method shape.
+
+    def stat(self) -> SimpleNamespace:
+        """Return only the stat fields that the dashboard consumes."""
+        return SimpleNamespace(st_size=self._size, st_mtime=self._modified)  # Avoid real filesystem noise.
+
+
+def _patch_summary_scan(monkeypatch: pytest.MonkeyPatch, entries: list[_FakeDirEntry]) -> None:
+    """Patch the dashboard scan dependencies for deterministic tests."""
+    monkeypatch.setattr(dashboard_module.os.path, "isdir", lambda _path: True)  # Force the directory-present path.
+    monkeypatch.setattr(dashboard_module.os, "scandir", lambda _path: iter(entries))  # Return stable scan order.
+
+
 @pytest.fixture
 def writable_data_dir(tmp_path) -> str:
     """Return the path of a data directory the test process can write to."""
     data_dir = tmp_path / "data"  # WHY: pathlib keeps the path correct on Windows and on Linux.
     data_dir.mkdir()  # WHY: the readiness check needs a directory that exists.
     return str(data_dir)  # WHY: the app config stores the directory as a string.
+
+
+class TestDashboardDataSummary:
+    """Verify dashboard summary file counts and recent-file rows."""
+
+    def test_summary_returns_empty_values_for_an_absent_directory(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An absent data directory must keep the current empty summary."""
+        monkeypatch.setattr(dashboard_module.os.path, "isdir", lambda _path: False)  # Force the absent path.
+
+        summary = dashboard_module._build_data_summary("missing-data")  # Build the summary under test.
+
+        assert summary == {  # Preserve the route template contract.
+            "file_count": 0,
+            "recent_files": [],
+            "data_dir": "missing-data",
+        }
+
+    def test_summary_counts_visible_files_and_returns_only_recent_rows(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The summary must count visible files and display the newest five."""
+        entries = [  # Define scan order and metadata without filesystem variance.
+            _FakeDirEntry("old.csv", 100, 1.0),
+            _FakeDirEntry(".hidden.csv", 100, 99.0),
+            _FakeDirEntry("directory", 0, 100.0, is_file=False),
+            _FakeDirEntry("newest.csv", 2048, 9.0),
+            _FakeDirEntry("middle.csv", 1024, 5.0),
+            _FakeDirEntry("newer.csv", 4096, 8.0),
+            _FakeDirEntry("zero.csv", 0, 0.0),
+            _FakeDirEntry("late.csv", 512, 7.0),
+        ]
+        _patch_summary_scan(monkeypatch, entries)  # Make os.scandir deterministic for this test.
+
+        summary = dashboard_module._build_data_summary("data")  # Build the dashboard summary.
+
+        assert summary["file_count"] == 6  # Count visible files, not displayed rows.
+        assert [file["name"] for file in summary["recent_files"]] == [  # Preserve descending timestamp order.
+            "newest.csv",
+            "newer.csv",
+            "late.csv",
+            "middle.csv",
+            "old.csv",
+        ]
+        assert summary["recent_files"][0] == {  # Preserve the row shape and formatted values.
+            "name": "newest.csv",
+            "size_bytes": 2048,
+            "size_display": "2.0 KB",
+            "last_modified": 9.0,
+            "modified_display": "1970-01-01 00:00:09 UTC",
+        }
+
+    def test_recent_files_preserve_scan_order_when_timestamps_match(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Files with equal timestamps must keep the previous stable-sort order."""
+        entries = [_FakeDirEntry(f"same-{index}.csv", index, 5.0) for index in range(7)]  # Create tie rows.
+        _patch_summary_scan(monkeypatch, entries)  # Make tied entries arrive in a known order.
+
+        recent_files = dashboard_module._get_recent_files("data", limit=5)  # Read the helper output.
+
+        assert [file["name"] for file in recent_files] == [  # Match stable reverse sort with a key.
+            "same-0.csv",
+            "same-1.csv",
+            "same-2.csv",
+            "same-3.csv",
+            "same-4.csv",
+        ]
+
+    def test_count_helper_uses_the_same_visible_file_rules(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The count helper must still exclude hidden entries and directories."""
+        entries = [  # Mix visible files, hidden files, and a directory.
+            _FakeDirEntry("one.csv", 1, 1.0),
+            _FakeDirEntry(".two.csv", 2, 2.0),
+            _FakeDirEntry("folder", 0, 3.0, is_file=False),
+            _FakeDirEntry("three.log", 3, 3.0),
+        ]
+        _patch_summary_scan(monkeypatch, entries)  # Reuse the same deterministic scan helper.
+
+        assert dashboard_module._count_data_files("data") == 2  # Preserve the public helper return type.
+
+    def test_recent_files_preserve_negative_limit_slice_behavior(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A negative limit must match the old sorted-list slice behavior."""
+        entries = [_FakeDirEntry(f"file-{index}.csv", index, float(index)) for index in range(4)]  # Build rows.
+        _patch_summary_scan(monkeypatch, entries)  # Control the scan order and metadata.
+
+        recent_files = dashboard_module._get_recent_files("data", limit=-1)  # Exercise the legacy slice case.
+
+        assert [file["name"] for file in recent_files] == [  # Keep all but the last sorted row.
+            "file-3.csv",
+            "file-2.csv",
+            "file-1.csv",
+        ]
 
 
 class TestReadinessDataDirectory:
