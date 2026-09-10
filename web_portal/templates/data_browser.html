@@ -135,7 +135,8 @@ function renderFileTable(files) {
         tr.innerHTML =
             '<td>' + escapeHtml(file.name) + '</td>' +
             '<td><span class="badge bg-secondary">' + escapeHtml(file.file_type) + '</span></td>' +
-            '<td class="file-size">' + (file.is_directory ? '--' : formatFileSize(file.size_bytes)) + '</td>' +
+            '<td class="file-size" data-sort-value="' + (file.is_directory ? 0 : file.size_bytes) + '">' +
+            (file.is_directory ? '--' : formatFileSize(file.size_bytes)) + '</td>' +
             '<td class="file-size">' + formatTimestamp(file.last_modified) + '</td>' +
             '<td>' + buildActions(file) + '</td>';
         tbody.appendChild(tr);
