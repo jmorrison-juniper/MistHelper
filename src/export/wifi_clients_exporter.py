@@ -303,7 +303,9 @@ class WifiClientsExporter:  # WHY: orchestrator dataclass — attributes act as 
     def _write_final_csv(self, sanitized: list[dict[str, Any]]) -> None:
         """Persist the sanitized rows through the configured data exporter backend."""
         logging.info("Writing %s to configured output backend", _OUTPUT_CSV)  # WHY: log before final write.
-        self.data_exporter.write_with_format_selection(sanitized, _OUTPUT_CSV)  # WHY: persist final records.
+        self.data_exporter.write_with_format_selection(
+            sanitized, _OUTPUT_CSV, api_function_name="listSiteWirelessClientsStats"
+        )  # WHY: persist final records.
         logging.debug("%s write completed successfully", _OUTPUT_CSV)  # WHY: after-action write confirmation.
 
     @staticmethod

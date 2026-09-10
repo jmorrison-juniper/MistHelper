@@ -133,7 +133,9 @@ class TestPersistApTemplateProfiles:
 
         OrgTemplateExporter._persist_ap_template_profiles([], "OrgApTemplates.csv")
 
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with([], "OrgApTemplates.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            [], "OrgApTemplates.csv", api_function_name="listOrgDeviceProfiles"
+        )  # WHY: empty write keeps endpoint metadata.
 
     def test_non_empty_flattens_and_writes(self, fake_mh):
         """Non-empty list flows through flatten/escape/write."""
@@ -147,7 +149,9 @@ class TestPersistApTemplateProfiles:
 
         dpu.flatten_nested_fields.assert_called_once_with(profiles)
         dpu.escape_multiline.assert_called_once_with(profiles)
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(profiles, "OrgApTemplates.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            profiles, "OrgApTemplates.csv", api_function_name="listOrgDeviceProfiles"
+        )  # WHY: export keeps endpoint metadata.
 
 
 class TestApTemplates:
@@ -201,7 +205,9 @@ class TestApTemplates:
         ):
             OrgTemplateExporter.ap_templates()
 
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with([], "OrgApTemplates.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            [], "OrgApTemplates.csv", api_function_name="listOrgDeviceProfiles"
+        )  # WHY: empty write keeps endpoint metadata.
 
     def test_exception_and_cleanup_swallows_secondary_error(self, fake_mh):
         """Best-effort empty-write failure is swallowed; original error still re-raises."""
@@ -227,7 +233,9 @@ class TestPersistSwitchTemplateCsv:
 
         OrgTemplateExporter._persist_switch_template_csv([], "OrgSwitchTemplates.csv")
 
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with([], "OrgSwitchTemplates.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            [], "OrgSwitchTemplates.csv", api_function_name="listOrgNetworkTemplates"
+        )  # WHY: empty write keeps endpoint metadata.
 
     def test_non_empty_flattens_and_writes(self, fake_mh):
         """Non-empty list flows through flatten/escape/write."""
@@ -241,7 +249,9 @@ class TestPersistSwitchTemplateCsv:
 
         dpu.flatten_nested_fields.assert_called_once_with(profiles)
         dpu.escape_multiline.assert_called_once_with(profiles)
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(profiles, "OrgSwitchTemplates.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            profiles, "OrgSwitchTemplates.csv", api_function_name="listOrgNetworkTemplates"
+        )  # WHY: export keeps endpoint metadata.
 
 
 class TestSwitchTemplates:
@@ -295,7 +305,9 @@ class TestSwitchTemplates:
         ):
             OrgTemplateExporter.switch_templates()
 
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with([], "OrgSwitchTemplates.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            [], "OrgSwitchTemplates.csv", api_function_name="listOrgNetworkTemplates"
+        )  # WHY: empty write keeps endpoint metadata.
 
     def test_exception_and_cleanup_swallows_secondary_error(self, fake_mh):
         """Best-effort empty-write failure is swallowed; original error still re-raises."""

@@ -315,7 +315,9 @@ class TestExportAnomalyData:
             dpu.escape_multiline.return_value = [{"escaped": 1}]
             SiteAnomalyExporter._export_anomaly_data([{"raw": 1}], "out.csv", "site anomaly event", 1, "Site")
 
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with([{"escaped": 1}], "out.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            [{"escaped": 1}], "out.csv", api_function_name="listSiteAnomalyEvents"
+        )  # WHY: site export keeps endpoint metadata.
 
     def test_writes_empty_csv_when_no_data(self, fake_mh, caplog):
         """Writes empty CSV when no data collected."""
@@ -324,7 +326,9 @@ class TestExportAnomalyData:
         caplog.set_level(logging.WARNING, logger="src.export.site_anomaly_exporter")
         SiteAnomalyExporter._export_anomaly_data([], "out.csv", "site anomaly event", 0, "Site")
 
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with([], "out.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            [], "out.csv", api_function_name="listSiteAnomalyEvents"
+        )  # WHY: empty site export keeps endpoint metadata.
         assert "no data available" in caplog.text
 
 
@@ -560,7 +564,9 @@ class TestAnomalyExport:
             dpu.escape_multiline.return_value = [{"escaped": 1}]
             SiteAnomalyExporter._anomaly_export([{"raw": 1}], 1, "aa", "out.csv")
 
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with([{"escaped": 1}], "out.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            [{"escaped": 1}], "out.csv", api_function_name="getSiteAnomalyEventsForClient"
+        )  # WHY: client export keeps endpoint metadata.
 
     def test_writes_empty_when_no_data(self, fake_mh, caplog):
         """Writes an empty CSV when no data was collected."""
@@ -569,7 +575,9 @@ class TestAnomalyExport:
         caplog.set_level(logging.WARNING, logger="src.export.site_anomaly_exporter")
         SiteAnomalyExporter._anomaly_export([], 0, "aa", "out.csv")
 
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with([], "out.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            [], "out.csv", api_function_name="getSiteAnomalyEventsForClient"
+        )  # WHY: empty client export keeps endpoint metadata.
         assert "no data available" in caplog.text
 
 

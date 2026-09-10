@@ -242,7 +242,9 @@ class TestFinalizeErrorBranch:
         with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT uses root logging.info
             op._finalize([], 0, "out.csv", ctx)  # WHY: exercise zero-data branch
         # WHY: empty-data path still writes empty file for consistency
-        deps["DataExporter"].write_with_format_selection.assert_called_once_with([], "out.csv")
+        deps["DataExporter"].write_with_format_selection.assert_called_once_with(
+            [], "out.csv", api_function_name="getSiteInsightMetrics"
+        )  # WHY: empty write keeps endpoint metadata.
         out = "\n".join(r.getMessage() for r in caplog.records)  # WHY: aggregate captured log records
         assert "0 insight metrics exported" in out  # WHY: user summary surfaced
 

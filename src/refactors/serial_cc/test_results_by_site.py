@@ -155,7 +155,9 @@ class GatewayTestResultsService:
         logging.info("Exporting %d gateway test results to %s", len(all_results), filename)  # Log before export
         flattened = deps.DataProcessingUtils.flatten_nested_fields(all_results)  # Flatten nested structures
         sanitized = deps.DataProcessingUtils.escape_multiline(flattened)  # Sanitise multiline CSV fields
-        deps.DataExporter.write_with_format_selection(sanitized, filename)  # Write to configured output backend
+        deps.DataExporter.write_with_format_selection(
+            sanitized, filename, api_function_name="listSiteDeviceTests"
+        )  # Write to configured output backend
         logging.debug("Exported %d records to %s", len(sanitized), filename)  # Log after successful write
         # User-facing count
         logging.info("! %d gateway test results exported to %s", len(all_results), filename)

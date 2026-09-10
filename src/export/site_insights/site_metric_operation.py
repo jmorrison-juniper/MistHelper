@@ -86,7 +86,7 @@ class SiteMetricOperation:
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info(_EMPTY_METRICS_PROMPT)
         logging.error(_EMPTY_METRICS_LOG)  # WHY: Persist failure cause in the log
-        self.DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # WHY: Emit empty file for downstream consistency
+        self.DataExporter.write_with_format_selection([], filename, api_function_name="getSiteInsightMetrics")  # type: ignore[no-untyped-call]  # WHY: Emit empty file for downstream consistency
 
     def _prompt_site_id(self) -> str | None:  # WHY: Wrap prompt in cancel-aware helper for execute()
         """Prompt the user for a site selection. Return None when the user cancels."""
@@ -193,7 +193,7 @@ class SiteMetricOperation:
         """Flatten, escape, and write the non-empty result set. Log the success summary."""
         processed = self.DataProcessingUtils.flatten_nested_fields(all_insight_data)  # WHY: Flatten nested API objs
         processed = self.DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # WHY: CSV-safe text
-        self.DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]  # WHY: Write to disk / DB
+        self.DataExporter.write_with_format_selection(processed, filename, api_function_name="getSiteInsightMetrics")  # type: ignore[no-untyped-call]  # WHY: Write to disk / DB
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! %s site insight metrics exported to %s", retrieved, filename)
         logging.info(  # WHY: Persist success summary at info level for ops visibility
@@ -208,7 +208,7 @@ class SiteMetricOperation:
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! 0 insight metrics exported to %s (no data available)", filename)
         logging.warning("No insight data available for site %s", context.site_name)  # WHY: Distinguish empty from error
-        self.DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # WHY: Emit empty file for consistency
+        self.DataExporter.write_with_format_selection([], filename, api_function_name="getSiteInsightMetrics")  # type: ignore[no-untyped-call]  # WHY: Emit empty file for consistency
 
     def _export_error(  # WHY: Exception emit path - preserve failure visibility while still writing a file
         self,
@@ -222,4 +222,4 @@ class SiteMetricOperation:
         logging.error(  # WHY: Persist failure cause with site context for triage
             "Failed to export site insight metrics for %s: %s", context.site_name, exception
         )
-        self.DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]  # WHY: Always emit a file for consistency
+        self.DataExporter.write_with_format_selection([], filename, api_function_name="getSiteInsightMetrics")  # type: ignore[no-untyped-call]  # WHY: Always emit a file for consistency

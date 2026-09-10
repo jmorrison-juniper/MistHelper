@@ -603,7 +603,9 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
         """Serialise per-device results to the audit CSV via the injected exporter."""
         report_data = self._build_report_rows(results)  # WHY: CSV-shaped rows per device.
         logging.info("Saving WAN probe override audit CSV: %s", AUDIT_OUTPUT_FILE)  # WHY: pre-write log.
-        DataExporter.write_with_format_selection(report_data, AUDIT_OUTPUT_FILE)  # type: ignore[no-untyped-call]
+        DataExporter.write_with_format_selection(
+            report_data, AUDIT_OUTPUT_FILE, api_function_name="getSiteDeviceWanProbeOverrides"
+        )  # type: ignore[no-untyped-call]
         logging.debug("Audit CSV saved (rows=%s)", len(report_data))  # WHY: post-write log.
 
     def _emit_summary(  # WHY: dispatch dry-run vs apply summary printer.

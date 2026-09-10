@@ -174,11 +174,15 @@ class SecurityEventsService:
                 spec.empty_suffix,
             )
             logging.warning(spec.empty_message)  # Trace an empty result for postmortems.
-            deps.DataExporter.write_with_format_selection([], spec.output_file)  # Write empty for consistency.
+            deps.DataExporter.write_with_format_selection(
+                [], spec.output_file, api_function_name="listOrgSecPolicies"
+            )  # Write empty for consistency.
             return
         processed = deps.DataProcessingUtils.flatten_nested_fields(dataset)  # Flatten nested API structures.
         processed = deps.DataProcessingUtils.escape_multiline(processed)  # Escape multiline fields for CSV safety.
-        deps.DataExporter.write_with_format_selection(processed, spec.output_file)  # Emit the CSV/XLSX file.
+        deps.DataExporter.write_with_format_selection(
+            processed, spec.output_file, api_function_name="listOrgSecPolicies"
+        )  # Emit the CSV/XLSX file.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info(
             "! %d %s exported to %s",
@@ -268,11 +272,15 @@ class SecurityEventsService:
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info("! 0 rogue devices exported to OrgRogueData.csv (no rogue devices found)")
             logging.info("No rogue devices found across all sites (OrgRogueData.csv written empty).")  # Trace empty.
-            deps.DataExporter.write_with_format_selection([], _ROGUE_OUTPUT)  # Consistent empty export.
+            deps.DataExporter.write_with_format_selection(
+                [], _ROGUE_OUTPUT, api_function_name="listSiteRogueClients"
+            )  # Consistent empty export.
             return
         processed = deps.DataProcessingUtils.flatten_nested_fields(all_rogue_data)  # Flatten nested rogue fields.
         processed = deps.DataProcessingUtils.escape_multiline(processed)  # Escape multiline fields for CSV.
-        deps.DataExporter.write_with_format_selection(processed, _ROGUE_OUTPUT)  # Write the combined rogue export.
+        deps.DataExporter.write_with_format_selection(
+            processed, _ROGUE_OUTPUT, api_function_name="listSiteRogueClients"
+        )  # Write the combined rogue export.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! %d rogue devices exported to OrgRogueData.csv", len(processed))
         logging.info("Exported %d rogue devices to OrgRogueData.csv", len(processed))  # Trace export volume.

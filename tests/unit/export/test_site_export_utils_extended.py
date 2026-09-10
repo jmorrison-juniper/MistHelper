@@ -381,7 +381,9 @@ def test_write_insight_rows_writes_and_logs_when_rows_present(
     exporter, mocks = _build_exporter()
     with caplog.at_level(logging.INFO, logger="root"):
         exporter._write_insight_rows([{"metric_name": "m1"}], "f.csv", "site")
-    mocks["exporter_mock"].assert_called_once_with([{"metric_name": "m1"}], "f.csv")
+    mocks["exporter_mock"].assert_called_once_with(
+        [{"metric_name": "m1"}], "f.csv", api_function_name="listSiteSlesMetrics"
+    )  # WHY: export keeps endpoint metadata.
     messages = " ".join(rec.getMessage() for rec in caplog.records)
     assert "1 records exported" in messages
 
@@ -393,7 +395,9 @@ def test_write_insight_rows_writes_empty_file_when_rows_missing(
     exporter, mocks = _build_exporter()
     with caplog.at_level(logging.WARNING, logger="root"):
         exporter._write_insight_rows([], "f.csv", "site")
-    mocks["exporter_mock"].assert_called_once_with([], "f.csv")
+    mocks["exporter_mock"].assert_called_once_with(
+        [], "f.csv", api_function_name="listSiteSlesMetrics"
+    )  # WHY: empty write keeps endpoint metadata.
     messages = " ".join(rec.getMessage() for rec in caplog.records)
     assert "no metrics available" in messages
     assert "No site SLE metric insight data available" in caplog.text

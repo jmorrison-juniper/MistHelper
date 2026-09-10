@@ -461,7 +461,9 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
         logging.info("Generating audit report for %s results (dry_run=%s)", len(results), dry_run)  # Trace start
         report_data = [self._build_report_row(result) for result in results]  # Build per-result report rows
         output_file = "GatewayTemplate_WAN_Probe_Config_Audit.csv"  # Output filename
-        _MH.DataExporter.write_with_format_selection(report_data, output_file)  # Write CSV/XLSX audit report
+        _MH.DataExporter.write_with_format_selection(
+            report_data, output_file, api_function_name="listSiteWanProbes"
+        )  # Write CSV/XLSX audit report
         total_interfaces, total_sites = self._compute_report_totals(results)  # Compute aggregate counts
         if dry_run:  # Dry-run summary
             self._emit_dry_run_summary(results, total_interfaces, total_sites)  # Print dry-run section

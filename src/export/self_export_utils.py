@@ -34,7 +34,9 @@ class SelfExportUtils:  # Self/account exporters.
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live writer + processing helpers.
         if not rows:  # No data returned -- write empty output rather than failing silently.
             logging.warning("No self audit log records returned for the last %d hours", hours)  # Warn empty.
-            mh.DataExporter.write_with_format_selection([], filename)  # Empty file signals successful run.
+            mh.DataExporter.write_with_format_selection(
+                [], filename, api_function_name="listSelfAuditLogs"
+            )  # Empty file signals successful run.
             return  # Done.
         rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested change-detail dicts for CSV.
         mh.DataExporter.write_with_format_selection(  # Persist to disk with format selection.

@@ -121,7 +121,9 @@ class OrgAlarmEventExporter:
         logging.info(
             "Fetched %s device events from the past %s hours (duration=%s).", len(events), hours, duration_param
         )
-        mh.DataExporter.write_with_format_selection(events, "OrgDeviceEvents.csv")  # Persist events.
+        mh.DataExporter.write_with_format_selection(
+            events, "OrgDeviceEvents.csv", api_function_name="searchOrgDeviceEvents"
+        )  # Persist events.
         logging.info("Device events written to OrgDeviceEvents.csv (%s rows).", len(events))
         # WHY: operator-visible export confirmation (replaces prior print()).
         logging.warning("! %s device events exported to OrgDeviceEvents.csv", len(events))

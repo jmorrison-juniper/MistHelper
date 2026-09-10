@@ -228,7 +228,9 @@ class TestWriteMspOrgsCsv:
     def test_empty_orgs_data_writes_empty_csv(self, fake_mh, capsys):
         """Empty payload still writes an empty CSV so consumers get a fresh file."""
         OrgConfigExporter._write_msp_orgs_csv([], "msp-1", "MSP One")
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with([], "MspOrganizations.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            [], "MspOrganizations.csv", api_function_name="listMspOrgs"
+        )  # WHY: empty write keeps endpoint metadata.
         assert "No organizations found under this MSP" in capsys.readouterr().out
 
     def test_populated_orgs_data_writes_and_summarizes(self, fake_mh, capsys):

@@ -152,7 +152,9 @@ class TestDeviceEvents:
             mistapi_mock.api.v1.orgs.devices.searchOrgDeviceEvents.return_value = MagicMock()
             mistapi_mock.get_all.return_value = events
             OrgAlarmEventExporter.device_events()
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(events, "OrgDeviceEvents.csv")  # type: ignore[attr-defined]
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(  # type: ignore[attr-defined]  # WHY: export keeps endpoint metadata.
+            events, "OrgDeviceEvents.csv", api_function_name="searchOrgDeviceEvents"
+        )
         assert "3 device events exported" in caplog.text
 
     def test_without_events_skips_sample_block(self, fake_mh: ModuleType) -> None:
@@ -166,7 +168,9 @@ class TestDeviceEvents:
             mistapi_mock.get_all.return_value = []
             OrgAlarmEventExporter.device_events()
         dumps_mock.assert_not_called()
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with([], "OrgDeviceEvents.csv")  # type: ignore[attr-defined]
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(  # type: ignore[attr-defined]  # WHY: empty write keeps endpoint metadata.
+            [], "OrgDeviceEvents.csv", api_function_name="searchOrgDeviceEvents"
+        )
 
 
 # ---------------------------------------------------------------------------

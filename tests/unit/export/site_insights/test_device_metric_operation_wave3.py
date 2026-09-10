@@ -266,7 +266,9 @@ class TestEmitEmptyMetricList:
         op = _make_op()  # WHY: fresh SUT.
         with caplog.at_level(logging.ERROR):
             op._emit_empty_metric_list("out.csv")  # WHY: exercise the emit path.
-        op.DataExporter.write_with_format_selection.assert_called_once_with([], "out.csv")  # WHY: empty write.
+        op.DataExporter.write_with_format_selection.assert_called_once_with(
+            [], "out.csv", api_function_name="getSiteInsightMetricsForDevice"
+        )  # WHY: empty write keeps endpoint metadata.
         assert any("No device-scope metrics" in r.message for r in caplog.records)  # WHY: log preserved.
 
 
@@ -581,7 +583,9 @@ class TestExportPaths:
             op._export_with_data([{"raw": 1}], 4, "out.csv", ctx)  # WHY: exercise the success emitter.
         op.DataProcessingUtils.flatten_nested_fields.assert_called_once_with([{"raw": 1}])  # WHY: pipeline step 1.
         op.DataProcessingUtils.escape_multiline.assert_called_once_with([{"flat": 1}])  # WHY: pipeline step 2.
-        op.DataExporter.write_with_format_selection.assert_called_once_with([{"escaped": 1}], "out.csv")
+        op.DataExporter.write_with_format_selection.assert_called_once_with(
+            [{"escaped": 1}], "out.csv", api_function_name="getSiteInsightMetricsForDevice"
+        )  # WHY: success write keeps endpoint metadata.
         assert any("Exported 4 device insight" in r.message for r in caplog.records)  # WHY: summary log.
 
     def test_export_empty_writes_empty_and_logs_warning(self, caplog) -> None:
@@ -590,7 +594,9 @@ class TestExportPaths:
         ctx = _make_context()  # WHY: canned context.
         with caplog.at_level(logging.WARNING):
             op._export_empty("out.csv", ctx)  # WHY: exercise the empty emitter.
-        op.DataExporter.write_with_format_selection.assert_called_once_with([], "out.csv")  # WHY: empty write.
+        op.DataExporter.write_with_format_selection.assert_called_once_with(
+            [], "out.csv", api_function_name="getSiteInsightMetricsForDevice"
+        )  # WHY: empty write keeps endpoint metadata.
         assert any("No device insight data available" in r.message for r in caplog.records)  # WHY: warn log.
 
     def test_export_error_writes_empty_and_logs_error(self, caplog) -> None:
@@ -599,7 +605,9 @@ class TestExportPaths:
         ctx = _make_context()  # WHY: canned context.
         with caplog.at_level(logging.ERROR):
             op._export_error(RuntimeError("boom"), "out.csv", ctx)  # WHY: exercise the error emitter.
-        op.DataExporter.write_with_format_selection.assert_called_once_with([], "out.csv")  # WHY: empty write.
+        op.DataExporter.write_with_format_selection.assert_called_once_with(
+            [], "out.csv", api_function_name="getSiteInsightMetricsForDevice"
+        )  # WHY: empty write keeps endpoint metadata.
         assert any("Failed to export device insights" in r.message for r in caplog.records)  # WHY: error log.
 
 

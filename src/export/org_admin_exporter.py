@@ -104,7 +104,9 @@ class OrgAdminExporter:
         except Exception as e:  # Export failed.
             logging.error("Failed to export licenses: %s", e)  # Log the error.
             try:
-                mh.DataExporter.write_with_format_selection([], filename)  # Best-effort empty write.
+                mh.DataExporter.write_with_format_selection(
+                    [], filename, api_function_name="listOrgLicenses"
+                )  # Best-effort empty write.
             except Exception:  # nosec B110
                 pass  # Best-effort cleanup.
             raise  # Re-raise to caller.

@@ -247,7 +247,9 @@ class SLEMetricsService:
         if all_sle_data:  # Data was collected from at least one source
             processed = deps.DataProcessingUtils.flatten_nested_fields(all_sle_data)  # Flatten nested SLE structures
             processed = deps.DataProcessingUtils.escape_multiline(processed)  # Escape multiline fields for CSV
-            deps.DataExporter.write_with_format_selection(processed, "OrgSLEMetrics.csv")  # Write the export file
+            deps.DataExporter.write_with_format_selection(
+                processed, "OrgSLEMetrics.csv", api_function_name="getOrgSle"
+            )  # Write the export file
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info(
                 "! %s organization SLE data sources exported to OrgSLEMetrics.csv", metrics_retrieved
@@ -264,7 +266,9 @@ class SLEMetricsService:
             )  # User summary
             logging.warning("No org SLE data available - all sources failed or returned empty")  # Warn on empty run
             deps.DataExporter.write_with_format_selection(
-                [], "OrgSLEMetrics.csv"
+                [],
+                "OrgSLEMetrics.csv",
+                api_function_name="getOrgSle",
             )  # Write an empty export for consistency
 
     @classmethod
@@ -293,7 +297,9 @@ class SLEMetricsService:
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info("! Error exporting organization SLE metrics: %s", exception)  # User-facing error
             logging.error("Failed to export org SLE metrics: %s", exception)  # Trace the failure
-            deps.DataExporter.write_with_format_selection([], "OrgSLEMetrics.csv")  # Write empty export on failure
+            deps.DataExporter.write_with_format_selection(
+                [], "OrgSLEMetrics.csv", api_function_name="getOrgSle"
+            )  # Write empty export on failure
 
     @classmethod
     def execute(cls, fast: bool = False) -> None:

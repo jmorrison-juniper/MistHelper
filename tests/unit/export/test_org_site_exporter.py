@@ -123,7 +123,9 @@ class TestSitesListApi:
         # flatten is called twice (see line 85 comment "Flatten again post-merge")
         assert dpu.flatten_nested_fields.call_count == 2
         dpu.escape_multiline.assert_called_once()
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(raw, "SiteList_ListAPI.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            raw, "SiteList_ListAPI.csv", api_function_name="listOrgSites"
+        )  # WHY: export keeps endpoint metadata.
 
 
 class TestSitesWithLocation:
@@ -143,7 +145,9 @@ class TestSitesWithLocation:
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.assert_called_once()
         dpu.flatten_nested_fields.assert_called_once_with(raw)
         dpu.escape_multiline.assert_called_once_with(raw)
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(raw, "SitesWithLocations.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            raw, "SitesWithLocations.csv", api_function_name="listOrgSites"
+        )  # WHY: export keeps endpoint metadata.
 
 
 class TestCurrentGuests:
@@ -172,7 +176,9 @@ class TestCurrentGuests:
 
         search.assert_called_once_with(fake_mh.apisession, "org1", limit=1000)
         get_all.assert_called_once()
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(guests, "OrgCurrentGuests.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            guests, "OrgCurrentGuests.csv", api_function_name="searchOrgGuestAuthorization"
+        )  # WHY: export keeps endpoint metadata.
 
 
 class TestHistoricalGuests:
@@ -202,4 +208,6 @@ class TestHistoricalGuests:
 
         # end=1_000_000, start = end - 7*24*3600 = 395_200
         search.assert_called_once_with(fake_mh.apisession, "org2", limit=1000, start=395_200, end=1_000_000)
-        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(guests, "OrgHistoricalGuests.csv")
+        fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
+            guests, "OrgHistoricalGuests.csv", api_function_name="searchOrgGuestAuthorization"
+        )  # WHY: export keeps endpoint metadata.

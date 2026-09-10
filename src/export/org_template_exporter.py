@@ -102,11 +102,15 @@ class OrgTemplateExporter:
             logging.info(
                 "No AP templates returned from canonical endpoint; writing empty OrgApTemplates.csv"
             )  # Log empty.
-            mh.DataExporter.write_with_format_selection([], filename)  # Write empty file for consistency.
+            mh.DataExporter.write_with_format_selection(
+                [], filename, api_function_name="listOrgDeviceProfiles"
+            )  # Write empty file for consistency.
             return
         processed = DataProcessingUtils.flatten_nested_fields(ap_profiles)  # Flatten nested JSON.
         processed = DataProcessingUtils.escape_multiline(processed)  # Escape multiline.
-        mh.DataExporter.write_with_format_selection(processed, filename)  # Persist.
+        mh.DataExporter.write_with_format_selection(
+            processed, filename, api_function_name="listOrgDeviceProfiles"
+        )  # Persist.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! %s AP templates exported to %s", len(processed), filename)  # Tell user.
         logging.info("Exported %s AP templates to %s.", len(processed), filename)  # Log count.
@@ -129,7 +133,9 @@ class OrgTemplateExporter:
         except Exception as e:  # AP export failed.
             logging.error("Failed to export AP templates: %s", e)  # Log AP error.
             try:
-                mh.DataExporter.write_with_format_selection([], filename)  # Best-effort empty file.
+                mh.DataExporter.write_with_format_selection(
+                    [], filename, api_function_name="listOrgDeviceProfiles"
+                )  # Best-effort empty file.
             except Exception:  # nosec B110
                 pass  # Best-effort cleanup.
             raise  # Re-raise to caller.
@@ -144,11 +150,13 @@ class OrgTemplateExporter:
             logging.info(  # Trace empty-result branch.
                 "No switch templates returned from canonical endpoint; writing empty OrgSwitchTemplates.csv"
             )
-            mh.DataExporter.write_with_format_selection([], filename)
+            mh.DataExporter.write_with_format_selection([], filename, api_function_name="listOrgNetworkTemplates")
             return  # Done. Empty CSV written.
         processed = DataProcessingUtils.flatten_nested_fields(switch_profiles)  # Flatten nested template fields.
         processed = DataProcessingUtils.escape_multiline(processed)  # CSV-safe.
-        mh.DataExporter.write_with_format_selection(processed, filename)  # Persist.
+        mh.DataExporter.write_with_format_selection(
+            processed, filename, api_function_name="listOrgNetworkTemplates"
+        )  # Persist.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! %s switch templates exported to %s", len(processed), filename)  # User notice.
         logging.info("Exported %s switch templates to %s.", len(processed), filename)  # Trace count.
@@ -169,7 +177,7 @@ class OrgTemplateExporter:
         except Exception as e:  # Export failed.
             logging.error("Failed to export switch templates: %s", e)  # Log error.
             try:
-                mh.DataExporter.write_with_format_selection([], filename)
+                mh.DataExporter.write_with_format_selection([], filename, api_function_name="listOrgNetworkTemplates")
             except Exception:  # nosec B110
                 pass  # Best-effort cleanup.
             raise  # Re-raise to caller.

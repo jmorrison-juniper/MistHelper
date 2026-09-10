@@ -182,8 +182,8 @@ class TestPersistSiteClients:
         wired_deps["DataProcessingUtils"].escape_multiline.assert_called_once_with(rows)  # WHY: then escape.
         # WHY: filename uses underscore-replaced site name.
         wired_deps["DataExporter"].write_with_format_selection.assert_called_once_with(
-            rows, "SiteClients_Site_With_Spaces.csv"
-        )
+            rows, "SiteClients_Site_With_Spaces.csv", api_function_name="listSiteWirelessClientsStats"
+        )  # WHY: export keeps endpoint metadata.
         # WHY: exact count message emitted via logging.info after #886.
         assert any("2 client records exported" in rec.message for rec in caplog.records)
 
@@ -220,8 +220,8 @@ class TestClients:
         wired_deps["mistapi"].get_all.assert_called_once_with(response=response, mist_session=wired_deps["apisession"])
         # WHY: per-site CSV write follows through the persist path.
         wired_deps["DataExporter"].write_with_format_selection.assert_called_once_with(
-            [{"mac": "aa"}], "SiteClients_SiteName.csv"
-        )
+            [{"mac": "aa"}], "SiteClients_SiteName.csv", api_function_name="listSiteWirelessClientsStats"
+        )  # WHY: export keeps endpoint metadata.
 
     def test_api_error_is_logged_and_user_notice_emitted(
         self, wired_deps: dict[str, Any], caplog: pytest.LogCaptureFixture
@@ -384,7 +384,9 @@ class TestBeacons:
                 response=wired_deps["mistapi"].api.v1.sites.stats.listSiteWirelessClientsStats.return_value,
                 mist_session=wired_deps["apisession"],
             ),
-            call.write([{"mac": "aa"}], "SiteClients_N.csv"),
+            call.write(
+                [{"mac": "aa"}], "SiteClients_N.csv", api_function_name="listSiteWirelessClientsStats"
+            ),  # WHY: final write keeps endpoint metadata.
         ]
 
 

@@ -218,11 +218,15 @@ class SiteClientInsightsService:
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning(_MSG_EXPORT_EMPTY_TMPL, filename)  # WHY: User summary
             logging.warning(_MSG_EXPORT_EMPTY_LOG, site_name)  # WHY: Warn on empty run
-            deps.DataExporter.write_with_format_selection([], filename)  # WHY: Write empty export file
+            deps.DataExporter.write_with_format_selection(
+                [], filename, api_function_name="listSiteWirelessClientsStats"
+            )  # WHY: Write empty export file
             return  # WHY: Empty-case complete
         processed = deps.DataProcessingUtils.flatten_nested_fields(all_client_data)  # WHY: Flatten nested structures
         processed = deps.DataProcessingUtils.escape_multiline(processed)  # WHY: Escape multiline fields for CSV
-        deps.DataExporter.write_with_format_selection(processed, filename)  # WHY: Write the export file
+        deps.DataExporter.write_with_format_selection(
+            processed, filename, api_function_name="listSiteWirelessClientsStats"
+        )  # WHY: Write the export file
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(_MSG_EXPORT_OK_TMPL, metrics_retrieved, filename)  # WHY: User summary
         logging.info(_MSG_EXPORT_OK_LOG, metrics_retrieved, site_name, filename)  # WHY: Trace successful export
@@ -271,7 +275,9 @@ class SiteClientInsightsService:
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning(_MSG_NO_METRICS)  # WHY: Inform the user of misconfiguration
         logging.error(_MSG_NO_METRICS_LOG)  # WHY: Trace the misconfiguration
-        deps.DataExporter.write_with_format_selection([], filename)  # WHY: Write an empty export for consistency
+        deps.DataExporter.write_with_format_selection(
+            [], filename, api_function_name="listSiteWirelessClientsStats"
+        )  # WHY: Write an empty export for consistency
         return None  # WHY: Signal abort (empty file already written)
 
     @classmethod
@@ -288,7 +294,9 @@ class SiteClientInsightsService:
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error(_MSG_ERROR_TMPL, exception)  # WHY: User-facing error
             logging.error(_MSG_ERROR_LOG, context.site_name, exception)  # WHY: Trace the failure
-            deps.DataExporter.write_with_format_selection([], context.filename)  # WHY: Write empty export on failure
+            deps.DataExporter.write_with_format_selection(
+                [], context.filename, api_function_name="listSiteWirelessClientsStats"
+            )  # WHY: Write empty export on failure
 
     @staticmethod
     def _print_intro_and_refresh(deps: SimpleNamespace) -> None:

@@ -116,7 +116,9 @@ class DeviceEvents52wExporter:  # WHY: Public streaming exporter bound to a sing
     def _handle_empty_result(self) -> None:  # WHY: Empty-result branch emits zero-row output
         """Log empty branch and emit an empty output file via the backend."""
         self.logger.info(_LOG_EMPTY)  # WHY: Announce empty-result branch for operator visibility
-        self.data_exporter.write_with_format_selection([], _CSV_FILENAME)  # WHY: Emit zero-row output
+        self.data_exporter.write_with_format_selection(
+            [], _CSV_FILENAME, api_function_name=_API_FUNCTION_NAME
+        )  # WHY: Emit zero-row output
 
     def _build_header(self, buffered_rows: list[dict[str, Any]]) -> list[str]:  # WHY: Header discovery
         """Derive stable CSV header from buffered preload rows."""

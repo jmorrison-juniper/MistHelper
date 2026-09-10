@@ -449,11 +449,11 @@ def test_display_gateways_summary_table_emits_debug_log(caplog: pytest.LogCaptur
 class _RecordingDataExporter:
     """Stand-in for MistHelper.DataExporter capturing write calls."""
 
-    calls: list[tuple[list, str]] = []
+    calls: list[tuple[list, str, str | None]] = []
 
     @classmethod
-    def write_with_format_selection(cls, rows, filename) -> None:  # type: ignore[no-untyped-def]
-        cls.calls.append((list(rows), filename))
+    def write_with_format_selection(cls, rows, filename, api_function_name=None) -> None:  # type: ignore[no-untyped-def]
+        cls.calls.append((list(rows), filename, api_function_name))  # Record the strategy name too.
 
 
 def test_flatten_sort_export_devices_sorts_by_site_and_writes_csv(

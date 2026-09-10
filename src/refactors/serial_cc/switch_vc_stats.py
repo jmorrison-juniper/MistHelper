@@ -181,7 +181,9 @@ class SwitchVcStatsService:
         logging.info("Flattening and sanitizing %d VC stats entries for CSV export.", len(all_vc_stats))  # Trace size
         all_vc_stats = deps.DataProcessingUtils.flatten_nested_fields(all_vc_stats)  # Flatten nested fields for CSV
         all_vc_stats = deps.DataProcessingUtils.escape_multiline(all_vc_stats)  # Sanitize multiline fields
-        deps.DataExporter.write_with_format_selection(all_vc_stats, "OrgSwitchVCStats.csv")  # Persist VC stats
+        deps.DataExporter.write_with_format_selection(
+            all_vc_stats, "OrgSwitchVCStats.csv", api_function_name="getSiteDeviceVirtualChassis"
+        )  # Persist VC stats
         # User-facing result count
         logging.info("! %d switch VC stats exported to OrgSwitchVCStats.csv", len(all_vc_stats))
         logging.info(

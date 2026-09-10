@@ -122,7 +122,7 @@ class DeviceMetricOperation:
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info(_EMPTY_METRICS_PROMPT)
         logging.error(_EMPTY_METRICS_LOG)  # WHY: Persist failure cause in the log
-        self.DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
+        self.DataExporter.write_with_format_selection([], filename, api_function_name="getSiteInsightMetricsForDevice")  # type: ignore[no-untyped-call]
 
     def _resolve_site_name(self, site_id: str) -> str:  # WHY: Named lookup keeps execute path narrative
         """Best-effort site-name lookup. Fall back to site_id when API call fails."""
@@ -286,7 +286,9 @@ class DeviceMetricOperation:
         """Flatten, escape, and write the non-empty result set. Log the success summary."""
         processed = self.DataProcessingUtils.flatten_nested_fields(all_device_data)  # WHY: Flatten nested API objs
         processed = self.DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
-        self.DataExporter.write_with_format_selection(processed, filename)  # type: ignore[no-untyped-call]
+        self.DataExporter.write_with_format_selection(
+            processed, filename, api_function_name="getSiteInsightMetricsForDevice"
+        )  # type: ignore[no-untyped-call]
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("! %s device insight metrics exported to %s", retrieved, filename)
         logging.info(  # WHY: Persist success summary at info level for ops visibility
@@ -306,7 +308,7 @@ class DeviceMetricOperation:
             context.device_name,
             context.site_name,
         )
-        self.DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
+        self.DataExporter.write_with_format_selection([], filename, api_function_name="getSiteInsightMetricsForDevice")  # type: ignore[no-untyped-call]
 
     def _export_error(  # WHY: Exception emit path - preserve failure visibility while still writing a file
         self,
@@ -323,4 +325,4 @@ class DeviceMetricOperation:
             context.site_name,
             exception,
         )
-        self.DataExporter.write_with_format_selection([], filename)  # type: ignore[no-untyped-call]
+        self.DataExporter.write_with_format_selection([], filename, api_function_name="getSiteInsightMetricsForDevice")  # type: ignore[no-untyped-call]
