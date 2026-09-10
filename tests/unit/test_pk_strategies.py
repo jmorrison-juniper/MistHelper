@@ -127,6 +127,27 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "System events with composite key for uniqueness",
     },
+    "searchOrgOtherDeviceEvents": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac", "timestamp"],
+        "indexes": ["org_id", "site_id", "type"],
+        "unique_constraints": [],
+        "description": "Other device event search results",
+    },
+    "searchOrgMxEdges": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac"],
+        "indexes": ["org_id", "site_id", "name", "model"],
+        "unique_constraints": [],
+        "description": "MxEdge search results",
+    },
+    "searchOrgUserMacs": {
+        "type": "composite_pk",
+        "primary_key": ["id", "mac"],
+        "indexes": ["org_id"],
+        "unique_constraints": [],
+        "description": "Organization user MAC address search results",
+    },
     "listOrgDevicesStats": {
         "type": "composite_pk",
         "primary_key": ["device_id", "timestamp"],
@@ -284,6 +305,25 @@ class TestEndpointPrimaryKeyStrategies:
         assert "default" in ENDPOINT_PRIMARY_KEY_STRATEGIES
         default = ENDPOINT_PRIMARY_KEY_STRATEGIES["default"]
         assert default["type"] == "auto_increment_with_unique"
+
+    def test_other_device_events_strategy_exists(self):
+        strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES["searchOrgOtherDeviceEvents"]
+        assert strategy["type"] == "composite_pk"
+        assert strategy["primary_key"] == ["id", "mac", "timestamp"]
+
+    def test_user_macs_strategy_exists(self):
+        """Menu 251 upserts user MAC rows, so the key must be the id and MAC pair."""
+        strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES["searchOrgUserMacs"]  # Read the duplicated catalog entry.
+        assert strategy["type"] == "composite_pk"  # Match the production strategy type.
+        assert strategy["primary_key"] == ["id", "mac"]  # Match the production primary key.
+        assert strategy["indexes"] == ["org_id"]  # Match the production index list.
+
+    def test_mx_edges_strategy_exists(self):
+        """Menu 253 upserts MxEdge rows, so the key must be the id and MAC pair."""
+        strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES["searchOrgMxEdges"]  # Read the duplicated catalog entry.
+        assert strategy["type"] == "composite_pk"  # Match the production strategy type.
+        assert strategy["primary_key"] == ["id", "mac"]  # Match the production primary key.
+        assert strategy["indexes"] == ["org_id", "site_id", "name", "model"]  # Match the production indexes.
 
     def test_no_duplicate_endpoint_names(self):
         """Dict keys are inherently unique, but verify count matches."""

@@ -61,6 +61,12 @@ This page names the operations that arrived most recently.
 | 245 | Export the Cradlepoint connection status for an organization (`testOrgCradlepointConnection`) | `interactive_safe` |
 | 246 | Troubleshoot a call for a site, client MAC, and meeting ID (`troubleshootSiteCall`) | `interactive_safe` |
 | 247 | Verify an email change token from the Mist email (`verifySelfEmail`) | `interactive_safe` |
+| 248 | Search sites for the organization (`searchOrgSites`) | `safe` |
+| 249 | Search devices for the organization (`searchOrgDevices`) | `safe` |
+| 250 | Search organization variables (`searchOrgVars`) | `safe` |
+| 251 | Search user MAC assignments for the organization (`searchOrgUserMacs`) | `safe` |
+| 252 | Search other-device events for the organization (`searchOrgOtherDeviceEvents`) | `safe` |
+| 253 | Search Mist Edges for the organization (`searchOrgMxEdges`) | `safe` |
 
 Menu 197 writes to `data/packet_captures/<mac>/vlan_<id>/`. Every other
 operation in the table writes through `DataExporter`, so it honors the CSV,

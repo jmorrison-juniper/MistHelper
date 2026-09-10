@@ -115,11 +115,7 @@ class WebPortalApp:
         event_bus = PortalEventBus()
         event_bus.start()
         app.config["EVENT_BUS"] = event_bus
-        # WHY: nothing else calls stop(), so the heartbeat thread outlived the
-        # process without this hook. A leaked thread keeps sleeping and, under
-        # a patched time.sleep, leaks its interval into a test's recording.
-        atexit.register(event_bus.stop)
-        logging.info("Event bus started for SSE streaming")
+        logging.info("Event bus started for SSE streaming")  # Report that the event bus is ready for portal requests.
 
     @staticmethod
     def _setup_theme_manager(app: Flask, config: dict) -> None:
