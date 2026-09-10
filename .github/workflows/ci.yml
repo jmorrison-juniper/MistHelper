@@ -667,7 +667,8 @@ jobs:
           REDIS_PORT: "6379"
           ARANGO_HOST: "http://127.0.0.1:8529"
           ARANGO_ROOT_PASSWORD: e2e-throwaway-password
-        run: pytest tests/e2e/ -v --base-url=http://127.0.0.1:8056 --timeout=180
+          CAPTURE_PORT: "8056"
+        run: pytest tests/e2e/ -v --base-url=http://127.0.0.1:${CAPTURE_PORT} --timeout=180
 
   # ──────────────────────────────────────────────────────────────
   # OPS PORTAL (TypeScript + React)
