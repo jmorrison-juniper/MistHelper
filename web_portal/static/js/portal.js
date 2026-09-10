@@ -82,13 +82,15 @@ function makeSortable(table) {
             var asc = !th.classList.contains('sort-asc');
             headers.forEach(function(h) {
                 h.classList.remove('sort-asc', 'sort-desc');
+                h.setAttribute('aria-sort', 'none'); // Reset the state so assistive technology sees one active column.
             });
             th.classList.add(asc ? 'sort-asc' : 'sort-desc');
+            th.setAttribute('aria-sort', asc ? 'ascending' : 'descending'); // Report the active direction to assistive technology.
             rows.sort(function(a, b) {
                 var aCell = a.cells[colIndex]; // Read the cell so numeric sort metadata can override formatted text.
                 var bCell = b.cells[colIndex]; // Read the cell so both rows use the same sort rule.
-                var aVal = aCell.getAttribute('data-sort-value') || aCell.textContent.trim(); // Preserve display text while sorting by bytes.
-                var bVal = bCell.getAttribute('data-sort-value') || bCell.textContent.trim(); // Preserve display text while sorting by bytes.
+                var aVal = aCell.getAttribute('data-sort-value') || aCell.textContent.trim(); // Prefer stable raw values for formatted cells.
+                var bVal = bCell.getAttribute('data-sort-value') || bCell.textContent.trim(); // Prefer stable raw values for formatted cells.
                 var aNum = parseFloat(aVal);
                 var bNum = parseFloat(bVal);
                 if (!isNaN(aNum) && !isNaN(bNum)) {

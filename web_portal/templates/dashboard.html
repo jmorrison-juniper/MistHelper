@@ -42,17 +42,17 @@
         <table class="table table-sm portal-table" data-testid="recent-files-table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Size</th>
-                    <th>Modified</th>
+                    <th data-sort aria-sort="none">Name</th>
+                    <th data-sort aria-sort="none">Size</th>
+                    <th data-sort aria-sort="none">Modified</th>
                 </tr>
             </thead>
             <tbody>
                 {% for file in summary.recent_files %}
                 <tr>
                     <td>{{ file.name }}</td>
-                    <td class="file-size">{{ file.size_display }}</td>
-                    <td class="file-size">{{ file.modified_display }}</td>
+                    <td class="file-size" data-sort-value="{{ file.size_bytes }}">{{ file.size_display }}</td>
+                    <td class="file-size" data-sort-value="{{ file.last_modified }}">{{ file.modified_display }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
