@@ -123,6 +123,14 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Added**: Unit coverage for webhook selection, pagination, persistence, and
   SDK error handling.
 
+### Search site other-device events (menu 258)
+
+- **Added**: Menu 258 calls `searchSiteOtherDeviceEvents` for a selected site
+  and exports the event rows through the CSV, SQLite, or ArangoDB backend.
+  Issue #1402.
+- **Added**: The endpoint uses the existing composite primary-key strategy
+  based on `mac` and `timestamp` for repeatable SQLite upserts.
+
 ### Search organization PSK portal logs (menu 255)
 
 - **Added**: Menu 255 calls `searchOrgPskPortalLogs` for the selected
