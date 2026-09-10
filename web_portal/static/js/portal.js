@@ -85,8 +85,10 @@ function makeSortable(table) {
             });
             th.classList.add(asc ? 'sort-asc' : 'sort-desc');
             rows.sort(function(a, b) {
-                var aVal = a.cells[colIndex].textContent.trim();
-                var bVal = b.cells[colIndex].textContent.trim();
+                var aCell = a.cells[colIndex]; // Read the cell so numeric sort metadata can override formatted text.
+                var bCell = b.cells[colIndex]; // Read the cell so both rows use the same sort rule.
+                var aVal = aCell.getAttribute('data-sort-value') || aCell.textContent.trim(); // Preserve display text while sorting by bytes.
+                var bVal = bCell.getAttribute('data-sort-value') || bCell.textContent.trim(); // Preserve display text while sorting by bytes.
                 var aNum = parseFloat(aVal);
                 var bNum = parseFloat(bVal);
                 if (!isNaN(aNum) && !isNaN(bNum)) {
