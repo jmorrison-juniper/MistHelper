@@ -7,6 +7,39 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Search organization Mist Edges (menu 253)
+
+- **Added**: Menu 253 calls `searchOrgMxEdges` for an organization, prompts
+  safely for its optional filters, which include the `hostname` filter, follows
+  all response pages, and exports the rows through CSV, SQLite, or ArangoDB.
+  Issue #1375.
+- **Added**: Unit coverage for typed filter forwarding, empty-filter defaults,
+  pagination, and the standard `DataExporter` write path.
+- **Fixed**: The optional filter prompts are skipped under `--test`, so the
+  unattended sweep never blocks on stdin for a `safe` menu. See issue #1765.
+
+### Search organization other-device events (menu 252)
+
+- **Added**: Menu 252 calls `searchOrgOtherDeviceEvents` for an organization and
+  exports the event rows through CSV, SQLite, or ArangoDB. The export keeps the
+  stable `OrgOtherDeviceEvents.csv` name and sorts on `timestamp`. Issue #1376.
+- **Added**: Unit coverage for the SDK binding, the output name, and the
+  time-series sort key.
+
+### Search user MAC assignments for an organization (menu 251)
+
+- **Added**: Menu 251 calls the read-only `searchOrgUserMacs` endpoint and
+  exports all paginated organization user-MAC records through CSV, SQLite, or
+  ArangoDB. Issue #1380.
+- **Added**: Menu 251 prompts safely for the optional `mac`, `labels`, `limit`,
+  and `sort` filters. A blank answer leaves the SDK default in place. The menu
+  asks for no page number, because `mistapi.get_all` follows the pages. The
+  `--test` sweep skips the prompts, so the `safe` menu runs unattended.
+- **Added**: Unit coverage for the SDK binding, every optional filter,
+  pagination, empty results, and export pipeline. The existing
+  `searchOrgUserMacs` primary-key strategy provides stable upserts by record ID
+  and MAC address.
+
 ### Compliance analyzer parallel jobs (issue #2428)
 
 - **Added**: `tools.compliance_analyzer` accepts opt-in worker jobs for large

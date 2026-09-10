@@ -350,6 +350,7 @@ class OperationRegistry:
             "category": "interactive_safe",
             "skip_reason": "Requires an email change token from the Mist email",
         },
+        # WHY: menus 248-253 read organization data and write exports without changing Mist Cloud.
         "248": {"category": "safe"},
         # WHY: menu 249 reads organization devices and writes only local export data.
         "249": {"category": "safe"},
@@ -357,6 +358,12 @@ class OperationRegistry:
         "250": {
             "category": "safe",
         },
+        # WHY: menu 251 reads organization user MAC assignments and writes only local export data.
+        "251": {"category": "safe"},
+        # WHY: menu 252 reads organization other-device events and writes only local export data.
+        "252": {"category": "safe"},
+        # WHY: menu 253 reads the organization Mist Edges and writes only local export data.
+        "253": {"category": "safe"},
         # WHY: menu 239 starts a local web server and drives a firmware upgrade, so it writes
         # device state. The fail-closed guardrail needs this row or the build breaks.
         #

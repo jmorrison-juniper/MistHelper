@@ -43,7 +43,10 @@ class OrgExportUtils:
         logging.info("Starting export of organization %s...", data_type)  # Log start.
 
         # Create filename from data_type
-        safe_data_type = data_type.replace(" ", "").replace("-", "").title()  # Sanitize for filename.
+        if data_type.casefold() == "other device events":
+            safe_data_type = "OtherDeviceEvents"
+        else:
+            safe_data_type = data_type.replace(" ", "").replace("-", "").title()  # Sanitize for filename.
         filename = f"Org{safe_data_type}.csv"  # Build the CSV name.
 
         fetcher_kwargs = dict(api_kwargs)  # Copy extra kwargs.
@@ -659,6 +662,20 @@ class OrgExportUtils:
             api_call=mistapi.api.v1.orgs.mxedges.searchOrgMistEdgeEvents,
             data_type="mist edge events",  # Drives the export filename -> OrgMistEdgeEvents.csv.
             sort_key="timestamp",  # Matches the composite PK ordering (newest events sort naturally).
+        )
+
+    @staticmethod
+    def other_device_events():  # Export organization other-device events.
+        """Export other-device event search results to OrgOtherDeviceEvents.csv.
+
+        Why:
+            Spec 868 and issue #1376 expose the organization other-device event
+            search through the shared org export pipeline.
+        """
+        OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
+            api_call=mistapi.api.v1.orgs.otherdevices.searchOrgOtherDeviceEvents,
+            data_type="other device events",  # Preserve the established OrgOtherDeviceEvents filename.
+            sort_key="timestamp",  # Keep event output aligned with the time-series key.
         )
 
     @staticmethod
