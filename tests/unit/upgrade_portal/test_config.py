@@ -793,6 +793,14 @@ def test_the_settings_records_carry_the_password_variable_names(monkeypatch: pyt
     assert settings.redis.password_variable == REDIS_PASSWORD_NAME
 
 
+def test_redis_settings_keep_the_compose_password_contract(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The portal keeps the password variable name while compose supplies its value."""
+    monkeypatch.setenv("REDIS_PASSWORD", REDIS_PASSWORD_SENTINEL)  # Model compose injecting a non-secret test value.
+    settings = load_redis_settings()  # Load the portal settings without retaining the credential.
+    assert settings.password_variable == REDIS_PASSWORD_NAME  # Keep the environment variable name as the contract.
+    assert REDIS_PASSWORD_SENTINEL not in repr(settings)  # Prevent the credential value from entering settings.
+
+
 def test_no_password_value_reaches_the_settings_tree(monkeypatch: pytest.MonkeyPatch) -> None:
     """No field of the settings tree holds a password value.
 
