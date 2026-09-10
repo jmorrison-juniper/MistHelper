@@ -40,6 +40,18 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   `searchOrgUserMacs` primary-key strategy provides stable upserts by record ID
   and MAC address.
 
+### Compliance analyzer parallel jobs (issue #2428)
+
+- **Added**: `tools.compliance_analyzer` accepts opt-in worker jobs for large
+  repository scans. The default stays sequential. `--jobs 0` selects the
+  measured automatic worker bound.
+- **Added**: The parallel path uses spawned worker processes, 16-file batches,
+  and an 8-worker automatic cap. This preserves result order and avoids the
+  slower high-worker counts measured on Windows.
+- **Added**: Unit coverage proves sequential and parallel report parity, order
+  preservation, small-scan fallback, parse-error handling, missing-file failure
+  parity, and CLI argument forwarding.
+
 ### Stranded branch report reference time (issue #2404)
 
 - **Fixed**: `StrandedBranchReporter.find()` and `StrandedBranchReporter.render()`

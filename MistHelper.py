@@ -53,6 +53,7 @@ from collections.abc import (
     Iterable,  # Type hints for static analysis
 )
 from datetime import datetime  # Import datetime for timestamping logs and events
+from logging.handlers import RotatingFileHandler  # Rotate script.log before the data volume fills
 from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, TextIO, cast
 
 from src.utils.console import echo  # WHY: 1031 stdout + INFO log helper replaces legacy WARNING-channel echoes.
@@ -61,6 +62,46 @@ from src.utils.subprocess_runner import (  # Centralized subprocess dispatch + e
     SubprocessRunner,  # Audited dispatcher. Sole entry point for external command execution.
     TimeoutExpired,  # Raised when subprocess.run exceeds its timeout.
 )
+
+
+class LogRotationSettings:
+    """Read safe size-based rotation settings for script.log."""
+
+    DEFAULT_MAX_BYTES = 10 * 1024 * 1024  # Limit the active log to 10 MiB by default
+    DEFAULT_BACKUP_COUNT = 5  # Keep five rotated logs by default
+
+    def __init__(self, max_bytes: int, backup_count: int) -> None:
+        self.max_bytes = max_bytes  # Store the active log size limit
+        self.backup_count = backup_count  # Store the retained backup count
+
+    @classmethod
+    def from_environment(cls) -> LogRotationSettings:
+        """Read validated rotation values from the process environment."""
+        max_bytes = cls._read_integer("LOGGING_MAX_BYTES", cls.DEFAULT_MAX_BYTES, minimum=1)  # Read the size limit
+        backup_count = cls._read_integer("LOGGING_BACKUP_COUNT", cls.DEFAULT_BACKUP_COUNT, minimum=0)  # Read retention
+        return cls(max_bytes, backup_count)  # Return one validated configuration for either setup path
+
+    @staticmethod
+    def _read_integer(name: str, default: int, minimum: int) -> int:
+        """Return a positive environment integer or its safe default."""
+        raw_value = os.environ.get(name)  # Read the optional deployment override
+        if raw_value is None:  # Use the default when the variable is not configured
+            return default  # Preserve the bounded default
+        try:  # Validate operator-provided text before logging starts
+            value = int(raw_value)  # Convert the override to an integer
+        except ValueError:  # Reject malformed deployment settings
+            return default  # Preserve a safe bounded configuration
+        return value if value >= minimum else default  # Reject values that disable the safety bound
+
+    def build_handler(self, log_path: str) -> RotatingFileHandler:
+        """Build a UTF-8 rotating handler for the configured log path."""
+        return RotatingFileHandler(  # Create the bounded handler used by both logging setup paths
+            log_path,  # Keep the existing data/script.log location
+            maxBytes=self.max_bytes,  # Rotate when the active file reaches the configured size
+            backupCount=self.backup_count,  # Retain only the configured number of backups
+            encoding="utf-8",  # Preserve non-ASCII operational data safely
+        )
+
 
 # Type stubs for dynamically imported modules
 # These allow type checking while the actual imports happen at runtime via GlobalImportManager
@@ -734,9 +775,10 @@ _early_console_handler = logging.StreamHandler()  # Create handler for console o
 _early_console_handler.setLevel(
     _early_console_level
 )  # Set console handler to respect CONSOLE_LOG_LEVEL environment variable
-_early_file_handler = logging.FileHandler(
-    _early_log_path, encoding="utf-8"
-)  # script.log file output. UTF-8 keeps non-cp1252 chars (for example Hawaiian 'okina) from a crash in logging
+_early_rotation_settings = LogRotationSettings.from_environment()  # Read bounded rotation settings before setup
+_early_file_handler = _early_rotation_settings.build_handler(
+    _early_log_path
+)  # Build the bounded script.log handler for early startup records
 _early_file_handler.setLevel(_early_file_level)  # Set file handler to respect LOGGING_LOG_LEVEL environment variable
 
 logging.basicConfig(  # Configure root logger with handlers and format
@@ -1349,18 +1391,24 @@ class GlobalImportManager:
         logging.debug("_build_console_log_handler: console handler ready")  # Log after build
         return console_handler  # Caller wires this into basicConfig
 
-    def _build_file_log_handler(self, level: int) -> logging.FileHandler:  # File handler factory (data/script.log)
+    def _build_file_log_handler(self, level: int) -> RotatingFileHandler:  # File handler factory (data/script.log)
         """Build a data/script.log file handler at the requested level."""
         logging.debug("_build_file_log_handler: creating file handler at level %s", level)  # Log before build
         log_file_path = os.path.join("data", "script.log")  # Log path under data/ (writable in the container)
         os.makedirs("data", exist_ok=True)  # Create data/ if missing (no error if present)
-        file_handler = logging.FileHandler(
-            log_file_path, encoding="utf-8"
-        )  # script.log writer. UTF-8 keeps non-cp1252 chars (for example Hawaiian 'okina) from a crash in logging
+        rotation_settings = LogRotationSettings.from_environment()  # Read deployment rotation limits for this handler
+        file_handler = rotation_settings.build_handler(
+            log_file_path
+        )  # Build the bounded script.log writer with UTF-8 output
         file_handler.setLevel(level)  # Apply the file verbosity threshold
         file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")  # Same timestamped format
         file_handler.setFormatter(file_formatter)  # Attach the format to the file handler
-        logging.debug("_build_file_log_handler: file handler ready at %s", log_file_path)  # Log after build
+        logging.debug(
+            "_build_file_log_handler: bounded handler ready at %s with %d-byte limit and %d backups",
+            log_file_path,
+            rotation_settings.max_bytes,
+            rotation_settings.backup_count,
+        )  # Log the configured bound after the handler is ready
         return file_handler  # Caller wires this into basicConfig
 
     def _define_package_requirements(self) -> None:  # Populate the required/optional package dictionaries
@@ -5070,8 +5118,13 @@ def _metrics_gateway_org_id(settings: Any) -> str:
         return str(settings.org_id)
     if org_id:  # The session already holds a selection, so reuse it rather than ask twice
         return str(org_id)
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):  # Refuse prompts without a terminal
+        logging.error("METRICS_GATEWAY: No organization and no terminal.")  # Explain the startup failure
+        logging.error("METRICS_GATEWAY: Set METRICS_ORG_ID or MIST_ORG_ID.")  # Give the operator the fix
+        return ""  # Return an empty value so the caller exits with a failure status
     logging.info("METRICS_GATEWAY: No organization is set - starting the picker")  # Log before the prompt
     _select_org_from_session()  # Writes the module-level org_id global
+    logging.debug("METRICS_GATEWAY: Picker result: %s", bool(org_id))  # Record the result safely
     return str(org_id or "")
 
 
@@ -5110,7 +5163,7 @@ def _launch_metrics_gateway(dev_debug: bool = False) -> None:
     if not resolved:  # Without an organization the gateway would serve an empty reading forever
         echo("  X No organization selected - the metrics gateway cannot start")
         logging.error("METRICS_GATEWAY: No organization selected - abort the launch")  # Log the refusal
-        return
+        raise SystemExit(1)  # Return a non-zero status so service managers report the startup failure
     settings = settings.with_org_id(resolved)  # Carry the chosen org into the frozen record
     # Reuse the shared token-based initializer (handles retries, rate limits, and the legacy fallback).
     if not MistSessionInitializer.initialize():  # Populates the module-level `apisession` global on success.

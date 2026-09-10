@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "recorded_at": "2026-09-09",
+  "entries": [
+    {
+      "gate": "ruff",
+      "path": "mist-ops-platform",
+      "scan_path": "mist-ops-platform",
+      "recorded_count": 410
+    },
+    {
+      "gate": "ruff",
+      "path": "web_portal",
+      "scan_path": "web_portal",
+      "recorded_count": 18
+    },
+    {
+      "gate": "ruff",
+      "path": "scripts",
+      "scan_path": "scripts",
+      "recorded_count": 447
+    },
+    {
+      "gate": "ruff",
+      "path": "src/maps",
+      "scan_path": "src/maps",
+      "recorded_count": 45
+    },
+    {
+      "gate": "mypy",
+      "path": "mist-ops-platform",
+      "scan_path": "mist-ops-platform/src",
+      "recorded_count": 266
+    },
+    {
+      "gate": "mypy",
+      "path": "web_portal",
+      "scan_path": "web_portal",
+      "recorded_count": 190
+    },
+    {
+      "gate": "mypy",
+      "path": "src/maps",
+      "scan_path": "src/maps",
+      "recorded_count": 394
+    },
+    {
+      "gate": "mypy",
+      "path": "tests",
+      "scan_path": "tests",
+      "recorded_count": 7258
+    },
+    {
+      "gate": "mypy",
+      "path": "scripts",
+      "scan_path": "scripts",
+      "recorded_count": 301
+    },
+    {
+      "gate": "mypy",
+      "path": "tools",
+      "scan_path": "tools",
+      "recorded_count": 71
+    },
+    {
+      "gate": "mypy",
+      "path": "starlink_dashboard.py",
+      "scan_path": "starlink_dashboard.py",
+      "recorded_count": 76
+    },
+    {
+      "gate": "bandit",
+      "path": "tests",
+      "scan_path": "tests",
+      "recorded_count": 20961
+    },
+    {
+      "gate": "bandit",
+      "path": ".venv",
+      "scan_path": ".venv",
+      "recorded_count": 0
+    },
+    {
+      "gate": "bandit",
+      "path": "node_modules",
+      "scan_path": "node_modules",
+      "recorded_count": 0
+    },
+    {
+      "gate": "bandit",
+      "path": "scripts",
+      "scan_path": "scripts",
+      "recorded_count": 45
+    },
+    {
+      "gate": "bandit",
+      "path": "specs",
+      "scan_path": "specs",
+      "recorded_count": 7
+    },
+    {
+      "gate": "bandit",
+      "path": "tools/test_quality_analyzer/fixtures",
+      "scan_path": "tools/test_quality_analyzer/fixtures",
+      "recorded_count": 42
+    },
+    {
+      "gate": "bandit",
+      "path": "tools\\test_quality_analyzer\\fixtures",
+      "scan_path": "tools/test_quality_analyzer/fixtures",
+      "recorded_count": 42
+    },
+    {
+      "gate": "pylint",
+      "path": "src/maps,src/ssh,src/ui",
+      "scan_path": [
+        "src/maps",
+        "src/ssh",
+        "src/ui"
+      ],
+      "recorded_count": 529
+    }
+  ]
+}
