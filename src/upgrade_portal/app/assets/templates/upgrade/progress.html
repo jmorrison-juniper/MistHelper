@@ -137,6 +137,15 @@
     </p>
   {% endif %}
 
+  {% if run_state == 'awaiting_confirmation' and pre_key %}
+    <p class="portal-card-note">
+      This run has a verified pre-check and is ready for final review.
+      <a class="portal-button"
+         data-testid="upgrade-confirm-link"
+         href="/runs/{{ run_key }}/confirm">Review and confirm the upgrade</a>
+    </p>
+  {% endif %}
+
   {#
     Issue #2100 names the site in words on every page that leads to a firmware
     write. The identifier stays on the page, because an operator quotes the

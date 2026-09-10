@@ -619,6 +619,36 @@ def test_run_page_gives_a_recovery_link_for_an_unprepared_run(
     assert f'href="/runs/{run_id}/options"' in page  # The control opens the correct saved plan.
 
 
+def test_run_page_gives_a_confirmation_link_for_a_prepared_run(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """A prepared run gives the operator a visible path to final review."""
+    run_id = seed_run(run_store, "awaiting_confirmation", pre_capture_id="capture-1", targets=[PLANNED_ROW])
+    answer = upgrade_client.get(f"/runs/{run_id}")  # The operator resumes the prepared run from its status page.
+    page = answer.get_data(as_text=True)  # The rendered page contains the discoverable action.
+    assert answer.status_code == OK_STATUS  # A prepared run remains readable.
+    assert 'data-testid="upgrade-confirm-link"' in page  # The page exposes the final review action.
+    assert f'href="/runs/{run_id}/confirm"' in page  # The action targets this exact run.
+    follow = upgrade_client.get(
+        f"/runs/{run_id}/confirm"
+    )  # Following the visible action reaches the existing safety page.
+    assert follow.status_code == OK_STATUS  # The confirmation page remains the next browser destination.
+    assert 'data-testid="upgrade-confirm-input"' in follow.get_data(as_text=True)  # The typed safety gate is present.
+
+
+def test_run_page_hides_confirmation_link_without_a_pre_check(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """A prepared-state label without a pre-check cannot expose a misleading link."""
+    run_id = seed_run(run_store, "awaiting_confirmation", targets=[PLANNED_ROW])
+    answer = upgrade_client.get(f"/runs/{run_id}")  # The route renders the incomplete record safely.
+    page = answer.get_data(as_text=True)  # The operator must not see an unusable confirmation action.
+    assert answer.status_code == OK_STATUS  # The state remains inspectable.
+    assert 'data-testid="upgrade-confirm-link"' not in page  # The link requires a verified pre-check.
+
+
 def test_options_page_renders_the_version_picker(
     upgrade_client: FlaskClient,
     run_store: RecordingRunStore,
