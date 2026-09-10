@@ -30,7 +30,7 @@ def _load_sortable_dashboard(page: Any, html: str) -> None:
     """Load the dashboard and attach the production sorter to its table."""
     page.set_content(html)
     page.add_script_tag(content=PORTAL_SCRIPT.read_text(encoding="utf-8"))
-    page.evaluate("makeSortable(document.querySelector('[data-testid=\"recent-files-table\"]))")
+    page.evaluate("makeSortable(document.querySelector('[data-testid=\"recent-files-table\"]'))")
 
 
 def _file_names(page: Any) -> list[str]:
