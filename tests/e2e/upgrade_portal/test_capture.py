@@ -93,6 +93,7 @@ LOCK_SETTLE_MS = 4000  # The take call is one round trip on loopback, so it sett
 # `contracts/http-api.md` section 5 fixes both page paths and the create path.
 VERSION_SELECT_ALL_ID = "upgrade-version-select-all"
 OPTIONS_SAVE_ID = "upgrade-options-save-button"
+CONFIRM_LINK_ID = "upgrade-confirm-link"
 CONFIRM_INPUT_ID = "upgrade-confirm-input"
 OPTIONS_PAGE_SUFFIX = "/options"  # The run page that picks a version for each device.
 CONFIRM_PAGE_SUFFIX = "/confirm"  # The run page that reads the typed word.
@@ -743,6 +744,16 @@ class TestUpgradeJourney:
         picker.select_option(index=1)  # The first real version, because index 0 is the empty prompt.
         walking_page.get_by_test_id(OPTIONS_SAVE_ID).click()  # The save writes the plan and opens the confirm page.
 
+        walking_page.wait_for_url(f"**/runs/{run_id}{CONFIRM_PAGE_SUFFIX}", timeout=START_TIMEOUT_MS)
+        sync_api.expect(walking_page.get_by_test_id(CONFIRM_INPUT_ID)).to_be_visible(timeout=START_TIMEOUT_MS)
+
+        walking_page.get_by_role("link", name="History", exact=True).click()
+        walking_page.wait_for_url(f"**{HISTORY_PAGE_PATH}", timeout=START_TIMEOUT_MS)
+        walking_page.get_by_role("link", name=run_id, exact=True).click()
+        walking_page.wait_for_url(f"**/runs/{run_id}", timeout=START_TIMEOUT_MS)
+        confirm_link = walking_page.get_by_test_id(CONFIRM_LINK_ID)
+        sync_api.expect(confirm_link).to_be_visible(timeout=START_TIMEOUT_MS)
+        confirm_link.click()
         walking_page.wait_for_url(f"**/runs/{run_id}{CONFIRM_PAGE_SUFFIX}", timeout=START_TIMEOUT_MS)
         sync_api.expect(walking_page.get_by_test_id(CONFIRM_INPUT_ID)).to_be_visible(timeout=START_TIMEOUT_MS)
 

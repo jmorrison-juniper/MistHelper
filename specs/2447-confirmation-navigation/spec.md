@@ -2,7 +2,7 @@
 
 **Feature Branch**: `fix/2447-confirmation-navigation`
 **Created**: 2026-09-10
-**Status**: Ready for implementation
+**Status**: Implemented and verified
 **Input**: GitHub issue #2447 — operators cannot discover the final confirmation page from an awaiting upgrade run.
 
 ## User Scenarios & Testing

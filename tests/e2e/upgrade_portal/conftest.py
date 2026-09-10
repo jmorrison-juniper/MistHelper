@@ -1121,6 +1121,8 @@ def _skip_storage_bootstrap() -> None:
 
 
 FAILED_RUN_ID = "e2e-failed-run-0001"  # The seeded run that the retry test opens. One fixed key, so no test guesses.
+PREPARED_RUN_ID = "e2e-prepared-run-0001"  # The seeded run that proves the confirmation link works.
+PREPARED_SITE_ID = "e2e-confirm-site"  # A separate site keeps this live run from blocking other E2E journeys.
 
 
 def _failed_run_record() -> dict[str, Any]:
@@ -1147,44 +1149,55 @@ def _failed_run_record() -> dict[str, Any]:
     }
 
 
-def _seed_failed_run(built: Any, upgrade: Any) -> None:
-    """Write one failed run into the store of the stand-in portal.
+def _prepared_run_record() -> dict[str, Any]:
+    """Build one prepared run that exposes the confirmation navigation."""
+    return {
+        "run_id": PREPARED_RUN_ID,
+        "site_id": PREPARED_SITE_ID,
+        "org_id": STAND_IN_ORG_ID,
+        "state": "awaiting_confirmation",
+        "message": "The stand-in plan is ready for final review.",
+        "pre_capture_id": "e2e-pre-capture-0001",
+        "targets": [
+            {
+                "device_id": "e2e-gateway-0001",
+                "name": "E2E gateway",
+                "model": "SRX-1500",
+                "type": "gateway",
+                "current_version": "23.4R2-S5.5",
+                "target_version": "23.4R2-S6.1",
+            }
+        ],
+        "options": {"strategy": "big_bang", "reboot": True},
+    }
 
-    Why:
-        The retry control needs a failed run, and the portal offers no route
-        that puts a run into that state. The server process therefore writes one
-        record itself, exactly as it registers the two operators above.
 
-        The write runs on its own thread. A cold store builds its collections on
-        the first write, and that build takes longer than the port wait of the
-        fixture. A write on this thread would therefore stop the server from
-        binding at all, and every browser test would report a start failure.
+def _seed_fixture_runs(built: Any, upgrade: Any) -> None:
+    """Write the failed and prepared browser fixtures without delaying server start.
 
-    Args:
-        built: The Flask application. The write needs its context to read the
-            store seam out of the configuration.
-        upgrade: The upgrade route module, which owns the store seam.
+    A cold store can take longer to initialize than the fixture's port wait. The
+    background thread lets the portal bind first; each test waits for its seeded
+    run before it asserts the related control.
     """
-    logger.info("Seeding the failed run %s for the retry control test", FAILED_RUN_ID)
-    writer = threading.Thread(target=_write_failed_run, args=(built, upgrade), daemon=True)
-    writer.start()  # The server binds now, and the record lands a moment later.
-    logger.debug("The failed run seed runs on its own thread")
+    logger.info("Seeding browser fixture runs %s and %s", FAILED_RUN_ID, PREPARED_RUN_ID)
+    writer = threading.Thread(target=_write_fixture_runs, args=(built, upgrade), daemon=True)
+    writer.start()
+    logger.debug("The browser fixture run seed runs on its own thread")
 
 
-def _write_failed_run(built: Any, upgrade: Any) -> None:
-    """Write the seeded record, and report a refusal instead of raising.
-
-    Args:
-        built: The Flask application that owns the store seam.
-        upgrade: The upgrade route module, which owns the store seam.
-    """
-    try:  # A store that refuses the write must not end the thread with a trace.
-        with built.app_context():  # `run_store` reads `current_app.config`, so a context is required.
-            written = upgrade.save_run(_failed_run_record())
-    except Exception as failure:  # An unreachable store is a normal state on a bare workstation.
-        logger.warning("The failed run seed did not write. The retry test will skip. Cause: %s", failure)
-        return  # The retry test reads the absent run and reports a skip that names the cause.
-    logger.info("The failed run seed reported %s", written)  # The retry test skips when this reads False.
+def _write_fixture_runs(built: Any, upgrade: Any) -> None:
+    """Write both seeded run records, and report a refusal instead of raising."""
+    try:
+        with built.app_context():
+            failed_written = upgrade.save_run(_failed_run_record())
+            prepared_written = upgrade.save_run(_prepared_run_record())
+    except Exception as failure:
+        logger.warning(
+            "The browser fixture runs did not write. Related tests will report the missing state. Cause: %s",
+            failure,
+        )
+        return
+    logger.info("Browser fixture run seeds reported failed=%s prepared=%s", failed_written, prepared_written)
 
 
 def build_stand_in_app() -> Any:
@@ -1232,7 +1245,7 @@ def build_stand_in_app() -> Any:
     built.config[upgrade.STOP_RUNNER_KEY] = stand_in_stop_runner  # A stop then cancels nothing at the cloud.
     _register_operator(STAND_IN_EMAIL, STAND_IN_BROWSER_ID)  # The operator that every test drives.
     _register_operator(SECOND_EMAIL, SECOND_BROWSER_ID)  # The operator that meets the lock refusal.
-    _seed_failed_run(built, upgrade)  # Issue #2242 needs a failed run, and no page journey reaches that state.
+    _seed_fixture_runs(built, upgrade)  # Browser-only states that no safe page journey can create.
     return built  # Waitress and Gunicorn both load this object by name.
 
 
