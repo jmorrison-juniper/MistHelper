@@ -371,6 +371,11 @@ class OperationRegistry:
         },
         # WHY: menu 255 reads organization PSK portal logs and writes only local export data.
         "255": {"category": "safe"},
+        # WHY: menu 256 reads organization webhook deliveries and prompts for a webhook selection.
+        "256": {
+            "category": "interactive_safe",
+            "skip_reason": "Requires an organization and webhook selection",
+        },
         # WHY: menu 239 starts a local web server and drives a firmware upgrade, so it writes
         # device state. The fail-closed guardrail needs this row or the build breaks.
         #
