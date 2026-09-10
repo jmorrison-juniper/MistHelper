@@ -249,6 +249,10 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install -r requirements-dev.txt  # pinned pytest stack (issue #1779)
+      - name: Run dependency import smoke tests
+        # Issue #1948: the coverage scope excludes scripts/, so name the import
+        # test directly and fail when a dependency removes an imported symbol.
+        run: python -m pytest tests/unit/scripts/test_script_imports.py -q
       - name: Run tests with coverage
         # Issue #888: this gate keeps SRC_PATH. Widening the measured scope adds
         # uncovered lines to the denominator, so the percentage drops against the 80
@@ -571,6 +575,28 @@ jobs:
             exit 1
           fi
           echo "The menu reference matches the generator output."
+
+  exclusion_drift:
+    name: "Quality exclusion drift (advisory)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Measure excluded findings
+        run: python scripts/check_exclusion_drift.py --format github --output exclusion-drift.json
+      - name: Upload the machine-readable report
+        uses: actions/upload-artifact@v6
+        with:
+          name: quality-exclusion-drift
+          path: exclusion-drift.json
 
   playwright:
     name: "E2E smoke tests"
