@@ -65,6 +65,13 @@ WIRELESS_CLIENT_MAC = "aabbccdd0011"  # The wireless client of the capture below
 DEVICE_TABLE_MARKER = 'data-testid="capture-device-table"'
 WIRED_TABLE_MARKER = 'data-testid="capture-client-wired-table"'
 WIRELESS_TABLE_MARKER = 'data-testid="capture-client-wireless-table"'
+GUEST_TABLE_MARKER = 'data-testid="capture-client-guest-table"'
+SWITCH_PORTS_TABLE_MARKER = 'data-testid="capture-switch-ports-table"'
+POE_TABLE_MARKER = 'data-testid="capture-poe-table"'
+RADIOS_TABLE_MARKER = 'data-testid="capture-radios-table"'
+TUNNELS_TABLE_MARKER = 'data-testid="capture-tunnels-table"'
+BGP_PEERS_TABLE_MARKER = 'data-testid="capture-bgp-peers-table"'
+ALARMS_TABLE_MARKER = 'data-testid="capture-alarms-table"'
 EXPORT_CSV_MARKER = 'data-testid="capture-export-csv"'
 EXPORT_JSON_MARKER = 'data-testid="capture-export-json"'
 
@@ -157,6 +164,79 @@ EMPTY_CAPTURE: dict[str, Any] = {
     "clients": {"wired": [], "wireless": [], "guest": []},
     "counts": {"devices_total": 0},
     "stored_size_bytes": 512,
+}
+
+# WHY: Issue #2443 reports that a tier 3 capture stores every section, and the
+# page still shows only three tables. This fixture holds one record of five of
+# the six sections, and a stored refusal reason for the sixth, so a single
+# fixture proves the "ok" state and the "unavailable" state at once. The page
+# then shows the "not_requested" state whenever `STORED_CAPTURE` above (a tier
+# 2 capture, with no `extras` key) renders.
+GUEST_CLIENT_MAC = "aabbccdd2233"  # The guest client of the tier 3 fixture below.
+SWITCH_PORT_MAC = "0011220000aa"  # The switch that owns the port row below.
+RADIO_MAC = "0011220000cc"  # The access point that owns the radio row below.
+
+STORED_CAPTURE_TIER3: dict[str, Any] = {
+    **STORED_CAPTURE,
+    "tier": 3,
+    "clients": {
+        **STORED_CAPTURE["clients"],
+        "guest": [
+            {
+                "mac": GUEST_CLIENT_MAC,
+                "hostname": "guest-01",
+                "username": "visitor@example.invalid",
+                "device_mac": "0011220000cc",
+                "device_name": "ap-01",
+                "ssid": "guest-wifi",
+            }
+        ],
+    },
+    "extras": {
+        "switch_ports": [
+            {
+                "mac": SWITCH_PORT_MAC,
+                "port_id": "ge-0/0/1",
+                "up": True,
+                "speed": 1000,
+                "full_duplex": True,
+                "port_usage": "access",
+                "mac_count": 1,
+                "neighbor_mac": "",
+                "neighbor_port_desc": "",
+                "neighbor_system_name": "",
+            }
+        ],
+        "poe": [
+            {
+                "mac": SWITCH_PORT_MAC,
+                "port_id": "ge-0/0/1",
+                "poe_disabled": False,
+                "poe_mode": "802.3at",
+                "poe_on": True,
+                "poe_priority": "low",
+                "power_draw": 4.5,
+            }
+        ],
+        "radios": [
+            {
+                "mac": RADIO_MAC,
+                "band": "5",
+                "channel": 36,
+                "power": 12,
+                "bandwidth": 80,
+                "noise_floor": -95,
+                "num_clients": 3,
+                "num_wlans": 2,
+            }
+        ],
+        "tunnels": [],  # No stored reason below, so the page must show "no rows".
+        "bgp_peers": [],
+        "alarms": [],
+    },
+    "partial_reasons": [
+        {"section": "bgp_peers", "reason": "cloud_call_failed", "http_status": 0},
+    ],
 }
 
 
@@ -383,6 +463,77 @@ def test_the_page_holds_the_three_tables(signed_in: FlaskClient) -> None:
     assert WIRELESS_TABLE_MARKER in page
 
 
+def test_the_page_holds_the_guest_table_and_the_six_tier3_tables(signed_in: FlaskClient) -> None:
+    """Issue #2443. The page shows a table for every stored section, tier 2 or tier 3.
+
+    Args:
+        signed_in: The signed-in browser.
+    """
+    page = open_page(signed_in)
+    assert GUEST_TABLE_MARKER in page
+    assert SWITCH_PORTS_TABLE_MARKER in page
+    assert POE_TABLE_MARKER in page
+    assert RADIOS_TABLE_MARKER in page
+    assert TUNNELS_TABLE_MARKER in page
+    assert BGP_PEERS_TABLE_MARKER in page
+    assert ALARMS_TABLE_MARKER in page
+
+
+def test_a_tier2_capture_shows_the_not_requested_state(signed_in: FlaskClient) -> None:
+    """FR-003. A tier 2 capture never ran tier 3, so each tier 3 table states that.
+
+    Args:
+        signed_in: The signed-in browser.
+    """
+    page = open_page(signed_in)
+    assert 'data-testid="capture-switch-ports-card" data-state="not_requested"' in page
+    assert "Tier 3 was not requested for this capture." in page
+
+
+def test_a_tier3_capture_shows_its_rows(wired_app: Flask, signed_in: FlaskClient) -> None:
+    """FR-003. A tier 3 capture shows the stored row of a section that read one.
+
+    Args:
+        wired_app: The portal with the stored capture reader injected.
+        signed_in: The signed-in browser.
+    """
+    wired_app.config[LOADER_KEY] = RecordingLoader(StoredLoad(dict(STORED_CAPTURE_TIER3), True, ""))
+    page = open_page(signed_in)
+    assert f'data-testid="capture-client-row-{GUEST_CLIENT_MAC}"' in page
+    assert "guest-01" in page
+    assert "visitor@example.invalid" in page
+    assert 'data-testid="capture-switch-ports-card" data-state="ok"' in page
+    assert "ge-0/0/1" in page
+    assert 'data-testid="capture-poe-card" data-state="ok"' in page
+    assert 'data-testid="capture-radios-card" data-state="ok"' in page
+
+
+def test_a_tier3_section_with_no_row_shows_the_no_rows_state(wired_app: Flask, signed_in: FlaskClient) -> None:
+    """FR-003. A tier 3 section that read no row is not the same as a failed read.
+
+    Args:
+        wired_app: The portal with the stored capture reader injected.
+        signed_in: The signed-in browser.
+    """
+    wired_app.config[LOADER_KEY] = RecordingLoader(StoredLoad(dict(STORED_CAPTURE_TIER3), True, ""))
+    page = open_page(signed_in)
+    assert 'data-testid="capture-tunnels-card" data-state="no_rows"' in page
+    assert "This site holds no row for this section." in page
+
+
+def test_a_tier3_section_with_a_failed_read_shows_the_reason(wired_app: Flask, signed_in: FlaskClient) -> None:
+    """FR-003. A failed cloud call must never read as an empty site.
+
+    Args:
+        wired_app: The portal with the stored capture reader injected.
+        signed_in: The signed-in browser.
+    """
+    wired_app.config[LOADER_KEY] = RecordingLoader(StoredLoad(dict(STORED_CAPTURE_TIER3), True, ""))
+    page = open_page(signed_in)
+    assert 'data-testid="capture-bgp-peers-card" data-state="unavailable"' in page
+    assert "The cloud call for this section failed." in page
+
+
 def test_each_chassis_member_holds_its_own_row(signed_in: FlaskClient) -> None:
     """A stack that loses a member must show the loss, so each member has a row.
 
@@ -541,6 +692,38 @@ def test_the_json_download_holds_every_captured_row(signed_in: FlaskClient) -> N
         WIRED_CLIENT_MAC,
         WIRELESS_CLIENT_MAC,
     }
+
+
+def test_the_download_holds_every_tier3_row(wired_app: Flask, signed_in: FlaskClient) -> None:
+    """Issue #2443. The download must carry a row for every stored tier 3 record.
+
+    Args:
+        wired_app: The portal with the stored capture reader injected.
+        signed_in: The signed-in browser.
+    """
+    wired_app.config[LOADER_KEY] = RecordingLoader(StoredLoad(dict(STORED_CAPTURE_TIER3), True, ""))
+    rows = csv_rows(download(signed_in, "csv"))
+    kinds = {row["kind"] for row in rows}
+    assert "client_guest" in kinds
+    assert "switch_port" in kinds
+    assert "poe" in kinds
+    assert "radio" in kinds
+    # tunnels, bgp_peers, and alarms each read no row in this fixture, so no
+    # row of those kinds reaches the file, even though bgp_peers failed.
+    assert "tunnel" not in kinds
+    assert "bgp_peer" not in kinds
+    assert "alarm" not in kinds
+
+
+def test_a_tier2_download_holds_no_tier3_row(signed_in: FlaskClient) -> None:
+    """A tier 2 capture never ran tier 3, so the file must carry none of those rows.
+
+    Args:
+        signed_in: The signed-in browser.
+    """
+    rows = csv_rows(download(signed_in, "csv"))
+    kinds = {row["kind"] for row in rows}
+    assert not kinds & {"switch_port", "poe", "radio", "tunnel", "bgp_peer", "alarm"}
 
 
 def test_an_unknown_format_is_refused(signed_in: FlaskClient) -> None:

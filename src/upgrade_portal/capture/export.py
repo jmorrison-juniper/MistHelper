@@ -54,6 +54,12 @@ KIND_DEVICE = "device"  # One row of the device table.
 KIND_CLIENT_WIRED = "client_wired"  # One row of the wired client table.
 KIND_CLIENT_WIRELESS = "client_wireless"  # One row of the wireless client table.
 KIND_CLIENT_GUEST = "client_guest"  # One row of the guest client table.
+KIND_SWITCH_PORT = "switch_port"  # One row of the switch port table. Tier 3 only.
+KIND_POE = "poe"  # One row of the power-over-ethernet table. Tier 3 only.
+KIND_RADIO = "radio"  # One row of the radio table. Tier 3 only.
+KIND_TUNNEL = "tunnel"  # One row of the tunnel table. Tier 3 only.
+KIND_BGP_PEER = "bgp_peer"  # One row of the BGP peer table. Tier 3 only.
+KIND_ALARM = "alarm"  # One row of the alarm table. Tier 3 only.
 
 # The client group of the stored document, and the row kind that each one writes.
 CLIENT_GROUPS: tuple[tuple[str, str], ...] = (
@@ -91,6 +97,45 @@ EXPORT_COLUMNS = (
     "vlan",
     "ssid",
     "band",
+    # The tier 3 columns below this line. Issue #2443 asks for one flat file
+    # that still sorts and filters on the `kind` column, so a tier 3 row uses
+    # the same file and stays out of the seven columns above that a device row
+    # or a client row already fills.
+    "up",
+    "speed",
+    "full_duplex",
+    "port_usage",
+    "mac_count",
+    "neighbor_mac",
+    "neighbor_port_desc",
+    "neighbor_system_name",
+    "poe_disabled",
+    "poe_mode",
+    "poe_on",
+    "poe_priority",
+    "power_draw",
+    "channel",
+    "power",
+    "bandwidth",
+    "noise_floor",
+    "num_clients",
+    "num_wlans",
+    "tunnel_name",
+    "wan_name",
+    "peer_host",
+    "peer_ip",
+    "protocol",
+    "neighbor",
+    "neighbor_as",
+    "state",
+    "vrf_name",
+    "type",
+    "group",
+    "severity",
+    "count",
+    "timestamp",
+    "last_seen",
+    "hostnames",
 )
 
 # The columns that a device row reads straight out of the device index entry.
@@ -103,6 +148,38 @@ CLIENT_FIELDS = ("hostname", "ip", "port_id", "vlan", "ssid", "band")
 # column names read as the parent of the client, which is what the operator
 # looks for. The source names come from `data-model.md` section 3.4.
 CLIENT_PARENT_FIELDS = (("parent_device", "device_name"), ("parent_mac", "device_mac"))
+
+# The columns that each tier 3 row reads straight out of its stored record.
+# `mac` is common to every group except the alarm group, and the row builder
+# reads it on its own, so no list below repeats it.
+SWITCH_PORT_FIELDS = (
+    "port_id",
+    "up",
+    "speed",
+    "full_duplex",
+    "port_usage",
+    "mac_count",
+    "neighbor_mac",
+    "neighbor_port_desc",
+    "neighbor_system_name",
+)
+POE_FIELDS = ("port_id", "poe_disabled", "poe_mode", "poe_on", "poe_priority", "power_draw")
+RADIO_FIELDS = ("band", "channel", "power", "bandwidth", "noise_floor", "num_clients", "num_wlans")
+TUNNEL_FIELDS = ("tunnel_name", "wan_name", "peer_host", "peer_ip", "protocol", "up", "uptime")
+BGP_PEER_FIELDS = ("neighbor", "neighbor_as", "neighbor_mac", "state", "up", "uptime", "vrf_name")
+ALARM_FIELDS = ("type", "group", "severity", "status", "count", "timestamp", "last_seen", "hostnames")
+
+# The tier 3 section of the stored document, the row kind that it writes, and
+# the columns that it reads. `document["extras"]` is absent for a tier 2
+# capture, so `extra_rows` below never reaches this list for one of those.
+TIER3_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("switch_ports", KIND_SWITCH_PORT, SWITCH_PORT_FIELDS),
+    ("poe", KIND_POE, POE_FIELDS),
+    ("radios", KIND_RADIO, RADIO_FIELDS),
+    ("tunnels", KIND_TUNNEL, TUNNEL_FIELDS),
+    ("bgp_peers", KIND_BGP_PEER, BGP_PEER_FIELDS),
+    ("alarms", KIND_ALARM, ALARM_FIELDS),
+)
 
 # The five values that name the capture. FR-027 requires each one, so a reader
 # of the file can tell which site it read and when. Each one is also a column,
@@ -244,7 +321,8 @@ def _as_text(value: Any) -> str:
     Why:
         A comma-separated file holds text alone, and the JSON file must match
         it column for column. An absent value becomes an empty cell rather than
-        the word `None`.
+        the word `None`. The alarm section stores a list for a field such as
+        `hostnames`, and a Python list would otherwise paint as `['a', 'b']`.
 
     Args:
         value: The captured value.
@@ -254,6 +332,8 @@ def _as_text(value: Any) -> str:
     """
     if value is None:  # The cloud sends a null value for a field it never read.
         return ""  # An empty cell reads better than the word None.
+    if isinstance(value, (list, tuple)):  # An alarm field can hold more than one name.
+        return _one_line(", ".join(_as_text(item) for item in value if item is not None))
     return _one_line(str(value))  # A number, a flag, and a word all read the same way.
 
 
@@ -413,8 +493,57 @@ def client_rows(capture: Mapping[str, Any]) -> list[ExportRow]:
     return rows
 
 
+def _extra_row(kind: str, record: Mapping[str, Any], heading: Mapping[str, str], fields: tuple[str, ...]) -> ExportRow:
+    """Return the export row of one tier 3 record.
+
+    Args:
+        kind: The row kind of the tier 3 section.
+        record: One stored tier 3 record.
+        heading: The five values that name the capture.
+        fields: The columns that this section reads.
+
+    Returns:
+        The row of that record.
+    """
+    readable = _readable(record)  # No credential field reaches a cell.
+    values = _blank_values(heading)  # Every device column and every client column stays empty on this row.
+    values.update({name: _as_text(readable.get(name)) for name in fields})  # The columns of this section.
+    values["kind"] = kind  # A reader filters one tier 3 section apart from the others.
+    values["mac"] = _as_text(readable.get("mac"))  # Absent for an alarm record, and blank reads as no match key.
+    return ExportRow(kind=kind, mac=values["mac"], values=values)
+
+
+def extra_rows(capture: Mapping[str, Any]) -> list[ExportRow]:
+    """Return one export row for each tier 3 record of one capture.
+
+    Why:
+        Issue #2443 reports that the download carries no switch port, no
+        power-over-ethernet reading, no radio, no tunnel, no BGP peer, and no
+        alarm. `document["extras"]` is absent for a tier 2 capture, so a tier 2
+        download still carries none of these rows, by the same rule that the
+        page uses.
+
+    Args:
+        capture: The stored capture document.
+
+    Returns:
+        The switch port rows, then the power-over-ethernet rows, then the
+        radio rows, then the tunnel rows, then the BGP peer rows, then the
+        alarm rows.
+    """
+    extra_map: Any = capture.get("extras")  # Absent for a tier 2 capture.
+    if not isinstance(extra_map, Mapping):  # A tier 2 capture never ran a tier 3 read.
+        return []
+    heading = capture_heading(capture)  # Every row names the same capture, so the writer reads it one time.
+    rows: list[ExportRow] = []  # The six sections write into one list.
+    for section, kind, fields in TIER3_GROUPS:  # The order of `TIER3_GROUPS` fixes the row order.
+        records: Any = extra_map.get(section) or []  # A section the capture could not read holds no record.
+        rows.extend(_extra_row(kind, record, heading, fields) for record in records if isinstance(record, Mapping))
+    return rows
+
+
 def build_rows(capture: Mapping[str, Any]) -> tuple[ExportRow, ...]:
-    """Return one row for every device and every client of one capture.
+    """Return one row for every device, every client, and every tier 3 record of one capture.
 
     Why:
         Acceptance Scenario 3 requires that the file holds every captured row.
@@ -425,10 +554,10 @@ def build_rows(capture: Mapping[str, Any]) -> tuple[ExportRow, ...]:
         capture: The stored capture document.
 
     Returns:
-        The device rows first, then the client rows.
+        The device rows first, then the client rows, then the tier 3 rows.
     """
     logger.info("capture export: build the rows of the capture %s", _as_text(capture.get("capture_id")) or "unnamed")
-    rows = tuple(device_rows(capture) + client_rows(capture))  # The device rows read first, as the page shows them.
+    rows = tuple(device_rows(capture) + client_rows(capture) + extra_rows(capture))  # The page order, then tier 3.
     logger.debug("capture export: built %s rows", len(rows))  # The count proves that no row was dropped.
     return rows
 
@@ -623,6 +752,8 @@ def column_names() -> Sequence[str]:
 
 
 __all__ = [
+    "ALARM_FIELDS",
+    "BGP_PEER_FIELDS",
     "CLIENT_FIELDS",
     "CLIENT_GROUPS",
     "CLIENT_PARENT_FIELDS",
@@ -636,13 +767,24 @@ __all__ = [
     "FORMULA_LEADERS",
     "HEADER_MARKER",
     "HEADING_COLUMNS",
+    "KIND_ALARM",
+    "KIND_BGP_PEER",
     "KIND_CLIENT_GUEST",
     "KIND_CLIENT_WIRED",
     "KIND_CLIENT_WIRELESS",
     "KIND_DEVICE",
+    "KIND_POE",
+    "KIND_RADIO",
+    "KIND_SWITCH_PORT",
+    "KIND_TUNNEL",
     "MEDIA_TYPE_CSV",
     "MEDIA_TYPE_JSON",
+    "POE_FIELDS",
+    "RADIO_FIELDS",
     "SUPPORTED_FORMATS",
+    "SWITCH_PORT_FIELDS",
+    "TIER3_GROUPS",
+    "TUNNEL_FIELDS",
     "ExportResult",
     "ExportRow",
     "build_rows",
@@ -654,6 +796,7 @@ __all__ = [
     "disarm_cell",
     "download_name",
     "export_capture",
+    "extra_rows",
     "is_credential_field",
     "render_csv",
     "render_json",
