@@ -2,7 +2,7 @@
 
 **Feature Branch**: `868-mist-search-org-other-device-events`
 **Created**: 2026-06-29
-**Status**: Draft
+**Status**: Complete
 **Input**: User description: "Catalog the missing Mist API GET endpoint `searchOrgOtherDeviceEvents` and add it as a new MistHelper menu item."
 
 ## Source Endpoint
