@@ -1,0 +1,302 @@
+{
+  "schema_version": 2,
+  "source": "Zscaler Client Connector \u00e2\u20ac\u201d Ports and IP Addresses required destinations (user-supplied 2026-07-23)",
+  "description": "Zscaler Client Connector destinations grouped by role/function. Wildcards (e.g. *.zscaler.net) are informational and cannot be directly probed; probe consumers should choose a representative concrete FQDN. Each role carries a `probe` object with the single most-reliable (protocol, port) tuple, derived from live probing on 2026-07-25 (see data/zscaler_probe_results_20260725T022856Z.md). `ports` is retained for documentation of every port Zscaler declares.",
+  "probe_conventions": {
+    "protocols": [
+      "http",
+      "https",
+      "tcp"
+    ],
+    "ignore_cert_errors": true,
+    "notes": "HTTPS probes should be configured to ignore TLS hostname/cert validation \u00e2\u20ac\u201d several Zscaler-fronted endpoints (CENR proxies, DigiCert CRL, etc.) return tenant or shared certs that will not match the request hostname."
+  },
+  "wildcards": [
+    "*.prod.zpath.net",
+    "*.private.zscaler.com",
+    "*.prod.zpath.vip",
+    "*.zpatwo.net"
+  ],
+  "roles": [
+    {
+      "role": "service_discovery_enrollment_login",
+      "description": "Service Discovery, Enrollment, Login",
+      "ports": [
+        443
+      ],
+      "probe": {
+        "protocol": "tcp",
+        "port": 443,
+        "reason": "login.zscaler.net closes HTTPS connections without response (RemoteDisconnected); TCP handshake on 443 is universal for both hosts."
+      },
+      "critical": true,
+      "critical_fqdn": "login.zscaler.net",
+      "fqdns": [
+        "mobile.zscaler.net",
+        "login.zscaler.net"
+      ]
+    },
+    {
+      "role": "pac",
+      "description": "Proxy Auto-Config (PAC) delivery",
+      "ports": [
+        80,
+        443
+      ],
+      "probe": {
+        "protocol": "https",
+        "port": 443,
+        "reason": "HTTPS returns 200 with a valid Zscaler cert."
+      },
+      "critical": true,
+      "fqdns": [
+        "pac.zscaler.net"
+      ]
+    },
+    {
+      "role": "tunnel_zen",
+      "description": "Tunnel/ZEN \u00e2\u20ac\u201d cloud enforcement node ranges. See data/zscaler_cenr_hostnames.json for concrete ZEN hostnames. Not org-wide critical: the per-site picker selects the nearest ~3 ZENs and pins those as site-scope critical, so an org-wide critical flag would waste the 5-slot cap on a single alphabetically-first ZEN (e.g. Mad3) regardless of geography.",
+      "ports": [
+        80,
+        443,
+        8080
+      ],
+      "probe": {
+        "protocol": "https",
+        "port": 443,
+        "reason": "HTTPS handshake completes; cert is a Zscaler tenant cert so hostname will not match \u00e2\u20ac\u201d cert validation must be disabled."
+      },
+      "critical": false,
+      "fqdns_ref": "data/zscaler_cenr_hostnames.json"
+    },
+    {
+      "role": "captive_portal_url1_legacy",
+      "description": "Captive Portal URL 1 \u00e2\u20ac\u201d Zscaler Client Connector 1.4.3 and earlier",
+      "ports": [
+        80
+      ],
+      "probe": {
+        "protocol": "http",
+        "port": 80,
+        "reason": "Captive-portal check is documented on HTTP/80; clients4.google.com returns 404 as expected."
+      },
+      "fqdns": [
+        "clients4.google.com"
+      ]
+    },
+    {
+      "role": "captive_portal_url1_modern",
+      "description": "Captive Portal URL 1 \u00e2\u20ac\u201d Zscaler Client Connector 1.5 and later",
+      "ports": [
+        80
+      ],
+      "probe": {
+        "protocol": "http",
+        "port": 80,
+        "reason": "Documented captive-portal HTTP endpoint; returns 403."
+      },
+      "critical": true,
+      "fqdns": [
+        "gateway.zscaler.net"
+      ]
+    },
+    {
+      "role": "captive_portal_url2",
+      "description": "Captive Portal URL 2",
+      "ports": [
+        80
+      ],
+      "probe": {
+        "protocol": "http",
+        "port": 80,
+        "reason": "Documented captive-portal HTTP endpoint; returns 200."
+      },
+      "fqdns": [
+        "pac.zscaler.net"
+      ]
+    },
+    {
+      "role": "support",
+      "description": "Support endpoint",
+      "ports": [
+        443
+      ],
+      "probe": {
+        "protocol": "https",
+        "port": 443,
+        "reason": "mobilesupport.zscaler.com has TCP/80 CLOSED \u00e2\u20ac\u201d HTTPS on 443 is the only responding channel."
+      },
+      "fqdns": [
+        "mobilesupport.zscaler.com"
+      ]
+    },
+    {
+      "role": "samsung_elm_activation_americas",
+      "description": "Samsung ELM key activation for Android ZCC \u00e2\u20ac\u201d Americas",
+      "ports": [
+        443
+      ],
+      "probe": {
+        "protocol": "https",
+        "port": 443,
+        "reason": "HTTP on port 80 times out on all four hosts; HTTPS returns 404."
+      },
+      "fqdns": [
+        "gslb.secb2b.com",
+        "us-elm.secb2b.com",
+        "us-prod-klm-b2c.secb2b.com",
+        "us-prod-klm.secb2b.com"
+      ]
+    },
+    {
+      "role": "samsung_elm_activation_emea",
+      "description": "Samsung ELM key activation for Android ZCC \u00e2\u20ac\u201d EMEA",
+      "ports": [
+        443
+      ],
+      "probe": {
+        "protocol": "https",
+        "port": 443,
+        "reason": "HTTP on port 80 times out on all four hosts; HTTPS returns 404."
+      },
+      "fqdns": [
+        "gslb.secb2b.com",
+        "eu-elm.secb2b.com",
+        "eu-prod-klm-b2c.secb2b.com",
+        "eu-prod-klm.secb2b.com"
+      ]
+    },
+    {
+      "role": "samsung_elm_activation_china",
+      "description": "Samsung ELM key activation for Android ZCC \u00e2\u20ac\u201d China",
+      "ports": [
+        443
+      ],
+      "probe": {
+        "protocol": "https",
+        "port": 443,
+        "reason": "Three of four hosts return HTTPS 200/404; china-prod-klm.secb2b.com.cn fails DNS resolution and cannot be probed regardless of protocol."
+      },
+      "fqdns": [
+        "china-gslb.secb2b.com.cn",
+        "china-elm.secb2b.com.cn",
+        "china-b2c-klm.secb2b.com.cn",
+        "china-prod-klm.secb2b.com.cn"
+      ]
+    },
+    {
+      "role": "zcc_auto_update",
+      "description": "Zscaler Client Connector auto-update",
+      "ports": [
+        443
+      ],
+      "probe": {
+        "protocol": "https",
+        "port": 443,
+        "reason": "CloudFront + zcc.ecdn both respond 403/404 on HTTPS."
+      },
+      "fqdns": [
+        "d32a6ru7mhaq0c.cloudfront.net",
+        "zcc.ecdn.zscaler.com"
+      ]
+    },
+    {
+      "role": "certificate_validation",
+      "description": "OCSP and CRL certificate validation (DigiCert)",
+      "ports": [
+        80
+      ],
+      "probe": {
+        "protocol": "http",
+        "port": 80,
+        "reason": "OCSP/CRL is standardized on HTTP; DigiCert HTTPS certs are for the CDN edge and produce hostname mismatches."
+      },
+      "critical": true,
+      "critical_fqdn": "ocsp.digicert.com",
+      "fqdns": [
+        "ocsp.digicert.com",
+        "crl3.digicert.com",
+        "crl4.digicert.com"
+      ]
+    },
+    {
+      "role": "data_protection_updates",
+      "description": "Zscaler Data Protection module auto-update",
+      "ports": [
+        443
+      ],
+      "probe": {
+        "protocol": "https",
+        "port": 443,
+        "reason": "CloudFront + zcc.ecdn respond 403/404 on HTTPS."
+      },
+      "fqdns": [
+        "d1aisxtb9u4c2s.cloudfront.net",
+        "zcc.ecdn.zscaler.com"
+      ]
+    },
+    {
+      "role": "zdx_auto_update",
+      "description": "Zscaler Digital Experience (ZDX) module auto-update",
+      "ports": [
+        443
+      ],
+      "probe": {
+        "protocol": "https",
+        "port": 443,
+        "reason": "CloudFront + zcc.ecdn respond 403/404 on HTTPS."
+      },
+      "fqdns": [
+        "d3l44rcogcb7iv.cloudfront.net",
+        "zcc.ecdn.zscaler.com"
+      ]
+    },
+    {
+      "role": "deception_auto_update",
+      "description": "Zscaler Deception module auto-update",
+      "ports": [
+        443
+      ],
+      "probe": {
+        "protocol": "https",
+        "port": 443,
+        "reason": "CloudFront + zcc.ecdn respond 403/404 on HTTPS."
+      },
+      "fqdns": [
+        "dwv281inkfqg3.cloudfront.net",
+        "zcc.ecdn.zscaler.com"
+      ]
+    },
+    {
+      "role": "health_metric_probes",
+      "description": "ZCC health metric probes (also uses ICMP)",
+      "ports": [
+        443
+      ],
+      "probe": {
+        "protocol": "https",
+        "port": 443,
+        "reason": "healthapp.ecdn.zscaler.com returns HTTPS 200."
+      },
+      "fqdns": [
+        "healthapp.ecdn.zscaler.com"
+      ],
+      "critical": true
+    },
+    {
+      "role": "misc_private_zscaler",
+      "description": "Miscellaneous Zscaler internal repos / private endpoints",
+      "ports": [
+        443
+      ],
+      "probe": {
+        "protocol": "https",
+        "port": 443,
+        "reason": "yum.private.zscaler.com times out on HTTP/80 but returns HTTPS 403."
+      },
+      "fqdns": [
+        "yum.private.zscaler.com"
+      ]
+    }
+  ]
+}

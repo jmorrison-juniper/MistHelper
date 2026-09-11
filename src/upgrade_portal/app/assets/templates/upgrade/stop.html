@@ -1,0 +1,171 @@
+{#
+  upgrade/stop.html - the stop control of the upgrade capture portal.
+
+  Why this file exists:
+    FR-038a asks for a stop control while a run is live. The control belongs on
+    the run page, next to the phase list the operator is reading. This file is a
+    partial, so upgrade/progress.html includes it and no route needs a second
+    page. The section `GET /runs/<run_id>` of contracts/http-api.md names the
+    live run view, and it names no separate stop page. A route may also render
+    this file on its own, because the file extends no layout and needs one
+    variable.
+
+  Why the stop needs a typed word:
+    FR-038b asks the operator to type the word STOP. A stop cancels a pending
+    upgrade and leaves the site in a mixed firmware state. One press is too
+    little for that result. The word sits in one Jinja variable, so a change of
+    the word costs one line. portal.js reads the word from the attribute.
+
+  Why the stop never promises a full stop:
+    The cloud states that a cancel is best effort. A device that already writes
+    firmware finishes the write. The outcome region therefore holds three lists
+    and one plain sentence, which matches the outcome object of
+    `POST /api/runs/<run_id>/stop` in contracts/http-api.md.
+
+  Why the page holds no script:
+    The content security policy is 'self' only. The policy blocks an inline
+    script and blocks the style attribute. Every behavior lives in portal.js.
+
+  The contract with portal.js:
+    The stop button carries data-stop-reveal. It shows the box that holds the
+    input. The input carries data-confirm-word and data-confirm-target, which
+    are the same two hooks the upgrade confirmation uses. The submit button
+    carries data-run-id. portal.js sends POST /api/runs/<run_id>/stop with the
+    typed text in the confirm field, then paints the answer into the outcome
+    region.
+
+  Variables a route may supply:
+    run_id         - the run identifier. The stop call needs it.
+    stop_outcome   - the outcome object of a stop that already ran. Holds
+                     cancelled, already_writing, no_cancel_available, and
+                     message. Null or absent before a stop.
+    stop_available - false when the run already finished. The default is true.
+                     The stop section of contracts/http-api.md answers 409 with
+                     run_not_stoppable for a run that already finished, so the
+                     button hides that dead end.
+#}
+
+{#
+  The one place that holds the stop word. Change this line to change the word.
+#}
+{% set stop_confirm_word = 'STOP' %}
+
+{% set stop_run_key = run_id | default('', true) %}
+{% set stop_result = stop_outcome | default({}, true) %}
+
+{#
+  A boolean uses the default filter with one argument only. The second argument
+  turns the filter into a truth test, and a false value then reads as a missing
+  value. A route that sends false would therefore get true back, and the button
+  would stay unlocked after the run finished.
+#}
+{% set stop_is_available = stop_available | default(true) %}
+
+{% set stop_cancelled = stop_result.cancelled | default([], true) %}
+{% set stop_writing = stop_result.already_writing | default([], true) %}
+{% set stop_no_cancel = stop_result.no_cancel_available | default([], true) %}
+{% set stop_message = stop_result.message | default('', true) %}
+
+<div class="confirm-box" data-stop-region>
+  <h2 class="confirm-box-title">Stop the run</h2>
+
+  <p class="confirm-box-text">
+    Caution: a stop cancels each upgrade that waits to start. A device that
+    already writes firmware finishes the write. The site can hold two firmware
+    versions after a stop.
+  </p>
+
+  {#
+    The button only shows the box below. The stop itself needs the typed word,
+    so this press starts no work.
+  #}
+  <button type="button"
+          class="portal-button portal-button-danger"
+          data-testid="stop-button"
+          data-stop-reveal
+          aria-expanded="false"
+          aria-controls="stop-confirm-box"
+          {{ 'disabled' if not stop_is_available else '' }}>Stop the run</button>
+
+  {#
+    The box stays hidden until the operator presses the button above. The hidden
+    attribute wins over a display rule, because the vendored stylesheet sets
+    [hidden] { display: none !important; }.
+  #}
+  <div class="confirm-box-actions" id="stop-confirm-box" data-stop-form hidden>
+    <label class="form-label" for="stop-confirm-input">
+      Type {{ stop_confirm_word }} in capital letters to unlock the stop
+    </label>
+
+    <input type="text"
+           class="confirm-box-input"
+           id="stop-confirm-input"
+           data-testid="stop-confirm-input"
+           data-confirm-word="{{ stop_confirm_word }}"
+           data-confirm-target="stop-confirm-submit"
+           data-confirm-hint-for="stop-confirm-hint"
+           autocomplete="off"
+           autocapitalize="off"
+           spellcheck="false"
+           aria-describedby="stop-confirm-hint">
+
+    <p class="portal-card-note" id="stop-confirm-hint" aria-live="polite"></p>
+
+    {#
+      The submit button starts disabled in the markup. A browser that fails to
+      load portal.js therefore leaves the stop locked.
+    #}
+    <button type="button"
+            class="portal-button portal-button-danger"
+            data-testid="stop-confirm-submit"
+            data-run-id="{{ stop_run_key }}"
+            disabled>Stop the run now</button>
+  </div>
+
+  {#
+    The outcome region stays hidden until a stop returns an answer. A route that
+    sends stop_outcome renders the region open, so a page reload after a stop
+    still shows the result.
+  #}
+  <div class="status-panel"
+       data-testid="stop-outcome"
+       data-stop-outcome
+       aria-live="polite"
+       {{ '' if stop_message else 'hidden' }}>
+    <h3 class="status-panel-title">Stop result</h3>
+
+    <p class="status-message" data-testid="stop-outcome-message">{{ stop_message }}</p>
+
+    <h4 class="status-panel-title">Cancelled</h4>
+    <ul class="status-section-list" data-testid="stop-outcome-cancelled">
+      {% for mac in stop_cancelled %}
+        <li class="cell-mono">{{ mac }}</li>
+      {% else %}
+        <li>The portal canceled no device.</li>
+      {% endfor %}
+    </ul>
+
+    <h4 class="status-panel-title">Writing firmware</h4>
+    <ul class="status-section-list" data-testid="stop-outcome-writing">
+      {% for mac in stop_writing %}
+        <li class="cell-mono">{{ mac }}</li>
+      {% else %}
+        <li>No device writes firmware.</li>
+      {% endfor %}
+    </ul>
+
+    {#
+      contracts/ui-testids.md names stop-outcome-no-cancel for the third list.
+      FR-038f asks the portal to report a device with no cancel path. The list
+      keeps the same naming shape as the two lists above.
+    #}
+    <h4 class="status-panel-title">No cancel available</h4>
+    <ul class="status-section-list" data-testid="stop-outcome-no-cancel">
+      {% for mac in stop_no_cancel %}
+        <li class="cell-mono">{{ mac }}</li>
+      {% else %}
+        <li>Every device has a cancel path.</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>

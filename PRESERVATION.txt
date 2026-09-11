@@ -1,0 +1,3 @@
+This branch preserves the files found in the orphaned MistHelper-2378 directory on 2026-09-11.
+
+The directory had no Git metadata. Generated Python bytecode and test caches are excluded. This snapshot is for recovery and comparison only. Do not merge it directly.

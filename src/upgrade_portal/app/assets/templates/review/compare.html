@@ -1,0 +1,285 @@
+{#
+  review/compare.html - the human view of one comparison.
+
+  Why this file exists:
+    contracts/http-api.md:341-343 states that GET /compare takes the same two
+    query values as GET /api/comparisons and renders the human view. The two
+    answers must report the same numbers, so this page prints what the route
+    already decided and counts nothing on its own.
+
+  Why the page holds one filter bar:
+    contracts/ui-testids.md:25-26 states that a test identifier value appears
+    once for each page. The word added names a device outcome and a client
+    outcome, so two filter bars would print compare-filter-added twice. One bar
+    holds the union of the two outcome sets, and the route hands the chosen
+    outcome to the table that knows it.
+
+  Why the filter controls are links:
+    The content security policy of this portal is 'self' only, so an inline
+    script would not run. A link needs no script, keeps the choice in the
+    address bar, and lets the operator share the filtered view.
+
+  Variables a route may supply:
+    header     - the two capture summaries, the site name, the organization
+                 name, and the skipped section list.
+    devices    - the device table. Holds rows, outcome, total, and skipped.
+    clients    - the client table. Holds rows, outcome, total, and skipped.
+    statistics - the statistics region. Holds one record for each number.
+    filters    - one record for each filter control. Each record holds
+                 outcome, label, test_id, href, and active.
+    csv_href   - the address of the comma-separated value download.
+    json_href  - the address of the JSON download.
+    page_title - the heading text and the tab text.
+    theme      - the name of the current theme. See layout.html.
+    themes     - the theme names the operator may pick.
+#}
+{% extends 'layout.html' %}
+
+{#
+  Every value passes through a default filter first. A record that a route did
+  not supply becomes none. Each reader below tests for that before it reads a
+  field, so a missing value renders as an empty value and never stops the
+  page.
+#}
+{% set head = header | default(none, true) %}
+{% set device_section = devices | default(none, true) %}
+{% set client_section = clients | default(none, true) %}
+{% set statistics_section = statistics | default(none, true) %}
+
+{% set filter_controls = filters | default([], true) %}
+{% set csv_link = csv_href | default('', true) %}
+{% set json_link = json_href | default('', true) %}
+{% set full_csv_link = full_csv_href | default('', true) %}
+{% set full_json_link = full_json_href | default('', true) %}
+
+{% set site_name = (head.site_name if head else '') | default('', true) %}
+{% set org_name = (head.org_name if head else '') | default('', true) %}
+{% set skipped_names = (head.skipped_sections if head else []) | default([], true) %}
+
+{% set before_key = (head.before.capture_id if head else '') | default('', true) %}
+{% set before_role = (head.before.role if head else '') | default('capture', true) %}
+{% set before_started = (head.before.started_at if head else '') | default('', true) %}
+{% set after_key = (head.after.capture_id if head else '') | default('', true) %}
+{% set after_role = (head.after.role if head else '') | default('capture', true) %}
+{% set after_started = (head.after.started_at if head else '') | default('', true) %}
+
+{% set device_rows = (device_section.rows if device_section else []) | default([], true) %}
+{% set device_total = (device_section.total if device_section else 0) | default(0, true) %}
+{% set device_skipped = (device_section.skipped if device_section else false) | default(false, true) %}
+
+{% set client_rows = (client_section.rows if client_section else []) | default([], true) %}
+{% set client_total = (client_section.total if client_section else 0) | default(0, true) %}
+{% set client_skipped = (client_section.skipped if client_section else false) | default(false, true) %}
+
+{% set stat_values = (statistics_section.values if statistics_section else []) | default([], true) %}
+
+{% set heading = page_title | default('Capture comparison', true) %}
+
+{% block title %}{{ heading }}{% endblock %}
+
+{% block heading %}<h1>{{ heading }}</h1>{% endblock %}
+
+{% block content %}
+<div class="portal-card">
+  <h2 class="portal-card-title">The two captures</h2>
+
+  <dl class="row mb-0">
+    {% if site_name %}
+      <dt class="col-sm-4">Site</dt>
+      <dd class="col-sm-8">{{ site_name }}</dd>
+    {% endif %}
+
+    {% if org_name %}
+      <dt class="col-sm-4">Organization</dt>
+      <dd class="col-sm-8">{{ org_name }}</dd>
+    {% endif %}
+
+    <dt class="col-sm-4">Capture from before</dt>
+    <dd class="col-sm-8">
+      <span class="cell-mono">{{ before_key }}</span>
+      {{ before_role }} {{ before_started }}
+    </dd>
+
+    <dt class="col-sm-4">Capture from after</dt>
+    <dd class="col-sm-8">
+      <span class="cell-mono">{{ after_key }}</span>
+      {{ after_role }} {{ after_started }}
+    </dd>
+  </dl>
+
+  {% if skipped_names %}
+    {#
+      A digest match stops the comparison in that section. An empty table is
+      then a proof of no change, not a proof of no data. The note says so at the
+      top, where the operator reads it before the tables.
+    #}
+    <p class="portal-card-note mt-3 mb-0">
+      The digests matched in these sections, so the portal compared no row
+      there: {{ skipped_names | join(', ') }}.
+    </p>
+  {% endif %}
+</div>
+
+<div class="portal-card">
+  <h2 class="portal-card-title">Statistics</h2>
+
+  <div class="compare-statistics" data-testid="compare-statistics">
+    {% for stat in stat_values %}
+      <div class="compare-stat">
+        <span class="compare-stat-value"
+              data-testid="{{ stat.test_id | default('', true) }}">{{ stat.value | default(0, true) }}</span>
+        <span class="compare-stat-label">{{ stat.label | default('', true) }}</span>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="portal-card">
+  <h2 class="portal-card-title">Filter and download</h2>
+
+  <nav aria-label="Filter the two tables by outcome">
+    {% for choice in filter_controls %}
+      <a class="portal-button {% if choice.active %}portal-button-primary{% endif %}"
+         href="{{ choice.href | default('#', true) }}"
+         data-testid="{{ choice.test_id | default('', true) }}"
+         {% if choice.active %}aria-current="true"{% endif %}>{{ choice.label | default('', true) }}</a>
+    {% endfor %}
+  </nav>
+
+  <p class="mt-3 mb-1">
+    <a class="portal-button"
+       href="{{ csv_link }}"
+       data-testid="compare-export-csv">Download as CSV</a>
+    <a class="portal-button"
+       href="{{ json_link }}"
+       data-testid="compare-export-json">Download as JSON</a>
+  </p>
+
+  <p class="mt-1 mb-0">
+    <a class="portal-button"
+       href="{{ full_csv_link }}"
+       data-testid="compare-export-full-csv">Download the full comparison as CSV</a>
+    <a class="portal-button"
+       href="{{ full_json_link }}"
+       data-testid="compare-export-full-json">Download the full comparison as JSON</a>
+  </p>
+
+  <p class="portal-note mt-1 mb-0">
+    The first two files hold the differences. The full files hold every device,
+    every client, and every statistic of both captures.
+  </p>
+</div>
+
+<div class="portal-table-scroll">
+  <table class="portal-table" data-testid="compare-device-table"
+                 data-sortable>
+    <caption class="visually-hidden">
+      Every device difference between the two captures. The table shows
+      {{ device_rows | length }} of {{ device_total }} rows.
+    </caption>
+
+    <thead>
+      <tr>
+        <th scope="col">Name</th>
+        <th scope="col">MAC address</th>
+        <th scope="col">Outcome</th>
+        <th scope="col">Changes</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for row in device_rows %}
+        {% set device_mac = row.mac | default('', true) %}
+        {% set device_outcome = row.outcome | default('unchanged', true) %}
+
+        <tr data-testid="compare-device-row-{{ device_mac }}">
+          <th scope="row">{{ row.name | default('Unnamed device', true) }}</th>
+          <td class="cell-mono">{{ device_mac }}</td>
+          {#
+            The outcome reads as a word. The color adds a second signal only.
+            WCAG 1.4.1 forbids color as the only signal.
+          #}
+          <td class="outcome-cell outcome-{{ device_outcome }}">{{ device_outcome }}</td>
+          <td>
+            {% for change in row.changes | default([], true) %}
+              <div>
+                {{ change.field | default('', true) }}:
+                {{ change.before | default('none', true) }} to
+                {{ change.after | default('none', true) }}
+              </div>
+            {% else %}
+              <span class="portal-table-empty">No field changed.</span>
+            {% endfor %}
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="4" class="portal-table-empty">
+            {% if device_skipped %}
+              The digests matched, so the portal compared no device.
+            {% elif device_total %}
+              No device has that outcome.
+            {% else %}
+              The portal found no device difference.
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="portal-table-scroll">
+  <table class="portal-table" data-testid="compare-client-table"
+                 data-sortable>
+    <caption class="visually-hidden">
+      Every client difference between the two captures. A moved client is on
+      the network, so a move is never a loss. The table shows
+      {{ client_rows | length }} of {{ client_total }} rows.
+    </caption>
+
+    <thead>
+      <tr>
+        <th scope="col">Host name</th>
+        <th scope="col">MAC address</th>
+        <th scope="col">Kind</th>
+        <th scope="col">Outcome</th>
+        <th scope="col">Device before</th>
+        <th scope="col">Device after</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for row in client_rows %}
+        {% set client_mac = row.mac | default('', true) %}
+        {% set client_outcome = row.outcome | default('present', true) %}
+
+        <tr data-testid="compare-client-row-{{ client_mac }}">
+          <th scope="row">{{ row.hostname | default('Unnamed client', true) }}</th>
+          <td class="cell-mono">{{ client_mac }}</td>
+          <td>{{ row.kind | default('unknown', true) }}</td>
+          <td class="outcome-cell outcome-{{ client_outcome }}">{{ client_outcome }}</td>
+          <td class="cell-mono">
+            {{ row.move.before_name | default('', true) or row.move.before_device | default('', true) }}
+          </td>
+          <td class="cell-mono">
+            {{ row.move.after_name | default('', true) or row.move.after_device | default('', true) }}
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="6" class="portal-table-empty">
+            {% if client_skipped %}
+              The digests matched, so the portal compared no client.
+            {% elif client_total %}
+              No client has that outcome.
+            {% else %}
+              The portal found no client difference.
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

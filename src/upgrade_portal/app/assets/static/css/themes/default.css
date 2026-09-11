@@ -1,0 +1,202 @@
+/*
+ * default.css - Upgrade Capture Portal neutral theme
+ *
+ * This file sets the neutral value of every custom property that portal.css
+ * reads. It adds no layout rule. A second theme file replaces this one and
+ * changes only color.
+ *
+ * Every foreground and background pair below carries its computed contrast
+ * ratio. The floor is 4.5:1 for normal text, 3:1 for large text, and 3:1 for a
+ * control boundary or a graphic. The ratios follow the WCAG 2.1 relative
+ * luminance formula.
+ */
+
+:root {
+    /* --- Surfaces and text ------------------------------------------------
+     * #212529 on #ffffff .......... 15.43:1  (page text)
+     * #212529 on #f1f3f5 .......... 13.87:1  (table head, status panel)
+     * #5c636a on #ffffff ...........  6.09:1  (muted text)
+     * #5c636a on #f1f3f5 ...........  5.48:1  (muted text on a tint)
+     * #6c757d on #ffffff ...........  4.69:1  (control boundary, needs 3:1)
+     * #dee2e6 is a decorative hairline. It carries no meaning and no text.
+     */
+    --portal-bg: #ffffff;
+    --portal-surface: #ffffff;
+    --portal-text: #212529;
+    --portal-text-muted: #5c636a;
+    --portal-border: #dee2e6;
+    --portal-border-strong: #6c757d;
+
+    /* --- Brand and links --------------------------------------------------
+     * #ffffff on #0b5ed7 ...........  5.84:1  (primary button)
+     * #0b5ed7 on #ffffff ...........  5.84:1  (header rule, focus ring)
+     * #ffffff on #0a58ca ...........  6.44:1  (primary button hover)
+     * #0a58ca on #ffffff ...........  6.44:1  (link)
+     * #0a58ca on #f1f3f5 ...........  5.79:1  (status panel heading)
+     * #084298 on #ffffff ...........  9.36:1  (link hover)
+     */
+    --portal-accent: #0b5ed7;
+    --portal-accent-hover: #0a58ca;
+    --portal-on-accent: #ffffff;
+    --portal-link: #0a58ca;
+    --portal-link-hover: #084298;
+    --portal-focus-ring: #0b5ed7;
+
+    /* --- Header -----------------------------------------------------------
+     * The header carries its own tokens, so a theme may fill it with a brand
+     * color. This theme keeps the header on the page surface, so these values
+     * repeat the page values.
+     * #212529 on #ffffff .......... 15.43:1  (brand text)
+     * #5c636a on #ffffff ...........  6.09:1  (navigation link)
+     * #084298 on #ffffff ...........  9.36:1  (navigation link hover)
+     * #0a58ca on #ffffff ...........  6.44:1  (active tab and its underline)
+     * #0b5ed7 on #ffffff ...........  5.84:1  (rule under the header)
+     */
+    --portal-header-bg: #ffffff;
+    --portal-header-text: #212529;
+    --portal-header-link: #5c636a;
+    --portal-header-link-hover: #084298;
+    --portal-header-link-active: #0a58ca;
+    --portal-header-border: #0b5ed7;
+
+    /* The button and the selection list in the header sit on the page surface
+     * here, so the page boundary color already works. This value repeats
+     * --portal-border-strong. It also lifts the header selection list off the
+     * Bootstrap default #dee2e6, which gives 1.30:1 and fails WCAG 1.4.11.
+     * #6c757d on #ffffff ...........  4.69:1  (control boundary, needs 3:1)
+     */
+    --portal-header-control-border: #6c757d;
+
+    /* --- Text fields ------------------------------------------------------
+     * A field carries its own tokens, so a dark theme may sink it below the
+     * card. This theme keeps the field on the page surface.
+     * #212529 on #ffffff .......... 15.43:1  (typed text)
+     * #6c757d on #ffffff ...........  4.69:1  (field boundary, needs 3:1)
+     */
+    --portal-input-bg: #ffffff;
+    --portal-input-text: #212529;
+    --portal-input-border: #6c757d;
+
+    /* --- Scrollbar --------------------------------------------------------
+     * The token holds the pair that `scrollbar-color` wants, in its order: the
+     * thumb first, then the track. Both values repeat a color this theme
+     * already sets, so the scrollbar matches the boundary of a control and the
+     * fill of a progress track.
+     * #6c757d on #e9ecef ...........  3.95:1  (thumb on track, needs 3:1)
+     * #6c757d on #ffffff ...........  4.69:1  (thumb where the track is thin)
+     *
+     * The track is a decorative surface. It carries no text and needs no ratio
+     * of its own. The thumb is the control, so the thumb carries the ratio.
+     */
+    --portal-scrollbar: #6c757d #e9ecef;
+
+    /* --- Shadows ---------------------------------------------------------- */
+    --portal-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08);
+
+    /* --- Destructive button ----------------------------------------------
+     * #ffffff on #b02a37 ...........  6.50:1
+     * #ffffff on #842029 ...........  9.46:1  (hover)
+     */
+    --portal-danger-bg: #b02a37;
+    --portal-danger-hover: #842029;
+    --portal-on-danger: #ffffff;
+
+    /* --- Tables -----------------------------------------------------------
+     * The head fill and the hover fill both carry #212529 text at 13.87:1.
+     * #e9ecef is a decorative row rule.
+     */
+    --portal-table-head-bg: #f1f3f5;
+    --portal-table-row-hover: #f1f3f5;
+    --portal-table-border: #e9ecef;
+
+    /* --- Option bubbles ---------------------------------------------------
+     * #212529 on #ffffff ........... 15.43:1  (bubble not chosen)
+     * #6c757d on #ffffff ...........  4.69:1  (bubble boundary, needs 3:1)
+     * #ffffff on #0b5ed7 ...........  5.84:1  (bubble chosen)
+     * #495057 on #e9ecef ...........  6.90:1  (bubble disabled)
+     */
+    --portal-bubble-bg: #ffffff;
+    --portal-bubble-border: #6c757d;
+    --portal-bubble-text: #212529;
+    --portal-bubble-selected-bg: #0b5ed7;
+    --portal-bubble-selected-border: #0b5ed7;
+    --portal-bubble-selected-text: #ffffff;
+    --portal-bubble-disabled-bg: #e9ecef;
+    --portal-bubble-disabled-text: #495057;
+
+    /* --- Confirm box ------------------------------------------------------
+     * The confirm box uses the danger tint, because the operator types a word
+     * for an action that is hard to undo.
+     * #842029 on #f8d7da ...........  7.08:1  (text and left rule)
+     * #b02a37 on #f8d7da ...........  4.87:1  (border, needs 3:1)
+     */
+    --portal-confirm-bg: #f8d7da;
+    --portal-confirm-border: #b02a37;
+    --portal-confirm-text: #842029;
+
+    /* --- Status panel -----------------------------------------------------
+     * #0a58ca on #f1f3f5 ...........  5.79:1  (title)
+     * #212529 on #f1f3f5 ........... 13.87:1  (state and message)
+     * #5c636a on #f1f3f5 ...........  5.48:1  (phase count)
+     * #6c757d on #f1f3f5 ...........  4.22:1  (border, needs 3:1)
+     */
+    --portal-status-bg: #f1f3f5;
+    --portal-status-border: #6c757d;
+    --portal-status-heading: #0a58ca;
+
+    /* --- Progress bar -----------------------------------------------------
+     * #0b5ed7 on #e9ecef ...........  4.92:1  (bar against track, needs 3:1)
+     */
+    --portal-progress-track: #e9ecef;
+    --portal-progress-bar: #0b5ed7;
+
+    /* --- Badges -----------------------------------------------------------
+     * #0f5132 on #d1e7dd ...........  7.22:1  (verified)
+     * #664d03 on #fff3cd ...........  7.21:1  (partial)
+     * #842029 on #f8d7da ...........  7.08:1  (failed)
+     * #41464b on #e2e3e5 ...........  7.43:1  (unknown)
+     */
+    --portal-badge-verified-bg: #d1e7dd;
+    --portal-badge-verified-text: #0f5132;
+    --portal-badge-partial-bg: #fff3cd;
+    --portal-badge-partial-text: #664d03;
+    --portal-badge-failed-bg: #f8d7da;
+    --portal-badge-failed-text: #842029;
+    --portal-badge-unknown-bg: #e2e3e5;
+    --portal-badge-unknown-text: #41464b;
+
+    /* --- Flash region and lock banner -------------------------------------
+     * Each border repeats its own text color, so one ratio covers both.
+     * #055160 on #cff4fc ...........  7.65:1  (note)
+     * #0f5132 on #d1e7dd ...........  7.22:1  (done)
+     * #664d03 on #fff3cd ...........  7.21:1  (caution, lock banner)
+     * #842029 on #f8d7da ...........  7.08:1  (warning)
+     */
+    --portal-flash-info-bg: #cff4fc;
+    --portal-flash-info-border: #055160;
+    --portal-flash-info-text: #055160;
+    --portal-flash-success-bg: #d1e7dd;
+    --portal-flash-success-border: #0f5132;
+    --portal-flash-success-text: #0f5132;
+    --portal-flash-warning-bg: #fff3cd;
+    --portal-flash-warning-border: #664d03;
+    --portal-flash-warning-text: #664d03;
+    --portal-flash-danger-bg: #f8d7da;
+    --portal-flash-danger-border: #842029;
+    --portal-flash-danger-text: #842029;
+
+    /* --- Comparison outcomes ----------------------------------------------
+     * An outcome cell sits on #ffffff and on the hover fill #f1f3f5. Both
+     * ratios appear below. The lower number governs.
+     * #5c636a  6.09:1 / 5.48:1 .... unchanged
+     * #664d03  7.99:1 / 7.18:1 .... changed
+     * #0f5132  9.36:1 / 8.42:1 .... added
+     * #842029  9.46:1 / 8.50:1 .... removed
+     * #055160  8.93:1 / 8.03:1 .... moved
+     */
+    --portal-outcome-unchanged: #5c636a;
+    --portal-outcome-changed: #664d03;
+    --portal-outcome-added: #0f5132;
+    --portal-outcome-removed: #842029;
+    --portal-outcome-moved: #055160;
+}

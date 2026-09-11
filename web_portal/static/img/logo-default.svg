@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 40" width="200" height="40">
+  <rect width="200" height="40" rx="6" fill="none"/>
+  <text x="24" y="28" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="700" fill="currentColor">
+    MistHelper
+  </text>
+  <circle cx="12" cy="20" r="8" fill="#0077B6" opacity="0.9"/>
+  <circle cx="12" cy="20" r="4" fill="#00B4D8"/>
+</svg>

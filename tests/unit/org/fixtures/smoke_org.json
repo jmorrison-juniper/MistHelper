@@ -1,0 +1,55 @@
+{
+    "_comment": [
+        "US2 INV-1 smoke fixture (feature 1024).",
+        "Bundles a minimal (probes, cenr) tuple for _build_probe_set so the",
+        "byte-stability guard in TestInv1ByteStability can pin every emit shape",
+        "produced by the shape-based dispatcher without depending on the",
+        "shipped catalogue files under data/.",
+        "",
+        "Emit-shape coverage (5 hosts):",
+        "  (a) vpn-bag host, no observation                -> bare fqdn / reachability",
+        "  (b) vpn-bag host, observed UDP/500              -> bare fqdn / reachability (bag wins)",
+        "  (c) vpn-bag host with '-vpn.' name, no obs      -> bare fqdn / reachability",
+        "  (d) proxy-bag host, observed TCP/443            -> https://host / application",
+        "  (e) proxy-bag host, observed TCP/8080           -> host:8080  / application"
+    ],
+    "probes": {
+        "roles": [
+            {
+                "role": "tunnel_zen",
+                "critical": false
+            }
+        ]
+    },
+    "cenr": {
+        "probe_default": {
+            "protocol": "https",
+            "port": 443
+        },
+        "proxy_hostnames": [
+            {
+                "host": "edge.zscalerthree.net",
+                "observed_protocol": "TCP/443",
+                "observed_port": 443
+            },
+            {
+                "host": "custom-svc.zscalerthree.net",
+                "observed_protocol": "TCP/8080",
+                "observed_port": 8080
+            }
+        ],
+        "vpn_hostnames": [
+            {
+                "host": "gateway.zscalerthree.net"
+            },
+            {
+                "host": "ike-observed.zscalerthree.net",
+                "observed_protocol": "UDP/500",
+                "observed_port": 500
+            },
+            {
+                "host": "fra4-vpn.zscalerthree.net"
+            }
+        ]
+    }
+}
