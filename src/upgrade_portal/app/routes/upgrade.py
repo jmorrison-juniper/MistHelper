@@ -2221,6 +2221,24 @@ def rebased_options(options: Mapping[str, Any]) -> tuple[dict[str, Any], list[st
     return copied, notes
 
 
+def reserve_retry(
+    source: Mapping[str, Any], source_id: str, org_id: str, site_id: str
+) -> tuple[dict[str, Any] | None, list[str], tuple[Response, int] | None]:
+    """Reserve one live site slot and persist the new retry record."""
+    with _RETRY_GUARD:  # Two browser presses in this worker must reserve one live site slot, not two.
+        live = live_run_at_site(site_id)  # A terminal source does not excuse another active run at the site.
+        if live:
+            return None, [], already_running_refusal(live)
+        record = RunRecordBuilder().build(new_run_spec(org_id, site_id))  # The record layer owns every field.
+        options, notes = rebased_options(source.get("options") or {})  # Every choice, with schedules rebased.
+        record["options"] = options
+        record[TARGETS_FIELD] = list(source.get(TARGETS_FIELD) or [])  # The same devices and versions.
+        record["retry_of_run_id"] = source_id  # The new record names the run that it came from.
+        if not save_run(record):
+            return None, [], write_failed()
+    return record, notes, None
+
+
 @upgrade_bp.post(RETRY_PATH)
 @identity.require_session
 def retry_run(run_id: str) -> tuple[Response, int]:
@@ -2254,18 +2272,11 @@ def retry_run(run_id: str) -> tuple[Response, int]:
         return json_error(CONFLICT_STATUS, RUN_NOT_RETRYABLE_CODE, RUN_NOT_RETRYABLE_MESSAGE)
     org_id = str(failed.get("org_id") or "")  # The new run keeps the scope of the earlier one.
     site_id = str(failed.get("site_id") or "")  # FR-014 binds one run to one site.
-    with _RETRY_GUARD:  # Two browser presses in this worker must reserve one live site slot, not two.
-        live = live_run_at_site(site_id)  # A terminal source does not excuse another active run at the site.
-        if live:
-            return already_running_refusal(live)
-        logger.info("upgrade: build a retry of the unsuccessful run %s", run_id)  # BEFORE the write.
-        record = RunRecordBuilder().build(new_run_spec(org_id, site_id))  # The record layer owns every field.
-        options, notes = rebased_options(failed.get("options") or {})  # Every choice, with each schedule rebased.
-        record["options"] = options
-        record[TARGETS_FIELD] = list(failed.get(TARGETS_FIELD) or [])  # The same devices and the same versions.
-        record["retry_of_run_id"] = run_id  # The new record names the run that it came from.
-        if not save_run(record):  # The operator must learn that the portal kept nothing.
-            return write_failed()
+    logger.info("upgrade: build a retry of the unsuccessful run %s", run_id)  # BEFORE the write.
+    record, notes, reservation_refusal = reserve_retry(failed, run_id, org_id, site_id)
+    if reservation_refusal is not None:
+        return reservation_refusal
+    assert record is not None  # A reservation with no refusal always returns the record that it persisted.
     logger.info("upgrade: the retry %s came from the unsuccessful run %s", record["run_id"], run_id)  # AFTER write.
     return (
         jsonify(
