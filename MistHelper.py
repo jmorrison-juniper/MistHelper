@@ -436,7 +436,7 @@ from src.export.org_inventory_exporter import (
     OrgInventoryExporter,  # Cat E canonical (1015 T-06) -- re-export for MistHelper.OrgInventoryExporter callers
 )
 from src.export.org_inventory_search_exporter import (
-    OrgInventorySearchExporter,  # Spec 864 / issue #1372 -- organization inventory search menu 249
+    OrgInventorySearchExporter,  # Spec 864 / issue #1372 -- organization inventory search menu 253
 )
 from src.export.org_search_exporter import (
     OrgSearchExporter,  # Specs 874-879 / issues #1379, #1382, #1383, #1385, #1386 -- org search menus 230-234

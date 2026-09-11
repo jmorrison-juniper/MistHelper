@@ -3,9 +3,9 @@
 This page is generated. Run `python scripts/generate_menu_wiki.py` after any
 change to `menu_actions` in `MistHelper.py` or to `src/utils/operation_registry.py`.
 
-MistHelper defines **248 actionable menu entries**, numbered
-1 to 249 with gaps at 152.
-Menu 0 is Exit, so the registry holds 249 entries in total.
+MistHelper defines **249 actionable menu entries**, numbered
+1 to 253 with gaps at 152, 250-252.
+Menu 0 is Exit, so the registry holds 250 entries in total.
 
 The Safety column reads from `src/utils/operation_registry.py`, which is the
 single source of truth. The classifier fails closed, so an unregistered option
@@ -22,13 +22,8 @@ never runs in an automated test pass.
 
 | Menu numbers | Category | Summary |
 |---|---|---|
-<<<<<<< HEAD
-| 60-96, 195-203, 209-229, 235-238, 240-242, 244-247 | Interactive safe | 78 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
+| 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 253 | Interactive safe | 79 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-249 | Safe org exports | 67 operations. Read-only org exports. The --test run includes them. |
-=======
-| 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 249 | Interactive safe | 79 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
-| 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248 | Safe org exports | 66 operations. Read-only org exports. The --test run includes them. |
->>>>>>> 1d83065b (feat: add organization inventory search menu)
 | 154-187, 189-191, 194, 206-208, 239 | Destructive | 42 operations. They change the Mist cloud configuration. Each one needs a typed confirmation. |
 | 0, 124-150, 192 | Interactive | 29 operations. They prompt the operator, so no automated run includes them. |
 | 102-123 | WebSocket | 22 operations. They open a WebSocket stream to a device. |

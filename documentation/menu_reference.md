@@ -3,9 +3,9 @@
 This page is generated. Run `python scripts/generate_menu_wiki.py` after any
 change to `menu_actions` in `MistHelper.py` or to `src/utils/operation_registry.py`.
 
-MistHelper defines **248 actionable menu entries**, numbered
-1 to 249 with gaps at 152.
-Menu 0 is Exit, so the registry holds 249 entries in total.
+MistHelper defines **249 actionable menu entries**, numbered
+1 to 253 with gaps at 152, 250-252.
+Menu 0 is Exit, so the registry holds 250 entries in total.
 
 The Safety column reads from `src/utils/operation_registry.py`, which is the
 single source of truth. The classifier fails closed, so an unregistered option
