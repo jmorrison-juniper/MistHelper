@@ -28,7 +28,11 @@ from flask.testing import FlaskClient  # The client type that drives every reque
 from werkzeug.test import TestResponse  # The answer type that every assertion reads.
 
 from src.upgrade_portal.runtime import identity  # The real session guard, so the tests sign in for real.
-from src.upgrade_portal.runtime.runs import RunRecordBuilder, RunSpec  # The record layer owns every field.
+from src.upgrade_portal.runtime.runs import (  # The record layer owns every field and final-state authority.
+    RunRecordBuilder,
+    RunSpec,
+    RunStateMachine,
+)
 
 RUN_STORE_KEY = "RUN_STORE"  # The seam that holds the run record store.
 LOCK_READER_KEY = "SITE_LOCK_READER"  # The seam that reads the site lock, named by `select.py`.
@@ -1157,3 +1161,16 @@ def test_the_confirm_page_keeps_the_saved_warning_list(
     run_id = seed_run(run_store, "pre_capture_done", warnings=[saved])
     page = upgrade_client.get(f"/runs/{run_id}/confirm").get_data(as_text=True)
     assert saved in page  # The sentence of the option save still shows.
+
+
+@pytest.mark.parametrize("state", sorted(member.value for member in RunStateMachine.TERMINAL))
+def test_stop_refuses_every_canonical_terminal_state(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+    state: str,
+) -> None:  # Prove the stop contract for one canonical final state.
+    """A stop call refuses every state in the canonical terminal set."""
+    run_id = seed_run(run_store, state, pre_capture_id="capture-1")  # Seed one canonical final state.
+    answer = upgrade_client.post(f"/api/runs/{run_id}/stop", json={"confirm": "STOP"})  # Call the real stop route.
+    assert answer.status_code == CONFLICT_STATUS  # A final run cannot accept a new stop.
+    assert read_error_code(answer) == "run_not_stoppable"  # Keep one refusal code for every final state.

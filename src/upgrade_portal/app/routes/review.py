@@ -57,12 +57,14 @@ from urllib.parse import urlencode
 from flask import Blueprint, Response, current_app, jsonify, render_template, request
 from jinja2 import TemplateNotFound
 
+from ...api.run_controls.views import RunStalePolicy  # Use one stale decision for both portal pages.
 from ...compare import clients as client_compare
 from ...compare import diff as device_compare
 from ...compare import download as compare_download
 from ...compare import render as compare_render
 from ...compare import statistics as compare_statistics
 from ...runtime import identity
+from ...runtime.runs import RunStateMachine, RunTransitionError  # Use the canonical final-state authority.
 from ..factory import json_error
 from ..seam_shapes import check_stand_in  # Issue #1991: compare each stand-in against the real callee.
 
@@ -1305,10 +1307,6 @@ def short_moment(value: Any) -> str:
 # run stored before the state field existed still happened.
 UNKNOWN_RUN_STATE = "unknown"
 
-# The run states that mean the run ended. A run in one of these names an end
-# moment. Any other state leaves that column empty, because the run still runs.
-FINISHED_RUN_STATES = frozenset({"succeeded", "failed", "stopped", "complete", "completed"})
-
 
 def run_site_label(record: Mapping[str, Any]) -> str:
     """Return the site name of one run, or its identifier.
@@ -1326,7 +1324,7 @@ def run_site_label(record: Mapping[str, Any]) -> str:
     return str(record.get("site_name") or record.get("site_id") or "")
 
 
-def run_end_moment(record: Mapping[str, Any], state: str) -> str:
+def run_end_moment(record: Mapping[str, Any], state: str) -> str:  # Select an end time from the canonical state.
     """Return the stored end moment of one run, or an empty text.
 
     Why:
@@ -1340,7 +1338,16 @@ def run_end_moment(record: Mapping[str, Any], state: str) -> str:
     Returns:
         The stored moment when the run ended, or an empty text.
     """
-    return str(record.get("updated_at") or "") if state in FINISHED_RUN_STATES else ""
+    logger.info("review: the portal checks whether one run has ended")  # Record the history decision.
+    try:  # An old or damaged state must not appear as a completed run.
+        run_state = RunStateMachine.coerce(state)  # Use the canonical state model for the history decision.
+    except RunTransitionError:  # A state outside the model has no proven end moment.
+        logger.debug("review: the run state is unknown, so the history shows no end moment")  # Safe result.
+        return ""  # Do not tell the operator that an unknown run ended.
+    ended = run_state in RunStateMachine.TERMINAL  # The canonical terminal set controls the end moment.
+    result = str(record.get("updated_at") or "") if ended else ""  # Final runs use their last stored update.
+    logger.debug("review: the run history end moment is present: %s", bool(result))  # Report no record value.
+    return result  # A live run keeps the end column empty.
 
 
 def run_device_count(record: Mapping[str, Any]) -> int:
@@ -1356,7 +1363,9 @@ def run_device_count(record: Mapping[str, Any]) -> int:
     return len(targets) if isinstance(targets, (list, tuple)) else 0
 
 
-def run_history_row(record: Mapping[str, Any]) -> dict[str, Any]:
+def run_history_row(  # Shape one run with an optional shared policy for a page batch.
+    record: Mapping[str, Any], stale_policy: RunStalePolicy | None = None
+) -> dict[str, Any]:
     """Shape one stored run record into the row that the history page paints.
 
     Why:
@@ -1375,19 +1384,29 @@ def run_history_row(record: Mapping[str, Any]) -> dict[str, Any]:
         The row, with the state, the counts, both moments, and both capture
         keys.
     """
+    logger.info("review: the portal shapes one run history row")  # Record the transformation before it starts.
     state = str(record.get("state") or "").strip() or UNKNOWN_RUN_STATE  # An old record names no state.
-    return {
-        "run_id": str(record.get("run_id") or ""),
-        "site_name": run_site_label(record),
-        "site_id": str(record.get("site_id") or ""),
-        "state": state,
-        "device_count": run_device_count(record),
+    policy = stale_policy or RunStalePolicy(datetime.now(tz=UTC))  # Use one clock when the caller supplies none.
+    stale = policy.assess(record)  # Apply the shared policy before the template receives the row.
+    shaped = {  # Give the template data only, so it contains no stale rule.
+        "run_id": str(record.get("run_id") or ""),  # Keep the stored identifier for links and test hooks.
+        "site_name": run_site_label(record),  # Show a name and fall back to the site identifier.
+        "site_id": str(record.get("site_id") or ""),  # Keep the site scope available for later controls.
+        "state": state,  # Show the stored state or the safe unknown value.
+        "device_count": run_device_count(record),  # Count only a list or tuple of run targets.
         "started_text": short_moment(record.get("created_at")),  # The human UTC moment.
         "started_raw": str(record.get("created_at") or ""),  # The stored text, for the title attribute.
         "ended_text": short_moment(run_end_moment(record, state)),  # Empty while the run still runs.
-        "pre_capture_id": str(record.get("pre_capture_id") or ""),
-        "post_capture_id": str(record.get("post_capture_id") or ""),
+        "pre_capture_id": str(record.get("pre_capture_id") or ""),  # Link the capture before the run.
+        "post_capture_id": str(record.get("post_capture_id") or ""),  # Link the capture after the run.
+        "updated_at": stale.updated_at,  # Give browser display updates the normalized safe time only.
+        "age_seconds": stale.age_seconds,  # Keep the exact server age beside the display text.
+        "age_text": stale.age_text,  # Show the shared short age or `unknown`.
+        "is_stale": stale.is_stale,  # Let the template show a badge without making a decision.
+        "stale_reason": stale.reason,  # Keep the stable reason available for later controls.
     }
+    logger.debug("review: the run history row has stale state %s", stale.is_stale)  # Report no record value.
+    return shaped  # Return the complete display row.
 
 
 def run_history_rows(site_id: str, limit: int, offset: int) -> list[dict[str, Any]]:
@@ -1406,11 +1425,14 @@ def run_history_rows(site_id: str, limit: int, offset: int) -> list[dict[str, An
     Returns:
         One shaped row for each run of the page.
     """
-    logger.info("review: the portal reads the run rows of the history page")  # Before the read.
-    rows, total = read_store_page(run_lister(), RUNS_FIELD, site_id, limit, offset)
-    shaped = [run_history_row(row) for row in rows]  # One shape for the template.
-    logger.debug("review: the history page holds %s run row(s) of %s", len(shaped), total)
-    return shaped
+    logger.info("review: the portal reads the run rows of the history page")  # Record the read before it starts.
+    rows, total = read_store_page(run_lister(), RUNS_FIELD, site_id, limit, offset)  # Read one visible page.
+    logger.debug("review: the run store returned %s row(s) of %s", len(rows), total)  # Confirm the safe count.
+    logger.info("review: the portal assesses the age of the run rows")  # Record the shared time decision.
+    policy = RunStalePolicy(datetime.now(tz=UTC))  # Supply one UTC clock value to the complete page.
+    shaped = [run_history_row(row, policy) for row in rows]  # Apply that same clock to every visible run.
+    logger.debug("review: the history page holds %s assessed run row(s)", len(shaped))  # Confirm the result count.
+    return shaped  # Give the template the complete run rows.
 
 
 def moment_texts(rows: Iterable[Mapping[str, Any]]) -> dict[str, str]:

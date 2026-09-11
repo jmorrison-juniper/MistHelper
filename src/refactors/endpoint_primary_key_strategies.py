@@ -2713,4 +2713,11 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Upgrade run record that joins the pre-check capture to the post-check capture",
     },
+    "upgradeRunActions": {  # Register the action journal before repository code uses this domain key.
+        "type": "composite_pk",  # Keep the durable actor and request key as one business key.
+        "primary_key": ["actor_scope", "idempotency_key_digest"],  # Bind replay to one durable actor.
+        "indexes": ["action_id", "actor_scope", "created_at"],  # Support result reads and actor history reads.
+        "unique_constraints": ["action_id"],  # Keep each public action identifier globally unique.
+        "description": "Durable actor-scoped upgrade portal action outcomes",  # Match the approved data model.
+    },
 }

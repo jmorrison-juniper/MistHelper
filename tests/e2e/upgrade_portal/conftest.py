@@ -37,7 +37,6 @@ import os
 import signal
 import socket
 import subprocess
-import tempfile
 import threading
 import time
 from collections.abc import Iterator
@@ -45,25 +44,25 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import patch
 
 import flask
 import pytest
 from flask.sessions import SecureCookieSessionInterface
 
 from src.firmware.org_upgrade_service import OrgUpgradeResult
-from src.upgrade_portal.app.config import DEFAULT_PORT, PORT_VARIABLE, SECRET_KEY_VARIABLE, read_port
-from src.upgrade_portal.runtime import identity
-from src.upgrade_portal.runtime.server import build_server_command
+from src.upgrade_portal.api.run_controls import E2EFactoryOverrides  # Type the complete isolated dependency set.
+from src.upgrade_portal.app.config import PORT_VARIABLE, SECRET_KEY_VARIABLE  # Read child server setting names.
+from src.upgrade_portal.runtime import identity  # Build the signed test session owners.
+from src.upgrade_portal.runtime.server import build_server_command  # Start the platform server safely.
+from tests.support.upgrade_portal_e2e import (  # Build isolated resources, environments, stores, and traps.
+    allocate_resources,
+    build_child_environment,
+    build_e2e_overrides,
+)
 
 logger = logging.getLogger(__name__)
 
-# WHY: The portal reads CAPTURE_PORT and falls back to 8056, next to the
-# existing portal on port 8055. The tests read the same variable through the
-# same reader, so a changed port moves the server and the browser together.
-CAPTURE_PORT = read_port(PORT_VARIABLE, DEFAULT_PORT)
 LOOPBACK_HOST = "127.0.0.1"  # Loopback only. No test reaches an outside host.
-BASE_URL = f"http://{LOOPBACK_HOST}:{CAPTURE_PORT}"
 
 # WHY: Gunicorn and Waitress both load a target of this shape. `wsgi_capture.py`
 # holds `wsgi_capture:app` and stays the production target of this portal. The
@@ -74,6 +73,25 @@ WSGI_TARGET = "tests.e2e.upgrade_portal.conftest:app"
 # WHY: The root conftest changes the working directory for each test, so the
 # server needs an explicit directory to find wsgi_capture.py.
 REPO_ROOT = Path(__file__).parents[3]
+
+# WHY: The parent allocates the resources. The child reads those exact values
+# from its scrubbed environment and never allocates a second server identity.
+CHILD_TEST_RUN_ID = os.environ.get("UPGRADE_PORTAL_E2E_RUN_ID", "")  # Empty only in the parent test process.
+if CHILD_TEST_RUN_ID:  # The WSGI child must use the resources that the parent allocated.
+    E2E_RESOURCES = None  # The child owns no reservation socket.
+    TEST_RUN_ID = CHILD_TEST_RUN_ID  # Keep record ownership equal to the expected response header.
+    CAPTURE_PORT = int(os.environ[PORT_VARIABLE])  # Use the exact port that the parent passes.
+    ARTIFACT_DIRECTORY = Path(os.environ["UPGRADE_PORTAL_E2E_ARTIFACT_DIRECTORY"])  # Use the parent artifact root.
+    SERVER_LOG_PATH = Path(os.environ["UPGRADE_PORTAL_E2E_LOG_PATH"])  # Keep the parent-selected log path.
+    SERVER_OWNER_PATH = Path(os.environ["UPGRADE_PORTAL_E2E_OWNER_PATH"])  # Keep the parent-selected owner path.
+else:  # The parent test process allocates one unique server resource set.
+    E2E_RESOURCES = allocate_resources(REPO_ROOT / "data" / "test-artifacts" / "upgrade-portal")
+    TEST_RUN_ID = E2E_RESOURCES.test_run_id  # Bind all parent expectations to the allocated owner.
+    CAPTURE_PORT = E2E_RESOURCES.port  # Pass the exact reserved loopback port to the child.
+    ARTIFACT_DIRECTORY = E2E_RESOURCES.artifact_directory  # Keep all artifacts under one unique directory.
+    SERVER_LOG_PATH = E2E_RESOURCES.log_path  # Keep one log inside this server artifact directory.
+    SERVER_OWNER_PATH = E2E_RESOURCES.process_owner_path  # Keep the owner record unique to this server.
+BASE_URL = f"http://{LOOPBACK_HOST}:{CAPTURE_PORT}"  # Point every browser request at this server only.
 
 # WHY: The settings file sits beside this module. A path load is the only way
 # to read a file whose name holds a dot.
@@ -94,15 +112,11 @@ STOP_TIMEOUT_SECONDS = 5  # The server gets 5 seconds to stop before this fixtur
 # run. A full pipe blocks the writer, so a server given a pipe stops answering
 # partway through a run and every later page reports a refused connection. A
 # file never blocks the writer, and the skip message reads the same file back.
-SERVER_LOG_PATH = Path(tempfile.gettempdir()) / f"upgrade_portal_e2e_{CAPTURE_PORT}.log"
-
 # WHY: Issue #2260. A run that ends on a timeout never reaches its teardown, so
 # the portal outlives it and holds the port. Every later run on that port then
 # reported a stray listener, and an operator had to find the process by hand.
 # This file names the portal that the current run started, so the next run can
 # tell its own leftover from a portal container that an operator started.
-SERVER_OWNER_PATH = Path(tempfile.gettempdir()) / f"upgrade_portal_e2e_{CAPTURE_PORT}.pid"
-
 # The wait for a stopped portal to release the port. A stop is quick on
 # loopback, and these two values bound the wait at ten seconds.
 RECLAIM_TRIES = 20
@@ -172,11 +186,13 @@ SECOND_SITE_NAME = "E2E Second Stand-In Site"  # The text of the second site row
 STAND_IN_DEVICE_TYPES = ("ap", "gateway", "switch")  # Mirrors `select.DEVICE_TYPES`, which FR-013 fixes.
 STAND_IN_VERSIONS = ("0.14.29216", "0.15.1")  # The version that runs now, then one newer version to pick.
 
-STAND_IN_RUN_ID = "e2e-run-0001"  # The run that owns both stored captures below.
+STAND_IN_RUN_ID = "e2e-run-0001"  # The run that owns the comparison captures below.
 PRE_CAPTURE_ID = "e2e-capture-pre-0001"  # The pre-check that the picker offers first.
 POST_CAPTURE_ID = "e2e-capture-post-0001"  # The post-check that the picker offers second.
+TIER3_CAPTURE_ID = "e2e-capture-tier3-0001"  # The complete Tier 3 capture for browser proof.
 PRE_CAPTURE_STAMP = "2026-08-19T10:00:00+00:00"  # ISO 8601 in UTC, which is the stored form.
 POST_CAPTURE_STAMP = "2026-08-19T10:30:00+00:00"  # Thirty minutes later, so the window is measurable.
+TIER3_CAPTURE_STAMP = "2026-08-19T11:00:00+00:00"  # The newest history record.
 # `capture/store.py` names this reason for a key that the database does not hold,
 # and `app/routes/capture.py` turns it into the 404 of the contract.
 CAPTURE_NOT_FOUND_REASON = "capture_not_found"  # The refusal for a key that the stand-in never published.
@@ -467,9 +483,14 @@ def _child_environment() -> dict[str, str]:
     Returns:
         The environment variables for the server process.
     """
-    child = dict(os.environ)  # Start from the parent, so the interpreter and the path still resolve.
+    child = build_child_environment(os.environ)  # Remove production credentials and install connector sentinels.
     child[E2E_SESSION_VARIABLE] = E2E_SESSION_ENABLED  # Open the sign-in seam for this one process.
     child[SECRET_KEY_VARIABLE] = TEST_SECRET_KEY  # Both sides then sign and read one cookie key.
+    child[PORT_VARIABLE] = str(CAPTURE_PORT)  # Give the child the exact port that this session reserved.
+    child["UPGRADE_PORTAL_E2E_RUN_ID"] = TEST_RUN_ID  # Bind child records to this server.
+    child["UPGRADE_PORTAL_E2E_ARTIFACT_DIRECTORY"] = str(ARTIFACT_DIRECTORY)  # Reuse the parent artifact root.
+    child["UPGRADE_PORTAL_E2E_LOG_PATH"] = str(SERVER_LOG_PATH)  # Reuse the parent server log path.
+    child["UPGRADE_PORTAL_E2E_OWNER_PATH"] = str(SERVER_OWNER_PATH)  # Reuse the parent process owner path.
     return child  # `_spawn` hands this table to the new process.
 
 
@@ -489,6 +510,9 @@ def _spawn(command: list[str]) -> subprocess.Popen[bytes] | None:
         The running process, or None when the process did not start.
     """
     child_env = _child_environment()  # The sign-in seam and the cookie key travel to the child alone.
+    if E2E_RESOURCES is None:  # Only the parent owns the reservation socket.
+        raise RuntimeError("The E2E child cannot start another E2E server.")  # Prevent nested server creation.
+    E2E_RESOURCES.release_port()  # Release the reservation immediately before the child binds the same port.
     try:  # A missing interpreter, a blocked process, and an unwritable path all raise OSError.
         with SERVER_LOG_PATH.open("wb") as log:  # The child holds its own copy of this handle.
             return subprocess.Popen(command, cwd=REPO_ROOT, env=child_env, stdout=log, stderr=subprocess.STDOUT)
@@ -594,6 +618,39 @@ def base_url() -> str:
         The base address of the capture portal.
     """
     return PLAYWRIGHT_CONFIG["baseURL"]
+
+
+@pytest.fixture(scope="session")
+def browser_context_args(
+    pytestconfig: Any,
+    playwright: Any,
+    device: str | None,
+    _pw_artifacts_folder: Any,
+) -> dict[str, Any]:
+    """Build browser settings that always name this suite's portal.
+
+    Why:
+        The Playwright plug-in caches its session settings. Another E2E folder
+        can create that cache before this nested configuration loads, which
+        leaves the browser on the deployment port while this suite owns a
+        dynamic port. A local fixture gives this suite a separate cache key.
+
+    Args:
+        pytestconfig: The active pytest configuration.
+        playwright: The Playwright controller with optional device settings.
+        device: The selected browser device name, if one exists.
+        _pw_artifacts_folder: The plug-in folder for retained videos.
+
+    Returns:
+        The browser context settings for this portal test session.
+    """
+    settings: dict[str, Any] = {}  # Start with no plug-in defaults from another E2E folder.
+    if device:  # A selected device still controls its viewport and user agent.
+        settings.update(playwright.devices[device])  # Copy the plug-in's selected device settings.
+    settings["base_url"] = BASE_URL  # Bind relative browser paths to this suite's dynamic server port.
+    if pytestconfig.getoption("--video") in {"on", "retain-on-failure"}:  # Keep requested video evidence.
+        settings["record_video_dir"] = _pw_artifacts_folder.name  # Use the plug-in artifact lifecycle.
+    return settings  # The Playwright context fixture copies this table for each test.
 
 
 @pytest.fixture(autouse=True)
@@ -978,20 +1035,56 @@ def stand_in_capture(capture_id: str, role: str, version: str, started_at: str) 
     }
 
 
-def stand_in_capture_index() -> dict[str, dict[str, Any]]:
-    """Build the two stored captures of the stand-in site, keyed by identifier.
+def stand_in_tier3_capture() -> dict[str, Any]:
+    """Build one verified Tier 3 capture for the browser tests.
 
     Why:
-        The picker offers one choice for each stored capture, and a comparison
-        needs two that differ. The pair below differs in the firmware version
-        of every device, so the comparison reports a real version change.
+        The browser must show each stored Tier 3 section. Contract tests cannot
+        prove that the browser renders the rows or downloads the same rows.
+
+    Returns:
+        One capture with populated, empty, and unavailable Tier 3 sections.
+    """
+    capture = stand_in_capture(TIER3_CAPTURE_ID, "pre", STAND_IN_VERSIONS[0], TIER3_CAPTURE_STAMP)
+    switch_mac = str(capture["devices"][1]["mac"])
+    ap_mac = str(capture["devices"][0]["mac"])
+    capture["tier"] = 3
+    capture["clients"]["guest"] = [
+        {
+            "mac": "aabbcc000099",
+            "hostname": "e2e-guest-1",
+            "username": "guest@example.invalid",
+            "device_mac": ap_mac,
+            "device_name": "e2e-ap-1",
+            "ssid": "guest-wifi",
+        }
+    ]
+    capture["extras"] = {
+        "switch_ports": [{"mac": switch_mac, "port_id": "ge-0/0/1", "up": True, "speed": 1000}],
+        "poe": [{"mac": switch_mac, "port_id": "ge-0/0/1", "poe_on": True, "power_draw": 4.5}],
+        "radios": [{"mac": ap_mac, "band": "5", "channel": 36, "power": 12}],
+        "tunnels": [],
+        "bgp_peers": [],
+        "alarms": [],
+    }
+    capture["partial_reasons"] = [{"section": "bgp_peers", "reason": "cloud_call_failed", "http_status": 0}]
+    return capture
+
+
+def stand_in_capture_index() -> dict[str, dict[str, Any]]:
+    """Build all stored captures of the stand-in site.
+
+    Why:
+        Two captures prove comparison behavior. The Tier 3 capture proves the
+        browser tables and the two exports with stored section data.
 
     Returns:
         One capture document for each identifier that the picker publishes.
     """
     before = stand_in_capture(PRE_CAPTURE_ID, "pre", STAND_IN_VERSIONS[0], PRE_CAPTURE_STAMP)
     after = stand_in_capture(POST_CAPTURE_ID, "post", STAND_IN_VERSIONS[1], POST_CAPTURE_STAMP)
-    return {PRE_CAPTURE_ID: before, POST_CAPTURE_ID: after}
+    tier3 = stand_in_tier3_capture()
+    return {PRE_CAPTURE_ID: before, POST_CAPTURE_ID: after, TIER3_CAPTURE_ID: tier3}
 
 
 def stand_in_capture_lister(site_id: str = "", limit: int = 0, offset: int = 0) -> list[dict[str, Any]]:
@@ -1167,17 +1260,6 @@ def _register_operator(email: str, browser_id: str) -> None:
     identity.SESSION_REGISTRY.register(identity.OperatorSession(owner, StandInCloudSession(), mode))
 
 
-def _skip_storage_bootstrap() -> None:
-    """Keep the stand-in application independent from external storage.
-
-    Why:
-        Browser tests replace every storage seam after the factory returns.
-        A storage bootstrap would only wait for unavailable services. The
-        temporary replacement affects the E2E child process during application
-        creation and never changes the production application.
-    """
-
-
 FAILED_RUN_ID = "e2e-failed-run-0001"  # The seeded run that the retry test opens. One fixed key, so no test guesses.
 STOPPED_RUN_ID = "e2e-stopped-run-0001"  # The seeded run that proves a cancelled attempt can restart.
 PREPARED_RUN_ID = "e2e-prepared-run-0001"  # The seeded run that proves the confirmation link works.
@@ -1274,7 +1356,40 @@ def _write_fixture_runs(built: Any, upgrade: Any) -> None:
     )
 
 
-def build_stand_in_app() -> Any:
+def _reset_cached_state() -> None:  # Clear each process cache before isolated construction.
+    """Reset every storage and readiness cache before E2E application construction."""
+    logger.info("Reset the E2E storage and readiness caches")  # Record the reset before it starts.
+    from src.upgrade_portal.app import factory, wiring  # Load reset functions without constructing an application.
+    from src.upgrade_portal.capture import store as capture_store  # Own the cached ArangoDB connection.
+    from src.upgrade_portal.runtime import lock  # Own the cached Redis connection.
+
+    wiring.reset_storage_bootstrap()  # Prevent an earlier production bootstrap state from crossing into E2E.
+    factory.reset_readiness_cache()  # Prevent an earlier readiness result from crossing into E2E.
+    capture_store.reset_connection()  # Drop any cached document store handle before traps install.
+    lock.reset_connection()  # Drop any cached lock store handle before traps install.
+    logger.debug("Reset the E2E storage and readiness caches")  # Confirm the complete reset.
+
+
+def _build_factory_overrides() -> E2EFactoryOverrides:  # Assemble one complete isolated dependency value.
+    """Build the complete process-owned dependency set for one E2E server."""
+    logger.info("Build the E2E factory override set")  # Record construction before any route exists.
+    seams = {  # Name each existing stand-in that the support builder must install.
+        "captures": stand_in_capture_index().values(),  # Seed both process-owned comparison captures.
+        "capture_runner": stand_in_capture_runner,  # Complete captures without a cloud call.
+        "run_launcher": stand_in_run_launcher,  # Accept a run without firmware work.
+        "stop_runner": stand_in_stop_runner,  # Accept a stop without a cloud call.
+        "options_builder": stand_in_options_builder,  # Build options from stand-in inventory.
+        "options_view": stand_in_options_view,  # Render options from stand-in inventory.
+        "versions_reader": lambda *_arguments: stand_in_version_map(),  # Return fixed firmware versions.
+        "cloud_reader": stand_in_cloud_read,  # Read fixed organization and site rows.
+        "device_reader": stand_in_device_read,  # Read fixed device rows.
+    }
+    overrides = build_e2e_overrides(TEST_RUN_ID, seams)  # Create all stores and traps before the factory call.
+    logger.debug("Built the complete E2E factory override set")  # Confirm construction without record values.
+    return overrides  # The factory validates this value before blueprint registration.
+
+
+def build_stand_in_app() -> Any:  # Build one fully isolated browser test application.
     """Build the portal with two signed-in operators and no cloud reach.
 
     Why:
@@ -1297,26 +1412,12 @@ def build_stand_in_app() -> Any:
     Returns:
         The Flask application that the server process serves.
     """
-    from src.upgrade_portal.app import wiring  # The test replaces its storage call only while the app starts.
     from src.upgrade_portal.app.factory import create_app  # Late, so a plain collection never builds an app.
-    from src.upgrade_portal.app.routes import (
-        capture,  # Late as well. It owns the collection seam.
-        review,  # Late as well. It owns the two capture seams.
-        select,  # Late as well. It owns the two cloud seams.
-        upgrade,  # Late as well. It owns the two options seams.
-    )
+    from src.upgrade_portal.app.routes import upgrade  # Own the seeded run write helper.
 
-    with patch.object(wiring, "prepare_storage", _skip_storage_bootstrap):
-        built = create_app()  # The production application, with no storage wait in this isolated test process.
-    built.config[select.MIST_READER_KEY] = stand_in_cloud_read  # The site picker then reads no network.
-    built.config[select.DEVICE_READER_KEY] = stand_in_device_read  # The inventory page reads no network.
-    built.config[upgrade.OPTIONS_VIEW_KEY] = stand_in_options_view  # The options page then draws every device.
-    built.config[upgrade.OPTIONS_BUILDER_KEY] = stand_in_options_builder  # The save call stores a whole row.
-    built.config[review.CAPTURE_LISTER_KEY] = stand_in_capture_lister  # The history and both pickers hold rows.
-    built.config[review.CAPTURE_LOADER_KEY] = stand_in_capture_loader  # The comparison then reads two captures.
-    built.config[capture.RUNNER_KEY] = stand_in_capture_runner  # A capture then verifies and reads no cloud.
-    built.config[upgrade.LAUNCHER_KEY] = stand_in_run_launcher  # A start then writes firmware to no device.
-    built.config[upgrade.STOP_RUNNER_KEY] = stand_in_stop_runner  # A stop then cancels nothing at the cloud.
+    _reset_cached_state()  # Clear each cached production handle before the override set installs.
+    overrides = _build_factory_overrides()  # Build every required process-owned dependency before routes.
+    built = create_app(overrides)  # Validate and install overrides before blueprint registration.
     from src.upgrade_portal.app.routes import org_upgrade
 
     built.config[org_upgrade.SERVICE_CONFIG_KEY] = E2EOrgUpgradeService

@@ -19,10 +19,10 @@ from typing import Any
 
 import pytest
 
+from src.upgrade_portal.runtime.runs import RunStateMachine
 from src.upgrade_portal.runtime.signals import (
     STOP_CONFIRMATION_TEXT,
     STOP_SCOPE_RUN,
-    TERMINAL_RUN_STATES,
     ConfirmationRequiredError,
     RunNotFoundError,
     RunNotStoppableError,
@@ -328,16 +328,17 @@ def test_request_changes_only_the_stop_request_and_the_time() -> None:
     assert {key for key in after if after[key] != before.get(key)} == {"stop_request", "updated_at"}
 
 
-def test_request_does_not_add_a_state_field() -> None:
-    """The request adds no state field to a record that holds none.
+def test_request_rejects_a_record_without_a_state_field() -> None:
+    """The request rejects a run record that has no valid state.
 
     Why:
-        This proves the boundary by absence. Only the run state machine writes
-        the state field, and it moves the run to stopping in its own step.
+        The canonical state model must decide whether a run is final. A missing
+        state gives no safe answer, so the stop request must fail closed.
     """
     records = _records()
-    del records[RUN_ID]["state"]  # The record now holds no state field at all
-    _store_with_request(records)
+    del records[RUN_ID]["state"]  # The malformed record cannot pass the canonical state model.
+    with pytest.raises(RunNotStoppableError):
+        _store_with_request(records)
     assert "state" not in records[RUN_ID]
 
 
@@ -379,16 +380,16 @@ def test_request_raises_when_the_run_is_absent() -> None:
     assert error.value.code == "run_not_found"
 
 
-@pytest.mark.parametrize("state", sorted(TERMINAL_RUN_STATES))
+@pytest.mark.parametrize("state", sorted(RunStateMachine.TERMINAL))
 def test_request_raises_for_every_terminal_state(state: str) -> None:
     """A run in a final state raises the run not stoppable error.
 
     Why:
         The contract answers 409 with the code run_not_stoppable. Every state
-        in TERMINAL_RUN_STATES must give the same answer.
+        in the canonical terminal set must give the same answer.
 
     Args:
-        state: One final run state from TERMINAL_RUN_STATES.
+        state: One final run state from the canonical terminal set.
     """
     store = _new_store(_records(state))
     with pytest.raises(RunNotStoppableError) as error:

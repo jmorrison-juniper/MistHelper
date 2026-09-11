@@ -20,6 +20,7 @@ from datetime import UTC, datetime  # ISO 8601 timestamps in UTC
 from typing import Any, ClassVar, Final, Protocol  # Record typing, error codes, and the store shape
 
 from src.upgrade_portal.runtime.identity import email_digest  # The one address form a log record may hold
+from src.upgrade_portal.runtime.runs import RunStateMachine, RunTransitionError  # Use the canonical final states.
 
 # WHAT: the exact text the operator types to confirm a stop.
 # WHY: FR-038b accepts this text and this letter case only. A lower-case word or
@@ -30,10 +31,6 @@ STOP_CONFIRMATION_TEXT: Final[str] = "STOP"
 # WHY: data-model.md section 4.3 fixes the field. A stop always covers the whole
 #      run, never one device.
 STOP_SCOPE_RUN: Final[str] = "run"
-
-# WHAT: the run states that a stop can no longer change.
-# WHY: the contract answers 409 run_not_stoppable when the run already finished.
-TERMINAL_RUN_STATES: Final[frozenset[str]] = frozenset({"complete", "stopped", "failed"})
 
 
 class StopRequestError(Exception):
@@ -312,11 +309,16 @@ class StopRequestStore:
         Raises:
             RunNotStoppableError: When the run already reached a final state.
         """
-        run = self._load_run(run_id)  # Raises RunNotFoundError when the run is absent
-        state = str(run.get("state", ""))  # The run state machine owns this field
-        if state in TERMINAL_RUN_STATES:  # A finished run accepts no stop
-            raise RunNotStoppableError(f"The run already reached the state {state}, so a stop changes nothing.")
-        return run  # A stop may still change this run
+        logging.info("[STOP] Checking whether run %s is final", run_id)  # Record the stop guard before evaluation.
+        run = self._load_run(run_id)  # Read the shared record before the canonical state decision.
+        try:  # A malformed state cannot prove that a destructive stop is safe.
+            state = RunStateMachine.read_state(run)  # Coerce the stored text through the canonical state model.
+        except RunTransitionError as failure:  # Fail closed when the state does not belong to the model.
+            raise RunNotStoppableError("The run state is invalid.") from failure  # Return one safe stop refusal.
+        if state in RunStateMachine.TERMINAL:  # The canonical terminal set controls every stop refusal.
+            raise RunNotStoppableError(f"The run is final: {state.value}.")  # Refuse every canonical final state.
+        logging.debug("[STOP] Run %s remains stoppable in state %s", run_id, state.value)  # Record the safe result.
+        return run  # A nonfinal run can continue through the stop request path.
 
     def _write_request(self, run: dict[str, Any], request: StopRequest) -> StopRequest:
         """Write one stop request into the run record.

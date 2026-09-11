@@ -233,6 +233,9 @@
     var DEFAULT_POLL_SECONDS = 30;
     var MILLISECONDS_PER_SECOND = 1000;
     var NOT_FOUND_STATUS = 404;
+    var RUN_AGE_SELECTOR = "[data-run-age]";  /* Find display-only age fields on both run views. */
+    var RUN_AGE_UPDATED_ATTRIBUTE = "data-age-updated-at";  /* Read only the normalized server time. */
+    var RUN_AGE_REFRESH_MILLISECONDS = 60000;  /* Refresh the visible minute without a server request. */
 
     /* A section name and a count name reach a CSS selector. The portal builds
      * both from a response body, so this pattern refuses any other character
@@ -3510,6 +3513,82 @@
     }
 
     /**
+     * Returns the short display text for one nonnegative run age.
+     *
+     * Why: The browser can update the visible age while the page stays open.
+     * The server remains the only source of stale eligibility.
+     *
+     * @param {number} ageSeconds The elapsed whole seconds.
+     * @returns {string} The short age text.
+     */
+    function runAgeText(ageSeconds) {
+        var wholeSeconds = Math.max(0, Math.floor(ageSeconds));  /* Keep the age whole and nonnegative. */
+        var days = Math.floor(wholeSeconds / 86400);  /* Read complete days from the elapsed time. */
+        var dayRemainder = wholeSeconds % 86400;  /* Keep the time below one complete day. */
+        var hours = Math.floor(dayRemainder / 3600);  /* Read complete hours from the day remainder. */
+        var hourRemainder = dayRemainder % 3600;  /* Keep the time below one complete hour. */
+        var minutes = Math.floor(hourRemainder / 60);  /* Read complete minutes from the hour remainder. */
+        var seconds = hourRemainder % 60;  /* Keep the final seconds for a new run. */
+        if (days) {  /* A day-scale age needs days and optional hours only. */
+            return hours ? days + "d " + hours + "h" : days + "d";  /* Match the server display shape. */
+        }
+        if (hours) {  /* An hour-scale age needs hours and optional minutes only. */
+            return minutes ? hours + "h " + minutes + "m" : hours + "h";  /* Match the server display shape. */
+        }
+        return minutes ? minutes + "m" : seconds + "s";  /* Show one useful unit below one hour. */
+    }
+
+    /**
+     * Updates each visible run age from one browser clock value.
+     *
+     * Why: A page can stay open across an age boundary. This function changes
+     * text only. It never adds, removes, or changes a stale control.
+     *
+     * @returns {void}
+     */
+    function refreshDisplayedRunAges() {
+        var ageFields = document.querySelectorAll(RUN_AGE_SELECTOR);  /* Find the server-approved age fields. */
+        if (!ageFields.length) {  /* A page with no run age needs no display work. */
+            return;  /* Leave pages outside the run views unchanged. */
+        }
+        console.info("Refresh the displayed run ages.");  /* Record the display action before it starts. */
+        var nowMilliseconds = Date.now();  /* Use one browser clock value for every visible age. */
+        var changedCount = 0;  /* Report how many safe fields received new text. */
+        ageFields.forEach(function (ageField) {  /* Update each visible age without touching eligibility. */
+            var updatedText = ageField.getAttribute(RUN_AGE_UPDATED_ATTRIBUTE) || "";  /* Read server UTC text. */
+            var updatedMilliseconds = Date.parse(updatedText);  /* Convert only the normalized display value. */
+            if (!Number.isFinite(updatedMilliseconds) || updatedMilliseconds > nowMilliseconds) {  /* Unsafe time. */
+                return;  /* Keep the server-rendered `unknown` text and stale decision. */
+            }
+            var ageSeconds = (nowMilliseconds - updatedMilliseconds) / MILLISECONDS_PER_SECOND;  /* Find the age. */
+            ageField.textContent = runAgeText(ageSeconds);  /* Change visible text only, never a stale marker. */
+            changedCount += 1;  /* Count the safe display update for the debug record. */
+        });
+        console.debug("Refreshed displayed run ages.", changedCount);  /* Report a count and no record value. */
+    }
+
+    /**
+     * Starts display-only age updates when the page contains a run age.
+     *
+     * Why: One timer serves the history page and the run page. The timer does
+     * not call an API and cannot change server eligibility.
+     *
+     * @returns {void}
+     */
+    function initRunAgeDisplay() {
+        if (!document.querySelector(RUN_AGE_SELECTOR)) {  /* A page without an age needs no timer. */
+            return;  /* Avoid a timer on unrelated portal pages. */
+        }
+        console.info("Install the displayed run age refresh event.");  /* Record listener setup before it starts. */
+        document.addEventListener("upgrade-portal-refresh-run-ages", refreshDisplayedRunAges);  /* Allow a safe refresh. */
+        console.debug("Installed the displayed run age refresh event.");  /* Confirm the display-only listener. */
+        refreshDisplayedRunAges();  /* Align all visible ages to one browser clock at load. */
+        console.info("Start the displayed run age timer.");  /* Record the timer action before it starts. */
+        window.setInterval(refreshDisplayedRunAges, RUN_AGE_REFRESH_MILLISECONDS);  /* Update display text each minute. */
+        console.debug("Started the displayed run age timer.");  /* Confirm the display-only timer. */
+    }
+
+    /**
      * Arms every control of the current page.
      *
      * Why: One entry point keeps the load order clear. Each init step tests for
@@ -3518,21 +3597,22 @@
      * @returns {void}
      */
     function initPortal() {
-        initTableFilters();
+        initTableFilters();  /* Add table filters only where the page supplies their controls. */
         initTableSorting();  /* Issue #2027 lets an operator order any table by any column. */
-        initCapturePage();
+        initCapturePage();  /* Add capture controls only on a capture page. */
         /* The gates run before the pages that hold them. A page then starts
          * with a button state that matches the field. */
-        initConfirmGates();
-        initBrowserTokenSignIn();
-        initUpgradeOptionsPage();
-        initUpgradeConfirmPage();
-        initRunPage();
+        initConfirmGates();  /* Set each typed confirmation state before an operator acts. */
+        initBrowserTokenSignIn();  /* Add the browser token flow only on the sign-in page. */
+        initUpgradeOptionsPage();  /* Add option controls only on the option page. */
+        initUpgradeConfirmPage();  /* Add the start control only on the confirmation page. */
+        initRunPage();  /* Add run polling and manual refresh only on the run page. */
+        initRunAgeDisplay();  /* Update age text without changing the server stale decision. */
         initOrgUpgradePage();
-        initStopControl();
+        initStopControl();  /* Add the existing single-run stop behavior without a change. */
         initRunRetryControl();  // Issue #2202: restart an unsuccessful terminal run.
         initRunScheduleControls();  // Issue #2201: the reschedule and the cancel of a run that has not begun.
-        initLockBanner();
+        initLockBanner();  /* Add site lock controls only where the page supplies the banner. */
     }
 
     /* The script tag sits at the end of the body, so the document is often
@@ -3592,5 +3672,3 @@
     window.upgradePortal.startLockBeat = startLockBeat;
     window.upgradePortal.stopLockBeat = stopLockBeat;
 })();
-
-

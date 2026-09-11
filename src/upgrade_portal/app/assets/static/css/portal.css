@@ -420,6 +420,41 @@
     padding: 0.25rem 0.75rem;
 }
 
+/* The run table keeps its age and stale text usable at 360, 768, and 1280
+ * pixels. The shared scroll box supplies horizontal movement on narrow views. */
+.run-history-table {
+    min-width: 62rem; /* Keep every run column readable instead of compressing controls. */
+}
+
+.run-age-cell {
+    min-width: 9rem; /* Keep the age and the stale text on clear lines. */
+}
+
+.run-age-text {
+    display: inline-block; /* Give the changing text one stable visual box. */
+    min-width: 4.5rem; /* Stop minute changes from moving the adjacent badge. */
+    font-variant-numeric: tabular-nums; /* Keep changing digits aligned. */
+    white-space: nowrap; /* Keep a short age on one line. */
+}
+
+.run-age-cell .badge-stale {
+    margin-top: 0.25rem; /* Separate the stale marker from the age text. */
+}
+
+.run-age-summary {
+    display: flex; /* Keep the age and stale marker in one readable group. */
+    flex-wrap: wrap; /* Let the marker move below the age on a narrow view. */
+    align-items: center; /* Align the text and marker on a wide view. */
+    gap: 0.5rem; /* Preserve space when the group wraps. */
+    border-left: 0.25rem solid var(--portal-border-strong); /* Add a shape that does not depend on color. */
+    padding-left: 0.75rem; /* Keep text clear of the shape. */
+    margin-bottom: 0.75rem; /* Separate age information from the run message. */
+}
+
+.run-age-summary .portal-card-note {
+    margin-bottom: 0; /* Keep the flex row aligned with the stale marker. */
+}
+
 /* ==========================================================================
  * 5. Option bubbles
  *
@@ -820,6 +855,25 @@
     color: var(--portal-badge-unknown-text);
 }
 
+.badge-stale {
+    background-color: var(--portal-flash-warning-bg); /* Use the existing warning surface token. */
+    color: var(--portal-flash-warning-text); /* Keep the text readable in each theme. */
+    border: 2px solid currentColor; /* Add a closed shape, so color is not the only signal. */
+    border-left-width: 0.5rem; /* Add a second visible shape at the leading edge. */
+}
+
+.stale-symbol {
+    display: inline-grid; /* Center the text symbol inside its outline. */
+    place-items: center; /* Keep the symbol legible at each required width. */
+    width: 1rem; /* Give the symbol a stable circular shape. */
+    height: 1rem; /* Keep the circle equal in both dimensions. */
+    margin-right: 0.25rem; /* Separate the symbol from the visible stale text. */
+    border: 1px solid currentColor; /* Keep the shape visible without color meaning. */
+    border-radius: 50%; /* Make the warning symbol distinct from the badge outline. */
+    font-size: 0.7rem; /* Fit the exclamation mark inside the circle. */
+    line-height: 1; /* Prevent the text line from stretching the circle. */
+}
+
 /* ==========================================================================
  * 11. Comparison outcomes
  *
@@ -1035,6 +1089,14 @@
 
     .status-phase-count {
         text-align: left;
+    }
+
+    .run-age-summary {
+        align-items: flex-start; /* Keep wrapped age content aligned on narrow views. */
+    }
+
+    .run-age-cell {
+        white-space: normal; /* Let the stale marker move below the age at 360 pixels. */
     }
 }
 

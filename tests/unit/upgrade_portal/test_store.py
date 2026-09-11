@@ -471,6 +471,19 @@ def test_document_digest_ignores_the_driver_fields() -> None:
     assert store.measure_size_bytes(stored) == store.measure_size_bytes(written)
 
 
+def test_document_digest_accepts_a_whole_float_returned_as_an_integer() -> None:
+    """A nested whole float and its equal database integer share one digest."""
+    written = {"extras": {"poe": [{"power_draw": 0.0}]}}
+    stored = {"extras": {"poe": [{"power_draw": 0}]}}
+    assert store.document_digest(stored) == store.document_digest(written)
+
+
+def test_document_digest_preserves_boolean_and_fractional_values() -> None:
+    """The canonical form keeps a boolean and a fractional float distinct."""
+    assert store.document_digest({"value": True}) != store.document_digest({"value": 1})
+    assert store.document_digest({"value": 0.5}) != store.document_digest({"value": 0})
+
+
 def test_measure_size_bytes_counts_a_real_document() -> None:
     """The size of a capture is the byte count of its canonical form."""
     written = _written_capture()
