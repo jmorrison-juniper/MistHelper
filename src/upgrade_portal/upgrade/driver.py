@@ -1442,6 +1442,8 @@ class RunDriver:
                 return
             self._advance(record, settling_state(name))
             lost = self._run_phase(record, name)  # Text when the phase could not run, and None when it ran
+            if str(record.get("state", "")) == RunState.STOPPED.value:
+                return  # The interrupted gate already completed the stop and the post-check.
             reason = lost or reason  # A later phase that ran well never clears an earlier reason
         self._finish(record, reason)
 
@@ -1474,6 +1476,9 @@ class RunDriver:
             self._write_phase(record, PhaseOutcome(name, PhaseState.SKIPPED.value))  # FR-058: the site holds none
             return None  # An empty family is no failure, so the run may still reach complete
         outcome = self._deps.gate.settle(run_id, name, targets)  # The gate blocks until the phase settles
+        if self._stop_pending(record):  # The gate returns early when the route writes a stop request.
+            self._stop(record)
+            return None
         self._beat()  # The phase held this thread for up to half an hour, so the lock beats as it ends
         self._write_phase(record, outcome)  # The record now holds the counts the gate reported
         return None  # This phase ran, so it names no reason to fail the run

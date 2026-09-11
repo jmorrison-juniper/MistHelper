@@ -710,7 +710,7 @@ def build_heartbeat(driver: ModuleType, record: Mapping[str, Any], lock_record: 
     return driver.lock_heartbeat(record, lock_record)  # The key comes from the organization and the site.
 
 
-def build_gate_deps(phase_gate: ModuleType, session: Any, record: Mapping[str, Any], heartbeat: Any) -> Any:
+def build_gate_deps(phase_gate: ModuleType, session: Any, record: Mapping[str, Any], heartbeat: Any, store: Any) -> Any:
     """Build the collaborators of the settle gate of one run.
 
     Why:
@@ -723,6 +723,7 @@ def build_gate_deps(phase_gate: ModuleType, session: Any, record: Mapping[str, A
         session: The cloud session of the operator.
         record: The run record, which names the organization and the site.
         heartbeat: The site lock heartbeat, or None.
+        store: The run store that carries a persisted stop request.
 
     Returns:
         The dependency record, or None when the event module is absent.
@@ -733,18 +734,30 @@ def build_gate_deps(phase_gate: ModuleType, session: Any, record: Mapping[str, A
     org_id = str(record.get("org_id", ""))  # Both readers narrow to this organization.
     reader = phase_gate.CloudReconnectReader(session, org_id, events.EventCatalogue(), time.time)
     counter = phase_gate.CloudStatisticsReader(session, org_id, str(record.get("site_id", "")))
+
+    def stop_requested(run_id: str) -> bool:
+        """Read the stop field that the route thread writes while the gate waits."""
+        stored = store.read_run(run_id) if store is not None else None
+        return isinstance(stored, Mapping) and stored.get("stop_request") is not None
+
     if heartbeat is None:  # No lock means no beat, so the gate keeps its own log reporter.
-        return phase_gate.PhaseGateDeps(event_reader=reader, statistics_reader=counter)
-    return phase_gate.PhaseGateDeps(event_reader=reader, statistics_reader=counter, progress=heartbeat)
+        return phase_gate.PhaseGateDeps(event_reader=reader, statistics_reader=counter, stop_requested=stop_requested)
+    return phase_gate.PhaseGateDeps(
+        event_reader=reader,
+        statistics_reader=counter,
+        progress=heartbeat,
+        stop_requested=stop_requested,
+    )
 
 
-def build_phase_gate(record: Mapping[str, Any], session: Any, heartbeat: Any) -> Any:
+def build_phase_gate(record: Mapping[str, Any], session: Any, heartbeat: Any, store: Any) -> Any:
     """Build the settle gate of one run.
 
     Args:
         record: The run record, which names the organization and the site.
         session: The cloud session of the operator.
         heartbeat: The site lock heartbeat, or None.
+        store: The run store that carries a persisted stop request.
 
     Returns:
         The settle gate, or None when a collaborator module is absent.
@@ -752,7 +765,7 @@ def build_phase_gate(record: Mapping[str, Any], session: Any, heartbeat: Any) ->
     phase_gate = load_module(PHASE_GATE_MODULE)  # Late, so this module imports no cloud code at load.
     if phase_gate is None:  # No gate module means no cascade at all.
         return None  # The caller names the gap and the run sends nothing.
-    deps = build_gate_deps(phase_gate, session, record, heartbeat)  # The readers and the progress seat.
+    deps = build_gate_deps(phase_gate, session, record, heartbeat, store)  # Readers, progress, and stop signal.
     if deps is None:  # The event module is absent.
         return None  # The caller names the gap and the run sends nothing.
     return phase_gate.PhaseSettleGate(deps)  # The deadline stays at the 1800 seconds of the module.
@@ -776,7 +789,9 @@ def build_driver_deps(driver: ModuleType, record: Mapping[str, Any], bindings: M
         The dependency record, or None when a collaborator could not be built.
     """
     heartbeat = build_heartbeat(driver, record, bindings.get(LOCK_FIELD))  # One object for two seats.
-    gate = build_phase_gate(record, bindings.get(SESSION_FIELD), heartbeat)  # The heartbeat sits in the loop.
+    gate = build_phase_gate(
+        record, bindings.get(SESSION_FIELD), heartbeat, bindings.get(STORE_FIELD)
+    )  # The heartbeat and stop reader sit in the loop.
     if gate is None:  # No gate means no honest cascade, so the run must not start.
         return None  # The caller writes one error line and sends nothing.
     return driver.RunDriverDeps(  # Every field carries its name, so no positional order can drift.

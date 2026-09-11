@@ -1,0 +1,10 @@
+{
+  "workflow": "speckit",
+  "specName": "2447-confirmation-navigation",
+  "branch": "fix/2447-confirmation-navigation",
+  "selectedAt": "2026-09-10T00:00:00Z",
+  "currentStep": "tasks",
+  "status": "ready-to-implement",
+  "history": [],
+  "telemetryInstanceId": "59680c2e-be7b-4571-b127-20ed172dd54b"
+}

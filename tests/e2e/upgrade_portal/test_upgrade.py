@@ -78,6 +78,7 @@ CONFIRM_INPUT_ID = "upgrade-confirm-input"
 START_BUTTON_ID = "upgrade-start-button"
 
 # The progress page controls.
+CONFIRM_LINK_ID = "upgrade-confirm-link"
 RUN_STATE_ID = "upgrade-state"
 RUN_TABLE_ID = "upgrade-run-table"
 DEVICE_STATE_PREFIX = "upgrade-device-state-"
@@ -108,6 +109,8 @@ PRE_ROLE = "pre"  # The half of the run that runs before the upgrade.
 VERIFIED_STATE = "verified"  # The state that FR-035 reads before it allows a start.
 VERIFY_TRIES = 40  # Twenty seconds in all, which covers a slow workstation.
 VERIFY_PAUSE_MS = 500  # The collection thread holds the progress guard for a moment only.
+PREPARED_RUN_ID = "e2e-prepared-run-0001"  # `conftest.py` seeds this awaiting-confirmation run.
+SEED_TIMEOUT_MS = 30000  # A cold store can take several seconds to write the seeded browser fixture.
 
 # WHY: The server fixture states its own fault and its own skip, so this module
 # must not translate either one. The browser fixture is different: a workstation
@@ -584,6 +587,25 @@ class TestUpgradeOptions:
 
 class TestUpgradeConfirm:
     """The confirm page holds the start behind the typed word `CONFIRM`."""
+
+    def test_prepared_run_links_to_the_confirmation_page(self, page: Any) -> None:
+        """A prepared run exposes and follows the final-review action.
+
+        Args:
+            page: The signed-in browser page.
+        """
+        path = PROGRESS_PAGE_TEMPLATE.format(run_id=PREPARED_RUN_ID)
+        link = page.get_by_test_id(CONFIRM_LINK_ID)
+        for _ in range(SEED_TIMEOUT_MS // 1000):
+            answer = page.goto(path)
+            assert answer is not None and answer.status == OK_STATUS, f"{path} did not answer {OK_STATUS}."
+            if link.count() == 1:
+                break
+            page.wait_for_timeout(1000)
+        sync_api.expect(link).to_be_visible()
+        link.click()
+        sync_api.expect(page.get_by_test_id(CONFIRM_INPUT_ID)).to_be_visible()
+        assert page.url.endswith(CONFIRM_PAGE_TEMPLATE.format(run_id=PREPARED_RUN_ID))
 
     def test_confirm_page_shows_the_warning_list(self, confirm_page: Any) -> None:
         """The page shows the warning list that the plan produced.

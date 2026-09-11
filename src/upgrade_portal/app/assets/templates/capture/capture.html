@@ -303,7 +303,8 @@
             class="portal-button portal-button-primary"
             data-testid="capture-start-upgrade-button"
             data-site-id="{{ site_id | default('', true) }}"
-            {% if not is_verified %}hidden{% endif %}>Start the upgrade</button>
+            data-run-id="{{ run_id | default('', true) }}"
+            {% if not is_verified %}hidden{% endif %}>{% if run_id %}Continue the retry{% else %}Start the upgrade{% endif %}</button>
   </p>
   {#
     FR-104 and FR-105 name the cause of a refusal. aria-live lets a screen
@@ -500,6 +501,399 @@
           <tr>
             <td colspan="7" class="portal-table-empty">
               This capture holds no wireless client.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{#
+  Guest clients. `document["clients"]["guest"]` is present on every capture,
+  tier 2 or tier 3, so this table follows the exact pattern of the wired and
+  the wireless tables above it, with no empty-state distinction to make.
+#}
+<div class="portal-card">
+  <h2 class="portal-card-title">Guest clients</h2>
+
+  {% if (guest_rows_held | default(0, true)) > (guest_rows | length) %}
+    <p class="portal-note" data-testid="capture-guest-cap-note">
+      This table shows the first {{ guest_rows | length }} of
+      {{ guest_rows_held }} guest clients. Download the capture to read every
+      record.
+    </p>
+  {% endif %}
+
+  <div class="portal-table-scroll">
+    <table class="portal-table" data-testid="capture-client-guest-table"
+                 data-sortable>
+      <caption class="visually-hidden">
+        Every guest client of this capture, with the user name and the access
+        point that holds it.
+      </caption>
+
+      <thead>
+        <tr>
+          <th scope="col">Host name</th>
+          <th scope="col">MAC address</th>
+          <th scope="col">User name</th>
+          <th scope="col">Parent device</th>
+          <th scope="col">Network name</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for client in guest_rows | default([], true) %}
+          {% set client_mac = client.mac | default('', true) %}
+
+          <tr data-testid="capture-client-row-{{ client_mac }}">
+            <th scope="row">{{ client.hostname | default('Unnamed client', true) }}</th>
+            <td class="cell-mono">{{ client_mac }}</td>
+            <td>{{ client.username | default('', true) }}</td>
+            <td>{{ client.parent_device | default('unknown', true) }}</td>
+            <td>{{ client.ssid | default('', true) }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="5" class="portal-table-empty">
+              This capture holds no guest client.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{#
+  The six tier 3 sections below. Each table carries a state, so an operator
+  can tell a tier 2 capture apart from an empty site and a failed read. FR-003
+  fixes the three states. `tables.tier3_table` already chose the message that
+  matches the state, so the empty row below reads that message and needs no
+  further branch.
+#}
+<div class="portal-card" data-testid="capture-switch-ports-card" data-state="{{ switch_port_state }}">
+  <h2 class="portal-card-title">Switch ports</h2>
+
+  {% if (switch_port_rows_held | default(0, true)) > (switch_port_rows | length) %}
+    <p class="portal-note" data-testid="capture-switch-ports-cap-note">
+      This table shows the first {{ switch_port_rows | length }} of
+      {{ switch_port_rows_held }} switch ports. Download the capture to read
+      every record.
+    </p>
+  {% endif %}
+
+  <div class="portal-table-scroll">
+    <table class="portal-table" data-testid="capture-switch-ports-table"
+                 data-sortable>
+      <caption class="visually-hidden">
+        Every switch port of this capture, with its neighbor when the switch
+        found one.
+      </caption>
+
+      <thead>
+        <tr>
+          <th scope="col">MAC address</th>
+          <th scope="col">Port</th>
+          <th scope="col">Up</th>
+          <th scope="col">Speed</th>
+          <th scope="col">Full duplex</th>
+          <th scope="col">Port usage</th>
+          <th scope="col">MAC count</th>
+          <th scope="col">Neighbor MAC</th>
+          <th scope="col">Neighbor port</th>
+          <th scope="col">Neighbor system</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for port in switch_port_rows | default([], true) %}
+          <tr data-testid="capture-switch-port-row-{{ loop.index0 }}">
+            <td class="cell-mono">{{ port.mac | default('', true) }}</td>
+            <td class="cell-mono">{{ port.port_id | default('', true) }}</td>
+            <td>{{ port.up | default('', true) }}</td>
+            <td>{{ port.speed | default('', true) }}</td>
+            <td>{{ port.full_duplex | default('', true) }}</td>
+            <td>{{ port.port_usage | default('', true) }}</td>
+            <td class="cell-number">{{ port.mac_count | default('', true) }}</td>
+            <td class="cell-mono">{{ port.neighbor_mac | default('', true) }}</td>
+            <td>{{ port.neighbor_port_desc | default('', true) }}</td>
+            <td>{{ port.neighbor_system_name | default('', true) }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="10" class="portal-table-empty" data-testid="capture-switch-ports-empty">
+              {{ switch_port_message | default('This capture holds no switch port.', true) }}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="portal-card" data-testid="capture-poe-card" data-state="{{ poe_state }}">
+  <h2 class="portal-card-title">Power over ethernet</h2>
+
+  {% if (poe_rows_held | default(0, true)) > (poe_rows | length) %}
+    <p class="portal-note" data-testid="capture-poe-cap-note">
+      This table shows the first {{ poe_rows | length }} of
+      {{ poe_rows_held }} power readings. Download the capture to read every
+      record.
+    </p>
+  {% endif %}
+
+  <div class="portal-table-scroll">
+    <table class="portal-table" data-testid="capture-poe-table" data-sortable>
+      <caption class="visually-hidden">
+        Every power-over-ethernet reading of this capture, one row for each
+        port that carries power.
+      </caption>
+
+      <thead>
+        <tr>
+          <th scope="col">MAC address</th>
+          <th scope="col">Port</th>
+          <th scope="col">Disabled</th>
+          <th scope="col">Mode</th>
+          <th scope="col">On</th>
+          <th scope="col">Priority</th>
+          <th scope="col">Power draw</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for reading in poe_rows | default([], true) %}
+          <tr data-testid="capture-poe-row-{{ loop.index0 }}">
+            <td class="cell-mono">{{ reading.mac | default('', true) }}</td>
+            <td class="cell-mono">{{ reading.port_id | default('', true) }}</td>
+            <td>{{ reading.poe_disabled | default('', true) }}</td>
+            <td>{{ reading.poe_mode | default('', true) }}</td>
+            <td>{{ reading.poe_on | default('', true) }}</td>
+            <td>{{ reading.poe_priority | default('', true) }}</td>
+            <td class="cell-number">{{ reading.power_draw | default('', true) }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="7" class="portal-table-empty" data-testid="capture-poe-empty">
+              {{ poe_message | default('This capture holds no power-over-ethernet reading.', true) }}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="portal-card" data-testid="capture-radios-card" data-state="{{ radio_state }}">
+  <h2 class="portal-card-title">Radios</h2>
+
+  {% if (radio_rows_held | default(0, true)) > (radio_rows | length) %}
+    <p class="portal-note" data-testid="capture-radios-cap-note">
+      This table shows the first {{ radio_rows | length }} of
+      {{ radio_rows_held }} radios. Download the capture to read every record.
+    </p>
+  {% endif %}
+
+  <div class="portal-table-scroll">
+    <table class="portal-table" data-testid="capture-radios-table" data-sortable>
+      <caption class="visually-hidden">
+        Every radio of this capture, one row for each band of each access
+        point.
+      </caption>
+
+      <thead>
+        <tr>
+          <th scope="col">MAC address</th>
+          <th scope="col">Band</th>
+          <th scope="col">Channel</th>
+          <th scope="col">Power</th>
+          <th scope="col">Bandwidth</th>
+          <th scope="col">Noise floor</th>
+          <th scope="col">Clients</th>
+          <th scope="col">WLANs</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for radio in radio_rows | default([], true) %}
+          <tr data-testid="capture-radio-row-{{ loop.index0 }}">
+            <td class="cell-mono">{{ radio.mac | default('', true) }}</td>
+            <td>{{ radio.band | default('', true) }}</td>
+            <td class="cell-number">{{ radio.channel | default('', true) }}</td>
+            <td class="cell-number">{{ radio.power | default('', true) }}</td>
+            <td class="cell-number">{{ radio.bandwidth | default('', true) }}</td>
+            <td class="cell-number">{{ radio.noise_floor | default('', true) }}</td>
+            <td class="cell-number">{{ radio.num_clients | default('', true) }}</td>
+            <td class="cell-number">{{ radio.num_wlans | default('', true) }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="8" class="portal-table-empty" data-testid="capture-radios-empty">
+              {{ radio_message | default('This capture holds no radio.', true) }}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="portal-card" data-testid="capture-tunnels-card" data-state="{{ tunnel_state }}">
+  <h2 class="portal-card-title">Tunnels</h2>
+
+  {% if (tunnel_rows_held | default(0, true)) > (tunnel_rows | length) %}
+    <p class="portal-note" data-testid="capture-tunnels-cap-note">
+      This table shows the first {{ tunnel_rows | length }} of
+      {{ tunnel_rows_held }} tunnels. Download the capture to read every
+      record.
+    </p>
+  {% endif %}
+
+  <div class="portal-table-scroll">
+    <table class="portal-table" data-testid="capture-tunnels-table" data-sortable>
+      <caption class="visually-hidden">
+        Every gateway tunnel of this capture, with its peer and its state.
+      </caption>
+
+      <thead>
+        <tr>
+          <th scope="col">Tunnel name</th>
+          <th scope="col">MAC address</th>
+          <th scope="col">WAN name</th>
+          <th scope="col">Peer host</th>
+          <th scope="col">Peer IP</th>
+          <th scope="col">Protocol</th>
+          <th scope="col">Up</th>
+          <th scope="col">Uptime</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for tunnel in tunnel_rows | default([], true) %}
+          <tr data-testid="capture-tunnel-row-{{ loop.index0 }}">
+            <td>{{ tunnel.tunnel_name | default('', true) }}</td>
+            <td class="cell-mono">{{ tunnel.mac | default('', true) }}</td>
+            <td>{{ tunnel.wan_name | default('', true) }}</td>
+            <td>{{ tunnel.peer_host | default('', true) }}</td>
+            <td class="cell-mono">{{ tunnel.peer_ip | default('', true) }}</td>
+            <td>{{ tunnel.protocol | default('', true) }}</td>
+            <td>{{ tunnel.up | default('', true) }}</td>
+            <td class="cell-number">{{ tunnel.uptime | default('', true) }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="8" class="portal-table-empty" data-testid="capture-tunnels-empty">
+              {{ tunnel_message | default('This capture holds no tunnel.', true) }}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="portal-card" data-testid="capture-bgp-peers-card" data-state="{{ bgp_peer_state }}">
+  <h2 class="portal-card-title">BGP peers</h2>
+
+  {% if (bgp_peer_rows_held | default(0, true)) > (bgp_peer_rows | length) %}
+    <p class="portal-note" data-testid="capture-bgp-peers-cap-note">
+      This table shows the first {{ bgp_peer_rows | length }} of
+      {{ bgp_peer_rows_held }} BGP peers. Download the capture to read every
+      record.
+    </p>
+  {% endif %}
+
+  <div class="portal-table-scroll">
+    <table class="portal-table" data-testid="capture-bgp-peers-table" data-sortable>
+      <caption class="visually-hidden">
+        Every BGP peer of this capture, with its state and its route counts.
+      </caption>
+
+      <thead>
+        <tr>
+          <th scope="col">MAC address</th>
+          <th scope="col">Neighbor</th>
+          <th scope="col">Neighbor AS</th>
+          <th scope="col">Neighbor MAC</th>
+          <th scope="col">State</th>
+          <th scope="col">Up</th>
+          <th scope="col">Uptime</th>
+          <th scope="col">VRF</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for peer in bgp_peer_rows | default([], true) %}
+          <tr data-testid="capture-bgp-peer-row-{{ loop.index0 }}">
+            <td class="cell-mono">{{ peer.mac | default('', true) }}</td>
+            <td>{{ peer.neighbor | default('', true) }}</td>
+            <td class="cell-number">{{ peer.neighbor_as | default('', true) }}</td>
+            <td class="cell-mono">{{ peer.neighbor_mac | default('', true) }}</td>
+            <td>{{ peer.state | default('', true) }}</td>
+            <td>{{ peer.up | default('', true) }}</td>
+            <td class="cell-number">{{ peer.uptime | default('', true) }}</td>
+            <td>{{ peer.vrf_name | default('', true) }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="8" class="portal-table-empty" data-testid="capture-bgp-peers-empty">
+              {{ bgp_peer_message | default('This capture holds no BGP peer.', true) }}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="portal-card" data-testid="capture-alarms-card" data-state="{{ alarm_state }}">
+  <h2 class="portal-card-title">Alarms</h2>
+
+  {% if (alarm_rows_held | default(0, true)) > (alarm_rows | length) %}
+    <p class="portal-note" data-testid="capture-alarms-cap-note">
+      This table shows the first {{ alarm_rows | length }} of
+      {{ alarm_rows_held }} alarms. Download the capture to read every record.
+    </p>
+  {% endif %}
+
+  <div class="portal-table-scroll">
+    <table class="portal-table" data-testid="capture-alarms-table" data-sortable>
+      <caption class="visually-hidden">
+        Every open alarm of this capture, with its severity and the devices it
+        names.
+      </caption>
+
+      <thead>
+        <tr>
+          <th scope="col">Type</th>
+          <th scope="col">Group</th>
+          <th scope="col">Severity</th>
+          <th scope="col">Status</th>
+          <th scope="col">Count</th>
+          <th scope="col">Timestamp</th>
+          <th scope="col">Last seen</th>
+          <th scope="col">Host names</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for alarm in alarm_rows | default([], true) %}
+          <tr data-testid="capture-alarm-row-{{ loop.index0 }}">
+            <td>{{ alarm.type | default('', true) }}</td>
+            <td>{{ alarm.group | default('', true) }}</td>
+            <td>{{ alarm.severity | default('', true) }}</td>
+            <td>{{ alarm.status | default('', true) }}</td>
+            <td class="cell-number">{{ alarm.count | default('', true) }}</td>
+            <td>{{ alarm.timestamp | default('', true) }}</td>
+            <td>{{ alarm.last_seen | default('', true) }}</td>
+            <td>{{ alarm.hostnames | default('', true) }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="8" class="portal-table-empty" data-testid="capture-alarms-empty">
+              {{ alarm_message | default('This capture holds no alarm.', true) }}
             </td>
           </tr>
         {% endfor %}

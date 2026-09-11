@@ -1087,6 +1087,11 @@
      */
     function startUpgradeFromCapture(button) {
         var siteId = (button.getAttribute("data-site-id") || "").trim();  /* The path names the site. */
+        var existingRunId = (button.getAttribute("data-run-id") || "").trim();  /* A retry already owns its run. */
+        if (existingRunId) {
+            window.location.assign("/runs/" + encodeURIComponent(existingRunId) + "/options");
+            return Promise.resolve({run_id: existingRunId});
+        }
         if (!siteId) {  /* A page with no site cannot post the run. */
             showCaptureUpgradeError("The page names no site, so the upgrade cannot start.");  /* The operator reads why. */
             return Promise.resolve(null);  /* No call runs without a site. */
@@ -2800,10 +2805,10 @@
     }
 
     /**
-     * Sends the retry of one failed run.
+     * Sends the retry of one unsuccessful terminal run.
      *
-     * Why: Issue #2202 builds a new run from the settings of a failed one. The
-     * new run needs a fresh capture, so the browser follows the answer to the
+     * Why: Issue #2202 builds a new run from the saved settings. The new run
+     * needs a fresh capture, so the browser follows the answer to the
      * capture page of the new run.
      *
      * @param {Element} button The control the operator pressed.
@@ -2823,7 +2828,17 @@
                     /* The page names every schedule that the retry dropped. */
                     showFlash(notes[index], "warning", true);
                 }
-                showFlash("The portal built a retry. Take a fresh capture before you start it.", "success", true);
+                var retryRunId = (answer && answer.run_id) || "";
+                var retrySiteId = (answer && answer.site_id) || "";
+                if (retryRunId && retrySiteId) {
+                    window.location.assign(
+                        "/captures/new?site_id=" + encodeURIComponent(retrySiteId) +
+                        "&run_id=" + encodeURIComponent(retryRunId) + "&role=pre"
+                    );
+                    return answer;
+                }
+                showFlash("The portal built a retry, but it did not name the fresh capture page.", "warning", true);
+                button.disabled = false;
                 return answer;
             })
             .catch(function (error) {
@@ -2835,7 +2850,7 @@
     }
 
     /**
-     * Binds the retry control of a failed run.
+     * Binds the retry control of an unsuccessful terminal run.
      *
      * @returns {void}
      */
@@ -3347,7 +3362,7 @@
         initUpgradeConfirmPage();
         initRunPage();
         initStopControl();
-        initRunRetryControl();  // Issue #2202: the retry of a failed run.
+        initRunRetryControl();  // Issue #2202: restart an unsuccessful terminal run.
         initRunScheduleControls();  // Issue #2201: the reschedule and the cancel of a run that has not begun.
         initLockBanner();
     }
