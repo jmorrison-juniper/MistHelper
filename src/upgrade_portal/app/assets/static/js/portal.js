@@ -175,6 +175,7 @@
      * every path at one of them. */
     var RUN_FINISHED_STATES = ["complete", "stopped", "failed"];
     var ORG_UPGRADE_FINISHED_STATES = ["cancelled", "completed", "failed"];
+    var RUN_RETRYABLE_STATES = ["failed", "stopped", "cancelled"];
 
     /* Each device cell of the run table carries one of these field names. The
      * value is the text to show when the run reports no value yet. The same
@@ -184,7 +185,8 @@
         state: "pending",
         version_before: "unknown",
         version_target: "none",
-        version_after: "not yet"
+        version_after: "not yet",
+        failure_reason: ""
     };
 
     /* The version check badge of FR-051. upgrade/progress.html holds the same
@@ -2419,6 +2421,47 @@
         });
     }
 
+    /** Paints the prominent failure summary from the run status body. */
+    function paintRunFailure(region, status) {
+        var failed = status && status.state === "failed";
+        var alert = region.querySelector("[data-run-failure-alert]");
+        if (!failed && !alert) {
+            return;
+        }
+        if (!alert) {
+            alert = document.createElement("div");
+            alert.setAttribute("data-run-failure-alert", "");
+            alert.setAttribute("data-testid", "upgrade-failure-alert");
+            alert.setAttribute("role", "alert");
+            alert.className = "flash-item flash-danger run-failure-alert";
+            region.insertBefore(alert, region.firstChild);
+        }
+        alert.replaceChildren();
+        alert.hidden = !failed;
+        if (!failed) {
+            return;
+        }
+        var heading = document.createElement("strong");
+        heading.textContent = "Upgrade failed. ";
+        alert.appendChild(heading);
+        var message = document.createElement("span");
+        message.textContent = (status.error && status.error.message) ||
+            "One or more devices did not complete the requested upgrade.";
+        alert.appendChild(message);
+        var failures = Array.isArray(status.failures) ? status.failures : [];
+        if (failures.length) {
+            var list = document.createElement("ul");
+            failures.forEach(function (failure) {
+                var item = document.createElement("li");
+                item.textContent = (failure.name || "Unnamed device") + " (" +
+                    (failure.mac || "unknown MAC") + "): " +
+                    (failure.reason || "No reason was reported.");
+                list.appendChild(item);
+            });
+            alert.appendChild(list);
+        }
+    }
+
     /**
      * Returns the banner of the run region, and builds it on the first call.
      *
@@ -2525,6 +2568,7 @@
         paintRunPhases(region, status);
         paintRunTargets(region, status);
         paintRunVersionChecks(region, status);
+        paintRunFailure(region, status);
         paintRunLock(region, status);
 
         /* A run that finished answers 409 to a stop, so the two stop controls
@@ -2574,6 +2618,12 @@
         return fetchJson("/api/runs/" + encodeURIComponent(runId) + "/status")
             .then(function (status) {
                 paintRunStatus(region, status);
+                if (status && RUN_RETRYABLE_STATES.indexOf(status.state) !== -1 &&
+                        !document.querySelector("[data-testid='run-retry-controls']")) {
+                    stopRunPoll();
+                    window.location.reload();
+                    return status;
+                }
                 if (reportSuccess && status) {
                     showFlash("The run state is current. " + (status.message || ""), "info");
                 }

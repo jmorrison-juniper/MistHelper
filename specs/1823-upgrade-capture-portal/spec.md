@@ -555,7 +555,11 @@ with the same rows and the same statistics.
 - **FR-049**: When every device of the selected type settles, the portal MUST show
   the new firmware version for each device.
 - **FR-050**: If a device fails during the upgrade or after the upgrade, the
-  portal MUST raise an alert that names the device and the reported reason.
+  portal MUST raise an alert that names the device and the reported reason from
+  the device event log.
+- **FR-050a**: A failed run MUST offer a retry that keeps the saved upgrade
+  settings and target versions, includes only devices that failed or did not
+  finish, and lets the operator keep or change the schedule before confirmation.
 - **FR-051**: If a device returns on a firmware version that is not the requested
   version, the portal MUST mark that device as a version mismatch.
 

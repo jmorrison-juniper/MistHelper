@@ -36,6 +36,8 @@ __all__ = [
     "RunStateMachine",
     "RunStatusView",
     "RunTransitionError",
+    "run_has_failures",
+    "target_needs_retry",
 ]
 
 logger = logging.getLogger(__name__)
@@ -540,6 +542,53 @@ class RunStateMachine:
             raise RunTransitionError(f"{value!r} is not a run state of this model.") from error
 
 
+def _target_version_mismatch(target: Mapping[str, Any]) -> bool:
+    """Report whether a device returned on a version other than its target."""
+    from ..upgrade.gate import OUTCOME_VERSION_MISMATCH, target_version_outcome
+
+    return target_version_outcome(target) == OUTCOME_VERSION_MISMATCH
+
+
+def target_needs_retry(target: Mapping[str, Any]) -> bool:
+    """Report whether a retry must include one target device."""
+    successful_states = {"settled", "complete", "completed", "success", "succeeded"}
+    state = str(target.get("state") or "pending").lower()
+    return state not in successful_states or _target_version_mismatch(target)
+
+
+def _item_has_state(item: Mapping[str, Any], state: str) -> bool:
+    """Report whether one run item has the requested state."""
+    return str(item.get("state") or "") == state
+
+
+def _target_has_failed(target: Mapping[str, Any]) -> bool:
+    """Report whether one target failed or returned on the wrong version."""
+    return _item_has_state(target, "failed") or _target_version_mismatch(target)
+
+
+def run_has_failures(record: Mapping[str, Any]) -> bool:
+    """Report whether a run contains a failed phase or device.
+
+    This also repairs the presentation of older records that reached the
+    ``complete`` state even though a phase had failed.
+    """
+    if str(record.get("state") or "") == RunState.FAILED.value:
+        return True
+    phases = record.get("phases") or ()
+    targets = record.get("targets") or ()
+    return any(_item_has_state(item, PhaseState.FAILED.value) for item in phases) or any(
+        _target_has_failed(item) for item in targets
+    )
+
+
+def effective_run_state(record: Mapping[str, Any]) -> str:
+    """Return the state an operator must see for this run."""
+    state = str(record.get("state", RunState.CREATED.value))
+    if state == RunState.COMPLETE.value and run_has_failures(record):
+        return RunState.FAILED.value
+    return state
+
+
 class RunStatusView:
     """Build the status body that the run page polls.
 
@@ -549,7 +598,7 @@ class RunStatusView:
         page never has to guess whether a value is missing or empty.
     """
 
-    # WHY: The contract shows these seven keys on a target row. The view fills
+    # WHY: The contract shows these eight keys on a target row. The view fills
     # any key the driver has not written yet with null.
     TARGET_FIELDS: ClassVar[tuple[str, ...]] = (
         "mac",
@@ -559,6 +608,7 @@ class RunStatusView:
         "version_before",
         "version_target",
         "version_after",
+        "failure_reason",
     )
 
     # WHY: `upgrade/driver.py` writes the key `lock` onto the record when the
@@ -699,7 +749,7 @@ class RunStatusView:
         Returns:
             One sentence in plain words.
         """
-        state = str(record.get("state", ""))
+        state = effective_run_state(record)
         # WHY: Only a settling state names a family. Every other state leaves the
         # prefix in place, finds no phase of that name, and falls to the map.
         family = state.removeprefix("settling_")
@@ -752,23 +802,46 @@ class RunStatusView:
         """
         return {
             "run_id": str(record.get("run_id", "")),
-            "state": str(record.get("state", RunState.CREATED.value)),
+            "state": effective_run_state(record),
         }
 
     @staticmethod
-    def _outcome(record: Mapping[str, Any]) -> dict[str, Any]:
-        """Return the stop request and the two capture identifiers.
+    def _failure_reason(target: Mapping[str, Any], mismatch: bool) -> str:
+        """Return the event, mismatch, or timeout reason for one target."""
+        reason = str(target.get("failure_reason") or "")
+        if reason:
+            return reason
+        if mismatch:
+            requested = str(target.get("version_target") or "unknown")
+            reported = str(target.get("version_after") or "unknown")
+            return f"Version mismatch: requested {requested}; device reported {reported}."
+        return "The device did not return before the phase limit."
 
-        Args:
-            record: The stored run record.
+    @classmethod
+    def _target_failure(cls, target: Mapping[str, Any]) -> dict[str, str] | None:
+        """Return one status failure entry, or None for a successful target."""
+        mismatch = _target_version_mismatch(target)
+        if not _target_has_failed(target):
+            return None
+        return {
+            "name": str(target.get("name") or "Unnamed device"),
+            "mac": str(target.get("mac") or ""),
+            "reason": cls._failure_reason(target, mismatch),
+        }
 
-        Returns:
-            The three keys that report the outcome of the run so far.
-        """
+    @classmethod
+    def _outcome(cls, record: Mapping[str, Any]) -> dict[str, Any]:
+        """Return the stop request, captures, error, and device failures."""
+        failures = [
+            failure for target in record.get("targets", []) if (failure := cls._target_failure(target)) is not None
+        ]
+        error = record.get("error")
         return {
             "stop_request": record.get("stop_request"),
             "pre_capture_id": record.get("pre_capture_id"),
             "post_capture_id": record.get("post_capture_id"),
+            "error": dict(error) if isinstance(error, Mapping) else None,
+            "failures": failures,
         }
 
     @classmethod

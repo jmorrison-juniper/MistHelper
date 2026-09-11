@@ -300,6 +300,7 @@ hardware.
 | `upgrade_id` | string or null | Returned by the cloud. Needed by the cancel call. |
 | `scope` | string | `site` or `org`. A session smart router always uses `org`. |
 | `state` | string | `pending`, `submitted`, `rebooting`, `settled`, `cancelled`, or `failed`. |
+| `failure_reason` | string or null | The reason from the Mist device event log. Null when the device has no reported failure. |
 | `uptime_before` | integer or null | The gate compares against this value. Null means the portal read no uptime. |
 | `reboot_seen_at` | string or null | Set when the uptime decreases. |
 | `settled_at` | string or null | |

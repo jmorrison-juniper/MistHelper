@@ -28,8 +28,8 @@ from typing import Any
 from src.upgrade_portal.runtime.runs import RunStatusView
 from src.upgrade_portal.upgrade import driver
 
-# WHY: `contracts/http-api.md` section 5 shows these nine keys. The lock report
-# is the tenth key and must never displace one of them.
+# WHY: `contracts/http-api.md` section 5 fixes these keys. The lock report is an
+# optional extra key and must never displace one of them.
 CONTRACT_FIELDS = {
     "run_id",
     "state",
@@ -40,6 +40,8 @@ CONTRACT_FIELDS = {
     "pre_capture_id",
     "post_capture_id",
     "message",
+    "error",
+    "failures",
 }
 
 # WHY: One sentence the driver really writes. The test reads the constant, so a
@@ -96,7 +98,7 @@ def test_the_view_names_the_field_the_driver_writes() -> None:
 
 
 def test_a_healthy_run_adds_no_lock_key() -> None:
-    """A run that still holds its site lock answers the nine contract keys.
+    """A run that still holds its site lock answers the fixed contract keys.
 
     Why:
         `contracts/http-api.md` section 5 fixes the keys of the body, and a
@@ -105,7 +107,7 @@ def test_a_healthy_run_adds_no_lock_key() -> None:
         fixed, and would break that test.
     """
     body = RunStatusView().build({"run_id": "run-1", "state": "upgrade_running"})
-    assert set(body) == CONTRACT_FIELDS  # Exactly the nine keys, and no tenth.
+    assert set(body) == CONTRACT_FIELDS  # Exactly the fixed keys, and no lock key.
     assert driver.LOCK_FIELD not in body  # The healthy run reports no fault.
 
 
@@ -124,8 +126,8 @@ def test_a_lost_lock_reaches_the_status_body() -> None:
     assert report["at"] == LOST_AT  # The operator reads when the run lost the site.
 
 
-def test_the_lock_report_keeps_the_nine_contract_keys() -> None:
-    """The lock report adds one key and replaces none of the nine."""
+def test_the_lock_report_keeps_the_contract_keys() -> None:
+    """The lock report adds one key and replaces no fixed key."""
     body = RunStatusView().build(record_with_lock(lost_entry()))
     assert CONTRACT_FIELDS < set(body)  # Every contract key survives the added report.
     assert set(body) - CONTRACT_FIELDS == {driver.LOCK_FIELD}  # The report adds one key only.

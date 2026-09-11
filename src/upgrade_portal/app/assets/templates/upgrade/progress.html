@@ -75,6 +75,8 @@
 {% set site_key = site_id | default('', true) %}
 {% set pre_key = status_record.pre_capture_id | default('', true) %}
 {% set post_key = status_record.post_capture_id | default('', true) %}
+{% set failure_rows = status_record.failures | default([], true) %}
+{% set run_error = status_record.error | default({}, true) %}
 
 {#
   The cascade order is fixed: gateways, then switches, then access points, then
@@ -118,6 +120,27 @@
          data-poll-seconds="{{ poll_interval_seconds | default(30, true) }}"
          aria-live="polite">
   <h2 class="status-panel-title">Run state</h2>
+
+  {% if run_state == 'failed' %}
+    <div class="flash-item flash-danger run-failure-alert"
+         role="alert"
+         data-testid="upgrade-failure-alert"
+         data-run-failure-alert>
+      <strong>Upgrade failed.</strong>
+      {% if run_error.message | default('', true) %}
+        <span data-run-failure-message>{{ run_error.message }}</span>
+      {% else %}
+        <span data-run-failure-message>One or more devices did not complete the requested upgrade.</span>
+      {% endif %}
+      {% if failure_rows %}
+        <ul data-run-failure-list>
+          {% for failure in failure_rows %}
+            <li><strong>{{ failure.name }}</strong> (<code>{{ failure.mac }}</code>): {{ failure.reason }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </div>
+  {% endif %}
 
   {#
     The state word sits in the markup, so a test reads it without a script and
@@ -263,6 +286,7 @@
           <th scope="col" data-no-sort>Target version</th>
           <th scope="col">Version after</th>
           <th scope="col">Version check</th>
+          <th scope="col">Failure reason</th>
         </tr>
       </thead>
 
@@ -342,10 +366,14 @@
               <span class="portal-badge {{ version_check_class.get(outcome, 'badge-partial') }}"
                     data-run-version-check="{{ mac }}">{{ version_check_text.get(outcome, 'Awaiting version') }}</span>
             </td>
+
+            <td data-testid="upgrade-device-failure-{{ mac }}"
+                data-run-device="{{ mac }}"
+                data-run-field="failure_reason">{{ device.failure_reason | default('', true) }}</td>
           </tr>
         {% else %}
           <tr>
-            <td colspan="8" class="portal-table-empty">The run holds no device.</td>
+            <td colspan="9" class="portal-table-empty">The run holds no device.</td>
           </tr>
         {% endfor %}
       </tbody>
@@ -379,9 +407,10 @@
     <h2 class="portal-card-title">This run did not complete</h2>
 
     <p class="portal-card-note">
-      The retry keeps every option of this run, the device list, and the target
-      version of each device. It needs a fresh capture first, because the site
-      may have changed during this attempt.
+      The retry keeps every option and target version, but includes only the
+      devices that failed or did not finish. It needs a fresh capture first,
+      because the site may have changed during this attempt. You can keep or
+      change the saved schedule before you confirm the retry.
     </p>
 
     <button type="button"

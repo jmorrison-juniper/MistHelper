@@ -275,6 +275,13 @@ class CloudReconnectReader:
         self._org_id = org_id
         self._catalogue = catalogue
         self._clock = clock
+        self._started_at = clock()
+        self._failure_reasons: dict[str, str] = {}
+
+    @property
+    def failure_reasons(self) -> Mapping[str, str]:
+        """Return upgrade failures found in the most recent event poll."""
+        return dict(self._failure_reasons)
 
     def read(self, device_type: str) -> frozenset[str]:
         """Return the address of each device of one family that reconnected.
@@ -288,6 +295,7 @@ class CloudReconnectReader:
         """
         window = events.build_window(self._clock())
         rows = events.drain_device_events(self._session, self._org_id, device_type, window)
+        self._failure_reasons = events.upgrade_failure_reasons(rows, since=self._started_at)
         return events.reconnect_macs(rows, self._catalogue.load(self._session))
 
 
@@ -364,6 +372,7 @@ class _PhaseWatch:
     targets: tuple[gate.GateTarget, ...]
     deadline: float
     progress: dict[str, gate.GateProgress]
+    failures: dict[str, str] = field(default_factory=dict)
 
     @property
     def family(self) -> str:
@@ -381,30 +390,24 @@ class _PhaseWatch:
 
     @property
     def settled(self) -> int:
-        """Return how many devices of the phase returned.
+        """Return how many devices settled without a later failure event.
 
         Returns:
-            The count of settled devices.
+            The count of successful devices.
         """
-        return sum(1 for record in self.progress.values() if gate.is_settled(record))
+        return sum(1 for mac, record in self.progress.items() if gate.is_settled(record) and mac not in self.failures)
 
     @property
     def is_complete(self) -> bool:
-        """Report whether every device of the phase returned.
-
-        Returns:
-            True when no device of the phase is still out.
-        """
-        return self.settled == len(self.targets)
+        """Report whether every device either succeeded or reported a failure."""
+        return all(gate.is_settled(record) or mac in self.failures for mac, record in self.progress.items())
 
     @property
     def missing(self) -> tuple[str, ...]:
-        """Return the address of each device that has not returned.
-
-        Returns:
-            The addresses in a stable order, for the operator message.
-        """
-        return tuple(sorted(mac for mac, item in self.progress.items() if not gate.is_settled(item)))
+        """Return the address of each device with no success or failure event."""
+        return tuple(
+            sorted(mac for mac, item in self.progress.items() if not gate.is_settled(item) and mac not in self.failures)
+        )
 
 
 def polls_per_phase(deadline_seconds: int = PHASE_DEADLINE_SECONDS) -> int:
@@ -670,6 +673,16 @@ class PhaseSettleGate:
                 )
             note = self._round(watch)
             if watch.is_complete:
+                if watch.failures:
+                    return self._outcome(watch, PhaseState.FAILED, tuple(sorted(watch.failures)), note)
+                confirmation_note = self._confirm_no_delayed_failure(watch)
+                if watch.failures:
+                    return self._outcome(
+                        watch,
+                        PhaseState.FAILED,
+                        tuple(sorted(watch.failures)),
+                        confirmation_note,
+                    )
                 return self._outcome(watch, PhaseState.SETTLED)
             self._deps.sleep(float(gate.POLL_INTERVAL_SECONDS))
             if self._deps.settle_gate.now() >= watch.deadline:
@@ -693,11 +706,38 @@ class PhaseSettleGate:
             by a space. Empty text after a whole round.
         """
         reconnected, event_note = self._read_reconnects(watch.family)
+        self._apply_event_failures(watch)
         readings, statistics_note = self._read_statistics()
         for target in watch.targets:
+            if target.mac in watch.failures:
+                continue
             self._observe(watch, target, gate.GateSignals(target.mac in reconnected, readings.get(target.mac)))
         self._deps.progress.report(PhaseProgress(watch.run_id, watch.phase, watch.settled, len(watch.targets)))
         return " ".join(note for note in (event_note, statistics_note) if note)
+
+    def _apply_event_failures(self, watch: _PhaseWatch) -> None:
+        """Apply the most recent event poll failures to target devices."""
+        event_failures = getattr(self._deps.event_reader, "failure_reasons", {})
+        if not isinstance(event_failures, Mapping):
+            return
+        target_macs = set(watch.progress)
+        watch.failures.update(
+            (normalize_device_mac(mac), str(reason))
+            for mac, reason in event_failures.items()
+            if normalize_device_mac(mac) in target_macs
+        )
+
+    def _confirm_no_delayed_failure(self, watch: _PhaseWatch) -> str:
+        """Wait one event interval before accepting an all-settled phase.
+
+        Mist can publish the failure event after statistics first show the
+        target as settled. One bounded event-only poll keeps that late event
+        from turning a failed upgrade into a successful run.
+        """
+        self._deps.sleep(float(gate.POLL_INTERVAL_SECONDS))
+        _, event_note = self._read_reconnects(watch.family)
+        self._apply_event_failures(watch)
+        return event_note
 
     def _observe(self, watch: _PhaseWatch, target: gate.GateTarget, signals: gate.GateSignals) -> None:
         """Apply one round of observations to one device.
@@ -801,7 +841,26 @@ class PhaseSettleGate:
         Returns:
             The outcome of the phase.
         """
-        return PhaseOutcome(watch.phase, state.value, watch.settled, len(watch.targets), not_returned, note)
+        failures = tuple(sorted(watch.failures.items()))
+        settled_targets = tuple(
+            sorted(
+                (mac, progress.version_after)
+                for mac, progress in watch.progress.items()
+                if gate.is_settled(progress) and mac not in watch.failures
+            )
+        )
+        failure_note = " ".join(f"{mac}: {reason}" for mac, reason in failures)
+        detail = " ".join(part for part in (failure_note, note) if part)
+        return PhaseOutcome(
+            watch.phase,
+            state.value,
+            watch.settled,
+            len(watch.targets),
+            not_returned,
+            detail,
+            failures,
+            settled_targets,
+        )
 
     def _timeout(self, watch: _PhaseWatch, note: str = "") -> PhaseOutcome:
         """Report a phase that reached its time limit.
@@ -820,7 +879,7 @@ class PhaseSettleGate:
         Returns:
             The outcome of the phase.
         """
-        missing = watch.missing
+        missing = tuple(sorted((*watch.missing, *watch.failures)))
         logger.warning(
             "Run %s phase %s stopped waiting at its limit with %s device(s) still out: %s",
             watch.run_id,

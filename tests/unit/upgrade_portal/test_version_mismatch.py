@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.upgrade_portal.runtime.runs import RunStatusView
+from src.upgrade_portal.runtime.runs import RunStatusView, run_has_failures, target_needs_retry
 from src.upgrade_portal.upgrade import gate
 
 # WHY: Two real firmware versions from the same train. They differ only after
@@ -205,6 +205,38 @@ def test_target_version_outcome_treats_an_absent_field_as_pending() -> None:
     """
     assert gate.target_version_outcome({}) == gate.OUTCOME_VERSION_PENDING  # An empty row proves nothing.
     assert gate.target_version_outcome({"mac": DEVICE_MAC}) == gate.OUTCOME_VERSION_PENDING  # Neither field.
+
+
+def test_a_version_mismatch_makes_a_completed_record_failed() -> None:
+    """The status repair derives the mismatch instead of reading an absent field."""
+    target = {**row(VERSION_TARGET, VERSION_OLD), "state": "settled"}
+    assert run_has_failures({"state": "complete", "targets": [target]}) is True
+
+
+def test_a_settled_version_mismatch_stays_in_the_retry() -> None:
+    """A settled state cannot hide firmware that differs from the request."""
+    target = {**row(VERSION_TARGET, VERSION_OLD), "state": "settled"}
+    assert target_needs_retry(target) is True
+
+
+def test_a_version_mismatch_names_both_versions_in_the_failure_summary() -> None:
+    """The prominent alert must explain the requested and reported versions."""
+    target = {**row(VERSION_TARGET, VERSION_OLD), "name": "SRX-1500", "state": "settled"}
+    status = RunStatusView().build({"run_id": "run-1", "state": "complete", "targets": [target]})
+    assert status["state"] == "failed"
+    assert status["failures"] == [
+        {
+            "name": "SRX-1500",
+            "mac": DEVICE_MAC,
+            "reason": f"Version mismatch: requested {VERSION_TARGET}; device reported {VERSION_OLD}.",
+        }
+    ]
+
+
+def test_a_settled_version_match_stays_out_of_the_retry() -> None:
+    """A retry must not reboot a device that reached the requested firmware."""
+    target = {**row(VERSION_TARGET, VERSION_TARGET), "state": "settled"}
+    assert target_needs_retry(target) is False
 
 
 def test_the_module_exports_every_new_name() -> None:

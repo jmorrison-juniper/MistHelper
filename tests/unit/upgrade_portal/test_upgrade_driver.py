@@ -457,6 +457,14 @@ class TestCascadeOrder:
         assert driver.client_gate_open(settled) is True
         assert driver.client_gate_open(skipped) is True
 
+    def test_a_failed_gateway_phase_cannot_finish_as_complete(self, parts: dict[str, Any]) -> None:
+        """A failed phase fails the run even when every later family is absent."""
+        gateway_targets = [target for target in make_targets() if target["device_type"] == "gateway"]
+        parts["gate"].state_for = {"gateways": PhaseState.FAILED.value}
+        final = parts["driver"].run(make_record(gateway_targets))
+        assert final["state"] == RunState.FAILED.value
+        assert "gateways phase failed" in final["error"]["message"]
+
     def test_the_client_gate_refuses_to_open_early(self, parts: dict[str, Any]) -> None:
         """The run fails when the access point phase never reaches settled.
 
@@ -1150,7 +1158,15 @@ def ap_outcome(settled: int, total: int, missing: tuple[str, ...]) -> driver.Pha
     Returns:
         The outcome a settle gate reports at its time limit.
     """
-    return driver.PhaseOutcome("aps", PhaseState.FAILED.value, settled, total, missing)
+    returned = tuple((mac, "0.15.34994") for mac in sorted({"aa0000000003", "aa0000000004"} - set(missing)))
+    return driver.PhaseOutcome(
+        "aps",
+        PhaseState.FAILED.value,
+        settled,
+        total,
+        missing,
+        settled_targets=returned,
+    )
 
 
 def target_states(record: dict[str, Any]) -> dict[str, Any]:
@@ -1210,14 +1226,14 @@ class TestTimeLimitOnOneAccessPoint:
     """FR-047 marks the device that stayed out and continues with the others."""
 
     def test_the_run_reaches_the_post_check(self, timeout_parts: dict[str, Any]) -> None:
-        """One access point of two that stayed out never loses the post-check.
+        """One failed access point fails the run but keeps the post-check.
 
         Args:
             timeout_parts: The doubles and the driver.
         """
         timeout_parts["gate"].outcomes["aps"] = ap_outcome(1, 2, ("aa0000000004",))
         final = timeout_parts["driver"].run(make_record(make_two_ap_targets()))
-        assert final["state"] == RunState.COMPLETE.value
+        assert final["state"] == RunState.FAILED.value
         assert timeout_parts["capture"].requests[0]["ordinal"] == 2
 
     def test_the_missing_access_point_carries_the_mark(self, timeout_parts: dict[str, Any]) -> None:
@@ -1229,7 +1245,15 @@ class TestTimeLimitOnOneAccessPoint:
         timeout_parts["gate"].outcomes["aps"] = ap_outcome(1, 2, ("aa0000000004",))
         final = timeout_parts["driver"].run(make_record(make_two_ap_targets()))
         assert target_states(final)["aa0000000004"] == driver.TARGET_STATE_NOT_RETURNED
-        assert target_states(final)["aa0000000003"] is None
+        assert target_states(final)["aa0000000003"] == PhaseState.SETTLED.value
+
+    def test_the_returned_access_point_is_saved_as_settled(self, timeout_parts: dict[str, Any]) -> None:
+        """The run record preserves success so a retry excludes this device."""
+        timeout_parts["gate"].outcomes["aps"] = ap_outcome(1, 2, ("aa0000000004",))
+        final = timeout_parts["driver"].run(make_record(make_two_ap_targets()))
+        returned = next(target for target in final["targets"] if target["mac"] == "aa0000000003")
+        assert returned["state"] == PhaseState.SETTLED.value
+        assert returned["version_after"] == "0.15.34994"
 
     def test_the_phase_entry_keeps_the_two_counts(self, timeout_parts: dict[str, Any]) -> None:
         """A later reader tells one loss of two from a phase that lost every device.

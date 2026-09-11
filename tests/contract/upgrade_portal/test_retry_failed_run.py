@@ -292,16 +292,19 @@ def test_the_retry_copies_every_option(client: FlaskClient, run_store: Recording
     assert new_record(run_store, answer.get_json())["options"] == FAILED_OPTIONS
 
 
-def test_the_retry_copies_the_device_list_and_each_version(client: FlaskClient, run_store: RecordingRunStore) -> None:
-    """The retry acts on the same devices, and it wants the same versions.
-
-    Args:
-        client: The signed-in client.
-        run_store: The recording store.
-    """
+def test_the_retry_keeps_only_failed_devices_and_their_versions(
+    client: FlaskClient, run_store: RecordingRunStore
+) -> None:
+    """A retry must not reboot a device that already reached its target."""
     run_id = seed_failed(run_store)
+    failed = run_store.runs[run_id]["targets"][0]
+    failed["state"] = "failed"
+    failed["failure_reason"] = "The cloud refused the upgrade."
+    pending = run_store.runs[run_id]["targets"][1]
+    settled = {**pending, "mac": "5c5b350e0003", "state": "settled"}
+    run_store.runs[run_id]["targets"].append(settled)
     answer = client.post(RETRY_TEMPLATE.format(run_id=run_id), json={})
-    assert new_record(run_store, answer.get_json())["targets"] == FAILED_TARGETS
+    assert new_record(run_store, answer.get_json())["targets"] == [failed, pending]
 
 
 def test_the_new_record_names_the_failed_run(client: FlaskClient, run_store: RecordingRunStore) -> None:

@@ -528,6 +528,25 @@ class TestSelectReconnectEvents:
         rows = [{"mac": "not-an-address", "type": "AP_RESTARTED"}]
         assert module.reconnect_macs(rows, keys) == frozenset()
 
+    def test_upgrade_failure_keeps_the_reported_event_reason(self) -> None:
+        """FR-050 requires the device name and the cloud-reported reason."""
+        rows = [
+            {
+                "mac": "58:00:bb:5e:e1:00",
+                "type": "GW_UPGRADE_FAILED",
+                "reason": "OC_FWUPDATE_REQUESTFAILED",
+                "text": "firmware upgrade is ongoing",
+            }
+        ]
+        assert module.upgrade_failure_reasons(rows) == {
+            "5800bb5ee100": "GW_UPGRADE_FAILED: OC_FWUPDATE_REQUESTFAILED: firmware upgrade is ongoing"
+        }
+
+    def test_a_failure_in_the_start_second_is_kept(self) -> None:
+        """An integer event timestamp must match a fractional run start."""
+        rows = [{"timestamp": 1000, "mac": "58:00:bb:5e:e1:00", "type": "GW_UPGRADE_FAILED"}]
+        assert module.upgrade_failure_reasons(rows, since=1000.5) == {"5800bb5ee100": "GW_UPGRADE_FAILED"}
+
 
 class TestPollCadence:
     """The 20-second cadence of the event poll."""
