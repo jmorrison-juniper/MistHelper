@@ -25,13 +25,16 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Fixed**: The optional filter prompts are skipped under `--test`, so the
   unattended sweep never blocks on stdin for a `safe` menu. See issue #1765.
 
-### Search organization other-device events (menu 252)
+### Search organization other-device events (menu 261)
 
-- **Added**: Menu 252 calls `searchOrgOtherDeviceEvents` for an organization and
+- **Added**: Menu 261 calls `searchOrgOtherDeviceEvents` for an organization and
   exports the event rows through CSV, SQLite, or ArangoDB. The export keeps the
-  stable `OrgOtherDeviceEvents.csv` name and sorts on `timestamp`. Issue #1376.
-- **Added**: Unit coverage for the SDK binding, the output name, and the
-  time-series sort key.
+  stable `OrgOtherDeviceEvents.csv` name. Issue #1376.
+- **Added**: Menu 261 prompts safely for the optional site, MAC, device MAC,
+  model, vendor, type, limit, time-range, sort, and `search_after` filters.
+- **Added**: Unit coverage for filter forwarding, prompt order, invalid-limit
+  handling, menu registration, unattended `--test` behavior, and the composite
+  event key.
 
 ### Search user MAC assignments for an organization (menu 251)
 

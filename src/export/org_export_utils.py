@@ -664,21 +664,6 @@ class OrgExportUtils:
             sort_key="timestamp",  # Matches the composite PK ordering (newest events sort naturally).
         )
 
-    @staticmethod
-    def other_device_events():  # Export organization other-device events.
-        """Export other-device event search results to OrgOtherDeviceEvents.csv.
-
-        Why:
-            Spec 868 and issue #1376 expose the organization other-device event
-            search through the shared org export pipeline.
-        """
-        OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.orgs.otherdevices.searchOrgOtherDeviceEvents,
-            data_type="other device events",  # Preserve the established OrgOtherDeviceEvents filename.
-            sort_key="timestamp",  # Keep event output aligned with the time-series key.
-        )
-
-    @staticmethod
     def ospf_stats():  # Export OSPF stats.
         """Export OSPF adjacency statistics for the organization to OrgOspfStats.csv."""
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]

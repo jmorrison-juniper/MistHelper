@@ -3868,10 +3868,6 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         OrgSearchExporter.user_macs,  # Issue #1380 -- search organization user MAC assignments.
         "Search user MAC assignments for the organization (searchOrgUserMacs)",  # Operation ID for operators.
     ),
-    "252": (
-        OrgExportUtils.other_device_events,  # Issue #1376 -- search organization other-device events.
-        "Search other-device events for the organization (searchOrgOtherDeviceEvents)",  # Operation ID shown.
-    ),
     "253": (
         OrgSearchExporter.mx_edges,  # Search the Mist Edges that belong to the organization.
         "Search Mist Edges for the organization (searchOrgMxEdges)",  # Expose the read-only endpoint in the menu.
@@ -3895,6 +3891,10 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "258": (
         SiteOtherDeviceEventsExporter.other_device_events,  # Spec 894 / issue #1402 -- search site other-device events.
         "Search other-device events for a selected site (searchSiteOtherDeviceEvents)",  # Operation ID.
+    ),
+    "261": (
+        OrgSearchExporter.other_device_events,  # Spec 868 / issue #1376 -- search organization other-device events.
+        "Search other-device events for the organization (searchOrgOtherDeviceEvents)",  # Operation ID shown.
     ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),

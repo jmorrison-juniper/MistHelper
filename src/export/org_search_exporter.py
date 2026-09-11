@@ -1,7 +1,7 @@
 """OrgSearchExporter -- organization-scoped search export operations.
 
-Added for specs 878, 877, 875, 874, 879, 870, 872, and 869 (issues #1386, #1385,
-#1383, #1382, #1379, #1378, #1380, and #1377). Wraps read-only Mist API search
+Added for specs 878, 877, 875, 874, 879, 870, 872, 868, and 869 (issues #1386,
+#1385, #1383, #1382, #1379, #1378, #1380, #1376, and #1377). Wraps read-only Mist API search
 endpoints so operators reach them through the standard MistHelper menu and
 DataExporter pipeline (CSV, SQLite, or ArangoDB).
 
@@ -15,6 +15,7 @@ Covered operations:
     - ``searchOrgSites`` (menu 248)
     - ``searchOrgUserMacs`` (menu 251)
     - ``searchOrgMxEdges`` (menu 253)
+    - ``searchOrgOtherDeviceEvents`` (menu 261)
     - ``searchOrgPskPortalLogs`` (menu 255)
 
 Why:
@@ -83,6 +84,22 @@ class OrgSearchExporter:
         "labels": "labels, separated by commas",  # The SDK accepts a list of label strings.
         "limit": "page size limit",  # The SDK accepts an integer page size.
         "sort": "sort field, with a - prefix for descending order",  # The SDK accepts one sort field.
+    }
+
+    # WHY: these are the optional searchOrgOtherDeviceEvents filters in the endpoint specification.
+    _OTHER_DEVICE_EVENT_FILTER_PROMPTS = {
+        "site_id": "site ID",  # The SDK accepts one site identifier to narrow the event scope.
+        "mac": "client MAC address, full or partial",  # The SDK accepts a full or partial client MAC address.
+        "device_mac": "attached device MAC address, full or partial",  # The SDK accepts a partial uplink MAC address.
+        "model": "device model",  # The SDK accepts one device model string.
+        "vendor": "vendor name",  # The SDK accepts one vendor string.
+        "type": "event type",  # The SDK accepts one event type string.
+        "limit": "page size limit",  # The SDK accepts an integer page size.
+        "start": "start time",  # The SDK accepts the start of the query window.
+        "end": "end time",  # The SDK accepts the end of the query window.
+        "duration": "duration",  # The SDK accepts a duration instead of an end time.
+        "sort": "sort field, with a - prefix for descending order",  # The SDK accepts one sort field.
+        "search_after": "search_after cursor",  # The SDK accepts one deep-page cursor.
     }
 
     @staticmethod
@@ -299,6 +316,17 @@ class OrgSearchExporter:
             "OrgUserMacs",  # Use a stable filename prefix for the export.
             "user MAC",  # Report the result type in operator messages.
             OrgSearchExporter._USER_MAC_FILTER_PROMPTS,  # Ask for the optional SDK filters.
+        )
+
+    @staticmethod
+    def other_device_events() -> None:
+        """Search organization other-device events (menu 261)."""
+        OrgSearchExporter._run_org_search(  # Reuse the standard org search pipeline for consistent output.
+            mistapi.api.v1.orgs.otherdevices.searchOrgOtherDeviceEvents,  # Call the installed alias for the org event endpoint.
+            "searchOrgOtherDeviceEvents",  # Route output storage through the endpoint strategy.
+            "OrgOtherDeviceEvents",  # Use a stable filename prefix for the export.
+            "other-device event",  # Report the result type in operator messages.
+            OrgSearchExporter._OTHER_DEVICE_EVENT_FILTER_PROMPTS,  # Ask for the optional SDK filters.
         )
 
     @staticmethod

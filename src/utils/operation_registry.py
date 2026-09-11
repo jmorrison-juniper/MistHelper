@@ -360,8 +360,6 @@ class OperationRegistry:
         },
         # WHY: menu 251 reads organization user MAC assignments and writes only local export data.
         "251": {"category": "safe"},
-        # WHY: menu 252 reads organization other-device events and writes only local export data.
-        "252": {"category": "safe"},
         # WHY: menu 253 reads the organization Mist Edges and writes only local export data.
         "253": {"category": "safe"},
         # WHY: menu 254 is a read-only inventory search that prompts for optional filters.
@@ -387,6 +385,9 @@ class OperationRegistry:
             "category": "interactive_safe",
             "skip_reason": "Requires a site selection",
         },
+        # WHY: menu 261 reads organization other-device events, prompts only for optional
+        # filters, and writes only local export data.
+        "261": {"category": "safe"},
         # WHY: menu 239 starts a local web server and drives a firmware upgrade, so it writes
         # device state. The fail-closed guardrail needs this row or the build breaks.
         #

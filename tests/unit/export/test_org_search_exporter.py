@@ -1,8 +1,8 @@
 """Unit tests for the organization-scoped search exporter.
 
-Covers specs 863, 869, 870, 872, and 873 to 879 (issues #1371, #1377, #1378,
-#1379, #1380, #1381, #1382, #1383, #1385, and #1386), which are menus 230 to
-234, 248 to 253, and 255.
+Covers specs 863, 868, 869, 870, 872, and 873 to 879 (issues #1371, #1376,
+#1377, #1378, #1379, #1380, #1381, #1382, #1383, #1385, and #1386), which are
+menus 230 to 234, 248 to 255, and 261.
 
 The registered operations share one helper, so the shared behavior is tested
 once and each menu entry is checked for the binding that makes it distinct.
@@ -47,6 +47,12 @@ MENU_BINDINGS = [
     ("sites", "searchOrgSites", "OrgSitesSearch", ("sites", "searchOrgSites")),
     ("org_vars", "searchOrgVars", "OrgVars", ("vars", "searchOrgVars")),
     ("user_macs", "searchOrgUserMacs", "OrgUserMacs", ("usermacs", "searchOrgUserMacs")),
+    (
+        "other_device_events",
+        "searchOrgOtherDeviceEvents",
+        "OrgOtherDeviceEvents",
+        ("otherdevices", "searchOrgOtherDeviceEvents"),
+    ),
     ("mx_edges", "searchOrgMxEdges", "OrgMxEdges", ("mxedges", "searchOrgMxEdges")),
     ("psk_portal_logs", "searchOrgPskPortalLogs", "OrgPskPortalLogs", ("pskportals", "searchOrgPskPortalLogs")),
 ]
@@ -410,6 +416,110 @@ class TestUserMacSearch:
         assert strategy["primary_key"] == ["id", "mac"]  # Require stable uniqueness for repeated exports.
 
 
+class TestOtherDeviceEventSearch:
+    """Cover the organization other-device event search filters and menu binding."""
+
+    def test_other_device_events_forwards_optional_filters(self, wired: dict[str, Any]) -> None:
+        """The menu entry must convert and forward every entered filter to the SDK."""
+        target = wired["mistapi"].api.v1.orgs.otherdevices.searchOrgOtherDeviceEvents
+        target.return_value = [{"id": "event-1"}]
+        answers = iter(
+            [
+                "site-1",
+                "aa:bb:cc:dd:ee:ff",
+                "11:22:33:44:55:66",
+                "EX9200",
+                "Juniper",
+                "CELLULAR_EDGE_MODEM_WAN_PLUGGED",
+                "25",
+                "-1d",
+                "now",
+                "7d",
+                "-timestamp",
+                "cursor-1",
+            ]
+        )
+        wired["InputUtils"].safe_input.side_effect = lambda *args, **kwargs: next(answers)
+
+        OrgSearchExporter.other_device_events()
+
+        target.assert_called_once_with(
+            wired["apisession"],
+            "org-1",
+            site_id="site-1",
+            mac="aa:bb:cc:dd:ee:ff",
+            device_mac="11:22:33:44:55:66",
+            model="EX9200",
+            vendor="Juniper",
+            type="CELLULAR_EDGE_MODEM_WAN_PLUGGED",
+            limit=25,
+            start="-1d",
+            end="now",
+            duration="7d",
+            sort="-timestamp",
+            search_after="cursor-1",
+        )
+        wired["DataExporter"].write_with_format_selection.assert_called_once_with(
+            [{"id": "event-1"}],
+            "OrgOtherDeviceEvents.csv",
+            api_function_name="searchOrgOtherDeviceEvents",
+        )
+
+    def test_other_device_events_asks_for_the_documented_filters(self, wired: dict[str, Any]) -> None:
+        """The prompts must match the endpoint filter list and order."""
+        wired["mistapi"].api.v1.orgs.otherdevices.searchOrgOtherDeviceEvents.return_value = [{"id": "event-1"}]
+
+        OrgSearchExporter.other_device_events()
+
+        contexts = [call.kwargs["context"] for call in wired["InputUtils"].safe_input.call_args_list]
+        assert contexts == [
+            "org_search_exporter.searchOrgOtherDeviceEvents.site_id",
+            "org_search_exporter.searchOrgOtherDeviceEvents.mac",
+            "org_search_exporter.searchOrgOtherDeviceEvents.device_mac",
+            "org_search_exporter.searchOrgOtherDeviceEvents.model",
+            "org_search_exporter.searchOrgOtherDeviceEvents.vendor",
+            "org_search_exporter.searchOrgOtherDeviceEvents.type",
+            "org_search_exporter.searchOrgOtherDeviceEvents.limit",
+            "org_search_exporter.searchOrgOtherDeviceEvents.start",
+            "org_search_exporter.searchOrgOtherDeviceEvents.end",
+            "org_search_exporter.searchOrgOtherDeviceEvents.duration",
+            "org_search_exporter.searchOrgOtherDeviceEvents.sort",
+            "org_search_exporter.searchOrgOtherDeviceEvents.search_after",
+        ]
+
+    def test_other_device_events_ignores_an_invalid_limit(
+        self, wired: dict[str, Any], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Text that is not a number must not reach the SDK as a page size."""
+        target = wired["mistapi"].api.v1.orgs.otherdevices.searchOrgOtherDeviceEvents
+        target.return_value = [{"id": "event-1"}]
+        answers = iter(["", "", "", "", "", "", "many", "", "", "", "", ""])
+        wired["InputUtils"].safe_input.side_effect = lambda *args, **kwargs: next(answers)
+
+        with caplog.at_level(logging.WARNING):
+            OrgSearchExporter.other_device_events()
+
+        target.assert_called_once_with(wired["apisession"], "org-1")
+        assert "Ignoring the invalid searchOrgOtherDeviceEvents limit value: many" in caplog.text
+
+    def test_other_device_events_menu_is_registered_as_safe(self) -> None:
+        """Menu 261 must route to the other-device event export as a safe operation."""
+        import MistHelper  # Import the runtime menu registry under test.
+        from src.utils.operation_registry import OperationRegistry  # Read the safety classification.
+
+        action, description = MistHelper.menu_actions["261"]  # Read the menu dispatch tuple for issue #1376.
+        assert action is OrgSearchExporter.other_device_events  # Require the new menu to call the exporter.
+        assert "searchOrgOtherDeviceEvents" in description  # Expose the operation identifier to operators.
+        assert OperationRegistry.get("261")["category"] == "safe"  # Keep the read-only operation automated.
+
+    def test_other_device_event_strategy_uses_the_id_mac_and_timestamp(self) -> None:
+        """Other-device event rows must upsert on the composite event key."""
+        strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES["searchOrgOtherDeviceEvents"]  # Read the catalog entry.
+
+        assert strategy["type"] == "composite_pk"  # Require update-safe event storage.
+        assert strategy["primary_key"] == ["id", "mac", "timestamp"]  # Require stable uniqueness for repeated exports.
+
+
 class TestUnattendedSweep:
     """A `safe` menu must run under --test without reading stdin. See issue #1765."""
 
@@ -417,6 +527,7 @@ class TestUnattendedSweep:
         ("method", "chain"),
         [
             ("user_macs", ("usermacs", "searchOrgUserMacs")),
+            ("other_device_events", ("otherdevices", "searchOrgOtherDeviceEvents")),
             ("mx_edges", ("mxedges", "searchOrgMxEdges")),
         ],
     )

@@ -85,32 +85,6 @@ class TestExportData:
         assert "limit" not in kwargs
         assert kwargs["filename"] == "OrgE911Report.csv"
 
-    def test_other_device_events_uses_the_expected_sdk_operation(self, fake_mh, monkeypatch):
-        """The Spec 868 entry must bind the SDK operation and event sort order."""
-        from src.export import org_export_utils as module
-        from src.export.org_export_utils import OrgExportUtils
-
-        endpoint = MagicMock(name="searchOrgOtherDeviceEvents")  # Represent the installed SDK operation.
-        monkeypatch.setattr(module.mistapi.api.v1.orgs.otherdevices, "searchOrgOtherDeviceEvents", endpoint)
-
-        OrgExportUtils.other_device_events()
-
-        kwargs = fake_mh.APIDataFetcher.call_args.kwargs  # Inspect the shared export pipeline binding.
-        assert kwargs["api_call"] is endpoint  # Confirm the operation reaches the expected SDK callable.
-        assert kwargs["filename"] == "OrgOtherDeviceEvents.csv"  # Confirm the stable output name.
-        assert kwargs["sort_key"] == "timestamp"  # Confirm time-series ordering.
-
-    def test_other_device_events_menu_is_registered_as_safe(self):
-        """Menu 252 must route to the other-device event export as a safe operation."""
-        import MistHelper  # Import the runtime menu registry under test.
-        from src.export.org_export_utils import OrgExportUtils  # Read the exporter under test.
-        from src.utils.operation_registry import OperationRegistry  # Read the safety classification.
-
-        action, description = MistHelper.menu_actions["252"]  # Read the menu dispatch tuple for issue #1376.
-        assert action is OrgExportUtils.other_device_events  # Require the new menu to call the exporter.
-        assert "searchOrgOtherDeviceEvents" in description  # Expose the operation identifier to operators.
-        assert OperationRegistry.get("252")["category"] == "safe"  # Keep the read-only operation automated.
-
 
 # ---------------------------------------------------------------------------
 # SLE summary block

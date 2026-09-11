@@ -65,13 +65,13 @@ This page names the operations that arrived most recently.
 | 249 | Search devices for the organization (`searchOrgDevices`) | `safe` |
 | 250 | Search organization variables (`searchOrgVars`) | `safe` |
 | 251 | Search user MAC assignments for the organization (`searchOrgUserMacs`) | `safe` |
-| 252 | Search other-device events for the organization (`searchOrgOtherDeviceEvents`) | `safe` |
 | 253 | Search Mist Edges for the organization (`searchOrgMxEdges`) | `safe` |
 | 254 | Search organization inventory with optional filters (`searchOrgInventory`) | `interactive_safe` |
 | 255 | Search organization PSK portal logs (`searchOrgPskPortalLogs`) | `safe` |
 | 256 | Search organization webhook deliveries (`searchOrgWebhooksDeliveries`) | `interactive_safe` |
 | 257 | Search NAC clients for a selected site (`searchSiteNacClients`) | `interactive_safe` |
 | 258 | Search other-device events for a selected site (`searchSiteOtherDeviceEvents`) | `interactive_safe` |
+| 261 | Search other-device events for the organization (`searchOrgOtherDeviceEvents`) | `safe` |
 
 Menu 197 writes to `data/packet_captures/<mac>/vlan_<id>/`. Every other
 operation in the table writes through `DataExporter`, so it honors the CSV,
