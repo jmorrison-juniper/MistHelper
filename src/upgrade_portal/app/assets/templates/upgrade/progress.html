@@ -367,21 +367,21 @@
 #}
 {% set may_change_schedule = run_not_started | default(false, true) %}
 {% set may_write_site = lock_write_allowed | default(false, true) %}
-{% set run_failed = run_state_name | default('', true) == 'failed' %}
+{% set run_retryable = run_state_name | default('', true) in ['failed', 'stopped', 'cancelled'] %}
 
 {#
-  Issue #2202: a failed run holds every choice that the operator made. The
-  retry builds a new run from those settings, so no operator rebuilds a plan by
-  hand and drops a setting on the way.
+  Issue #2447: an unsuccessful terminal run holds every choice that the operator
+  made. The retry builds a new run from those settings, so no operator rebuilds
+  a plan by hand and drops a setting on the way.
 #}
-{% if run_failed %}
+{% if run_retryable %}
   <section class="portal-card" data-testid="run-retry-controls">
-    <h2 class="portal-card-title">This run failed</h2>
+    <h2 class="portal-card-title">This run did not complete</h2>
 
     <p class="portal-card-note">
       The retry keeps every option of this run, the device list, and the target
       version of each device. It needs a fresh capture first, because the site
-      changed while this run wrote firmware to part of it.
+      may have changed during this attempt.
     </p>
 
     <button type="button"

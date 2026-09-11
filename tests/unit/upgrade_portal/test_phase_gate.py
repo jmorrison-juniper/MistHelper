@@ -283,6 +283,7 @@ class Harness:
         statistics: FakeStatisticsReader,
         settle_gate: phase_gate.DeviceGate | None = None,
         deadline_seconds: int = phase_gate.PHASE_DEADLINE_SECONDS,
+        stop_requested: Any = None,
     ) -> None:
         """Build one harness.
 
@@ -296,6 +297,7 @@ class Harness:
         self.reporter = RecordingReporter()
         self.events = events
         self.statistics = statistics
+        self.stop_requested = stop_requested or (lambda _run_id: False)
         self.adapter = self._build(settle_gate, deadline_seconds)
 
     @property
@@ -323,6 +325,7 @@ class Harness:
             settle_gate=settle_gate or gate.SettleGate(clock=self.clock),
             progress=self.reporter,
             sleep=self.sleeper,
+            stop_requested=self.stop_requested,
         )
         return phase_gate.PhaseSettleGate(deps, deadline_seconds)
 
@@ -617,6 +620,16 @@ def test_the_family_of_an_empty_phase_is_empty() -> None:
 
 
 # --- The progress report --------------------------------------------------
+
+
+def test_a_stop_request_ends_the_wait_before_another_cloud_poll() -> None:
+    """A cancelled run does not wait for the 30-minute phase deadline."""
+    harness = Harness(FakeReconnectReader(), FakeStatisticsReader(), stop_requested=lambda _run_id: True)
+    outcome = harness.adapter.settle(RUN_ID, "switches", [target_entry(SWITCH_MAC)])
+    assert outcome.state == PhaseState.WAITING.value
+    assert harness.events.calls == 0
+    assert harness.statistics.calls == 0
+    assert harness.sleeper.calls == []
 
 
 def test_the_operator_sees_progress_during_the_wait() -> None:
