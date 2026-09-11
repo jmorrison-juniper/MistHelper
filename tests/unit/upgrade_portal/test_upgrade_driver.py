@@ -141,6 +141,7 @@ class RecordingGate:
         self.raise_on: str | None = None
         self.state_for: dict[str, str] = {}
         self.hold: threading.Event | None = None
+        self.stop_during: str | None = None
 
     def settle(self, run_id: str, phase: str, targets: Any) -> driver.PhaseOutcome:
         """Report the phase as settled.
@@ -163,6 +164,8 @@ class RecordingGate:
         """
         self.calls.append(phase)
         self.seen_before.append(self.store.phase_states())
+        if self.stop_during == phase and self.store.record is not None:
+            self.store.record["stop_request"] = {"requested_by": "sam@example.com", "confirmation_text": "STOP"}
         if self.hold is not None:
             self.hold.wait(timeout=10)
         if self.raise_on == phase:
@@ -766,6 +769,13 @@ class TestStopAndFailure:
         final = parts["driver"].run(make_record())
         assert final["state"] == RunState.STOPPED.value
         assert parts["gate"].calls != list(PHASE_ORDER)
+
+    def test_a_stop_during_a_blocking_phase_ends_before_the_next_phase(self, parts: dict[str, Any]) -> None:
+        """A stop observed by the gate returns directly to the driver's stop path."""
+        parts["gate"].stop_during = "gateways"
+        final = parts["driver"].run(make_record())
+        assert final["state"] == RunState.STOPPED.value
+        assert parts["gate"].calls == ["gateways"]
 
     def test_a_stopped_run_still_takes_the_second_capture(self, parts: dict[str, Any]) -> None:
         """FR-038g still allows the post-check capture after a stop.

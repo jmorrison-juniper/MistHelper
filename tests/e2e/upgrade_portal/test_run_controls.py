@@ -92,6 +92,8 @@ CREATE_TIMEOUT_MS = 120000
 # failed run offers the retry control, and no journey through the pages reaches
 # the failed state without a real upgrade fault at a real site.
 FAILED_RUN_ID = "e2e-failed-run-0001"
+STOPPED_RUN_ID = "e2e-stopped-run-0001"
+CAPTURE_PAGE_PATH = "/captures/new"
 
 # The seed runs on its own thread inside the server, because a cold store builds
 # its collections on the first write. These two values wait for that write.
@@ -230,6 +232,26 @@ def _create_run(page: Any) -> str:
     return str(json.loads(answer.text())["run_id"])
 
 
+def _take_site_lock_without_a_live_run(page: Any) -> None:
+    """Take the site lock, then end the temporary run that acquired it."""
+    run_id = _create_run(page)
+    path = f"/api/runs/{run_id}/cancel"
+    headers = {CSRF_HEADER: _csrf_token(page), "Content-Type": "application/json"}
+    answer = page.request.post(path, headers=headers, data="{}", timeout=CREATE_TIMEOUT_MS)
+    if answer.status != OK_STATUS:
+        raise AssertionError(f"{path} answered {answer.status}, so the temporary lock run stayed live.")
+    site_id = _first_site_id(page)
+    lock_path = f"/api/sites/{site_id}/lock"
+    headers = {CSRF_HEADER: _csrf_token(page), "Content-Type": "application/json"}
+    answer = page.request.fetch(
+        lock_path, method="post", headers=headers, data=json.dumps({"confirm": "continue"}), timeout=CREATE_TIMEOUT_MS
+    )
+    if answer.status != OK_STATUS:
+        raise AssertionError(
+            f"{lock_path} answered {answer.status}: {answer.text()}, so the browser did not regain the site lock."
+        )
+
+
 def _open_run_page(page: Any, run_id: str) -> None:
     """Open the run page of one run.
 
@@ -305,7 +327,7 @@ def fixture_failed_run_page(portal_page: Any) -> Any:
     Returns:
         The Playwright page object, on the run page of the failed run.
     """
-    _create_run(portal_page)  # Takes the site lock for this browser, which the retry control reads.
+    _take_site_lock_without_a_live_run(portal_page)  # Keep the lock without blocking the retry.
     for _ in range(SEED_TRIES):  # The seed runs on its own thread, so it may land a moment after the bind.
         _open_run_page(portal_page, FAILED_RUN_ID)
         if portal_page.get_by_test_id(RETRY_REGION_ID).count() >= 1:  # The seeded run is readable now.
@@ -413,18 +435,12 @@ class TestTheCancelControl:
 
 
 class TestTheRetryControl:
-    """Issue #2202 builds a new run from the settings of a failed one."""
+    """Issue #2202 restarts an unsuccessful terminal run with its saved plan."""
 
-    def test_a_run_that_has_not_failed_offers_no_retry(self, scheduled_run_page: Any) -> None:
-        """A run in any state but failed MUST NOT draw the retry control.
-
-        Why:
-            The retry reaches a failed run alone. A control on a healthy run
-            would invite a press that the route refuses, and the operator would
-            read a refusal instead of a page that never offered the control.
-        """
-        assert scheduled_run_page.get_by_test_id(RETRY_REGION_ID).count() == 0, "only a failed run offers a retry"
-        assert scheduled_run_page.get_by_test_id(RETRY_BUTTON_ID).count() == 0, "only a failed run offers a retry"
+    def test_a_live_run_offers_no_retry(self, scheduled_run_page: Any) -> None:
+        """A live run MUST NOT draw the retry control."""
+        assert scheduled_run_page.get_by_test_id(RETRY_REGION_ID).count() == 0, "a live run offers no retry"
+        assert scheduled_run_page.get_by_test_id(RETRY_BUTTON_ID).count() == 0, "a live run offers no retry"
 
     def test_a_plain_press_builds_a_retry_of_a_failed_run(self, failed_run_page: Any) -> None:
         """A plain press MUST build a retry and MUST ask for a fresh capture.
@@ -440,5 +456,22 @@ class TestTheRetryControl:
 
         button.click()  # A plain press. No force, and no raised timeout.
 
-        flash = page.get_by_test_id(FLASH_REGION_ID)
-        sync_api.expect(flash).to_contain_text(RETRY_MESSAGE, timeout=FLASH_TIMEOUT_MS)
+        page.wait_for_url(f"**{CAPTURE_PAGE_PATH}?site_id=*&run_id=*&role=pre", timeout=FLASH_TIMEOUT_MS)
+        assert page.get_by_test_id("capture-start-button").get_attribute("data-run-id")
+
+    def test_a_stopped_run_offers_a_fresh_run_capture(self, portal_page: Any) -> None:
+        """A stopped attempt can restart without rebuilding the plan by hand."""
+        _take_site_lock_without_a_live_run(portal_page)  # Keep the lock without a conflicting run.
+        for _ in range(SEED_TRIES):
+            _open_run_page(portal_page, STOPPED_RUN_ID)
+            button = portal_page.get_by_test_id(RETRY_BUTTON_ID)
+            if button.count() == 1:
+                break
+            portal_page.wait_for_timeout(SEED_PAUSE_MS)
+        sync_api.expect(button).to_be_visible()
+        _require_enabled(button, RETRY_BUTTON_ID)
+        button.click()
+        portal_page.wait_for_url(f"**{CAPTURE_PAGE_PATH}?site_id=*&run_id=*&role=pre", timeout=FLASH_TIMEOUT_MS)
+        capture_start = portal_page.get_by_test_id("capture-start-button")
+        sync_api.expect(capture_start).to_be_visible()
+        assert capture_start.get_attribute("data-run-id")

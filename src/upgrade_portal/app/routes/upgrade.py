@@ -49,7 +49,7 @@ import threading  # One guard for the memory run store, which a driver thread al
 import time  # Issue #2187 previews the moment that a schedule duration names.
 from collections.abc import Iterable, Mapping  # The version answer arrives in more than one shape.
 from datetime import UTC, datetime  # The same preview needs a readable moment.
-from typing import Any, NamedTuple  # A run record is free-form, and the lock read carries two fixed fields.
+from typing import Any, NamedTuple, cast  # Run records are free-form; lock reads carry fixed fields.
 
 from flask import Blueprint, Response, current_app, jsonify, request, session  # The framework of the portal.
 
@@ -216,7 +216,8 @@ UNAVAILABLE_STATUS = 503  # `contracts/http-api.md:133` fixes this status for an
 # The run record of a live run lives here while no store is injected. The driver
 # thread writes and the poll reads, so both take the guard.
 _RUNS: dict[str, dict[str, Any]] = {}  # One entry for each run this process created.
-_RUN_GUARD = threading.Lock()  # Held for the whole of one read and one write.
+_RUN_GUARD = threading.Lock()  # Held for the whole of one memory-store read or write.
+_RETRY_GUARD = threading.Lock()  # Serializes the live-run check and retry reservation in this worker.
 
 
 class MemoryRunStore:
@@ -1717,7 +1718,7 @@ def run_page(run_id: str) -> str:
         # Issue #2201 shows the reschedule and the cancel for a run that has not
         # reached the cloud. A run past that point offers the stop control alone.
         run_not_started=run_not_started(record),
-        # Issue #2202 shows the retry for a failed run, and for no other state.
+        # An unsuccessful terminal run can restart with its saved plan.
         run_state_name=str(record.get("state") or ""),
         **context,  # The site labels, the stop partial values, and the lock banner values.
     )
@@ -2120,9 +2121,12 @@ RUN_ALREADY_STARTED_MESSAGE = (
     "This run already sent firmware to the cloud. Use the stop control, which cancels the work that has not begun."
 )
 
-# Issue #2202: a retry reaches a failed run alone.
+# Issue #2447: a retry reaches an unsuccessful terminal run alone.
 RUN_NOT_RETRYABLE_CODE = "run_not_retryable"
-RUN_NOT_RETRYABLE_MESSAGE = "A retry reads a failed run. This run holds another state, so no retry applies to it."
+RUN_NOT_RETRYABLE_MESSAGE = (
+    "A retry reads a failed, stopped, or cancelled run. This run holds another state, so no retry applies to it."
+)
+RETRYABLE_STATES = frozenset({RunState.FAILED.value, RunState.STOPPED.value, RunState.CANCELLED.value})
 
 
 def run_not_started(record: Mapping[str, Any]) -> bool:
@@ -2217,17 +2221,35 @@ def rebased_options(options: Mapping[str, Any]) -> tuple[dict[str, Any], list[st
     return copied, notes
 
 
+def reserve_retry(
+    source: Mapping[str, Any], source_id: str, org_id: str, site_id: str
+) -> tuple[dict[str, Any] | None, list[str], tuple[Response, int] | None]:
+    """Reserve one live site slot and persist the new retry record."""
+    with _RETRY_GUARD:  # Two browser presses in this worker must reserve one live site slot, not two.
+        live = live_run_at_site(site_id)  # A terminal source does not excuse another active run at the site.
+        if live:
+            return None, [], already_running_refusal(live)
+        record = RunRecordBuilder().build(new_run_spec(org_id, site_id))  # The record layer owns every field.
+        options, notes = rebased_options(source.get("options") or {})  # Every choice, with schedules rebased.
+        record["options"] = options
+        record[TARGETS_FIELD] = list(source.get(TARGETS_FIELD) or [])  # The same devices and versions.
+        record["retry_of_run_id"] = source_id  # The new record names the run that it came from.
+        if not save_run(record):
+            return None, [], write_failed()
+    return record, notes, None
+
+
 @upgrade_bp.post(RETRY_PATH)
 @identity.require_session
 def retry_run(run_id: str) -> tuple[Response, int]:
-    """Build a new run from the settings of one failed run.
+    """Build a new run from one unsuccessful terminal run.
 
     Why:
-        A failed run holds every choice that the operator made, and the portal
-        offered no way to use them again. The operator returned to the site,
-        took the lock, and rebuilt every option by hand. A rebuild by hand drops
-        a setting, and the retry then ran a plan that differed from the one that
-        failed.
+        A failed, stopped, or cancelled run holds every choice that the operator
+        made, and the portal offered no way to use them again. The operator
+        returned to the site, took the lock, and rebuilt every option by hand.
+        A rebuild by hand drops a setting, and the retry then ran a plan that
+        differed from the earlier plan.
 
         The new run takes no pre-check of the failed run. The site changed while
         that run wrote firmware to part of it, so the reading before the failure
@@ -2235,7 +2257,7 @@ def retry_run(run_id: str) -> tuple[Response, int]:
         page, and the confirmation stays locked until a fresh capture verifies.
 
     Args:
-        run_id: The key of the failed run.
+        run_id: The key of the unsuccessful terminal run.
 
     Returns:
         The new run identifier, or a refusal.
@@ -2246,23 +2268,21 @@ def retry_run(run_id: str) -> tuple[Response, int]:
     refusal = stop_lock_refusal(failed)  # FR-038i binds every write of a run to the operator that holds the site.
     if refusal is not None:  # Another operator holds the site, so this call writes nothing.
         return refusal
-    if str(failed.get("state") or "") != RunState.FAILED.value:  # A retry reaches a failed run alone.
+    if str(failed.get("state") or "") not in RETRYABLE_STATES:  # A retry reaches an unsuccessful final run alone.
         return json_error(CONFLICT_STATUS, RUN_NOT_RETRYABLE_CODE, RUN_NOT_RETRYABLE_MESSAGE)
-    org_id = str(failed.get("org_id") or "")  # The new run keeps the scope of the failed one.
+    org_id = str(failed.get("org_id") or "")  # The new run keeps the scope of the earlier one.
     site_id = str(failed.get("site_id") or "")  # FR-014 binds one run to one site.
-    logger.info("upgrade: build a retry of the failed run %s", run_id)  # BEFORE the write.
-    record = RunRecordBuilder().build(new_run_spec(org_id, site_id))  # The record layer owns every field.
-    options, notes = rebased_options(failed.get("options") or {})  # Every choice, with each schedule rebased.
-    record["options"] = options
-    record[TARGETS_FIELD] = list(failed.get(TARGETS_FIELD) or [])  # The same devices and the same versions.
-    record["retry_of_run_id"] = run_id  # The new record names the run that it came from.
-    if not save_run(record):  # The operator must learn that the portal kept nothing.
-        return write_failed()
-    logger.info("upgrade: the retry %s came from the failed run %s", record["run_id"], run_id)  # AFTER the write.
+    logger.info("upgrade: build a retry of the unsuccessful run %s", run_id)  # BEFORE the write.
+    record, notes, reservation_refusal = reserve_retry(failed, run_id, org_id, site_id)
+    if reservation_refusal is not None:
+        return reservation_refusal
+    record = cast(dict[str, Any], record)  # A reservation with no refusal always returns its persisted record.
+    logger.info("upgrade: the retry %s came from the unsuccessful run %s", record["run_id"], run_id)  # AFTER write.
     return (
         jsonify(
             {
                 "run_id": record["run_id"],
+                "site_id": site_id,
                 "state": record["state"],
                 "retry_of_run_id": run_id,
                 "notes": notes,  # The page names every schedule that the retry dropped.

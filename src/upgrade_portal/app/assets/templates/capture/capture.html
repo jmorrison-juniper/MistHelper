@@ -303,7 +303,8 @@
             class="portal-button portal-button-primary"
             data-testid="capture-start-upgrade-button"
             data-site-id="{{ site_id | default('', true) }}"
-            {% if not is_verified %}hidden{% endif %}>Start the upgrade</button>
+            data-run-id="{{ run_id | default('', true) }}"
+            {% if not is_verified %}hidden{% endif %}>{% if run_id %}Continue the retry{% else %}Start the upgrade{% endif %}</button>
   </p>
   {#
     FR-104 and FR-105 name the cause of a refusal. aria-live lets a screen
