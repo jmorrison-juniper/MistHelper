@@ -338,6 +338,7 @@ class PhaseGateDeps:
     settle_gate: DeviceGate = field(default_factory=gate.SettleGate)
     progress: ProgressReporter = field(default_factory=LogProgressReporter)
     sleep: Callable[[float], None] = time.sleep
+    stop_requested: Callable[[str], bool] = field(default=lambda _run_id: False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -658,6 +659,15 @@ class PhaseSettleGate:
         """
         note = ""
         for _ in range(self._ceiling):
+            if self._deps.stop_requested(watch.run_id):
+                logger.info("Run %s phase %s stopped waiting after an operator request", watch.run_id, watch.phase)
+                return PhaseOutcome(
+                    watch.phase,
+                    PhaseState.WAITING.value,
+                    watch.settled,
+                    len(watch.targets),
+                    watch.missing,
+                )
             note = self._round(watch)
             if watch.is_complete:
                 return self._outcome(watch, PhaseState.SETTLED)

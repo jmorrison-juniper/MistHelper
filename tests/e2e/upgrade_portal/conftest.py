@@ -1121,6 +1121,7 @@ def _skip_storage_bootstrap() -> None:
 
 
 FAILED_RUN_ID = "e2e-failed-run-0001"  # The seeded run that the retry test opens. One fixed key, so no test guesses.
+STOPPED_RUN_ID = "e2e-stopped-run-0001"  # The seeded run that proves a cancelled attempt can restart.
 PREPARED_RUN_ID = "e2e-prepared-run-0001"  # The seeded run that proves the confirmation link works.
 PREPARED_SITE_ID = "e2e-confirm-site"  # A separate site keeps this live run from blocking other E2E journeys.
 
@@ -1147,6 +1148,15 @@ def _failed_run_record() -> dict[str, Any]:
         "targets": [],  # The retry copies this list. An empty list keeps the record small and valid.
         "options": {},  # The retry copies every option. An empty table still exercises the copy.
     }
+
+
+def _stopped_run_record() -> dict[str, Any]:
+    """Build one stopped run that can start a fresh attempt."""
+    record = _failed_run_record()
+    record["run_id"] = STOPPED_RUN_ID
+    record["state"] = "stopped"
+    record["message"] = "The stand-in run stopped after an operator cancellation."
+    return record
 
 
 def _prepared_run_record() -> dict[str, Any]:
@@ -1179,7 +1189,7 @@ def _seed_fixture_runs(built: Any, upgrade: Any) -> None:
     background thread lets the portal bind first; each test waits for its seeded
     run before it asserts the related control.
     """
-    logger.info("Seeding browser fixture runs %s and %s", FAILED_RUN_ID, PREPARED_RUN_ID)
+    logger.info("Seeding browser fixture runs %s, %s, and %s", FAILED_RUN_ID, STOPPED_RUN_ID, PREPARED_RUN_ID)
     writer = threading.Thread(target=_write_fixture_runs, args=(built, upgrade), daemon=True)
     writer.start()
     logger.debug("The browser fixture run seed runs on its own thread")
@@ -1190,6 +1200,7 @@ def _write_fixture_runs(built: Any, upgrade: Any) -> None:
     try:
         with built.app_context():
             failed_written = upgrade.save_run(_failed_run_record())
+            stopped_written = upgrade.save_run(_stopped_run_record())
             prepared_written = upgrade.save_run(_prepared_run_record())
     except Exception as failure:
         logger.warning(
@@ -1197,7 +1208,12 @@ def _write_fixture_runs(built: Any, upgrade: Any) -> None:
             failure,
         )
         return
-    logger.info("Browser fixture run seeds reported failed=%s prepared=%s", failed_written, prepared_written)
+    logger.info(
+        "Browser fixture run seeds reported failed=%s stopped=%s prepared=%s",
+        failed_written,
+        stopped_written,
+        prepared_written,
+    )
 
 
 def build_stand_in_app() -> Any:

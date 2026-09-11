@@ -1377,13 +1377,15 @@ def page_context(capture_id: str) -> dict[str, Any]:
     """
     status = page_status(capture_id)  # An empty record before the first start.
     site_id = status.get("site_id") or request.args.get("site_id", "")  # A start page names its site in the query.
+    run_id = status.get(RUN_FIELD) or request.args.get(RUN_FIELD, "")  # A retry binds its fresh capture in the query.
+    role = status.get(ROLE_FIELD) or request.args.get(ROLE_FIELD, DEFAULT_ROLE)
     context: dict[str, Any] = {
         "capture_id": status["capture_id"],  # An empty value stops the poll before it starts.
         "status": status_body(status),  # The same filter that the poll answers with.
         "tier": status.get(TIER_FIELD, TIER_STANDARD),  # The tier list opens on this value.
         "site_id": site_id,  # The start button posts to the site named here.
-        "run_id": status.get(RUN_FIELD, ""),  # The link back to the owning run.
-        "role": status.get(ROLE_FIELD, DEFAULT_ROLE),  # The half of the run that this capture covers.
+        "run_id": run_id,  # The retry query binds the fresh pre-check to its new run.
+        "role": role,  # The half of the run that this capture covers.
         "poll_interval_seconds": POLL_SECONDS,  # Decision D3 of the plan fixes this period.
         # WHY: issue #2063. The size reaches the page here, at the first render.
         # `status_body` drops the field, because the poll contract does not name
