@@ -138,7 +138,7 @@ STATUS_FIELDS = (  # A field that is absent here never reaches the browser.
 
 START_PERCENT = 0  # A capture that has read nothing shows no progress.
 WHOLE_PERCENT = 100  # A finished capture shows the whole bar.
-POLL_SECONDS = 30  # Decision D3 of the plan fixes this period.
+POLL_SECONDS = 3  # A fresh capture updates the progress display every three seconds.
 
 # The progress store keeps the newest captures only. A portal that runs for
 # weeks would otherwise hold one record for every capture it ever started.
@@ -1386,7 +1386,7 @@ def page_context(capture_id: str) -> dict[str, Any]:
         "site_id": site_id,  # The start button posts to the site named here.
         "run_id": run_id,  # The retry query binds the fresh pre-check to its new run.
         "role": role,  # The half of the run that this capture covers.
-        "poll_interval_seconds": POLL_SECONDS,  # Decision D3 of the plan fixes this period.
+        "poll_interval_seconds": POLL_SECONDS,  # The browser refreshes capture progress every three seconds.
         # WHY: issue #2063. The size reaches the page here, at the first render.
         # `status_body` drops the field, because the poll contract does not name
         # it, so the browser used to obtain it from one extra read of the whole

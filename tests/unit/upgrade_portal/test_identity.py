@@ -1290,6 +1290,23 @@ def test_sign_in_registers_the_record_and_marks_the_browser_session(
     assert record.credential_mode is CredentialMode.ENVIRONMENT_TOKEN
 
 
+def test_sign_in_clears_the_upgrade_selection(
+    flask_app: flask.Flask,
+    fake_mist_session: SimpleNamespace,
+) -> None:
+    """A new sign-in cannot inherit the target scope of an earlier operator."""
+    with flask_app.test_request_context("/", headers=cookie_header(FIRST_BROWSER_ID)):
+        flask.session["selected_org_id"] = "old-org"
+        flask.session["selected_upgrade_mode"] = "multi_site"
+        flask.session["selected_site_ids"] = ["old-site"]
+        owner = build_owner(OPERATOR_EMAIL, FIRST_BROWSER_ID)
+        sign_in(owner, fake_mist_session, CredentialMode.ENVIRONMENT_TOKEN)
+        assert flask.session.get("selected_org_id") is None
+        assert flask.session.get("selected_upgrade_mode") is None
+        assert flask.session.get("selected_site_ids") is None
+        assert flask.session[SESSION_OWNER_KEY] == owner.key
+
+
 def test_sign_in_writes_the_browser_session_key_and_not_the_address(
     flask_app: flask.Flask,
     fake_mist_session: SimpleNamespace,

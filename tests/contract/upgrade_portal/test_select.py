@@ -26,7 +26,7 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from flask import Flask, render_template
+from flask import Flask, render_template, session
 from flask.testing import FlaskClient
 from werkzeug.test import TestResponse
 
@@ -40,6 +40,7 @@ from src.upgrade_portal.runtime import identity
 # WHY: The paths that `contracts/http-api.md` and `tasks.md` name. A test states
 # each path in full, so a renamed constant inside the route module fails here.
 ORG_PAGE_PATH = "/select/org"
+MODE_PAGE_PATH = "/select/mode"
 SITE_PAGE_PATH = "/select/site"
 SITES_API_PATH = "/api/sites"
 ORG_SITES_API_PATH = "/api/orgs/<org_id>/sites"
@@ -49,6 +50,8 @@ INVENTORY_API_PATH = "/api/sites/<site_id>/inventory"
 # endpoint names. A rename would break the pages with no test failure elsewhere.
 ORG_PAGE_ENDPOINT = "select.org_page"
 CHOOSE_ORG_ENDPOINT = "select.choose_org"
+MODE_PAGE_ENDPOINT = "select.mode_page"
+CHOOSE_MODE_ENDPOINT = "select.choose_mode"
 SITE_PAGE_ENDPOINT = "select.sites_page"
 LIST_SITES_ENDPOINT = "select.list_sites"
 INVENTORY_ENDPOINT = "select.site_inventory"
@@ -85,6 +88,7 @@ LOCK_READER_KEY = "SITE_LOCK_READER"
 # WHY: The signed session field that carries the chosen organization. The site
 # list path without an organization reads the pick from this field.
 SELECTED_ORG_SESSION_KEY = "selected_org_id"
+SELECTED_MODE_SESSION_KEY = "selected_upgrade_mode"
 
 # WHY: The error codes that the contract fixes for this stage.
 NOT_AUTHENTICATED_CODE = "not_authenticated"
@@ -479,6 +483,8 @@ def fetch_sites(client: FlaskClient, org_id: str, query: str = "") -> TestRespon
     [
         (ORG_PAGE_ENDPOINT, ORG_PAGE_PATH),
         (CHOOSE_ORG_ENDPOINT, ORG_PAGE_PATH),
+        (MODE_PAGE_ENDPOINT, MODE_PAGE_PATH),
+        (CHOOSE_MODE_ENDPOINT, MODE_PAGE_PATH),
         (SITE_PAGE_ENDPOINT, SITE_PAGE_PATH),
         (INVENTORY_ENDPOINT, INVENTORY_API_PATH),
     ],
@@ -496,6 +502,67 @@ def test_each_selection_endpoint_carries_the_documented_path(portal_app: Flask, 
         path: The path the contract binds to that name.
     """
     assert read_endpoints(portal_app).get(endpoint) == {path}
+
+
+def test_an_organization_change_drops_multisite_upgrade_options(portal_app: Flask, fake_org_id: str) -> None:
+    """An organization change cannot carry firmware options to the new scope."""
+    with portal_app.test_request_context():
+        session[SELECTED_ORG_SESSION_KEY] = OTHER_ORG_ID
+        session[SELECTED_MODE_SESSION_KEY] = "multi_site"
+        session["org_upgrade_options"] = {"versions": [{"firmware_type": "ap", "version": "0.15.1"}]}
+        session["org_upgrade_options_org"] = OTHER_ORG_ID
+        session["org_upgrade_options_nonce"] = "old-confirmation"
+        select.store_chosen_org(fake_org_id)
+        assert "org_upgrade_options" not in session
+        assert "org_upgrade_options_org" not in session
+        assert "org_upgrade_options_nonce" not in session
+
+
+def test_multi_site_mode_renders_site_checkboxes(signed_in_client: FlaskClient) -> None:
+    """Multi-site mode changes only the action control of the site list."""
+    with signed_in_client.session_transaction() as browser_session:
+        browser_session[SELECTED_MODE_SESSION_KEY] = "multi_site"
+    answer = signed_in_client.get(SITE_PAGE_PATH)
+    assert answer.status_code == 200
+    assert b'data-testid="multi-site-form"' in answer.data
+    assert b'data-testid="multi-site-continue"' in answer.data
+
+
+def test_multi_site_selection_reaches_the_session(
+    signed_in_client: FlaskClient,
+    wired_app: Flask,
+    fake_site_id: str,
+) -> None:
+    """A valid multi-site selection reaches the organization options step."""
+    wired_app.config["WTF_CSRF_ENABLED"] = False
+    with signed_in_client.session_transaction() as browser_session:
+        browser_session[SELECTED_MODE_SESSION_KEY] = "multi_site"
+    answer = signed_in_client.post(
+        SITE_PAGE_PATH,
+        json={"site_ids": [fake_site_id]},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert answer.status_code == 200
+    assert answer.get_json() == {"next": "/upgrade/org/options"}
+    with signed_in_client.session_transaction() as browser_session:
+        assert "selected_site_ids" not in browser_session
+    options = signed_in_client.get("/upgrade/org/options")
+    assert options.status_code == 200
+    assert b'data-testid="org-upgrade-options"' in options.data
+
+
+def test_multi_site_selection_refuses_an_empty_set(signed_in_client: FlaskClient, wired_app: Flask) -> None:
+    """A multi-site operation cannot continue with no selected site."""
+    wired_app.config["WTF_CSRF_ENABLED"] = False
+    with signed_in_client.session_transaction() as browser_session:
+        browser_session[SELECTED_MODE_SESSION_KEY] = "multi_site"
+    answer = signed_in_client.post(
+        SITE_PAGE_PATH,
+        json={"site_ids": []},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert answer.status_code == 400
+    assert read_error_code(answer) == "sites_not_chosen"
 
 
 def test_one_site_list_endpoint_carries_both_documented_paths(portal_app: Flask) -> None:

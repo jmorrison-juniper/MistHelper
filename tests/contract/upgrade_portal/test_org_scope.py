@@ -50,12 +50,16 @@ from src.upgrade_portal.runtime import identity
 # WHY: `contracts/http-api.md` fixes this path for the picker and for the choice.
 ORG_PAGE_PATH = "/select/org"
 
-# WHY: The contract fixes the path that a successful choice names next.
-NEXT_AFTER_ORG = "/select/site"
+# WHY: The operator selects the mode after the organization.
+NEXT_AFTER_ORG = "/select/mode"
+NEXT_AFTER_MODE = "/select/site"
+MODE_PAGE_PATH = "/select/mode"
 
-# WHY: The body field and the signed session field that carry the choice.
+# WHY: The body fields and the signed session fields carry both choices.
 ORG_FIELD = "org_id"
+MODE_FIELD = "mode"
 SELECTED_ORG_SESSION_KEY = "selected_org_id"
+SELECTED_MODE_SESSION_KEY = "selected_upgrade_mode"
 
 # WHY: The header that separates the browser form post from the portal script.
 SCRIPT_HEADER = "X-Requested-With"
@@ -198,16 +202,22 @@ def read_error_code(response: TestResponse) -> str:
 
 
 def read_stored_org(client: FlaskClient) -> str | None:
-    """Return the organization that the signed browser session holds.
-
-    Args:
-        client: The test client that carries the session.
-
-    Returns:
-        The stored identifier, or None when the session holds none.
-    """
+    """Return the organization that the signed browser session holds."""
     with client.session_transaction() as browser_session:
         stored = browser_session.get(SELECTED_ORG_SESSION_KEY)
+    return None if stored is None else str(stored)
+
+
+def post_mode(client: FlaskClient, mode: str | None) -> TestResponse:
+    """Post one operation mode through the script contract."""
+    body = {} if mode is None else {MODE_FIELD: mode}
+    return client.post(MODE_PAGE_PATH, json=body, headers=SCRIPT_HEADERS)
+
+
+def read_stored_mode(client: FlaskClient) -> str | None:
+    """Return the operation mode in the signed browser session."""
+    with client.session_transaction() as browser_session:
+        stored = browser_session.get(SELECTED_MODE_SESSION_KEY)
     return None if stored is None else str(stored)
 
 
@@ -459,15 +469,46 @@ def test_the_script_header_wins_over_the_page_header(scoped_client: FlaskClient,
 
 
 def test_a_second_choice_replaces_the_first(scoped_client: FlaskClient, fake_org_id: str) -> None:
-    """A second choice inside the scope replaces the stored organization.
-
-    Args:
-        scoped_client: The signed-in client.
-        fake_org_id: The organization the operator chooses first.
-    """
+    """A second choice inside the scope replaces the stored organization."""
     post_org(scoped_client, fake_org_id)
     post_org(scoped_client, SECOND_ORG_ID)
     assert read_stored_org(scoped_client) == SECOND_ORG_ID
+
+
+def test_the_mode_page_follows_the_organization_choice(scoped_client: FlaskClient, fake_org_id: str) -> None:
+    """The mode page shows both operation choices after the organization."""
+    post_org(scoped_client, fake_org_id)
+    answer = scoped_client.get(MODE_PAGE_PATH)
+    assert answer.status_code == OK_STATUS
+    assert b'data-testid="mode-single-site"' in answer.data
+    assert b'data-testid="mode-multi-site"' in answer.data
+
+
+@pytest.mark.parametrize("mode", ["single_site", "multi_site"])
+def test_an_accepted_mode_reaches_the_session(scoped_client: FlaskClient, fake_org_id: str, mode: str) -> None:
+    """Each accepted operation mode reaches the signed session."""
+    post_org(scoped_client, fake_org_id)
+    answer = post_mode(scoped_client, mode)
+    assert answer.status_code == OK_STATUS
+    assert answer.get_json() == {"next": NEXT_AFTER_MODE}
+    assert read_stored_mode(scoped_client) == mode
+
+
+def test_an_unknown_mode_is_refused(scoped_client: FlaskClient, fake_org_id: str) -> None:
+    """A value outside the accepted mode set answers 400."""
+    post_org(scoped_client, fake_org_id)
+    answer = post_mode(scoped_client, "all_sites")
+    assert answer.status_code == BAD_REQUEST_STATUS
+    assert read_error_code(answer) == "mode_not_chosen"
+    assert read_stored_mode(scoped_client) is None
+
+
+def test_an_organization_change_clears_the_mode(scoped_client: FlaskClient, fake_org_id: str) -> None:
+    """A new organization requires a new operation mode choice."""
+    post_org(scoped_client, fake_org_id)
+    post_mode(scoped_client, "multi_site")
+    post_org(scoped_client, SECOND_ORG_ID)
+    assert read_stored_mode(scoped_client) is None
 
 
 # ---------------------------------------------------------------------------

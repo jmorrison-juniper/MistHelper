@@ -475,6 +475,17 @@ def test_the_page_renders(read_client: FlaskClient, owner: identity.SessionOwner
     assert PROGRESS_MARKER in answer.get_data(as_text=True)
 
 
+def test_the_page_sets_a_three_second_capture_poll(
+    read_client: FlaskClient,
+    owner: identity.SessionOwner,
+    fake_org_id: str,
+) -> None:
+    """The capture page asks the browser to refresh progress every three seconds."""
+    sign_in_client(read_client, owner, fake_org_id)
+    markup = open_page(read_client, STORED_CAPTURE_ID).get_data(as_text=True)
+    assert 'data-poll-seconds="3"' in markup
+
+
 def test_the_page_names_the_capture(read_client: FlaskClient, owner: identity.SessionOwner, fake_org_id: str) -> None:
     """The page carries the capture identifier, which the poll script reads.
 

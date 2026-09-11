@@ -450,6 +450,7 @@ class OperatorSession:  # Mutable, so a later story can refresh the cloud sessio
     cloud_session: Any  # A reference to the `mistapi` object, never a credential value
     credential_mode: CredentialMode  # The mode that opened the cloud session
     created_at: datetime = field(default_factory=_utc_now)  # Set once, at sign-in
+    selected_site_ids: tuple[str, ...] = ()  # Multi-site targets stay out of the signed cookie.
 
     def __repr__(self) -> str:  # Replaces the dataclass form, which would print the cloud session
         """Return a text form that holds no personal data and no credential.
@@ -684,6 +685,7 @@ def sign_in(owner: SessionOwner, cloud_session: Any, mode: CredentialMode) -> Op
     _LOGGER.info("identity: sign-in start for operator %s in mode %s", owner.email_digest, mode.value)  # Digest
     record = OperatorSession(owner=owner, cloud_session=cloud_session, credential_mode=mode)  # By reference
     SESSION_REGISTRY.register(record)  # The record now serves every later request of this owner
+    flask.session.clear()  # A new identity must not inherit an organization, a mode, or a site.
     flask.session[SESSION_OWNER_KEY] = owner.key  # The signed session carries the key, never the address
     _LOGGER.debug("identity: sign-in done for operator %s", owner.email_digest)  # A pair of records to join
     return record  # The route reads `cloud_session` from the record

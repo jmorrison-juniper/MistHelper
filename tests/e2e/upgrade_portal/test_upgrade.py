@@ -578,11 +578,15 @@ class TestUpgradeOptions:
         canary.check()  # The operator picks the staged rollout.
         sync_api.expect(canary).to_be_checked()  # The staged choice holds.
         sync_api.expect(big_bang).not_to_be_checked()  # The default clears.
-        junos_yes = options_page.get_by_test_id(JUNOS_YES_ID)  # The Junos file action on.
-        junos_no = options_page.get_by_test_id(JUNOS_NO_ID)  # The Junos default, which is off.
-        junos_yes.check()  # The operator turns the Junos file action on.
-        sync_api.expect(junos_yes).to_be_checked()  # The chosen action holds.
-        sync_api.expect(junos_no).not_to_be_checked()  # The default clears.
+        junos_yes = options_page.get_by_test_id(JUNOS_YES_ID)  # The default completes the Junos file action.
+        junos_no = options_page.get_by_test_id(JUNOS_NO_ID)  # The operator can skip the Junos file action.
+        sync_api.expect(junos_yes).to_be_checked()  # The safe default is on.
+        sync_api.expect(junos_no).not_to_be_checked()  # A radio group keeps one default.
+        junos_no.check()  # The operator turns the Junos file action off.
+        sync_api.expect(junos_no).to_be_checked()  # The changed choice holds.
+        sync_api.expect(junos_yes).not_to_be_checked()  # The default clears.
+        junos_yes.check()  # The operator restores the default.
+        sync_api.expect(junos_yes).to_be_checked()  # The restored choice holds.
 
 
 class TestUpgradeConfirm:

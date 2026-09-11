@@ -85,14 +85,14 @@ BODY_SHAPES: tuple[tuple[str, GatewayFamily, str, UpgradeOptions, frozenset[str]
         GatewayFamily.JUNOS,
         "switch",
         UpgradeOptions(),
-        frozenset({"device_ids", "version", "strategy", "reboot"}),
+        frozenset({"device_ids", "version", "strategy", "reboot", "snapshot"}),
     ),
     (
         "junos gateway with the default options",
         GatewayFamily.JUNOS,
         "gateway",
         UpgradeOptions(),
-        frozenset({"device_ids", "version", "strategy", "reboot"}),
+        frozenset({"device_ids", "version", "strategy", "reboot", "snapshot"}),
     ),
     (
         "access point with the default options",
@@ -127,7 +127,7 @@ BODY_SHAPES: tuple[tuple[str, GatewayFamily, str, UpgradeOptions, frozenset[str]
         GatewayFamily.JUNOS,
         "switch",
         UpgradeOptions(strategy=upgrade_service.STRATEGY_CANARY),
-        frozenset({"device_ids", "version", "strategy", "reboot", "canary_phases"}),
+        frozenset({"device_ids", "version", "strategy", "reboot", "snapshot", "canary_phases"}),
     ),
     (
         "access point with the canary strategy",
@@ -141,7 +141,7 @@ BODY_SHAPES: tuple[tuple[str, GatewayFamily, str, UpgradeOptions, frozenset[str]
         GatewayFamily.JUNOS,
         "switch",
         UpgradeOptions(start_time=1893456000),
-        frozenset({"device_ids", "version", "strategy", "reboot", "start_time"}),
+        frozenset({"device_ids", "version", "strategy", "reboot", "snapshot", "start_time"}),
     ),
     (
         "session smart router with the canary strategy",

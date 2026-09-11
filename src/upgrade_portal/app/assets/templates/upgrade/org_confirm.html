@@ -1,0 +1,54 @@
+{% extends 'layout.html' %}
+{% set confirm_word = 'CONFIRM' %}
+
+{% block title %}Confirm the upgrade{% endblock %}
+{% block heading %}<h1>Confirm the upgrade</h1>{% endblock %}
+
+{% block content %}
+<div class="portal-card" data-testid="org-upgrade-confirm">
+  <h2 class="portal-card-title">Review the organization upgrade</h2>
+  <p><strong>Organization:</strong> {{ org_name }}</p>
+  <p><strong>Sites:</strong> {{ site_count }}</p>
+  <p><strong>Devices:</strong> {{ device_count }}</p>
+  <p><strong>Firmware:</strong> {{ options.version }}</p>
+  <p><strong>Strategy:</strong> {{ options.strategy }}</p>
+
+  <div class="alert alert-danger" role="alert">
+    Warning: the upgrade can interrupt network service at all selected sites. Cancellation does not restore upgraded devices.
+  </div>
+
+  {% if not writes_enabled %}
+    <div class="alert alert-warning" role="alert" data-testid="org-upgrade-write-disabled">
+      Caution: organization upgrade writes are disabled. Complete the multi-site safety gates before you enable this operation.
+    </div>
+  {% endif %}
+
+  <form method="post" action="/api/org-upgrades">
+    <input type="hidden"
+           name="csrf_token"
+           value="{{ csrf_token() if csrf_token is defined else '' }}">
+    <label class="form-label" for="org-upgrade-confirmation">Type {{ confirm_word }} to start the upgrade</label>
+    <input class="form-control"
+           id="org-upgrade-confirmation"
+           name="confirmation"
+           data-testid="org-upgrade-confirmation"
+           data-confirm-word="{{ confirm_word }}"
+           data-confirm-target="org-upgrade-start"
+           data-confirm-hint-for="org-upgrade-confirm-hint"
+           autocomplete="off"
+           autocapitalize="off"
+           spellcheck="false"
+           aria-describedby="org-upgrade-confirm-hint"
+           {% if not writes_enabled %}disabled{% endif %}
+           required>
+    <p class="portal-card-note" id="org-upgrade-confirm-hint" aria-live="polite"></p>
+    <button type="submit"
+            id="org-upgrade-start"
+            class="portal-button portal-button-danger mt-3"
+            data-testid="org-upgrade-start"
+            {% if not writes_enabled %}data-write-disabled="true"{% endif %}
+            disabled>Start the upgrade</button>
+    <a class="portal-button mt-3" href="/upgrade/org/options">Back</a>
+  </form>
+</div>
+{% endblock %}

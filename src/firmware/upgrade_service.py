@@ -406,7 +406,7 @@ class UpgradeOptions:
     """
 
     reboot: bool = True
-    junos_file_action: bool = False
+    junos_file_action: bool = True
     strategy: str = STRATEGY_DEFAULT
     start_time: int | None = None
     reboot_at: int | None = None

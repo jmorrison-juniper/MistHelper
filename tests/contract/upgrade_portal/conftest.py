@@ -235,6 +235,7 @@ def portal_app() -> Any:
     logger.info("Build the capture portal application for a contract test")  # WHY: ASCII, %s style, no credential.
     app = factory.create_app()
     app.config.update(TESTING=True)  # WHY: Test mode reports the real exception instead of a 500 page.
+    app.config["ORG_UPGRADE_WRITES_ENABLED"] = True
     app.config[LAUNCHER_KEY] = None  # WHY: No contract test may start a real run driver thread.
     app.config[STOP_RUNNER_KEY] = None  # WHY: No contract test may send a real cancel to the cloud.
     app.config[LOCK_CLIENT_KEY] = FakeLockStore()  # WHY: A capture start writes a lock, and no test may reach Redis.

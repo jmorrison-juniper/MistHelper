@@ -1,0 +1,100 @@
+{% extends 'layout.html' %}
+{% set rows = sites | default([], true) %}
+
+{% block title %}Configure the upgrade{% endblock %}
+{% block heading %}<h1>Configure the upgrade</h1>{% endblock %}
+
+{% block content %}
+<div class="portal-card" data-testid="org-upgrade-options">
+  <h2 class="portal-card-title">Upgrade options</h2>
+  <p class="portal-card-note">
+    The organization job targets {{ rows | length }} selected sites. The first release supports access points only.
+  </p>
+
+  <form method="post" action="/api/org-upgrades/options">
+    <input type="hidden"
+           name="csrf_token"
+           value="{{ csrf_token() if csrf_token is defined else '' }}">
+
+    <div class="mb-3">
+      <label class="form-label" for="firmware-version">Target firmware version</label>
+      <input class="form-control"
+             id="firmware-version"
+             name="version"
+             data-testid="org-upgrade-version"
+             value="{{ options.version | default('', true) }}"
+             required>
+    </div>
+
+    <fieldset class="bubble-group mb-3">
+      <legend class="bubble-group-legend">Upgrade strategy</legend>
+      {% for value, label in [('canary', 'Canary'), ('big_bang', 'Big bang'), ('rrm', 'RRM'), ('serial', 'Serial')] %}
+        <span class="bubble-option">
+          <input class="bubble-option-input"
+                 type="radio"
+                 id="org-strategy-{{ value }}"
+                 name="strategy"
+                 value="{{ value }}"
+                 data-testid="org-strategy-{{ value }}"
+                 {{ 'checked' if options.strategy | default('canary', true) == value else '' }}>
+          <label class="bubble-option-label" for="org-strategy-{{ value }}">{{ label }}</label>
+        </span>
+      {% endfor %}
+    </fieldset>
+
+    <div class="mb-3">
+      <label class="form-label" for="canary-phases">Canary phases</label>
+      <input class="form-control"
+             id="canary-phases"
+             name="canary_phases"
+             data-testid="org-upgrade-canary-phases"
+             value="{{ options.canary_phases | default('1,10,50,100', true) }}"
+             aria-describedby="canary-phases-help">
+      <p class="portal-card-note" id="canary-phases-help">Enter increasing percentages that end with 100.</p>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label" for="max-failure-percentage">Maximum failure percentage</label>
+      <input class="form-control"
+             type="number"
+             min="0"
+             max="100"
+             id="max-failure-percentage"
+             name="max_failure_percentage"
+             data-testid="org-upgrade-max-failures"
+             value="{{ options.max_failure_percentage | default(5) }}"
+             required>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label" for="start-time">Start time (UTC)</label>
+      <input class="form-control"
+             type="datetime-local"
+             id="start-time"
+             name="start_time"
+             data-testid="org-upgrade-start-time"
+             value="{{ options.start_time | default('', true) }}">
+    </div>
+
+    <button type="submit"
+            class="portal-button portal-button-primary"
+            data-testid="org-upgrade-review">Review</button>
+  </form>
+</div>
+
+<div class="portal-table-scroll">
+  <table class="portal-table" data-testid="org-upgrade-site-summary">
+    <caption class="visually-hidden">The sites in this organization upgrade.</caption>
+    <thead><tr><th scope="col">Site</th><th scope="col">Devices</th><th scope="col">Lock state</th></tr></thead>
+    <tbody>
+      {% for site in rows %}
+        <tr>
+          <th scope="row">{{ site.name }}</th>
+          <td>{{ site.device_count }}</td>
+          <td>{{ site.lock_state | capitalize }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

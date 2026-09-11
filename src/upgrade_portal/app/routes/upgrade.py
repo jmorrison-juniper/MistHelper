@@ -989,7 +989,7 @@ def plain_options(body: dict[str, Any]) -> dict[str, Any]:
         return dict(record)
     return {  # No module, so the three fields that the contract names by hand.
         "reboot": bool(body.get("reboot", True)),  # The cloud reboots an access point on its own.
-        "junos_file_action": bool(body.get("junos_file_action", False)),  # A copy only, until the operator asks.
+        "junos_file_action": bool(body.get("junos_file_action", True)),  # A copy only, until the operator asks.
         "strategy": str(body.get("strategy") or "big_bang"),  # The contract names this value as the default.
     }
 

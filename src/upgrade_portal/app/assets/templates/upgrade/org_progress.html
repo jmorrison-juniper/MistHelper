@@ -1,0 +1,87 @@
+{% extends 'layout.html' %}
+
+{% block title %}Upgrade progress{% endblock %}
+{% block heading %}<h1>Upgrade progress</h1>{% endblock %}
+
+{% block content %}
+<div class="portal-card"
+     data-testid="org-upgrade-progress"
+     data-org-upgrade-region
+     data-upgrade-id="{{ upgrade_id }}"
+     data-job-status="{{ status.status | default('unknown', true) }}"
+     data-poll-seconds="{{ poll_interval_seconds | default(30, true) }}">
+  <h2 class="portal-card-title">Organization upgrade job</h2>
+  <p><strong>Job identifier:</strong> <span class="cell-mono">{{ upgrade_id }}</span></p>
+  <p><strong>Sites:</strong> {{ site_count }}</p>
+  <p class="portal-card-note">
+    The portal reads the organization job state at the configured interval. A completed job can still contain failed devices.
+  </p>
+  <button class="portal-button portal-button-primary"
+          type="button"
+          data-testid="org-upgrade-refresh">Refresh status</button>
+</div>
+
+<div class="portal-card" data-testid="org-upgrade-status">
+  <h2 class="portal-card-title">Current status</h2>
+  <p><strong>Status:</strong> <span data-org-upgrade-field="status">{{ status.status | default('unknown', true) }}</span></p>
+  <p><strong>Current phase:</strong> <span data-org-upgrade-field="current_phase">{{ status.current_phase | default('Not reported', true) }}</span></p>
+  <p><strong>Total targets:</strong> <span data-org-upgrade-field="total">{{ status.total | default(0, true) }}</span></p>
+  <p><strong>Upgraded:</strong> <span data-org-upgrade-field="upgraded_count">{{ status.upgraded_count | default(0, true) }}</span></p>
+  <p><strong>Failed:</strong> <span data-org-upgrade-field="failed_count">{{ status.failed_count | default(0, true) }}</span></p>
+  <form method="post" action="/api/org-upgrades/{{ upgrade_id }}/cancel" class="mt-3">
+    <input type="hidden"
+           name="csrf_token"
+           value="{{ csrf_token() if csrf_token is defined else '' }}">
+    <label class="form-label" for="org-upgrade-cancel-confirmation">Type CANCEL to request cancellation</label>
+    <input class="form-control"
+           id="org-upgrade-cancel-confirmation"
+           name="confirmation"
+           data-testid="org-upgrade-cancel-confirmation"
+           data-confirm-word="CANCEL"
+           data-confirm-target="org-upgrade-cancel"
+           data-confirm-hint-for="org-upgrade-cancel-hint"
+           autocomplete="off"
+           autocapitalize="off"
+           spellcheck="false"
+           aria-describedby="org-upgrade-cancel-hint"
+           required>
+    <p class="portal-card-note" id="org-upgrade-cancel-hint" aria-live="polite"></p>
+    <button type="submit"
+            id="org-upgrade-cancel"
+            class="portal-button portal-button-danger mt-3"
+            data-testid="org-upgrade-cancel"
+            disabled>Request cancellation</button>
+  </form>
+  <p class="portal-card-note">Cancellation is best effort. It does not restore devices that already upgraded.</p>
+</div>
+
+<div class="portal-table-scroll">
+  <table class="portal-table" data-testid="org-upgrade-site-progress">
+    <caption class="visually-hidden">The state of each site job.</caption>
+    <thead>
+      <tr>
+        <th scope="col">Site identifier</th>
+        <th scope="col">Status</th>
+        <th scope="col">Targets</th>
+        <th scope="col">Upgraded</th>
+        <th scope="col">Failed</th>
+        <th scope="col">Upgrade identifier</th>
+      </tr>
+    </thead>
+    <tbody data-org-upgrade-sites>
+      {% for site in status.site_upgrades | default([], true) %}
+        <tr>
+          <th scope="row" class="cell-mono">{{ site.site_id | default('Unknown', true) }}</th>
+          <td>{{ site.status | default('unknown', true) }}</td>
+          <td>{{ site.total | default(0, true) }}</td>
+          <td>{{ site.upgraded | default(0, true) }}</td>
+          <td>{{ site.failed | default(0, true) }}</td>
+          <td class="cell-mono">{{ site.id | default('', true) }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6">The cloud has not reported a site state yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

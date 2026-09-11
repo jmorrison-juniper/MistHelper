@@ -83,7 +83,7 @@ UNKNOWN_TIER = 9  # A whole number outside the two tiers the record layer accept
 CREATE_ANSWER_FIELDS = {"run_id", "state"}
 
 # WHY: The default of each option control, as `contracts/http-api.md` names it.
-DEFAULT_OPTIONS = {"reboot": True, "junos_file_action": False, "strategy": "big_bang"}
+DEFAULT_OPTIONS = {"reboot": True, "junos_file_action": True, "strategy": "big_bang"}
 
 # WHY: Delta U2 retires one select and two toggles for three radio groups, so
 # #2101 shows every choice at once. The page draws each group under these
@@ -98,7 +98,7 @@ RADIO_OPTION_IDS = (
     "upgrade-reboot-yes",  # The reboot default, which reboots each device after the write.
     "upgrade-reboot-no",  # The choice that holds the reboot for a later manual window.
     "upgrade-junos-file-action-yes",  # The choice that turns the Junos file action on.
-    "upgrade-junos-file-action-no",  # The Junos file action default, which leaves it off.
+    "upgrade-junos-file-action-no",  # The operator can turn off the default Junos file action.
 )
 RETIRED_CONTROL_IDS = (
     "upgrade-strategy-select",  # The retired select, which showed one strategy at a time.

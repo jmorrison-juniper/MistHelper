@@ -7,7 +7,7 @@
  *   2. A small JSON fetch wrapper.
  *   3. A flash message region updater.
  *   4. A browser-side table filter for the site list.
- *   5. A capture status poll that runs every 30 seconds, with a manual refresh.
+ *   5. A capture status poll that runs every 3 seconds, with a manual refresh.
  *   6. A run status poll that runs every 30 seconds, with a manual refresh.
  *   7. A typed-word gate that unlocks a button only for an exact word.
  *   8. The upgrade option save, the upgrade start, and the run stop.
@@ -122,6 +122,7 @@
     var UPGRADE_START_TESTID = "upgrade-start-button";
     var UPGRADE_STATE_TESTID = "upgrade-state";
     var UPGRADE_REFRESH_TESTID = "upgrade-refresh-button";
+    var ORG_UPGRADE_REFRESH_TESTID = "org-upgrade-refresh";
     var BROWSER_TOKEN_SIGNIN_TESTID = "signin-browser-token";
 
     /* The stop identifiers. contracts/ui-testids.md lines 117-125 fix every
@@ -173,6 +174,7 @@
     /* The run poll stops on these three states. data-model.md section 4.1 ends
      * every path at one of them. */
     var RUN_FINISHED_STATES = ["complete", "stopped", "failed"];
+    var ORG_UPGRADE_FINISHED_STATES = ["cancelled", "completed", "failed"];
 
     /* Each device cell of the run table carries one of these field names. The
      * value is the text to show when the run reports no value yet. The same
@@ -248,6 +250,9 @@
 
     /* The interval handle of the run poll, or null. One page shows one run. */
     var runPollTimer = null;
+
+    /* The interval handle of the organization upgrade poll, or null. */
+    var orgUpgradePollTimer = null;
 
     /* The interval handle of the lock heartbeat, or null. One page drives one
      * site, so one handle is enough and a second start replaces the first. */
@@ -852,7 +857,7 @@
     /**
      * Reads the capture status once and paints the page.
      *
-     * Why: The manual refresh control and the 30-second poll must do the same
+     * Why: The manual refresh control and the 3-second poll must do the same
      * work. One function covers both, so the two can never drift apart.
      *
      * @param {Element} region The capture progress region.
@@ -875,6 +880,7 @@
                         var startButton = byTestId(CAPTURE_START_TESTID);
                         if (startButton) {
                             startButton.disabled = false;
+                            setText(startButton, "Start the capture");
                         }
                     }
                 }
@@ -894,7 +900,7 @@
                 console.error("The capture status read failed.", error && error.code, error && error.status);
                 showCaptureError((error && error.message) || "The portal cannot read the capture state.");
                 /* A capture that is gone never returns, so a further read
-                 * would fail in the same way every 30 seconds. */
+                 * would fail in the same way every 3 seconds. */
                 if (error && error.status === NOT_FOUND_STATUS) {
                     stopCapturePoll();
                 }
@@ -903,7 +909,7 @@
     }
 
     /**
-     * Starts the 30-second capture poll.
+     * Starts the capture status poll.
      *
      * Why: The portal sends no server-sent event. Decision D3 of the plan fixes
      * a poll, because the existing event bus caps at 10 subscribers. A second
@@ -949,9 +955,12 @@
             role: button.getAttribute("data-role") || "pre"
         };
 
-        /* The button stays disabled until the answer arrives. A second click
-         * would start a second capture of the same site. */
+        /* The button changes before the request starts. The operator then sees
+         * that the press worked while the server creates the progress record. */
+        var startLabel = button.textContent;
         button.disabled = true;
+        setText(button, "Starting the capture...");
+        setText(region.querySelector('[data-capture-field="state"]'), "starting");
         clearCaptureError();
 
         return fetchJson("/api/sites/" + encodeURIComponent(siteId) + "/captures", {
@@ -959,18 +968,9 @@
             body: payload
         })
             .then(function (created) {
-                if (created && created.capture_id) {
-                    /* A new capture page has no identifier, so it cannot load
-                     * stored rows when the worker completes. The real capture
-                     * page has the identifier in its path and reads those rows. */
-                    window.location.assign("/captures/" + encodeURIComponent(created.capture_id));
-                    return created;
-                }
                 if (created && created.lock) {
                     /* The start took the site lock on this call, so the banner
-                     * must show the hold and the beat must begin. FR-107 and
-                     * FR-110 ask for both with no reload. A read-only page has
-                     * no banner, so the paint runs only when the region exists. */
+                     * must show the hold and the beat must begin. */
                     var lockRegion = getLockRegion();
                     if (lockRegion) {
                         paintLockHeld(lockRegion, created.lock);
@@ -978,7 +978,18 @@
                         startLockBeat(lockRegion);
                     }
                 }
-                showFlash("The capture started. The page reads the state every 30 seconds.", "success");
+                if (created && created.capture_id) {
+                    var captureId = String(created.capture_id);
+                    region.setAttribute("data-capture-id", captureId);
+                    setText(byTestId(CAPTURE_IDENTIFIER_TESTID), captureId);
+                    if (window.location.protocol === "http:" || window.location.protocol === "https:") {
+                        window.history.replaceState({}, "", "/captures/" + encodeURIComponent(captureId));
+                    }
+                    setText(button, "Capture running");
+                    refreshCaptureStatus(region);
+                    startCapturePoll(region);
+                }
+                showFlash("The capture started. The page reads the state every 3 seconds.", "success");
                 return created;
             })
             .catch(function (error) {
@@ -986,6 +997,7 @@
                  * carries no session value and no email address. */
                 console.error("The capture start failed.", error && error.code, error && error.status);
                 button.disabled = false;
+                setText(button, startLabel);
                 showCaptureError((error && error.message) || "The capture did not start.");
                 return null;
             });
@@ -1407,8 +1419,8 @@
             });
         }
 
-        /* FR-040 requires a manual refresh control. The poll waits 30 seconds,
-         * and this control reads the state at once. */
+        /* FR-040 requires a manual refresh control. The automatic poll waits
+         * three seconds, and this control reads the state at once. */
         var refreshButton = byTestId(CAPTURE_REFRESH_TESTID);
         if (refreshButton) {
             refreshButton.addEventListener("click", function () {
@@ -1426,6 +1438,9 @@
             });
         }
 
+        if (readCaptureId(region)) {
+            refreshCaptureStatus(region);
+        }
         startCapturePoll(region);
     }
 
@@ -2609,6 +2624,108 @@
      *
      * @returns {void}
      */
+    function stopOrgUpgradePoll() {
+        if (orgUpgradePollTimer !== null) {
+            window.clearInterval(orgUpgradePollTimer);
+            orgUpgradePollTimer = null;
+        }
+    }
+
+    function paintOrgUpgradeSites(status) {
+        var body = document.querySelector("[data-org-upgrade-sites]");
+        if (!body) {
+            return;
+        }
+        var sites = Array.isArray(status && status.site_upgrades) ? status.site_upgrades : [];
+        body.textContent = "";
+        if (!sites.length) {
+            var emptyRow = document.createElement("tr");
+            var emptyCell = document.createElement("td");
+            emptyCell.colSpan = 6;
+            emptyCell.textContent = "The cloud has not reported a site state yet.";
+            emptyRow.appendChild(emptyCell);
+            body.appendChild(emptyRow);
+            return;
+        }
+        sites.forEach(function (site) {
+            var row = document.createElement("tr");
+            [site.site_id || "Unknown", site.status || "unknown", site.total || 0, site.upgraded || 0, site.failed || 0, site.id || ""].forEach(function (value, index) {
+                var cell = document.createElement(index === 0 ? "th" : "td");
+                if (index === 0) {
+                    cell.scope = "row";
+                }
+                if (index === 0 || index === 5) {
+                    cell.className = "cell-mono";
+                }
+                cell.textContent = String(value);
+                row.appendChild(cell);
+            });
+            body.appendChild(row);
+        });
+    }
+
+    function paintOrgUpgradeStatus(region, status) {
+        if (!region || !status) {
+            return;
+        }
+        var fields = ["status", "current_phase", "total", "upgraded_count", "failed_count"];
+        fields.forEach(function (field) {
+            var fallback = field === "current_phase" ? "Not reported" : (field === "status" ? "unknown" : 0);
+            var value = status[field];
+            setText(document.querySelector('[data-org-upgrade-field="' + field + '"]'), value === null || value === undefined || value === "" ? fallback : value);
+        });
+        paintOrgUpgradeSites(status);
+        var state = String(status.status || "unknown").toLowerCase();
+        region.setAttribute("data-job-status", state);
+        if (ORG_UPGRADE_FINISHED_STATES.indexOf(state) !== -1) {
+            stopOrgUpgradePoll();
+        }
+    }
+
+    function refreshOrgUpgradeStatus(region, reportSuccess) {
+        var upgradeId = (region.getAttribute("data-upgrade-id") || "").trim();
+        if (!upgradeId) {
+            return Promise.resolve(null);
+        }
+        return fetchJson("/api/org-upgrades/" + encodeURIComponent(upgradeId))
+            .then(function (status) {
+                paintOrgUpgradeStatus(region, status);
+                if (reportSuccess) {
+                    showFlash("The organization upgrade state is current.", "info");
+                }
+                return status;
+            })
+            .catch(function (error) {
+                console.error("The organization upgrade status read failed.", error && error.code, error && error.status);
+                showRequestError(error);
+                if (error && error.status === NOT_FOUND_STATUS) {
+                    stopOrgUpgradePoll();
+                }
+                return null;
+            });
+    }
+
+    function initOrgUpgradePage() {
+        var region = document.querySelector("[data-org-upgrade-region]");
+        if (!region) {
+            return;
+        }
+        var refreshButton = byTestId(ORG_UPGRADE_REFRESH_TESTID);
+        if (refreshButton) {
+            refreshButton.addEventListener("click", function () {
+                refreshOrgUpgradeStatus(region, true);
+            });
+        }
+        var state = (region.getAttribute("data-job-status") || "").toLowerCase();
+        if (ORG_UPGRADE_FINISHED_STATES.indexOf(state) !== -1) {
+            return;
+        }
+        stopOrgUpgradePoll();
+        orgUpgradePollTimer = window.setInterval(function () {
+            refreshOrgUpgradeStatus(region);
+        }, readPollMilliseconds(region));
+    }
+
     function initRunPage() {
         var region = document.querySelector("[data-run-region]");
         if (!region) {
@@ -3361,6 +3478,7 @@
         initUpgradeOptionsPage();
         initUpgradeConfirmPage();
         initRunPage();
+        initOrgUpgradePage();
         initStopControl();
         initRunRetryControl();  // Issue #2202: restart an unsuccessful terminal run.
         initRunScheduleControls();  // Issue #2201: the reschedule and the cancel of a run that has not begun.

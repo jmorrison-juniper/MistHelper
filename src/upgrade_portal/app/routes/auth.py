@@ -320,6 +320,7 @@ def default_cloud_login(actor_email: str, password: str, host: str) -> Any:
     )
     cloud_session._apitoken = []  # A cached token would let the library skip the pair the operator typed.
     cloud_session._apitoken_index = -1  # The index must match the empty list, or the library reads past its end.
+    cloud_session._MAX_429_RETRIES = 0  # A firmware write must not repeat after an uncertain response.
     return cloud_session  # The caller attempts the login and owns the answer.
 
 
@@ -350,6 +351,7 @@ def default_token_session(host: str) -> Any:
         show_cli_notif=False,  # The portal is not a terminal, so the library must print no prompt.
     )
     cloud_session.login()  # Fills the privilege list, which the organization picker and the scope check both read.
+    cloud_session._MAX_429_RETRIES = 0  # A firmware write must not repeat after an uncertain response.
     return cloud_session  # The caller registers the session and owns it from there.
 
 
@@ -363,6 +365,7 @@ def default_browser_token_session(host: str, token: str) -> Any:
         show_cli_notif=False,
     )
     cloud_session.login()
+    cloud_session._MAX_429_RETRIES = 0  # A firmware write must not repeat after an uncertain response.
     return cloud_session
 
 
