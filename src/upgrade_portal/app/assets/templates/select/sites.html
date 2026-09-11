@@ -54,9 +54,11 @@
 #}
 {% set site_rows = sites | default([], true) %}
 {% set org_label = org_name | default('', true) %}
+{% set operation_mode = selected_mode | default('single_site', true) %}
+{% set chosen_site_ids = selected_site_ids | default([], true) %}
 
 <div class="portal-card">
-  <h2 class="portal-card-title">Find a site</h2>
+  <h2 class="portal-card-title">{{ 'Select sites' if operation_mode == 'multi_site' else 'Find a site' }}</h2>
 
   {#
     The label stays visible. A placeholder disappears on the first key press,
@@ -84,9 +86,18 @@
     {% if org_label %}
       The list shows the sites of {{ org_label }}.
     {% endif %}
+    {% if operation_mode == 'multi_site' %}
+      Select one or more sites. The portal uses one organization-level upgrade job.
+    {% endif %}
   </p>
 </div>
 
+{% if operation_mode == 'multi_site' %}
+<form method="post" action="/select/site" data-testid="multi-site-form">
+  <input type="hidden"
+         name="csrf_token"
+         value="{{ csrf_token() if csrf_token is defined else '' }}">
+{% endif %}
 <div class="portal-table-scroll">
   {#
     Issue #2227: this was the one table of the portal that never sorted. An
@@ -155,9 +166,19 @@
               The site sections of contracts/http-api.md state that a read never
               needs the lock.
             #}
-            <a class="portal-button portal-button-primary"
-               data-testid="site-open-{{ site_id }}"
-               href="{{ open_url }}">Open</a>
+            {% if operation_mode == 'multi_site' %}
+              <input type="checkbox"
+                     name="site_ids"
+                     value="{{ site_id }}"
+                     id="site-select-{{ site_id }}"
+                     data-testid="site-select-{{ site_id }}"
+                     {{ 'checked' if site_id in chosen_site_ids else '' }}>
+              <label for="site-select-{{ site_id }}">Select<span class="visually-hidden"> {{ site_name }}</span></label>
+            {% else %}
+              <a class="portal-button portal-button-primary"
+                 data-testid="site-open-{{ site_id }}"
+                 href="{{ open_url }}">Open</a>
+            {% endif %}
           </td>
         </tr>
       {% else %}
@@ -180,4 +201,12 @@
     </tbody>
   </table>
 </div>
+{% if operation_mode == 'multi_site' %}
+  <div class="portal-card">
+    <button type="submit"
+            class="portal-button portal-button-primary"
+            data-testid="multi-site-continue">Continue</button>
+  </div>
+</form>
+{% endif %}
 {% endblock %}

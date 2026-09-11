@@ -223,16 +223,18 @@ def test_the_poll_paints_the_identifier_with_a_document_read() -> None:
     assert BROKEN_SELECTOR not in body  # The region read that returned null is gone.
 
 
-def test_the_start_opens_the_page_of_the_new_capture() -> None:
-    """The start response opens the page of the returned capture identifier.
+def test_the_start_adopts_the_page_of_the_new_capture() -> None:
+    """The start response adopts the returned capture identifier.
 
     Why:
-        A new capture page has no capture identifier. It cannot load completed
-        capture rows. The stored capture page carries the returned identifier
-        in its path, so it loads those rows after the worker completes.
+        The page must show progress without a reload. The new path also lets a
+        later reload read the stored capture rows after the worker completes.
     """
     body = script_function(START_FUNCTION)  # WHY: The handler runs when the 202 answer arrives.
-    assert 'window.location.assign("/captures/" + encodeURIComponent(created.capture_id))' in body
+    assert 'region.setAttribute("data-capture-id", captureId)' in body
+    assert 'window.history.replaceState({}, "", "/captures/" + encodeURIComponent(captureId))' in body
+    assert "refreshCaptureStatus(region)" in body
+    assert "startCapturePoll(region)" in body
 
 
 def test_no_paint_of_the_script_reads_the_field_from_a_region() -> None:

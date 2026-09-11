@@ -30,7 +30,8 @@ import pytest
 # A run without the package reports a skip and never an import error.
 sync_api = pytest.importorskip("playwright.sync_api", reason="The Playwright package is not installed.")
 
-# `contracts/http-api.md` fixes this path for the site picker.
+# The operator chooses the operation mode before the site picker.
+MODE_PAGE_PATH = "/select/mode"
 SITE_PAGE_PATH = "/select/site"
 
 # The identifier prefixes that `contracts/ui-testids.md` fixes for a dynamic row.
@@ -257,6 +258,20 @@ def inventory_page(site_page: Any) -> Any:
         site_page.get_by_test_id(f"site-open-{site_id}").click()
     _require_built_route(event.value.status, f"the inventory page of the site {site_id}")
     return site_page
+
+
+class TestOperationMode:
+    """Drive the mode choice from the organization context to the site list."""
+
+    def test_multi_site_mode_opens_the_familiar_site_list(self, portal_page: Any) -> None:
+        """The multi-site choice keeps the site picker and changes its controls."""
+        status = _page_status(portal_page, MODE_PAGE_PATH)
+        _require_built_route(status, MODE_PAGE_PATH)
+        portal_page.get_by_test_id("mode-multi-site").check()
+        portal_page.get_by_test_id("mode-continue").click()
+        portal_page.wait_for_url(re.compile(r".*/select/site$"))
+        assert portal_page.get_by_test_id("multi-site-form").is_visible()
+        assert portal_page.get_by_test_id("multi-site-continue").is_visible()
 
 
 class TestSitePicker:

@@ -21,12 +21,12 @@
   The contract with portal.js:
     portal.js reads data-capture-id and data-poll-seconds from the progress
     region. With a capture identifier it polls GET /api/captures/<id>/status
-    every 30 seconds and paints the values below. The start button carries
+    every 3 seconds and paints the values below. The start button carries
     data-site-id, data-run-id, and data-role, which build the body of
     POST /api/sites/<site_id>/captures.
 
   Why the page polls instead of listening:
-    Decision D3 of the plan fixes a 30-second poll. The portal sends no
+    The capture page uses a 3-second poll. The portal sends no
     server-sent event, because the existing event bus caps at 10 subscribers.
 
   Variables a route may supply:
@@ -174,7 +174,7 @@
   {% endif %}
 
   {#
-    FR-040 requires a manual refresh control. The poll runs every 30 seconds,
+    FR-040 requires a manual refresh control. The poll runs every 3 seconds,
     and this control reads the status at once.
   #}
   <button type="button"
@@ -190,7 +190,7 @@
 <section class="status-panel"
          data-testid="capture-progress"
          data-capture-id="{{ capture_identifier }}"
-         data-poll-seconds="{{ poll_interval_seconds | default(30, true) }}"
+         data-poll-seconds="{{ poll_interval_seconds | default(3, true) }}"
          data-capture-tables-ready="{{ 'true' if is_verified else 'false' }}"
          aria-live="polite">
 

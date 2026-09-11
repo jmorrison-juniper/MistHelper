@@ -232,6 +232,7 @@ def test_the_token_sign_in_signs_the_session_in(monkeypatch: Any) -> None:
     built = auth.default_token_session(HOST)
     assert built is spy
     assert spy.logins == 1  # The builder signed the session in exactly one time.
+    assert built._MAX_429_RETRIES == 0  # Firmware writes cannot repeat after an uncertain response.
     assert [identity.privilege_org_id(one) for one in built.privileges] == [ORG_ID]
 
 

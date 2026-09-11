@@ -51,6 +51,7 @@ import flask
 import pytest
 from flask.sessions import SecureCookieSessionInterface
 
+from src.firmware.org_upgrade_service import OrgUpgradeResult
 from src.upgrade_portal.app.config import DEFAULT_PORT, PORT_VARIABLE, SECRET_KEY_VARIABLE, read_port
 from src.upgrade_portal.runtime import identity
 from src.upgrade_portal.runtime.server import build_server_command
@@ -162,10 +163,12 @@ SECOND_BROWSER_ID = "e2eBrowserIdentity0002"  # A second browser, so the pair di
 # WHY: The organization picker reads the privilege list of the cloud session,
 # and the site picker reads two cloud lists. Fixed records fill all three, so a
 # signed-in page renders real rows and opens no socket to the Mist cloud.
-STAND_IN_ORG_ID = "e2e-org-0001"  # The organization that the picker shows and the site list reads.
-STAND_IN_ORG_NAME = "E2E Stand-In Organization"  # The text of the one organization row.
-STAND_IN_SITE_ID = "e2e-site-0001"  # The site that the site picker shows and the inventory page reads.
-STAND_IN_SITE_NAME = "E2E Stand-In Site"  # The text of the one site row.
+STAND_IN_ORG_ID = "11111111-1111-1111-1111-111111111111"  # The organization that the picker shows.
+STAND_IN_ORG_NAME = "E2E Stand-In Organization"  # The text of the organization row.
+STAND_IN_SITE_ID = "22222222-2222-2222-2222-222222222222"  # The first site in the picker.
+STAND_IN_SITE_NAME = "E2E Stand-In Site"  # The text of the first site row.
+SECOND_SITE_ID = "33333333-3333-3333-3333-333333333333"  # The second site for organization tests.
+SECOND_SITE_NAME = "E2E Second Stand-In Site"  # The text of the second site row.
 STAND_IN_DEVICE_TYPES = ("ap", "gateway", "switch")  # Mirrors `select.DEVICE_TYPES`, which FR-013 fixes.
 STAND_IN_VERSIONS = ("0.14.29216", "0.15.1")  # The version that runs now, then one newer version to pick.
 
@@ -661,6 +664,55 @@ class StandInCloudSession:  # Carries a privilege list and a narrow read, so eve
         return SimpleNamespace(data=rows)
 
 
+class E2EOrgUpgradeService:
+    """Return deterministic organization job results to the browser server."""
+
+    @staticmethod
+    def submit(cloud_session: Any, org_id: str, body: dict[str, object]) -> OrgUpgradeResult:
+        """Return one accepted organization job."""
+        assert body["site_ids"] == [STAND_IN_SITE_ID, SECOND_SITE_ID]
+        return OrgUpgradeResult(
+            org_id,
+            "44444444-4444-4444-4444-444444444444",
+            200,
+            {"id": "44444444-4444-4444-4444-444444444444"},
+            None,
+        )
+
+    @staticmethod
+    def status(cloud_session: Any, org_id: str, upgrade_id: str) -> OrgUpgradeResult:
+        """Return progress for both selected sites."""
+        return OrgUpgradeResult(
+            org_id,
+            upgrade_id,
+            200,
+            {
+                "id": upgrade_id,
+                "status": "inprogress",
+                "site_upgrades": [
+                    {
+                        "site_id": STAND_IN_SITE_ID,
+                        "id": "55555555-5555-5555-5555-555555555555",
+                        "status": "running",
+                        "targets": {"total": 2, "upgraded": ["a"], "failed": []},
+                    },
+                    {
+                        "site_id": SECOND_SITE_ID,
+                        "id": "66666666-6666-6666-6666-666666666666",
+                        "status": "running",
+                        "targets": {"total": 2, "upgraded": [], "failed": ["b"]},
+                    },
+                ],
+            },
+            None,
+        )
+
+    @staticmethod
+    def cancel(cloud_session: Any, org_id: str, upgrade_id: str) -> OrgUpgradeResult:
+        """Return one accepted cancellation."""
+        return OrgUpgradeResult(org_id, upgrade_id, 200, {}, None)
+
+
 def stand_in_cloud_read(name: str, **parameters: Any) -> list[dict[str, Any]]:
     """Answer a site read of the portal without a network call.
 
@@ -679,9 +731,15 @@ def stand_in_cloud_read(name: str, **parameters: Any) -> list[dict[str, Any]]:
     """
     del parameters  # One organization answers every call, so no parameter changes the result.
     if name == "listOrgSites":  # The name and the identifier of each site.
-        return [{"id": STAND_IN_SITE_ID, "name": STAND_IN_SITE_NAME}]
+        return [
+            {"id": STAND_IN_SITE_ID, "name": STAND_IN_SITE_NAME},
+            {"id": SECOND_SITE_ID, "name": SECOND_SITE_NAME},
+        ]
     if name == "listOrgSiteStats":  # The device count of each site, read from `num_devices`.
-        return [{"id": STAND_IN_SITE_ID, "num_devices": len(STAND_IN_DEVICE_TYPES)}]
+        return [
+            {"id": STAND_IN_SITE_ID, "num_devices": len(STAND_IN_DEVICE_TYPES)},
+            {"id": SECOND_SITE_ID, "num_devices": len(STAND_IN_DEVICE_TYPES)},
+        ]
     return []  # An unknown read name shows an empty list, and never a fault.
 
 
@@ -1259,6 +1317,10 @@ def build_stand_in_app() -> Any:
     built.config[capture.RUNNER_KEY] = stand_in_capture_runner  # A capture then verifies and reads no cloud.
     built.config[upgrade.LAUNCHER_KEY] = stand_in_run_launcher  # A start then writes firmware to no device.
     built.config[upgrade.STOP_RUNNER_KEY] = stand_in_stop_runner  # A stop then cancels nothing at the cloud.
+    from src.upgrade_portal.app.routes import org_upgrade
+
+    built.config[org_upgrade.SERVICE_CONFIG_KEY] = E2EOrgUpgradeService
+    built.config[org_upgrade.WRITES_ENABLED_CONFIG_KEY] = True
     _register_operator(STAND_IN_EMAIL, STAND_IN_BROWSER_ID)  # The operator that every test drives.
     _register_operator(SECOND_EMAIL, SECOND_BROWSER_ID)  # The operator that meets the lock refusal.
     _seed_fixture_runs(built, upgrade)  # Browser-only states that no safe page journey can create.

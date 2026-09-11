@@ -981,7 +981,7 @@ class TestImmutability:
         options = upgrade_service.UpgradeOptions()
         assert (options.reboot, options.junos_file_action, options.strategy, options.start_time) == (
             True,
-            False,
+            True,
             "big_bang",
             None,
         )

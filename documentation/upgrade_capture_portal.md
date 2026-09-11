@@ -262,7 +262,7 @@ The page also offers three controls.
 | Control | Default | Meaning |
 | --- | --- | --- |
 | `reboot` | on | The device restarts after the firmware write. |
-| `junos_file_action` | off | The cloud copies the file to the device and stops. The device does not install the file until you ask. |
+| `junos_file_action` | on | The cloud completes the Junos file action after the device reboots. Clear this option to skip the action. |
 | `strategy` | `big_bang` | The order in which the cloud sends the upgrade. The four values are `big_bang`, `canary`, `rrm`, and `serial`. |
 
 The page shows a warning in two cases:

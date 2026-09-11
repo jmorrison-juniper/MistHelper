@@ -78,7 +78,7 @@
   on the next visit.
 #}
 {% set reboot_chosen = option_values.reboot | default(true) %}
-{% set junos_action_chosen = option_values.junos_file_action | default(false) %}
+{% set junos_action_chosen = option_values.junos_file_action | default(true) %}
 {% set force_chosen = option_values.force | default(false) %}
 {% set stable_version_chosen = option_values.stable_version | default(false) %}
 {% set p2p_chosen = option_values.get('peer_to_peer', {}).get('enable_p2p', false) %}

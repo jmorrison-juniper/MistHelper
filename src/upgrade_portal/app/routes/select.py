@@ -65,6 +65,7 @@ select_bp = Blueprint("select", __name__)  # No URL prefix, because the paths sp
 
 # Each route declares a full path, so a reader finds the whole path in one place.
 ORG_PAGE_PATH = "/select/org"  # The organization picker, and the post that stores the pick.
+MODE_PAGE_PATH = "/select/mode"  # The operation mode picker after the organization choice.
 SITE_PAGE_PATH = "/select/site"  # The site picker for the chosen organization.
 SITE_INVENTORY_PAGE_PATH = "/select/site/<site_id>"  # The device list of one site, as a page.
 
@@ -85,10 +86,21 @@ LOCK_API_PATH = "/api/sites/<site_id>/lock"  # The acquire, the resume, the take
 HEARTBEAT_API_PATH = "/api/sites/<site_id>/lock/heartbeat"  # The beat that keeps one lock alive.
 
 SELECTED_ORG_KEY = "selected_org_id"  # The field inside the signed browser session.
+SELECTED_MODE_KEY = "selected_upgrade_mode"  # The operation mode in the signed browser session.
+ORG_UPGRADE_OPTIONS_KEY = "org_upgrade_options"
+ORG_UPGRADE_OPTIONS_ORG_KEY = "org_upgrade_options_org"
+ORG_UPGRADE_OPTIONS_NONCE_KEY = "org_upgrade_options_nonce"
 SELECTED_SITE_KEY = "selected_site_id"  # The site pick, in the same signed session.
 ORG_FIELD = "org_id"  # The body field that carries the pick.
+MODE_FIELD = "mode"  # The body field that carries the operation mode.
+SINGLE_SITE_MODE = "single_site"  # One site uses the current workflow.
+MULTI_SITE_MODE = "multi_site"  # Many sites use the organization workflow.
+UPGRADE_MODES = (SINGLE_SITE_MODE, MULTI_SITE_MODE)  # The complete set of accepted modes.
 FILTER_FIELD = "q"  # The optional text filter of the site list and of the organization picker.
-NEXT_AFTER_ORG = SITE_PAGE_PATH  # The page the browser opens after a successful pick.
+NEXT_AFTER_ORG = MODE_PAGE_PATH  # The operator chooses the operation mode after the organization.
+NEXT_AFTER_MODE = SITE_PAGE_PATH  # Both modes use the familiar site selection page.
+NEXT_AFTER_MULTI_SITE = "/upgrade/org/options"  # The organization upgrade configuration page.
+SITE_IDS_FIELD = "site_ids"  # The repeated form field for a multi-site selection.
 OFFSET_FIELD = "offset"  # The query argument that names the first row of the wanted page.
 
 # `contracts/http-api.md:53` asks the organization picker to page and to filter
@@ -106,6 +118,7 @@ ORG_NEXT_TEST_ID = "org-page-next"  # The control that opens the later page.
 ORG_PREVIOUS_TEST_ID = "org-page-previous"  # The control that opens the earlier page.
 
 ORG_TEMPLATE = "select/orgs.html"  # The organization picker page.
+MODE_TEMPLATE = "select/mode.html"  # The operation mode picker page.
 SITE_TEMPLATE = "select/sites.html"  # The site picker page.
 INVENTORY_TEMPLATE = "select/inventory.html"  # The device list of one site.
 FALLBACK_TEMPLATE = "layout.html"  # The shell page, shown while a picker template is still missing.
@@ -192,9 +205,13 @@ LOCK_STATE_SITE_UNKNOWN = "site_unknown"  # The page named no site, so no lock k
 # `org_not_permitted` code, the refusal sentence, and the 403 status. This
 # module names none of the four.
 ORG_NOT_CHOSEN = "org_not_chosen"  # The request named no organization and the session holds none.
+MODE_NOT_CHOSEN = "mode_not_chosen"  # The request named no accepted operation mode.
+SITES_NOT_CHOSEN = "sites_not_chosen"  # A multi-site request named no site.
 SITE_NOT_FOUND = "site_not_found"  # `contracts/http-api.md` fixes this code for the inventory.
 
 ORG_NOT_CHOSEN_MESSAGE = "Choose an organization before you read the site list."  # The operator reads this.
+MODE_NOT_CHOSEN_MESSAGE = "Choose a single-site or a multi-site operation."  # The operator reads this.
+SITES_NOT_CHOSEN_MESSAGE = "Choose one or more sites for the multi-site operation."  # The operator reads this.
 SITE_NOT_FOUND_MESSAGE = "The portal found no such site in this organization."  # The same text for both paths.
 
 OK_STATUS = 200  # The answer for a read that succeeded.
@@ -536,34 +553,94 @@ def read_chosen_org() -> str:
     return str(request.form.get(ORG_FIELD, "")).strip()  # The plain form path.
 
 
+def clear_org_upgrade_options() -> None:
+    """Drop organization upgrade options that belong to an earlier scope."""
+    session.pop(ORG_UPGRADE_OPTIONS_KEY, None)
+    session.pop(ORG_UPGRADE_OPTIONS_ORG_KEY, None)
+    session.pop(ORG_UPGRADE_OPTIONS_NONCE_KEY, None)
+
+
 def store_chosen_org(org_id: str) -> None:
     """Record the chosen organization in the signed browser session.
 
     Why:
         Flask signs the session, so the browser cannot change the pick. The site
-        list then needs no organization in its path, which is the shape that
-        `contracts/http-api.md` names. A changed organization also drops the
-        stored site, because a site never spans two organizations.
+        list then needs no organization in its path. A changed organization
+        also drops the mode, sites, and upgrade options of the earlier scope.
 
     Args:
         org_id: The organization identifier the operator picked.
     """
-    if session.get(SELECTED_ORG_KEY) != org_id:  # A changed organization makes the stored site wrong.
+    if session.get(SELECTED_ORG_KEY) != org_id:  # A changed organization invalidates the later choices.
+        session.pop(SELECTED_MODE_KEY, None)  # The operator must choose the scope for the new organization.
         clear_chosen_site()  # The operator must not carry a site across an organization boundary.
+        clear_org_upgrade_options()
     session[SELECTED_ORG_KEY] = org_id  # The signed session carries the pick to every later request.
     logger.info("select: the operator chose the organization %s", org_id)  # An identifier is not personal data.
 
 
-def clear_chosen_site() -> None:
-    """Drop any stored site pick from the signed browser session.
+def read_chosen_mode() -> str:
+    """Read the operation mode from the current request body.
 
-    Why:
-        A site belongs to one organization. If the stored site outlived an
-        organization change, a later route would read a site the operator may
-        no longer reach. The ownership check would then refuse it as a fault
-        rather than as a stale pick.
+    Returns:
+        The mode, or an empty string when the body names none.
     """
-    session.pop(SELECTED_SITE_KEY, None)  # A missing key is the normal case, so the default stays.
+    payload: Any = request.get_json(silent=True)
+    if isinstance(payload, dict) and isinstance(payload.get(MODE_FIELD), str):
+        return str(payload[MODE_FIELD]).strip()
+    return str(request.form.get(MODE_FIELD, "")).strip()
+
+
+def store_chosen_mode(mode: str) -> None:
+    """Store the operation mode in the signed browser session.
+
+    Args:
+        mode: The validated operation mode.
+    """
+    if session.get(SELECTED_MODE_KEY) != mode:
+        clear_chosen_site()  # A mode change invalidates the earlier target selection.
+        clear_org_upgrade_options()
+    session[SELECTED_MODE_KEY] = mode
+    logger.info("select: the operator chose the %s operation mode", mode)
+
+
+def selected_mode() -> str | None:
+    """Return the accepted operation mode from the signed session."""
+    value: Any = session.get(SELECTED_MODE_KEY)
+    return value if isinstance(value, str) and value in UPGRADE_MODES else None
+
+
+def clear_chosen_site() -> None:
+    """Drop all stored site targets for the current operator."""
+    session.pop(SELECTED_SITE_KEY, None)
+    record = identity.current_session()
+    if record is not None:
+        record.selected_site_ids = ()
+
+
+def read_chosen_site_ids() -> list[str]:
+    """Read the unique site identifiers from the current request body."""
+    payload: Any = request.get_json(silent=True)
+    values: Any = payload.get(SITE_IDS_FIELD, []) if isinstance(payload, dict) else request.form.getlist(SITE_IDS_FIELD)
+    if not isinstance(values, list):
+        return []
+    return list(dict.fromkeys(str(value).strip() for value in values if str(value).strip()))
+
+
+def store_chosen_sites(site_ids: list[str]) -> None:
+    """Store the validated site set in the server-side operator record."""
+    record = identity.current_session()
+    if record is None:
+        return
+    session.pop(SELECTED_SITE_KEY, None)
+    record.selected_site_ids = tuple(site_ids)
+    logger.info("select: the operator chose %s sites for the organization upgrade", len(site_ids))
+
+
+def selected_site_ids() -> list[str]:
+    """Return the site set from the server-side operator record."""
+    record = identity.current_session()
+    return list(record.selected_site_ids) if record is not None else []
 
 
 def store_chosen_site(site_id: str) -> None:
@@ -600,20 +677,18 @@ def wants_browser_page() -> bool:
     return preferred == BROWSER_MIME  # Only a stated preference for HTML earns a page.
 
 
-def next_page_answer() -> Response | tuple[Response, int]:
-    """Answer one successful pick, as a page redirect or as a JSON body.
+def next_page_answer(path: str = NEXT_AFTER_ORG) -> Response | tuple[Response, int]:
+    """Answer one successful pick as a redirect or as a JSON body.
 
-    Why:
-        `wants_browser_page` holds the negotiation rule, and this function
-        holds the two answers that follow from it. The route then reads as one
-        line, and a later route that needs the same choice reuses this one.
+    Args:
+        path: The path of the next selection step.
 
     Returns:
         The redirect to the next page, or the next path as a JSON body.
     """
     if wants_browser_page():  # A browser form post cannot read a JSON body.
-        return Response(status=REDIRECT_STATUS, headers={LOCATION_HEADER: NEXT_AFTER_ORG})  # The next page.
-    return jsonify({"next": NEXT_AFTER_ORG}), OK_STATUS  # The script opens the site picker next.
+        return Response(status=REDIRECT_STATUS, headers={LOCATION_HEADER: path})
+    return jsonify({"next": path}), OK_STATUS
 
 
 def lock_reader() -> Callable[..., Any] | None:
@@ -1437,6 +1512,32 @@ def choose_org() -> Response | tuple[Response, int]:
     return next_page_answer()  # The rule above chooses the redirect or the JSON body.
 
 
+@select_bp.get(MODE_PAGE_PATH)
+@identity.require_session
+def mode_page() -> str:
+    """Show the operation mode picker for the chosen organization."""
+    org_id = resolve_org(None)
+    return render_page(
+        MODE_TEMPLATE,
+        org_id=org_id or "",
+        org_name=org_display_name(org_id) if org_id else "",
+        selected_mode=selected_mode() or "",
+    )
+
+
+@select_bp.post(MODE_PAGE_PATH)
+@identity.require_session
+def choose_mode() -> Response | tuple[Response, int]:
+    """Store the operation mode that the operator selected."""
+    if resolve_org(None) is None:
+        return json_error(BAD_REQUEST_STATUS, ORG_NOT_CHOSEN, ORG_NOT_CHOSEN_MESSAGE)
+    chosen = read_chosen_mode()
+    if chosen not in UPGRADE_MODES:
+        return json_error(BAD_REQUEST_STATUS, MODE_NOT_CHOSEN, MODE_NOT_CHOSEN_MESSAGE)
+    store_chosen_mode(chosen)
+    return next_page_answer(NEXT_AFTER_MODE)
+
+
 @select_bp.get(SITE_PAGE_PATH)
 @identity.require_session
 def sites_page() -> str:
@@ -1456,7 +1557,33 @@ def sites_page() -> str:
         return render_page(SITE_TEMPLATE, sites=[], org_id="", org_name="")  # An empty table, and no fault.
     rows = apply_text_filter(build_site_rows(chosen), request.args.get(FILTER_FIELD, ""))  # The optional filter.
     name = org_display_name(chosen)  # The heading names the organization, not only its identifier.
-    return render_page(SITE_TEMPLATE, sites=rows, org_id=chosen, org_name=name)  # The picker page itself.
+    return render_page(
+        SITE_TEMPLATE,
+        sites=rows,
+        org_id=chosen,
+        org_name=name,
+        selected_mode=selected_mode() or SINGLE_SITE_MODE,
+        selected_site_ids=selected_site_ids(),
+    )
+
+
+@select_bp.post(SITE_PAGE_PATH)
+@identity.require_session
+def choose_sites() -> Response | tuple[Response, int]:
+    """Store the site set for a multi-site operation."""
+    org_id = resolve_org(None)
+    if org_id is None:
+        return json_error(BAD_REQUEST_STATUS, ORG_NOT_CHOSEN, ORG_NOT_CHOSEN_MESSAGE)
+    if selected_mode() != MULTI_SITE_MODE:
+        return json_error(BAD_REQUEST_STATUS, MODE_NOT_CHOSEN, MODE_NOT_CHOSEN_MESSAGE)
+    chosen = read_chosen_site_ids()
+    if not chosen:
+        return json_error(BAD_REQUEST_STATUS, SITES_NOT_CHOSEN, SITES_NOT_CHOSEN_MESSAGE)
+    permitted = {str(row.get("site_id", "")) for row in build_site_rows(org_id)}
+    if any(site_id not in permitted for site_id in chosen):
+        return json_error(NOT_FOUND_STATUS, SITE_NOT_FOUND, SITE_NOT_FOUND_MESSAGE)
+    store_chosen_sites(chosen)
+    return next_page_answer(NEXT_AFTER_MULTI_SITE)
 
 
 @select_bp.get(SITE_INVENTORY_PAGE_PATH)

@@ -44,10 +44,10 @@ NO_REBOOT = UpgradeOptions(reboot=False)
 WITH_REBOOT = UpgradeOptions(reboot=True)
 
 # The complete key set of the per-device schema for a Junos device with the
-# reboot control off, from ``documentation/api/utilities/
-# POST_sites_site_id_devices_device_id_upgrade.md``. The body carries no
-# ``device_ids`` and no ``strategy``, because the schema holds neither name.
-PER_DEVICE_KEYS = frozenset({"version", "reboot"})
+# reboot control off and the default file action on, from ``documentation/api/
+# utilities/POST_sites_site_id_devices_device_id_upgrade.md``. The body carries
+# no ``device_ids`` and no ``strategy``, because the schema holds neither name.
+PER_DEVICE_KEYS = frozenset({"version", "reboot", "snapshot"})
 
 # The number of arguments that each site-scope call takes. The batch call names
 # the site alone. The per-device call names the site and the device.
@@ -251,17 +251,18 @@ class TestThePerDeviceBody:
         plan = plan_one(options)
         assert "canary_phases" not in plan.body
 
-    def test_carries_the_reboot_choice_and_the_version(self) -> None:
-        """The body states the two values the operator chose.
+    def test_carries_the_reboot_choice_version_and_default_file_action(self) -> None:
+        """The body states the selected values and the default file action.
 
         Why:
-            The whole point of the smaller call is that the reboot choice
-            travels alone. A body that dropped it would send the cloud default,
-            which is also false, but for a reason no reader could see.
+            The smaller call must keep the reboot choice and the default Junos
+            file action. If the body drops one of them, the cloud can use a
+            different default from the portal.
         """
         plan = plan_one(NO_REBOOT)
         assert set(plan.body) == set(PER_DEVICE_KEYS)
         assert plan.body["reboot"] is False
+        assert plan.body["snapshot"] is True
         assert plan.body["version"] == "25.4R1-S2.3"
 
     def test_carries_the_junos_file_action_when_the_operator_asks(self) -> None:

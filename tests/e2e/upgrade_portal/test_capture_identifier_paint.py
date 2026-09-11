@@ -47,6 +47,7 @@ SCRIPT_PATH = REPO_ROOT / "src" / "upgrade_portal" / "app" / "assets" / "static"
 IDENTIFIER_TESTID = "capture-identifier"
 PROGRESS_TESTID = "capture-progress"
 START_TESTID = "capture-start-button"
+TIER_TESTID = "capture-tier-select"
 REFRESH_TESTID = "capture-refresh-button"
 SIZE_TESTID = "capture-size-bytes"
 
@@ -130,6 +131,27 @@ def status_body(state: str, percent: int) -> dict[str, Any]:
     }
 
 
+def render_upgrade_options_page() -> str:
+    """Return the real upgrade options page with its default values."""
+    import flask
+
+    app = factory.create_app()
+    with app.test_request_context("/runs/test/options"):
+        return flask.render_template(
+            "upgrade/options.html",
+            run_id="run-test",
+            site_id=SITE_ID,
+            site_name="The site of the test",
+            targets=[],
+            versions_by_model={},
+            type_selections={},
+            selected_types=["switch"],
+            warnings=[],
+            options={},
+            advanced={},
+        )
+
+
 def render_capture_page(capture_identifier: str, status: dict[str, Any] | None = None) -> str:
     """Return the real capture page, rendered with Jinja.
 
@@ -161,7 +183,8 @@ def render_capture_page(capture_identifier: str, status: dict[str, Any] | None =
             tier=2,  # contracts/http-api.md fixes tier 2 as the default.
             role="pre",  # A pre-check capture, as the run page starts.
             run_id="",  # No run owns this capture, so the page shows the single-capture path.
-            poll_interval_seconds=30,  # Decision D3 fixes the 30-second poll.
+            poll_interval_seconds=3,  # The capture page refreshes progress every three seconds.
+            lock_write_allowed=True,  # The isolated page permits the start control.
         )
 
 
@@ -239,6 +262,121 @@ def open_capture_page(
     return page
 
 
+def test_the_junos_file_action_defaults_to_yes(browser: Any) -> None:
+    """The options page selects the Junos file action by default."""
+    page = browser.new_page()
+    page.set_content(render_upgrade_options_page())
+    try:
+        yes = page.locator('[data-testid="upgrade-junos-file-action-yes"]')
+        no = page.locator('[data-testid="upgrade-junos-file-action-no"]')
+        assert yes.is_checked()
+        assert not no.is_checked()
+    finally:
+        page.close()
+
+
+def test_the_level_three_start_changes_the_button_and_starts_progress(browser: Any) -> None:
+    """A level 3 start gives immediate feedback and adopts the new capture."""
+    page = open_capture_page(browser, "", {})
+    page.evaluate(
+        """
+        ([captureId, siteId]) => {
+            window.__startBody = null;
+            window.fetch = function (url, options) {
+                var address = String(url);
+                if (address.indexOf('/api/sites/' + siteId + '/captures') !== -1) {
+                    window.__startBody = JSON.parse(options.body);
+                    return new Promise(function (resolve) {
+                        window.setTimeout(function () {
+                            resolve({
+                                ok: true,
+                                status: 202,
+                                text: function () {
+                                    return Promise.resolve(JSON.stringify({capture_id: captureId}));
+                                }
+                            });
+                        }, 200);
+                    });
+                }
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    text: function () {
+                        return Promise.resolve(JSON.stringify({
+                            capture_id: captureId,
+                            state: 'running',
+                            percent: 10,
+                            sections: {},
+                            counts: {},
+                            partial_reasons: [],
+                            verified: false,
+                            message: 'The capture is running.'
+                        }));
+                    }
+                });
+            };
+        }
+        """,
+        [CAPTURE_ID, SITE_ID],
+    )
+    try:
+        page.locator(f'[data-testid="{TIER_TESTID}"]').select_option("3")
+        start = page.locator(f'[data-testid="{START_TESTID}"]')
+        start.click()
+        assert start.is_disabled()
+        assert start.inner_text().strip() == "Starting the capture..."
+        page.wait_for_function(
+            f"() => document.querySelector('[data-testid=\"{PROGRESS_TESTID}\"]')"
+            f'.getAttribute("data-capture-id") === "{CAPTURE_ID}"',
+            timeout=WAIT_MILLISECONDS,
+        )
+        assert start.inner_text().strip() == "Capture running"
+        assert page.evaluate("() => window.__startBody.tier") == 3
+    finally:
+        page.close()
+
+
+def test_the_capture_poll_runs_every_three_seconds_and_stops(browser: Any) -> None:
+    """The automatic poll repeats after three seconds and stops on verification."""
+    answers = {f"/api/captures/{CAPTURE_ID}/status": status_body("running", 40)}
+    page = open_capture_page(browser, CAPTURE_ID, answers, status_body("running", 20))
+    try:
+        page.wait_for_timeout(3300)
+        requests = page.evaluate("() => window.__portalRequests.filter(url => url.indexOf('/status') !== -1).length")
+        assert requests >= 2
+        page.locator(f'[data-testid="{PROGRESS_TESTID}"]').evaluate(
+            "element => element.setAttribute('data-capture-tables-ready', 'true')"
+        )
+        page.evaluate(
+            """
+            (body) => {
+                window.__verifiedRequests = 0;
+                window.fetch = function (url) {
+                    var isStatus = String(url).endsWith('/status');
+                    if (isStatus) {
+                        window.__verifiedRequests += 1;
+                    }
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        text: function () {
+                            return Promise.resolve(JSON.stringify(isStatus ? body : {stored_size_bytes: 1}));
+                        }
+                    });
+                };
+            }
+            """,
+            status_body("verified", 100),
+        )
+        page.locator(f'[data-testid="{REFRESH_TESTID}"]').click()
+        page.wait_for_function("() => window.__verifiedRequests >= 1", timeout=WAIT_MILLISECONDS)
+        stopped_at = page.evaluate("() => window.__verifiedRequests")
+        page.wait_for_timeout(3300)
+        assert page.evaluate("() => window.__verifiedRequests") == stopped_at
+    finally:
+        page.close()
+
+
 def test_the_poll_fills_the_identifier(browser: Any) -> None:
     """A poll of a running capture writes the identifier into the field.
 
@@ -249,7 +387,7 @@ def test_the_poll_fills_the_identifier(browser: Any) -> None:
         empty for the whole life of the capture.
 
         This test clicks the manual refresh control of FR-040. That control and
-        the 30-second timer both reach `refreshCaptureStatus`, so one click
+        the 3-second timer both reach `refreshCaptureStatus`, so one click
         proves the path that the timer takes.
 
     Args:
