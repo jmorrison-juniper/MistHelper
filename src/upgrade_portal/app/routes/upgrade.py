@@ -49,7 +49,7 @@ import threading  # One guard for the memory run store, which a driver thread al
 import time  # Issue #2187 previews the moment that a schedule duration names.
 from collections.abc import Iterable, Mapping  # The version answer arrives in more than one shape.
 from datetime import UTC, datetime  # The same preview needs a readable moment.
-from typing import Any, NamedTuple  # A run record is free-form, and the lock read carries two fixed fields.
+from typing import Any, NamedTuple, cast  # Run records are free-form; lock reads carry fixed fields.
 
 from flask import Blueprint, Response, current_app, jsonify, request, session  # The framework of the portal.
 
@@ -2276,7 +2276,7 @@ def retry_run(run_id: str) -> tuple[Response, int]:
     record, notes, reservation_refusal = reserve_retry(failed, run_id, org_id, site_id)
     if reservation_refusal is not None:
         return reservation_refusal
-    assert record is not None  # A reservation with no refusal always returns the record that it persisted.
+    record = cast(dict[str, Any], record)  # A reservation with no refusal always returns its persisted record.
     logger.info("upgrade: the retry %s came from the unsuccessful run %s", record["run_id"], run_id)  # AFTER write.
     return (
         jsonify(
