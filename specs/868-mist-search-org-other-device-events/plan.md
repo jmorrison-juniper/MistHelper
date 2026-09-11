@@ -13,6 +13,14 @@ ships on `main` as menu 252 through pull request #2418.
 4. Confirm the composite primary-key strategy for event records.
 5. Restore the missing SpecKit workflow records from pull request #2380.
 
+## Files
+
+- `MistHelper.py` registers menu 252.
+- `src/export/org_export_utils.py` implements the operation.
+- `src/utils/operation_registry.py` marks the menu as safe.
+- `src/refactors/endpoint_primary_key_strategies.py` defines the key strategy.
+- `tests/unit/export/test_org_export_utils.py` verifies the operation.
+
 ## Validation
 
 - Confirm that menu 252 calls `OrgExportUtils.other_device_events`.
