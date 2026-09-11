@@ -606,6 +606,43 @@ def test_run_page_renders_the_live_view(upgrade_client: FlaskClient, run_store: 
     assert 'data-testid="stop-button"' in page  # The included `stop.html` read the two values the route passed.
 
 
+def test_completed_record_with_failed_device_renders_failure_alert_and_retry(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """A legacy contradictory record must still show the failure prominently."""
+    target = {
+        **PLANNED_ROW,
+        "name": "SRX-1500",
+        "state": "failed",
+        "failure_reason": "GW_UPGRADE_FAILED: OC_FWUPDATE_REQUESTFAILED: firmware upgrade is ongoing",
+    }
+    phases = [
+        {"name": "gateways", "state": "failed", "settled": 0, "total": 1},
+        {"name": "switches", "state": "skipped", "settled": 0, "total": 0},
+        {"name": "aps", "state": "skipped", "settled": 0, "total": 0},
+        {"name": "clients", "state": "settled", "settled": 0, "total": 0},
+    ]
+    run_id = seed_run(run_store, "complete", targets=[target], phases=phases)
+    answer = upgrade_client.get(f"/runs/{run_id}")
+    page = answer.get_data(as_text=True)
+    assert 'data-testid="upgrade-failure-alert"' in page
+    assert "Upgrade failed." in page
+    assert "OC_FWUPDATE_REQUESTFAILED" in page
+    assert 'data-testid="run-retry-controls"' in page
+
+    status = upgrade_client.get(f"/api/runs/{run_id}/status").get_json()
+    assert status["state"] == "failed"
+    assert status["failures"] == [
+        {
+            "name": "SRX-1500",
+            "mac": str(target["mac"]),
+            "reason": target["failure_reason"],
+        }
+    ]
+    assert status["targets"][0]["failure_reason"] == target["failure_reason"]
+
+
 def test_run_page_gives_a_recovery_link_for_an_unprepared_run(
     upgrade_client: FlaskClient,
     run_store: RecordingRunStore,

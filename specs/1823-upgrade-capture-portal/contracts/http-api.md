@@ -438,17 +438,26 @@ one begin action for each run, so the second call sends nothing.
   "targets": [
     { "mac": "<string>", "name": "<string>", "device_type": "switch",
       "state": "rebooting", "version_before": "<string>",
-      "version_target": "<string>", "version_after": null }
+      "version_target": "<string>", "version_after": null,
+      "failure_reason": null }
   ],
   "stop_request": null,
   "pre_capture_id": "cap-ab12cd34-01",
   "post_capture_id": null,
-  "message": "Waiting for 5 switches to return."
+  "message": "Waiting for 5 switches to return.",
+  "error": null,
+  "failures": []
 }
 ```
 
-The body carries a tenth key, `lock`, only when the run record holds a lock entry.
-A healthy run carries no such key, and the key reports a fault alone.
+A failed run puts the safe run-level failure under `error`. It also puts one
+entry for each failed device under `failures`. Each entry holds `name`, `mac`,
+and `reason`. The reason comes from the Mist device event log when the log
+reports one. The same reason appears as `failure_reason` on the target row.
+These fields never contain a credential.
+
+The body carries a twelfth key, `lock`, only when the run record holds a lock
+entry. A healthy run carries no such key, and the key reports a fault alone.
 
 Each phase entry carries six keys, whatever the example above shows. The view
 fills `name`, `state`, `settled`, `total`, `settled_at`, and `note` on every
@@ -482,8 +491,10 @@ The browser polls this endpoint every 30 seconds.
 | 500 | `run_write_failed` when the store refused the write |
 | 503 | `lock_store_unreachable` when the portal cannot read the site lock |
 
-The new run copies every option of the failed run, the device list, and the
-target version of each device. It names the failed run in `retry_of_run_id`.
+The new run copies every option of the unsuccessful run and the target version
+of each device that failed or did not finish. It excludes devices that already
+settled on the requested version. It names the earlier run in
+`retry_of_run_id`.
 
 Warning: a schedule of the failed run names a moment in the past. A retry that
 kept that moment would write the firmware at once, and the operator would read a

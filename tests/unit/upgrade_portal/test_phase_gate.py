@@ -130,17 +130,28 @@ class FakeReconnectReader:
         so a long deadline case needs no long schedule.
     """
 
-    def __init__(self, schedule: Sequence[Collection[str]] = (), fail_rounds: Collection[int] = ()) -> None:
-        """Build one fake reconnect reader.
-
-        Args:
-            schedule: One address set for each round. The last entry repeats.
-            fail_rounds: The one-based rounds at which the read raises.
-        """
+    def __init__(
+        self,
+        schedule: Sequence[Collection[str]] = (),
+        fail_rounds: Collection[int] = (),
+        failure_reasons: Mapping[str, str] | None = None,
+        failure_schedule: Sequence[Mapping[str, str]] = (),
+    ) -> None:
+        """Build one fake reconnect reader."""
         self._schedule = [frozenset(item) for item in schedule]
         self._fail_rounds = frozenset(fail_rounds)
+        self._failure_reasons = dict(failure_reasons or {})
+        self._failure_schedule = [dict(item) for item in failure_schedule]
         self.calls = 0
         self.families: list[str] = []
+
+    @property
+    def failure_reasons(self) -> Mapping[str, str]:
+        """Return the failure reasons scheduled for the current round."""
+        if not self._failure_schedule:
+            return dict(self._failure_reasons)
+        index = min(max(self.calls - 1, 0), len(self._failure_schedule) - 1)
+        return dict(self._failure_schedule[index])
 
     def read(self, device_type: str) -> frozenset[str]:
         """Return the addresses that reconnected in this round.
@@ -384,20 +395,32 @@ def test_a_phase_settles_on_the_first_poll() -> None:
     sleeper_clock = FakeClock()
     harness = Harness(FakeReconnectReader(), FakeStatisticsReader(), AlwaysSettledGate(sleeper_clock))
     outcome = harness.adapter.settle(RUN_ID, "switches", [target_entry(SWITCH_MAC)])
-    assert outcome == PhaseOutcome("switches", PhaseState.SETTLED.value, 1, 1)
-    assert harness.events.calls == 1
+    assert outcome == PhaseOutcome(
+        "switches",
+        PhaseState.SETTLED.value,
+        1,
+        1,
+        settled_targets=((SWITCH_MAC, VERSION_AFTER),),
+    )
+    assert harness.events.calls == 2
     assert harness.statistics.calls == 1
-    assert harness.sleeper.calls == []
+    assert harness.sleeper.calls == [float(gate.POLL_INTERVAL_SECONDS)]
 
 
 def test_a_phase_settles_after_several_polls() -> None:
     """A switch settles on the round that follows its 60-second wait."""
     harness = switch_harness()
     outcome = harness.adapter.settle(RUN_ID, "switches", [target_entry(SWITCH_MAC)])
-    assert outcome == PhaseOutcome("switches", PhaseState.SETTLED.value, 1, 1)
-    assert harness.events.calls == SWITCH_SETTLE_ROUNDS
-    assert harness.sleeper.calls == [float(gate.POLL_INTERVAL_SECONDS)] * (SWITCH_SETTLE_ROUNDS - 1)
-    assert harness.clock() == START_TIME + float(gate.SETTLE_WAIT_SECONDS)
+    assert outcome == PhaseOutcome(
+        "switches",
+        PhaseState.SETTLED.value,
+        1,
+        1,
+        settled_targets=((SWITCH_MAC, VERSION_AFTER),),
+    )
+    assert harness.events.calls == SWITCH_SETTLE_ROUNDS + 1
+    assert harness.sleeper.calls == [float(gate.POLL_INTERVAL_SECONDS)] * SWITCH_SETTLE_ROUNDS
+    assert harness.clock() == START_TIME + float(gate.SETTLE_WAIT_SECONDS + gate.POLL_INTERVAL_SECONDS)
 
 
 def test_a_phase_that_hits_the_deadline_reports_the_devices_that_returned() -> None:
@@ -406,8 +429,44 @@ def test_a_phase_that_hits_the_deadline_reports_the_devices_that_returned() -> N
     harness = Harness(events, FakeStatisticsReader(rebooted_readings(SWITCH_MAC)))
     targets = [target_entry(SWITCH_MAC), target_entry(SECOND_SWITCH_MAC)]
     outcome = harness.adapter.settle(RUN_ID, "switches", targets)
-    assert outcome == PhaseOutcome("switches", PhaseState.FAILED.value, 1, 2, (SECOND_SWITCH_MAC,))
+    assert outcome == PhaseOutcome(
+        "switches",
+        PhaseState.FAILED.value,
+        1,
+        2,
+        (SECOND_SWITCH_MAC,),
+        settled_targets=((SWITCH_MAC, VERSION_AFTER),),
+    )
     assert harness.events.calls == phase_gate.polls_per_phase()
+
+
+def test_an_upgrade_failure_event_ends_the_device_wait_with_its_reason() -> None:
+    """A cloud-reported failure is final and must not wait for the deadline."""
+    reason = "GW_UPGRADE_FAILED: OC_FWUPDATE_REQUESTFAILED: firmware upgrade is ongoing"
+    events_reader = FakeReconnectReader(failure_reasons={SWITCH_MAC: reason})
+    harness = Harness(events_reader, FakeStatisticsReader())
+    outcome = harness.adapter.settle(RUN_ID, "switches", [target_entry(SWITCH_MAC)])
+    assert outcome.state == PhaseState.FAILED.value
+    assert outcome.not_returned == (SWITCH_MAC,)
+    assert outcome.failures == ((SWITCH_MAC, reason),)
+    assert reason in outcome.note
+    assert harness.events.calls == 1
+
+
+def test_a_delayed_failure_overrides_an_earlier_settle() -> None:
+    """A late event fails the device without holding the phase to its deadline."""
+    reason = "SW_UPGRADE_FAILED: checksum mismatch"
+    events_reader = FakeReconnectReader(
+        [[SWITCH_MAC]],
+        failure_schedule=[{}, {}, {}, {}, {SWITCH_MAC: reason}],
+    )
+    statistics = FakeStatisticsReader(rebooted_readings(SWITCH_MAC))
+    harness = Harness(events_reader, statistics)
+    outcome = harness.adapter.settle(RUN_ID, "switches", [target_entry(SWITCH_MAC)])
+    assert outcome.state == PhaseState.FAILED.value
+    assert outcome.failures == ((SWITCH_MAC, reason),)
+    assert outcome.settled_targets == ()
+    assert harness.events.calls == SWITCH_SETTLE_ROUNDS + 1
 
 
 def test_a_phase_that_hits_the_deadline_names_each_device_that_stayed_out() -> None:
@@ -441,9 +500,17 @@ def test_an_access_point_phase_waits_one_further_minute() -> None:
     events = FakeReconnectReader([[ACCESS_POINT_MAC]])
     harness = Harness(events, FakeStatisticsReader(rebooted_readings(ACCESS_POINT_MAC)))
     outcome = harness.adapter.settle(RUN_ID, "aps", [target_entry(ACCESS_POINT_MAC, "ap")])
-    assert outcome == PhaseOutcome("aps", PhaseState.SETTLED.value, 1, 1)
-    assert harness.events.calls == ACCESS_POINT_SETTLE_ROUNDS
-    assert harness.clock() == START_TIME + float(gate.SETTLE_WAIT_SECONDS + gate.ACCESS_POINT_EXTRA_WAIT_SECONDS)
+    assert outcome == PhaseOutcome(
+        "aps",
+        PhaseState.SETTLED.value,
+        1,
+        1,
+        settled_targets=((ACCESS_POINT_MAC, VERSION_AFTER),),
+    )
+    assert harness.events.calls == ACCESS_POINT_SETTLE_ROUNDS + 1
+    assert harness.clock() == START_TIME + float(
+        gate.SETTLE_WAIT_SECONDS + gate.ACCESS_POINT_EXTRA_WAIT_SECONDS + gate.POLL_INTERVAL_SECONDS
+    )
 
 
 def test_the_access_point_wait_costs_exactly_three_more_rounds() -> None:
@@ -489,7 +556,7 @@ def test_an_event_read_that_raises_costs_one_round() -> None:
     harness = Harness(events, FakeStatisticsReader(rebooted_readings(SWITCH_MAC)))
     outcome = harness.adapter.settle(RUN_ID, "switches", [target_entry(SWITCH_MAC)])
     assert outcome.state == PhaseState.SETTLED.value
-    assert harness.events.calls == ROUNDS_AFTER_ONE_FAILED_READ
+    assert harness.events.calls == ROUNDS_AFTER_ONE_FAILED_READ + 1
 
 
 def test_an_event_source_that_never_answers_names_the_events() -> None:
@@ -548,12 +615,12 @@ def test_a_phase_that_timed_out_on_partial_reads_says_so() -> None:
 # --- The call budget ------------------------------------------------------
 
 
-def test_the_round_makes_exactly_two_cloud_calls() -> None:
-    """One round reads the events once and the statistics once."""
+def test_each_round_makes_two_calls_and_confirmation_makes_one() -> None:
+    """Each round reads both sources, then success confirms events once."""
     harness = switch_harness()
     harness.adapter.settle(RUN_ID, "switches", [target_entry(SWITCH_MAC)])
-    assert harness.events.calls == harness.statistics.calls
-    assert harness.events.calls + harness.statistics.calls == SWITCH_SETTLE_ROUNDS * phase_gate.CALLS_PER_ROUND
+    assert harness.events.calls == harness.statistics.calls + 1
+    assert harness.events.calls + harness.statistics.calls == SWITCH_SETTLE_ROUNDS * phase_gate.CALLS_PER_ROUND + 1
 
 
 def test_the_device_count_never_changes_the_call_count() -> None:
@@ -563,7 +630,13 @@ def test_the_device_count_never_changes_the_call_count() -> None:
     harness = Harness(events, statistics)
     targets = [target_entry(SWITCH_MAC), target_entry(SECOND_SWITCH_MAC)]
     outcome = harness.adapter.settle(RUN_ID, "switches", targets)
-    assert outcome == PhaseOutcome("switches", PhaseState.SETTLED.value, 2, 2)
+    assert outcome == PhaseOutcome(
+        "switches",
+        PhaseState.SETTLED.value,
+        2,
+        2,
+        settled_targets=((SWITCH_MAC, VERSION_AFTER), (SECOND_SWITCH_MAC, VERSION_AFTER)),
+    )
     assert harness.statistics.calls == SWITCH_SETTLE_ROUNDS
 
 
@@ -672,7 +745,13 @@ def test_a_null_uptime_before_settles_on_the_version_change(caplog: pytest.LogCa
     events = FakeReconnectReader([[SWITCH_MAC]])
     harness = Harness(events, FakeStatisticsReader(rebooted_readings(SWITCH_MAC)))
     outcome = harness.adapter.settle(RUN_ID, "switches", [target_entry(SWITCH_MAC, uptime_before=None)])
-    assert outcome == PhaseOutcome("switches", PhaseState.SETTLED.value, 1, 1)
+    assert outcome == PhaseOutcome(
+        "switches",
+        PhaseState.SETTLED.value,
+        1,
+        1,
+        settled_targets=((SWITCH_MAC, VERSION_AFTER),),
+    )
     assert any(SWITCH_MAC in record.getMessage() for record in caplog.records)
 
 
@@ -691,6 +770,7 @@ def test_the_adapter_answers_with_the_record_the_driver_writes() -> None:
     outcome = harness.adapter.settle(RUN_ID, "switches", [target_entry(SWITCH_MAC)])
     assert isinstance(outcome, PhaseOutcome)
     assert (outcome.name, outcome.settled, outcome.total) == ("switches", 1, 1)
+    assert outcome.settled_targets == ((SWITCH_MAC, VERSION_AFTER),)
 
 
 def test_the_adapter_fills_the_driver_protocol() -> None:
@@ -708,7 +788,14 @@ def test_a_settled_device_is_never_observed_again() -> None:
     harness = Harness(events, statistics, deadline_seconds=gate.POLL_INTERVAL_SECONDS * 10)
     targets = [target_entry(SWITCH_MAC), target_entry(SECOND_SWITCH_MAC)]
     outcome = harness.adapter.settle(RUN_ID, "switches", targets)
-    assert outcome == PhaseOutcome("switches", PhaseState.FAILED.value, 1, 2, (SECOND_SWITCH_MAC,))
+    assert outcome == PhaseOutcome(
+        "switches",
+        PhaseState.FAILED.value,
+        1,
+        2,
+        (SECOND_SWITCH_MAC,),
+        settled_targets=((SWITCH_MAC, VERSION_AFTER),),
+    )
 
 
 # --- The proof that no test waits -----------------------------------------

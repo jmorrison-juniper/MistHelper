@@ -61,9 +61,9 @@ METHOD_NOT_ALLOWED_STATUS = 405  # The path accepts a read only.
 
 NOT_AUTHENTICATED_CODE = "not_authenticated"  # `identity.require_session` answers this code.
 
-# WHY: `contracts/http-api.md` section 5 shows exactly these nine keys. The page
-# reads each one on every poll, so an extra key would tell a reader that the
-# portal promises a field the contract never fixed.
+# WHY: `contracts/http-api.md` section 5 fixes these keys. The page reads each
+# one on every poll, so an extra key would tell a reader that the portal promises
+# a field the contract never fixed.
 STATUS_FIELDS = {
     "run_id",
     "state",
@@ -74,6 +74,8 @@ STATUS_FIELDS = {
     "pre_capture_id",
     "post_capture_id",
     "message",
+    "error",
+    "failures",
 }
 
 # WHY: `data-model.md` section 4.2 fixes this order, and the page draws the four
@@ -85,9 +87,18 @@ PHASE_ORDER = ["gateways", "switches", "aps", "clients"]
 # The sixth key names what the gate could not read, and it holds text, never null.
 PHASE_FIELDS = {"name", "state", "settled", "total", "settled_at", "note"}
 
-# WHY: The contract shows these seven keys on a target row. A row that dropped a
+# WHY: The contract shows these eight keys on a target row. A row that dropped a
 # key would leave a blank column with no reason a reader could see.
-TARGET_FIELDS = {"mac", "name", "device_type", "state", "version_before", "version_target", "version_after"}
+TARGET_FIELDS = {
+    "mac",
+    "name",
+    "device_type",
+    "state",
+    "version_before",
+    "version_target",
+    "version_after",
+    "failure_reason",
+}
 
 # WHY: `data-model.md` section 4.3 fixes these five keys on a stop request.
 STOP_REQUEST_FIELDS = {"requested_by", "requested_at", "confirmation_text", "scope", "outcome"}
@@ -338,19 +349,19 @@ def test_the_status_adds_no_key_the_contract_never_named(
     upgrade_client: FlaskClient,
     run_store: RecordingRunStore,
 ) -> None:
-    """The status body holds the nine contract keys, and no other key.
+    """The status body holds the fixed contract keys, and no other key.
 
     Why:
-        A reader of the contract looks for these nine keys only. A tenth key
-        would become a promise that no contract fixed, and a later removal of
-        it would then read as a breaking change.
+        A reader of the contract looks for these keys only. An extra key would
+        become a promise that no contract fixed, and a later removal of it
+        would then read as a breaking change.
 
     Args:
         upgrade_client: The signed-in client.
         run_store: The stand-in run record store.
     """
     run_id = seed_run(run_store, RUNNING_STATE)  # A run in flight, which is the state the page polls most.
-    assert set(status_body(upgrade_client, run_id)) == STATUS_FIELDS  # Exactly the nine keys of the contract.
+    assert set(status_body(upgrade_client, run_id)) == STATUS_FIELDS  # Exactly the fixed keys of the contract.
 
 
 def test_the_status_names_the_four_phases_in_the_fixed_order(

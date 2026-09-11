@@ -295,6 +295,9 @@ class PhaseOutcome:
             when the gate reports the counts alone.
         note: One sentence naming what the gate could not read. Empty when
             every read of the last round answered.
+        failures: Each device address and the failure reason reported by the
+            Mist device event log.
+        settled_targets: Each successful device address and its reported version.
     """
 
     name: str
@@ -303,6 +306,8 @@ class PhaseOutcome:
     total: int = 0
     not_returned: tuple[str, ...] = ()  # Empty by default, so a gate that reports counts alone still builds one
     note: str = ""  # Empty by default, so a phase that never met a fault names no cause
+    failures: tuple[tuple[str, str], ...] = ()
+    settled_targets: tuple[tuple[str, str | None], ...] = ()
 
 
 class PhaseGate(Protocol):
@@ -1444,7 +1449,7 @@ class RunDriver:
             lost = self._run_phase(record, name)  # Text when the phase could not run, and None when it ran
             if str(record.get("state", "")) == RunState.STOPPED.value:
                 return  # The interrupted gate already completed the stop and the post-check.
-            reason = lost or reason  # A later phase that ran well never clears an earlier reason
+            reason = reason or lost  # Keep the first failure, which is the root cause of downstream skips.
         self._finish(record, reason)
 
     def _run_phase(self, record: MutableMapping[str, Any], name: str) -> str | None:
@@ -1481,6 +1486,10 @@ class RunDriver:
             return None
         self._beat()  # The phase held this thread for up to half an hour, so the lock beats as it ends
         self._write_phase(record, outcome)  # The record now holds the counts the gate reported
+        if outcome.state == PhaseState.FAILED.value:
+            detail = outcome.note or f"{len(outcome.not_returned)} device(s) did not return before the phase limit."
+            phase_label = "access point" if name == AP_PHASE else name
+            return f"The {phase_label} phase failed. {detail}"
         return None  # This phase ran, so it names no reason to fail the run
 
     def _write_phase(self, record: MutableMapping[str, Any], outcome: PhaseOutcome) -> None:
@@ -1504,12 +1513,26 @@ class RunDriver:
             "total": outcome.total,
             "settled_at": settled_at,
             "note": outcome.note,
+            "failures": [{"mac": mac, "reason": reason} for mac, reason in outcome.failures],
         }
         phases = [dict(item) for item in record.get("phases", [])]
         record["phases"] = [entry if str(item.get("name", "")) == outcome.name else item for item in phases]
+        self._record_settled(record, outcome)
         self._record_missing(record, outcome)  # FR-047: mark each device before the record reaches the store
         logger.info("Run %s reports phase %s as %s", record.get("run_id", ""), outcome.name, outcome.state)
         self._save(record)
+
+    @staticmethod
+    def _record_settled(record: MutableMapping[str, Any], outcome: PhaseOutcome) -> None:
+        """Store each successful device result for later failed-only retries."""
+        settled = dict(outcome.settled_targets)
+        for target in record.get("targets", []):
+            mac = str(target.get("mac", "")).strip().lower()
+            if mac not in settled:
+                continue
+            target["state"] = PhaseState.SETTLED.value
+            if settled[mac] is not None:
+                target["version_after"] = settled[mac]
 
     def _record_missing(self, record: MutableMapping[str, Any], outcome: PhaseOutcome) -> None:
         """Mark the devices of one phase that never came back.
@@ -1528,7 +1551,13 @@ class RunDriver:
         if outcome.state != _PHASE_TIMED_OUT or missing == 0:
             return  # The wait still runs, or every device came back, so nothing needs a mark
         marked = mark_not_returned(record, outcome.not_returned)  # FR-047: name the device, not only the count
-        detail = f"settled {outcome.settled} of {outcome.total} and marked {marked} as not returned"
+        reasons = dict(outcome.failures)
+        for target in record.get("targets", []):
+            mac = str(target.get("mac", "")).strip().lower()
+            if mac in reasons:
+                target["state"] = TARGET_STATE_NOT_RETURNED
+                target["failure_reason"] = reasons[mac]
+        detail = f"settled {outcome.settled} of {outcome.total} and marked {marked} as failed"
         logger.warning("Run %s phase %s %s", record.get("run_id", ""), outcome.name, detail)
 
     def _finish(self, record: MutableMapping[str, Any], reason: str | None = None) -> None:

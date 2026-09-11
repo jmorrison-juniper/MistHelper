@@ -61,6 +61,8 @@ from ...runtime.runs import (  # The record layer owns every rule below, so no c
     RunStateMachine,
     RunStatusView,
     RunTransitionError,
+    run_has_failures,
+    target_needs_retry,
 )
 from ...runtime.signals import (  # The stop request rides inside the run record, visible to every worker.
     ConfirmationRequiredError,
@@ -1705,6 +1707,7 @@ def run_page(run_id: str) -> str:
     record = load_run(run_id) or {}  # An absent run still renders, so the operator reads a page and not a fault.
     poll_seconds = current_app.config.get("POLL_INTERVAL_SECONDS", 30)  # Decision D3 fixes this period.
     logger.info("upgrade: show the run page of %s", run_id)  # One line for each page read.
+    status = RunStatusView().build(record)
     context = {
         **site_labels(record),  # Issue #2100 names the site in words and keeps the identifier.
         **stop_control_state(record),  # The two values that the included stop partial reads.
@@ -1713,13 +1716,14 @@ def run_page(run_id: str) -> str:
     return render_page(
         PROGRESS_TEMPLATE,
         run_id=run_id,  # The page builds every control identifier from this value.
-        status=RunStatusView().build(record),  # The same body that the poll answers.
+        status=status,  # The same body that the poll answers.
         poll_interval_seconds=poll_seconds,  # The script reads this through `data-poll-seconds`.
         # Issue #2201 shows the reschedule and the cancel for a run that has not
         # reached the cloud. A run past that point offers the stop control alone.
         run_not_started=run_not_started(record),
-        # An unsuccessful terminal run can restart with its saved plan.
-        run_state_name=str(record.get("state") or ""),
+        # Older records can say complete while a phase says failed. The status
+        # view repairs that contradiction for the page and the retry control.
+        run_state_name=str(status.get("state") or ""),
         **context,  # The site labels, the stop partial values, and the lock banner values.
     )
 
@@ -2124,7 +2128,7 @@ RUN_ALREADY_STARTED_MESSAGE = (
 # Issue #2447: a retry reaches an unsuccessful terminal run alone.
 RUN_NOT_RETRYABLE_CODE = "run_not_retryable"
 RUN_NOT_RETRYABLE_MESSAGE = (
-    "A retry reads a failed, stopped, or cancelled run. This run holds another state, so no retry applies to it."
+    "A retry reads an unsuccessful run. This run holds no failed device or retryable final state."
 )
 RETRYABLE_STATES = frozenset({RunState.FAILED.value, RunState.STOPPED.value, RunState.CANCELLED.value})
 
@@ -2182,6 +2186,16 @@ RETRY_DROPPED_SCHEDULE_MESSAGE = (
 )
 
 
+def failed_retry_targets(record: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Return only devices that did not finish the requested upgrade.
+
+    A retry must not reboot a device that already reached its target version.
+    For an older failed record with no per-device result, keep unresolved
+    targets so the operator does not lose the only recovery path.
+    """
+    return [dict(target) for target in record.get(TARGETS_FIELD, []) if target_needs_retry(target)]
+
+
 def rebased_options(options: Mapping[str, Any]) -> tuple[dict[str, Any], list[str]]:
     """Copy every option of a failed run and move each schedule to the present.
 
@@ -2232,7 +2246,7 @@ def reserve_retry(
         record = RunRecordBuilder().build(new_run_spec(org_id, site_id))  # The record layer owns every field.
         options, notes = rebased_options(source.get("options") or {})  # Every choice, with schedules rebased.
         record["options"] = options
-        record[TARGETS_FIELD] = list(source.get(TARGETS_FIELD) or [])  # The same devices and versions.
+        record[TARGETS_FIELD] = failed_retry_targets(source)  # Retry only devices that did not finish successfully.
         record["retry_of_run_id"] = source_id  # The new record names the run that it came from.
         if not save_run(record):
             return None, [], write_failed()
@@ -2268,7 +2282,8 @@ def retry_run(run_id: str) -> tuple[Response, int]:
     refusal = stop_lock_refusal(failed)  # FR-038i binds every write of a run to the operator that holds the site.
     if refusal is not None:  # Another operator holds the site, so this call writes nothing.
         return refusal
-    if str(failed.get("state") or "") not in RETRYABLE_STATES:  # A retry reaches an unsuccessful final run alone.
+    state = str(failed.get("state") or "")
+    if state not in RETRYABLE_STATES and not run_has_failures(failed):
         return json_error(CONFLICT_STATUS, RUN_NOT_RETRYABLE_CODE, RUN_NOT_RETRYABLE_MESSAGE)
     org_id = str(failed.get("org_id") or "")  # The new run keeps the scope of the earlier one.
     site_id = str(failed.get("site_id") or "")  # FR-014 binds one run to one site.

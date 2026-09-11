@@ -602,6 +602,50 @@ def select_reconnect_events(
     return tuple(event for event in events if keys.matches(str(event.get("type", ""))))
 
 
+def _event_timestamp(event: Mapping[str, Any]) -> float:
+    """Return one event timestamp, or zero when it is unreadable."""
+    try:
+        return float(event.get("timestamp") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _event_precedes(event: Mapping[str, Any], since: float | None) -> bool:
+    """Report whether one event predates the integer-second start boundary."""
+    return since is not None and _event_timestamp(event) < int(since)
+
+
+def _failure_description(event: Mapping[str, Any], event_type: str) -> str:
+    """Build the event type and optional Mist reason text."""
+    reason = str(event.get("reason") or "").strip()
+    text = str(event.get("text") or "").strip()
+    detail = ": ".join(part for part in (reason, text) if part)
+    return f"{event_type}: {detail}" if detail else event_type
+
+
+def _upgrade_failure(event: Mapping[str, Any], since: float | None) -> tuple[str, str] | None:
+    """Return one normalized upgrade failure, or None for another event."""
+    if _event_precedes(event, since):
+        return None
+    event_type = str(event.get("type") or "").strip().upper()
+    if not event_type.endswith("_UPGRADE_FAILED"):
+        return None
+    mac = normalize_device_mac(event.get("mac"))
+    if not mac:
+        return None
+    return mac, _failure_description(event, event_type)
+
+
+def upgrade_failure_reasons(event_rows: Sequence[Mapping[str, Any]], since: float | None = None) -> dict[str, str]:
+    """Return the first reported upgrade failure reason for each device."""
+    failures: dict[str, str] = {}
+    for event in event_rows:
+        failure = _upgrade_failure(event, since)
+        if failure is not None:
+            failures.setdefault(*failure)
+    return failures
+
+
 def reconnect_macs(events: Sequence[Mapping[str, Any]], keys: EventKeys) -> frozenset[str]:
     """Return the MAC address of each device that reported a reconnect.
 
@@ -671,4 +715,5 @@ __all__ = [
     "reconnect_macs",
     "seconds_until_next_poll",
     "select_reconnect_events",
+    "upgrade_failure_reasons",
 ]
