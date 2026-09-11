@@ -77,6 +77,11 @@
 {% set post_key = status_record.post_capture_id | default('', true) %}
 {% set failure_rows = status_record.failures | default([], true) %}
 {% set run_error = status_record.error | default({}, true) %}
+{% set stale_record = stale_assessment | default(none, true) %} {# Read the shared immutable policy result. #}
+{% set run_age_text = stale_record.age_text | default('unknown', true) if stale_record else 'unknown' %} {# Use safe text. #}
+{% set run_age_seconds = stale_record.age_seconds if stale_record and stale_record.age_seconds is not none else '' %} {# Keep exact age data. #}
+{% set run_age_updated_at = stale_record.updated_at | default('', true) if stale_record else '' %} {# Expose valid UTC only. #}
+{% set run_is_stale = stale_record.is_stale | default(false) if stale_record else false %} {# Trust the server decision. #}
 
 {#
   The cascade order is fixed: gateways, then switches, then access points, then
@@ -147,6 +152,22 @@
     without generated content.
   #}
   <p class="status-panel-state" data-testid="upgrade-state">{{ run_state }}</p>
+
+  <div class="run-age-summary">
+    <p class="portal-card-note">
+      Last update:
+      <span class="run-age-text"
+            data-testid="run-last-update-age"
+            data-run-age
+            data-age-updated-at="{{ run_age_updated_at }}"
+            data-age-seconds="{{ run_age_seconds }}">{{ run_age_text }}</span>
+    </p>
+    {% if run_is_stale %} {# Print the shared policy result and do not calculate eligibility here. #}
+      <span class="portal-badge badge-stale"
+            data-testid="run-stale-badge"
+            aria-label="Stale run"><span class="stale-symbol" aria-hidden="true">!</span> Stale</span>
+    {% endif %}
+  </div>
 
   <p class="status-message" data-run-field="message">{{ run_message }}</p>
 

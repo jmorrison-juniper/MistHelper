@@ -128,7 +128,7 @@
 </div>
 
 <div class="portal-table-scroll">
-  <table class="portal-table" data-testid="history-run-table" data-sortable>
+  <table class="portal-table run-history-table" data-testid="history-run-table" data-sortable>
     <caption class="visually-hidden">
       Every upgrade run. Each row holds the site, the state, the device count,
       the start moment, the end moment, and a link to each capture.
@@ -142,6 +142,7 @@
         <th scope="col">Devices</th>
         <th scope="col">Started</th>
         <th scope="col">Ended</th>
+        <th scope="col">Last update</th>
         <th scope="col" data-no-sort>Captures</th>
       </tr>
     </thead>
@@ -171,6 +172,18 @@
           <td>{{ run.device_count }}</td>
           <td title="{{ run.started_raw }}">{{ run.started_text }}</td>
           <td>{{ run.ended_text }}</td>
+          <td class="run-age-cell">
+            <span class="run-age-text"
+                  data-testid="history-run-age-{{ run.run_id }}"
+                  data-run-age
+                  data-age-updated-at="{{ run.updated_at }}"
+                  data-age-seconds="{{ run.age_seconds if run.age_seconds is not none else '' }}">{{ run.age_text }}</span>
+            {% if run.is_stale %} {# Print the policy result and do not decide eligibility in the template. #}
+              <span class="portal-badge badge-stale"
+                    data-testid="history-run-stale-{{ run.run_id }}"
+                    aria-label="Stale run"><span class="stale-symbol" aria-hidden="true">!</span> Stale</span>
+            {% endif %}
+          </td>
           <td>
             {% if run.pre_capture_id %}
               <a href="/captures/{{ run.pre_capture_id }}"
@@ -187,7 +200,7 @@
         </tr>
       {% else %}
         <tr>
-          <td colspan="7" class="portal-table-empty" data-testid="history-run-empty">
+          <td colspan="8" class="portal-table-empty" data-testid="history-run-empty">
             The portal holds no upgrade run yet.
           </td>
         </tr>
@@ -425,5 +438,4 @@
   </div>
 </div>
 {% endblock %}
-
 

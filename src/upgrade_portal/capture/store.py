@@ -711,6 +711,17 @@ def bootstrap_storage(database: Any = None) -> BootstrapReport:
     return BootstrapReport(collections, indexes, edge_ready, True)
 
 
+def _canonical_value(value: Any) -> Any:
+    """Normalize values that a JSON document store can return differently."""
+    if isinstance(value, float) and value.is_integer():  # ArangoDB can return a whole JSON float as an integer.
+        return int(value)  # Keep equal JSON numbers equal during the read-back check.
+    if isinstance(value, Mapping):  # Normalize nested Tier 3 sections too.
+        return {key: _canonical_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):  # JSON writes both sequence types as arrays.
+        return [_canonical_value(item) for item in value]
+    return value  # Preserve booleans, fractional floats, strings, and null values.
+
+
 def canonical_json(document: Mapping[str, Any]) -> str:
     """Return the canonical JSON form of the body of a document.
 
@@ -720,13 +731,16 @@ def canonical_json(document: Mapping[str, Any]) -> str:
         field whose name starts with an underscore. The writer and the server
         add those fields after the caller builds the document.
 
+        A JSON store can return `0.0` as `0`. These values are the same JSON
+        number, so the canonical form normalizes whole floats before the digest.
+
     Args:
         document: The document to render.
 
     Returns:
         The canonical JSON text.
     """
-    body = {key: value for key, value in document.items() if not key.startswith("_")}
+    body = {key: _canonical_value(value) for key, value in document.items() if not key.startswith("_")}
     return json.dumps(body, sort_keys=True, separators=(",", ":"), default=str, ensure_ascii=True)
 
 

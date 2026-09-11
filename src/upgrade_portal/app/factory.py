@@ -39,6 +39,7 @@ from flask import (  # The web framework surface.
     request,
 )
 
+from ..api.run_controls import E2EFactoryOverrides  # Type the complete test-only dependency set.
 from .config import DEFAULT_THEMES, PortalSettings, load_settings  # The settings record and the environment reader.
 from .security import PortalSecurity  # The guards that arm the application.
 from .wiring import install_seams  # Joins the upgrade parts into the seams the routes read.
@@ -518,6 +519,11 @@ def read_readiness() -> tuple[dict[str, str], int]:
     Returns:
         The readiness body and the HTTP status code.
     """
+    if has_app_context() and current_app.config.get("E2E_OVERRIDES_ACTIVE", False):  # E2E uses process stores only.
+        logger.info("The E2E application reads process-owned readiness")  # Record the isolated readiness action.
+        body = {STATUS_FIELD: READY_WORD, DATABASE_FIELD: STORE_OK, REDIS_FIELD: STORE_OK}  # No connector call.
+        logger.debug("The E2E application readiness is ready")  # Confirm the process-owned result.
+        return body, READY_STATUS  # Never probe a production connector in E2E mode.
     with _readiness_lock:  # One probe at a time, for the herd as much as for the entry.
         cached = _readiness_cache.get(READINESS_CACHE_KEY)  # None before the first probe.
         if cached is not None and monotonic() - cached[0] < READINESS_CACHE_SECONDS:
@@ -853,16 +859,15 @@ def register_theme_context(app: Flask) -> None:
         return {THEME_ARGUMENT: name, "themes": list(allowed_themes()), "theme_scheme": theme_scheme(name)}
 
 
-def arm_application(app: Flask, settings: PortalSettings) -> None:
-    """Add the guards, the error handlers, the routes, and the seams.
+def arm_application(
+    app: Flask,
+    settings: PortalSettings,
+    overrides: E2EFactoryOverrides | None = None,
+) -> None:  # Install dependencies and routes in the required construction order.
+    """Add guards, dependencies, and routes to the application.
 
     Why:
-        The seams register last, because `install_seams` fills a gap with
-        `setdefault` and must never replace a value that an earlier caller chose.
-
-    Args:
-        app: The application to arm.
-        settings: The settings read from the environment.
+        E2E dependencies must exist before the first blueprint registration.
     """
     PortalSecurity().apply(app, settings)  # The guards register first, so they run before any view.
     register_error_handlers(app)  # The JSON envelope must cover a fault the guards raise.
@@ -870,17 +875,29 @@ def arm_application(app: Flask, settings: PortalSettings) -> None:
     register_readiness(app)  # The orchestrator readiness probe needs the store reading.
     register_teardown(app)  # Every request must release its sockets.
     register_theme_context(app)  # Without this the theme picker of the navigation changes nothing.
+    install_seams(app, overrides)  # Install every dependency before a route module registers.
+    if overrides is not None:  # Production responses must never carry a test identifier.
+
+        @app.after_request  # Add the test owner to every isolated response.
+        def add_e2e_run_header(response: Response) -> Response:  # Bind one response to this E2E server.
+            """Attach the expected E2E test run identifier to one response."""
+            logger.info("Attach the E2E test run identifier response header")  # Record the test-only action.
+            response.headers["X-MistHelper-E2E-Run-ID"] = overrides.test_run_id  # Bind the response to this server.
+            logger.debug("Attached the E2E test run identifier response header")  # Confirm the safe result.
+            return response  # Continue the normal Flask response path.
+
     register_blueprints(app)  # A route module that does not exist yet writes one warning.
-    install_seams(app)  # Without this the confirmed run reads no launcher and sends nothing.
 
 
-def create_app() -> Flask:
+def create_app(overrides: E2EFactoryOverrides | None = None) -> Flask:  # Build production or isolated application.
     """Build the upgrade capture portal application.
 
     Why:
-        This function takes no argument, because `wsgi_capture.py` and the menu
-        238 launcher both call it with an empty argument list. Every setting
-        comes from the process environment inside `load_settings`.
+        Production callers still use an empty argument list. An E2E caller
+        supplies one complete override value before any route registration.
+
+    Args:
+        overrides: The complete E2E dependency set, or None for production.
 
     Returns:
         The application, ready for Gunicorn or for the development server.
@@ -888,7 +905,9 @@ def create_app() -> Flask:
     configure_logging()  # The log format must be in place before the first record.
     settings = load_settings()  # The environment is the only source of a setting.
     app = build_application(settings)  # The bare object with the configuration.
-    arm_application(app, settings)  # The guards, the handlers, and the routes.
+    if overrides is not None:  # A partial E2E dependency set must fail before a route exists.
+        overrides.validate()  # Reject every missing record, access, cloud, connector, or file seam.
+    arm_application(app, settings, overrides)  # Install dependencies before the route blueprints.
     logger.info(
         "The upgrade capture portal is ready for the port %s.",  # The first line of a healthy start.
         settings.web.port,

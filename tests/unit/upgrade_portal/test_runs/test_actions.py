@@ -22,6 +22,22 @@ from typing import Any, Final
 
 import pytest
 
+from src.refactors.endpoint_primary_key_strategies import (  # Read the registered action domain key.
+    ENDPOINT_PRIMARY_KEY_STRATEGIES,
+)
+from src.upgrade_portal.capture import store as capture_store  # Verify the existing export boundary unchanged.
+from src.upgrade_portal.persistence.actions import (  # Exercise immutable action records without a live store.
+    ActionIdentity,
+    ActionInitialization,
+    ActionIntent,
+    ActionLease,
+    ActionSource,
+    DurableActorScope,
+    OutcomeCompletion,
+    OutcomeState,
+    UpgradeRunAction,
+    canonical_digest,
+)
 from src.upgrade_portal.runtime.runs import (
     PHASE_ORDER,
     RUN_KEY_PREFIX,
@@ -1027,3 +1043,187 @@ def test_the_specification_refuses_an_edit() -> None:
     with pytest.raises(AttributeError):
         setattr(spec, attribute, 3)
     assert not hasattr(spec, "__dict__")
+
+
+ACTION_TIME: Final[str] = "2026-09-11T14:00:00+00:00"  # Give action model tests one aware UTC time.
+LEASE_TIME: Final[str] = "2026-09-11T14:05:00+00:00"  # Keep the model lease later than creation.
+ACTION_KEY: Final[str] = "visible-request-key-0001"  # Meet the 16-character idempotency key minimum.
+
+
+class RecordingExporter:
+    """Record one existing DataExporter call without writing any backend."""
+
+    calls: list[tuple[str, str]] = []  # Hold safe operation and file names for one test.
+
+    @classmethod
+    def write(
+        cls,
+        data: list[dict[str, Any]],
+        filename: str,
+        api_function_name: str,
+        backend_options: object,
+    ) -> bool:
+        """Record one existing export call and report success."""
+        del data, backend_options  # The assertion needs only the safe routing values.
+        cls.calls.append((filename, api_function_name))  # Prove the existing exporter boundary ran.
+        return True  # Model one successful configured backend write.
+
+
+def _action_initialization(
+    source_kind: str = "bulk_preview",
+    action: str = "cancel",
+    run_ids: tuple[str, ...] = ("run-one", "run-two"),
+    site_ids: tuple[str, ...] = ("site-one", "site-two"),
+    request_key: str = ACTION_KEY,
+) -> ActionInitialization:
+    """Return one validated action initialization for model tests."""
+    actor = DurableActorScope.build("email", "Operator@Example.Invalid")  # Normalize one durable actor.
+    preview_digest = canonical_digest({"preview_id": "preview-one"})  # Store no raw preview body.
+    source = (  # Select the source-specific null rules for this test.
+        ActionSource.bulk("preview-one", preview_digest, "org-one", "all-sites")  # Require preview fields.
+        if source_kind == "bulk_preview"  # A bulk test needs the authoritative preview source.
+        else ActionSource.reconciliation("org-one")  # A reconciliation test requires null preview fields.
+    )
+    request_fields = {"action": action, "run_ids": list(run_ids), "source_kind": source_kind}  # Bind order.
+    identity = ActionIdentity.from_request(actor, request_key, request_fields, "CONFIRM")  # Store safe digests.
+    site_count = len(set(site_ids))  # Match the authoritative count for these controlled values.
+    intent = ActionIntent(action, run_ids, site_ids, site_count)  # Enforce distinct ordered identifiers.
+    return ActionInitialization(identity, source, intent)  # Validate the source and action relation.
+
+
+def _upgrade_action(initialization: ActionInitialization | None = None) -> UpgradeRunAction:
+    """Return one immutable processing action with durable placeholders."""
+    request = initialization or _action_initialization()  # Use the common bulk request by default.
+    lease = ActionLease("worker-one", LEASE_TIME)  # Use one opaque worker owner.
+    return UpgradeRunAction.initialize(request, lease, ACTION_TIME)  # Build all ordered placeholders.
+
+
+def test_upgrade_run_actions_strategy_matches_the_data_model() -> None:
+    """The registered strategy uses the exact composite action domain key."""
+    strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES["upgradeRunActions"]  # Read the new catalog entry.
+    assert strategy["type"] == "composite_pk"  # Route the strategy by its approved type.
+    assert strategy["primary_key"] == ["actor_scope", "idempotency_key_digest"]  # Preserve field order.
+    assert strategy["indexes"] == ["action_id", "actor_scope", "created_at"]  # Support approved reads.
+    assert strategy["unique_constraints"] == ["action_id"]  # Keep the public identifier unique.
+    assert strategy["description"] == "Durable actor-scoped upgrade portal action outcomes"  # Match the model.
+
+
+def test_bulk_action_requires_every_preview_field() -> None:
+    """A bulk source rejects each missing authoritative preview field."""
+    digest = canonical_digest("preview-one")  # Use one safe preview digest.
+    with pytest.raises(ValueError, match="requires every preview field"):  # Refuse a missing preview identifier.
+        ActionSource("bulk_preview", None, digest, "org-one", "all-sites")  # Omit one required field.
+    with pytest.raises(ValueError, match="requires every preview field"):  # Refuse a missing preview digest.
+        ActionSource("bulk_preview", "preview-one", None, "org-one", "all-sites")  # Omit one required field.
+    with pytest.raises(ValueError, match="requires every preview field"):  # Refuse a missing history scope.
+        ActionSource("bulk_preview", "preview-one", digest, "org-one", None)  # Omit one required field.
+
+
+def test_reconciliation_needs_no_preview_and_stores_null_preview_fields() -> None:
+    """A single reconciliation action starts directly with null preview fields."""
+    request = _action_initialization("single_reconciliation", "reconcile", ("run-one",), ("site-one",))
+    action = _upgrade_action(request)  # Initialize one run without a preview service.
+    document = action.document()  # Read the exact durable storage shape.
+    assert document["source_kind"] == "single_reconciliation"  # Preserve the single-run source.
+    assert document["preview_id"] is None  # Store null instead of a made-up preview identifier.
+    assert document["preview_digest"] is None  # Store null instead of a made-up preview digest.
+    assert document["history_scope"] is None  # Store null instead of a bulk history scope.
+    assert document["run_count"] == 1  # Keep the one requested reconciliation run.
+    assert document["site_count"] == 1  # Keep the one requested reconciliation site.
+
+
+def test_reconciliation_rejects_any_preview_field() -> None:
+    """A reconciliation source cannot carry a bulk preview value."""
+    digest = canonical_digest("preview-one")  # Use one safe digest to isolate the null rule.
+    with pytest.raises(ValueError, match="requires null preview fields"):  # Refuse mixed source semantics.
+        ActionSource("single_reconciliation", "preview-one", digest, "org-one", "all-sites")  # Add bulk fields.
+
+
+def test_action_intent_rejects_duplicate_run_identifiers() -> None:
+    """The action model rejects duplicates instead of changing the request."""
+    with pytest.raises(ValueError, match="duplicate run identifier"):  # Preserve exact confirmation counts.
+        ActionIntent("cancel", ("run-one", "run-one"), ("site-one", "site-one"), 1)  # Repeat one identifier.
+
+
+@pytest.mark.parametrize("count", [0, 51])  # Check both invalid sides of the allowed 1 through 50 range.
+def test_action_intent_rejects_an_invalid_batch_size(count: int) -> None:
+    """The action model accepts no empty or oversized batch."""
+    run_ids = tuple(f"run-{index}" for index in range(count))  # Build the requested invalid size.
+    site_ids = tuple(f"site-{index}" for index in range(count))  # Keep the positional site list aligned.
+    with pytest.raises(ValueError, match="1 through 50"):  # Reject before a durable placeholder write.
+        ActionIntent("cancel", run_ids, site_ids, max(1, count))  # Isolate the batch size rule.
+
+
+def test_action_initialization_keeps_ordered_unknown_placeholders() -> None:
+    """Initialization creates one pending unknown placeholder for each ordered run."""
+    action = _upgrade_action()  # Build two placeholders in request order.
+    documents = [item.document() for item in action.ledger.items]  # Read each flat durable item.
+    assert [item["source_run_id"] for item in documents] == ["run-one", "run-two"]  # Preserve order.
+    assert [item["processing_state"] for item in documents] == ["pending", "pending"]  # Start unclaimed.
+    assert [item["classification"] for item in documents] == ["unknown", "unknown"]  # Claim no result.
+    assert [item["reason"] for item in documents] == ["not_processed", "not_processed"]  # Use exact reason.
+
+
+def test_durable_actor_scope_ignores_browser_and_session_values() -> None:
+    """The same normalized durable actor always receives the same scope."""
+    first = DurableActorScope.build("EMAIL", " Operator@Example.Invalid ")  # Normalize case and whitespace.
+    renewed = DurableActorScope.build("email", "operator@example.invalid")  # Model a renewed browser session.
+    other = DurableActorScope.build("email", "other@example.invalid")  # Model another durable actor.
+    assert first.actor_scope == renewed.actor_scope  # Keep scope stable across browser sessions.
+    assert first.actor_scope != other.actor_scope  # Separate two durable actors.
+    assert "operator@example.invalid" not in first.actor_scope  # Expose no raw actor identity.
+
+
+def test_action_records_are_immutable_and_serialize_a_safe_response() -> None:
+    """A caller cannot edit action records, and a response omits internal binding values."""
+    action = _upgrade_action()  # Build one validated immutable action.
+    attribute = "intent"  # Keep the mutation target dynamic for the frozen-record check.
+    with pytest.raises(AttributeError):  # Refuse a direct record edit.
+        setattr(action, attribute, ActionIntent("retry", ("run-one",), ("site-one",), 1))  # Attempt a frozen edit.
+    response = action.response()  # Serialize only the stable public fields.
+    assert response["action_id"].startswith("action-")  # Return one opaque public identifier.
+    assert response["counts"] == {"succeeded": 0, "refused": 0, "failed": 0, "unknown": 2}  # Count items.
+    assert "actor_scope" not in response  # Hide the durable actor digest from the API.
+    assert "idempotency_key_digest" not in response  # Hide the request key digest from the API.
+    assert "processing_owner" not in response  # Hide the worker lease owner from the API.
+
+
+def test_action_document_stores_no_raw_actor_key_or_confirmation() -> None:
+    """The durable action document stores safe digests instead of request secrets."""
+    document_text = repr(_upgrade_action().document())  # Render one validated durable record for inspection.
+    assert "operator@example.invalid" not in document_text  # Store no raw durable actor identity.
+    assert ACTION_KEY not in document_text  # Store no raw idempotency key.
+    assert "'CONFIRM'" not in document_text  # Store no exact typed confirmation.
+
+
+def test_claimed_and_final_outcomes_preserve_one_item_identity() -> None:
+    """A claim and final result change no source, site, or action identity."""
+    pending = _upgrade_action().item("run-one")  # Read one durable placeholder.
+    claimed = pending.claimed("worker-one", LEASE_TIME)  # Claim it before possible work.
+    state = OutcomeState("created", "", ACTION_TIME, ACTION_TIME)  # Make no verified final state claim.
+    completion = OutcomeCompletion("refused", "run_changed", "The run changed before this action.", "", state)
+    final = claimed.finalized(completion)  # Replace the placeholder with one durable refusal.
+    assert final.identity == pending.identity  # Preserve the requested run, site, and action.
+    assert final.claim.processing_state == "final"  # Close the item exactly once.
+    assert final.completion.classification == "refused"  # Preserve the stable result class.
+    with pytest.raises(ValueError, match="Only a claimed item"):  # Never finalize the same item twice.
+        final.finalized(completion)  # Refuse a second durable outcome.
+
+
+def test_existing_run_export_still_uses_data_exporter(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The existing API data path still calls DataExporter without action fallback changes."""
+    RecordingExporter.calls = []  # Start this test with no prior exporter observation.
+    monkeypatch.setattr(  # Replace the external write while preserving the production call path.
+        capture_store.DataExporter,  # Patch the exporter already imported by the existing store.
+        "write_with_format_selection",  # Patch only the configured backend operation.
+        RecordingExporter.write,  # Keep the existing static call convention.
+    )
+    result = capture_store._export_document(  # Exercise the unchanged run export path.
+        {"run_id": "run-one", "schema_version": 1},  # Supply one minimal existing run document.
+        capture_store._RUN_TARGET,  # Use the existing run export target.
+        "run-one",  # Build the existing safe backup file name.
+    )
+    assert result is True  # Preserve the existing exporter success result.
+    assert RecordingExporter.calls == [  # Preserve the existing file and operation names.
+        ("upgrade_run_run-one.csv", capture_store.RUN_OPERATION),  # Keep the current DataExporter route.
+    ]
