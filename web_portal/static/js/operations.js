@@ -45,7 +45,8 @@ function buildAccordionItem(cat, collapseId) {
     html += '<h2 class="accordion-header">';
     html += '<button class="accordion-button collapsed" type="button" ';
     html += 'data-bs-toggle="collapse" data-bs-target="#' + collapseId + '">';
-    html += escapeHtml(cat.name) + ' (' + cat.operations.length + ')';
+    html += escapeHtml(cat.name) + ' (<span class="op-count" data-testid="operation-count-' +
+        collapseId + '">' + cat.operations.length + '</span>)';
     html += '</button></h2>';
     html += '<div id="' + collapseId + '" class="accordion-collapse collapse">';
     html += '<div class="accordion-body p-0">';
@@ -996,6 +997,22 @@ function setupSearch() {
             var text = item.textContent.toLowerCase();
             item.style.display = text.indexOf(query) >= 0 ? '' : 'none';
         });
+        updateCategoryCounts();
+    });
+}
+
+function updateCategoryCounts() {
+    document.querySelectorAll('.accordion-item').forEach(function(categoryItem) {
+        var visibleCount = 0;
+        categoryItem.querySelectorAll('.op-item').forEach(function(item) {
+            if (item.style.display !== 'none') {
+                visibleCount += 1;
+            }
+        });
+        var count = categoryItem.querySelector('.op-count');
+        if (count) {
+            count.textContent = String(visibleCount);
+        }
     });
 }
 
