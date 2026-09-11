@@ -710,9 +710,7 @@ def build_heartbeat(driver: ModuleType, record: Mapping[str, Any], lock_record: 
     return driver.lock_heartbeat(record, lock_record)  # The key comes from the organization and the site.
 
 
-def build_gate_deps(
-    phase_gate: ModuleType, session: Any, record: Mapping[str, Any], heartbeat: Any, store: Any
-) -> Any:
+def build_gate_deps(phase_gate: ModuleType, session: Any, record: Mapping[str, Any], heartbeat: Any, store: Any) -> Any:
     """Build the collaborators of the settle gate of one run.
 
     Why:
@@ -743,9 +741,7 @@ def build_gate_deps(
         return isinstance(stored, Mapping) and stored.get("stop_request") is not None
 
     if heartbeat is None:  # No lock means no beat, so the gate keeps its own log reporter.
-        return phase_gate.PhaseGateDeps(
-            event_reader=reader, statistics_reader=counter, stop_requested=stop_requested
-        )
+        return phase_gate.PhaseGateDeps(event_reader=reader, statistics_reader=counter, stop_requested=stop_requested)
     return phase_gate.PhaseGateDeps(
         event_reader=reader,
         statistics_reader=counter,

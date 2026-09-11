@@ -180,9 +180,7 @@ def fixture_client(retry_app: Flask, registered_owner: identity.SessionOwner) ->
         yield test_client
 
 
-def seed_failed(
-    store: RecordingRunStore, options: dict[str, Any] | None = None, state: str = "failed"
-) -> str:
+def seed_failed(store: RecordingRunStore, options: dict[str, Any] | None = None, state: str = "failed") -> str:
     """Write one failed run that holds a full plan.
 
     Args:
@@ -389,9 +387,7 @@ def test_each_unsuccessful_terminal_state_can_build_a_retry(
     assert new_record(run_store, answer.get_json())["retry_of_run_id"] == run_id
 
 
-def test_another_live_run_at_the_site_blocks_a_retry(
-    client: FlaskClient, run_store: RecordingRunStore
-) -> None:
+def test_another_live_run_at_the_site_blocks_a_retry(client: FlaskClient, run_store: RecordingRunStore) -> None:
     """A retry cannot overlap another active workflow at the same site."""
     run_id = seed_failed(run_store)
     run_store.runs["run-live"] = {
