@@ -47,21 +47,25 @@ the template `upgrade/progress.html`. That template includes the template
 The history view at `/history` sits outside the five views. Read
 [The history page](#the-history-page) for that view.
 
-## The three confirmation words
+## The confirmation phrases
 
-Three actions need a typed word. The portal compares the text exactly, so the
+Some actions need typed text. The portal compares the text exactly, so the
 letter case must match.
 
-| Word | Action | Where you type it |
+| Phrase | Action | Where you type it |
 | --- | --- | --- |
 | `CONFIRM` | Start the upgrade. Take a quiet site from another operator. | The confirmation page. The site lock banner. |
 | `STOP` | Stop a run that already started. | The stop control on the run page. |
 | `continue` | Return to your own quiet session. | The site lock banner. |
+| `CANCEL <run-count> RUNS` | Cancel selected pre-cloud runs. | The bulk preview dialog. |
+| `RETRY <run-count> RUNS` | Retry selected final runs. | The bulk preview dialog. |
+| `RECONCILE <run_id>` | Reconcile one stale run. | The run page. |
 
 Type `CONFIRM` and `STOP` in capital letters. Type `continue` in small letters.
+Type the bulk and reconciliation phrases exactly as the page shows them.
 
-**Caution:** a wrong word causes a refusal, and the portal changes nothing. If
-the portal refuses your word, type the word again with the correct letter case.
+**Caution:** wrong text causes a refusal, and the portal changes nothing. If
+the portal refuses the text, type it again with the correct letter case.
 
 ## Before you start
 
@@ -376,12 +380,134 @@ Open the history page at `/history` to read the past captures of a site and the
 past runs of a site. The page shows 25 rows at a time, and the largest page is
 200 rows.
 
+The run table comes before the capture table. Each run row shows the run
+identifier, the site, the state, the device count, the start time, the end
+time, and the last-update age.
+
+The server marks a run as stale when these facts are true:
+
+1. The run is not in a final state.
+2. The run has a valid `updated_at` time.
+3. The last update is at least 86400 seconds old.
+
+The final states are `complete`, `failed`, `stopped`, and `cancelled`.
+The browser does not decide that a run is stale. The browser only refreshes the
+visible age text once each minute.
+
+If the time is missing, invalid, or in the future, the page shows `unknown`.
+The server does not mark that run as stale.
+
+If the run is stale, the row shows the badge `Stale`.
+Open the run to see the same last-update age and stale badge.
+
 Each capture row shows the capture identifier, the role, the start time, the
 capture state, the operator email address, and the stored size in bytes.
 
-The history is free to read. No history page asks for a typed word, and no
-history page reads the site lock. Any person with a session can read the
-history of any site in the organization.
+The history is free to read. Any person with a session can read the history of
+any site in the organization.
+
+The history page asks for typed text only when you submit a bulk action. The
+server checks the site lock before each run write.
+
+### Bulk preview
+
+Use bulk preview before you cancel or retry selected runs. The server owns the
+preview. The server removes runs that are not visible in the current history
+scope.
+
+The preview gives the exact run count, site count, site counts, and
+confirmation phrase. The browser replaces the selection with the visible run
+list from the server.
+
+If you select no run, the bulk buttons stay disabled. If you select one or more
+runs, the page enables these controls:
+
+- `Cancel selected`
+- `Retry selected`
+- `Clear selection`
+
+Press `Cancel selected` to ask for a cancel preview.
+Press `Retry selected` to ask for a retry preview.
+Read the preview dialog before you continue.
+Type the confirmation phrase exactly as the dialog shows it.
+
+For cancel, the phrase has this form:
+
+```text
+CANCEL <run-count> RUNS
+```
+
+For retry, the phrase has this form:
+
+```text
+RETRY <run-count> RUNS
+```
+
+Type the capital letters exactly. A lowercase letter causes a refusal.
+
+The preview uses `/api/runs/bulk-actions/preview`.
+The action uses `/api/runs/bulk-actions`.
+If the response is lost, use `Read stored result` to read
+`/api/run-actions/by-request-key`.
+
+### Bulk cancel
+
+Use bulk cancel only for selected pre-cloud runs. A pre-cloud run has not sent
+firmware work to Mist.
+
+Before each cancel, the server checks the site lock and the write permission
+again. If one site fails that check, the server stops later writes for that
+site. Other sites continue.
+
+Bulk cancel sends no cloud request. A successful cancel changes the run state
+to `cancelled`.
+
+### Bulk retry
+
+Use bulk retry for selected runs that are `failed`, `stopped`, or `cancelled`.
+
+A retry creates a new run. The new run starts at `created` and links to the
+source run. Open `Start fresh pre-check` from the result. Then run a new
+pre-check before you confirm firmware work.
+
+For one site, the newest selected source wins. The server uses `updated_at` and
+then `run_id` to select that source.
+
+The server copies only approved targets and options from the source run. It
+does not copy old pre-checks, confirmations, task identifiers, or invalid
+absolute schedules.
+
+### Bulk result
+
+The result shows these counts:
+
+- Succeeded
+- Refused
+- Failed
+- Unknown
+
+Each run also shows its reason and message. A result link opens the changed run
+or the new run. A retry result can show `Start fresh pre-check`.
+
+The portal stores each action result in the durable action store. The portal
+does not report success until the store verifies the transaction.
+
+### Action recovery
+
+Use `Read stored result` when the browser loses the first action response. The
+server reads the stored result with the same request key.
+
+If the first request still has a live worker lease, the server returns the
+stored processing action. It does not repeat a write.
+
+If the worker lease expired, one new worker can take the action. That worker
+processes only pending items. It does not repeat a claimed or final item.
+
+If a claimed item has no final outcome, recovery finalizes it as `unknown` with
+the reason `processing_interrupted`.
+
+If one site loses its guard, recovery finalizes later items for that site as
+`unknown` with the reason `not_processed_after_site_guard_loss`.
 
 ## The site lock
 
@@ -418,6 +544,10 @@ for that run to end.`
 
 The refusal carries the code `site_locked` and the HTTP status 409. The answer
 asks the browser to try again after 30 seconds.
+
+Only one operator can own one site at one time. This rule also applies to bulk
+cancel, bulk retry, and reconciliation. If another operator holds the site, the
+action refuses before it writes the run.
 
 ### Take a site from a quiet operator
 
@@ -458,11 +588,53 @@ neither of the two protected groups.
 After a stop, the portal takes the post-check capture. Read the comparison to
 learn which devices changed before the stop.
 
+## Reconcile a stale run
+
+Open a stale run to find the reconciliation control. The control appears only
+when the server decides that the run is stale and reconcilable.
+
+The reconciliation control uses `/api/runs/<run_id>/reconcile`.
+
+Type the phrase that the run page shows. The phrase has this form:
+
+```text
+RECONCILE <run_id>
+```
+
+Type the run identifier exactly. A changed letter causes a refusal.
+
+Use reconciliation for a stale pre-cloud run or a stale `stopping` run. A
+stale pre-cloud run can become `cancelled`.
+
+Use reconciliation for a `stopping` run only when the evidence is complete.
+The server reads stored target evidence and cloud evidence. It sends no
+firmware, stop, or cancel request to Mist.
+
+The server changes a `stopping` run only to `stopped`. It does that only when
+the evidence proves these facts:
+
+1. No target writes firmware.
+2. No cloud task is active.
+3. No target evidence conflicts.
+4. The target evidence is complete.
+
+If evidence is incomplete, unavailable, or in conflict, the run stays
+`stopping`. The result shows an `unknown` outcome with the cause.
+
+If a target still writes firmware, the run stays `stopping`. If a cloud task is
+active, the run stays `stopping`.
+
 ## Where the data goes
 
 ArangoDB is the primary store. The portal writes captures to the collection
 `upgrade_captures`, runs to the collection `upgrade_runs`, and the link between
 them to the edge collection `capture_for_run`.
+
+ArangoDB is also the durable action store for run controls. It stores the bulk
+preview source, reconciliation source, item claims, outcomes, and counts.
+
+The portal keeps each action record for the lifetime of its run record. It has
+no automatic cleanup for action records in this release.
 
 The portal verifies every write. It reads the key back and compares the schema
 version and the digest. A verified record reports: `The database holds this
@@ -541,6 +713,73 @@ for the cause.`
 The portal gives one device at most one hour. The portal marks a device that
 does not return inside that hour as failed for that phase. Read that device in
 the Mist cloud by hand.
+
+### A bulk preview refuses the selection
+
+If the page says `Select between 1 and 50 runs.`, change the selection count.
+One bulk request can hold 1 through 50 run identifiers.
+
+If the page says `A run identifier occurs more than once.`, clear the
+selection and select the rows again. The server refuses duplicate identifiers.
+
+If the page says `No selected run is visible in this history scope.`, refresh
+the history page. The server removed each hidden or out-of-scope run.
+
+### A bulk action refuses after preview
+
+If the page says `The typed confirmation does not match.`, type the phrase
+again with the same capital letters.
+
+If the page says `The action preview expired.`, request a new preview.
+
+If the page says `The action request does not match its preview.`, request a
+new preview. The selection or scope changed after the preview.
+
+If the page says `The durable action store is unavailable.`, stop. The portal
+cannot safely write the run result.
+
+### A site guard refuses a run control
+
+If the result says `site_write_forbidden`, ask an administrator to check your
+site permission.
+
+If the result says `site_lock_not_owned`, take the site lock before you try
+again.
+
+If the result says `site_lock_token_changed`, refresh the site page before you
+try again. Another session changed the site lock.
+
+### A cancel or retry refuses one run
+
+If a cancel result says `run_not_precloud`, the run already reached cloud work.
+Use the single-run stop control instead.
+
+If a retry result says `run_not_retryable`, select a run that is `failed`,
+`stopped`, or `cancelled`.
+
+If a retry result says `retry_source_time_unknown`, use another source run.
+The source run has no valid update time.
+
+If a retry result says `retry_options_unsupported` or `retry_options_invalid`,
+create a new upgrade plan by hand. The source options are not safe to copy.
+
+If a retry result says `upgrade_already_running`, finish the live run for that
+site first.
+
+### A reconciliation refuses one run
+
+If a result says `run_not_stale`, wait until the run is stale or refresh the
+page.
+
+If a result says `run_not_reconcilable`, use reconciliation only for a
+pre-cloud run or a `stopping` run.
+
+If a result says `firmware_write_active` or `cloud_task_active`, wait for the
+firmware work to finish.
+
+If a result says `cloud_evidence_incomplete`,
+`cloud_evidence_unavailable`, or `cloud_evidence_conflict`, read the run in
+Mist before you try again.
 
 ## Current limits
 

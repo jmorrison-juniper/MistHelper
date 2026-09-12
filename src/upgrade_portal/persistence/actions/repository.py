@@ -293,7 +293,7 @@ class ActionRepository:
         """Verify the exact required index fields and uniqueness."""
         indexes = collection.indexes() or []  # Read the durable collection metadata back.
         actual = {(tuple(item.get("fields", ())), bool(item.get("unique"))) for item in indexes}  # Normalize.
-        expected: set[tuple[tuple[str, ...], bool]] = {  # Give mypy the nested collection type.
+        expected: set[tuple[tuple[str, ...], bool]] = {  # Give mypy the concrete index signature.
             (tuple(item["fields"]), bool(item["unique"])) for item in _INDEX_DEFINITIONS  # Normalize.
         }
         if not expected.issubset(actual):  # A missing key or actor index makes the bootstrap incomplete.

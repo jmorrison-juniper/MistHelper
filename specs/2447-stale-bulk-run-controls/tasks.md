@@ -16,14 +16,14 @@ terminal-state checks.
 - [ ] T001 Fetch `origin/main`. Confirm the active branch is `fix/2447-stale-bulk-run-controls` and that `HEAD` starts at current `origin/main`.
 - [ ] T002 Claim issue #2447, add `in-progress`, and confirm that no conflicting owner holds the implementation.
 - [ ] T003 Check active worktrees, active branches, and open pull request files against the complete feature manifest. Stop on an overlap without a recorded handoff.
-- [ ] T004 Confirm that `feature-files.txt` contains all 79 planned paths before the first source or test edit. Compare current tracked and untracked feature changes with it. Exclude unrelated pre-existing untracked files.
+- [x] T004 Confirm that `feature-files.txt` contains all 79 planned paths before the first source or test edit. Compare current tracked and untracked feature changes with it. Exclude unrelated pre-existing untracked files.
 - [ ] T005 Record the grandfathered hierarchy violations as separate remediation actions. Confirm every new package and subpackage uses the child budget in `plan.md`.
-- [ ] T006 Create and verify the ArangoDB backup before any action schema or persistence change.
-- [ ] T007 Write tests that prove `complete`, `failed`, `stopped`, and `cancelled` are terminal in stop, history, stale, and live-run decisions.
-- [ ] T008 Change `runtime/signals.py` to use `RunStateMachine.TERMINAL` and remove `TERMINAL_RUN_STATES`.
-- [ ] T009 Change `app/routes/review.py` to use `RunStateMachine.TERMINAL` and remove `FINISHED_RUN_STATES`.
-- [ ] T010 Search the upgrade portal for every terminal-state set and replace each run-state decision with `RunStateMachine.TERMINAL`.
-- [ ] T011 Run the focused terminal-state unit and contract tests.
+- [x] T006 Create and verify the ArangoDB backup before any action schema or persistence change.
+- [x] T007 Write tests that prove `complete`, `failed`, `stopped`, and `cancelled` are terminal in stop, history, stale, and live-run decisions.
+- [x] T008 Change `runtime/signals.py` to use `RunStateMachine.TERMINAL` and remove `TERMINAL_RUN_STATES`.
+- [x] T009 Change `app/routes/review.py` to use `RunStateMachine.TERMINAL` and remove `FINISHED_RUN_STATES`.
+- [x] T010 Search the upgrade portal for every terminal-state set and replace each run-state decision with `RunStateMachine.TERMINAL`.
+- [x] T011 Run the focused terminal-state unit and contract tests.
 
 **Checkpoint**: One canonical terminal set controls all run-state decisions.
 
@@ -31,23 +31,23 @@ terminal-state checks.
 
 **Goal**: Install all isolation controls before a browser process starts.
 
-- [ ] T012 Replace `tests/unit/upgrade_portal/test_runs.py` with the same-name package. Move existing tests before adding new tests.
-- [ ] T013 Replace `tests/contract/upgrade_portal/test_upgrade_routes.py` with the same-name package. Move existing tests before adding new tests.
-- [ ] T014 Replace `tests/e2e/upgrade_portal/test_run_controls.py` with the same-name package. Move existing tests into `test_existing.py`.
-- [ ] T015 Create the integration and support packages with every exact child from the layouts in `plan.md`.
-- [ ] T016 Write failing unit tests for override completeness, trap calls, credential scrub, unique ports, unique artifacts, and record ownership.
-- [ ] T017 Write failing contract tests for override installation before route registration.
-- [ ] T018 Implement the E2E override value classes in the new run-controls API package.
-- [ ] T019 Edit `app/factory.py` surgically so it validates and installs overrides before blueprint registration.
-- [ ] T020 Edit `app/wiring.py` surgically so it injects all action, access, cloud, audit, connector, and file seams.
-- [ ] T021 Implement process-owned run, action, access, cloud, and audit stores under `tests/support/upgrade_portal_e2e/records/`.
-- [ ] T022 Implement ArangoDB, Redis, and Mist connector traps under `tests/support/upgrade_portal_e2e/traps/`.
-- [ ] T023 Implement the portal record file trap and zero-call assertions.
-- [ ] T024 Implement credential scrub and explicit loopback port-1 sentinels.
-- [ ] T025 Implement unique port, test identifier, record store, log, process file, and artifact allocation.
-- [ ] T026 Reset cached storage and readiness state in `tests/e2e/upgrade_portal/conftest.py` before application construction.
-- [ ] T027 Add `X-MistHelper-E2E-Run-ID` only when E2E overrides are active.
-- [ ] T028 Run only the isolation unit and contract tests. Do not run a browser test.
+- [x] T012 Replace `tests/unit/upgrade_portal/test_runs.py` with the same-name package. Move existing tests before adding new tests.
+- [x] T013 Replace `tests/contract/upgrade_portal/test_upgrade_routes.py` with the same-name package. Move existing tests before adding new tests.
+- [x] T014 Replace `tests/e2e/upgrade_portal/test_run_controls.py` with the same-name package. Move existing tests into `test_existing.py`.
+- [x] T015 Create the integration and support packages with every exact child from the layouts in `plan.md`.
+- [x] T016 Write failing unit tests for override completeness, trap calls, credential scrub, unique ports, unique artifacts, and record ownership.
+- [x] T017 Write failing contract tests for override installation before route registration.
+- [x] T018 Implement the E2E override value classes in the new run-controls API package.
+- [x] T019 Edit `app/factory.py` surgically so it validates and installs overrides before blueprint registration.
+- [x] T020 Edit `app/wiring.py` surgically so it injects all action, access, cloud, audit, connector, and file seams.
+- [x] T021 Implement process-owned run, action, access, cloud, and audit stores under `tests/support/upgrade_portal_e2e/records/`.
+- [x] T022 Implement ArangoDB, Redis, and Mist connector traps under `tests/support/upgrade_portal_e2e/traps/`.
+- [x] T023 Implement the portal record file trap and zero-call assertions.
+- [x] T024 Implement credential scrub and explicit loopback port-1 sentinels.
+- [x] T025 Implement unique port, test identifier, record store, log, process file, and artifact allocation.
+- [x] T026 Reset cached storage and readiness state in `tests/e2e/upgrade_portal/conftest.py` before application construction.
+- [x] T027 Add `X-MistHelper-E2E-Run-ID` only when E2E overrides are active.
+- [x] T028 Run only the isolation unit and contract tests. Do not run a browser test.
 
 **Checkpoint**: Every connector and file path fails closed before route
 registration. Browser execution is now permitted.
@@ -56,34 +56,34 @@ registration. Browser execution is now permitted.
 
 **Goal**: Give every page the same stale decision.
 
-- [ ] T029 Write stale policy tests for boundaries, terminal states, offsets, malformed times, and future times.
-- [ ] T030 Write stale view contracts for the history and run pages.
-- [ ] T031 Implement `StaleAssessment` and `RunStalePolicy` in the compliant run-controls API package.
-- [ ] T032 Edit `app/routes/review.py` to call the shared stale policy without adding a top-level helper.
-- [ ] T033 Edit `app/routes/upgrade.py` to call the same stale policy without adding a top-level helper.
-- [ ] T034 Add age and stale markup to the history and progress templates.
-- [ ] T035 Add display-only age updates to `portal.js`.
-- [ ] T036 Add accessible stale styles to `portal.css`.
-- [ ] T037 Add browser stale tests and run them with all isolation traps active.
+- [x] T029 Write stale policy tests for boundaries, terminal states, offsets, malformed times, and future times.
+- [x] T030 Write stale view contracts for the history and run pages.
+- [x] T031 Implement `StaleAssessment` and `RunStalePolicy` in the compliant run-controls API package.
+- [x] T032 Edit `app/routes/review.py` to call the shared stale policy without adding a top-level helper.
+- [x] T033 Edit `app/routes/upgrade.py` to call the same stale policy without adding a top-level helper.
+- [x] T034 Add age and stale markup to the history and progress templates.
+- [x] T035 Add display-only age updates to `portal.js`.
+- [x] T036 Add accessible stale styles to `portal.css`.
+- [x] T037 Add browser stale tests and run them with all isolation traps active.
 
 ## Phase 4: Operational Store and Durable Actions
 
 **Goal**: Create one durable action and one durable item for each accepted run.
 
-- [ ] T038 Add the `upgradeRunActions` composite key strategy before action persistence.
-- [ ] T039 Write action model tests for bulk and single-run source fields.
-- [ ] T040 Write tests that prove reconciliation needs no preview and stores null preview fields.
-- [ ] T041 Write tests for duplicate identifiers, durable actor scope, ordered placeholders, item claims, action leases, evidence fields, and evidence digests.
-- [ ] T042 Implement action value records in `persistence/actions/models.py`.
-- [ ] T043 Implement the ArangoDB action repository and actor-scoped result reads.
-- [ ] T044 Implement action initialization with ordered `pending` items and durable unknown placeholders.
-- [ ] T045 Implement an item claim with compare-and-swap from `pending` to `claimed`.
-- [ ] T046 Implement outcome-only writes for `refused`, `failed`, and `unknown` items.
-- [ ] T047 Implement atomic run mutation and successful outcome transactions.
-- [ ] T048 Implement processing-to-complete finalization after all items become final.
-- [ ] T049 Implement read-back verification before any success response.
-- [ ] T050 Write unavailable-store tests that prove no SQLite, Redis, memory, or file fallback.
-- [ ] T051 Write tests that prove API exports and data collection still use `DataExporter`.
+- [x] T038 Add the `upgradeRunActions` composite key strategy before action persistence.
+- [x] T039 Write action model tests for bulk and single-run source fields.
+- [x] T040 Write tests that prove reconciliation needs no preview and stores null preview fields.
+- [x] T041 Write tests for duplicate identifiers, durable actor scope, ordered placeholders, item claims, action leases, evidence fields, and evidence digests.
+- [x] T042 Implement action value records in `persistence/actions/models.py`.
+- [x] T043 Implement the ArangoDB action repository and actor-scoped result reads.
+- [x] T044 Implement action initialization with ordered `pending` items and durable unknown placeholders.
+- [x] T045 Implement an item claim with compare-and-swap from `pending` to `claimed`.
+- [x] T046 Implement outcome-only writes for `refused`, `failed`, and `unknown` items.
+- [x] T047 Implement atomic run mutation and successful outcome transactions.
+- [x] T048 Implement processing-to-complete finalization after all items become final.
+- [x] T049 Implement read-back verification before any success response.
+- [x] T050 Write unavailable-store tests that prove no SQLite, Redis, memory, or file fallback.
+- [x] T051 Write tests that prove API exports and data collection still use `DataExporter`.
 
 **Checkpoint**: The operational store can initialize, claim, finalize, and read
 an action. It cannot lose an item outcome.
@@ -92,29 +92,29 @@ an action. It cannot lose an item outcome.
 
 **Goal**: Resume only work that has no possible prior mutation.
 
-- [ ] T052 Write tests for same-key replay, request mismatch, active lease, lease expiry, and compare-and-swap takeover.
-- [ ] T053 Write crash tests for a stop before claim, after claim, before transaction commit, and after transaction commit.
-- [ ] T054 Implement actor-scoped replay in `persistence/actions/replay.py`.
-- [ ] T055 Implement lease takeover with compare-and-swap.
-- [ ] T056 Finalize each abandoned `claimed` item as `unknown` with `processing_interrupted`.
-- [ ] T057 Resume only `pending` items and never repeat a `claimed` or `final` item.
-- [ ] T058 Persist site blocks and finalize later blocked items as `not_processed_after_site_guard_loss`.
-- [ ] T059 Finalize every remaining item and change the action to `complete`.
-- [ ] T060 Run the replay and crash-recovery unit and integration tests.
+- [x] T052 Write tests for same-key replay, request mismatch, active lease, lease expiry, and compare-and-swap takeover.
+- [x] T053 Write crash tests for a stop before claim, after claim, before transaction commit, and after transaction commit.
+- [x] T054 Implement actor-scoped replay in `persistence/actions/replay.py`.
+- [x] T055 Implement lease takeover with compare-and-swap.
+- [x] T056 Finalize each abandoned `claimed` item as `unknown` with `processing_interrupted`.
+- [x] T057 Resume only `pending` items and never repeat a `claimed` or `final` item.
+- [x] T058 Persist site blocks and finalize later blocked items as `not_processed_after_site_guard_loss`.
+- [x] T059 Finalize every remaining item and change the action to `complete`.
+- [x] T060 Run the replay and crash-recovery unit and integration tests.
 
 ## Phase 6: Authoritative Bulk Preview
 
 **Goal**: Remove hidden selections before phrase entry.
 
-- [ ] T061 Write preview tests for scope, hidden identifiers, duplicates, exact counts, expiry, and token binding.
-- [ ] T062 Write preview API contracts.
-- [ ] T063 Implement preview request and response values in the run-controls API package.
-- [ ] T064 Implement `BulkActionPreviewService`.
-- [ ] T065 Implement the preview route and signed token response.
-- [ ] T066 Edit `app/factory.py` and `app/wiring.py` only as needed to register the new blueprint and dependencies.
-- [ ] T067 Update `portal.js` to request preview, replace stored identifiers, and show server counts.
-- [ ] T068 Update the history template for preview counts, removed identifiers, and phrase entry.
-- [ ] T069 Add browser preview tests.
+- [x] T061 Write preview tests for scope, hidden identifiers, duplicates, exact counts, expiry, and token binding.
+- [x] T062 Write preview API contracts.
+- [x] T063 Implement preview request and response values in the run-controls API package.
+- [x] T064 Implement `BulkActionPreviewService`.
+- [x] T065 Implement the preview route and signed token response.
+- [x] T066 Edit `app/factory.py` and `app/wiring.py` only as needed to register the new blueprint and dependencies.
+- [x] T067 Update `portal.js` to request preview, replace stored identifiers, and show server counts.
+- [x] T068 Update the history template for preview counts, removed identifiers, and phrase entry.
+- [x] T069 Add browser preview tests.
 
 ## Phase 7: Atomic Cancel and Reconciliation
 
@@ -171,7 +171,7 @@ coverage.
 - [ ] T102 Add the fixed 50-run no-cloud batch measurement.
 - [ ] T103 Run both measurements with the warm-up and sample counts from `research.md`.
 - [ ] T104 Add requirement identifiers to named tests and update the traceability matrix.
-- [ ] T105 Review FR-001 through FR-076 against unit, contract, integration, browser, or manual evidence.
+- [x] T105 Review FR-001 through FR-076 against unit, contract, integration, browser, or manual evidence.
 - [ ] T106 Re-run `checklists/requirements.md` and leave no unchecked item.
 
 ## Phase 11: Manifest, Quality Gates, and Documentation
@@ -179,12 +179,12 @@ coverage.
 **Goal**: Gate and stage every feature file without touching unrelated work.
 
 - [ ] T107 Update `README.md` with the operator controls and governed deployment sequence.
-- [ ] T108 Update `documentation/upgrade_capture_portal.md` with stale, preview, reconciliation, result, retention, and recovery behavior.
-- [ ] T109 Add the feature entry to `CHANGELOG.md` with the required version format.
-- [ ] T110 Update `feature-files.txt` before any path differs from the 79-path plan.
-- [ ] T111 Build the changed-file set from the merge base, staged changes, unstaged changes, and untracked files.
-- [ ] T112 Compare the changed-file set with `feature-files.txt`. Reject an unlisted feature path and exclude unrelated pre-existing untracked paths.
-- [ ] T113 Run all applicable Python gates for each changed Python file in the manifest.
+- [x] T108 Update `documentation/upgrade_capture_portal.md` with stale, preview, reconciliation, result, retention, and recovery behavior.
+- [x] T109 Add the feature entry to `CHANGELOG.md` with the required version format.
+- [x] T110 Update `feature-files.txt` before any path differs from the 79-path plan.
+- [x] T111 Build the changed-file set from the merge base, staged changes, unstaged changes, and untracked files.
+- [x] T112 Compare the changed-file set with `feature-files.txt`. Reject an unlisted feature path and exclude unrelated pre-existing untracked paths.
+- [x] T113 Run all applicable Python gates for each changed Python file in the manifest.
 - [ ] T114 Run all applicable JavaScript and browser gates for each changed JavaScript file in the manifest.
 - [ ] T115 Review each changed executable line for required comments and each meaningful action for required logs.
 - [ ] T116 Run all targeted unit, contract, integration, and browser tests.

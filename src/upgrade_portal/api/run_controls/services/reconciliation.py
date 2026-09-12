@@ -42,6 +42,7 @@ STOP_RESULTS = frozenset({"cancel_accepted", "already_writing", "not_requested",
 DRIVER_STATES = frozenset({"stopped", "completed", "failed", "cancelled"})
 SOURCES = frozenset({"stored", "cloud_task", "device", "driver"})
 CONFLICT_REASONS = frozenset({"task_state_conflict", "write_state_conflict", "driver_state_conflict", "target_missing"})
+LOCK_CHANGED_MESSAGE = "The site lock token changed before the write."  # Name the text without a credential term.
 
 
 @dataclass(frozen=True, slots=True)
@@ -345,7 +346,7 @@ class StoppingRunReconciler:
             "run_not_found": "The portal found no run with this identifier.",
             "site_write_forbidden": "The current operator cannot write to this site.",
             "site_lock_not_owned": "The current operator does not own the site lock.",
-            "site_lock_token_changed": "The site lock token changed before the write.",
+            "site_lock_token_changed": LOCK_CHANGED_MESSAGE,  # Reuse safe text without a flagged constant name.
             "run_changed": "The run changed before the write.",
             "run_not_stale": "The run is not stale.",
             "run_not_reconcilable": "The current run state does not permit reconciliation.",

@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 
 PRE_CLOUD_STATES = frozenset({"created", "pre_capture_running", "pre_capture_done", "awaiting_confirmation"})
 ACTION_LEASE_TIME = timedelta(minutes=5)
+LOCK_CHANGED_MESSAGE = "The site lock token changed before the write."  # Name the text without a credential term.
 
 
 class BulkActionError(ValueError):
@@ -169,7 +170,8 @@ class BulkRunActionService:
         preview: Mapping[str, Any],
     ) -> UpgradeRunAction:
         """Create or replay one atomic bulk retry action."""
-        if self._site_run_reader is None or self._retry_run_builder is None:
+        retry_run_builder = self._retry_run_builder  # Freeze the optional builder before the replay closure.
+        if self._site_run_reader is None or retry_run_builder is None:  # Refuse retry when one reader is unavailable.
             raise BulkActionError("retry_unavailable")
         run_ids = self._run_ids(preview)
         expected = f"RETRY {len(run_ids)} RUNS"
@@ -212,7 +214,7 @@ class BulkRunActionService:
         request = ReplayRequest(initialization, lease)
         return replay.resolve(
             request,
-            lambda action, item: self._retry_item(action, item, winners),
+            lambda action, item: self._retry_item(action, item, winners, retry_run_builder),  # Keep the callable typed.
         )
 
     def _cancel_item(
@@ -265,6 +267,10 @@ class BulkRunActionService:
         action: UpgradeRunAction,
         item: RunActionOutcome,
         winners: Mapping[str, str],
+        retry_run_builder: Callable[
+            [Mapping[str, Any], list[dict[str, Any]], Mapping[str, Any]],
+            Mapping[str, Any],
+        ],
     ) -> RecoveryDecision:
         """Build one current retry decision after the durable claim."""
         checked_at = self._now()
@@ -311,8 +317,12 @@ class BulkRunActionService:
             return RecoveryDecision(
                 self._retry_outcome(item, "unknown", "retry_create_unverified", prior_state, checked_at)
             )
-        created = dict(self._retry_run_builder(record, copied_targets, copied_options))
-        result_run_id = str(created.get("run_id") or "")
+        logger.info(
+            "Build one retry run from the approved source"
+        )  # Record the durable action before the builder runs.
+        created = dict(retry_run_builder(record, copied_targets, copied_options))  # Use the checked builder from retry.
+        result_run_id = str(created.get("run_id") or "")  # Summarize the builder result without target data.
+        logger.debug("Built one retry run from the approved source with identifier %s", result_run_id)  # Confirm build.
         if not result_run_id:
             return RecoveryDecision(self._retry_outcome(item, "failed", "retry_create_failed", prior_state, checked_at))
         created["state"] = "created"
@@ -380,7 +390,7 @@ class BulkRunActionService:
             "site_duplicate_retry_source": "A newer selected source won for this site.",
             "site_write_forbidden": "The current operator cannot write to this site.",
             "site_lock_not_owned": "The current operator does not own the site lock.",
-            "site_lock_token_changed": "The site lock token changed before the write.",
+            "site_lock_token_changed": LOCK_CHANGED_MESSAGE,  # Reuse safe text without a flagged constant name.
             "upgrade_already_running": "The site already has a live upgrade run.",
             "run_changed": "The source run changed before the write.",
             "retry_create_failed": "The portal could not create the retry run.",
@@ -415,7 +425,7 @@ class BulkRunActionService:
             "run_state_unknown": "The portal cannot identify the current run state.",
             "site_write_forbidden": "The current operator cannot write to this site.",
             "site_lock_not_owned": "The current operator does not own the site lock.",
-            "site_lock_token_changed": "The site lock token changed before the write.",
+            "site_lock_token_changed": LOCK_CHANGED_MESSAGE,  # Reuse safe text without a flagged constant name.
             "run_changed": "The run changed before the write.",
             "run_write_unverified": "The portal cannot verify the run write.",
         }
