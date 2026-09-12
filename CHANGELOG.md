@@ -16,6 +16,14 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   a missing session, and the existing cookie-session boundary. The safe
   stand-in records only non-secret evidence.
 
+### Upgrade capture stored size performance (issue #2486)
+
+- **Changed**: The upgrade capture store now solves the `stored_size_bytes`
+  width after one body serialization. The write path keeps the same canonical
+  JSON size rule.
+- **Added**: Unit coverage compares the fast size stamp with the documented
+  convergence loop. The tests cover 99, 100, 999, and 1000 byte boundaries.
+
 ### Capture log baseline performance (issue #2483)
 
 - **Changed**: `tools.capture_log_baseline` now builds one call-line index
@@ -61,14 +69,6 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Added**: Unit coverage keeps the file count, recent-file order, hidden-file
   exclusion, absent-directory behavior, and helper slice behavior stable.
 
-### Data browser preview memory use (issue #2484)
-
-- **Changed**: The web portal data browser now streams CSV, JSON Lines, and
-  log preview rows. It still counts all matching rows for page metadata.
-- **Added**: Unit coverage keeps CSV page clamping, log search, JSON Lines
-  single-item fallback, and JSON column order stable.
-- **Measured**: Peak traced memory fell by 99.62 percent for a large CSV page
-  and 99.81 percent for a filtered large log page in the local harness.
 ### Search organization Mist Edges (menu 253)
 
 - **Added**: Menu 253 calls `searchOrgMxEdges` for an organization, prompts
@@ -5434,6 +5434,14 @@ that runs without a proxy needs no action.
 - **Menu 13 still undercounted APs (claimed-but-never-connected APs dropped)** (#417): Even after #415, AP counts were short because the AP path used `countOrgDevices(distinct="version")`, which only returns version-keyed buckets. APs that are **claimed and assigned to a site but have never connected** report no firmware version and were silently dropped (e.g. T-Mobile_USA_Retail AP41 showed 9428 vs the portal's 9676). These APs have a `site_id`, so the #415 unassigned supplement did not catch them either. APs are now counted directly from `getOrgInventory(type="ap")` — the same source as the portal "Claim APs" screen — so every claimed AP is counted exactly once with a three-way version bucket: `unassigned` (no `site_id`), the real firmware version (assigned + connected), or `unknown` (assigned but never connected). Switches and gateways are unchanged, and the unassigned supplement is now switch-only to avoid double counting APs. Conservation is verified against real inventory data and four new unit tests cover every AP state.
 - **Menu 13 undercounted devices (unassigned AP/switch inventory excluded)** (#415): The Org Device Inventory Summary counted APs via `countOrgDevices` and switches via `searchOrgDevices`, both of which return only devices **assigned to a site**. Unassigned APs and switches sitting in org inventory were therefore omitted from the model-count, firmware-summary, and version-per-model reports, understating totals and leaving the reports internally inconsistent (gateways already used `getOrgInventory`, which includes unassigned stock). A supplemental `getOrgInventory(type="ap,switch")` fetch now pulls claimed-but-unassigned APs and switches (filtered client-side on a missing `site_id`), merges them into the model counts, and surfaces them under a dedicated `unassigned` firmware column in the firmware summary and version-per-model pivot (single-org and MSP combined). The `unassigned` bucket is kept distinct from `unknown` (an assigned device that never reported firmware). Assigned-but-offline/disconnected devices were already counted (the assigned-device APIs do not filter on connection state), so no change was needed there. Gateways are intentionally excluded from the supplemental fetch to avoid double counting.
 
+### Data browser preview memory use (issue #2484)
+
+- **Changed**: The web portal data browser now streams CSV, JSON Lines, and
+  log preview rows. It still counts all matching rows for page metadata.
+- **Added**: Unit coverage keeps CSV page clamping, log search, JSON Lines
+  single-item fallback, and JSON column order stable.
+- **Measured**: Peak traced memory fell by 99.62 percent for a large CSV page
+  and 99.81 percent for a filtered large log page in the local harness.
 ## [26.06.09.22.10] - Fix E911BSSIDReportGenerator module-level access
 
 ### Fixed
@@ -6881,4 +6889,7 @@ Closes #368
 - Locations: Single AP pre-check, multi-AP pre-check, site PCAP polling, org PCAP polling
 - Function names now match mistapi SDK and Mist API operationId values
 - operationId: listSitePacketCaptures and listOrgPacketCaptures per OpenAPI spec
+
+
+
 
