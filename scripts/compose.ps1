@@ -30,6 +30,12 @@
 
 .EXAMPLE
     .\scripts\compose.ps1 logs -f misthelper
+
+.EXAMPLE
+    .\scripts\compose.ps1 build
+
+.EXAMPLE
+    .\scripts\compose.ps1 check-revision
 #>
 
 # Warning: this script declares no param block on purpose, and it reads the
@@ -67,6 +73,47 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "Install it with this command, then run this script again:" -ForegroundColor Yellow
     Write-Host "    $Interpreter -m pip install podman-compose" -ForegroundColor Cyan
     throw "podman-compose is required on Windows. See issue #2184."
+}
+
+# Two subcommands run here instead of passing through to the provider.
+#
+# "build" merges compose.build.yml, so the build section reaches the provider.
+# A plain "up" reads compose.yml only, and that file carries no build section.
+# That split is the repair of issue #2272: a plain "up" can never build the
+# image and never overwrite the published tag with a local build.
+#
+# "check-revision" reads the commit label of the running container and
+# compares it against origin/main. An empty label names a local build,
+# because only the CI build writes the label.
+if ($ComposeArguments.Count -gt 0 -and $ComposeArguments[0] -eq "build") {
+    $BuildFile = Join-Path $RepositoryRoot "compose.build.yml"  # The file that holds the build section.
+    if (-not (Test-Path $BuildFile)) {
+        throw "No compose.build.yml exists at $BuildFile. Run this script from the MistHelper repository."
+    }
+    Write-Host "Building the image from the working tree. Update the checkout first if it is behind main." -ForegroundColor Yellow
+    & $Interpreter -m podman_compose -f $ComposeFile -f $BuildFile build
+    exit $LASTEXITCODE  # Report the status of the provider, so a script that calls this one sees a failure.
+}
+
+if ($ComposeArguments.Count -gt 0 -and $ComposeArguments[0] -eq "check-revision") {
+    $RevisionLabel = podman inspect misthelper-app --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
+    if ($LASTEXITCODE -ne 0) {
+        throw "The container misthelper-app is absent, so its revision cannot be read."
+    }
+    $OriginHead = (git -C $RepositoryRoot rev-parse --short origin/main)  # The tested commit that CI published.
+    if ($LASTEXITCODE -ne 0) {
+        throw "The repository has no origin/main, so the revision cannot be compared."
+    }
+    if ([string]::IsNullOrWhiteSpace($RevisionLabel)) {
+        Write-Host "The container holds no revision label. It runs a local build, not the CI image." -ForegroundColor Red
+        exit 1
+    }
+    if ($RevisionLabel -like "$OriginHead*") {
+        Write-Host "The container runs commit $RevisionLabel, and origin/main is $OriginHead. The image is current." -ForegroundColor Green
+        exit 0
+    }
+    Write-Host "The container runs commit $RevisionLabel, but origin/main is $OriginHead. The image is not current." -ForegroundColor Red
+    exit 1
 }
 
 if (-not $ComposeArguments) {
