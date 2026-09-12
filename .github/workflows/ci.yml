@@ -274,6 +274,30 @@ jobs:
   # ──────────────────────────────────────────────────────────────
   # SECURITY
   # ──────────────────────────────────────────────────────────────
+  codeql_register_check:
+    name: "CodeQL verdict register check"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      # Refs #2088. The register missed seven dismissed alerts with no CI failure.
+      # This live audit can fail after metadata changes, even on an unchanged commit.
+      # Denied API access must fail, including on a fork. Never add a token fallback.
+      - name: Reconcile the register against the dismissed alerts
+        env:
+          GH_HOST: github.com
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/codeql_verdict_register.py check
+
   bandit:
     name: "Bandit (security)"
     runs-on: ubuntu-latest
@@ -964,6 +988,7 @@ jobs:
       - vulture
       - pydocstyle
       - interrogate
+      - codeql_register_check
       - ops_portal
       - ops_platform_pytest
     if: ${{ always() && contains(needs.*.result, 'failure') }}
@@ -1004,6 +1029,7 @@ jobs:
           RESULTS[vulture]="${{ needs.vulture.result }}"
           RESULTS[pydocstyle]="${{ needs.pydocstyle.result }}"
           RESULTS[interrogate]="${{ needs.interrogate.result }}"
+          RESULTS[codeql_register_check]="${{ needs.codeql_register_check.result }}"
           RESULTS[ops_portal]="${{ needs.ops_portal.result }}"
           RESULTS[ops_platform_pytest]="${{ needs.ops_platform_pytest.result }}"
 
@@ -1072,6 +1098,7 @@ jobs:
       - vulture
       - pydocstyle
       - interrogate
+      - codeql_register_check
       - ops_portal
       - ops_platform_pytest
     if: ${{ always() }}
@@ -1107,6 +1134,7 @@ jobs:
           RESULTS[vulture]="${{ needs.vulture.result }}"
           RESULTS[pydocstyle]="${{ needs.pydocstyle.result }}"
           RESULTS[interrogate]="${{ needs.interrogate.result }}"
+          RESULTS[codeql_register_check]="${{ needs.codeql_register_check.result }}"
           RESULTS[ops_portal]="${{ needs.ops_portal.result }}"
           RESULTS[ops_platform_pytest]="${{ needs.ops_platform_pytest.result }}"
 
