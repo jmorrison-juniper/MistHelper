@@ -9,6 +9,9 @@ The timing median changed from 6.901 s to 4.385 s across 41 samples.
 This is a 36.45 percent wall-time reduction.
 The CPU median changed from 5.344 s to 3.531 s.
 This is a 33.92 percent CPU-time reduction.
+After issue #2509 merged, a follow-up comparison used its file-read reduction as the baseline.
+The combined path changed from 1.310 s to 0.867 s across 21 samples.
+This is a 33.76 percent wall-time reduction against current `origin/main`.
 The change stayed sequential.
 
 ## 2. Environment and Python version
@@ -34,6 +37,8 @@ It counted `Path.read_text()` calls and bytes.
 It measured traced Python memory in a separate `tracemalloc` run.
 It started `tracemalloc` outside the measured memory loop.
 The acceptance rule was at least 5 percent end-to-end improvement with output parity.
+After issue #2509 merged, the same harness also compared `origin/main` with this branch.
+That check measured only the extra symbol table change on top of the file-read change.
 
 ## 4. Baseline results
 
@@ -95,6 +100,9 @@ A token scan with parser validation was slower on the real tree.
 | `diagram-symbol-table`, production command | CPU time | 5,343,750,000 ns, MAD 875,000,000 ns | 3,531,250,000 ns, MAD 812,500,000 ns | 41 before, 41 after | -33.92 percent | Retained |
 | `diagram-symbol-table`, production command | File reads | 490 reads, MAD 0 | 490 reads, MAD 0 | 41 before, 41 after | 0.00 percent | Neutral |
 | `diagram-symbol-table`, production command | Read bytes | 10,191,622 bytes, MAD 0 | 10,191,622 bytes, MAD 0 | 41 before, 41 after | 0.00 percent | Neutral |
+| `diagram-symbol-table` after issue #2509, production command | Wall time | 1,309,500,600 ns, MAD 113,288,500 ns | 867,350,300 ns, MAD 74,800,300 ns | 21 before, 21 after | -33.76 percent | Retained |
+| `diagram-symbol-table` after issue #2509, production command | CPU time | 1,281,250,000 ns, MAD 109,375,000 ns | 843,750,000 ns, MAD 62,500,000 ns | 21 before, 21 after | -34.15 percent | Retained |
+| `diagram-symbol-table` after issue #2509, production command | File reads | 328 reads, MAD 0 | 328 reads, MAD 0 | 21 before, 21 after | 0.00 percent | Neutral |
 
 ## 9. Memory impact
 
