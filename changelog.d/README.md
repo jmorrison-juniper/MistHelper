@@ -10,6 +10,12 @@ Each pull request touched the same lines near the top of that file. Git reported
 a conflict on every rebase, and an engineer repaired the same lines again and
 again. A unique file for each change removes the shared line.
 
+The repository also marks `CHANGELOG.md` with `merge=union` in `.gitattributes`.
+That merge rule protects old branches while they drain. It is a safety net, not
+the long-term process. A union merge can keep duplicate entries and cannot prove
+that each pull request kept a complete release note. Fragments keep ownership
+explicit and let the release coordinator review one file for each change.
+
 ## Name the file
 
 Give the file a name that no other change can choose. Use the first rule that

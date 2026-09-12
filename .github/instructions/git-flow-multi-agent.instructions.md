@@ -128,6 +128,11 @@ every parallel rebase, because each change edits the same lines.
 Give each change its own file instead. Put the pull request number, the issue
 number, or the date in the file name, so no two changes choose one name.
 
+`CHANGELOG.md` uses `merge=union` as a temporary safety net for old branches.
+Do not treat that rule as permission to keep editing `CHANGELOG.md` on feature
+branches. A union merge can keep duplicate entries, and it cannot prove that a
+branch kept the correct release note.
+
 | Record | Feature branch writes | Feature branch never writes |
 | - | - | - |
 | Release note | `changelog.d/pr-<number>.md` | `CHANGELOG.md` |

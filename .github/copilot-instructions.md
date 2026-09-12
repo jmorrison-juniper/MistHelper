@@ -497,6 +497,10 @@ the top of the same `## [Unreleased]` section. Each open pull request therefore
 touched the same lines, and every rebase reported a conflict. One unique file for
 each change removes that shared line.
 
+`CHANGELOG.md` has a `merge=union` rule as a safety net for old branches. Do not
+use that rule as the release-note process. A union merge can keep duplicate
+entries, and it cannot prove that each branch kept the correct release note.
+
 Add one new Markdown file under `changelog.d/` for a user-visible change. Use the
 first name rule that fits.
 
