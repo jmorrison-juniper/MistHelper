@@ -3798,12 +3798,16 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         "Verify an email change token from the Mist email (verifySelfEmail)",
     ),
     "248": (
-        OrgSearchExporter.psk_portal_logs,
-        "Search PSK portal logs for the organization (searchOrgPskPortalLogs)",
+        OrgSearchExporter.sites,
+        "Search sites for the organization (searchOrgSites)",
     ),
     "249": (
         OrgSearchExporter.devices,  # Spec 863 / issue #1371 -- search organization devices.
         "Search devices for the organization (searchOrgDevices)",  # Expose the read-only endpoint in the menu.
+    ),
+    "250": (
+        OrgSearchExporter.psk_portal_logs,
+        "Search PSK portal logs for the organization (searchOrgPskPortalLogs)",
     ),
     "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
     "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),

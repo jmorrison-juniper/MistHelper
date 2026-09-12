@@ -1,9 +1,9 @@
 """OrgSearchExporter -- organization-scoped search export operations.
 
-Added for specs 878, 877, 875, 874, 879 and 869 (issues #1386, #1385, #1383,
-#1382, #1379 and #1377). Wraps read-only Mist API search endpoints so operators
-reach them through the standard MistHelper menu and DataExporter pipeline (CSV,
-SQLite, or ArangoDB).
+Added for specs 878, 877, 875, 874, 879, 870 and 869 (issues #1386, #1385,
+#1383, #1382, #1379, #1378 and #1377). Wraps read-only Mist API search
+endpoints so operators reach them through the standard MistHelper menu and
+DataExporter pipeline (CSV, SQLite, or ArangoDB).
 
 Covered operations:
     - ``searchOrgDevices`` (menu 249)
@@ -12,10 +12,11 @@ Covered operations:
     - ``searchOrgWanClients`` (menu 232)
     - ``searchOrgWanClientEvents`` (menu 233)
     - ``searchOrgSystemEvents`` (menu 234)
-    - ``searchOrgPskPortalLogs`` (menu 248)
+    - ``searchOrgSites`` (menu 248)
+    - ``searchOrgPskPortalLogs`` (menu 250)
 
 Why:
-    Every one of these endpoints takes a session and an organization and returns
+    Every endpoint takes a session and an organization and returns
     a paginated row set. One shared helper therefore runs the whole resolve,
     fetch, and persist sequence, and each menu entry supplies only the parts that
     differ. This mirrors ``SiteSearchExporter`` for the site-scoped peers.
@@ -173,8 +174,18 @@ class OrgSearchExporter:
         )
 
     @staticmethod
+    def sites() -> None:
+        """Search the sites for an organization (menu 248)."""
+        OrgSearchExporter._run_org_search(  # Reuse the standard org search pipeline for consistent output.
+            mistapi.api.v1.orgs.sites.searchOrgSites,  # Call the Mist site search endpoint exposed by the SDK.
+            "searchOrgSites",  # Route output storage through the endpoint strategy.
+            "OrgSitesSearch",  # Use a stable filename prefix for the export.
+            "site",  # Report the result type in operator messages.
+        )
+
+    @staticmethod
     def psk_portal_logs() -> None:
-        """Search PSK portal logs for an organization (menu 248)."""
+        """Search PSK portal logs for an organization (menu 250)."""
         OrgSearchExporter._run_org_search(
             mistapi.api.v1.orgs.pskportals.searchOrgPskPortalLogs,
             "searchOrgPskPortalLogs",

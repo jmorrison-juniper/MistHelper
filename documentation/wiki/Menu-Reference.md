@@ -4,7 +4,11 @@ This page is generated. Run `python scripts/generate_menu_wiki.py` after any
 change to `menu_actions` in `MistHelper.py` or to `src/utils/operation_registry.py`.
 
 MistHelper defines **248 actionable menu entries**, numbered
+<<<<<<< HEAD
 1 to 249 with a gap at 152.
+=======
+1 to 249 with gaps at 152.
+>>>>>>> origin/main
 Menu 0 is Exit, so the registry holds 249 entries in total.
 
 The Safety column reads from `src/utils/operation_registry.py`, which is the
@@ -281,8 +285,13 @@ never runs in an automated test pass.
 | 245 | Export the Cradlepoint connection status for an organization (testOrgCradlepointConnection) | Interactive safe | `OrgCradlepointConnectionExporter.status` |
 | 246 | Troubleshoot a call for a site, client MAC, and meeting ID (troubleshootSiteCall) | Interactive safe | `SiteSearchExporter.troubleshoot_call` |
 | 247 | Verify an email change token from the Mist email (verifySelfEmail) | Interactive safe | `SelfAccountExporter.verify_email` |
+<<<<<<< HEAD
 | 249 | Search devices for the organization (searchOrgDevices) | Safe org exports | `OrgSearchExporter.devices` |
 | 248 | Search PSK portal logs for the organization (searchOrgPskPortalLogs) | Safe org exports | `OrgSearchExporter.psk_portal_logs` |
+=======
+| 248 | Search sites for the organization (searchOrgSites) | Safe org exports | `OrgSearchExporter.sites` |
+| 249 | Search devices for the organization (searchOrgDevices) | Safe org exports | `OrgSearchExporter.devices` |
+>>>>>>> origin/main
 
 This page should be regenerated whenever `menu_actions` or the operation registry
 changes, so the wiki stays aligned with the code.
