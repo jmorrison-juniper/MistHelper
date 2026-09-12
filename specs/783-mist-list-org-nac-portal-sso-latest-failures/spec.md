@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/nacportals/{nacportal_id}/failures`
 - **Tag**: `Orgs NAC Portals`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.nacportals.failures`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.nacportals`
 
 ### Description
 

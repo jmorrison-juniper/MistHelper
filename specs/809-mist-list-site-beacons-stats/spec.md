@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/stats/beacons`
 - **Tag**: `Sites Stats - Beacons`
-- **mistapi SDK module**: `mistapi.api.v1.sites.stats.beacons`
+- **mistapi SDK module**: `mistapi.api.v1.sites.stats`
 
 ### Description
 

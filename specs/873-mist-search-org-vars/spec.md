@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/vars/search`
 - **Tag**: `Orgs Vars`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.vars.search`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.vars`
 
 ### Description
 

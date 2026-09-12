@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/devices/search`
 - **Tag**: `Orgs Devices`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.devices.search`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.devices`
 
 ### Description
 

@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/ssr/register_cmd`
 - **Tag**: `Orgs Devices - SSR`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.ssr.register_cmd`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.ssr`
 
 ### Description
 

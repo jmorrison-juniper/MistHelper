@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/logs/count`
 - **Tag**: `Orgs Logs`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.logs.count`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.logs`
 
 ### Description
 

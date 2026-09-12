@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/stats/discovered_switches/search`
 - **Tag**: `Sites Stats - Discovered Switches`
-- **mistapi SDK module**: `mistapi.api.v1.sites.stats.discovered_switches.search`
+- **mistapi SDK module**: `mistapi.api.v1.sites.stats`
 
 ### Description
 

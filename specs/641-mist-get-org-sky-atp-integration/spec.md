@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/setting/skyatp/setup`
 - **Tag**: `Orgs Integration SkyATP`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.setting.skyatp.setup`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.setting`
 
 ### Description
 

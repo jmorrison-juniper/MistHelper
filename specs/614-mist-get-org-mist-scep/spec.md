@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/setting/mist_scep`
 - **Tag**: `Orgs SCEP`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.setting.mist_scep`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.setting`
 
 ### Description
 

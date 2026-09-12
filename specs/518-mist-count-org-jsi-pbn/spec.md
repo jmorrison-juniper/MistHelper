@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/jsi/pbn/count`
 - **Tag**: `Orgs JSI`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.jsi.pbn.count`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.jsi`
 
 ### Description
 

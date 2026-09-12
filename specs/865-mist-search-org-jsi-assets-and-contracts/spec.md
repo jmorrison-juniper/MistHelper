@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/jsi/inventory/search`
 - **Tag**: `Orgs JSI`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.jsi.inventory.search`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.jsi`
 
 ### Description
 

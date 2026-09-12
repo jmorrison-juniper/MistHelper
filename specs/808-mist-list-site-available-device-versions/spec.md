@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/devices/versions`
 - **Tag**: `Utilities Upgrade`
-- **mistapi SDK module**: `mistapi.api.v1.sites.devices.versions`
+- **mistapi SDK module**: `mistapi.api.v1.sites.devices`
 
 ### Description
 

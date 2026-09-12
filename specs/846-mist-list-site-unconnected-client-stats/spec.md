@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/stats/maps/{map_id}/unconnected_clients`
 - **Tag**: `Sites Stats - Clients Wireless`
-- **mistapi SDK module**: `mistapi.api.v1.sites.stats.maps.unconnected_clients`
+- **mistapi SDK module**: `mistapi.api.v1.sites.stats`
 
 ### Description
 

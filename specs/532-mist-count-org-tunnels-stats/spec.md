@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/stats/tunnels/count`
 - **Tag**: `Orgs Stats - Tunnels`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.stats.tunnels.count`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.stats`
 
 ### Description
 

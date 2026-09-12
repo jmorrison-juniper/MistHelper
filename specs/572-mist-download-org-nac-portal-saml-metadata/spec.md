@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/nacportals/{nacportal_id}/saml_metadata.xml`
 - **Tag**: `Orgs NAC Portals`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.nacportals.saml_metadata_xml`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.nacportals`
 
 ### Description
 

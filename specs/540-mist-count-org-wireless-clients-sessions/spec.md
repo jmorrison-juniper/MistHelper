@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/clients/sessions/count`
 - **Tag**: `Orgs Clients - Wireless`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.clients.sessions.count`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.clients`
 
 ### Description
 

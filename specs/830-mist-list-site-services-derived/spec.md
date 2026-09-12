@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/services/derived`
 - **Tag**: `Sites Services`
-- **mistapi SDK module**: `mistapi.api.v1.sites.services.derived`
+- **mistapi SDK module**: `mistapi.api.v1.sites.services`
 
 ### Description
 
