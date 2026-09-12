@@ -294,7 +294,7 @@ never runs in an automated test pass.
 | 258 | Search other-device events for a selected site (searchSiteOtherDeviceEvents) | Interactive safe | `SiteOtherDeviceEventsExporter.other_device_events` |
 | 259 | Run any no-identifier Mist get or list endpoint (29 operations, issue #1807) | Interactive safe | `SimpleEndpointExporter.global_endpoints` |
 | 260 | Run any org-scoped Mist get or list endpoint (55 operations, issue #1807) | Interactive safe | `SimpleEndpointExporter.org_endpoints` |
-| 261 | Run any site-scoped Mist get or list endpoint (57 operations, issue #1807) | Interactive safe | `SimpleEndpointExporter.site_endpoints` |
+| 261 | Run any site-scoped simple Mist read endpoint (58 operations, issue #1807) | Interactive safe | `SimpleEndpointExporter.site_endpoints` |
 | 262 | Run any MSP-scoped Mist get or list endpoint (10 operations, issue #1807) | Interactive safe | `SimpleEndpointExporter.msp_endpoints` |
 | 263 | Run any site SLE endpoint with scope prompts (17 operations, issue #1807) | Interactive safe | `EndpointFamilyExporter.site_sle_endpoints` |
 | 264 | Run any site map endpoint with map prompts (7 operations, issue #1807) | Interactive safe | `EndpointFamilyExporter.site_map_endpoints` |

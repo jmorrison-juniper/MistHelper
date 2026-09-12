@@ -2,7 +2,7 @@
 
 **Feature Branch**: `858-mist-optimize-installer-rrm`
 **Created**: 2026-06-29
-**Status**: Draft
+**Status**: Deliberately excluded from safe endpoint families
 **Input**: User description: "Catalog the missing Mist API GET endpoint `optimizeInstallerRrm` and add it as a new MistHelper menu item."
 
 ## Source Endpoint
@@ -12,6 +12,14 @@
 - **Path**: `/api/v1/installer/sites/{site_name}/optimize`
 - **Tag**: `Installer`
 - **mistapi SDK module**: `mistapi.api.v1.installer.sites.optimize`
+
+### Decision
+
+This endpoint starts radio optimization on a live site.
+MistHelper must not add it to a safe export family.
+Add it only as a destructive action with typed confirmation.
+Issue #1366 is closed as out of scope for the read-only backlog.
+A guard test prevents this operation from entering the safe family tables.
 
 ### Description
 
@@ -27,47 +35,37 @@ _None._
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Read-only data retrieval (Priority: P1)
+### User Story 1 - Deliberate safe-family exclusion (Priority: P1)
 
-A junior NOC engineer launches MistHelper, selects the new menu item, supplies the required identifiers
-(org / site / device as applicable), and receives the JSON payload exposed by `optimizeInstallerRrm` -- exported to the
-configured storage backend (CSV, SQLite, or ArangoDB+Redis) under `data/`.
+A junior NOC engineer reads this specification.
+The engineer sees that `optimizeInstallerRrm` is not a safe export.
 
-**Why this priority**: This is a read-only Mist API call -- no destructive effect, so it can ship as P1
-without elaborate guardrails. Coverage of this endpoint unlocks data the user cannot currently extract
-from MistHelper without writing custom code.
+**Why this priority**: A GET method can still change the network. This call starts radio optimization.
 
-**Independent Test**: Run the new menu item against a known org/site; verify the resulting file exists
-under `data/`, has at least one row when the upstream API returns data, and that re-running the menu
-item upserts cleanly into SQLite (no duplicate primary keys).
+**Independent Test**: Run the safe-family guard test. Verify that `optimizeInstallerRrm` is absent.
 
 **Acceptance Scenarios**:
 
-1. **Given** valid credentials and org context, **When** the user selects the new menu item, **Then**
-   MistHelper invokes `mistapi.api.v1.installer.sites.optimize.optimizeInstallerRrm()` exactly once per required scope and persists results.
-2. **Given** an SSH or container session, **When** the user is prompted for identifiers, **Then**
-   `safe_input()` handles EOF gracefully and the operation exits 0 without a traceback.
-3. **Given** repeated runs, **When** SQLite is the active backend, **Then** rows upsert by the configured
-   primary key strategy (no duplicates).
+1. **Given** the safe endpoint family tables, **When** the guard test runs, **Then** it rejects `optimizeInstallerRrm`.
+2. **Given** a future implementation, **When** it adds a menu item, **Then** the menu item must be `destructive`.
+3. **Given** a future implementation, **When** it calls the SDK, **Then** it must require typed confirmation.
 
 ### Edge Cases
 
-- The API returns an empty list -> menu reports "no data returned" and exits cleanly.
-- The user supplies an unknown org/site UUID -> 404 from Mist API surfaces as a logged warning, not a traceback.
-- Rate limiting (429) triggers the adaptive delay system; no manual intervention required.
-- The user runs with `--fast` -> retries cap respected, concurrency raised.
-- Output backend is ArangoDB+Redis -> graph edges (per spec 188) and Redis caches are updated consistently.
+- Do not classify this endpoint by method alone.
+- Do not export the response through a read-only family.
+- Do not run this endpoint during unattended tests.
 
 ## Requirements *(mandatory)*
 
-**FR-001**: Provide a new menu item that invokes `mistapi.api.v1.installer.sites.optimize.optimizeInstallerRrm()` via the `mistapi` SDK.
+**FR-001**: Do not add `optimizeInstallerRrm` to a safe export family.
 **FR-002**: Collect required inputs using `safe_input()` so the operation works in SSH and container contexts.
 **FR-003**: Apply rate limiting and retry logic consistent with adjacent menu items (delay_metrics.json + tuning_data.json).
-**FR-004**: Persist results using `DataExporter.write_with_format_selection(data, filename, api_function_name=...)` so CSV/SQLite/ArangoDB backends all work.
-**FR-005**: Register the operationId `optimizeInstallerRrm` in `ENDPOINT_PRIMARY_KEY_STRATEGIES` with the correct PK strategy (natural / composite / auto-increment).
+**FR-004**: If implemented later, classify the menu action as `destructive`.
+**FR-005**: If implemented later, require typed confirmation before the API call.
 **FR-006**: Log `INFO` before the API call and `DEBUG` with response counts after, ASCII-only, per Action Logging principle.
 **FR-007**: Add inline comments on every new executable line per Inline Comments principle.
-**FR-008**: Update README.md menu table and CHANGELOG.md with the new operation number.
+**FR-008**: Keep a guard test that excludes this operation from safe family tables.
 
 ## Constitution & Instructions Conformance
 
@@ -75,10 +73,8 @@ item upserts cleanly into SQLite (no duplicate primary keys).
 - Action logging before/after every meaningful step (Constitution VII -- NON-NEGOTIABLE).
 - 5-Item Rule: implementation function <=25 lines, <=5 params, <=5 nesting blocks.
 - ASCII-only logging (no Unicode/emoji).
-- Multi-backend output via `DataExporter`.
-- `safe_input()` wraps all `input()` calls.
-- Primary key strategy registered in `ENDPOINT_PRIMARY_KEY_STRATEGIES`.
-- README menu table + CHANGELOG entry updated in the same PR.
+- A guard test prevents safe-family inclusion.
+- A later implementation must use destructive confirmation.
 
 ## Non-Functional Requirements
 
@@ -94,11 +90,6 @@ item upserts cleanly into SQLite (no duplicate primary keys).
 
 ## Acceptance Criteria Checklist
 
-- [ ] Menu item added with sequential operation number.
-- [ ] `ENDPOINT_PRIMARY_KEY_STRATEGIES` updated.
-- [ ] Inline comments + action logging on every new line.
-- [ ] `DataExporter.write_with_format_selection` used for output.
-- [ ] `safe_input()` used for prompts.
-- [ ] README.md and CHANGELOG.md updated.
-- [ ] `python -m py_compile MistHelper.py`, `python -m ruff check`, `python -m black --check` all green.
-- [ ] Test invocation via `python MistHelper.py --menu <num>` returns 0 on a known org.
+- [ ] `optimizeInstallerRrm` is absent from safe family tables.
+- [ ] The guard test fails if a safe family adds this operation.
+- [ ] This issue records the destructive-action decision.
