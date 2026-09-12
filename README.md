@@ -150,6 +150,20 @@ In the upgrade capture portal, a capture is one record of site state and not a
 packet capture. Read [the portal
 guide](documentation/upgrade_capture_portal.md).
 
+The upgrade capture portal shows stale runs with a `Stale` badge and a
+last-update age. The server owns the stale decision.
+
+Bulk actions start with an authoritative server preview. The preview returns
+the visible run list, counts, and required phrase. For cancel, type
+`CANCEL <run-count> RUNS`. For retry, type `RETRY <run-count> RUNS`.
+
+Use bulk cancel for pre-cloud runs. Use bulk retry for final failed, stopped,
+or cancelled runs. The run page also includes reconciliation for eligible stale
+runs. It sends no firmware, stop, or cancel request to Mist.
+
+Read [the portal guide](documentation/upgrade_capture_portal.md) for the full
+operator flow and deployment rules.
+
 ### Watch the network from a monitoring system
 
 Menu 241 starts a metrics gateway on port 8057. The gateway reads your

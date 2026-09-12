@@ -156,8 +156,8 @@ an action. It cannot lose an item outcome.
 - [x] T093 Reverify the backup and record its freshness before the full E2E and deployment sequence.
 - [x] T094 Record the persistent run, action, and audit baselines before the full E2E suite.
 - [x] T095 Run the complete `tests/e2e/upgrade_portal` suite with strict mode and all traps active.
-- [ ] T096 Compare persistent run, action, and audit counts with the T094 baseline immediately after the suite.
-- [ ] T097 Stop the workflow and create an issue if any persistent count changed.
+- [x] T096 Compare persistent run, action, and audit counts with the T094 baseline immediately after the suite.
+- [x] T097 Stop the workflow and create an issue if any persistent count changed.
 
 ## Phase 10: Recovery Drill, Performance, and Traceability
 
@@ -166,32 +166,32 @@ coverage.
 
 - [ ] T098 Restore the verified backup to an isolated ArangoDB target.
 - [ ] T099 Verify run and action collection counts, keys, indexes, and sample records on the isolated target.
-- [ ] T100 Record that action retention matches the lifetime of referenced run records and that no cleanup job exists.
-- [ ] T101 Add the fixed 50-row history measurement.
-- [ ] T102 Add the fixed 50-run no-cloud batch measurement.
-- [ ] T103 Run both measurements with the warm-up and sample counts from `research.md`.
-- [ ] T104 Add requirement identifiers to named tests and update the traceability matrix.
+- [x] T100 Record that action retention matches the lifetime of referenced run records and that no cleanup job exists.
+- [x] T101 Add the fixed 50-row history measurement.
+- [x] T102 Add the fixed 50-run no-cloud batch measurement.
+- [x] T103 Run both measurements with the warm-up and sample counts from `research.md`.
+- [x] T104 Add requirement identifiers to named tests and update the traceability matrix.
 - [x] T105 Review FR-001 through FR-076 against unit, contract, integration, browser, or manual evidence.
-- [ ] T106 Re-run `checklists/requirements.md` and leave no unchecked item.
+- [x] T106 Re-run `checklists/requirements.md` and leave no unchecked item.
 
 ## Phase 11: Manifest, Quality Gates, and Documentation
 
 **Goal**: Gate and stage every feature file without touching unrelated work.
 
-- [ ] T107 Update `README.md` with the operator controls and governed deployment sequence.
+- [x] T107 Update `README.md` with the operator controls and governed deployment sequence.
 - [x] T108 Update `documentation/upgrade_capture_portal.md` with stale, preview, reconciliation, result, retention, and recovery behavior.
 - [x] T109 Add the feature entry to `CHANGELOG.md` with the required version format.
 - [x] T110 Update `feature-files.txt` before any path differs from the 79-path plan.
 - [x] T111 Build the changed-file set from the merge base, staged changes, unstaged changes, and untracked files.
 - [x] T112 Compare the changed-file set with `feature-files.txt`. Reject an unlisted feature path and exclude unrelated pre-existing untracked paths.
 - [x] T113 Run all applicable Python gates for each changed Python file in the manifest.
-- [ ] T114 Run all applicable JavaScript and browser gates for each changed JavaScript file in the manifest.
-- [ ] T115 Review each changed executable line for required comments and each meaningful action for required logs.
-- [ ] T116 Run all targeted unit, contract, integration, and browser tests.
-- [ ] T117 Run the full existing CI-equivalent local gates that apply to the manifest.
-- [ ] T118 Fix a feature-caused failure and rerun its gate.
-- [ ] T119 Create one GitHub issue before any repair of an unrelated failure. Record the issue URL.
-- [ ] T120 Run the STE linter for every Markdown file in the feature package and the amended constitution.
+- [x] T114 Run all applicable JavaScript and browser gates for each changed JavaScript file in the manifest.
+- [x] T115 Review each changed executable line for required comments and each meaningful action for required logs.
+- [x] T116 Run all targeted unit, contract, integration, and browser tests.
+- [x] T117 Run the full existing CI-equivalent local gates that apply to the manifest.
+- [x] T118 Fix a feature-caused failure and rerun its gate.
+- [x] T119 Create one GitHub issue before any repair of an unrelated failure. Record the issue URL.
+- [x] T120 Run the STE linter for every Markdown file in the feature package and the amended constitution.
 - [ ] T121 Stage all feature files with `git add -A --pathspec-from-file=specs/2447-stale-bulk-run-controls/feature-files.txt`.
 - [ ] T122 Compare the manifest with the staged diff and prove that every changed feature path is staged.
 

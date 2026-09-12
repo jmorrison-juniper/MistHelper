@@ -2,6 +2,7 @@
 .specify/memory/constitution.md
 CHANGELOG.md
 documentation/upgrade_capture_portal.md
+README.md
 specs/2447-stale-bulk-run-controls/.spec-context.json
 specs/2447-stale-bulk-run-controls/checklists/requirements.md
 specs/2447-stale-bulk-run-controls/contracts/http-api.md
@@ -12,6 +13,7 @@ specs/2447-stale-bulk-run-controls/data-model.md
 specs/2447-stale-bulk-run-controls/feature-files.txt
 specs/2447-stale-bulk-run-controls/plan.md
 specs/2447-stale-bulk-run-controls/quickstart.md
+specs/2447-stale-bulk-run-controls/recovery-drill.md
 specs/2447-stale-bulk-run-controls/research.md
 specs/2447-stale-bulk-run-controls/spec.md
 specs/2447-stale-bulk-run-controls/tasks.md
