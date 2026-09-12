@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/msps/{msp_id}`
 - **Tag**: `MSPs`
-- **mistapi SDK module**: `mistapi.api.v1.msps`
+- **mistapi SDK module**: `mistapi.api.v1.msps.msps`
 
 ### Description
 

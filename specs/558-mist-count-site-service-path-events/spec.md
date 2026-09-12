@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/services/events/count`
 - **Tag**: `Sites Services`
-- **mistapi SDK module**: `mistapi.api.v1.sites.services.events.count`
+- **mistapi SDK module**: `mistapi.api.v1.sites.services`
 
 ### Description
 

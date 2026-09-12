@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/guests/search`
 - **Tag**: `Sites Guests`
-- **mistapi SDK module**: `mistapi.api.v1.sites.guests.search`
+- **mistapi SDK module**: `mistapi.api.v1.sites.guests`
 
 ### Description
 

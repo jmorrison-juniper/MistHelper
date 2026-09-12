@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/events/system/search`
 - **Tag**: `Sites Events`
-- **mistapi SDK module**: `mistapi.api.v1.sites.events.system.search`
+- **mistapi SDK module**: `mistapi.api.v1.sites.events`
 
 ### Description
 

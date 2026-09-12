@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/stats/mxedges`
 - **Tag**: `Sites Stats - MxEdges`
-- **mistapi SDK module**: `mistapi.api.v1.sites.stats.mxedges`
+- **mistapi SDK module**: `mistapi.api.v1.sites.stats`
 
 ### Description
 

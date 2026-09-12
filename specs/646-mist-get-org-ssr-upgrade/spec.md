@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/ssr/upgrade/{upgrade_id}/cancel`
 - **Tag**: `Utilities Upgrade`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.ssr.upgrade.cancel`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.ssr`
 
 ### Description
 

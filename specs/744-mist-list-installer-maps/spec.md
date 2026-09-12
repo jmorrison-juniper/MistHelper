@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/installer/orgs/{org_id}/sites/{site_name}/maps`
 - **Tag**: `Installer`
-- **mistapi SDK module**: `mistapi.api.v1.installer.orgs.sites.maps`
+- **mistapi SDK module**: `mistapi.api.v1.installer.orgs.sites`
 
 ### Description
 

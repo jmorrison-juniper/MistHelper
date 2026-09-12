@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/mxedges/events/search`
 - **Tag**: `Sites MxEdges`
-- **mistapi SDK module**: `mistapi.api.v1.sites.mxedges.events.search`
+- **mistapi SDK module**: `mistapi.api.v1.sites.mxedges`
 
 ### Description
 

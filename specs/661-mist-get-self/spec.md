@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/self`
 - **Tag**: `Self Account`
-- **mistapi SDK module**: `mistapi.api.v1.self`
+- **mistapi SDK module**: `mistapi.api.v1.self.self`
 
 ### Description
 
