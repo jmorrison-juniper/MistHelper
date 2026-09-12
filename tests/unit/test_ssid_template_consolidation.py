@@ -2995,7 +2995,7 @@ class TestInstanceMethods:
     def test_load_cache_valid_fresh(self) -> None:
         mgr = self._make_manager()
         cache_data = {
-            "collected_at": datetime.now().isoformat(),
+            "collected_at": datetime.now(UTC).isoformat(),
             "data": {"sites": []},
         }
         with (

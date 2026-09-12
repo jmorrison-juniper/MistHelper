@@ -20,7 +20,7 @@ import csv  # WHY: audit-trail CSV writer.
 import importlib  # WHY: lazy MistHelper import to reach live helper classes without circular load.
 import logging  # WHY: structured lifecycle + audit logging.
 import os  # WHY: env-var config + path helpers for the audit CSV.
-from datetime import datetime  # WHY: timestamps for scan snapshot + audit trail rows.
+from datetime import UTC, datetime  # WHY: timestamps for scan snapshot + audit trail rows.
 from typing import Any  # WHY: raw WLAN rows are duck-typed dicts from mistapi.
 
 import mistapi  # WHY: direct SDK access for listOrgWlans + updateOrgWlan endpoints.
@@ -448,7 +448,7 @@ class BulkRadiusWLANConfigManager:
     def _record_change(self, wlan: dict[str, Any], status: str, error_msg: str) -> None:
         """Record a change for the audit trail."""
         record = {  # Build a flat audit record capturing before/after values
-            "timestamp": datetime.now().isoformat(),  # When the change was recorded
+            "timestamp": datetime.now(UTC).isoformat(),  # When the change was recorded
             "wlan_id": wlan.get("id", ""),  # The WLAN's ID
             "ssid": wlan.get("ssid", ""),  # The WLAN's SSID
             "site_name": wlan.get("_inheritance_source", "Org-Level"),  # Where the WLAN is defined
@@ -472,9 +472,9 @@ class BulkRadiusWLANConfigManager:
             logging.debug("No RADIUS WLANs to snapshot; skipping scan export")  # Trace the empty case
             return  # No snapshot to write
         logging.info("Exporting scan snapshot for %s RADIUS WLAN(s)", len(all_radius))  # Before-action log
-        scan_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # Human-readable scan time stamped on each row
+        scan_timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")  # Human-readable scan time stamped on each row
         rows = [self._build_snapshot_row(wlan, scan_timestamp) for wlan in all_radius]  # Flatten each WLAN to a row
-        file_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # Compact stamp for a unique, non-overwriting filename
+        file_stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")  # Compact stamp for a unique, non-overwriting filename
         filename = f"RadiusWLANScanSnapshot_{file_stamp}.csv"  # Snapshot filename (DataExporter drops .csv for SQLite)
         ok = mh.DataExporter.write_with_format_selection(  # Multi-backend write: CSV by default, SQLite if configured
             rows,
@@ -549,7 +549,7 @@ class BulkRadiusWLANConfigManager:
         if not self.change_records:  # No changes were recorded this run
             print("[*] No changes to export.")
             return
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # Unique filename timestamp
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")  # Unique filename timestamp
         prefix = "DRYRUN_" if self.dry_run else ""  # Mark dry-run exports distinctly
         filename = f"{prefix}RadiusWLANBulkConfig_{timestamp}.csv"  # Composed audit CSV name
         filepath = os.path.join("data", filename)  # Place under data/ (cross-platform)

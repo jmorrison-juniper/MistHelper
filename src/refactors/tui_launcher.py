@@ -15,7 +15,7 @@ from __future__ import annotations  # Enable postponed evaluation for forward-re
 
 import importlib  # Late-import MistHelper module to avoid circular src<->MistHelper dependency
 import logging  # Structured action logging required by coding standards
-from datetime import datetime  # Timestamp string for debug-only completion breadcrumb
+from datetime import UTC, datetime  # Timestamp string for debug-only completion breadcrumb
 from types import SimpleNamespace  # Bundle runtime dependencies without coupling to a dataclass
 
 
@@ -165,7 +165,7 @@ class TUILauncher:  # Launch TUI mode from interactive menu.
         self.debug_mode = self._get_debug_mode()  # Re-read debug flag in case args changed during TUI session
 
         if self.debug_mode:  # Only emit the timestamped completion trace when debug mode is on
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Local wall-clock for eyeball parity
+            timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Local wall-clock for eyeball parity
             logging.debug("TUI_DEBUG: [%s] TUI_MODE function completed - returning to caller", timestamp)  # Trace
 
         logging.info("TUI_MODE: TUI mode completed successfully")  # Success-path summary log

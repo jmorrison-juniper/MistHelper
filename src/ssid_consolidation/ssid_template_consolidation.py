@@ -15,7 +15,7 @@ import logging  # WHY: workflow telemetry across all 5 phases
 import os  # WHY: file existence checks + path composition
 import re  # WHY: pilot-site regex pattern is a class constant
 from dataclasses import dataclass  # WHY: bundle 6 injected deps into a frozen struct
-from datetime import datetime  # WHY: ISO timestamps for confirmation + cache freshness
+from datetime import UTC, datetime  # WHY: ISO timestamps for confirmation + cache freshness
 from typing import Any  # WHY: broad response typing for mistapi wrappers
 
 import mistapi  # WHY: paginated fetch + REST call factories
@@ -449,7 +449,7 @@ class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-att
             logging.warning("Operation cancelled - confirmation not provided")  # WHY: audit-log cancel
             logging.warning("Operation cancelled.")  # WHY: user-visible cancel message
             return False  # WHY: caller aborts the write path
-        logging.info("Operation confirmed at %s", datetime.now().isoformat())  # WHY: audit-log confirmation time
+        logging.info("Operation confirmed at %s", datetime.now(UTC).isoformat())  # WHY: audit-log confirmation time
         return True  # WHY: caller proceeds with the write
 
     # ------------------------------------------------------------------
@@ -520,7 +520,7 @@ def _write_single_site_vars(  # WHY: parent-owned so tests can patch mistapi at 
 
 def _build_success_write_results(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:  # WHY: success rows builder
     """Build ``status=written`` result records with a shared timestamp."""
-    timestamp = datetime.now().isoformat()  # WHY: single ISO timestamp for the batch
+    timestamp = datetime.now(UTC).isoformat()  # WHY: single ISO timestamp for the batch
     results: list[dict[str, Any]] = []  # WHY: accumulator for the per-entry success rows
     for entry in entries:  # WHY: fan out per-variable success rows
         entry_copy = dict(entry)  # WHY: do not mutate caller's plan entries
@@ -707,7 +707,7 @@ def _handle_existing_non_misthelper(  # WHY: overwrite path split for readabilit
 ) -> dict[str, Any]:
     """Handle template that exists but was not created by this tool."""
     confirm: str = params.safe_input_fn(  # WHY: overwrite requires explicit operator opt-in
-        f"  Template '{params.template_name}' exists but was not " f"created by this tool. Overwrite? (y/N): ",
+        f"  Template '{params.template_name}' exists but was not created by this tool. Overwrite? (y/N): ",
         context="ssid_consolidation_template_overwrite",
     )
     if confirm.strip().lower() not in ("y", "yes"):  # WHY: accept only affirmative yes tokens
@@ -854,7 +854,7 @@ def _apply_ssid_disable(
         )
         # fmt: on
         result["status"] = "disabled"  # WHY: sentinel consumed by resume + summary logic
-        result["timestamp"] = datetime.now().isoformat()  # WHY: record when the flip happened
+        result["timestamp"] = datetime.now(UTC).isoformat()  # WHY: record when the flip happened
         logging.info("Disabled SSID %s in template %s", ssid_id, template_id)  # WHY: audit-log success
     else:  # WHY: SSID row not in template -> record skip, do not PUT
         result["status"] = "skipped"  # WHY: sentinel consumed by resume + summary logic

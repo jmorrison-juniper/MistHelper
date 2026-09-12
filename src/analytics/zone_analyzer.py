@@ -10,7 +10,7 @@ from __future__ import annotations  # WHY: enable postponed annotation evaluatio
 
 import logging  # WHY: module-level logger for action tracing
 from collections.abc import Callable  # WHY: PEP 585 Callable type alias source
-from datetime import datetime  # WHY: timestamp export filenames
+from datetime import UTC, datetime  # WHY: timestamp export filenames
 from typing import Any, TypeGuard  # WHY: heterogeneous dict payloads + narrow bundle checks
 
 # ---------------------------------------------------------------------------
@@ -293,7 +293,7 @@ class ZoneConfigurationAnalyzer:
         save_data_fn: SaveDataFn,
     ) -> None:
         """Export analysis results to CSV files."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # WHY: local wall-clock filename stamp
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")  # WHY: local wall-clock filename stamp
         analyses = {  # WHY: bundle the three analyses to keep helper param counts low
             "zones": combined.get("zones", {}),  # WHY: zone analysis dict
             "engagement": combined.get("engagement", {}),  # WHY: engagement analysis dict

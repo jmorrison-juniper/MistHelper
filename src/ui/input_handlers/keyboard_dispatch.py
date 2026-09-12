@@ -10,7 +10,7 @@ from __future__ import annotations  # WHY: PEP 604 union syntax + forward refs
 
 import logging  # WHY: action-log every dispatched key + mode transition
 from collections.abc import Callable  # WHY: precise type for zero-arg handler tables
-from datetime import datetime  # WHY: high-resolution timestamp for debug traces
+from datetime import UTC, datetime  # WHY: high-resolution timestamp for debug traces
 from typing import Any  # WHY: TUI back-reference is loosely typed
 
 
@@ -31,7 +31,7 @@ class KeyboardDispatchTable:  # WHY: replaces handle_input (was CC=65) with O(1)
         """Route ``key`` to the handler appropriate for the current TUI state."""
         tui = self._tui  # Local alias for readability
         if tui.debug_mode:  # Trace key + state for debugging
-            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # WHY: ms-precision for keystroke ordering
+            ts = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # WHY: ms-precision for keystroke ordering
             logging.debug(  # WHY: emit structured trace so we can reconstruct user's key sequence
                 "TUI_DEBUG: [%s] Key pressed: %r (state=%s, path=%s, selection=%s)",
                 ts,

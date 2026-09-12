@@ -7,7 +7,7 @@ import logging  # WHY: emit structured diagnostics for suite orchestration.
 import os  # WHY: read MIST_INTERACTIVE_TEST_SITE selector from environment.
 import time  # WHY: measure per-option and suite durations.
 from dataclasses import dataclass  # WHY: dataclasses bundle related params under the 5-Item Rule.
-from datetime import datetime  # WHY: format suite start-time header line.
+from datetime import UTC, datetime  # WHY: format suite start-time header line.
 from typing import Any  # WHY: emitter and registry protocols intentionally unconstrained.
 
 from src.dataclasses.progress_event import TestSummary  # WHY: reuse issue #470 aggregate telemetry container.
@@ -247,7 +247,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             "  Note: This tests read-only operations requiring site/device/client selection\n"
             "! Test started at: %s\n"
             "%s",
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"),
             "=" * 80,
         )
 
