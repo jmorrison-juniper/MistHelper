@@ -6,9 +6,9 @@ Why:
     operator attaches the file to a change record, so the file must open in a
     spreadsheet and must also feed another program.
 
-    One row holds one device or one client. A flat row lets a reader sort and
-    filter the file without unpacking a nested structure. It also lets the two
-    formats report the same rows.
+    One row holds one device, client, or Tier 3 record. A flat row lets a
+    reader sort and filter the file. The `details_json` cell retains all safe
+    source fields. Both formats report the same rows.
 
     Each chassis member writes its own row. A stack that loses a member keeps
     the same device count, so a row for each member is the only signal of the
@@ -54,12 +54,28 @@ KIND_DEVICE = "device"  # One row of the device table.
 KIND_CLIENT_WIRED = "client_wired"  # One row of the wired client table.
 KIND_CLIENT_WIRELESS = "client_wireless"  # One row of the wireless client table.
 KIND_CLIENT_GUEST = "client_guest"  # One row of the guest client table.
+KIND_SWITCH_PORT = "switch_port"  # One row of the Tier 3 switch-port section.
+KIND_POE = "poe"  # One row of the Tier 3 power over Ethernet section.
+KIND_RADIO = "radio"  # One row of the Tier 3 radio section.
+KIND_TUNNEL = "tunnel"  # One row of the Tier 3 gateway-tunnel section.
+KIND_BGP_PEER = "bgp_peer"  # One row of the Tier 3 BGP-peer section.
+KIND_ALARM = "alarm"  # One row of the Tier 3 alarm section.
 
 # The client group of the stored document, and the row kind that each one writes.
 CLIENT_GROUPS: tuple[tuple[str, str], ...] = (
     ("wired", KIND_CLIENT_WIRED),
     ("wireless", KIND_CLIENT_WIRELESS),
     ("guest", KIND_CLIENT_GUEST),
+)
+
+# The extra group of the stored document, and the stable row kind that each one writes.
+EXTRA_GROUPS: tuple[tuple[str, str], ...] = (
+    ("switch_ports", KIND_SWITCH_PORT),
+    ("poe", KIND_POE),
+    ("radios", KIND_RADIO),
+    ("tunnels", KIND_TUNNEL),
+    ("bgp_peers", KIND_BGP_PEER),
+    ("alarms", KIND_ALARM),
 )
 
 # WHY: One column list covers a device row and a client row. A second list
@@ -91,6 +107,7 @@ EXPORT_COLUMNS = (
     "vlan",
     "ssid",
     "band",
+    "details_json",
 )
 
 # The columns that a device row reads straight out of the device index entry.
@@ -211,7 +228,7 @@ class ExportRow:
         them.
 
     Attributes:
-        kind: The row kind. One of the four `KIND_` values.
+        kind: The stable row kind for a capture section.
         mac: The address of the device or of the client.
         values: The cell of every column of `EXPORT_COLUMNS`.
     """
@@ -276,21 +293,34 @@ def _one_line(value: str) -> str:
     return value.strip()  # A leading space or a trailing space carries no meaning.
 
 
+def _safe_value(value: Any) -> Any:
+    """Return one stored value with credential fields removed from nested maps."""
+    if isinstance(value, Mapping):  # A nested cloud object can hold a credential field.
+        return {  # Preserve every safe nested value for a complete evidence file.
+            str(name): _safe_value(item)  # Apply the same filter at every map depth.
+            for name, item in value.items()  # Read each stored field once.
+            if not is_credential_field(str(name))  # Remove a credential before serialization.
+        }
+    if isinstance(value, list | tuple):  # A list can contain nested cloud objects.
+        return [_safe_value(item) for item in value]  # Preserve the order of the stored list.
+    return value  # A scalar value contains no field name to inspect.
+
+
 def _readable(record: Mapping[str, Any]) -> dict[str, Any]:
-    """Return one captured record with every credential field removed.
+    """Return one captured record with every credential field removed."""
+    logger.debug("capture export: remove credential fields from one stored record")  # Log the safety action.
+    safe = _safe_value(record)  # Remove credential fields before the record reaches either file format.
+    result = dict(safe) if isinstance(safe, Mapping) else {}  # The input contract requires a map.
+    logger.debug("capture export: retained %s safe fields", len(result))  # Report only a count, never a value.
+    return result  # The caller can serialize every remaining field.
 
-    Why:
-        The column list names no credential today. This filter guards the day
-        somebody adds one, and it guards a cloud field that arrives under a
-        name the column list already holds.
 
-    Args:
-        record: One device index entry or one client record.
-
-    Returns:
-        The record, without any field whose name reads as a secret.
-    """
-    return {name: value for name, value in record.items() if not is_credential_field(str(name))}
+def _details_json(record: Mapping[str, Any]) -> str:
+    """Return every safe source field as compact JSON."""
+    logger.debug("capture export: serialize the safe detail fields")  # Log before the data transformation.
+    detail = json.dumps(_readable(record), sort_keys=True, separators=(",", ":"), default=str)  # Keep future fields.
+    logger.debug("capture export: serialized %s detail characters", len(detail))  # Report the result size.
+    return detail  # One CSV cell and one JSON field now retain the complete safe record.
 
 
 def _blank_values(heading: Mapping[str, str]) -> dict[str, str]:
@@ -329,6 +359,7 @@ def _device_row(mac: str, entry: Mapping[str, Any], heading: Mapping[str, str]) 
     values.update({name: _as_text(readable.get(name)) for name in DEVICE_FIELDS})  # The nine device columns.
     values["kind"] = KIND_DEVICE  # A reader filters the file on this column.
     values["mac"] = mac  # The index key names the member, so a chassis member keeps its own row.
+    values["details_json"] = _details_json({**readable, "mac": mac})  # Retain every safe device field.
     return ExportRow(kind=KIND_DEVICE, mac=mac, values=values)
 
 
@@ -347,8 +378,9 @@ def _client_row(kind: str, record: Mapping[str, Any], heading: Mapping[str, str]
     values = _blank_values(heading)  # Every device column stays empty on a client row.
     values.update({name: _as_text(readable.get(name)) for name in CLIENT_FIELDS})  # The six client columns.
     values.update({name: _as_text(readable.get(source)) for name, source in CLIENT_PARENT_FIELDS})  # The parent.
-    values["kind"] = kind  # A reader filters the wired rows apart from the wireless rows.
+    values["kind"] = kind  # A reader filters the client groups apart.
     values["mac"] = _as_text(readable.get("mac"))  # The match key of the client.
+    values["details_json"] = _details_json(readable)  # Retain every safe client field.
     return ExportRow(kind=kind, mac=values["mac"], values=values)
 
 
@@ -413,23 +445,39 @@ def client_rows(capture: Mapping[str, Any]) -> list[ExportRow]:
     return rows
 
 
+def _extra_row(kind: str, record: Mapping[str, Any], heading: Mapping[str, str]) -> ExportRow:
+    """Return one export row for a Tier 3 record."""
+    readable = _readable(record)  # Remove credential fields before any value reaches the file.
+    values = _blank_values(heading)  # Keep the existing flat columns for compatibility.
+    for name in EXPORT_COLUMNS:  # Copy a common field when the Tier 3 record uses the same name.
+        if name in readable:  # Do not replace a heading or a kind with an absent value.
+            values[name] = _as_text(readable.get(name))  # Keep common values easy to sort in a spreadsheet.
+    values["kind"] = kind  # The stable kind identifies the source section.
+    values["details_json"] = _details_json(readable)  # Preserve every safe section-specific field.
+    mac = _as_text(readable.get("mac"))  # Most infrastructure rows use a device address as their key.
+    values["mac"] = mac  # Put that key in the common address column when it exists.
+    return ExportRow(kind=kind, mac=mac, values=values)  # Both writers receive the same complete row.
+
+
+def extra_rows(capture: Mapping[str, Any]) -> list[ExportRow]:
+    """Return one export row for each stored Tier 3 record."""
+    extras: Any = capture.get("extras") or {}  # A Tier 2 capture holds no extra map.
+    if not isinstance(extras, Mapping):  # A damaged document must not make the download fail.
+        logger.warning("capture export: the extra section is not a map, so the file holds no extra row")
+        return []  # The base capture rows remain usable.
+    heading = capture_heading(capture)  # Every extra row names the same capture.
+    rows: list[ExportRow] = []  # The stable group order fixes the output order.
+    for group, kind in EXTRA_GROUPS:  # Read every Tier 3 section, including an empty section.
+        records: Any = extras.get(group) or []  # An empty section contributes no row.
+        rows.extend(_extra_row(kind, record, heading) for record in records if isinstance(record, Mapping))
+    return rows  # The caller appends these rows after the base capture rows.
+
+
 def build_rows(capture: Mapping[str, Any]) -> tuple[ExportRow, ...]:
-    """Return one row for every device and every client of one capture.
-
-    Why:
-        Acceptance Scenario 3 requires that the file holds every captured row.
-        The download therefore reports the whole capture, and not the changed
-        part of it.
-
-    Args:
-        capture: The stored capture document.
-
-    Returns:
-        The device rows first, then the client rows.
-    """
+    """Return one row for every stored record of one capture."""
     logger.info("capture export: build the rows of the capture %s", _as_text(capture.get("capture_id")) or "unnamed")
-    rows = tuple(device_rows(capture) + client_rows(capture))  # The device rows read first, as the page shows them.
-    logger.debug("capture export: built %s rows", len(rows))  # The count proves that no row was dropped.
+    rows = tuple(device_rows(capture) + client_rows(capture) + extra_rows(capture))  # Preserve every stored section.
+    logger.debug("capture export: built %s rows", len(rows))  # The count proves that no section row was dropped.
     return rows
 
 
@@ -602,7 +650,7 @@ def export_capture(capture: Mapping[str, Any], export_format: object) -> ExportR
         # bar and could carry a line break that fakes a log line.
         logger.warning("capture export: the portal refused a download, because the format is not known")
         return ExportResult(error=ERROR_BAD_FORMAT)  # The route answers 400 with this code.
-    rows = build_rows(capture)  # Every device row and every client row. Each one names the capture.
+    rows = build_rows(capture)  # Every stored section row. Each row names the capture.
     if chosen == FORMAT_CSV:  # The spreadsheet form.
         return ExportResult(render_csv(rows), MEDIA_TYPE_CSV, download_name(capture, FORMAT_CSV))
     heading = capture_heading(capture)  # The machine form repeats the five values in one object.
@@ -628,6 +676,7 @@ __all__ = [
     "CLIENT_PARENT_FIELDS",
     "CREDENTIAL_WORDS",
     "DEVICE_FIELDS",
+    "EXTRA_GROUPS",
     "ERROR_BAD_FORMAT",
     "EXPORT_COLUMNS",
     "FORMAT_CSV",
@@ -636,10 +685,16 @@ __all__ = [
     "FORMULA_LEADERS",
     "HEADER_MARKER",
     "HEADING_COLUMNS",
+    "KIND_ALARM",
+    "KIND_BGP_PEER",
     "KIND_CLIENT_GUEST",
     "KIND_CLIENT_WIRED",
     "KIND_CLIENT_WIRELESS",
     "KIND_DEVICE",
+    "KIND_POE",
+    "KIND_RADIO",
+    "KIND_SWITCH_PORT",
+    "KIND_TUNNEL",
     "MEDIA_TYPE_CSV",
     "MEDIA_TYPE_JSON",
     "SUPPORTED_FORMATS",
@@ -654,6 +709,7 @@ __all__ = [
     "disarm_cell",
     "download_name",
     "export_capture",
+    "extra_rows",
     "is_credential_field",
     "render_csv",
     "render_json",

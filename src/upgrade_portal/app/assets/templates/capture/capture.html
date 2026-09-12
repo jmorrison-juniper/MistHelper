@@ -509,6 +509,64 @@
 </div>
 
 {#
+  Issue #2443 exposes guest clients and every Tier 3 section. One generic table
+  keeps the empty state, the cap note, and future safe fields consistent.
+#}
+{% for table in additional_tables | default([], true) %}
+  <div class="portal-card" data-testid="capture-section-card-{{ table.key }}">
+    <h2 class="portal-card-title">{{ table.label }}</h2>
+
+    {% if table.held > (table.rows | length) %}
+      <p class="portal-note" data-testid="capture-{{ table.key }}-cap-note">
+        This table shows the first {{ table.rows | length }} of {{ table.held }}
+        records. Download the capture to read every record.
+      </p>
+    {% endif %}
+
+    <div class="portal-table-scroll">
+      <table class="portal-table"
+             data-testid="capture-{{ table.key }}-table"
+             data-sortable>
+        <caption class="visually-hidden">
+          Every stored {{ table.label | lower }} record of this capture.
+        </caption>
+
+        <thead>
+          <tr>
+            {% for column in table.columns %}
+              <th scope="col">{{ column | replace('_', ' ') | title }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for row in table.rows %}
+            <tr data-testid="capture-{{ table.key }}-row">
+              {% for column in table.columns %}
+                <td>{{ row[column] | default('', true) }}</td>
+              {% endfor %}
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="{{ table.columns | length }}" class="portal-table-empty">
+                This capture holds no {{ table.label | lower }} record.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endfor %}
+
+{% if not (tier3_requested | default(false, true)) %}
+  <div class="portal-card" data-testid="capture-tier3-not-requested">
+    <h2 class="portal-card-title">Tier 3 data</h2>
+    <p class="portal-note">This capture did not request Tier 3 data.</p>
+  </div>
+{% endif %}
+
+{#
   portal.css prepends "Caution:" to a flash-warning through a stylesheet rule.
   A partial capture is recoverable, because the operator can run the capture
   again, so the signal word is Caution and not Warning.

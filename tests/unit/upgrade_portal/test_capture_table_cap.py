@@ -93,3 +93,61 @@ def test_an_empty_capture_holds_no_row_and_no_count() -> None:
 def test_the_page_reads_the_cap_by_name() -> None:
     """The template states the cap, so the number lives in one module only."""
     assert tables.page_tables({})["table_row_cap"] == tables.TABLE_ROW_CAP
+
+
+def test_the_page_builds_guest_and_every_tier_three_table() -> None:
+    """A Tier 3 capture exposes the guest group and all six extra sections."""
+    capture = {
+        "tier": 3,
+        "clients": {"guest": [{"mac": "aabbccddeeff", "username": "visitor"}]},
+        "extras": {
+            "switch_ports": [{"port_id": "ge-0/0/1", "up": True}],
+            "poe": [{"port_id": "ge-0/0/1", "power": 4.2}],
+            "radios": [{"band": "5", "channel": 36}],
+            "tunnels": [],
+            "bgp_peers": [],
+            "alarms": [{"id": "alarm-1", "type": "switch_down"}],
+        },
+    }
+    result = tables.page_tables(capture)
+    views = {view["key"]: view for view in result["additional_tables"]}
+    assert result["tier3_requested"] is True
+    assert set(views) == {
+        "clients-guest",
+        "switch-ports",
+        "poe",
+        "radios",
+        "tunnels",
+        "bgp-peers",
+        "alarms",
+    }
+    assert views["clients-guest"]["rows"][0]["username"] == "visitor"
+    assert views["switch-ports"]["rows"][0]["up"] == "True"
+    assert views["tunnels"]["rows"] == []
+
+
+def test_a_tier_two_capture_names_that_tier_three_was_not_requested() -> None:
+    """A Tier 2 result must not make absent Tier 3 rows look like empty reads."""
+    result = tables.page_tables({"tier": 2, "clients": {"guest": []}})
+    assert result["tier3_requested"] is False
+    assert [view["key"] for view in result["additional_tables"]] == ["clients-guest"]
+
+
+def test_a_large_tier_three_table_uses_the_shared_cap() -> None:
+    """The new tables obey the same page limit as the original tables."""
+    held = tables.TABLE_ROW_CAP + 3
+    result = tables.page_tables({"tier": 3, "extras": {"alarms": [{"id": f"alarm-{index}"} for index in range(held)]}})
+    alarms = next(view for view in result["additional_tables"] if view["key"] == "alarms")
+    assert len(alarms["rows"]) == tables.TABLE_ROW_CAP
+    assert alarms["held"] == held
+
+
+def test_nested_values_are_safe_json_and_nested_credentials_leave() -> None:
+    """A structured Tier 3 cell stays readable and does not expose a secret."""
+    capture = {
+        "tier": 3,
+        "extras": {"alarms": [{"id": "alarm-1", "detail": {"password": "drop", "safe": "kept"}}]},
+    }
+    result = tables.page_tables(capture)
+    alarms = next(view for view in result["additional_tables"] if view["key"] == "alarms")
+    assert alarms["rows"][0]["detail"] == '{"safe":"kept"}'

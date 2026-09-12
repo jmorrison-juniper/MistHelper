@@ -33,6 +33,7 @@ MEMBER_MAC = "0011220000bb"  # The second member of the same virtual chassis.
 ACCESS_POINT_MAC = "0011220000cc"  # The access point that serves the wireless client.
 WIRED_CLIENT_MAC = "aabbccddeeff"  # The wired client of the capture below.
 WIRELESS_CLIENT_MAC = "aabbccdd0011"  # The wireless client of the capture below.
+GUEST_CLIENT_MAC = "aabbccdd0022"  # The guest client of the capture below.
 
 CAPTURE_ID = "cap-abcdef12-01"  # The identifier of the capture below.
 RUN_ID = "run-abcdef12"  # The run that owns the capture below.
@@ -57,6 +58,7 @@ def _capture() -> dict[str, Any]:
         "capture_id": CAPTURE_ID,
         "run_id": RUN_ID,
         "role": "pre",
+        "tier": 3,
         "org_id": "org-1",
         "org_name": ORG_NAME,
         "site_id": "site-1",
@@ -112,9 +114,26 @@ def _capture() -> dict[str, Any]:
                     "band": "5",
                 }
             ],
-            "guest": [],
+            "guest": [
+                {
+                    "mac": GUEST_CLIENT_MAC,
+                    "hostname": "guest-01",
+                    "ip": "192.168.20.20",
+                    "device_name": "ap-01",
+                    "ssid": "guest",
+                    "nested": {"api_token": "must-not-appear", "safe": "kept"},
+                }
+            ],
         },
-        "counts": {"devices_total": 2, "clients_wired": 1, "clients_wireless": 1},
+        "extras": {
+            "switch_ports": [{"mac": MASTER_MAC, "port_id": "ge-0/0/3", "up": True}],
+            "poe": [{"mac": MASTER_MAC, "port_id": "ge-0/0/3", "power": 4.2}],
+            "radios": [{"mac": ACCESS_POINT_MAC, "band": "5", "channel": 36}],
+            "tunnels": [{"name": "primary", "status": "up"}],
+            "bgp_peers": [{"neighbor": "192.0.2.1", "state": "established"}],
+            "alarms": [{"id": "alarm-1", "type": "switch_down", "nested": {"password": "drop", "safe": 1}}],
+        },
+        "counts": {"devices_total": 2, "clients_wired": 1, "clients_wireless": 1, "clients_guest": 1},
     }
 
 
@@ -143,10 +162,39 @@ def test_the_file_holds_every_device_row() -> None:
 
 
 def test_the_file_holds_every_client_row() -> None:
-    """The wired client and the wireless client both write a row."""
+    """The wired, wireless, and guest clients each write a row."""
     rows = export.build_rows(_capture())
-    clients = [row for row in rows if row.kind != export.KIND_DEVICE]
-    assert {row.mac for row in clients} == {WIRED_CLIENT_MAC, WIRELESS_CLIENT_MAC}
+    client_kinds = {export.KIND_CLIENT_WIRED, export.KIND_CLIENT_WIRELESS, export.KIND_CLIENT_GUEST}
+    clients = [row for row in rows if row.kind in client_kinds]
+    assert {row.mac for row in clients} == {WIRED_CLIENT_MAC, WIRELESS_CLIENT_MAC, GUEST_CLIENT_MAC}
+
+
+def test_the_file_holds_all_ten_stable_row_kinds() -> None:
+    """Tier 3 exports every stored section under one stable kind."""
+    kinds = {row.kind for row in export.build_rows(_capture())}
+    assert kinds == {
+        export.KIND_DEVICE,
+        export.KIND_CLIENT_WIRED,
+        export.KIND_CLIENT_WIRELESS,
+        export.KIND_CLIENT_GUEST,
+        export.KIND_SWITCH_PORT,
+        export.KIND_POE,
+        export.KIND_RADIO,
+        export.KIND_TUNNEL,
+        export.KIND_BGP_PEER,
+        export.KIND_ALARM,
+    }
+
+
+def test_details_json_keeps_safe_source_fields_and_drops_nested_credentials() -> None:
+    """The compatibility field keeps safe nested data and removes secret names."""
+    rows = _csv_rows(export.export_capture(_capture(), export.FORMAT_CSV).body)
+    guest = next(row for row in rows if row["kind"] == export.KIND_CLIENT_GUEST)
+    alarm = next(row for row in rows if row["kind"] == export.KIND_ALARM)
+    assert json.loads(guest["details_json"])["nested"] == {"safe": "kept"}
+    assert json.loads(alarm["details_json"])["nested"] == {"safe": 1}
+    assert "must-not-appear" not in json.dumps(rows)
+    assert '"drop"' not in json.dumps(rows)
 
 
 def test_a_device_row_names_the_five_fields_of_the_story() -> None:

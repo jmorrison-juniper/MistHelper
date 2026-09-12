@@ -59,12 +59,34 @@ MASTER_MAC = "0011220000aa"  # The master member of the one virtual chassis belo
 MEMBER_MAC = "0011220000bb"  # The second member of the same virtual chassis.
 WIRED_CLIENT_MAC = "aabbccddeeff"  # The wired client of the capture below.
 WIRELESS_CLIENT_MAC = "aabbccdd0011"  # The wireless client of the capture below.
+GUEST_CLIENT_MAC = "aabbccdd0022"  # The guest client of the capture below.
+EXPECTED_KINDS = {
+    "device",
+    "client_wired",
+    "client_wireless",
+    "client_guest",
+    "switch_port",
+    "poe",
+    "radio",
+    "tunnel",
+    "bgp_peer",
+    "alarm",
+}
 
 # WHY: `contracts/ui-testids.md` fixes each identifier below. A test reads the
 # identifier and never reads a class name, because a class name may change.
 DEVICE_TABLE_MARKER = 'data-testid="capture-device-table"'
 WIRED_TABLE_MARKER = 'data-testid="capture-client-wired-table"'
 WIRELESS_TABLE_MARKER = 'data-testid="capture-client-wireless-table"'
+ADDITIONAL_TABLE_MARKERS = (
+    'data-testid="capture-clients-guest-table"',
+    'data-testid="capture-switch-ports-table"',
+    'data-testid="capture-poe-table"',
+    'data-testid="capture-radios-table"',
+    'data-testid="capture-tunnels-table"',
+    'data-testid="capture-bgp-peers-table"',
+    'data-testid="capture-alarms-table"',
+)
 EXPORT_CSV_MARKER = 'data-testid="capture-export-csv"'
 EXPORT_JSON_MARKER = 'data-testid="capture-export-json"'
 
@@ -77,7 +99,7 @@ STORED_CAPTURE: dict[str, Any] = {
     "run_id": "run-abcdef12",
     "ordinal": 1,
     "role": "pre",
-    "tier": 2,
+    "tier": 3,
     "org_id": "org-1",
     "org_name": "Test Org",
     "site_id": "site-1",
@@ -139,9 +161,17 @@ STORED_CAPTURE: dict[str, Any] = {
                 "band": "5",
             }
         ],
-        "guest": [],
+        "guest": [{"mac": GUEST_CLIENT_MAC, "hostname": "guest-01", "ssid": "guest"}],
     },
-    "counts": {"devices_total": 2, "clients_wired": 1, "clients_wireless": 1},
+    "extras": {
+        "switch_ports": [{"mac": MASTER_MAC, "port_id": "ge-0/0/3", "up": True}],
+        "poe": [{"mac": MASTER_MAC, "port_id": "ge-0/0/3", "power": 4.2}],
+        "radios": [{"mac": "0011220000cc", "band": "5", "channel": 36}],
+        "tunnels": [{"name": "primary", "status": "up"}],
+        "bgp_peers": [{"neighbor": "192.0.2.1", "state": "established"}],
+        "alarms": [{"id": "alarm-1", "type": "switch_down"}],
+    },
+    "counts": {"devices_total": 2, "clients_wired": 1, "clients_wireless": 1, "clients_guest": 1},
 }
 
 # WHY: A site with no device and no client is a valid capture. The page must
@@ -371,8 +401,8 @@ def error_code(response: TestResponse) -> str:
 # --------------------------------------------------------------------------
 
 
-def test_the_page_holds_the_three_tables(signed_in: FlaskClient) -> None:
-    """The page shows a device table, a wired table, and a wireless table.
+def test_the_page_holds_every_capture_table(signed_in: FlaskClient) -> None:
+    """The page shows the base, guest, and six Tier 3 tables.
 
     Args:
         signed_in: The signed-in browser.
@@ -381,6 +411,8 @@ def test_the_page_holds_the_three_tables(signed_in: FlaskClient) -> None:
     assert DEVICE_TABLE_MARKER in page
     assert WIRED_TABLE_MARKER in page
     assert WIRELESS_TABLE_MARKER in page
+    for marker in ADDITIONAL_TABLE_MARKERS:
+        assert marker in page
 
 
 def test_each_chassis_member_holds_its_own_row(signed_in: FlaskClient) -> None:
@@ -525,7 +557,10 @@ def test_the_download_holds_every_captured_row(signed_in: FlaskClient) -> None:
         signed_in: The signed-in browser.
     """
     rows = csv_rows(download(signed_in, "csv"))
-    assert {row["mac"] for row in rows} == {MASTER_MAC, MEMBER_MAC, WIRED_CLIENT_MAC, WIRELESS_CLIENT_MAC}
+    assert {row["kind"] for row in rows} == EXPECTED_KINDS
+    assert {MASTER_MAC, MEMBER_MAC, WIRED_CLIENT_MAC, WIRELESS_CLIENT_MAC, GUEST_CLIENT_MAC}.issubset(
+        {row["mac"] for row in rows}
+    )
 
 
 def test_the_json_download_holds_every_captured_row(signed_in: FlaskClient) -> None:
@@ -535,12 +570,8 @@ def test_the_json_download_holds_every_captured_row(signed_in: FlaskClient) -> N
         signed_in: The signed-in browser.
     """
     payload = json.loads(download(signed_in, "json").get_data(as_text=True))
-    assert {row["mac"] for row in payload["rows"]} == {
-        MASTER_MAC,
-        MEMBER_MAC,
-        WIRED_CLIENT_MAC,
-        WIRELESS_CLIENT_MAC,
-    }
+    assert {row["kind"] for row in payload["rows"]} == EXPECTED_KINDS
+    assert all("details_json" in row for row in payload["rows"])
 
 
 def test_an_unknown_format_is_refused(signed_in: FlaskClient) -> None:

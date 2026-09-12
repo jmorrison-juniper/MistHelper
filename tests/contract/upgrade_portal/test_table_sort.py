@@ -33,6 +33,13 @@ SORTABLE_TABLES = (
     "capture-device-table",
     "capture-client-wired-table",
     "capture-client-wireless-table",
+    "capture-clients-guest-table",
+    "capture-switch-ports-table",
+    "capture-poe-table",
+    "capture-radios-table",
+    "capture-tunnels-table",
+    "capture-bgp-peers-table",
+    "capture-alarms-table",
     "compare-device-table",
     "compare-client-table",
     "history-table",
@@ -111,8 +118,11 @@ def table_is_sortable(test_id: str) -> bool:
     for path in TEMPLATE_ROOT.rglob("*.html"):
         markup = path.read_text(encoding="utf-8")
         marker = f'data-testid="{test_id}"'
-        if marker not in markup:
+        dynamic_capture_marker = 'data-testid="capture-{{ table.key }}-table"'
+        if marker not in markup and not (test_id.startswith("capture-") and dynamic_capture_marker in markup):
             continue
+        if marker not in markup:  # The generic Tier 3 table renders each listed capture identifier.
+            marker = dynamic_capture_marker
         opening = markup.split(marker)[0].rsplit("<table", 1)[-1] + markup.split(marker)[1].split(">")[0]
         if "data-sortable" in opening:
             return True

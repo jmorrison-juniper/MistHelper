@@ -119,7 +119,16 @@ element inside it. That inner attribute is a script hook, not a test hook.
 | `capture-device-row-{mac}` | One device row, such as `capture-device-row-0011220000aa` |
 | `capture-client-wired-table` | The wired client table |
 | `capture-client-wireless-table` | The wireless client table |
-| `capture-client-row-{mac}` | One client row of either client table |
+| `capture-clients-guest-table` | The guest client table |
+| `capture-switch-ports-table` | The Tier 3 switch port table |
+| `capture-poe-table` | The Tier 3 power table |
+| `capture-radios-table` | The Tier 3 radio table |
+| `capture-tunnels-table` | The Tier 3 tunnel table |
+| `capture-bgp-peers-table` | The Tier 3 BGP peer table |
+| `capture-alarms-table` | The Tier 3 alarm table |
+| `capture-{section}-row` | One row in a guest or Tier 3 table |
+| `capture-tier3-not-requested` | The note for a Tier 2 capture |
+| `capture-client-row-{mac}` | One row in the wired or wireless client table |
 | `capture-export-csv` | The download of the capture as a comma-separated file |
 | `capture-export-json` | The download of the capture as a JSON file |
 | `capture-start-upgrade-button` | Starts an upgrade for the site of this capture. Posts to `POST /api/sites/<site_id>/runs`, then opens the options page (FR-101). |
@@ -129,9 +138,9 @@ The two controls above render for a verified capture alone (Delta U1, FR-101). A
 capture the portal never verified holds no clean pre-check, so the button hides
 until the verified badge reads verified.
 
-FR-026 requires the three tables. Each table renders on every page render, even
-for a capture that holds no row. A site with no device of a type is a valid
-capture, so the table shows an empty state row and the page shows no error.
+FR-026 requires the three base tables. The guest table also renders for each
+stored capture. A Tier 3 capture renders all six Tier 3 tables. Each empty table
+shows an empty-state row. A Tier 2 capture shows the Tier 3 not-requested note.
 
 The address in a row identifier is the address without a separator and in lower
 case, which is the key of the device index. Each chassis member holds its own

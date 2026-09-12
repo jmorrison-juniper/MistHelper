@@ -104,6 +104,29 @@ CONFIRM_PAGE_SUFFIX = "/confirm"  # The run page that reads the typed word.
 HISTORY_PAGE_PATH = "/history"
 HISTORY_OPEN_PREFIX = "history-open-"
 CAPTURE_READ_PATH = "/api/captures/{capture_id}"  # `contracts/http-api.md:238` fixes this path.
+CAPTURE_PAGE_READ_PATH = "/captures/{capture_id}"  # The human view of one stored capture.
+CAPTURE_EXPORT_JSON_PATH = "/api/captures/{capture_id}/export?format=json"  # The complete machine download.
+ADDITIONAL_TABLE_IDS = (
+    "capture-clients-guest-table",
+    "capture-switch-ports-table",
+    "capture-poe-table",
+    "capture-radios-table",
+    "capture-tunnels-table",
+    "capture-bgp-peers-table",
+    "capture-alarms-table",
+)
+EXPECTED_EXPORT_KINDS = {
+    "device",
+    "client_wired",
+    "client_wireless",
+    "client_guest",
+    "switch_port",
+    "poe",
+    "radio",
+    "tunnel",
+    "bgp_peer",
+    "alarm",
+}
 
 DEFAULT_TIER = "2"  # `contracts/http-api.md` states that the tier defaults to 2.
 HIGH_TIER = "3"  # The endpoint refuses any value other than 2 or 3 with `bad_tier`.
@@ -512,6 +535,25 @@ class TestStoredCaptureRead:
         _require_built_route(_page_status(portal_page, path), path)
         body = portal_page.evaluate("() => JSON.parse(document.body.innerText || '{}')")
         assert body.get("capture_id") == capture_id, f"{path} answered a body for {body.get('capture_id')!r}."
+
+    def test_the_stored_tier_three_capture_shows_every_result_table(self, portal_page: Any) -> None:
+        """The human view exposes guest clients and all six Tier 3 sections."""
+        capture_id = _first_stored_capture_id(portal_page)
+        path = CAPTURE_PAGE_READ_PATH.format(capture_id=capture_id)
+        _require_built_route(_page_status(portal_page, path), path)
+        for test_id in ADDITIONAL_TABLE_IDS:
+            sync_api.expect(portal_page.get_by_test_id(test_id)).to_be_visible()
+        sync_api.expect(portal_page.get_by_test_id("capture-switch-ports-row")).to_contain_text("ge-0/0/1")
+        sync_api.expect(portal_page.get_by_test_id("capture-alarms-row")).to_contain_text("switch_down")
+
+    def test_the_json_download_holds_every_tier_three_kind(self, portal_page: Any) -> None:
+        """The browser session downloads one row kind for every stored section."""
+        capture_id = _first_stored_capture_id(portal_page)
+        answer = portal_page.request.get(CAPTURE_EXPORT_JSON_PATH.format(capture_id=capture_id))
+        assert answer.status == OK_STATUS
+        payload = answer.json()
+        assert {row["kind"] for row in payload["rows"]} == EXPECTED_EXPORT_KINDS
+        assert all("details_json" in row for row in payload["rows"])
 
 
 def _is_run_create(answer: Any) -> bool:

@@ -20,6 +20,7 @@ Row shape:
 
 from __future__ import annotations  # Every annotation stays text, so a name may appear before its class.
 
+import json  # Structured Tier 3 values stay valid JSON inside one table cell.
 import logging  # The portal logs with the standard library only.
 from collections.abc import Mapping  # Types each read-only record that arrives from the store.
 from typing import Any  # A stored capture document is free-form.
@@ -57,6 +58,22 @@ WIRELESS_COLUMNS = ("hostname", "mac", "ip", "vlan", "parent_device", "ssid", "b
 
 WIRED_GROUP = "wired"  # The key of the wired client list in the stored document.
 WIRELESS_GROUP = "wireless"  # The key of the wireless client list in the stored document.
+GUEST_GROUP = "guest"  # The key of the guest client list in the stored document.
+GUEST_COLUMNS = ("hostname", "mac", "username", "parent_device", "ssid", "random_mac")  # Guest identity and attachment.
+
+# Each Tier 3 section has preferred columns. A new safe field appends after them.
+EXTRA_TABLE_SPECS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("switch_ports", "Switch ports", ("mac", "port_id", "up", "speed", "full_duplex", "port_usage", "mac_count")),
+    (
+        "poe",
+        "Power over Ethernet",
+        ("mac", "port_id", "poe_on", "poe_disabled", "poe_mode", "poe_priority", "power_draw"),
+    ),
+    ("radios", "Radios", ("mac", "band", "channel", "bandwidth", "power", "noise_floor", "num_clients", "num_wlans")),
+    ("tunnels", "Gateway tunnels", ("mac", "tunnel_name", "type", "protocol", "status")),
+    ("bgp_peers", "BGP peers", ("mac", "neighbor_mac", "neighbor_ip", "vrf_name", "state", "up")),
+    ("alarms", "Alarms", ("id", "severity", "type", "group", "timestamp", "last_seen", "count")),
+)
 
 # The two client columns whose column name and source field name differ.
 # `data-model.md` section 3.4 names the source fields.
@@ -94,21 +111,30 @@ def cell_text(value: Any) -> str:
     return text.strip()  # A leading space or a trailing space carries no meaning.
 
 
+def safe_value(value: Any) -> Any:
+    """Return one value with credential fields removed from nested maps."""
+    if isinstance(value, Mapping):  # A nested cloud object can hold a credential field.
+        return {  # Keep every safe field for the operator.
+            str(name): safe_value(item)  # Apply the same rule at every map depth.
+            for name, item in value.items()  # Read each stored field once.
+            if not is_credential_field(str(name))  # Remove credentials before the template sees them.
+        }
+    if isinstance(value, list | tuple):  # A list can hold nested cloud objects.
+        return [safe_value(item) for item in value]  # Preserve the source order.
+    return value  # A scalar has no field name to inspect.
+
+
 def readable(record: Mapping[str, Any]) -> dict[str, Any]:
-    """Return one captured record with every credential field removed.
+    """Return one captured record with every credential field removed."""
+    safe = safe_value(record)  # Remove credentials before the page builds columns.
+    return dict(safe) if isinstance(safe, Mapping) else {}  # The caller always receives a map.
 
-    Why:
-        A page is a file that a browser caches and that an operator screenshots.
-        A token must never reach it. `export.is_credential_field` owns the rule,
-        so the page and the download drop the same fields.
 
-    Args:
-        record: One captured record.
-
-    Returns:
-        The record, without any field whose name reads as a secret.
-    """
-    return {name: value for name, value in record.items() if not is_credential_field(str(name))}
+def display_text(value: Any) -> str:
+    """Return a readable cell value for a scalar or a structured value."""
+    if isinstance(value, Mapping | list | tuple):  # Keep a nested cloud value valid and unambiguous.
+        return json.dumps(safe_value(value), sort_keys=True, separators=(",", ":"), default=str)  # Compact JSON.
+    return cell_text(value)  # Use the existing one-line rule for scalar values.
 
 
 def _row(columns: tuple[str, ...], source: Mapping[str, Any]) -> dict[str, str]:
@@ -234,6 +260,55 @@ def _client_records(capture: Mapping[str, Any], group: str) -> list[Mapping[str,
     return [record for record in records if isinstance(record, Mapping)]  # A stray value never reaches a row.
 
 
+def _section_records(capture: Mapping[str, Any], section: str) -> list[Mapping[str, Any]]:
+    """Return the stored records of one Tier 3 section."""
+    extras: Any = capture.get("extras") or {}  # A Tier 2 capture holds no extra map.
+    if not isinstance(extras, Mapping):  # A damaged extra section must not stop the page.
+        logger.warning("capture tables: the extra section is not a map, so %s stays empty", section)
+        return []  # The page still shows the explicit empty state.
+    records: Any = extras.get(section) or []  # A successful empty read contains no row.
+    return [record for record in records if isinstance(record, Mapping)]  # Drop a stray non-record value.
+
+
+def _section_columns(records: list[Mapping[str, Any]], preferred: tuple[str, ...]) -> list[str]:
+    """Return preferred columns followed by new safe source columns."""
+    found = {str(name) for record in records for name in readable(record)}  # Find every safe stored field.
+    ordered = [name for name in preferred if name in found or not records]  # Keep stable headings for empty data.
+    ordered.extend(sorted(found.difference(ordered)))  # Append future fields without hiding them.
+    return ordered  # The template uses this same order for the heading and each row.
+
+
+def _section_view(capture: Mapping[str, Any], section: str, label: str, preferred: tuple[str, ...]) -> dict[str, Any]:
+    """Return one bounded Tier 3 table description."""
+    logger.info("capture tables: build the %s rows", section)  # Log before the page transformation.
+    records = _section_records(capture, section)  # Read every stored record of the section.
+    columns = _section_columns(records, preferred)  # Preserve stable fields and append future fields.
+    rows = [{name: display_text(readable(record).get(name)) for name in columns} for record in records]  # Text cells.
+    visible, held = capped(rows, section.replace("_", " "))  # Apply the same bound as the base tables.
+    logger.debug("capture tables: built %s visible %s rows from %s stored rows", len(visible), section, held)
+    return {"key": section.replace("_", "-"), "label": label, "columns": columns, "rows": visible, "held": held}
+
+
+def _guest_view(capture: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the bounded guest-client table description."""
+    logger.info("capture tables: build the guest client rows")  # Log before the page transformation.
+    records = _client_records(capture, GUEST_GROUP)  # Read the guest group through the existing client rule.
+    columns = list(GUEST_COLUMNS)  # The stable fields keep an empty guest table readable.
+    rows = [_client_row(GUEST_COLUMNS, record) for record in records]  # Reuse the client name and parent mapping.
+    visible, held = capped(rows, "guest client")  # Apply the same bound as the other client tables.
+    logger.debug("capture tables: built %s visible guest client rows from %s stored rows", len(visible), held)
+    return {"key": "clients-guest", "label": "Guest clients", "columns": columns, "rows": visible, "held": held}
+
+
+def additional_tables(capture: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Return the guest table and each requested Tier 3 table."""
+    tables = [_guest_view(capture)]  # Guest clients belong to both data tiers.
+    if int(capture.get("tier") or 2) != 3:  # Tier 2 did not request any extra section.
+        return tables  # The template shows one explicit Tier 2 note after the guest table.
+    tables.extend(_section_view(capture, key, label, columns) for key, label, columns in EXTRA_TABLE_SPECS)
+    return tables  # Tier 3 always shows all six sections, including empty ones.
+
+
 def capped(rows: list[dict[str, str]], name: str) -> tuple[list[dict[str, str]], int]:
     """Return one table cut to the row cap, with the count it held before.
 
@@ -286,6 +361,8 @@ def page_tables(capture: Mapping[str, Any]) -> dict[str, Any]:
         "device_rows": devices,
         "wired_rows": wired,
         "wireless_rows": wireless,
+        "additional_tables": additional_tables(capture),  # Guest and Tier 3 tables use one generic template.
+        "tier3_requested": int(capture.get("tier") or 2) == 3,  # The page explains why Tier 3 tables are absent.
         # The page reads each held count beside its table, so a capped table
         # states both numbers and an uncapped table states nothing at all.
         "device_rows_held": device_held,
