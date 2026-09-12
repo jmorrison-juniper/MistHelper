@@ -313,6 +313,62 @@ def _install_exporter(monkeypatch: pytest.MonkeyPatch, mirror: _FakeDatabase | N
     return names
 
 
+def _arangodb_json_value(value: Any) -> Any:
+    """Return the JSON value that ArangoDB can return after storage.
+
+    Why:
+        ArangoDB can return a whole float as an integer after a document
+        round trip. The fake store uses this helper to repeat that boundary.
+
+    Args:
+        value: The value from the document that the portal writes.
+
+    Returns:
+        The stored JSON value with each whole float normalized to an integer.
+    """
+    if isinstance(value, float) and value.is_integer():  # Repeat the document store number normalization.
+        return int(value)  # Store equal whole JSON numbers with the returned type.
+    if isinstance(value, Mapping):  # Recurse into nested Tier 3 capture sections.
+        return {key: _arangodb_json_value(item) for key, item in value.items()}  # Keep the same object shape.
+    if isinstance(value, list | tuple):  # Recurse into JSON arrays from capture records.
+        return [_arangodb_json_value(item) for item in value]  # Preserve the list order for digest checks.
+    return value  # Leave booleans, strings, nulls, integers, and fractional floats unchanged.
+
+
+def _install_arango_normalizing_exporter(monkeypatch: pytest.MonkeyPatch, mirror: _FakeDatabase) -> list[str]:
+    """Install an exporter stand-in that repeats ArangoDB number normalization.
+
+    Args:
+        monkeypatch: The pytest patch helper.
+        mirror: The database that receives the normalized document.
+
+    Returns:
+        The list that receives each backup file name.
+    """
+    names: list[str] = []  # Record backup writes without touching the file system.
+
+    def _write(rows: list[dict[str, Any]], filename: str, **options: Any) -> bool:
+        """Mirror one normalized document and report a successful backup write.
+
+        Args:
+            rows: The flat rows for the backup file. The stand-in ignores them.
+            filename: The name of the backup file.
+            **options: The exporter options. ``backend_options`` holds the raw
+                document that the database backend receives.
+
+        Returns:
+            True, because the real exporter reports a successful CSV write.
+        """
+        names.append(filename)  # Record the backup file name for the result assertion.
+        payload = dict(options["backend_options"].raw_data[0])  # Read the exact document that the portal writes.
+        stored = _arangodb_json_value(payload)  # Repeat the ArangoDB boundary before the read-back.
+        mirror.fake_collection.documents[str(payload["capture_id"])] = stored  # Store by the natural capture key.
+        return True  # Match the exporter success contract after the mirror write.
+
+    monkeypatch.setattr(store, "DataExporter", SimpleNamespace(write_with_format_selection=_write))  # Patch the seam.
+    return names  # Return the call record for the test assertion.
+
+
 # ---------------------------------------------------------------------------
 # verify_write: the read-back
 # ---------------------------------------------------------------------------
@@ -482,6 +538,59 @@ def test_document_digest_preserves_boolean_and_fractional_values() -> None:
     """The canonical form keeps a boolean and a fractional float distinct."""
     assert store.document_digest({"value": True}) != store.document_digest({"value": 1})
     assert store.document_digest({"value": 0.5}) != store.document_digest({"value": 0})
+
+
+def test_write_capture_verifies_nested_arango_number_round_trip(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A Tier 3 capture verifies after ArangoDB normalizes whole floats."""
+    database = _FakeDatabase()  # Hold the normalized stored document in memory.
+    names = _install_arango_normalizing_exporter(monkeypatch, database)  # Install the normalizing database seam.
+    large = 9_007_199_254_740_992.0  # Use a large whole float that JSON stores as a number.
+    capture = dict(  # Build one Tier 3-shaped capture with nested numeric values.
+        _linked_capture(),  # Add the business key, schema version, run, and role.
+        extras={  # Add the Tier 3 section that carried the production PoE value.
+            "poe": [  # Keep the value inside the nested list used by PoE rows.
+                {  # Cover every numeric class that must survive the round trip.
+                    "power_draw": 0.0,  # Cover the production zero whole float.
+                    "whole_positive": 5.0,  # Cover a positive whole float.
+                    "fractional_positive": 5.25,  # Cover a positive fractional float.
+                    "integer_positive": 5,  # Cover an integer that must stay an integer.
+                    "integer_zero": 0,  # Cover an integer zero beside the float zero.
+                    "whole_negative": -5.0,  # Cover a negative whole float.
+                    "fractional_negative": -5.25,  # Cover a negative fractional float.
+                    "whole_large": large,  # Cover a very large whole float.
+                    "nested": {"whole": 12.0, "fractional": 12.5},  # Cover a nested object.
+                }
+            ],
+        },
+        digests={"whole": "a" * 64},  # Keep the stored digest check active.
+    )
+
+    result = store.write_capture(capture, database)  # Write, read, patch, and verify the capture.
+    stored = database.fake_collection.documents[_KEY]  # Read the final document from the fake collection.
+    poe_row = stored["extras"]["poe"][0]  # Read the nested Tier 3 row that changed type.
+
+    assert result.verified is True  # The whole float normalization must not fail verification.
+    assert result.reason == store.REASON_VERIFIED  # The result must carry the successful read-back reason.
+    assert result.storage_path == store.STORAGE_DATABASE  # The database must be the verified store.
+    assert names == ["upgrade_capture_" + _KEY + ".csv"]  # The backup write still occurs once.
+    assert poe_row["power_draw"] == 0  # ArangoDB can return the whole float zero as an integer.
+    assert type(poe_row["power_draw"]) is int  # The fake proves that the read-back saw an integer.
+    assert poe_row["fractional_positive"] == 5.25  # Fractional values must keep their precision.
+    assert type(poe_row["fractional_positive"]) is float  # Fractional values must keep the float type.
+    assert poe_row["integer_positive"] == 5  # Integer values must keep their value.
+    assert type(poe_row["integer_positive"]) is int  # Integer values must keep their type.
+    assert poe_row["integer_zero"] == 0  # Integer zero must keep its value.
+    assert type(poe_row["integer_zero"]) is int  # Integer zero must keep its type.
+    assert poe_row["whole_negative"] == -5  # Negative whole floats can return as integers.
+    assert type(poe_row["whole_negative"]) is int  # The fake proves the negative whole float normalized.
+    assert poe_row["fractional_negative"] == -5.25  # Negative fractional values must keep precision.
+    assert type(poe_row["fractional_negative"]) is float  # Negative fractional values must keep the float type.
+    assert poe_row["whole_large"] == int(large)  # Very large whole floats can return as integers.
+    assert type(poe_row["whole_large"]) is int  # The fake proves the large whole float normalized.
+    assert poe_row["nested"]["whole"] == 12  # Nested whole floats can return as integers.
+    assert type(poe_row["nested"]["whole"]) is int  # The fake proves nested normalization.
+    assert poe_row["nested"]["fractional"] == 12.5  # Nested fractional values must keep precision.
+    assert type(poe_row["nested"]["fractional"]) is float  # Nested fractional values must keep the float type.
 
 
 def test_measure_size_bytes_counts_a_real_document() -> None:
