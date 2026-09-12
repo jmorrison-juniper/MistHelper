@@ -22,6 +22,7 @@ from .replay import ActionReplayService, RecoveryDecision, ReplayRequest  # Expo
 from .repository import (  # Export the ArangoDB-only action repository and stable errors.
     ACTION_COLLECTION,
     RUN_COLLECTION,
+    ActionMutationRefusal,
     ActionRepository,
     ActionRequestConflict,
     ActionStateConflict,
@@ -31,6 +32,7 @@ from .repository import (  # Export the ArangoDB-only action repository and stab
 from .transactions import (  # Export the explicit transaction seam and mutation values.
     ArangoTransactionAdapter,
     AtomicWriteResult,
+    RetryRunMutation,
     RunMutation,
     TransactionScope,
 )
@@ -44,6 +46,7 @@ __all__ = [  # Keep the planned persistence package surface explicit.
     "ActionIntent",  # Publish ordered requested run values.
     "ActionLease",  # Publish opaque action and item lease values.
     "ActionLifecycle",  # Publish action status and time values.
+    "ActionMutationRefusal",  # Publish a stable transaction refusal.
     "ActionReplayService",  # Publish idempotent replay and recovery.
     "ActionRepository",  # Publish the ArangoDB-only durable repository.
     "ActionRequestConflict",  # Publish the different-request conflict.
@@ -60,6 +63,7 @@ __all__ = [  # Keep the planned persistence package surface explicit.
     "OutcomeState",  # Publish final run state values.
     "RecoveryDecision",  # Publish one recovery processor result.
     "ReplayRequest",  # Publish one replay request value.
+    "RetryRunMutation",  # Publish one atomic retry insert request.
     "RunActionOutcome",  # Publish one immutable ordered action item.
     "RunMutation",  # Publish one atomic run write request.
     "TransactionScope",  # Publish transaction collection scope.

@@ -60,14 +60,15 @@ def _initialization(
     run_ids: tuple[str, ...] = ("run-one",),
     site_ids: tuple[str, ...] = ("site-one",),
     request_tag: str = "first",
+    action_name: str = "cancel",
 ) -> ActionInitialization:
     """Return one valid controlled bulk request."""
     actor = DurableActorScope.build("email", "operator@example.invalid")  # Build one stable actor scope.
-    fields = {"action": "cancel", "run_ids": list(run_ids), "tag": request_tag}  # Bind ordered content.
-    identity = ActionIdentity.from_request(actor, REQUEST_KEY, fields, "CANCEL RUNS")  # Store safe digests.
+    fields = {"action": action_name, "run_ids": list(run_ids), "tag": request_tag}  # Bind ordered content.
+    identity = ActionIdentity.from_request(actor, REQUEST_KEY, fields, f"{action_name.upper()} RUNS")
     preview_digest = canonical_digest({"preview": "preview-one"})  # Store no raw preview value.
     source = ActionSource.bulk("preview-one", preview_digest, "org-one", "all-sites")  # Require preview fields.
-    intent = ActionIntent("cancel", run_ids, site_ids, len(set(site_ids)))  # Keep exact ordered identifiers.
+    intent = ActionIntent(action_name, run_ids, site_ids, len(set(site_ids)))  # Keep exact ordered identifiers.
     return ActionInitialization(identity, source, intent)  # Enforce the source and action relation.
 
 
@@ -184,6 +185,30 @@ def test_crash_after_claim_finalizes_interrupted_without_repeating_work() -> Non
     assert complete.item("run-one").completion.classification == "unknown"  # Claim no result.
     assert complete.item("run-one").completion.reason == "processing_interrupted"  # Use the exact reason.
     assert complete.lifecycle.status == "complete"  # Close the action after all items become final.
+
+
+def test_retry_crash_after_claim_never_creates_a_second_run() -> None:
+    """Retry recovery closes a claimed source without a second create attempt."""
+    database, repository = _repository()
+    initialization = _initialization(action_name="retry")
+    action = repository.initialize(initialization, ActionLease("worker-old", EXPIRED), START)
+    repository.claim_item(
+        action.identity.actor_scope,
+        action.key.action_id,
+        "run-one",
+        ActionLease("worker-old", EXPIRED),
+    )
+    processor = RecordingProcessor()
+    service = ActionReplayService(repository, lambda: NOW)
+
+    complete = service.resolve(
+        ReplayRequest(initialization, ActionLease("worker-new", RECOVERY_END)),
+        processor,
+    )
+
+    assert processor.calls == []
+    assert complete.item("run-one").completion.reason == "processing_interrupted"
+    assert database.collection(RUN_COLLECTION).get("run-new") is None
 
 
 def test_crash_before_transaction_commit_rolls_back_and_recovers_as_interrupted() -> None:

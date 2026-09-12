@@ -60,7 +60,7 @@ STATIC_FOLDER = str(ASSET_ROOT / "static")  # The vendored stylesheets and scrip
 # choose a site, capture the state, drive the upgrade, and review the difference.
 # Comparison route module added for T-014 delta analysis and approval workflow.
 # Keep the route order aligned with the operator journey.
-BLUEPRINT_NAMES = ("auth", "select", "capture", "upgrade", "org_upgrade", "review", "comparison")
+BLUEPRINT_NAMES = ("auth", "select", "capture", "upgrade", "org_upgrade", "review", "comparison", "run_controls")
 
 # Each route module publishes its blueprint under one of these names. The first
 # match wins, so a module needs no registration list of its own.
@@ -631,6 +631,8 @@ def import_route_module(name: str) -> ModuleType | None:
         The module, or None when the import failed.
     """
     try:  # The module may not exist yet.
+        if name == "run_controls":  # This feature keeps its API route beside its values and services.
+            return import_module("src.upgrade_portal.api.run_controls.routes")  # Register the planned API package.
         return import_module(f"{ROUTES_PACKAGE}.{name}")  # The late import keeps the shell startable.
     except ImportError as fault:  # A missing module is expected while the portal grows.
         logger.warning(
@@ -883,6 +885,14 @@ def arm_application(
             """Attach the expected E2E test run identifier to one response."""
             logger.info("Attach the E2E test run identifier response header")  # Record the test-only action.
             response.headers["X-MistHelper-E2E-Run-ID"] = overrides.test_run_id  # Bind the response to this server.
+            trap_counts = overrides.trap_call_counts()  # Read every hard trap after this request completes.
+            response.headers["X-MistHelper-E2E-Arango-Trap-Calls"] = str(trap_counts["arango"])
+            response.headers["X-MistHelper-E2E-Redis-Trap-Calls"] = str(trap_counts["redis"])
+            response.headers["X-MistHelper-E2E-Mist-Trap-Calls"] = str(trap_counts["mist"])
+            response.headers["X-MistHelper-E2E-File-Trap-Calls"] = str(trap_counts["files"])
+            response.headers["X-MistHelper-E2E-Persistent-Runs"] = "0"
+            response.headers["X-MistHelper-E2E-Persistent-Actions"] = "0"
+            response.headers["X-MistHelper-E2E-Persistent-Audits"] = "0"
             logger.debug("Attached the E2E test run identifier response header")  # Confirm the safe result.
             return response  # Continue the normal Flask response path.
 

@@ -32,6 +32,7 @@ Why:
 from __future__ import annotations
 
 import importlib.util
+import json
 import logging
 import os
 import signal
@@ -39,6 +40,7 @@ import socket
 import subprocess
 import threading
 import time
+import urllib.request
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -173,6 +175,7 @@ STAND_IN_BROWSER_ID = "e2eBrowserIdentity0001"  # Matches the browser cookie pat
 # below are as fake as the pair above, and neither one reaches a mail host.
 SECOND_EMAIL = "e2e.second.operator@example.invalid"  # A second address, already normalized.
 SECOND_BROWSER_ID = "e2eBrowserIdentity0002"  # A second browser, so the pair differs in both halves.
+RENEWED_BROWSER_ID = "e2eBrowserIdentity0003"  # A renewed session keeps the actor and changes the browser.
 
 # WHY: The organization picker reads the privilege list of the cloud session,
 # and the site picker reads two cloud lists. Fixed records fill all three, so a
@@ -1230,6 +1233,12 @@ def _register_operator(email: str, browser_id: str) -> None:
 FAILED_RUN_ID = "e2e-failed-run-0001"  # The seeded run that the retry test opens. One fixed key, so no test guesses.
 STOPPED_RUN_ID = "e2e-stopped-run-0001"  # The seeded run that proves a cancelled attempt can restart.
 PREPARED_RUN_ID = "e2e-prepared-run-0001"  # The seeded run that proves the confirmation link works.
+STALE_PRE_CLOUD_RUN_ID = "e2e-stale-precloud-0001"
+STALE_STOPPING_RUN_ID = "e2e-stale-stopping-0001"
+BULK_RETRY_RUN_ID = "e2e-bulk-retry-run-0001"
+BULK_RETRY_SITE_ID = "55555555-5555-5555-5555-555555555555"
+LIFECYCLE_RUN_ID = "e2e-lifecycle-run-0001"
+LIFECYCLE_SITE_ID = "66666666-6666-6666-6666-666666666666"
 PREPARED_SITE_ID = "e2e-confirm-site"  # A separate site keeps this live run from blocking other E2E journeys.
 
 
@@ -1289,6 +1298,63 @@ def _prepared_run_record() -> dict[str, Any]:
     }
 
 
+def _stale_precloud_run_record() -> dict[str, Any]:
+    """Build one stale pre-cloud run for atomic bulk cancel."""
+    return {
+        "run_id": STALE_PRE_CLOUD_RUN_ID,
+        "site_id": STAND_IN_SITE_ID,
+        "org_id": STAND_IN_ORG_ID,
+        "state": "awaiting_confirmation",
+        "updated_at": "2026-09-01T10:00:00+00:00",
+        "targets": [],
+        "options": {},
+    }
+
+
+def _stale_stopping_run_record() -> dict[str, Any]:
+    """Build one stale stopping run for read-only reconciliation."""
+    return {
+        "run_id": STALE_STOPPING_RUN_ID,
+        "site_id": STAND_IN_SITE_ID,
+        "org_id": STAND_IN_ORG_ID,
+        "state": "stopping",
+        "updated_at": "2026-09-01T10:00:00+00:00",
+        "targets": [{"device_id": "e2e-target-one", "cloud_task_id": "e2e-task-one"}],
+        "options": {},
+    }
+
+
+def _bulk_retry_run_record() -> dict[str, Any]:
+    """Build one isolated failed source for atomic bulk retry."""
+    return {
+        "run_id": BULK_RETRY_RUN_ID,
+        "site_id": BULK_RETRY_SITE_ID,
+        "site_name": "Bulk retry site",
+        "org_id": STAND_IN_ORG_ID,
+        "org_name": "E2E organization",
+        "state": "failed",
+        "updated_at": "2026-09-11T13:00:00+00:00",
+        "targets": [{"device_id": "e2e-bulk-target", "target_version": "1.2.3"}],
+        "options": {"strategy": "big_bang", "reboot": True},
+        "tier": 2,
+    }
+
+
+def _lifecycle_run_record() -> dict[str, Any]:
+    """Build one stale pre-cloud run for browser lifecycle tests."""
+    return {
+        "run_id": LIFECYCLE_RUN_ID,
+        "site_id": LIFECYCLE_SITE_ID,
+        "site_name": "Lifecycle test site",
+        "org_id": STAND_IN_ORG_ID,
+        "org_name": "E2E organization",
+        "state": "awaiting_confirmation",
+        "updated_at": "2026-09-01T10:00:00+00:00",
+        "targets": [],
+        "options": {},
+    }
+
+
 def _seed_fixture_runs(built: Any, upgrade: Any) -> None:
     """Write the failed and prepared browser fixtures without delaying server start.
 
@@ -1309,6 +1375,10 @@ def _write_fixture_runs(built: Any, upgrade: Any) -> None:
             failed_written = upgrade.save_run(_failed_run_record())
             stopped_written = upgrade.save_run(_stopped_run_record())
             prepared_written = upgrade.save_run(_prepared_run_record())
+            stale_precloud_written = upgrade.save_run(_stale_precloud_run_record())
+            stale_stopping_written = upgrade.save_run(_stale_stopping_run_record())
+            bulk_retry_written = upgrade.save_run(_bulk_retry_run_record())
+            lifecycle_written = upgrade.save_run(_lifecycle_run_record())
     except Exception as failure:
         logger.warning(
             "The browser fixture runs did not write. Related tests will report the missing state. Cause: %s",
@@ -1316,10 +1386,17 @@ def _write_fixture_runs(built: Any, upgrade: Any) -> None:
         )
         return
     logger.info(
-        "Browser fixture run seeds reported failed=%s stopped=%s prepared=%s",
+        (
+            "Browser fixture run seeds reported failed=%s stopped=%s prepared=%s "
+            "stale_precloud=%s stale_stopping=%s bulk_retry=%s lifecycle=%s"
+        ),
         failed_written,
         stopped_written,
         prepared_written,
+        stale_precloud_written,
+        stale_stopping_written,
+        bulk_retry_written,
+        lifecycle_written,
     )
 
 
@@ -1350,6 +1427,24 @@ def _build_factory_overrides() -> E2EFactoryOverrides:  # Assemble one complete 
         "versions_reader": lambda *_arguments: stand_in_version_map(),  # Return fixed firmware versions.
         "cloud_reader": stand_in_cloud_read,  # Read fixed organization and site rows.
         "device_reader": stand_in_device_read,  # Read fixed device rows.
+        "cloud_scripts": {
+            "reconciliation": {
+                "value": [
+                    {
+                        "target_id": "e2e-target-one",
+                        "stored_stop_result": "cancel_accepted",
+                        "task_id": "e2e-task-one",
+                        "task_state": "final",
+                        "write_state": "not_writing",
+                        "driver_state": "stopped",
+                        "sources": ["stored", "cloud_task", "device", "driver"],
+                        "observed_at": "2026-09-11T14:00:00+00:00",
+                        "is_complete": True,
+                        "has_conflict": False,
+                    }
+                ]
+            }
+        },
     }
     overrides = build_e2e_overrides(TEST_RUN_ID, seams)  # Create all stores and traps before the factory call.
     logger.debug("Built the complete E2E factory override set")  # Confirm construction without record values.
@@ -1391,8 +1486,63 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
     built.config[org_upgrade.WRITES_ENABLED_CONFIG_KEY] = True
     _register_operator(STAND_IN_EMAIL, STAND_IN_BROWSER_ID)  # The operator that every test drives.
     _register_operator(SECOND_EMAIL, SECOND_BROWSER_ID)  # The operator that meets the lock refusal.
+    _register_operator(STAND_IN_EMAIL, RENEWED_BROWSER_ID)  # The renewed session keeps the durable actor.
     _seed_fixture_runs(built, upgrade)  # Browser-only states that no safe page journey can create.
     return built  # Waitress and Gunicorn both load this object by name.
+
+
+E2E_HEADER = "X-MistHelper-E2E-Run-ID"
+TRAP_HEADERS = (
+    "X-MistHelper-E2E-Arango-Trap-Calls",
+    "X-MistHelper-E2E-Redis-Trap-Calls",
+    "X-MistHelper-E2E-Mist-Trap-Calls",
+    "X-MistHelper-E2E-File-Trap-Calls",
+)
+PERSISTENT_HEADERS = {
+    "runs": "X-MistHelper-E2E-Persistent-Runs",
+    "actions": "X-MistHelper-E2E-Persistent-Actions",
+    "audits": "X-MistHelper-E2E-Persistent-Audits",
+}
+
+
+def _assert_isolated_headers(headers: Any) -> None:
+    """Require the run owner and zero calls from every hard isolation trap."""
+    normalized = {str(name).lower(): str(value) for name, value in headers.items()}
+    assert normalized.get(E2E_HEADER.lower()) == TEST_RUN_ID
+    for name in TRAP_HEADERS:
+        assert normalized.get(name.lower()) == "0"
+
+
+def _persistent_baseline() -> dict[str, int]:
+    """Read the persistent-store baseline from one isolated health response."""
+    with urllib.request.urlopen(f"{BASE_URL}/healthz", timeout=5) as response:
+        _assert_isolated_headers(response.headers)
+        return {name: int(response.headers[header]) for name, header in PERSISTENT_HEADERS.items()}
+
+
+@pytest.fixture(scope="session", autouse=True)
+def persistent_store_baseline(capture_portal_server: str) -> Iterator[None]:
+    """Record and compare persistent counts around the complete browser suite."""
+    del capture_portal_server
+    before = _persistent_baseline()
+    record_path = ARTIFACT_DIRECTORY / "persistent-store-baselines.json"
+    record_path.write_text(json.dumps({"before": before}, indent=2), encoding="utf-8")
+    yield
+    after = _persistent_baseline()
+    record_path.write_text(json.dumps({"before": before, "after": after}, indent=2), encoding="utf-8")
+    assert after == before
+
+
+@pytest.fixture(scope="session")
+def e2e_test_run_id() -> str:
+    """Return the owner identifier that every isolated response must contain."""
+    return TEST_RUN_ID
+
+
+@pytest.fixture
+def renewed_operator_cookie_records() -> list[dict[str, str]]:
+    """Return a new browser session for the first durable actor."""
+    return operator_session_cookies(STAND_IN_EMAIL, RENEWED_BROWSER_ID)
 
 
 @pytest.fixture
@@ -1422,6 +1572,9 @@ def page(context: Any, capture_portal_server: str) -> Iterator[Any]:
     del capture_portal_server  # Requested for its start-up work alone. `base_url` carries the address.
     context.add_cookies(portal_session_cookies())  # Both cookies, against the portal address.
     opened = context.new_page()  # The page then carries the session on its first request.
+    isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
+    assert isolation_response is not None and isolation_response.ok
+    _assert_isolated_headers(isolation_response.headers)
     yield opened
     opened.close()  # A page left open would hold a browser target for the whole run.
 
@@ -1451,6 +1604,9 @@ def second_operator_page(browser: Any, capture_portal_server: str) -> Iterator[A
     context = browser.new_context(base_url=BASE_URL)  # A separate cookie jar, so a separate lock identity.
     context.add_cookies(second_operator_cookies())  # The second pair, which the server also registered.
     opened = context.new_page()
+    isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
+    assert isolation_response is not None and isolation_response.ok
+    _assert_isolated_headers(isolation_response.headers)
     yield opened
     opened.close()
     context.close()  # The context holds a profile directory until it closes.

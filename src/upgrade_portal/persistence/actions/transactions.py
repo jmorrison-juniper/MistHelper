@@ -64,6 +64,35 @@ class RunMutation:  # Hold one safe run update or insert request.
 
 
 @dataclass(frozen=True, slots=True)
+class RetryRunMutation:  # Hold one source-bound retry insert request.
+    """Describe one retry insert with its source and site checks."""
+
+    run_id: str  # Name the new run.
+    source_run_id: str  # Name the terminal source.
+    expected_source_revision: str  # Bind the source to the final eligibility read.
+    expected_source_state: str  # Bind the source to its retryable state.
+    site_id: str  # Scope the live-run check.
+    document: Mapping[str, Any]  # Hold the complete new run document.
+
+    def __post_init__(self) -> None:
+        """Freeze and validate one retry insert request."""
+        object.__setattr__(self, "document", MappingProxyType(dict(self.document)))
+        required = (
+            self.run_id,
+            self.source_run_id,
+            self.expected_source_revision,
+            self.expected_source_state,
+            self.site_id,
+        )
+        if not all(required):
+            raise ValueError("A retry mutation requires every source and site field.")
+        if self.document.get("run_id") != self.run_id or self.document.get("site_id") != self.site_id:
+            raise ValueError("The retry mutation document does not match its run or site.")
+        if {"_key", "_id", "_rev"}.intersection(self.document):
+            raise ValueError("A retry mutation cannot replace an ArangoDB system field.")
+
+
+@dataclass(frozen=True, slots=True)
 class AtomicWriteResult:  # Return both verified records from one atomic success.
     """Hold the verified action and run after one successful transaction."""
 

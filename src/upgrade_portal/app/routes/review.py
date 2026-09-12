@@ -54,7 +54,7 @@ from types import ModuleType
 from typing import Any
 from urllib.parse import urlencode
 
-from flask import Blueprint, Response, current_app, jsonify, render_template, request
+from flask import Blueprint, Response, current_app, jsonify, render_template, request, session
 from jinja2 import TemplateNotFound
 
 from ...api.run_controls.views import RunStalePolicy  # Use one stale decision for both portal pages.
@@ -1833,6 +1833,8 @@ def history_page() -> str:
         moment_texts=moment_texts(shaped),
         # Issue #2199 adds the runs section beside the captures section.
         run_rows=run_history_rows(site_id, limit, offset),
+        run_control_org_id=str(session.get("selected_org_id") or ""),
+        run_control_history_scope=f"site:{site_id}" if site_id else "all-sites",
         # Issue #2221 adds the audit log of every site lock action.
         audit_rows=audit_history_rows(),
     )

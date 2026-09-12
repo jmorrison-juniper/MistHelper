@@ -32,6 +32,7 @@ from typing import Any  # A late import answers with untyped objects.
 from flask import Flask  # The configuration that carries every seam lives on this object.
 
 from ..api.run_controls import E2EFactoryOverrides  # Type the complete test-only dependency set.
+from ..persistence.actions import ActionRepository  # Keep run actions in the authoritative document store.
 from .config import read_post_check_mode  # Reads the environment at call time, so an import opens nothing.
 
 logger = logging.getLogger(__name__)  # One logger for each module keeps the source visible in the log.
@@ -1387,6 +1388,7 @@ def install_seams(  # Install production defaults or one complete isolated depen
     app.config.setdefault(LAUNCHER_KEY, start_upgrade_run)  # Without this the confirmed run sends nothing.
     app.config.setdefault(STOP_RUNNER_KEY, cancel_run)  # Without this a stop cancels nothing at the cloud.
     app.config.setdefault(PRECHECK_ADOPTER_KEY, StandalonePrecheckAdopter())  # The run create call adopts a pre-check.
+    _install_action_repository(app)  # Bind atomic run actions to ArangoDB with no fallback.
     # Phase 2 T-006: Wire CaptureService for pre/post-upgrade device capture capture
     _install_capture_service(app)  # Inject CaptureService into Flask config seam
     # Phase 2 T-008/T-009: Wire UpgradeService for firmware upgrade orchestration
@@ -1399,6 +1401,27 @@ def install_seams(  # Install production defaults or one complete isolated depen
     logger.info(
         "wiring: the portal holds the run store, the launcher, the stop runner, the adopter, and the Phase 2-3 services"
     )  # Once.
+
+
+def _install_action_repository(app: Flask) -> None:
+    """Install the ArangoDB-only run action repository."""
+    if "RUN_ACTION_STORE" in app.config:
+        return
+    store = load_module(STORE_MODULE)
+    database = None
+    if store is not None:
+        try:
+            database = store.connect_database()
+        except Exception as fault:
+            logger.warning("wiring: the action store connection failed (%s)", type(fault).__name__)
+    repository = ActionRepository(database)
+    if database is not None:
+        try:
+            repository.bootstrap()
+        except Exception as fault:
+            logger.warning("wiring: the action store bootstrap failed (%s)", type(fault).__name__)
+            repository = ActionRepository(None)
+    app.config["RUN_ACTION_STORE"] = repository
 
 
 def prepare_storage() -> None:

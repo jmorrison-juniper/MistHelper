@@ -3589,6 +3589,274 @@
     }
 
     /**
+     * Arms authoritative bulk preview controls on the run history page.
+     *
+     * @returns {void}
+     */
+    function initBulkRunPreview() {
+        var controls = document.querySelector("[data-run-bulk-controls]");
+        if (!controls) {
+            return;
+        }
+        var checkboxes = Array.from(document.querySelectorAll("[data-run-selection]"));
+        var buttons = Array.from(controls.querySelectorAll("[data-bulk-preview]"));
+        var clearButton = controls.querySelector("[data-bulk-selection-clear]");
+        var countField = controls.querySelector("[data-bulk-selection-count]");
+        var dialog = document.querySelector("[data-bulk-preview-dialog]");
+        var summary = dialog && dialog.querySelector("[data-bulk-preview-summary]");
+        var removed = dialog && dialog.querySelector("[data-bulk-preview-removed]");
+        var phrase = dialog && dialog.querySelector("[data-bulk-preview-phrase]");
+        var phraseInput = dialog && dialog.querySelector("[data-bulk-preview-confirmation]");
+        var confirmButton = dialog && dialog.querySelector("[data-bulk-preview-confirm]");
+        var closeButton = dialog && dialog.querySelector("[data-bulk-preview-close]");
+        var refreshButton = dialog && dialog.querySelector("[data-bulk-result-refresh]");
+        var dialogTitle = dialog && dialog.querySelector("#bulk-preview-title");
+        var errorField = dialog && dialog.querySelector("[data-bulk-preview-error]");
+        var resultField = dialog && dialog.querySelector("[data-bulk-action-result]");
+        if (!clearButton || !dialog || !summary || !removed || !phrase || !phraseInput || !confirmButton ||
+                !closeButton ||
+                !refreshButton || !dialogTitle || !errorField || !resultField) {
+            return;
+        }
+        var organizationId = controls.getAttribute("data-organization-id") || "";
+        var historyScope = controls.getAttribute("data-history-scope") || "all-sites";
+        var storageKey = "misthelper.run-selection." + organizationId + "." + historyScope;
+        var previewAction = "";
+        var openingControl = null;
+        var pendingRequestKey = "";
+
+        function selectedIds() {
+            return checkboxes.filter(function (field) { return field.checked; }).map(function (field) { return field.value; });
+        }
+
+        function updateSelection() {
+            var selected = selectedIds();
+            countField.textContent = selected.length + (selected.length === 1 ? " run selected" : " runs selected");
+            buttons.forEach(function (button) { button.disabled = selected.length === 0; });
+            clearButton.disabled = selected.length === 0;
+            window.sessionStorage.setItem(storageKey, JSON.stringify(selected));
+        }
+
+        function replaceSelection(runIds) {
+            var retained = new Set(runIds);
+            checkboxes.forEach(function (field) { field.checked = retained.has(field.value); });
+            updateSelection();
+        }
+
+        try {
+            var restored = JSON.parse(window.sessionStorage.getItem(storageKey) || "[]");
+            if (Array.isArray(restored)) {
+                replaceSelection(restored.filter(function (value) { return typeof value === "string"; }));
+            }
+        } catch (storageError) {
+            window.sessionStorage.removeItem(storageKey);
+        }
+        checkboxes.forEach(function (field) { field.addEventListener("change", updateSelection); });
+        clearButton.addEventListener("click", function () {
+            replaceSelection([]);
+            window.sessionStorage.removeItem(storageKey);
+        });
+
+        buttons.forEach(function (button) {
+            button.addEventListener("click", function () {
+                var action = button.getAttribute("data-bulk-preview") || "";
+                openingControl = button;
+                errorField.hidden = true;
+                resultField.hidden = true;
+                refreshButton.hidden = true;
+                button.disabled = true;
+                fetchJson("/api/runs/bulk-actions/preview", {
+                    method: "POST",
+                    body: {
+                        action: action,
+                        organization_id: organizationId,
+                        history_scope: historyScope,
+                        run_ids: selectedIds()
+                    }
+                }).then(function (preview) {
+                    replaceSelection(preview.run_ids || []);
+                    summary.textContent = preview.run_count + " run(s) across " + preview.site_count + " site(s).";
+                    removed.textContent = preview.removed_run_ids.length
+                        ? preview.removed_run_ids.length + " selection(s) were removed because they are not visible in this scope."
+                        : "Every selected run is visible in this scope.";
+                    phrase.textContent = preview.confirmation;
+                    previewAction = preview.action || "";
+                    phraseInput.value = "";
+                    phraseInput.setAttribute("data-preview-token", preview.preview_token);
+                    confirmButton.disabled = true;
+                    dialog.showModal();
+                    dialogTitle.focus();
+                }).catch(function (error) {
+                    errorField.textContent = error.message;
+                    errorField.hidden = false;
+                    dialog.showModal();
+                    errorField.focus();
+                }).finally(updateSelection);
+            });
+        });
+
+        phraseInput.addEventListener("input", function () {
+            confirmButton.disabled = phraseInput.value !== phrase.textContent;
+        });
+        confirmButton.addEventListener("click", function () {
+            errorField.hidden = true;
+            resultField.hidden = true;
+            refreshButton.hidden = true;
+            confirmButton.disabled = true;
+            pendingRequestKey = actionRequestKey();
+            fetchJson("/api/runs/bulk-actions", {
+                method: "POST",
+                headers: {"Idempotency-Key": pendingRequestKey},
+                body: {
+                    action: previewAction,
+                    run_ids: selectedIds(),
+                    confirmation: phraseInput.value,
+                    preview_token: phraseInput.getAttribute("data-preview-token") || ""
+                }
+            }).then(function (result) {
+                paintBulkActionResult(resultField, result);
+                resultField.hidden = false;
+                replaceSelection([]);
+                resultField.querySelector("h3").focus();
+            }).catch(function (error) {
+                errorField.textContent = error.message;
+                errorField.hidden = false;
+                refreshButton.hidden = !pendingRequestKey;
+                if (refreshButton.hidden) {
+                    confirmButton.disabled = false;
+                }
+                errorField.focus();
+            });
+        });
+        refreshButton.addEventListener("click", function () {
+            refreshButton.disabled = true;
+            fetchJson("/api/run-actions/by-request-key", {
+                headers: {"Idempotency-Key": pendingRequestKey}
+            }).then(function (result) {
+                errorField.hidden = true;
+                paintBulkActionResult(resultField, result);
+                resultField.hidden = false;
+                refreshButton.hidden = true;
+                replaceSelection([]);
+                resultField.querySelector("h3").focus();
+            }).catch(function (error) {
+                errorField.textContent = error.message;
+                errorField.hidden = false;
+                errorField.focus();
+            }).finally(function () {
+                refreshButton.disabled = false;
+            });
+        });
+        dialog.addEventListener("close", function () {
+            if (openingControl) {
+                openingControl.focus();
+            }
+        });
+        closeButton.addEventListener("click", function () { dialog.close(); });
+        updateSelection();
+    }
+
+    function actionRequestKey() {
+        if (window.crypto && typeof window.crypto.randomUUID === "function") {
+            return "portal-" + window.crypto.randomUUID();
+        }
+        return "portal-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
+    }
+
+    function actionResultText(result) {
+        var counts = result && result.counts ? result.counts : {};
+        var summary = [
+            "Succeeded: " + (counts.succeeded || 0),
+            "Refused: " + (counts.refused || 0),
+            "Failed: " + (counts.failed || 0),
+            "Unknown: " + (counts.unknown || 0)
+        ].join(". ") + ".";
+        var reasons = result && Array.isArray(result.items)
+            ? result.items.map(function (item) { return item.reason; }).filter(Boolean)
+            : [];
+        return reasons.length ? summary + " Results: " + reasons.join(", ") + "." : summary;
+    }
+
+    function paintBulkActionResult(region, result) {
+        var counts = result && result.counts ? result.counts : {};
+        var panel = document.createElement("section");
+        var heading = document.createElement("h3");
+        var summary = document.createElement("p");
+        var list = document.createElement("ul");
+        region.replaceChildren();
+        panel.setAttribute("data-testid", "bulk-result-panel");
+        heading.textContent = "Bulk action result";
+        heading.tabIndex = -1;
+        summary.textContent = [
+            "Succeeded: " + (counts.succeeded || 0),
+            "Refused: " + (counts.refused || 0),
+            "Failed: " + (counts.failed || 0),
+            "Unknown: " + (counts.unknown || 0)
+        ].join(". ") + ".";
+        panel.appendChild(heading);
+        panel.appendChild(summary);
+        (result && Array.isArray(result.items) ? result.items : []).forEach(function (item) {
+            var row = document.createElement("li");
+            var text = document.createElement("span");
+            var link = document.createElement("a");
+            var sourceRunId = item.source_run_id || "";
+            var targetRunId = item.result_run_id || item.live_run_id || sourceRunId;
+            var targetUrl = item.precheck_url || (targetRunId ? "/runs/" + encodeURIComponent(targetRunId) : "");
+            row.setAttribute("data-testid", "bulk-result-" + sourceRunId);
+            text.setAttribute("data-testid", "bulk-result-class-" + sourceRunId);
+            text.textContent = [sourceRunId, item.site_id, item.classification, item.reason, item.message]
+                .filter(Boolean).join(" - ");
+            row.appendChild(text);
+            if (targetUrl) {
+                link.href = targetUrl;
+                link.setAttribute("data-testid", "bulk-result-open-" + sourceRunId);
+                link.textContent = item.precheck_url ? "Start fresh pre-check" : "Open run";
+                row.appendChild(document.createTextNode(" "));
+                row.appendChild(link);
+            }
+            list.appendChild(row);
+        });
+        panel.appendChild(list);
+        region.appendChild(panel);
+    }
+
+    function initRunReconciliation() {
+        var controls = document.querySelector("[data-run-reconciliation]");
+        if (!controls) {
+            return;
+        }
+        var runId = controls.getAttribute("data-run-id") || "";
+        var phrase = controls.querySelector("[data-run-reconciliation-phrase]");
+        var input = controls.querySelector("[data-run-reconciliation-confirmation]");
+        var submit = controls.querySelector("[data-run-reconciliation-submit]");
+        var errorField = controls.querySelector("[data-run-reconciliation-error]");
+        var resultField = controls.querySelector("[data-run-reconciliation-result]");
+        if (!phrase || !input || !submit || !errorField || !resultField) {
+            return;
+        }
+        input.addEventListener("input", function () {
+            submit.disabled = input.value !== phrase.textContent;
+        });
+        submit.addEventListener("click", function () {
+            submit.disabled = true;
+            errorField.hidden = true;
+            resultField.hidden = true;
+            fetchJson("/api/runs/" + encodeURIComponent(runId) + "/reconcile", {
+                method: "POST",
+                headers: {"Idempotency-Key": actionRequestKey()},
+                body: {confirmation: input.value}
+            }).then(function (result) {
+                resultField.textContent = actionResultText(result);
+                resultField.hidden = false;
+            }).catch(function (error) {
+                errorField.textContent = error.message;
+                errorField.hidden = false;
+                submit.disabled = false;
+            });
+        });
+    }
+
+    /**
      * Arms every control of the current page.
      *
      * Why: One entry point keeps the load order clear. Each init step tests for
@@ -3608,6 +3876,8 @@
         initUpgradeConfirmPage();  /* Add the start control only on the confirmation page. */
         initRunPage();  /* Add run polling and manual refresh only on the run page. */
         initRunAgeDisplay();  /* Update age text without changing the server stale decision. */
+        initBulkRunPreview();  /* Replace browser selection with one authoritative server preview. */
+        initRunReconciliation();  /* Reconcile one stale run from read-only evidence. */
         initOrgUpgradePage();
         initStopControl();  /* Add the existing single-run stop behavior without a change. */
         initRunRetryControl();  // Issue #2202: restart an unsuccessful terminal run.

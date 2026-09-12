@@ -2,10 +2,17 @@
 
 from __future__ import annotations  # Keep each annotation independent from import order.
 
+from datetime import datetime
 from typing import Any, Final  # Type safe evidence fields and fixed test times.
 
 import pytest  # Exercise the evidence validation refusals.
 
+from src.upgrade_portal.api.run_controls.services import (
+    ReconciliationEvidence,
+    SiteMutationGuard,
+    StoppingRunReconciler,
+    TargetEvidence,
+)
 from src.upgrade_portal.persistence.actions import (  # Test only action source and evidence placeholders.
     ActionIdentity,
     ActionInitialization,
@@ -18,6 +25,8 @@ from src.upgrade_portal.persistence.actions import (  # Test only action source 
     UpgradeRunAction,
     canonical_digest,
 )
+from tests.support.upgrade_portal_e2e.records.actions import ActionRecordStore
+from tests.support.upgrade_portal_e2e.records.portal import PortalRecordStore
 
 ACTION_TIME: Final[str] = "2026-09-11T14:00:00+00:00"  # Fix the evidence observation and action time.
 LEASE_TIME: Final[str] = "2026-09-11T14:05:00+00:00"  # Keep the controlled action lease current.
@@ -125,3 +134,142 @@ def test_reconciliation_evidence_rejects_an_unsafe_field_or_digest_mismatch() ->
     changed["active_task_count"] = 1  # Change the decision basis without changing its digest.
     with pytest.raises(ValueError, match="digest does not match"):  # Refuse unbound evidence.
         claimed.finalized(completion, changed)  # Store no mismatched proof.
+
+
+def test_evidence_summary_sorts_targets_and_sources_before_digest() -> None:
+    """The canonical summary has stable target and source order."""
+    second = TargetEvidence.from_mapping(
+        {
+            "target_id": "target-b",
+            "stored_stop_result": "cancel_accepted",
+            "task_state": "final",
+            "write_state": "not_writing",
+            "driver_state": "stopped",
+            "sources": ["stored", "device", "cloud_task"],
+            "observed_at": ACTION_TIME,
+            "is_complete": True,
+            "has_conflict": False,
+        }
+    )
+    first = TargetEvidence.from_mapping(
+        {
+            "target_id": "target-a",
+            "stored_stop_result": "not_requested",
+            "task_state": "absent",
+            "write_state": "not_writing",
+            "sources": ["device", "stored"],
+            "observed_at": ACTION_TIME,
+            "is_complete": True,
+            "has_conflict": False,
+        }
+    )
+
+    summary = ReconciliationEvidence("run-one", "1", ACTION_TIME, (second, first)).summary()
+
+    assert [row["target_digest"] for row in summary["targets"]] == sorted(
+        [canonical_digest("target-a"), canonical_digest("target-b")]
+    )
+    row_b = next(row for row in summary["targets"] if row["target_digest"] == canonical_digest("target-b"))
+    assert row_b["sources"] == ["cloud_task", "device", "stored"]
+    assert summary["decision_basis_digest"] == canonical_digest(
+        {key: value for key, value in summary.items() if key != "decision_basis_digest"}
+    )
+
+
+def test_precloud_reconciliation_cancels_without_reading_cloud_evidence() -> None:
+    """A stale pre-cloud run and its success outcome change in one action."""
+    portal = PortalRecordStore("unit-reconcile")
+    portal.write_run(
+        {
+            "run_id": "run-one",
+            "org_id": "org-one",
+            "site_id": "site-one",
+            "state": "awaiting_confirmation",
+            "updated_at": "2026-09-09T10:00:00+00:00",
+            "targets": [],
+        }
+    )
+    actions = ActionRecordStore("unit-reconcile", portal)
+    cloud_reads: list[str] = []
+    guard = SiteMutationGuard(
+        lambda _org, _site: True,
+        lambda _org, _site: {"lock_token": "token-one"},
+        {"site-one": "token-one"},
+    )
+    service = StoppingRunReconciler(
+        actions,
+        portal.read_run,
+        guard,
+        lambda _run, _now: cloud_reads.append("read") or [],
+        clock=lambda: datetime.fromisoformat(ACTION_TIME),
+    )
+    actor = DurableActorScope.build("email", "operator@example.invalid")
+
+    result = service.reconcile(
+        actor=actor,
+        idempotency_key=REQUEST_KEY,
+        confirmation="RECONCILE run-one",
+        run_id="run-one",
+        organization_id="org-one",
+        site_id="site-one",
+    )
+
+    assert result.status == "complete"
+    assert result.item("run-one").reason == "precloud_run_cancelled"
+    assert portal.read_run("run-one")["state"] == "cancelled"
+    assert cloud_reads == []
+
+
+def test_incomplete_stopping_evidence_is_unknown_and_changes_no_run() -> None:
+    """Incomplete evidence stores unknown and leaves a stopping run unchanged."""
+    portal = PortalRecordStore("unit-reconcile")
+    portal.write_run(
+        {
+            "run_id": "run-one",
+            "org_id": "org-one",
+            "site_id": "site-one",
+            "state": "stopping",
+            "updated_at": "2026-09-09T10:00:00+00:00",
+            "targets": [{"device_id": "target-one"}],
+        }
+    )
+    actions = ActionRecordStore("unit-reconcile", portal)
+    guard = SiteMutationGuard(
+        lambda _org, _site: True,
+        lambda _org, _site: {"lock_token": "token-one"},
+        {"site-one": "token-one"},
+    )
+    evidence = [
+        {
+            "target_id": "target-one",
+            "stored_stop_result": "cancel_accepted",
+            "task_state": "unknown",
+            "write_state": "unknown",
+            "sources": ["stored"],
+            "observed_at": ACTION_TIME,
+            "is_complete": False,
+            "has_conflict": False,
+        }
+    ]
+    service = StoppingRunReconciler(
+        actions,
+        portal.read_run,
+        guard,
+        lambda _run, _now: evidence,
+        clock=lambda: datetime.fromisoformat(ACTION_TIME),
+    )
+    actor = DurableActorScope.build("email", "operator@example.invalid")
+
+    result = service.reconcile(
+        actor=actor,
+        idempotency_key=REQUEST_KEY,
+        confirmation="RECONCILE run-one",
+        run_id="run-one",
+        organization_id="org-one",
+        site_id="site-one",
+    )
+
+    assert result.item("run-one").classification == "unknown"
+    assert result.item("run-one").reason == "cloud_evidence_incomplete"
+    assert result.evidence_summary_digest == result.item("run-one").evidence_summary["decision_basis_digest"]
+    assert portal.read_run("run-one")["state"] == "stopping"

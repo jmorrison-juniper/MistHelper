@@ -3,11 +3,13 @@
 from __future__ import annotations  # Keep each annotation independent from import order.
 
 import inspect  # Verify the production repository has no fallback dependency.
-from typing import Final  # Mark the fixed test times and request key.
+from datetime import datetime
+from typing import Any, Final  # Mark the fixed test times and request key.
 
 import pytest  # Exercise stable failure and compare-and-swap behavior.
 
 import src.upgrade_portal.persistence.actions.repository as action_repository_module  # Inspect production imports.
+from src.upgrade_portal.api.run_controls.services import BulkRunActionService, SiteMutationGuard
 from src.upgrade_portal.persistence.actions import (  # Test the public action persistence surface.
     ACTION_COLLECTION,
     RUN_COLLECTION,
@@ -15,6 +17,7 @@ from src.upgrade_portal.persistence.actions import (  # Test the public action p
     ActionInitialization,
     ActionIntent,
     ActionLease,
+    ActionMutationRefusal,
     ActionRepository,
     ActionRequestConflict,
     ActionSource,
@@ -23,6 +26,7 @@ from src.upgrade_portal.persistence.actions import (  # Test the public action p
     DurableActorScope,
     OutcomeCompletion,
     OutcomeState,
+    RetryRunMutation,
     RunActionOutcome,
     RunMutation,
     canonical_digest,
@@ -39,14 +43,15 @@ def _initialization(
     site_ids: tuple[str, ...] = ("site-one", "site-two"),
     request_key: str = REQUEST_KEY,
     request_tag: str = "first",
+    action_name: str = "cancel",
 ) -> ActionInitialization:  # Build one source-specific durable action request.
     """Return one valid bulk action initialization."""
     actor = DurableActorScope.build("email", "operator@example.invalid")  # Build one stable actor scope.
-    request_fields = {"action": "cancel", "run_ids": list(run_ids), "tag": request_tag}  # Bind request order.
+    request_fields = {"action": action_name, "run_ids": list(run_ids), "tag": request_tag}  # Bind request order.
     identity = ActionIdentity.from_request(actor, request_key, request_fields, "CANCEL 2 RUNS")  # Hash secrets.
     preview_digest = canonical_digest({"preview": "preview-one"})  # Store no raw preview value.
     source = ActionSource.bulk("preview-one", preview_digest, "org-one", "all-sites")  # Require preview fields.
-    intent = ActionIntent("cancel", run_ids, site_ids, len(set(site_ids)))  # Keep ordered distinct runs.
+    intent = ActionIntent(action_name, run_ids, site_ids, len(set(site_ids)))  # Keep ordered distinct runs.
     return ActionInitialization(identity, source, intent)  # Enforce source-specific action rules.
 
 
@@ -207,6 +212,231 @@ def test_atomic_success_can_insert_one_retry_run_with_its_outcome() -> None:
     assert result.run["run_id"] == "run-new"  # Verify the inserted natural run identifier.
     assert database.collection(RUN_COLLECTION).get("run-new") is not None  # Keep the new run durable.
     assert result.action.item("run-source").result_run_id == "run-new"  # Bind the source outcome to the new run.
+
+
+def test_atomic_retry_rechecks_the_source_and_live_site_runs() -> None:
+    """The retry transaction refuses a concurrent live run and inserts nothing."""
+    database, repository = _repository()
+    source = database.seed_run("run-source", "failed")
+    source["site_id"] = "site-one"
+    database.collections[RUN_COLLECTION]["documents"]["run-source"] = source
+    live = database.seed_run("run-live", "upgrade_running")
+    live["site_id"] = "site-one"
+    database.collections[RUN_COLLECTION]["documents"]["run-live"] = live
+    request = _initialization(("run-source",), ("site-one",), action_name="retry")
+    action = repository.initialize(request, _lease(), CREATED_AT)
+    claimed = repository.claim_item(action.identity.actor_scope, action.key.action_id, "run-source", _lease())
+    state = OutcomeState("failed", "created", CREATED_AT, CREATED_AT)
+    completion = OutcomeCompletion("succeeded", "retry_created", "The portal created a retry run.", "run-new", state)
+    outcome = claimed.item("run-source").finalized(completion)
+    mutation = RetryRunMutation(
+        "run-new",
+        "run-source",
+        source["_rev"],
+        "failed",
+        "site-one",
+        {"run_id": "run-new", "site_id": "site-one", "state": "created"},
+    )
+
+    with pytest.raises(ActionMutationRefusal, match="upgrade_already_running") as refusal:
+        repository.commit_success(action.identity.actor_scope, action.key.action_id, outcome, mutation)
+
+    assert refusal.value.live_run_id == "run-live"
+    assert database.collection(RUN_COLLECTION).get("run-new") is None
+    stored = repository.read(action.identity.actor_scope, action.key.action_id)
+    assert stored is not None and stored.item("run-source").claim.processing_state == "claimed"
+
+
+def test_concurrent_retry_transactions_create_only_one_live_run_for_a_site() -> None:
+    """Two retry actions for one site can commit only one new live run."""
+    database, repository = _repository()
+    sources: dict[str, dict[str, Any]] = {}
+    for run_id in ("run-source-a", "run-source-b"):
+        source = database.seed_run(run_id, "failed")
+        source["site_id"] = "site-one"
+        database.collections[RUN_COLLECTION]["documents"][run_id] = source
+        sources[run_id] = source
+    actions = []
+    for index, source_run_id in enumerate(sources):
+        request = _initialization(
+            (source_run_id,),
+            ("site-one",),
+            request_key=f"concurrent-retry-key-{index:04d}",
+            action_name="retry",
+        )
+        action = repository.initialize(request, _lease(), CREATED_AT)
+        actions.append(
+            repository.claim_item(action.identity.actor_scope, action.key.action_id, source_run_id, _lease())
+        )
+
+    first_state = OutcomeState("failed", "created", CREATED_AT, CREATED_AT)
+    first_outcome = (
+        actions[0]
+        .item("run-source-a")
+        .finalized(
+            OutcomeCompletion("succeeded", "retry_created", "The portal created a retry run.", "run-new-a", first_state)
+        )
+    )
+    first_mutation = RetryRunMutation(
+        "run-new-a",
+        "run-source-a",
+        sources["run-source-a"]["_rev"],
+        "failed",
+        "site-one",
+        {"run_id": "run-new-a", "site_id": "site-one", "state": "created"},
+    )
+    repository.commit_success(actions[0].identity.actor_scope, actions[0].key.action_id, first_outcome, first_mutation)
+
+    second_state = OutcomeState("failed", "created", CREATED_AT, CREATED_AT)
+    second_outcome = (
+        actions[1]
+        .item("run-source-b")
+        .finalized(
+            OutcomeCompletion(
+                "succeeded", "retry_created", "The portal created a retry run.", "run-new-b", second_state
+            )
+        )
+    )
+    second_mutation = RetryRunMutation(
+        "run-new-b",
+        "run-source-b",
+        sources["run-source-b"]["_rev"],
+        "failed",
+        "site-one",
+        {"run_id": "run-new-b", "site_id": "site-one", "state": "created"},
+    )
+
+    with pytest.raises(ActionMutationRefusal, match="upgrade_already_running") as refusal:
+        repository.commit_success(
+            actions[1].identity.actor_scope,
+            actions[1].key.action_id,
+            second_outcome,
+            second_mutation,
+        )
+
+    assert refusal.value.live_run_id == "run-new-a"
+    assert database.collection(RUN_COLLECTION).get("run-new-b") is None
+
+
+def test_atomic_retry_rolls_back_insert_when_the_outcome_write_fails() -> None:
+    """A retry action write fault rolls back the new run insert."""
+    database, repository = _repository()
+    source = database.seed_run("run-source", "stopped")
+    source["site_id"] = "site-one"
+    database.collections[RUN_COLLECTION]["documents"]["run-source"] = source
+    request = _initialization(("run-source",), ("site-one",), action_name="retry")
+    action = repository.initialize(request, _lease(), CREATED_AT)
+    claimed = repository.claim_item(action.identity.actor_scope, action.key.action_id, "run-source", _lease())
+    state = OutcomeState("stopped", "created", CREATED_AT, CREATED_AT)
+    completion = OutcomeCompletion("succeeded", "retry_created", "The portal created a retry run.", "run-new", state)
+    outcome = claimed.item("run-source").finalized(completion)
+    mutation = RetryRunMutation(
+        "run-new",
+        "run-source",
+        source["_rev"],
+        "stopped",
+        "site-one",
+        {"run_id": "run-new", "site_id": "site-one", "state": "created"},
+    )
+    database.failure_mode = "action_replace"
+
+    with pytest.raises(ActionStoreUnavailable, match="unavailable"):
+        repository.commit_success(action.identity.actor_scope, action.key.action_id, outcome, mutation)
+
+    assert database.collection(RUN_COLLECTION).get("run-new") is None
+    stored = repository.read(action.identity.actor_scope, action.key.action_id)
+    assert stored is not None and stored.item("run-source").claim.processing_state == "claimed"
+
+
+def test_retry_policy_refusal_uses_an_outcome_only_write() -> None:
+    """An unsupported option finalizes the item and inserts no run."""
+    database, repository = _repository()
+    source = database.seed_run("run-source", "failed")
+    source.update(
+        {
+            "site_id": "site-one",
+            "org_id": "org-one",
+            "updated_at": "2026-09-11T13:00:00+00:00",
+            "targets": [],
+            "options": {"unsupported": True},
+        }
+    )
+    database.collections[RUN_COLLECTION]["documents"]["run-source"] = source
+    collection = database.collection(RUN_COLLECTION)
+    service = BulkRunActionService(
+        repository,
+        collection.get,
+        SiteMutationGuard(lambda _org, _site: True, lambda _org, _site: {"lock_token": "token"}, {"site-one": "token"}),
+        lambda site_id: collection.find({"site_id": site_id}, limit=1000),
+        lambda _source, _targets, _options: {"run_id": "run-new"},
+        clock=lambda: datetime.fromisoformat(CREATED_AT),
+    )
+    preview = {
+        "preview_id": "preview-retry",
+        "organization_id": "org-one",
+        "history_scope": "all-sites",
+        "run_ids": ["run-source"],
+        "site_count": 1,
+    }
+
+    result = service.retry(
+        actor=DurableActorScope.build("email", "operator@example.invalid"),
+        idempotency_key="integration-retry-key-0001",
+        confirmation="RETRY 1 RUNS",
+        preview=preview,
+    )
+
+    assert result.item("run-source").reason == "retry_options_unsupported"
+    assert result.item("run-source").claim.processing_state == "final"
+    assert database.collection(RUN_COLLECTION).get("run-new") is None
+
+
+def test_retry_response_loss_reads_the_committed_atomic_result() -> None:
+    """A lost commit response returns the stored retry without a second insert."""
+    database, repository = _repository()
+    source = database.seed_run("run-source", "cancelled")
+    source.update(
+        {
+            "site_id": "site-one",
+            "org_id": "org-one",
+            "updated_at": "2026-09-11T13:00:00+00:00",
+            "targets": [],
+            "options": {},
+        }
+    )
+    database.collections[RUN_COLLECTION]["documents"]["run-source"] = source
+    collection = database.collection(RUN_COLLECTION)
+
+    def build_retry(_source: object, _targets: object, _options: object) -> dict[str, str]:
+        database.failure_mode = "after_commit"
+        return {"run_id": "run-new", "site_id": "site-one", "state": "created"}
+
+    service = BulkRunActionService(
+        repository,
+        collection.get,
+        SiteMutationGuard(lambda _org, _site: True, lambda _org, _site: {"lock_token": "token"}, {"site-one": "token"}),
+        lambda site_id: collection.find({"site_id": site_id}, limit=1000),
+        build_retry,
+        clock=lambda: datetime.fromisoformat(CREATED_AT),
+    )
+    preview = {
+        "preview_id": "preview-retry",
+        "organization_id": "org-one",
+        "history_scope": "all-sites",
+        "run_ids": ["run-source"],
+        "site_count": 1,
+    }
+
+    result = service.retry(
+        actor=DurableActorScope.build("email", "operator@example.invalid"),
+        idempotency_key="integration-retry-key-0002",
+        confirmation="RETRY 1 RUNS",
+        preview=preview,
+    )
+
+    assert result.item("run-source").reason == "retry_created"
+    assert database.collection(RUN_COLLECTION).get("run-new") is not None
+    assert len(database.collections[RUN_COLLECTION]["documents"]) == 2
 
 
 def test_finalize_requires_every_item_to_have_one_final_outcome() -> None:

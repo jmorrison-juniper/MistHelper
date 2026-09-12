@@ -51,9 +51,17 @@ class PortalRecordStore:  # Own portal records for one isolated server process.
         """Store one owned run record."""
         logger.info("Store one E2E run record")  # Record the process-owned write before it starts.
         owned = self._owned(run)  # Reject a record from another test run.
-        self._runs[str(owned["run_id"])] = owned  # Store the run under its business identifier.
+        run_id = str(owned["run_id"])
+        prior = self._runs.get(run_id)
+        owned["_rev"] = str(int(str(prior.get("_rev", "0"))) + 1) if prior is not None else "1"
+        self._runs[run_id] = owned  # Store the run under its business identifier.
         logger.debug("The E2E run store now holds %s record(s)", len(self._runs))  # Report a safe count.
         return True  # Match the production run store write contract.
+
+    @property
+    def transaction_lock(self) -> RLock:
+        """Return the process lock for one atomic run and action write."""
+        return self._lock_guard
 
     def read_run(self, run_id: str) -> dict[str, Any] | None:  # Read one owned run record.
         """Return one owned run record."""
@@ -122,7 +130,7 @@ class PortalRecordStore:  # Own portal records for one isolated server process.
     def authorization(self, scope: str) -> bool:  # Read one owned access decision.
         """Return one process-owned authorization decision."""
         logger.info("Read one E2E authorization decision")  # Record the access read.
-        record = self._authorizations.get(scope)  # An unknown scope has no owned decision.
+        record = self._authorizations.get(scope) or self._authorizations.get(scope.split(":", 2)[0] + ":write")
         allowed = bool(record and record.get("test_run_id") == self.test_run_id and record.get("allowed"))  # Validate.
         logger.debug("The E2E authorization decision is allowed: %s", allowed)  # Report the safe result.
         return allowed  # The route can enforce the current decision.

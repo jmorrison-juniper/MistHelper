@@ -93,11 +93,14 @@ def build_e2e_overrides(  # Build one complete factory override value.
     """Build the complete process-owned dependency set for one E2E server."""
     logger.info("Build the complete E2E factory override set")  # Record assembly before routes exist.
     portal = PortalRecordStore(test_run_id)  # Own run, capture, lock, and access records.
-    actions = ActionRecordStore(test_run_id)  # Own action records.
+    actions = ActionRecordStore(test_run_id, portal)  # Join process-owned action and run writes.
+    portal.set_authorization("run-control:write", True)  # Permit explicit run controls in this server.
     audits = AuditRecordStore(test_run_id)  # Own audit records.
     cloud = ScriptedCloudStore(test_run_id)  # Own scripted cloud evidence.
     for capture in seams.get("captures", ()):  # Seed only process-owned capture records.
         portal.write_capture(capture)  # Add the current test owner before storage.
+    for name, record in seams.get("cloud_scripts", {}).items():
+        cloud.write(str(name), dict(record))
     overrides = E2EFactoryOverrides(  # Join all explicit groups under one validated value.
         test_run_id,
         _record_values(portal, seams),

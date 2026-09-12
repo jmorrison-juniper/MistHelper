@@ -126,4 +126,12 @@ def test_e2e_header_is_present_only_for_overrides(  # Prove the response header 
     isolated_answer = isolated.test_client().get("/healthz")  # Read a route that needs no session.
     production_answer = production.test_client().get("/healthz")  # Read the same production route.
     assert isolated_answer.headers["X-MistHelper-E2E-Run-ID"] == "e2e-header-owner"  # Bind the response.
+    assert isolated_answer.headers["X-MistHelper-E2E-Arango-Trap-Calls"] == "0"
+    assert isolated_answer.headers["X-MistHelper-E2E-Redis-Trap-Calls"] == "0"
+    assert isolated_answer.headers["X-MistHelper-E2E-Mist-Trap-Calls"] == "0"
+    assert isolated_answer.headers["X-MistHelper-E2E-File-Trap-Calls"] == "0"
+    assert isolated_answer.headers["X-MistHelper-E2E-Persistent-Runs"] == "0"
+    assert isolated_answer.headers["X-MistHelper-E2E-Persistent-Actions"] == "0"
+    assert isolated_answer.headers["X-MistHelper-E2E-Persistent-Audits"] == "0"
     assert "X-MistHelper-E2E-Run-ID" not in production_answer.headers  # Keep production responses clean.
+    assert "X-MistHelper-E2E-Arango-Trap-Calls" not in production_answer.headers

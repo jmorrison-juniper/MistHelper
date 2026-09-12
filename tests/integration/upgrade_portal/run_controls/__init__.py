@@ -65,6 +65,9 @@ class FakeCollection:
         del sync  # The controlled store commits synchronously by design.
         logger.info("Insert one controlled action store document")  # Record the write before mutation.
         key = str(document["_key"])  # Read the required natural document key.
+        if self.database.root.failure_mode == "run_insert" and self.name == "upgrade_runs":
+            self.database.root.failure_mode = None
+            raise RuntimeError("The controlled run insert failed.")
         if key in self._state["documents"]:  # An existing key models an ArangoDB unique conflict.
             raise RuntimeError("The controlled document key already exists.")  # Stop an overwrite.
         stored = deepcopy(document)  # Isolate the fake durable record.
@@ -86,6 +89,9 @@ class FakeCollection:
         if self.database.root.failure_mode == "run_replace" and self.name == "upgrade_runs":
             self.database.root.failure_mode = None  # Consume the one planned run write failure.
             raise RuntimeError("The controlled run replacement failed.")  # Trigger transaction rollback.
+        if self.database.root.failure_mode == "action_replace" and self.name == "upgrade_run_actions":
+            self.database.root.failure_mode = None
+            raise RuntimeError("The controlled action replacement failed.")
         changed = deepcopy(document)  # Isolate the replacement from caller edits.
         changed["_rev"] = str(int(stored["_rev"]) + 1)  # Advance the fake ArangoDB revision.
         self._state["documents"][key] = changed  # Replace the complete stored document.
