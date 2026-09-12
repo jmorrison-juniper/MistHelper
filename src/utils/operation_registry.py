@@ -301,6 +301,10 @@ class OperationRegistry:
         "235": {"category": "interactive_safe", "skip_reason": "Requires a count operation choice"},
         "236": {"category": "interactive_safe", "skip_reason": "Requires a count operation and site"},
         "237": {"category": "interactive_safe", "skip_reason": "Requires a count operation and MSP ID"},
+        "259": {"category": "interactive_safe", "skip_reason": "Requires a simple endpoint operation choice"},
+        "260": {"category": "interactive_safe", "skip_reason": "Requires a simple endpoint operation and org"},
+        "261": {"category": "interactive_safe", "skip_reason": "Requires a simple endpoint operation and site"},
+        "262": {"category": "interactive_safe", "skip_reason": "Requires a simple endpoint operation and MSP ID"},
         "238": {"category": "interactive_safe", "skip_reason": "Requires an MSP ID"},
         "240": {
             "category": "interactive_safe",
