@@ -7,14 +7,12 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
-### Data browser preview memory use (issue #2484)
+### Capture log baseline performance (issue #2483)
 
-- **Changed**: The web portal data browser now streams CSV, JSON Lines, and
-  log preview rows. It still counts all matching rows for page metadata.
-- **Added**: Unit coverage keeps CSV page clamping, log search, JSON Lines
-  single-item fallback, and JSON column order stable.
-- **Measured**: Peak traced memory fell by 99.62 percent for a large CSV page
-  and 99.81 percent for a filtered large log page in the local harness.
+- **Changed**: `tools.capture_log_baseline` now builds one call-line index
+  after it parses the source file. It reuses the index for each fixture lookup.
+- **Added**: Unit coverage keeps the same-line first-call rule and the old
+  line collector result stable.
 
 ### Simple endpoint family stage one (issue #1807)
 
@@ -48,11 +46,20 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   fractional floats, integers, zero, negative values, and very large values.
 
 ### Dashboard data summary performance (issue #2439)
+
 - **Changed**: The web portal dashboard now builds the data summary with one
   directory scan. It formats only the recent files that the page shows.
 - **Added**: Unit coverage keeps the file count, recent-file order, hidden-file
   exclusion, absent-directory behavior, and helper slice behavior stable.
 
+### Data browser preview memory use (issue #2484)
+
+- **Changed**: The web portal data browser now streams CSV, JSON Lines, and
+  log preview rows. It still counts all matching rows for page metadata.
+- **Added**: Unit coverage keeps CSV page clamping, log search, JSON Lines
+  single-item fallback, and JSON column order stable.
+- **Measured**: Peak traced memory fell by 99.62 percent for a large CSV page
+  and 99.81 percent for a filtered large log page in the local harness.
 ### Search organization Mist Edges (menu 253)
 
 - **Added**: Menu 253 calls `searchOrgMxEdges` for an organization, prompts
@@ -6865,6 +6872,4 @@ Closes #368
 - Locations: Single AP pre-check, multi-AP pre-check, site PCAP polling, org PCAP polling
 - Function names now match mistapi SDK and Mist API operationId values
 - operationId: listSitePacketCaptures and listOrgPacketCaptures per OpenAPI spec
-
-
 
