@@ -50,13 +50,12 @@ class FakeCollection:
     def find(self, filters: dict[str, Any], limit: int = 1) -> list[dict[str, Any]]:
         """Return isolated documents that match every supplied field."""
         logger.info("Find one controlled action store document")  # Record the filtered read.
-        matches = [  # Preserve insertion order for deterministic actor-scoped reads.
+        matched_documents = [  # Preserve insertion order for deterministic actor-scoped reads.
             deepcopy(document)  # Stop a caller from changing fake store state.
             for document in self._state["documents"].values()  # Inspect this collection only.
             if all(document.get(field) == value for field, value in filters.items())  # Apply all filters.
-        ][
-            :limit
-        ]  # Match the repository limit.
+        ]
+        matches = matched_documents[:limit]  # Match the repository limit after the deterministic read.
         logger.debug("The controlled find returned %s record(s)", len(matches))  # Report a safe count.
         return matches  # A list provides the cursor iteration contract.
 

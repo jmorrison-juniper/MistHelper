@@ -593,7 +593,7 @@ class RunActionOutcome:  # Own one immutable item across pending, claimed, and f
         document.pop("completed_at")  # Keep the response aligned with the current HTTP contract.
         if self.identity.action == "retry" and self.completion.classification == "succeeded":
             document["precheck_url"] = (
-                f"/captures/new?site_id={self.identity.site_id}" f"&run_id={self.completion.result_run_id}&role=pre"
+                f"/captures/new?site_id={self.identity.site_id}&run_id={self.completion.result_run_id}&role=pre"
             )
         return document  # Expose no actor, request key, or raw evidence identifier.
 

@@ -1707,8 +1707,8 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
 
     built.config[org_upgrade.SERVICE_CONFIG_KEY] = E2EOrgUpgradeService
     built.config[org_upgrade.OPTIONS_VIEW_CONFIG_KEY] = stand_in_options_view
-    built.config[org_upgrade.OPTIONS_BUILDER_CONFIG_KEY] = (
-        lambda cloud_session, org_id, site_id, body: stand_in_options_builder({}, body)
+    built.config[org_upgrade.OPTIONS_BUILDER_CONFIG_KEY] = lambda cloud_session, org_id, site_id, body: (
+        stand_in_options_builder({}, body)
     )
     from src.firmware.aggregate_upgrade_service import AggregateUpgradeService
 
