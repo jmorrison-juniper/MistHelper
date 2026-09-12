@@ -5,6 +5,8 @@ from __future__ import annotations  # Enable PEP 604 union types on older Python
 import logging  # Stdlib logger for diagnostic breadcrumbs during version parsing.
 from typing import Any  # Type hint used by build_runtime_helpers return dict.
 
+from packaging.version import InvalidVersion, Version  # WHY: PEP 440 parser handles suffixes and segment counts.
+
 _VERSION_OPERATORS = (">=", "<=", "==", "!=", ">", "<")  # 2-char operators listed first to match before 1-char.
 
 
@@ -12,24 +14,13 @@ class UVRuntimeHelper:  # Groups version parsing/comparison helpers under one na
     """Helper methods for comparing and validating package versions."""
 
     @staticmethod
-    def _parse_numeric_prefix(raw_part: str) -> int:  # Extracted to keep parse_version CC <= 5.
-        """Return the leading numeric prefix of a version segment as an int (0 if empty)."""
-        # WHY: extracted from parse_version so the outer function stays CC 2 (try/except only).
-        numeric_part = ""  # Accumulator for consecutive leading digit characters.
-        for char in raw_part:  # Walk segment left-to-right consuming digits.
-            if char.isdigit():  # Digit contributes to the numeric prefix.
-                numeric_part += char  # Append to accumulator.
-            else:
-                break  # First non-digit terminates the numeric prefix.
-        return int(numeric_part) if numeric_part else 0  # Empty prefix -> 0 (matches legacy behavior).
-
-    @staticmethod
-    def parse_version(version_str: str) -> tuple[int, ...]:  # Public parser used by version_satisfies.
-        """Parse a version string into a comparable numeric tuple."""
-        try:  # Legacy contract: any parse error collapses to (0,) sentinel.
-            return tuple(UVRuntimeHelper._parse_numeric_prefix(p) for p in version_str.split("."))
-        except Exception:  # Broad catch mirrors original defensive shape.
-            return (0,)  # Sentinel used by version_satisfies to reject bad input.
+    def parse_version(version_str: str) -> Version:
+        """Parse a version string with the PEP 440 version parser."""
+        try:  # WHY: Invalid input must not stop the bootstrap dependency check.
+            return Version(str(version_str))  # WHY: PEP 440 handles suffixes, leading zeros, and segment counts.
+        except (InvalidVersion, TypeError):  # WHY: Bad metadata becomes a safe low version.
+            logging.debug("Treating invalid version '%s' as 0", version_str)  # WHY: Leave a diagnostic breadcrumb.
+            return Version("0")  # WHY: The sentinel makes a bad installed value fail the constraint.
 
     @staticmethod
     def _split_operator_and_required(spec: str) -> tuple[str, str]:
@@ -40,12 +31,12 @@ class UVRuntimeHelper:  # Groups version parsing/comparison helpers under one na
                 lhs, rhs = spec.split(symbol, 1)  # Split into name portion and required version portion.
                 if lhs is not None:  # Preserves legacy truthiness shape from original implementation.
                     return symbol, rhs.strip()  # Return matched operator and trimmed required version.
-        return ">=", ""  # Empty required signals "no constraint" to caller (default operator harmless).
+        return ">=", ""  # Empty required signals "no constraint" to caller.
 
     @staticmethod
-    def _compare_versions(installed: tuple[int, ...], required: tuple[int, ...], operator: str) -> bool:
-        """Return True when installed tuple satisfies operator vs required tuple."""
-        comparisons = {  # Map operator strings to pre-evaluated boolean results for O(1) dispatch.
+    def _compare_versions(installed: Version, required: Version, operator: str) -> bool:
+        """Return True when installed satisfies the operator and the required version."""
+        comparisons = {  # Map operator strings to evaluated boolean results for clear dispatch.
             ">=": installed >= required,  # Greater-than-or-equal semantics.
             ">": installed > required,  # Strictly greater-than semantics.
             "<=": installed <= required,  # Less-than-or-equal semantics.
@@ -53,25 +44,22 @@ class UVRuntimeHelper:  # Groups version parsing/comparison helpers under one na
             "==": installed == required,  # Equality semantics.
             "!=": installed != required,  # Inequality semantics.
         }
-        return comparisons.get(operator, True)  # Unknown operator -> trivially satisfied (legacy behavior).
+        return comparisons.get(operator, True)  # Unknown operator -> trivially satisfied.
 
     @staticmethod
     def version_satisfies(installed: str, spec: str) -> bool:
         """Validate whether an installed version satisfies a version spec."""
         if not installed:  # Empty installed version cannot satisfy any constraint.
             return False
-        operator, required = UVRuntimeHelper._split_operator_and_required(spec)  # Parse operator + required version.
+        operator, required = UVRuntimeHelper._split_operator_and_required(spec)  # Parse operator and required version.
         if not required:  # No constraint encoded -> spec is trivially satisfied.
             return True
-        installed_tuple = UVRuntimeHelper.parse_version(installed)  # Numeric tuple form of installed version.
-        required_tuple = UVRuntimeHelper.parse_version(required)  # Numeric tuple form of required version.
-        max_len = max(len(installed_tuple), len(required_tuple))  # Normalize lengths for fair tuple compare.
-        installed_tuple = installed_tuple + (0,) * (max_len - len(installed_tuple))  # Right-pad with zeros.
-        required_tuple = required_tuple + (0,) * (max_len - len(required_tuple))  # Right-pad with zeros.
+        installed_version = UVRuntimeHelper.parse_version(installed)  # Convert the installed version with PEP 440.
+        required_version = UVRuntimeHelper.parse_version(required)  # Convert the required version with PEP 440.
         logging.debug(
-            "Comparing installed=%s required=%s operator=%s", installed_tuple, required_tuple, operator
+            "Comparing installed=%s required=%s operator=%s", installed_version, required_version, operator
         )  # Log comparison inputs for diagnostics.
-        return UVRuntimeHelper._compare_versions(installed_tuple, required_tuple, operator)  # Dispatch compare.
+        return UVRuntimeHelper._compare_versions(installed_version, required_version, operator)  # Dispatch compare.
 
     @staticmethod
     def package_name_from_spec(package_spec: str) -> str:
