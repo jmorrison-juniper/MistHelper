@@ -788,6 +788,55 @@ def _child_site_ids(child: Mapping[str, Any]) -> tuple[str, ...]:
     return (site_id,) if site_id else ()  # A missing site causes no false lock validation.
 
 
+SETTLED_OPERATION_STATES = frozenset(  # States that end every destructive child action of one operation.
+    {"completed", "cancelled", "failed", "attention_required"}
+)
+
+
+def _release_operation_locks(operation: MutableMapping[str, Any]) -> None:
+    """Release every stored site lock after one operation settles.
+
+    Why:
+        `contracts/site-lock.md` releases a site when its run ends. An
+        operation that keeps its locks would block every later capture and
+        every later upgrade at the same site.
+    """
+    stored = operation.get("site_locks")  # Read the durable lock map of this operation.
+    if not isinstance(stored, Mapping) or not stored:  # An empty map needs no release.
+        return  # The operation holds no site.
+    if not _operation_is_settled(operation):  # Keep the locks while a child can still write firmware.
+        return  # Another request releases the locks after the work ends.
+    org_id = str(operation.get("org_id", ""))  # Build each key inside the approved organization.
+    for site_id, value in list(stored.items()):  # Release every site that this operation holds.
+        _release_one_lock(org_id, str(site_id), value)  # Preserve the other releases after one failure.
+    replacement = dict(operation)  # Build a detached compare-and-set replacement.
+    replacement["site_locks"] = {}  # The settled operation holds no site.
+    _cas_operation(operation, replacement)  # Persist the released state without hiding a lost race.
+
+
+def _operation_is_settled(operation: Mapping[str, Any]) -> bool:
+    """Return true when the portal sends no further write for one operation."""
+    if str(operation.get("state", "")) in SETTLED_OPERATION_STATES:  # A final state ends every child action.
+        return True  # The operation needs no site.
+    cancellation = operation.get("cancellation")  # Read the durable cancellation marker.
+    return isinstance(cancellation, Mapping) and cancellation.get("requested") is True  # A stop ends the work.
+
+
+def _release_one_lock(org_id: str, site_id: str, value: object) -> None:
+    """Release one stored site lock and keep a failure visible."""
+    saved = lock.LockRecord.from_json(json.dumps(value)) if isinstance(value, Mapping) else None  # Rebuild it.
+    if saved is None:  # A damaged record names no token, so no safe release exists.
+        logger.warning("The aggregate operation holds no readable lock for site %s", site_id)  # Name the gap.
+        return  # The lease then expires on its own.
+    logger.info("Release site %s after the aggregate operation settled", site_id)  # Log before the release.
+    try:  # The compare and the delete run as one step, so no release frees another operator.
+        lock.release_site_lock(lock.build_key(org_id, site_id), saved, select_routes.lock_client())
+    except lock.SiteLockError as fault:  # A takeover or an unreachable store must not stop the other releases.
+        logger.warning("The release of site %s reported %s", site_id, fault.code)  # Name the safe code only.
+        return  # The remaining sites still receive a release.
+    logger.debug("The aggregate operation released site %s", site_id)  # Log after the release.
+
+
 def _submit_aggregate(
     cloud_session: Any,
     operation: MutableMapping[str, Any],
@@ -813,6 +862,7 @@ def _submit_aggregate(
             SUBMISSION_FAILED,
             "One or more child outcomes are unknown. Read the operation before another action.",
         )
+    _release_operation_locks(operation)  # Free every site when no child can still write firmware.
     return next_page_answer(f"/upgrade/org/jobs/{operation['operation_id']}")  # Show one seamless operation.
 
 
@@ -993,6 +1043,7 @@ def _refresh_aggregate(cloud_session: Any, operation: MutableMapping[str, Any]) 
         aggregate_service().status(cloud_session, operation, upgrade_routes.run_store())  # Persist each child.
     except Exception:  # The last durable state remains safe to show.
         logger.exception("The aggregate upgrade status read failed")  # Record the unknown read outcome.
+    _release_operation_locks(operation)  # Free every site as soon as the operation settles.
     logger.debug("The aggregate upgrade refresh finished with state %s", operation.get("state", "unknown"))
 
 
@@ -1159,6 +1210,7 @@ def _cancel_aggregate(
             "One or more cancellation outcomes are unknown. Read the operation before another action.",
         )
     logger.debug("The aggregate cancellation %s finished with state %s", upgrade_id, operation.get("state", ""))
+    _release_operation_locks(operation)  # Free every site after each child holds a cancellation result.
     if _wants_html():  # Keep the browser on one visible operation.
         return next_page_answer(f"/upgrade/org/jobs/{upgrade_id}")  # Return the existing redirect response.
     return jsonify(aggregate_summary(operation)), OK_STATUS  # Show every child cancellation result.

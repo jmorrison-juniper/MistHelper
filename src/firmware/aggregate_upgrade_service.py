@@ -27,6 +27,16 @@ ACCEPTED_CHILD_STATES = frozenset({"accepted", "partial", "running", "read_unkno
 ACTIVE_CHILD_STATES = frozenset({"accepted", "partial", "running", "read_unknown"})  # Polling states.
 FAILED_CHILD_STATES = frozenset({"failed", "rejected", "submission_unknown", "not_submitted", "unknown"})  # Problems.
 CLAIM_LEASE = timedelta(minutes=5)  # A later request can recover only after this bounded interval.
+AP_ACTIVE_STATES = frozenset(  # Cloud words that prove one AP site job still runs.
+    {"accepted", "running", "upgrading", "downloading", "scheduled", "pending", "in_progress"}
+)
+AP_FAILURE_STATES = frozenset({"failed", "rejected", "error"})  # Known terminal failure words.
+AP_TERMINAL_STATES = frozenset({"completed", "cancelled"})  # Known terminal nonfailure words.
+SETTLED_STATE_RULES = (  # Map one settled child-state group to one aggregate word, in priority order.
+    (frozenset({"submission_claimed"}), "running"),  # A fresh claim is still in flight.
+    (frozenset({"submission_unknown", "not_submitted", "unknown"}), "attention_required"),  # Uncertain work.
+    (frozenset({"failed", "rejected"}), "failed"),  # Only terminal failures remain.
+)
 CAS_ATTEMPTS = 4  # A bounded retry handles independent status updates without a blind write.
 LockRefresh = Callable[[Mapping[str, Any], Mapping[str, Any]], None]  # Revalidate locks before one child write.
 
@@ -601,17 +611,17 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
     @staticmethod
     def _combined_site_status(states: Sequence[str]) -> str:
         """Combine AP site states without hiding active or unknown entries."""
-        active = {"accepted", "running", "upgrading", "downloading", "scheduled", "pending", "in_progress"}
-        failures = {"failed", "rejected", "error"}  # Known terminal failure words.
-        terminal = {"completed", "cancelled"}  # Known terminal nonfailure words.
         values = [state or "unknown" for state in states]  # Keep each site state visible.
-        if any(state in active for state in values):  # An active site keeps the child nonterminal.
-            return "partial" if any(state in failures for state in values) else "running"  # Show mixed failure.
-        if values and all(state in terminal for state in values):  # All sites reached a successful terminal state.
-            return "cancelled" if all(state == "cancelled" for state in values) else "completed"  # Summarize finals.
-        if any(state in failures for state in values):  # No active site remains.
-            return "failed"  # A terminal failure can now fail the child.
-        return values[0] if values else "unknown"  # Preserve an unrecognized state instead of hiding it.
+        if not values:  # An answer without site entries reports no known state.
+            return "unknown"  # Never turn an empty answer into a success.
+        seen = set(values)  # Compare the distinct words one time.
+        if seen & AP_ACTIVE_STATES:  # An active site keeps the child nonterminal.
+            return "partial" if seen & AP_FAILURE_STATES else "running"  # Show mixed failure.
+        if seen <= AP_TERMINAL_STATES:  # Every site reached a terminal nonfailure state.
+            return "cancelled" if seen == {"cancelled"} else "completed"  # Summarize the final words.
+        if seen & AP_FAILURE_STATES:  # No active site remains, so a failure is now terminal.
+            return "failed"  # Report the terminal failure for this child.
+        return values[0]  # Preserve an unrecognized cloud word instead of hiding it.
 
     def _read_device_child(self, cloud_session: Any, child: MutableMapping[str, Any]) -> None:
         """Read and apply one site or SSR status."""
@@ -787,25 +797,25 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
             "message": f"The cancellation outcome is unknown: {type(fault).__name__}.",  # Name no secret detail.
         }
 
-    @staticmethod
-    def _aggregate_state(record: Mapping[str, Any]) -> str:
+    @classmethod
+    def _aggregate_state(cls, record: Mapping[str, Any]) -> str:
         """Return one display state without hiding a child result."""
         states = {
             str(child.get("status", "unknown")).lower() for child in record.get("children", [])
         }  # Collect states.
-        active = bool(states & ACTIVE_CHILD_STATES)  # Active children require more polling.
-        failed = bool(states & FAILED_CHILD_STATES)  # Failed or uncertain children need attention.
-        if active:  # Never report a terminal aggregate while one child remains active.
-            return "partial" if failed else "running"  # Show mixed active and problem states.
-        if states & {"submission_claimed"}:  # A fresh claim is an in-flight request.
-            return "running"  # Keep polling until the claim finishes or expires.
-        if states & {"submission_unknown", "not_submitted", "unknown"}:  # No active child can resolve these states.
-            return "attention_required"  # Ask the operator to reconcile the durable record.
-        if states & {"failed", "rejected"}:  # Only terminal children remain.
-            return "failed"  # A known terminal failure can now fail the aggregate.
-        if states and states <= {"completed", "cancelled"}:  # Every child reached a nonfailure terminal state.
+        if states & ACTIVE_CHILD_STATES:  # Never report a terminal aggregate while one child remains active.
+            return "partial" if states & FAILED_CHILD_STATES else "running"  # Show mixed active and problem states.
+        return cls._settled_state(states)  # Every remaining child holds a settled state.
+
+    @staticmethod
+    def _settled_state(states: set[str]) -> str:
+        """Return the aggregate word for children that hold no active state."""
+        for words, result in SETTLED_STATE_RULES:  # Apply the first matching rule in priority order.
+            if states & words:  # This group decides the aggregate word.
+                return result  # Report the matching aggregate state.
+        if states and states <= AP_TERMINAL_STATES:  # Every child reached a nonfailure terminal state.
             return "cancelled" if states == {"cancelled"} else "completed"  # Preserve an all-cancelled result.
-        if not states or states == {"planned"}:  # No child started.
+        if not states or states == {"planned"}:  # No child started a cloud call.
             return "planned"  # Preserve the initial state.
         return "attention_required"  # Keep unrecognized child states visible and non-successful.
 

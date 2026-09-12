@@ -19,7 +19,7 @@ from flask.testing import FlaskClient
 from src.firmware.org_upgrade_service import OrgUpgradeResult
 from src.upgrade_portal.app.routes import org_upgrade, select
 from src.upgrade_portal.app.routes.org_upgrade import status_summary
-from src.upgrade_portal.runtime import identity
+from src.upgrade_portal.runtime import identity, lock
 from tests.support.lock_store_double import FakeLockStore
 
 ORG_OPTIONS_PAGE = "/upgrade/org/options"
@@ -110,6 +110,7 @@ class AggregateBoundaryStandIn:
         """Start with no submitted operation."""
         self.submit_count = 0
         self.cancel_count = 0
+        self.final_state = ""  # An empty value keeps the mixed status answer below.
 
     def build(self, request: Any) -> dict[str, Any]:
         """Build three child rows for the selected device families."""
@@ -166,6 +167,12 @@ class AggregateBoundaryStandIn:
 
     def status(self, cloud_session: Any, record: dict[str, Any], store: Any) -> dict[str, Any]:
         """Return mixed child status values."""
+        if self.final_state:  # A test can end every child to prove the lock release.
+            for child in record["children"]:
+                child["status"] = self.final_state
+            record["state"] = self.final_state
+            store.write_run(record)
+            return record
         record["children"][0]["status"] = "completed"
         record["children"][1]["status"] = "failed"
         record["children"][1]["error"] = "The switch child failed."
@@ -569,6 +576,43 @@ def test_multidevice_operation_is_durable_transparent_and_replay_safe(
     assert len(cancelled.get_json()["cancellation"]["results"]) == 3
     assert boundary.cancel_count == 1
     assert store.records["org-run-contract"]["children"][1]["error"] == "The switch child failed."
+    assert store.records["org-run-contract"]["site_locks"] == {}  # A settled operation blocks no later work.
+    assert lock.read_lock(fake_org_id, fake_site_id, select.lock_client()) is None  # The site accepts new work.
+
+
+def test_settled_operation_releases_every_site_lock(
+    org_upgrade_client: FlaskClient,
+    monkeypatch: pytest.MonkeyPatch,
+    fake_org_id: str,
+    fake_site_id: str,
+) -> None:
+    """A completed operation frees each site it locked."""
+    store = AggregateStoreStandIn()
+    boundary = AggregateBoundaryStandIn()
+    org_upgrade_client.application.config["RUN_STORE"] = store
+    org_upgrade_client.application.config["AGGREGATE_UPGRADE_SERVICE"] = boundary
+    devices = [{"mac": "001122334455", "name": "ap", "device_type": "ap", "model": "AP45"}]
+    monkeypatch.setattr(org_upgrade, "build_options_view", lambda session, org_id, site_id: {"targets": devices})
+    monkeypatch.setattr(
+        org_upgrade,
+        "build_options_record",
+        lambda session, org_id, site_id, body: {
+            "targets": [{**devices[0], "version_before": "old", "version_target": "0.15.1", "site_id": site_id}],
+            "options": {"strategy": "big_bang", "reboot": True},
+        },
+    )
+    saved = org_upgrade_client.post(
+        ORG_OPTIONS_API, json={"selected_types": ["ap"], "version_ap": "0.15.1", "strategy": "big_bang"}
+    )
+    assert saved.status_code == 200
+    started = org_upgrade_client.post(ORG_SUBMIT_API, json={"confirmation": "CONFIRM"})
+    assert started.status_code == 200
+    assert lock.read_lock(fake_org_id, fake_site_id, select.lock_client()) is not None  # The write holds the site.
+    boundary.final_state = "completed"  # The next read finds every child finished.
+    status = org_upgrade_client.get("/api/org-upgrades/org-run-contract")
+    assert status.get_json()["status"] == "completed"
+    assert store.records["org-run-contract"]["site_locks"] == {}  # The durable record holds no site.
+    assert lock.read_lock(fake_org_id, fake_site_id, select.lock_client()) is None  # The site is free again.
 
 
 def test_aggregate_summary_counts_nested_ap_site_targets() -> None:
