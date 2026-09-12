@@ -80,9 +80,13 @@ env:
   # targeted override in pyproject.toml, so a dependency bump cannot merge with no
   # gate above the code it changes.
   MYPY_PATHS: 'src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py'
-  # radon: no block passes complexity 10 in src/, MistHelper.py, wsgi.py, or
-  # starlink_dashboard.py. Excludes web_portal (2 blocks) and tools (20 blocks).
-  RADON_PATHS: 'src/ MistHelper.py wsgi.py starlink_dashboard.py'
+  # radon: no block passes complexity 10 in src/, MistHelper.py, wsgi.py,
+  # starlink_dashboard.py, scripts/analyze_marvis_pcap.py,
+  # scripts/probe_zscaler_endpoints.py, or
+  # tests/unit/utils/test_zscaler_catalogue.py. Measurement date is 2026-09-11.
+  # Excludes remaining scripts (33 blocks), remaining tests (51 blocks),
+  # web_portal (2 blocks), and tools (20 blocks).
+  RADON_PATHS: 'src/ MistHelper.py wsgi.py starlink_dashboard.py scripts/analyze_marvis_pcap.py scripts/probe_zscaler_endpoints.py tests/unit/utils/test_zscaler_catalogue.py'
   # vulture: 0 findings at confidence 70 everywhere except tools, which reports 6.
   VULTURE_PATHS: 'src/ MistHelper.py wsgi.py starlink_dashboard.py web_portal'
   # pydocstyle: 0 violations in src/, wsgi.py, and web_portal. Excludes

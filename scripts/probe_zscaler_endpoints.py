@@ -202,42 +202,108 @@ def _render_section(title: str, results: list[ProbeResult]) -> list[str]:
     if not results:
         lines.append("_No entries._")
         return lines
-    lines.append(
+    lines.extend(_render_table(results))  # Add the table rows for this section.
+    lines.extend(_render_notes(results))  # Add the notes block when entries have notes.
+    return lines
+
+
+def _render_table(results: list[ProbeResult]) -> list[str]:
+    """Render the endpoint result table.
+
+    Why:
+        A separate table helper keeps the section builder small and keeps the
+        column order in one place.
+    """
+    lines = [_table_header(), "|---|---|---|---|---|---|---|---|---|---|---|---|"]  # Start with the markdown header.
+    for result in results:  # Preserve the input order from the probe runner.
+        lines.append(_render_result_row(result))  # Convert each result into one markdown row.
+    return lines  # Return the complete table block.
+
+
+def _table_header() -> str:
+    """Return the markdown header for a probe result table.
+
+    Why:
+        The header string is long, so this helper keeps the caller readable.
+    """
+    return (
         "| FQDN | Role | Declared ports | IP | ICMP | TCP ports | HTTP | HTTPS"
         " | Server | TLS issuer | Server class | Actual protocols |"
-    )
-    lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|")
-    for r in results:
-        icmp = "yes" if r.icmp_ok else "no"
-        ip = r.ip or (f"DNS FAIL ({r.dns_error})" if r.dns_error else "-")
-        http = (
-            f"{r.http_status}" + (f" -> {r.http_location}" if r.http_location else "")
-            if r.http_status is not None
-            else "-"
-        )
-        https = (
-            f"{r.https_status}" + (f" -> {r.https_location}" if r.https_location else "")
-            if r.https_status is not None
-            else "-"
-        )
-        server = r.https_server or r.http_server or "-"
-        issuer = r.tls_issuer or "-"
-        protocols = ", ".join(r.responding_protocols) or "none"
-        declared = ",".join(str(p) for p in r.declared_ports) or "-"
-        lines.append(
-            f"| `{r.fqdn}` | `{r.role}` | {declared} | {ip} | {icmp} | "
-            f"{_fmt_ports(r)} | {http} | {https} | {_md_escape(server)} | "
-            f"{_md_escape(issuer)} | {r.server_class} | {protocols} |"
-        )
-    notes = [r for r in results if r.notes]
-    if notes:
-        lines.append("")
-        lines.append("### Notes")
-        lines.append("")
-        for r in notes:
-            for note in r.notes:
-                lines.append(f"- `{r.fqdn}`: {note}")
-    return lines
+    )  # Preserve the old header text.
+
+
+def _render_result_row(result: ProbeResult) -> str:
+    """Render one probe result as a markdown table row.
+
+    Why:
+        Each cell has a small fallback rule, and the row helper keeps those
+        rules near the row format.
+    """
+    endpoint = _render_endpoint_cells(result)  # Build the identity and network cells.
+    services = _render_service_cells(result)  # Build the HTTP, TLS, and protocol cells.
+    return (
+        f"| `{result.fqdn}` | `{result.role}` | {endpoint['declared']} | {endpoint['ip']} | "
+        f"{endpoint['icmp']} | {_fmt_ports(result)} | {services['http']} | {services['https']} | "
+        f"{_md_escape(services['server'])} | {_md_escape(services['issuer'])} | "
+        f"{result.server_class} | {services['protocols']} |"
+    )  # Preserve the old row format.
+
+
+def _render_endpoint_cells(result: ProbeResult) -> dict[str, str]:
+    """Render the identity and network cells for one result.
+
+    Why:
+        DNS, ICMP, and declared port fallbacks are independent of service
+        probe results.
+    """
+    return {
+        "declared": ",".join(str(port) for port in result.declared_ports) or "-",  # Preserve declared port display.
+        "icmp": "yes" if result.icmp_ok else "no",  # Preserve ICMP yes/no text.
+        "ip": result.ip
+        or (f"DNS FAIL ({result.dns_error})" if result.dns_error else "-"),  # Preserve DNS fallback text.
+    }  # Return named cells so the row format stays readable.
+
+
+def _render_service_cells(result: ProbeResult) -> dict[str, str]:
+    """Render the HTTP, TLS, and protocol cells for one result.
+
+    Why:
+        The service cells share fallback rules and must keep their old text.
+    """
+    return {
+        "http": _status_with_location(result.http_status, result.http_location),  # Render the HTTP status cell.
+        "https": _status_with_location(result.https_status, result.https_location),  # Render the HTTPS status cell.
+        "issuer": result.tls_issuer or "-",  # Preserve the old empty issuer fallback.
+        "protocols": ", ".join(result.responding_protocols) or "none",  # Preserve the old empty protocol fallback.
+        "server": result.https_server or result.http_server or "-",  # Prefer HTTPS server, as before.
+    }  # Return named cells so the row format stays readable.
+
+
+def _status_with_location(status: int | None, location: str | None) -> str:
+    """Render a status code with an optional redirect location.
+
+    Why:
+        The old report included the redirect target only when the probe found
+        one.
+    """
+    if status is None:  # Missing status means the probe did not receive a response.
+        return "-"  # Preserve the old no-status marker.
+    suffix = f" -> {location}" if location else ""  # Preserve redirect text when present.
+    return f"{status}{suffix}"  # Preserve the old status display.
+
+
+def _render_notes(results: list[ProbeResult]) -> list[str]:
+    """Render per-host notes for results that have notes.
+
+    Why:
+        Notes stay below the table, and empty note sets must produce no lines.
+    """
+    note_lines: list[str] = []  # Collect note rows without touching the caller's list.
+    for result in results:  # Preserve result order in the notes block.
+        note_lines.extend(f"- `{result.fqdn}`: {note}" for note in result.notes)  # Preserve one bullet per note.
+    if not note_lines:  # No notes means the old function added no note heading.
+        return []  # Return no markdown lines for empty note sets.
+    return ["", "### Notes", "", *note_lines]  # Preserve the old note heading and spacing.
 
 
 def _md_escape(text: str) -> str:
