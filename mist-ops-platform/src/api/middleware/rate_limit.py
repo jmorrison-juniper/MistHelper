@@ -1,7 +1,7 @@
 """Per-org API rate limiting backed by Redis (T022).
 
-Re-uses the same sliding-window pattern as ``src/shared/mist/rate_limit.py``
-but applies to inbound API requests on a per-org basis.
+The first verified request starts a fixed window. A Lua operation increments
+the counter and sets an expiry when the key has none (issue #2050).
 
 Issue #2049: the old ``BaseHTTPMiddleware`` read ``org_id`` from the raw
 request and incremented the counter before authentication ran. Any caller
@@ -13,15 +13,28 @@ organization only.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException
 from redis.exceptions import RedisError
+
+if TYPE_CHECKING:
+    from redis.asyncio import Redis
+    from redis.commands.core import AsyncScript
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_REQUEST_LIMIT = 1_000
 DEFAULT_WINDOW_SECONDS = 60
+
+# Repair old counters without an expiry, but keep the deadline of a valid window.
+ATOMIC_INCR_SCRIPT = """
+local count = redis.call('INCR', KEYS[1])
+if redis.call('TTL', KEYS[1]) == -1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return count
+"""
 
 
 class OrgRateLimiter:
@@ -29,7 +42,8 @@ class OrgRateLimiter:
 
     def __init__(self, redis_url: str = "") -> None:
         self._redis_url = redis_url  # Empty value turns rate limiting off
-        self._redis = None  # Lazy client, so import cost stays out of startup
+        self._redis: Redis | None = None  # Lazy client, so import cost stays out of startup
+        self._atomic_incr: AsyncScript | None = None
 
     async def check(self, org_id: Any) -> None:
         """Raise 429 when the verified organization exceeds its budget."""
@@ -42,41 +56,58 @@ class OrgRateLimiter:
     async def is_over_limit(self, org_id: Any) -> bool:
         """Return True when the org has exceeded its request budget."""
         redis = await self._get_redis()
-        if not redis:
+        if redis is None:
             return False  # fail-open when Redis unavailable
 
-        key = f"api_ratelimit:{org_id}"
         try:
-            current = await redis.incr(key)  # Increment the active window counter.
-            if current == 1:
-                await redis.expire(key, DEFAULT_WINDOW_SECONDS)  # Set the first-window expiry.
+            current = await self._count_request(redis, org_id)
             return current > DEFAULT_REQUEST_LIMIT  # Reject only requests over the budget.
         except RedisError as error:
-            self._redis = None  # Force a reconnect attempt after a runtime Redis outage.
+            # A late failure from an old client must not discard a replacement.
+            if self._redis is redis:
+                self._redis = None
+                self._atomic_incr = None
             logger.warning(
-                "Rate limit Redis command failed: %s. Rate limiting is disabled.",
+                "Rate limit Redis command failed: %s. The API permits this request.",
                 error,
             )
             return False  # Preserve the documented fail-open behavior during an outage.
 
-    async def _get_redis(self) -> Any:
-        """Lazy-initialize async Redis connection."""
+    async def _count_request(self, redis: Redis, org_id: Any) -> int:
+        """Increment the counter and ensure its expiry in one Redis operation."""
+        key = f"api_ratelimit:{org_id}"
+        logger.info("Checking the API rate limit for %s.", org_id)
+        if self._atomic_incr is None:
+            self._atomic_incr = redis.register_script(ATOMIC_INCR_SCRIPT)
+        script_args = [DEFAULT_WINDOW_SECONDS]  # Give the script the fixed window length.
+        result = await self._atomic_incr(keys=[key], args=script_args, client=redis)
+        current = int(result)  # Convert the Redis response before the limit comparison.
+        logger.debug("The API rate limit count for %s is %d.", org_id, current)
+        return current
+
+    async def _get_redis(self) -> Redis | None:
+        """Create the async Redis client only when a request needs it."""
         if self._redis is not None:
             return self._redis
         if not self._redis_url:
             return None
         try:
-            from redis.asyncio import from_url
+            from redis.asyncio import Redis
 
             from src.shared.redis_timeouts import redis_timeout_kwargs
 
             logger.info("Rate limit Redis connect starts.")  # Announce the connect attempt.
             # WHY: a client with no socket limit holds this request forever on a silent host.
-            self._redis = await from_url(self._redis_url, **redis_timeout_kwargs())
+            self._redis = Redis.from_url(
+                self._redis_url,
+                single_connection_client=False,
+                auto_close_connection_pool=None,
+                **redis_timeout_kwargs(),
+            )
             logger.debug("Rate limit Redis connect done.")  # Confirm the client exists.
             return self._redis
-        except Exception:
-            logger.warning("Redis unavailable — rate limiting disabled")
+        except RedisError as error:
+            logger.warning("Redis connection failed: %s. The API permits this request.", error)
             return None
 
 
