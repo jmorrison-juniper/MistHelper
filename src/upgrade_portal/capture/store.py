@@ -109,6 +109,8 @@ _TOO_NEW_SENTENCE = (
 # The digits of the size change the size of the document, so the measurement
 # repeats. The value only grows, so four rounds always reach a stable number.
 _SIZE_ROUNDS = 4
+_SIZE_FIELD = "stored_size_bytes"
+_SIZE_FIELD_JSON_PREFIX = '"' + _SIZE_FIELD + '":'
 
 _MESSAGES: dict[str, str] = {
     REASON_VERIFIED: "The database holds this record. The portal read the key back and matched the digest.",
@@ -819,7 +821,7 @@ def measure_size_bytes(document: Mapping[str, Any]) -> int:
     """
     if not _has_own_fields(document):
         return 0
-    return len(canonical_json(document).encode("utf-8"))
+    return len(canonical_json(document))
 
 
 def size_rule_holds(size_bytes: int) -> bool:
@@ -858,13 +860,49 @@ def _stamp_size(document: Mapping[str, Any]) -> dict[str, Any]:
         The stamped copy.
     """
     payload = dict(document)
-    payload["stored_size_bytes"] = 0
-    for _ in range(_SIZE_ROUNDS):
-        size = measure_size_bytes(payload)
-        if size == payload["stored_size_bytes"]:
-            break
-        payload["stored_size_bytes"] = size
+    payload[_SIZE_FIELD] = _stable_capture_size_bytes(payload)
     return payload
+
+
+def _stable_capture_size_bytes(document: Mapping[str, Any]) -> int:
+    """Return the stable size for a capture that stores its size inside itself.
+
+    Args:
+        document: The capture to measure.
+
+    Returns:
+        The stable byte count of the canonical form.
+    """
+    body = {
+        key: _canonical_value(value)
+        for key, value in document.items()
+        if not key.startswith("_") and key != _SIZE_FIELD
+    }
+    body_size = len(json.dumps(body, sort_keys=True, separators=(",", ":"), default=str, ensure_ascii=True))
+    size = 0
+    for _ in range(_SIZE_ROUNDS):
+        measured = _capture_size_bytes(body_size, size)
+        if measured == size:
+            break
+        size = measured
+    return size
+
+
+def _capture_size_bytes(body_size: int, stored_size_bytes: int) -> int:
+    """Return the canonical byte count after the size field is present.
+
+    Args:
+        body_size: The canonical byte count without the size field.
+        stored_size_bytes: The candidate stored size value.
+
+    Returns:
+        The byte count with the candidate size field.
+    """
+    size_digits = len(str(stored_size_bytes))
+    size_field_size = len(_SIZE_FIELD_JSON_PREFIX) + size_digits
+    if body_size == len("{}"):
+        return len("{") + size_field_size + len("}")
+    return body_size + len(",") + size_field_size
 
 
 def _is_scalar(value: Any) -> bool:
@@ -1431,7 +1469,7 @@ def _edge_size_bytes(edge: Mapping[str, Any]) -> int:
         The byte count of the canonical form of the four fields.
     """
     body = {name: edge.get(name) for name in EDGE_FIELDS}
-    return len(json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8"))
+    return len(json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=True))
 
 
 def _edge_matches(expected: Mapping[str, Any], stored: Mapping[str, Any]) -> bool:
