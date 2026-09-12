@@ -16,14 +16,21 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Measured**: Peak traced memory fell by 99.62 percent for a large CSV page
   and 99.81 percent for a filtered large log page in the local harness.
 
+### Simple endpoint family stage one (issue #1807)
+
+- **Added**: Menus 259 through 262 run no-identifier, org-scoped,
+  site-scoped, and MSP-scoped Mist get and list endpoints from a prompt.
+- **Added**: `SimpleEndpointExporter` covers 151 unique simple operations and
+  excludes the unresolved phantom operation `searchOrgClientFingerprints`.
+- **Added**: Unit coverage verifies SDK resolution, prompt failures, call
+  shape, primary-key strategy coverage, and table drift.
 ### Flatten nested fields performance (issue #2485)
 
 - **Changed**: `DataProcessingUtils.flatten_nested_fields()` now writes nested
   flattened fields directly into each output row. This removes temporary merge
   dictionaries from the export flatten path.
 - **Added**: Unit coverage keeps JSON and Python literal parse results, key
-  order, empty container handling, and malformed string behavior stable.
-### Dashboard data summary performance (issue #2439)
+  order, empty container handling, and malformed string behavior stable.`r`n`r`n### Dashboard data summary performance (issue #2439)
 
 - **Changed**: The web portal dashboard now builds the data summary with one
   directory scan. It formats only the recent files that the page shows.
@@ -6842,4 +6849,5 @@ Closes #368
 - Locations: Single AP pre-check, multi-AP pre-check, site PCAP polling, org PCAP polling
 - Function names now match mistapi SDK and Mist API operationId values
 - operationId: listSitePacketCaptures and listOrgPacketCaptures per OpenAPI spec
+
 
