@@ -16,6 +16,13 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Measured**: Peak traced memory fell by 99.62 percent for a large CSV page
   and 99.81 percent for a filtered large log page in the local harness.
 
+### Flatten nested fields performance (issue #2485)
+
+- **Changed**: `DataProcessingUtils.flatten_nested_fields()` now writes nested
+  flattened fields directly into each output row. This removes temporary merge
+  dictionaries from the export flatten path.
+- **Added**: Unit coverage keeps JSON and Python literal parse results, key
+  order, empty container handling, and malformed string behavior stable.
 ### Dashboard data summary performance (issue #2439)
 
 - **Changed**: The web portal dashboard now builds the data summary with one
@@ -6835,3 +6842,4 @@ Closes #368
 - Locations: Single AP pre-check, multi-AP pre-check, site PCAP polling, org PCAP polling
 - Function names now match mistapi SDK and Mist API operationId values
 - operationId: listSitePacketCaptures and listOrgPacketCaptures per OpenAPI spec
+
