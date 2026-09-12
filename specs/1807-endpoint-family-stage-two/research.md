@@ -36,7 +36,7 @@ The pass found three entries that do not ship in stage two.
 | Issue | Operation | Result |
 | - | - | - |
 | #991 | `endpoints` | Catalog issue, not an SDK operation. |
-| #1369 | `searchOrgClientFingerprints` | Phantom operation absent from the installed SDK. |
+| #1369 | `searchOrgClientFingerprints` | Wrong spec name. Menu 261 ships `searchSiteClientFingerprints`. |
 | #1366 | `optimizeInstallerRrm` | Active radio optimization endpoint, excluded from the read-only family. |
 
 ## Constraints

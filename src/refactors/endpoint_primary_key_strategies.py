@@ -2272,12 +2272,12 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Site WAN link usage",
     },
-    "searchOrgClientFingerprints": {
+    "searchSiteClientFingerprints": {
         "type": "composite_pk",
         "primary_key": ["mac", "timestamp"],
         "indexes": ["site_id", "os_type", "mfg", "family"],
         "unique_constraints": [],
-        "description": "Client NAC fingerprints",
+        "description": "Site client NAC fingerprints",
     },
     "listSiteUiSettings": {
         "type": "natural_pk",
