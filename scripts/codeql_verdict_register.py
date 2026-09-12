@@ -22,9 +22,10 @@ import json
 import logging
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 # The rule that the register governs. The register covers one rule at a time.
 DEFAULT_RULE_ID = "py/clear-text-logging-sensitive-data"
@@ -124,74 +125,116 @@ class AlertSource:
         # Store the rule, because the register covers one rule at a time.
         self.rule_id = rule_id
 
-    def fetch(self) -> list[dict]:
+    def fetch(self) -> list[dict[str, Any]]:
         """Return every dismissed alert that matches the rule."""
-        # Build the paginated API path for the dismissed alerts.
         path = f"repos/{self.repository}/code-scanning/alerts?state=dismissed&per_page=100"
         logger.info("Reading dismissed CodeQL alerts for rule %s", self.rule_id)
-        # Call the GitHub CLI, because it carries the credentials the user holds.
+        pages = json.loads(self._read(path))
+        matched = self._decode_pages(pages)
+        logger.debug("Read %d pages and matched %d dismissed alerts", len(pages), len(matched))
+        return matched
+
+    def _read(self, path: str) -> str:
+        """Read all API pages without exposing error response content."""
         try:
-            raw = subprocess.run(
-                ["gh", "api", "--paginate", path],
+            return subprocess.run(
+                ["gh", "api", "--paginate", "--slurp", path],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
                 check=True,
-                timeout=_GH_TIMEOUT_SECONDS,  # A stalled network read must not hang the gate.
+                timeout=_GH_TIMEOUT_SECONDS,
             ).stdout
         except subprocess.TimeoutExpired:
-            # Name the bound, so the operator can tell a stall from a crash.
             logger.error("The gh api call passed the %ds bound and was stopped", _GH_TIMEOUT_SECONDS)
             msg = f"The GitHub API read passed the {_GH_TIMEOUT_SECONDS}s bound"
-            raise RuntimeError(msg) from None  # Fail loudly instead of returning an empty register.
-        # Parse the response into Python objects.
-        alerts = json.loads(raw)
-        # Keep only the alerts that the register governs.
-        matched = [item for item in alerts if item.get("rule", {}).get("id") == self.rule_id]
-        logger.debug("Read %d dismissed alerts and matched %d", len(alerts), len(matched))
+            raise RuntimeError(msg) from None
+        except subprocess.CalledProcessError as error:
+            msg = (
+                f"The GitHub API read failed with exit code {error.returncode}. "
+                "Confirm security-events:read access and GitHub availability."
+            )
+            # The response can contain private data, so report no stdout or stderr.
+            raise RuntimeError(msg) from None
+
+    def _decode_pages(self, pages: object) -> list[dict[str, Any]]:
+        """Validate every page before selecting the governed alerts."""
+        if not isinstance(pages, list) or not pages:
+            raise ValueError("The GitHub response must contain at least one alert page.")
+        matched: list[dict[str, Any]] = []
+        seen: set[int] = set()
+        for page in pages:
+            if not isinstance(page, list):
+                raise ValueError("Each GitHub alert page must be a list.")
+            for item in page:
+                alert = self._validate_alert(item)
+                number = alert["number"]
+                if number in seen:
+                    raise ValueError(f"The GitHub response repeats alert {number}.")
+                seen.add(number)
+                if alert["rule"]["id"] == self.rule_id:
+                    matched.append(alert)
         return matched
+
+    def _validate_alert(self, item: object) -> dict[str, Any]:
+        """Reject malformed identities before a rule filter can hide them."""
+        if not isinstance(item, dict):
+            raise ValueError("Each GitHub alert must be an object.")
+        number = item.get("number")
+        if type(number) is not int or number <= 0:
+            raise ValueError("Each GitHub alert must have a positive integer number.")
+        rule = item.get("rule")
+        if not isinstance(rule, dict) or not isinstance(rule.get("id"), str) or not rule["id"]:
+            raise ValueError(f"GitHub alert {number} has no valid rule ID.")
+        if item.get("state") != "dismissed":
+            raise ValueError(f"GitHub alert {number} does not have the dismissed state.")
+        return item
 
 
 class RowBuilder:
     """Turn one API alert into one register row."""
 
-    def build(self, alert: dict) -> VerdictRow:
+    def build(self, alert: dict[str, Any]) -> VerdictRow:
         """Return the register row for one dismissed alert."""
-        # Read the code location, because the row names the file and the line.
-        location = alert.get("most_recent_instance", {}).get("location", {})
-        # Read the file path and fall back to a clear marker when it is absent.
-        file_path = location.get("path", "unknown")
-        # Read the start line and fall back to a clear marker when it is absent.
-        line = str(location.get("start_line", "-"))
-        # Read the dismissal reason that the API recorded.
-        api_reason = alert.get("dismissed_reason") or ""
-        # Map the API reason onto the register verdict vocabulary.
-        verdict = API_REASON_TO_VERDICT.get(api_reason, "accepted_with_rationale")
-        # Read the dismissal comment and strip the surrounding blank space.
+        self._validate(alert)
+        logger.info("Building the row for alert %d", alert["number"])
+        location = self._location(alert)
+        file_path, line = location["path"], str(location.get("start_line") or "-")
         comment = (alert.get("dismissed_comment") or "").strip()
-        # Replace a blank comment with the warning, because C-4 forbids a blank cell.
-        reason = self._flatten(comment) if comment else MISSING_REASON_TEXT
-        # Read the account that accepted the risk.
-        author = (alert.get("dismissed_by") or {}).get("login", "unknown")
-        # Read the dismissal timestamp and reduce it to an ISO date.
-        decided = self._to_date(alert.get("dismissed_at"))
-        return VerdictRow(
-            alert=int(alert.get("number", 0)),
+        decided = (alert.get("dismissed_at") or "-")[:10]
+        row = VerdictRow(
+            alert=alert["number"],
             issue=self._issue_for(comment),
             file=file_path,
             line=line,
             anchor=f"{file_path}::L{line}",
-            verdict=verdict,
-            reason=reason,
-            author=author,
+            verdict=API_REASON_TO_VERDICT[alert["dismissed_reason"]],
+            reason=" ".join(comment.split()) if comment else MISSING_REASON_TEXT,
+            author=(alert.get("dismissed_by") or {}).get("login", "unknown"),
             decided=decided,
             review=self._review_date(decided),
             trigger=DEFAULT_TRIGGER if comment else MISSING_REASON_TRIGGER,
         )
+        logger.debug("Built the row for alert %d", row.alert)
+        return row
 
-    def _flatten(self, text: str) -> str:
-        """Return the comment as one line, because a table cell holds one line."""
-        # Replace every line break with a space so the markdown table stays valid.
-        return " ".join(text.split())
+    def _validate(self, alert: dict[str, Any]) -> None:
+        """Reject invalid metadata instead of inventing a security decision."""
+        number = alert.get("number")
+        if type(number) is not int or number <= 0:
+            raise ValueError("Each alert must have a positive integer number.")
+        reason = alert.get("dismissed_reason")
+        if not isinstance(reason, str) or reason not in API_REASON_TO_VERDICT:
+            raise ValueError(f"Alert {number} has no valid dismissal reason.")
+        for key in ("dismissed_comment", "dismissed_at"):
+            value = alert.get(key)
+            if value is not None and not isinstance(value, str):
+                raise ValueError(f"Alert {number} has an invalid {key} field.")
+        author = alert.get("dismissed_by")
+        if author is not None and (
+            not isinstance(author, dict) or not isinstance(author.get("login"), str) or not author["login"]
+        ):
+            raise ValueError(f"Alert {number} has no valid dismissal author.")
 
     def _issue_for(self, comment: str) -> str:
         """Return the issue reference that the comment names, or a dash."""
@@ -202,21 +245,30 @@ class RowBuilder:
                 return "#" + token[1:].rstrip(".,")
         return "-"
 
-    def _to_date(self, stamp: str | None) -> str:
-        """Return the ISO date part of an API timestamp."""
-        # Report a dash when the API recorded no timestamp.
-        if not stamp:
-            return "-"
-        # Keep the first ten characters, because they hold the ISO date.
-        return stamp[:10]
+    def _location(self, alert: dict[str, Any]) -> dict[str, Any]:
+        """Validate the reported location without substituting a false location."""
+        instance = alert.get("most_recent_instance")
+        if not isinstance(instance, dict) or not isinstance(instance.get("location"), dict):
+            raise ValueError(f"Alert {alert['number']} has no valid location.")
+        location: dict[str, Any] = instance["location"]
+        if not isinstance(location.get("path"), str) or not location["path"]:
+            raise ValueError(f"Alert {alert['number']} has no valid file path.")
+        line = location.get("start_line")
+        if line is not None and (type(line) is not int or line <= 0):
+            raise ValueError(f"Alert {alert['number']} has no valid start line.")
+        return location
 
     def _review_date(self, decided: str) -> str:
         """Return the date when a reviewer must revisit the accepted risk."""
         # Report a dash when the decision carries no date to count from.
         if decided == "-":
             return "-"
-        # Parse the decision date so the tool can add the review interval.
-        start = datetime.strptime(decided, "%Y-%m-%d").replace(tzinfo=UTC)
+        try:
+            start = datetime.strptime(decided, "%Y-%m-%d").replace(tzinfo=UTC)
+            if start.strftime("%Y-%m-%d") != decided:
+                raise ValueError
+        except ValueError:
+            raise ValueError("A dismissal date must use a valid YYYY-MM-DD value.") from None
         # Add the interval and format the result as an ISO date.
         return (start + timedelta(days=REVIEW_INTERVAL_DAYS)).strftime("%Y-%m-%d")
 
@@ -267,7 +319,19 @@ class RegisterWriter:
             "```bash\n"
             "python scripts/codeql_verdict_register.py check\n"
             "```\n\n"
+            "CI runs this command in the `CodeQL verdict register check` job. The job\n"
+            "fails on drift, invalid records, denied API access, or a failed API read.\n"
+            "The job needs `contents: read` and `security-events: read`. It uses only\n"
+            "the job token. A fork with denied API access fails without a token fallback.\n\n"
+            "This check is a live audit, not a reproducible build. An unchanged commit\n"
+            "can fail after live alert metadata changes. CI never generates the register.\n"
+            "Refresh it only after you review the current metadata.\n\n"
+            "The check compares all eleven row fields, including the reason and author.\n"
+            "It removes surrounding cell spaces and restores escaped pipes. The writer\n"
+            "converts comment whitespace to spaces. The generation date does not cause\n"
+            "drift. A complete, successful API response must confirm an empty alert set.\n\n"
             "The `Anchor` column holds the file path and the line of the reported expression.\n"
+            "It is not a stable finding identity. This register covers only the rule above.\n"
             "A row with the reason `Warning: the dismissal recorded no reason` needs a written\n"
             "reason. Add the reason to the alert on GitHub, then run `generate` again.\n"
         )
@@ -314,46 +378,67 @@ class RegisterReconciler:
         # Store the register path that the check reads.
         self.path = path
 
-    def parse(self) -> dict[int, str]:
-        """Return the verdict of each alert number that the register records."""
-        # Report an empty record when the register file is absent.
-        if not self.path.exists():
-            logger.warning("The register file %s does not exist", self.path)
-            return {}
-        found: dict[int, str] = {}
-        # Read each line and keep the table rows that start with an alert number.
-        for line in self.path.read_text(encoding="utf-8").splitlines():
-            # Hide an escaped pipe, because a raw split would cut the cell in two.
-            masked = line.replace("\\|", "\x00")
-            # Split the markdown row into its cells.
-            cells = [cell.strip().replace("\x00", "|") for cell in masked.strip().strip("|").split("|")]
-            # Skip a line that does not hold the eleven columns.
-            if len(cells) != len(COLUMNS) or not cells[0].isdigit():
-                continue
-            # Record the alert number and the verdict for the comparison.
-            found[int(cells[0])] = cells[5]
+    def parse(self) -> dict[int, VerdictRow]:
+        """Read complete rows and reject an absent or malformed register."""
+        logger.info("Reading register rows from %s", self.path)
+        sections = self.path.read_text(encoding="utf-8").split("\n## Register\n")
+        if len(sections) != 2:
+            raise ValueError("The register must contain exactly one Register section.")
+        lines = sections[1].split("\n## Summary\n", 1)[0].strip().splitlines()
+        header = "| " + " | ".join(COLUMNS) + " |"
+        separator = "| " + " | ".join("-" for _ in COLUMNS) + " |"
+        if lines[:2] != [header, separator]:
+            raise ValueError("The register table must keep the eleven column names and their order.")
+        found: dict[int, VerdictRow] = {}
+        for line in lines[2:]:
+            row = self._parse_row(line)
+            if row.alert in found:
+                raise ValueError(f"The register repeats alert {row.alert}.")
+            found[row.alert] = row
         logger.debug("Parsed %d rows from the register", len(found))
         return found
 
+    def _parse_row(self, line: str) -> VerdictRow:
+        """Decode one complete row without losing escaped cell content."""
+        line = line.strip()
+        if not line.startswith("|") or not line.endswith("|") or "\x00" in line:
+            raise ValueError("A register row has an invalid table boundary or null character.")
+        # Mask escaped pipes before splitting, then restore them inside each cell.
+        masked = line[1:-1].replace("\\|", "\x00")
+        cells = [cell.strip().replace("\x00", "|") for cell in masked.split("|")]
+        if len(cells) != len(COLUMNS) or any(not cell for cell in cells):
+            raise ValueError("Each register row must contain eleven nonempty cells.")
+        if not cells[0].isdecimal() or int(cells[0]) <= 0:
+            raise ValueError("Each register row must have a positive integer alert number.")
+        return VerdictRow(int(cells[0]), *cells[1:])
+
     def compare(self, rows: list[VerdictRow]) -> list[str]:
         """Return one message for each difference between the register and the API."""
-        # Read the register rows that the file records.
+        logger.info("Comparing the register against %d live rows", len(rows))
         recorded = self.parse()
-        # Build the live view from the API rows.
-        live = {row.alert: row.verdict for row in rows}
+        # Apply the same cell formatting rules to both sides of the comparison.
+        live = {row.alert: self._parse_row(row.to_markdown()) for row in rows}
+        if len(live) != len(rows):
+            raise ValueError("The live rows contain duplicate alert numbers.")
+        problems = self._differences(recorded, live)
+        logger.debug("Compared the register and found %d differences", len(problems))
+        return problems
+
+    def _differences(self, recorded: dict[int, VerdictRow], live: dict[int, VerdictRow]) -> list[str]:
+        """Name changed fields without copying audit comments into CI logs."""
         problems: list[str] = []
-        # Report every alert that the API dismisses and the register misses.
         for number in sorted(set(live) - set(recorded)):
             problems.append(f"Alert {number} is dismissed and the register holds no row.")
-        # Report every register row that no dismissed alert supports.
         for number in sorted(set(recorded) - set(live)):
             problems.append(f"The register holds row {number} and no dismissed alert matches it.")
-        # Report every row whose verdict disagrees with the API reason.
         for number in sorted(set(recorded) & set(live)):
-            if recorded[number] != live[number]:
-                problems.append(
-                    f"Alert {number} records the verdict {live[number]} " f"and the register reads {recorded[number]}."
-                )
+            changed = [
+                column
+                for column, field in zip(COLUMNS, fields(VerdictRow), strict=True)
+                if getattr(recorded[number], field.name) != getattr(live[number], field.name)
+            ]
+            if changed:
+                problems.append(f"Alert {number} differs in these columns: {', '.join(changed)}.")
         return problems
 
 
@@ -417,7 +502,11 @@ def main(argv: list[str] | None = None) -> int:
     # Build the console for the selected repository, path, and rule.
     console = RegisterConsole(args.repository, args.path, args.rule_id)
     # Run the selected mode and return its exit status.
-    return console.generate() if args.mode == "generate" else console.check()
+    try:
+        return console.generate() if args.mode == "generate" else console.check()
+    except (OSError, RuntimeError, ValueError) as error:
+        logger.exception("The register %s failed: %s", args.mode, error)
+        return 2
 
 
 if __name__ == "__main__":
