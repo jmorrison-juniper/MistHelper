@@ -7,6 +7,13 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Capture log baseline performance (issue #2483)
+
+- **Changed**: `tools.capture_log_baseline` now builds one call-line index
+  after it parses the source file. It reuses the index for each fixture lookup.
+- **Added**: Unit coverage keeps the same-line first-call rule and the old
+  line collector result stable.
+
 ### Dashboard data summary performance (issue #2439)
 
 - **Changed**: The web portal dashboard now builds the data summary with one
