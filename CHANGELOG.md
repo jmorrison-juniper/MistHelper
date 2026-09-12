@@ -12,6 +12,11 @@ the merged fragments into this file at release time.
 
 ## [Unreleased]
 
+### Capture log fixture source (issue #2505)
+
+- **Fixed**: The capture log baseline tool now reads a fixture `source` value
+  and resolves that fixture in the named file.
+
 ### Citation reference lint performance (issue #2487)
 
 - **Changed**: The citation lint tool now builds the default file index and
@@ -6942,4 +6947,3 @@ Closes #368
 - Locations: Single AP pre-check, multi-AP pre-check, site PCAP polling, org PCAP polling
 - Function names now match mistapi SDK and Mist API operationId values
 - operationId: listSitePacketCaptures and listOrgPacketCaptures per OpenAPI spec
-
