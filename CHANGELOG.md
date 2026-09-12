@@ -114,15 +114,6 @@ the merged fragments into this file at release time.
   ArangoDB returns a whole float as an equal integer.
 - **Added**: Unit coverage for nested Tier 3 numbers, including whole floats,
   fractional floats, integers, zero, negative values, and very large values.
-### Stale and bulk run controls (issue #2447)
-
-- **Added**: The upgrade capture portal now marks stale runs after a 24-hour
-  server age check, previews selected runs with server counts, cancels
-  selected pre-cloud runs, and retries selected final runs through a fresh
-  pre-check.
-- **Added**: The run page now offers a reconciliation control for stale
-  pre-cloud and stopping runs. The control writes only after the server proves
-  the safe final state from stored and cloud evidence.
 
 ### Dashboard data summary performance (issue #2439)
 
