@@ -138,6 +138,11 @@ account holds a fixed balance each month. Pull
 `ghcr.io/jmorrison-juniper/misthelper:latest` only when you need the exact
 image that a release produced.
 
+Every container that you start for a test, for a debug session, or for an
+end-to-end run obeys four rules. The "Test and Debug Containers" section below
+holds them. Start it in the compose group. Name it for its issue or its pull
+request. Keep it off a production local port. Remove it when the test ends.
+
 ### Automated Sweep Safety
 
 An automated sweep is a code change. It carries more risk than a hand edit,
@@ -270,6 +275,96 @@ FAST_MODE_MAX_CONCURRENT_CONNECTIONS=8  # Environment tunable
 ---
 
 ## Container & SSH Architecture
+
+### Test and Debug Containers (NON-NEGOTIABLE)
+
+This policy covers every container that you start for a test, for a debug
+session, or for an end-to-end run. Issue #2059 records the collision that
+created the policy. A second project took the vendor default port, and the
+upgrade portal then read a foreign database as its own store.
+
+**Rule 1. Start the container inside the compose group.**
+
+Never start a one-off container outside the group. A container outside the
+group joins no project network, so it cannot reach `misthelper-arangodb` or
+`misthelper-redis` by name. Use one of these three forms.
+
+```powershell
+.\scripts\compose.ps1 run --rm misthelper python -m pytest tests/<file>
+.\scripts\compose.ps1 --profile test up -d
+.\scripts\compose.ps1 up -d --no-deps misthelper
+```
+
+If a test needs a new service, add the service to `compose.yml` under a
+profile. A profile keeps the service out of the normal `up`. Do not replace
+the service with a bare `podman run`.
+
+**Rule 2. Name an ephemeral container for its issue or its pull request.**
+
+An ephemeral container serves one investigation and then goes away. Its name
+states the reason it exists. Use this format for the container, the volume, and
+the network.
+
+```text
+misthelper-tmp-<issue|pr><number>-<slug>
+```
+
+For example, `misthelper-tmp-issue2059-portcheck`. A reader who finds the
+container three days later can open the issue and learn why it runs. Keep the
+`misthelper` prefix, because the guardrail test
+`tests/guardrails/test_compose_naming_policy.py` reads that prefix.
+
+**Rule 3. Never publish a production local port.**
+
+These ports belong to the production local stack. An ephemeral container must
+not publish one of them.
+
+| Port | Owner |
+| - | - |
+| 1161/udp | The SNMP service |
+| 1514/udp | The Observium syslog receiver |
+| 2200 | The SSH runner |
+| 8055 | The Gunicorn web UI |
+| 8056 | The upgrade capture portal |
+| 8057 | The metrics gateway |
+| 8668 | The Observium web interface |
+| 9379 | Redis |
+| 9526 | The RedisInsight web UI |
+| 9529 | ArangoDB |
+
+Read `compose.yml` before you pick a port. That file is the source of truth,
+and the table above can drift.
+
+Publish an ephemeral port in the range 9600 through 9699 instead. That range
+sits inside the policy range 1000 through 10000, and it holds no production
+service. Bind the port to `127.0.0.1`.
+
+Warning: an ephemeral container that publishes 9529 or 9379 takes the port
+from the running store. The portal then writes a capture into the wrong
+database, and the operator loses the upgrade record.
+
+**Rule 4. Remove the container when the test ends.**
+
+Never leave a test container running. A stopped container still holds its
+image layers, its volume, and its log file. Run the cleanup in the same session
+that started the container.
+
+```powershell
+.\scripts\compose.ps1 rm -s -f <the test service>
+podman rm -f misthelper-tmp-<issue|pr><number>-<slug>
+podman volume rm misthelper-tmp-<issue|pr><number>-<slug>
+podman ps -a --filter "name=misthelper-tmp-" --format "{{.Names}} {{.Status}}"
+podman volume ls --filter "name=misthelper-tmp-" --format "{{.Name}}"
+```
+
+The last two commands confirm the cleanup. An empty result from each one means
+the cleanup finished. Read `podman system df` when you want the reclaimed space.
+
+Warning: never run `podman volume prune`, and never pass `-v` to a compose
+`down` command. Both remove `misthelper-arangodb-data` and
+`misthelper-redis-data`. Those two volumes hold every capture and every upgrade
+run, and a removed volume is not recoverable. Remove a test volume by name
+instead.
 
 ### Container Registry & CI/CD
 - **Registry**: `ghcr.io/jmorrison-juniper/misthelper`
@@ -603,6 +698,10 @@ for the full rules. The short list:
 - Run `git checkout` while VS Code has files open (use worktrees instead)
 - Skip `python -m py_compile`, `ruff check`, or `black --check` before committing
 - Push a commit only to make a workflow build a container that Podman builds here
+- Start a test container outside the compose group with a bare `podman run`
+- Publish a production local port (1161/udp, 1514/udp, 2200, 8055, 8056, 8057,
+  8668, 9379, 9526, 9529) from a test container
+- Leave a test container running after the test ends
 
 ---
 

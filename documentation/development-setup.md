@@ -134,12 +134,40 @@ python -m playwright install chromium
 The tests start their own portal, because only that portal holds the sign-in
 seam. If another process already listens on port 8056, every test reports an
 error that names the port. A running portal container is the common cause. Stop
-the container, or point the tests at a free port.
+the container, or point the tests at an ephemeral port.
 
 ```powershell
-$env:CAPTURE_PORT = "8066"
+$env:CAPTURE_PORT = "9606"
 python -m pytest tests/e2e/upgrade_portal
 ```
+
+Port 9606 sits in the ephemeral range 9600 through 9699. That range holds no
+production service, so the tests never take a port from the running stack.
+
+### Container rules for a browser test
+
+If a browser test or a debug session needs a container, obey these four rules.
+`documentation/container-deployment.md` § "Test and debug containers" holds the
+full policy and the cleanup commands.
+
+1. Start the container inside the compose group. Use
+   `.\scripts\compose.ps1 run --rm`, or add the service to `compose.yml` under
+   a profile. Never start a one-off container with a bare `podman run`.
+2. Name an ephemeral container for the issue or the pull request that it
+   serves. Use the format `misthelper-tmp-<issue|pr><number>-<slug>`.
+3. Publish a port in the range 9600 through 9699. Never publish a production
+   local port. Read `compose.yml` for the current set. Today it holds 1161/udp,
+   1514/udp, 2200, 8055, 8056, 8057, 8668, 9379, 9526, and 9529.
+4. Remove the container, its volume, and its network when the test ends. Never
+   leave a test container running.
+
+```powershell
+podman rm -f misthelper-tmp-<issue|pr><number>-<slug>
+podman ps -a --filter "name=misthelper-tmp-" --format "{{.Names}} {{.Status}}"
+```
+
+The second command confirms the cleanup. An empty result means the cleanup
+finished.
 
 ## Never install this project into its own environment
 

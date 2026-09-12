@@ -78,10 +78,17 @@ run the tests again. See issue #1866.
   pull request, the issue, or the date. Never edit `CHANGELOG.md` on a feature
   branch, because every branch then conflicts on the same lines. See
   `changelog.d/README.md`.
-- **Container**: Podman primary, port 2200 (SSH), port 8055 (web UI)
-- **Zscaler**: Zscaler blocks a `podman push` to `ghcr.io`. Build and run the image
-  locally with `podman build` and `podman run`. Use GitHub Actions only when the
-  registry must hold the image, such as a release.
+- **Container**: Podman primary, port 2200 (SSH), port 8055 (web UI).
+- **Test containers**: A container started for a test, a debug session, or an
+  end-to-end run joins the compose group. Never start a one-off container with a
+  bare `podman run`. Name an ephemeral container
+  `misthelper-tmp-<issue|pr><number>-<slug>`. Publish a port in the range 9600
+  through 9699. Never publish a production local port. Remove the container when
+  the test ends. See `documentation/container-deployment.md`
+  § "Test and debug containers".
+- **Zscaler**: Zscaler blocks a `podman push` to `ghcr.io`. Build the image
+  locally with `podman build`, and start it with `.\scripts\compose.ps1`. Use
+  GitHub Actions only when the registry must hold the image, such as a release.
 - **Actions minutes**: MistHelper is public, so a standard runner costs nothing.
   A private repository spends the 2,000 free minutes each month. Validate locally
   first. Never push a commit only to start a workflow. See
