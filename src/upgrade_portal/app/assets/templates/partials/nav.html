@@ -1,0 +1,119 @@
+{#
+  nav.html - the shared header of the upgrade capture portal.
+
+  Why this file exists:
+    Every page shows the same three controls. The operator moves to the site
+    list, moves to the history, and picks a theme. One partial keeps the
+    controls and their test identifiers in one place, so a wording change or a
+    layout change needs one edit.
+
+  Why the links hold a literal path:
+    contracts/http-api.md fixes every public path of this portal. The blueprint
+    endpoint names are not fixed. A url_for call against an endpoint name that
+    changes would raise a build error and would break every page, so the links
+    follow the contract paths.
+
+  Variables a route may supply:
+    theme      - the name of the current theme, without the .css suffix.
+    themes     - the list of theme names the operator may pick.
+    signed_in  - false on the sign-in pages. Hides the links and the sign-out
+                 control. Defaults to true, because almost every page of this
+                 portal sits behind a session.
+#}
+{% set theme_choices = themes | default(['magenta', 'default'], true) %}
+{% set current_theme = theme | default(theme_choices[0], true) %}
+{% if current_theme not in theme_choices %}
+  {% set current_theme = theme_choices[0] %}
+{% endif %}
+
+{#
+  Flask puts the request proxy in the Jinja globals, so "request is defined" is
+  always true and tells nothing. The proxy answers false outside a request
+  instead, and a plain truth test is therefore the guard that works.
+#}
+{% set current_path = request.path if request else '' %}
+{% set is_signed_in = signed_in if signed_in is defined else true %}
+
+<header class="portal-header">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+
+    <a class="portal-brand" href="/">Upgrade capture portal</a>
+
+    {#
+      The active tab carries an underline and a weight as well as a color. WCAG
+      1.4.1 forbids color as the only signal. aria-current tells a screen reader
+      the same fact.
+    #}
+    <nav class="portal-nav" aria-label="Main">
+      {% if is_signed_in %}
+        <a href="/select/site"
+           data-testid="nav-sites"
+           class="{{ 'is-active' if current_path.startswith('/select') else '' }}"
+           {% if current_path.startswith('/select') %}aria-current="page"{% endif %}>Sites</a>
+
+        <a href="/history"
+           data-testid="nav-history"
+           class="{{ 'is-active' if current_path.startswith('/history') else '' }}"
+           {% if current_path.startswith('/history') %}aria-current="page"{% endif %}>History</a>
+      {% endif %}
+    </nav>
+
+    <div class="d-flex flex-wrap align-items-end gap-3">
+
+      {#
+        The theme form uses GET and needs no script. The content security policy
+        blocks an inline script, and portal.js holds no theme helper, so a plain
+        form is the only control that works today. The route reads the theme
+        argument and passes it back to the layout.
+      #}
+      <form method="get" class="d-flex align-items-end gap-2">
+        {#
+          The form replaces the whole query string. These hidden fields carry
+          every other argument forward, so a theme change never drops the site
+          identifier or the page number.
+        #}
+        {% if request %}
+          {% for key, value in request.args.items(multi=True) %}
+            {% if key != 'theme' %}
+              <input type="hidden" name="{{ key }}" value="{{ value }}">
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+
+        <div>
+          <label class="form-label mb-1" for="theme-select">Theme</label>
+          <select class="form-select form-select-sm"
+                  id="theme-select"
+                  name="theme"
+                  data-testid="theme-select">
+            {% for choice in theme_choices %}
+              <option value="{{ choice }}" {{ 'selected' if choice == current_theme else '' }}>
+                {{ choice | capitalize }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <button type="submit" class="portal-button">Apply theme</button>
+      </form>
+
+      {% if is_signed_in %}
+        {#
+          Sign out changes state, so it uses POST and carries the token. The
+          hidden field lets the form work without a script. A script may also
+          send the request through window.upgradePortal.fetchJson, which reads
+          the same token from the meta tag.
+        #}
+        <form method="post" action="/auth/signout">
+          <input type="hidden"
+                 name="csrf_token"
+                 value="{{ csrf_token() if csrf_token is defined else '' }}">
+          <button type="submit"
+                  class="portal-button"
+                  data-testid="signout-button">Sign out</button>
+        </form>
+      {% endif %}
+
+    </div>
+  </div>
+</header>

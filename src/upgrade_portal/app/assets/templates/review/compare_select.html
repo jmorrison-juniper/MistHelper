@@ -1,0 +1,124 @@
+{#
+  review/compare_select.html - choose the two captures of one comparison.
+
+  Why this file exists:
+    contracts/http-api.md:341-343 states that GET /compare takes the same two
+    query values as the endpoint and renders the human view. An operator who
+    reaches the page from the navigation names no capture at all, so the page
+    asks for the two captures rather than showing a refusal for a request that
+    asked for nothing.
+
+  Why the form uses the get method:
+    The form writes nothing. A get form puts the two choices in the address
+    bar, which is the same address that the endpoint reads. The operator can
+    then copy the address, and the page needs no token and no script. The
+    content security policy of this portal is 'self' only, so an inline script
+    would not run.
+
+  Why the links hold a literal path:
+    contracts/http-api.md fixes every public path of this portal. A url_for
+    call against an endpoint name raises while a later route is still missing,
+    so the form action arrives from the route as a plain path.
+
+  Variables a route may supply:
+    captures    - the capture rows to offer. Each row may hold capture_id,
+                  role, started_at, site_name, and capture_status.
+    before_id   - the pre-check identifier that the request carried.
+    after_id    - the post-check identifier that the request carried.
+    notice      - the sentence that names a refusal, or an empty string.
+    action_path - the path that the form submits to.
+    page_title  - the heading text and the tab text.
+    theme       - the name of the current theme. See layout.html.
+    themes      - the theme names the operator may pick.
+#}
+{% extends 'layout.html' %}
+
+{#
+  Every value passes through a default filter first, so a value that a route
+  did not supply renders as an empty value and never stops the page.
+#}
+{% set capture_rows = captures | default([], true) %}
+{% set chosen_before = before_id | default('', true) %}
+{% set chosen_after = after_id | default('', true) %}
+{% set refusal_text = notice | default('', true) %}
+{% set form_action = action_path | default('/compare', true) %}
+{% set heading = page_title | default('Choose two captures', true) %}
+
+{% block title %}{{ heading }}{% endblock %}
+
+{% block heading %}<h1>{{ heading }}</h1>{% endblock %}
+
+{% block content %}
+{% if refusal_text %}
+  {#
+    The refusal reaches the page as a plain sentence. The region carries the
+    shared flash identifier, so one browser test reads every message region.
+  #}
+  <div class="flash-region" role="alert" data-testid="flash-message">
+    {{ refusal_text }}
+  </div>
+{% endif %}
+
+<div class="portal-card">
+  <h2 class="portal-card-title">Compare two captures</h2>
+
+  <p class="portal-card-note">
+    Choose the capture from before the upgrade and the capture from after the
+    upgrade. The portal compares a verified capture only.
+  </p>
+
+  <form method="get" action="{{ form_action }}">
+    <div class="mb-3">
+      <label class="form-label" for="compare-before">Capture from before</label>
+      <select class="form-select"
+              id="compare-before"
+              name="before"
+              data-testid="compare-before-select">
+        <option value="">Choose a capture</option>
+        {% for capture in capture_rows %}
+          {% set capture_key = capture.capture_id | default('', true) %}
+          <option value="{{ capture_key }}"
+                  {% if capture_key and capture_key == chosen_before %}selected{% endif %}>
+            {{ capture.role | default('capture', true) }} -
+            {{ capture.moment_text | default(capture.started_at, true) | default('no start time', true) }} -
+            {{ capture_key }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label" for="compare-after">Capture from after</label>
+      <select class="form-select"
+              id="compare-after"
+              name="after"
+              data-testid="compare-after-select">
+        <option value="">Choose a capture</option>
+        {% for capture in capture_rows %}
+          {% set capture_key = capture.capture_id | default('', true) %}
+          <option value="{{ capture_key }}"
+                  {% if capture_key and capture_key == chosen_after %}selected{% endif %}>
+            {{ capture.role | default('capture', true) }} -
+            {{ capture.moment_text | default(capture.started_at, true) | default('no start time', true) }} -
+            {{ capture_key }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <button class="portal-button portal-button-primary"
+            type="submit"
+            data-testid="compare-run-button">Compare the two captures</button>
+  </form>
+
+  {% if not capture_rows %}
+    {#
+      An empty list is a fact, not a fault. The portal still shows the form, so
+      an operator who knows an identifier can type it into the address bar.
+    #}
+    <p class="portal-card-note mt-3 mb-0">
+      The portal found no stored capture to offer.
+    </p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,276 @@
+{#
+  select/orgs.html - the organization picker of the upgrade capture portal.
+
+  Why this file exists:
+    FR-011 starts the operator journey here. A managed service provider account
+    reaches many organizations, so the operator names one before the portal
+    lists a single site. Until this file existed, `select.org_page` rendered the
+    bare shell, and an operator read that empty page as "this account reaches no
+    organization at all".
+
+  Why the form holds a literal path:
+    contracts/http-api.md fixes every public path of this portal. The blueprint
+    endpoint names are not fixed in the template layer, so every link and every
+    form action follows the contract paths. url_for stays for a static asset.
+
+  Why each row carries its own form:
+    The pick is a state change, so it travels as a post and never as a link. A
+    link would let a browser prefetch the pick. One form for each row also keeps
+    the page usable with no script, because the button needs no listener.
+
+  Why the filter runs in the portal:
+    contracts/http-api.md line 53 asks the picker to page and to filter in the
+    portal itself. The portal filters the whole privilege list and then cuts one
+    page out of the matches, so a match on a later page still reaches the
+    operator. The filter costs no cloud read, because the privilege list arrives
+    whole with the cloud session.
+
+  Why the browser filter stays:
+    portal.js hides a row of the page on screen, so the list answers on each key
+    press. That step refines the page the portal already sent, and every row it
+    sees already matched the portal filter. The search field sits inside a get
+    form, so the same text reaches the portal on Enter and the operator searches
+    every page. With no script the get form alone still filters.
+
+  Why the page holds no rule:
+    A template must never hold a rule. `build_org_view` in
+    src/upgrade_portal/app/routes/select.py settles the filter, the paging, and
+    each control state. The page holds no arithmetic and no numeric comparison.
+    It never compares the offset with the total. It reads org_view.has_next and
+    org_view.has_previous.
+
+  Why a locked paging control is a button, not a link:
+    A link with no target still takes a press. The first page and the last page
+    therefore show a disabled button. A disabled button takes no press, and
+    portal.css already styles .portal-button:disabled. The test identifier stays
+    on the control in both states, so a browser test finds it on every page.
+
+  The test identifiers of contracts/ui-testids.md lines 55 to 57:
+    org-search            - the organization filter field
+    org-row-{org_id}      - one organization row
+    org-select-{org_id}   - the choose button of that row
+
+  Three identifiers below are not in that contract file yet:
+    org-search-submit     - the submit control of the filter form
+    org-page-next         - the later page control
+    org-page-previous     - the earlier page control
+  They follow the history-page-next and history-page-previous shape of the same
+  contract file, so the picker and the history page spell one idea one way.
+
+  Variables a route may supply:
+    org_view      - the view model. Holds rows, total, page_size, offset, query,
+                    has_next, has_previous, next_url, and previous_url. Each row
+                    holds org_id and name.
+    organizations - the same rows, for a caller that supplies no view model.
+    page_title    - the heading text and the tab text.
+    theme         - the name of the current theme. See layout.html.
+    themes        - the theme names the operator may pick.
+#}
+{% extends 'layout.html' %}
+
+{#
+  Every value passes through a default filter first. The portal runs Jinja with
+  the standard undefined type, and this step also holds if a later setting turns
+  on the strict undefined type.
+
+  A boolean uses the default filter with one argument only. The second argument
+  turns the filter into a truth test, and a false value then reads as a missing
+  value. A next control would then appear on the last page. See the same note in
+  review/history.html.
+#}
+{% set view = org_view | default(none, true) %}
+{% set fallback_rows = organizations | default([], true) %}
+{% set org_rows = view.rows | default(fallback_rows, true) %}
+{% set row_total = view.total | default(0, true) %}
+{% set page_size = view.page_size | default(0, true) %}
+{% set row_offset = view.offset | default(0, true) %}
+{% set filter_text = view.query | default('', true) %}
+{% set has_next = view.has_next | default(false) %}
+{% set has_previous = view.has_previous | default(false) %}
+{% set next_url = view.next_url | default('', true) %}
+{% set previous_url = view.previous_url | default('', true) %}
+{% set heading = page_title | default('Organizations', true) %}
+
+{% block title %}{{ heading }}{% endblock %}
+
+{% block heading %}<h1>{{ heading }}</h1>{% endblock %}
+
+{% block content %}
+<div class="portal-card">
+  <h2 class="portal-card-title">Find an organization</h2>
+
+  {#
+    The label stays visible. A placeholder disappears on the first key press, so
+    a placeholder alone leaves a screen reader and a returning operator with no
+    name for the field.
+
+    The form carries the filter field alone. It carries no offset, so a new
+    filter always opens the first page of the matches.
+
+    portal.js reads data-filter-target, finds the table by that identifier, and
+    hides each row of this page that does not match. The row carries the text to
+    match in data-filter-text, so the filter never reads the markup of a cell.
+  #}
+  <form method="get" action="/select/org" role="search">
+    <label class="form-label" for="org-search">Search the organizations</label>
+    <input type="search"
+           id="org-search"
+           name="q"
+           value="{{ filter_text }}"
+           class="portal-search"
+           data-testid="org-search"
+           data-filter-target="org-table"
+           autocomplete="off"
+           placeholder="Type an organization name"
+           aria-controls="org-table"
+           aria-describedby="org-search-note">
+
+    <button type="submit"
+            class="portal-button portal-button-primary"
+            data-testid="org-search-submit">Search every page</button>
+  </form>
+
+  <p class="portal-card-note" id="org-search-note">
+    The filter reads the organization name and the organization identifier. The
+    portal filters every organization that this sign-in may act on, and then
+    shows one page of the matches.
+    {% if view %}
+      The filter matches {{ row_total }} organizations. This page starts after
+      {{ row_offset }} of them, and one page holds {{ page_size }} rows.
+    {% endif %}
+  </p>
+</div>
+
+<div class="portal-table-scroll">
+  <table class="portal-table" id="org-table">
+    <caption class="visually-hidden">
+      One page of the organizations that this sign-in may act on, with the
+      button that chooses one.
+    </caption>
+
+    <thead>
+      <tr>
+        <th scope="col">Organization</th>
+        <th scope="col">Identifier</th>
+        <th scope="col">Action</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for org in org_rows %}
+        {% set org_id = org.org_id %}
+        {% set org_name = org.name | default('Unnamed organization', true) %}
+
+        <tr data-testid="org-row-{{ org_id }}"
+            data-filter-text="{{ org_name }} {{ org_id }}">
+
+          <th scope="row">{{ org_name }}</th>
+
+          <td class="cell-mono">{{ org_id }}</td>
+
+          <td>
+            {#
+              The token guard matches layout.html. The page stays renderable
+              before the security layer registers the csrf_token global. The
+              server still refuses a post that carries no token, so the fault
+              stays visible instead of passing quietly.
+            #}
+            <form method="post" action="/select/org">
+              <input type="hidden"
+                     name="csrf_token"
+                     value="{{ csrf_token() if csrf_token is defined else '' }}">
+              <input type="hidden" name="org_id" value="{{ org_id }}">
+
+              {#
+                The button names the organization for a screen reader. Every row
+                shows the same visible word, so the visible word alone would
+                leave a screen reader operator with a list of buttons that all
+                read "Choose".
+              #}
+              <button type="submit"
+                      class="portal-button portal-button-primary"
+                      data-testid="org-select-{{ org_id }}">
+                Choose<span class="visually-hidden"> {{ org_name }}</span>
+              </button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        {#
+          An empty page is a real state, not a fault. Three causes reach it, and
+          each one needs different words. A filter that matches nothing is the
+          first, and the operator fixes that one alone. A cloud session that
+          named a privilege list with no organization is the second, and an
+          administrator fixes that one.
+
+          The third cause is a cloud read that never answered. Issue #1989 holds
+          the report. The page told an operator with a valid token that the
+          sign-in reaches no organization, and it sent that operator to an
+          administrator who could change nothing. `privilege_state` tells the
+          second cause from the third.
+        #}
+        <tr>
+          <td colspan="3" class="portal-table-empty" data-testid="orgs-empty-note">
+            {% if filter_text %}
+              No organization matches the filter. Clear the filter to see every
+              organization.
+            {% elif privilege_state | default('known', true) == 'unknown' %}
+              The portal could not read the organizations of this sign-in. The
+              cloud named no privilege list. Check that the Mist cloud above is
+              the cloud that holds your organizations, then sign in again.
+            {% else %}
+              This sign-in reaches no organization. Ask an administrator for
+              access, then sign in again.
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+
+      {#
+        portal.js shows this row when the browser filter hides every row of this
+        page. The row stays in the markup, so the filter needs no element
+        builder.
+      #}
+      <tr data-filter-empty hidden>
+        <td colspan="3" class="portal-table-empty">
+          No organization on this page matches the filter. Press "Search every
+          page" to filter every organization.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="portal-card">
+  <h2 class="portal-card-title">More organizations</h2>
+
+  {#
+    The two controls carry the same test identifier in both states, so a browser
+    test finds the control on the first page and on the last page. Each path
+    carries the filter text, so paging never widens the list.
+  #}
+  <div class="confirm-box-actions">
+    {% if has_previous %}
+      <a class="portal-button"
+         data-testid="org-page-previous"
+         href="{{ previous_url }}">Show the earlier organizations</a>
+    {% else %}
+      <button type="button"
+              class="portal-button"
+              data-testid="org-page-previous"
+              disabled>Show the earlier organizations</button>
+    {% endif %}
+
+    {% if has_next %}
+      <a class="portal-button"
+         data-testid="org-page-next"
+         href="{{ next_url }}">Show the later organizations</a>
+    {% else %}
+      <button type="button"
+              class="portal-button"
+              data-testid="org-page-next"
+              disabled>Show the later organizations</button>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

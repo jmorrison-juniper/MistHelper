@@ -1,0 +1,555 @@
+{
+  "workflow": "companion",
+  "specName": "upgrade version defaults",
+  "branch": "1824-upgrade-capture-defaults",
+  "currentStep": "implement",
+  "status": "implemented",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-08-29T02:33:39.290Z"
+    },
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-08-29T02:37:50.739Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-08-29T02:41:50.794Z"
+    },
+    {
+      "step": "plan",
+      "substep": "research",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T02:51:21.697Z"
+    },
+    {
+      "step": "plan",
+      "substep": "design",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T02:51:40.268Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-08-29T02:53:48.304Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-08-29T02:56:52.091Z"
+    },
+    {
+      "step": "tasks",
+      "substep": "generate",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T03:00:13.748Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-08-29T03:02:36.445Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-08-29T03:06:35.029Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T001",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T03:13:16.307Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T002",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T03:14:33.508Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T003",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T03:15:58.764Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T004",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T03:16:01.218Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T005",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T03:17:50.531Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T006",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T03:17:53.008Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T007",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T03:18:13.083Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T008",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T03:19:19.383Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T009",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T03:19:21.739Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T010",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T03:23:16.251Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T011",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T03:23:18.442Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T012",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T03:25:04.929Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T013",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T03:25:07.613Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T014",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T03:25:10.275Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T015",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T03:25:12.740Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T017",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T03:28:40.341Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T018",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T03:28:43.001Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T016",
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-08-29T03:46:54.659Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T019",
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-08-29T03:46:54.659Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-08-29T03:46:54.659Z"
+    }
+  ],
+  "telemetryInstanceId": "7e71ccbc-77cf-4c3a-9e2f-80fd36fd072f",
+  "last_action": "implementation blocked pending browser suite: capture portal owns port 8056",
+  "coverage": {
+    "FR-001": {
+      "title": "Replace the global target dropdown with AP, switch, and gateway dropdowns.",
+      "tasks": [
+        "T003",
+        "T005",
+        "T007"
+      ]
+    },
+    "FR-002": {
+      "title": "Calculate compatible candidates from versions returned for every eligible device and model in each type.",
+      "tasks": [
+        "T001",
+        "T002"
+      ]
+    },
+    "FR-003": {
+      "title": "Preselect the numerically highest compatible candidate when no valid override applies.",
+      "tasks": [
+        "T001",
+        "T002",
+        "T004"
+      ]
+    },
+    "FR-004": {
+      "title": "Compare candidate versions by numeric version components.",
+      "tasks": [
+        "T001",
+        "T002"
+      ]
+    },
+    "FR-005": {
+      "title": "Read the three optional type-default environment overrides.",
+      "tasks": [
+        "T012",
+        "T013",
+        "T014"
+      ]
+    },
+    "FR-006": {
+      "title": "Apply a type override only when it is compatible with every eligible device of that type.",
+      "tasks": [
+        "T012",
+        "T013"
+      ]
+    },
+    "FR-007": {
+      "title": "Fall back safely to the highest compatible candidate or no selection for an invalid override.",
+      "tasks": [
+        "T001",
+        "T002",
+        "T012",
+        "T013"
+      ]
+    },
+    "FR-008": {
+      "title": "Assign a selected type target only to matching devices that offer it.",
+      "tasks": [
+        "T003",
+        "T007"
+      ]
+    },
+    "FR-009": {
+      "title": "Revalidate every submitted target against current availability before saving.",
+      "tasks": [
+        "T008",
+        "T009",
+        "T010"
+      ]
+    },
+    "FR-010": {
+      "title": "Reject unavailable, unknown, or incompatible targets without persisting them.",
+      "tasks": [
+        "T008",
+        "T009",
+        "T010",
+        "T011"
+      ]
+    },
+    "FR-011": {
+      "title": "Never submit or invoke an upgrade while calculating defaults or validating selections.",
+      "tasks": [
+        "T002",
+        "T004",
+        "T008",
+        "T010"
+      ]
+    },
+    "FR-012": {
+      "title": "Preserve explicit confirmation before a saved plan can start an upgrade.",
+      "tasks": [
+        "T009",
+        "T011"
+      ]
+    },
+    "FR-013": {
+      "title": "Explain when a type has no common compatible version.",
+      "tasks": [
+        "T001",
+        "T002",
+        "T003",
+        "T005"
+      ]
+    }
+  },
+  "size": "normal",
+  "classification": {
+    "projectedFiles": 8,
+    "projectedTasks": 12,
+    "scopeSignal": "none",
+    "verdict": "normal"
+  },
+  "context": [
+    "area: src/upgrade_portal/upgrade/options.py compatibility and target validation",
+    "area: src/upgrade_portal/app/routes/upgrade.py options view and save",
+    "area: src/upgrade_portal/app/assets/templates/upgrade/options.html target controls",
+    "constraint: never select an unavailable version or submit during validation"
+  ],
+  "intent": "Provide safe per-device-type upgrade target defaults while preserving explicit operator confirmation.",
+  "expectations": [
+    "Do not change upgrade execution, confirmation wording, or post-upgrade verification.",
+    "Do not add per-device or per-model override settings.",
+    "Do not invent versions absent from returned availability data."
+  ],
+  "approach": "Add a typed selector that derives one common compatible target for each device type from returned availability data. Render independent type controls, validate current availability on save, and preserve the existing CONFIRM-only start boundary.",
+  "decisions": [
+    {
+      "decision": "Use returned model availability as the only target source",
+      "why": "It proves current device support and prevents invented versions.",
+      "rejected": "A static release catalog"
+    },
+    {
+      "decision": "Intersect candidates by device type",
+      "why": "Every eligible device of a type must offer a selected target.",
+      "rejected": "Union and per-model defaults"
+    },
+    {
+      "decision": "Validate against a current save-time read",
+      "why": "Page data can become stale or be tampered with.",
+      "rejected": "Trusting the browser body"
+    },
+    {
+      "decision": "Keep individual saved targets and the confirmation boundary",
+      "why": "The existing body and start gate preserve safe no-submit behavior.",
+      "rejected": "A new type-target API or save-time upgrade"
+    },
+    {
+      "decision": "Use the three approved type-specific environment variables",
+      "why": "Each override stays isolated and must match a compatible returned candidate.",
+      "rejected": "A global, per-device, or per-model override"
+    }
+  ],
+  "step_summaries": {
+    "plan": {
+      "summary": "Defined typed per-type defaults, safe save validation, UI, configuration, documentation, and tests.",
+      "key_finding": "The current options view and save builder already form the read-only boundaries needed for safe typed discovery."
+    },
+    "tasks": {
+      "summary": "19 tasks across setup, foundational, three user-story phases, and polish in ordered waves."
+    }
+  },
+  "currentTask": "T019",
+  "task_summaries": {
+    "T001": {
+      "status": "DONE",
+      "did": "Added failing selector tests for normalized common candidates and no-common warnings.",
+      "files": [
+        "tests/unit/upgrade_portal/test_upgrade_options.py"
+      ]
+    },
+    "T002": {
+      "status": "DONE",
+      "did": "Implemented typed compatibility selection, numeric ranking, safe defaults, and no-common warnings.",
+      "files": [
+        "src/upgrade_portal/upgrade/options.py"
+      ]
+    },
+    "T003": {
+      "status": "DONE",
+      "did": "Updated browser assertions for three typed controls and removed global control.",
+      "files": [
+        "tests/e2e/upgrade_portal/test_upgrade.py"
+      ]
+    },
+    "T004": {
+      "status": "DONE",
+      "did": "Added failing route contract coverage for typed options controls.",
+      "files": [
+        "tests/contract/upgrade_portal/test_upgrade_options.py"
+      ]
+    },
+    "T005": {
+      "status": "DONE",
+      "did": "Replaced global version picker with AP, switch, and gateway controls and warnings.",
+      "files": [
+        "src/upgrade_portal/app/assets/templates/upgrade/options.html"
+      ]
+    },
+    "T006": {
+      "status": "DONE",
+      "did": "Passed typed candidates, selections, and warnings through the options render boundary.",
+      "files": [
+        "src/upgrade_portal/app/routes/upgrade.py"
+      ]
+    },
+    "T007": {
+      "status": "DONE",
+      "did": "Bound typed controls to matching device rows and exact offered versions only.",
+      "files": [
+        "src/upgrade_portal/app/assets/static/js/portal.js"
+      ]
+    },
+    "T008": {
+      "status": "DONE",
+      "did": "Added failing stale-availability save validation unit coverage.",
+      "files": [
+        "tests/unit/upgrade_portal/test_upgrade_options.py"
+      ]
+    },
+    "T009": {
+      "status": "DONE",
+      "did": "Added failing save-route atomic rejection contract coverage.",
+      "files": [
+        "tests/contract/upgrade_portal/test_upgrade_options.py"
+      ]
+    },
+    "T010": {
+      "status": "DONE",
+      "did": "Re-read availability during save and atomically rejected unavailable targets or unreadable validation.",
+      "files": [
+        "src/upgrade_portal/upgrade/options.py"
+      ]
+    },
+    "T011": {
+      "status": "DONE",
+      "did": "Kept the existing bad_option route contract and confirmation-only start boundary.",
+      "files": [
+        "src/upgrade_portal/app/routes/upgrade.py"
+      ]
+    },
+    "T012": {
+      "status": "DONE",
+      "did": "Added unit coverage for all three isolated type override variables.",
+      "files": [
+        "tests/unit/upgrade_portal/test_upgrade_options.py"
+      ]
+    },
+    "T013": {
+      "status": "DONE",
+      "did": "Validated type-specific environment overrides against normalized compatible candidates.",
+      "files": [
+        "src/upgrade_portal/upgrade/options.py"
+      ]
+    },
+    "T014": {
+      "status": "DONE",
+      "did": "Documented optional per-type default firmware environment variables.",
+      "files": [
+        "deploy/.env.example"
+      ]
+    },
+    "T015": {
+      "status": "DONE",
+      "did": "Documented typed safe defaults, fallback, validation, and confirmation gate.",
+      "files": [
+        "documentation/upgrade_capture_portal.md"
+      ]
+    },
+    "T017": {
+      "status": "DONE",
+      "did": "Ran Ruff lint and format checks for changed portal Python and tests.",
+      "files": [
+        "pyproject.toml",
+        "src/upgrade_portal/upgrade/options.py",
+        "src/upgrade_portal/app/routes/upgrade.py",
+        "src/upgrade_portal/app/assets/templates/upgrade/options.html",
+        "src/upgrade_portal/app/assets/static/js/portal.js"
+      ]
+    },
+    "T018": {
+      "status": "DONE",
+      "did": "Verified all documented type-default variables match implementation and contract names.",
+      "files": [
+        "deploy/.env.example",
+        "documentation/upgrade_capture_portal.md",
+        "specs/991-upgrade-version-defaults/contracts/http-api.md"
+      ]
+    }
+  },
+  "verified": [
+    {
+      "what": "focused unit and route-contract suites",
+      "command": "pytest tests/unit/upgrade_portal/test_upgrade_options.py tests/contract/upgrade_portal/test_upgrade_options.py -q",
+      "result": "113 passed",
+      "warnings": []
+    },
+    {
+      "what": "lint and format",
+      "command": "ruff check ...; ruff format --check ...",
+      "result": "passed",
+      "warnings": []
+    },
+    {
+      "what": "configuration names",
+      "command": "PowerShell Select-String contract check",
+      "result": "all three variables match",
+      "warnings": []
+    }
+  ],
+  "concerns": [
+    {
+      "note": "Browser suite could not start because the user capture-portal process owns port 8056 (PID 237340); it was left running.",
+      "step": "implement"
+    }
+  ]
+}

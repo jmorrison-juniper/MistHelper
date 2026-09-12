@@ -1,0 +1,922 @@
+{#
+  upgrade/options.html - the upgrade options page of the upgrade capture portal.
+
+  Why this file exists:
+    The operator must choose a target version for each device before the
+    upgrade starts. contracts/http-api.md:201-216 fixes the body of
+    POST /api/runs/<run_id>/options. This page builds that exact body. One page
+    holds the four option controls and the target table, so the operator reads
+    every choice in one view and the plan warnings sit next to the choice that
+    caused them.
+
+  Why the page holds no script:
+    The content security policy is 'self' only. See src/upgrade_portal/app/
+    security.py. The policy blocks an inline script and blocks the style
+    attribute. Every behavior of this page therefore lives in portal.js, and
+    every color lives in a stylesheet.
+
+  Why the links hold a literal path:
+    contracts/http-api.md fixes every public path of this portal. The blueprint
+    endpoint names are not fixed, and the route modules do not exist yet. A
+    url_for call against an endpoint name would raise while this page renders,
+    so every path follows the contract. url_for stays for a static asset.
+
+  The contract with portal.js:
+    Each device select carries data-version-for with the MAC address. The
+    apply-to-every-device select carries data-version-all. The save button
+    carries data-run-id and data-next-url. portal.js reads those four hooks,
+    builds the option body, and sends POST /api/runs/<run_id>/options.
+
+  Variables a route may supply:
+    run_id            - the run identifier. The save call needs it.
+    site_name         - the site name for the card note.
+    targets           - the list of device records. Each record may hold mac,
+                        name, device_type, model, version_before, and
+                        version_target. The mac value is lower case with no
+                        separator, which matches data-model.md section 4.2.
+    versions_by_model - the map of model to version list. The body of
+                        GET /api/runs/<run_id>/versions carries this map.
+    options           - the chosen options. Holds reboot, junos_file_action,
+                        and strategy. data-model.md section 4 stores the same
+                        three names.
+    warnings          - the plain sentences that plan_upgrade returned.
+    confirm_url       - the page that follows this one. contracts/http-api.md
+                        fixes no page path for it, so the route lane owns the
+                        value. The default follows the shape of the run path.
+    page_title        - the heading text and the tab text.
+    theme, themes     - see layout.html.
+#}
+{% extends 'layout.html' %}
+
+{#
+  Every value passes through a default filter first. The portal runs Jinja with
+  the strict undefined type, so a missing key raises instead of rendering an
+  empty string. The default filter tests for the undefined value before it
+  reads it, so this step holds for every key the route does not supply.
+#}
+{% set run_key = run_id | default('', true) %}
+{% set target_rows = targets | default([], true) %}
+{% set versions_map = versions_by_model | default({}, true) %}
+{% set typed_selections = type_selections | default({}, true) %}
+{% set selected_type_rows = selected_types | default(['ap', 'switch', 'gateway'], true) %}
+{% set warning_lines = warnings | default([], true) %}
+{% set option_values = options | default({}, true) %}
+{% set site_label = site_name | default('', true) %}
+{% set site_key = site_id | default('', true) %}
+{% set next_url = confirm_url | default('/runs/' ~ run_key ~ '/confirm', true) %}
+
+{#
+  The two strategy values come from src/firmware/upgrade_service.py:43-44. The
+  cloud reads the value, so the option value never changes for a wording change.
+#}
+{% set chosen_strategy = option_values.strategy | default('big_bang', true) %}
+
+{#
+  A boolean uses the default filter with one argument only. The second argument
+  turns the filter into a truth test, and a false value then reads as a missing
+  value. An operator who cleared the reboot box would see the box checked again
+  on the next visit.
+#}
+{% set reboot_chosen = option_values.reboot | default(true) %}
+{% set junos_action_chosen = option_values.junos_file_action | default(false) %}
+{% set force_chosen = option_values.force | default(false) %}
+{% set stable_version_chosen = option_values.stable_version | default(false) %}
+{% set p2p_chosen = option_values.get('peer_to_peer', {}).get('enable_p2p', false) %}
+
+{#
+  Issue #2156 draws the advanced controls. The route sends one flat mapping of
+  text values, because every advanced control is a text field or a select and
+  both read text. The route owns the shape, so this template never walks the
+  three nested option groups on its own.
+#}
+{% set advanced_values = advanced | default({}, true) %}
+
+{#
+  Issue #2186 names the value that an empty control keeps. The route sends one
+  flat mapping, because the cloud schema and the environment both live on the
+  server. A default written into this template by hand would drift from the
+  schema.
+
+  Warning: a default below is placeholder text alone. It must never become the
+  value attribute of a control. A browser that sent one would start a run with a
+  value that the operator never chose.
+#}
+{% set option_default = defaults | default({}, true) %}
+
+{#
+  The apply-to-every-device control needs one list that holds every version of
+  every model. A model that does not offer the chosen version keeps its own
+  value, so this list never forces a version onto a device that cannot take it.
+#}
+{% set every_version = versions_map.values() | map('list') | sum(start=[]) | unique | sort %}
+
+{% block title %}{{ page_title | default('Upgrade options', true) }}{% endblock %}
+
+{% block heading %}<h1>{{ page_title | default('Upgrade options', true) }}</h1>{% endblock %}
+
+{% block content %}
+{#
+  FR-072 gives one site to one operator. A saved option writes to the site, so
+  the banner sits above the option controls. `select.lock_banner_context`
+  supplies the six values.
+#}
+{% include 'partials/lock_banner.html' %}
+
+<div class="portal-card">
+  <h2 class="portal-card-title">Choose the upgrade options</h2>
+
+  {#
+    Issue #2100 names the site in words on every page that leads to a firmware
+    write. The identifier stays on the page, because an operator quotes the
+    identifier in a support case. The span holds the value alone, so a test
+    reads the value without the sentence around it.
+  #}
+  {% if site_label %}
+    <p class="portal-card-note">The upgrade runs at the site <span data-testid="upgrade-site-name">{{ site_label }}</span>.</p>
+  {% endif %}
+
+  {% if site_key %}
+    <p class="portal-card-note">The site identifier is <code data-testid="upgrade-site-id">{{ site_key }}</code>.</p>
+  {% endif %}
+
+  <fieldset class="bubble-group mb-3" data-testid="upgrade-device-type-selection">
+    <legend class="bubble-group-legend">Device types to upgrade</legend>
+    <div class="bubble-option">
+      <input type="checkbox"
+             id="upgrade-type-all"
+             class="bubble-option-input"
+             data-testid="upgrade-type-all"
+             data-select-all-device-types
+             {{ 'checked' if selected_type_rows | length == 3 else '' }}>
+      <label class="bubble-option-label" for="upgrade-type-all">All supported device types</label>
+    </div>
+    {% for device_type, label in [('ap', 'Access points'), ('switch', 'Switches'), ('gateway', 'Gateways')] %}
+      <div class="bubble-option">
+        <input type="checkbox"
+               id="upgrade-type-{{ device_type }}"
+               class="bubble-option-input"
+               data-testid="upgrade-type-{{ device_type }}"
+               data-device-type-choice="{{ device_type }}"
+               value="{{ device_type }}"
+               {{ 'checked' if device_type in selected_type_rows else '' }}>
+        <label class="bubble-option-label" for="upgrade-type-{{ device_type }}">{{ label }}</label>
+      </div>
+    {% endfor %}
+    <p class="bubble-option-hint">
+      Select all, one, or more supported device types. The portal captures every
+      device before it prepares the selected upgrade plan.
+    </p>
+  </fieldset>
+
+  {% for device_type, label in [('ap', 'access points'), ('switch', 'switches'), ('gateway', 'gateways')] %}
+    {% set selection = typed_selections.get(device_type, {}) %}
+    {% set candidates = selection.get('candidates', []) %}
+    {% set selected = selection.get('selected_version', '') %}
+    {#
+      Issue #2198 hides the applier of a device type that the run does not hold.
+      An applier that named an absent type invited a version choice that reaches
+      no device.
+    #}
+    <div class="mb-3" data-requires-device-type="{{ device_type }}">
+      <label class="form-label" for="upgrade-version-select-{{ device_type }}">
+        Apply a version to compatible {{ label }}
+      </label>
+      <select class="form-select"
+              id="upgrade-version-select-{{ device_type }}"
+              data-testid="upgrade-version-select-{{ device_type }}"
+              data-version-type="{{ device_type }}"
+              aria-describedby="upgrade-version-select-{{ device_type }}-note">
+        <option value="">Choose a version for each {{ label }} device below</option>
+        {% for version in candidates %}
+          <option value="{{ version }}" {{ 'selected' if version == selected else '' }}>{{ version }}</option>
+        {% endfor %}
+      </select>
+      <p class="portal-card-note" id="upgrade-version-select-{{ device_type }}-note">
+        {{ selection.get('warning', 'The portal applies this version only to compatible ' ~ label ~ '.') }}
+      </p>
+    </div>
+  {% endfor %}
+
+  <fieldset class="bubble-group mb-3"
+            data-testid="upgrade-strategy-group"
+            aria-describedby="upgrade-strategy-note">
+    {#
+      Delta U2 shows the strategy as a radio group, so both choices show at
+      once. Big bang writes every device together. Canary writes a small set
+      first. The value strings match the saved strategy field.
+    #}
+    <legend class="bubble-group-legend">Upgrade strategy</legend>
+
+    <div class="bubble-option">
+      <input type="radio"
+             id="upgrade-strategy-big-bang"
+             name="upgrade-strategy"
+             class="bubble-option-input"
+             data-testid="upgrade-strategy-big-bang"
+             value="big_bang"
+             {{ 'checked' if chosen_strategy == 'big_bang' else '' }}>
+      <label class="bubble-option-label" for="upgrade-strategy-big-bang">
+        All devices at the same time
+      </label>
+    </div>
+
+    <div class="bubble-option">
+      <input type="radio"
+             id="upgrade-strategy-canary"
+             name="upgrade-strategy"
+             class="bubble-option-input"
+             data-testid="upgrade-strategy-canary"
+             value="canary"
+             {{ 'checked' if chosen_strategy == 'canary' else '' }}>
+      <label class="bubble-option-label" for="upgrade-strategy-canary">
+        A few devices first, then the rest
+      </label>
+    </div>
+
+    {#
+      Issue #2156 adds the two remaining strategy words of the cloud schema.
+      Serial writes one device at a time, which keeps a site on one link
+      reachable. The radio word walks the radio neighbourhood in batches, and
+      the cloud reads it for an access point alone.
+    #}
+    <div class="bubble-option">
+      <input type="radio"
+             id="upgrade-strategy-serial"
+             name="upgrade-strategy"
+             class="bubble-option-input"
+             data-testid="upgrade-strategy-serial"
+             value="serial"
+             {{ 'checked' if chosen_strategy == 'serial' else '' }}>
+      <label class="bubble-option-label" for="upgrade-strategy-serial">
+        One device at a time
+      </label>
+    </div>
+
+    <div class="bubble-option" data-requires-device-type="ap" data-requires-strategy-option="rrm">
+      <input type="radio"
+             id="upgrade-strategy-rrm"
+             name="upgrade-strategy"
+             class="bubble-option-input"
+             data-testid="upgrade-strategy-rrm"
+             value="rrm"
+             {{ 'checked' if chosen_strategy == 'rrm' else '' }}>
+      <label class="bubble-option-label" for="upgrade-strategy-rrm">
+        Access points in radio batches, so coverage holds
+      </label>
+    </div>
+
+    <p class="bubble-option-hint" id="upgrade-strategy-note">
+      The second strategy upgrades 1 percent, then 10 percent, then 50 percent,
+      then the rest. The fourth strategy reaches an access point only. The
+      portal sends no strategy for a switch or a gateway of that run.
+    </p>
+  </fieldset>
+
+  <fieldset class="bubble-group mb-3"
+            data-requires-device-type="switch gateway"
+            data-testid="upgrade-reboot-group"
+            aria-describedby="upgrade-reboot-note">
+    {#
+      The cloud reboots an access point on its own, so this option reaches a
+      switch and a gateway only. See src/firmware/upgrade_service.py:49-51.
+      Issue #2185 adds the attribute that holds the rule, because the comment
+      above stated it and the markup did not.
+    #}
+    <legend class="bubble-group-legend">Reboot each switch and each gateway after the write</legend>
+
+    <div class="bubble-option">
+      <input type="radio"
+             id="upgrade-reboot-yes"
+             name="upgrade-reboot"
+             class="bubble-option-input"
+             data-testid="upgrade-reboot-yes"
+             value="yes"
+             {{ 'checked' if reboot_chosen else '' }}>
+      <label class="bubble-option-label" for="upgrade-reboot-yes">
+        Yes, reboot each switch and each gateway after the write
+      </label>
+    </div>
+
+    <div class="bubble-option">
+      <input type="radio"
+             id="upgrade-reboot-no"
+             name="upgrade-reboot"
+             class="bubble-option-input"
+             data-testid="upgrade-reboot-no"
+             value="no"
+             {{ 'checked' if not reboot_chosen else '' }}>
+      <label class="bubble-option-label" for="upgrade-reboot-no">
+        No, hold the reboot for a later manual window
+      </label>
+    </div>
+
+    <p class="bubble-option-hint" id="upgrade-reboot-note">
+      An access point reboots on its own, so this option does not reach it. A
+      device that does not reboot keeps the old firmware until the next reboot.
+    </p>
+  </fieldset>
+
+  <fieldset class="bubble-group mb-3"
+            data-requires-device-type="switch gateway"
+            data-testid="upgrade-junos-file-action-group"
+            aria-describedby="upgrade-junos-file-action-note">
+    {#
+      The Junos file action runs after the reboot. The radio group shows both
+      choices at once, so the operator reads the second choice without a menu.
+      Issue #2185 hides the group for a run of access points alone, because the
+      cloud rejects the field on an access point.
+    #}
+    <legend class="bubble-group-legend">Complete the Junos file action after the reboot</legend>
+
+    <div class="bubble-option">
+      <input type="radio"
+             id="upgrade-junos-file-action-yes"
+             name="upgrade-junos-file-action"
+             class="bubble-option-input"
+             data-testid="upgrade-junos-file-action-yes"
+             value="yes"
+             {{ 'checked' if junos_action_chosen else '' }}>
+      <label class="bubble-option-label" for="upgrade-junos-file-action-yes">
+        Yes, complete the Junos file action after the reboot
+      </label>
+    </div>
+
+    <div class="bubble-option">
+      <input type="radio"
+             id="upgrade-junos-file-action-no"
+             name="upgrade-junos-file-action"
+             class="bubble-option-input"
+             data-testid="upgrade-junos-file-action-no"
+             value="no"
+             {{ 'checked' if not junos_action_chosen else '' }}>
+      <label class="bubble-option-label" for="upgrade-junos-file-action-no">
+        No, skip the Junos file action
+      </label>
+    </div>
+
+    <p class="bubble-option-hint" id="upgrade-junos-file-action-note">
+      A Junos device reads this option. The action adds time to the upgrade of
+      each device.
+    </p>
+  </fieldset>
+
+  {#
+    Issue #2156 exposes the remaining upgrade fields of the cloud schema. Each
+    control keeps the current behavior as its default, so an operator who
+    changes nothing sends the same body as before.
+
+    Two attributes drive the visibility. `data-requires-device-type` names every
+    device type that reads the control, and `data-requires-strategy` names every
+    strategy that reads it. portal.js sets the hidden attribute from the device
+    type checkboxes and the strategy radio group. The markup carries no style
+    attribute, because the content security policy blocks one.
+  #}
+  <div class="portal-card" data-testid="upgrade-advanced-options">
+    <h2 class="portal-card-title">Advanced upgrade controls</h2>
+
+    <p class="portal-card-note">
+      Each control below keeps the cloud default until you change it. The page
+      hides a control that the device types of this run do not read.
+    </p>
+
+    <div class="mb-3" data-requires-strategy="canary serial rrm" data-testid="upgrade-max-failure-percentage-field">
+      <label class="form-label" for="upgrade-max-failure-percentage">
+        Failures allowed across the whole run, as a percentage
+      </label>
+      <input type="number"
+             class="form-control"
+             id="upgrade-max-failure-percentage"
+             data-testid="upgrade-max-failure-percentage"
+             min="0"
+             max="100"
+             step="1"
+             value="{{ advanced_values.get('max_failure_percentage') | default('', true) }}"
+             placeholder="{{ option_default.get('max_failure_percentage') | default('', true) }}"
+             aria-describedby="upgrade-max-failure-percentage-note">
+      <p class="portal-card-note" id="upgrade-max-failure-percentage-note">
+        Leave the field empty to keep the cloud default of 5 percent. The cloud
+        reads this field for every strategy above one write of every device.
+      </p>
+    </div>
+
+    <div class="mb-3" data-requires-strategy="canary" data-testid="upgrade-canary-phases-field">
+      <label class="form-label" for="upgrade-canary-phases">
+        Phases of the staged upgrade, as percentages
+      </label>
+      <input type="text"
+             class="form-control"
+             id="upgrade-canary-phases"
+             data-testid="upgrade-canary-phases"
+             inputmode="numeric"
+             autocomplete="off"
+             value="{{ advanced_values.get('canary_phases') | default('', true) }}"
+             placeholder="{{ option_default.get('canary_phases') | default('', true) }}"
+             aria-describedby="upgrade-canary-phases-note">
+      <p class="portal-card-note" id="upgrade-canary-phases-note">
+        Write one whole number for each phase, separated by commas. Leave the
+        field empty to keep the cloud default of 1, 10, 50, and 100.
+      </p>
+    </div>
+
+    <div class="mb-3"
+         data-requires-strategy="canary"
+         data-requires-filled="upgrade-canary-phases"
+         data-testid="upgrade-max-failures-field">
+      <label class="form-label" for="upgrade-max-failures">
+        Failures allowed inside each phase, as a count
+      </label>
+      <input type="text"
+             class="form-control"
+             id="upgrade-max-failures"
+             data-testid="upgrade-max-failures"
+             inputmode="numeric"
+             autocomplete="off"
+             value="{{ advanced_values.get('max_failures') | default('', true) }}"
+             placeholder="{{ option_default.get('max_failures') | default('', true) }}"
+             aria-describedby="upgrade-max-failures-note">
+      <p class="portal-card-note" id="upgrade-max-failures-note">
+        Write one count for each phase above. The portal refuses a list that
+        does not match the phase list. Leave the field empty to use the
+        percentage instead.
+      </p>
+    </div>
+
+    {#
+      Issue #2157 adds the download start. Every one of the three cloud upgrade
+      schemas holds the field, so the control names no device type and no
+      family. A session smart router reads it as the moment that the download
+      begins, and the reboot moment below follows it.
+    #}
+    <div class="mb-3" data-testid="upgrade-start-time-field">
+      <label class="form-label" for="upgrade-start-time">
+        Begin the firmware download after this much time
+      </label>
+      <input type="text"
+             class="form-control"
+             id="upgrade-start-time"
+             data-testid="upgrade-start-time"
+             autocomplete="off"
+             placeholder="5m"
+             value="{{ advanced_values.get('start_time') | default('', true) }}"
+             aria-describedby="upgrade-start-time-note">
+      <p class="portal-card-note" id="upgrade-start-time-note">
+        Write a number and a unit. Use s for seconds, m for minutes, h for
+        hours, and d for days. An example is 8h. The time counts from the moment
+        that you start the job. Leave the field empty to begin at once.
+      </p>
+    </div>
+
+    <div class="mb-3"
+         data-requires-device-type="switch gateway"
+         data-requires-control="upgrade-reboot-group:yes"
+         data-testid="upgrade-reboot-at-field">
+      <label class="form-label" for="upgrade-reboot-at">
+        Reboot each switch and each gateway after this much time
+      </label>
+      <input type="text"
+             class="form-control"
+             id="upgrade-reboot-at"
+             data-testid="upgrade-reboot-at"
+             autocomplete="off"
+             placeholder="8h"
+             value="{{ advanced_values.get('reboot_at') | default('', true) }}"
+             aria-describedby="upgrade-reboot-at-note">
+      <p class="portal-card-note" id="upgrade-reboot-at-note">
+        Write a number and a unit, such as 8h. The time counts from the moment
+        that you start the job. Leave the field empty to reboot as soon as the
+        write ends. A session smart router holds no reboot control, so a no on
+        the control above sends the value that disables its reboot.
+      </p>
+    </div>
+
+    <fieldset class="bubble-group mb-3"
+              data-testid="upgrade-force-group"
+              aria-describedby="upgrade-force-note">
+      <legend class="bubble-group-legend">Write the firmware onto a device that already runs the version</legend>
+
+      <div class="bubble-option">
+        <input type="radio"
+               id="upgrade-force-no"
+               name="upgrade-force"
+               class="bubble-option-input"
+               data-testid="upgrade-force-no"
+               value="no"
+               {{ 'checked' if not force_chosen else '' }}>
+        <label class="bubble-option-label" for="upgrade-force-no">
+          No, skip a device that already runs the version
+        </label>
+      </div>
+
+      <div class="bubble-option">
+        <input type="radio"
+               id="upgrade-force-yes"
+               name="upgrade-force"
+               class="bubble-option-input"
+               data-testid="upgrade-force-yes"
+               value="yes"
+               {{ 'checked' if force_chosen else '' }}>
+        <label class="bubble-option-label" for="upgrade-force-yes">
+          Yes, write the firmware again and reboot the device
+        </label>
+      </div>
+
+      <p class="bubble-option-hint" id="upgrade-force-note">
+        Warning: the second choice reboots a device that needed no upgrade. The
+        service of that device stops for the length of one reboot.
+      </p>
+    </fieldset>
+
+    <fieldset class="bubble-group mb-3"
+              data-testid="upgrade-stable-version-group"
+              aria-describedby="upgrade-stable-version-note">
+      <legend class="bubble-group-legend">Choose the firmware version</legend>
+
+      <div class="bubble-option">
+        <input type="radio"
+               id="upgrade-stable-version-no"
+               name="upgrade-stable-version"
+               class="bubble-option-input"
+               data-testid="upgrade-stable-version-no"
+               value="no"
+               {{ 'checked' if not stable_version_chosen else '' }}>
+        <label class="bubble-option-label" for="upgrade-stable-version-no">
+          Use the version that I picked for each device below
+        </label>
+      </div>
+
+      <div class="bubble-option">
+        <input type="radio"
+               id="upgrade-stable-version-yes"
+               name="upgrade-stable-version"
+               class="bubble-option-input"
+               data-testid="upgrade-stable-version-yes"
+               value="yes"
+               {{ 'checked' if stable_version_chosen else '' }}>
+        <label class="bubble-option-label" for="upgrade-stable-version-yes">
+          Use the vendor stable build for every device
+        </label>
+      </div>
+
+      <p class="bubble-option-hint" id="upgrade-stable-version-note">
+        Warning: the second choice ignores every version of the table below. The
+        cloud picks the build, and this page cannot name it before the run.
+      </p>
+    </fieldset>
+
+    <fieldset class="bubble-group mb-3"
+              data-requires-device-type="ap"
+              data-testid="upgrade-p2p-group"
+              aria-describedby="upgrade-p2p-note">
+      <legend class="bubble-group-legend">Let an access point take the firmware from a neighbour</legend>
+
+      <div class="bubble-option">
+        <input type="radio"
+               id="upgrade-enable-p2p-no"
+               name="upgrade-enable-p2p"
+               class="bubble-option-input"
+               data-testid="upgrade-enable-p2p-no"
+               value="no"
+               {{ 'checked' if not p2p_chosen else '' }}>
+        <label class="bubble-option-label" for="upgrade-enable-p2p-no">
+          No, every access point downloads from the cloud
+        </label>
+      </div>
+
+      <div class="bubble-option">
+        <input type="radio"
+               id="upgrade-enable-p2p-yes"
+               name="upgrade-enable-p2p"
+               class="bubble-option-input"
+               data-testid="upgrade-enable-p2p-yes"
+               value="yes"
+               {{ 'checked' if p2p_chosen else '' }}>
+        <label class="bubble-option-label" for="upgrade-enable-p2p-yes">
+          Yes, an access point may take the firmware from a neighbour
+        </label>
+      </div>
+
+      <p class="bubble-option-hint" id="upgrade-p2p-note">
+        The second choice saves the link of a site with a slow connection. The
+        cloud reads this control for an access point only.
+      </p>
+    </fieldset>
+
+    <div class="mb-3"
+         data-requires-device-type="ap"
+         data-requires-control="upgrade-p2p-group:yes"
+         data-testid="upgrade-p2p-cluster-size-field">
+      <label class="form-label" for="upgrade-p2p-cluster-size">
+        Access points of one download group
+      </label>
+      <input type="number"
+             class="form-control"
+             id="upgrade-p2p-cluster-size"
+             data-testid="upgrade-p2p-cluster-size"
+             min="0"
+             step="1"
+             value="{{ advanced_values.get('p2p_cluster_size') | default('', true) }}"
+             placeholder="{{ option_default.get('p2p_cluster_size') | default('', true) }}"
+             aria-describedby="upgrade-p2p-cluster-size-note">
+      <p class="portal-card-note" id="upgrade-p2p-cluster-size-note">
+        Leave the field empty to keep the cloud default of 10. The cloud reads
+        this field only when the control above says yes.
+      </p>
+    </div>
+
+    <div class="mb-3"
+         data-requires-device-type="ap"
+         data-requires-control="upgrade-p2p-group:yes"
+         data-testid="upgrade-p2p-parallelism-field">
+      <label class="form-label" for="upgrade-p2p-parallelism">
+        Download groups that run together
+      </label>
+      <input type="number"
+             class="form-control"
+             id="upgrade-p2p-parallelism"
+             data-testid="upgrade-p2p-parallelism"
+             min="0"
+             step="1"
+             value="{{ advanced_values.get('p2p_parallelism') | default('', true) }}"
+             placeholder="{{ option_default.get('p2p_parallelism') | default('', true) }}"
+             aria-describedby="upgrade-p2p-parallelism-note">
+      <p class="portal-card-note" id="upgrade-p2p-parallelism-note">
+        Leave the field empty to keep the cloud default. The cloud reads this
+        field only when the control above says yes.
+      </p>
+    </div>
+
+    <div class="mb-3"
+         data-requires-device-type="ap"
+         data-requires-strategy="rrm"
+         data-testid="upgrade-rrm-first-batch-percentage-field">
+      <label class="form-label" for="upgrade-rrm-first-batch-percentage">
+        Access points of the first radio batch, as a percentage
+      </label>
+      <input type="number"
+             class="form-control"
+             id="upgrade-rrm-first-batch-percentage"
+             data-testid="upgrade-rrm-first-batch-percentage"
+             min="0"
+             max="100"
+             step="1"
+             value="{{ advanced_values.get('rrm_first_batch_percentage') | default('', true) }}"
+             placeholder="{{ option_default.get('rrm_first_batch_percentage') | default('', true) }}"
+             aria-describedby="upgrade-rrm-first-batch-percentage-note">
+      <p class="portal-card-note" id="upgrade-rrm-first-batch-percentage-note">
+        Leave the field empty to keep the cloud default.
+      </p>
+    </div>
+
+    <div class="mb-3"
+         data-requires-device-type="ap"
+         data-requires-strategy="rrm"
+         data-testid="upgrade-rrm-max-batch-percentage-field">
+      <label class="form-label" for="upgrade-rrm-max-batch-percentage">
+        Largest radio batch after the first, as a percentage
+      </label>
+      <input type="number"
+             class="form-control"
+             id="upgrade-rrm-max-batch-percentage"
+             data-testid="upgrade-rrm-max-batch-percentage"
+             min="0"
+             max="100"
+             step="1"
+             value="{{ advanced_values.get('rrm_max_batch_percentage') | default('', true) }}"
+             placeholder="{{ option_default.get('rrm_max_batch_percentage') | default('', true) }}"
+             aria-describedby="upgrade-rrm-max-batch-percentage-note">
+      <p class="portal-card-note" id="upgrade-rrm-max-batch-percentage-note">
+        Leave the field empty to keep the cloud default.
+      </p>
+    </div>
+
+    <div class="mb-3"
+         data-requires-device-type="ap"
+         data-requires-strategy="rrm"
+         data-testid="upgrade-rrm-node-order-field">
+      <label class="form-label" for="upgrade-rrm-node-order">
+        Order of the radio batches across the site
+      </label>
+      <select class="form-select"
+              id="upgrade-rrm-node-order"
+              data-testid="upgrade-rrm-node-order"
+              aria-describedby="upgrade-rrm-node-order-note">
+        <option value="">Keep the cloud default</option>
+        {% for word, label in [('center_to_fringe', 'Start at the center of the site'),
+                               ('fringe_to_center', 'Start at the edge of the site')] %}
+          <option value="{{ word }}"
+                  {{ 'selected' if advanced_values.get('rrm_node_order') == word else '' }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <p class="portal-card-note" id="upgrade-rrm-node-order-note">
+        The cloud walks the radio neighbourhood in this order.
+      </p>
+    </div>
+
+    <div class="mb-3"
+         data-requires-device-type="ap"
+         data-requires-strategy="rrm"
+         data-testid="upgrade-rrm-mesh-upgrade-field">
+      <label class="form-label" for="upgrade-rrm-mesh-upgrade">
+        Order of the mesh access points at the end of the run
+      </label>
+      <select class="form-select"
+              id="upgrade-rrm-mesh-upgrade"
+              data-testid="upgrade-rrm-mesh-upgrade"
+              aria-describedby="upgrade-rrm-mesh-upgrade-note">
+        <option value="">Keep the cloud default</option>
+        {% for word, label in [('parallel', 'All mesh access points together'),
+                               ('sequential', 'One mesh access point at a time')] %}
+          <option value="{{ word }}"
+                  {{ 'selected' if advanced_values.get('rrm_mesh_upgrade') == word else '' }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <p class="portal-card-note" id="upgrade-rrm-mesh-upgrade-note">
+        A mesh access point carries the traffic of another access point, so the
+        cloud upgrades it last.
+      </p>
+    </div>
+
+    <div class="mb-3"
+         data-requires-device-type="ap"
+         data-requires-strategy="rrm"
+         data-testid="upgrade-rrm-slow-ramp-field">
+      <label class="form-label" for="upgrade-rrm-slow-ramp">
+        Growth of each radio batch
+      </label>
+      <select class="form-select"
+              id="upgrade-rrm-slow-ramp"
+              data-testid="upgrade-rrm-slow-ramp"
+              aria-describedby="upgrade-rrm-slow-ramp-note">
+        <option value="">Keep the cloud default</option>
+        {% for word, label in [('yes', 'Grow each batch slowly'), ('no', 'Grow each batch at the usual rate')] %}
+          <option value="{{ word }}"
+                  {{ 'selected' if advanced_values.get('rrm_slow_ramp') == word else '' }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <p class="portal-card-note" id="upgrade-rrm-slow-ramp-note">
+        A slow growth keeps more coverage while the firmware moves.
+      </p>
+    </div>
+
+    {#
+      Issue #2157 adds the release train of a session smart router. Only that
+      cloud schema holds a channel, and the page cannot read the model rules
+      that name a router. `data-requires-family` therefore names the family, and
+      portal.js reads the family of each selected device row.
+    #}
+    <div class="mb-3"
+         data-requires-family="ssr"
+         data-testid="upgrade-ssr-channel-field">
+      <label class="form-label" for="upgrade-ssr-channel">
+        Release train of each session smart router
+      </label>
+      <select class="form-select"
+              id="upgrade-ssr-channel"
+              data-testid="upgrade-ssr-channel"
+              aria-describedby="upgrade-ssr-channel-note">
+        <option value="">Keep the train that the router follows now</option>
+        {% for word, label in [('stable', 'Stable, the tested build'),
+                               ('beta', 'Beta, the build under test'),
+                               ('alpha', 'Alpha, the earliest build')] %}
+          <option value="{{ word }}"
+                  {{ 'selected' if advanced_values.get('channel') == word else '' }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <p class="portal-card-note" id="upgrade-ssr-channel-note">
+        Warning: an alpha build or a beta build carries defects that no test
+        found yet. A router on such a build can drop the wide area network of
+        the site. Choose the stable train for a production site.
+      </p>
+    </div>
+  </div>
+
+  {#
+    The button sends JSON and reads the answer, so it is a button and not a
+    form. A form would move the browser to a new page and would lose the body
+    that holds the plan warnings. portal.js adds the token header.
+  #}
+  {#
+    Issue #2200: the site lock guards this write. The control renders disabled
+    for an operator who does not hold the site, and it names the reason. The
+    page decides this, not the script, so the control is never live for the
+    moment before the script runs.
+  #}
+  {% set write_allowed = lock_write_allowed | default(false, true) %}
+  <button type="button"
+          class="portal-button portal-button-primary"
+          data-testid="upgrade-options-save-button"
+          data-needs-lock
+          data-run-id="{{ run_key }}"
+          data-next-url="{{ next_url }}"
+          {% if not write_allowed %}disabled aria-describedby="upgrade-options-locked"{% endif %}
+          >Save the options and continue</button>
+
+  {% if not write_allowed %}
+    <p class="portal-note" id="upgrade-options-locked"
+       data-testid="upgrade-options-locked-note" data-lock-reason-note>
+      {% if lock_holder | default('', true) %}
+        {{ lock_holder | default('', true) }} holds this site, so this control is off. You may read
+        every option. Take the site to change one.
+      {% else %}
+        Another operator holds this site, so this control is off. You may read every option.
+      {% endif %}
+    </p>
+  {% endif %}
+</div>
+
+<div class="portal-card">
+  <h2 class="portal-card-title">Plan warnings</h2>
+
+  {#
+    The list always renders, so a test finds it before a plan exists and after
+    a plan exists. Each sentence sits in the markup, because a signal word from
+    a stylesheet rule is generated content and no test can read it.
+  #}
+  <ul class="mb-0" data-testid="upgrade-warning-list">
+    {% for line in warning_lines %}
+      <li>{{ line }}</li>
+    {% else %}
+      <li>The plan found no warning.</li>
+    {% endfor %}
+  </ul>
+</div>
+
+<div class="portal-table-scroll">
+  <table class="portal-table" data-testid="upgrade-target-table"
+                 data-sortable>
+    <caption class="visually-hidden">
+      Every device the upgrade writes to, with the version before the upgrade
+      and the target version.
+    </caption>
+
+    <thead>
+      <tr>
+        <th scope="col">Name</th>
+        <th scope="col">MAC address</th>
+        <th scope="col">Type</th>
+        <th scope="col">Model</th>
+        <th scope="col">Version now</th>
+        <th scope="col" data-no-sort>Target version</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for device in target_rows %}
+        {% set mac = device.mac | default('', true) %}
+        {% set device_name = device.name | default('Unnamed device', true) %}
+        {% set model = device.model | default('', true) %}
+        {% set chosen_version = device.version_target | default('', true) %}
+        {% set model_versions = versions_map.get(model, []) %}
+
+        <tr data-testid="upgrade-target-row-{{ mac }}"
+            data-device-type="{{ device.device_type | default('', true) }}">
+          <th scope="row">{{ device_name }}</th>
+          <td class="cell-mono">{{ mac }}</td>
+          <td>{{ device.device_type | default('unknown', true) }}</td>
+          <td>{{ model | default('unknown', true) }}</td>
+          <td class="cell-mono">
+            {{ device.version_before | default('unknown', true) }}
+            {% if device.firmware_mismatch | default(false) %}
+              <span class="portal-badge badge-partial"
+                    data-testid="firmware-mismatch-{{ mac }}"
+                    data-safe-target="{{ device.safe_target | default('', true) }}">
+                Different from safe target {{ device.safe_target | default('', true) }}
+              </span>
+            {% endif %}
+          </td>
+
+          <td>
+            {#
+              The select carries its own label through aria-label. A table
+              header names a column, and a browser gives no accessible name to
+              a control from a column header.
+            #}
+            <select class="form-select form-select-sm"
+                    id="upgrade-version-select-{{ mac }}"
+                    data-testid="upgrade-version-select-{{ mac }}"
+                    data-version-for="{{ mac }}"
+                    data-device-type="{{ device.device_type | default('', true) }}"
+                    data-gateway-family="{{ device.gateway_family | default('', true) }}"
+                    aria-label="Target version for {{ device_name }}">
+              <option value="">Do not upgrade this device</option>
+              {% for version in model_versions %}
+                <option value="{{ version }}"
+                        {{ 'selected' if version == chosen_version else '' }}>{{ version }}</option>
+              {% endfor %}
+            </select>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="6" class="portal-table-empty">
+            The run holds no device. Return and choose a site with a device.
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+
+
