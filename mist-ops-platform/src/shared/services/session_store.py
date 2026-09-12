@@ -7,6 +7,12 @@ reader does not gain the Mist credential.
 
 The store writes to Redis when Redis answers. The store falls back to a
 process-local map, so local work and the test suite run without Redis.
+The fallback map expires each record after the session lifetime, so a
+process that runs without Redis cannot grow without bound (issue #2051).
+
+A deployment that runs more than one worker must hold its sessions in Redis.
+A process-local map is invisible to the other workers, so the build refuses
+to fall back when the worker count is greater than one (issue #2051).
 
 The record also holds the last Mist ``/api/v1/self`` result. The auth
 middleware reads that result inside the cache period, so a repeat request makes
@@ -23,6 +29,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from src.shared.config.settings import get_settings  # Shared access to the app settings.
+
 logger = logging.getLogger(__name__)  # Records each session action, and never a token value.
 
 SESSION_TTL_SECONDS = 8 * 3600  # Matches the 8 hour cookie lifetime that the login route sets.
@@ -30,6 +38,7 @@ PRIVILEGE_CACHE_TTL = 300  # A verification result stays valid for 5 minutes, pe
 SESSION_KEY_PREFIX = "ops_session"  # Separates a session record from every other Redis key.
 
 _MEMORY_RECORDS: dict[str, str] = {}  # Holds the records when Redis is absent, for local work.
+_MEMORY_CREATED_AT: dict[str, float] = {}  # Holds the write time, so the map can expire a record.
 
 
 @dataclass(slots=True)
@@ -137,23 +146,32 @@ class SessionStore:
             },
         )
         if self._redis is None:  # The fallback map keeps local work and the tests running.
-            _MEMORY_RECORDS[key] = payload
+            _sweep_memory_records()  # Drop expired records, so the map cannot grow without bound.
+            _MEMORY_RECORDS[key] = payload  # Store the record under its digest key.
+            _MEMORY_CREATED_AT[key] = time.time()  # Record the write time, so it can expire.
             return
         self._redis.setex(key, SESSION_TTL_SECONDS, payload)  # The TTL expires an idle session.
 
     def _read(self, key: str) -> str | None:
         """Return the stored payload for *key*, or None."""
         if self._redis is None:  # Read from the fallback map when Redis is absent.
+            if _memory_record_is_expired(key):  # An expired record must act as a missing record.
+                _remove_memory_record(key)  # Drop the record, so a stale session cannot resolve.
+                return None
             return _MEMORY_RECORDS.get(key)
         raw = self._redis.get(key)  # Redis answers bytes or None for a missing key.
         if isinstance(raw, bytes):  # Decode the bytes, because json.loads wants text.
             return raw.decode("utf-8")
-        return raw
+        if isinstance(raw, str):  # A text answer is the payload as stored.
+            return raw
+        return None  # A missing key or an unexpected type means no record.
 
     def _delete_key(self, key: str) -> bool:
         """Delete *key* and report whether the key existed."""
         if self._redis is None:  # Delete from the fallback map when Redis is absent.
-            return _MEMORY_RECORDS.pop(key, None) is not None
+            existed = _MEMORY_RECORDS.pop(key, None) is not None  # Report if it existed.
+            _MEMORY_CREATED_AT.pop(key, None)  # Drop the write time, so the key leaves no trace.
+            return existed
         return bool(self._redis.delete(key))  # Redis reports the count of the deleted keys.
 
     @staticmethod
@@ -173,12 +191,64 @@ class SessionStore:
         )
 
 
+def _memory_record_is_expired(key: str) -> bool:
+    """Report whether the fallback record for *key* is past its lifetime."""
+    written_at = _MEMORY_CREATED_AT.get(key)  # A record without a write time cannot expire.
+    if written_at is None:  # Keep a record that predates the timestamp map.
+        return False
+    return (time.time() - written_at) >= SESSION_TTL_SECONDS  # Compare age to the lifetime.
+
+
+def _remove_memory_record(key: str) -> None:
+    """Drop the fallback record and its write time for *key*."""
+    _MEMORY_RECORDS.pop(key, None)  # Remove the payload, so a reader finds no record.
+    _MEMORY_CREATED_AT.pop(key, None)  # Remove the write time, so the key leaves no trace.
+
+
+def _sweep_memory_records() -> None:
+    """Remove every expired fallback record from the process-local map."""
+    expired = [key for key in _MEMORY_RECORDS if _memory_record_is_expired(key)]
+    for key in expired:  # Drop each expired record, so the map cannot grow without bound.
+        _remove_memory_record(key)
+    if expired:  # A sweep that removed a record is worth a log line.
+        logger.debug("Session store fallback sweep removed %d expired record(s).", len(expired))
+
+
 def build_session_store() -> SessionStore:
-    """Return a store that uses Redis when Redis answers."""
+    """Return a store that uses Redis when Redis answers.
+
+    A multi-worker deployment must hold its sessions in Redis. A process-local
+    map is invisible to the other workers, so the build refuses to fall back
+    when more than one worker runs (issue #2051).
+    """
     logger.info("Session store build starts.")  # Announce the connection attempt before the work.
+    worker_count = _read_worker_count()  # The count decides whether the fallback is safe.
     client = _connect_redis()  # A None client selects the process-local fallback map.
+    if client is None and worker_count > 1:  # A shared store is the only multi-worker store.
+        # WHY: a per-process map loses a session on every request that lands on another worker.
+        logger.error(
+            "Session store build failed. Redis is required when WEB_WORKERS is %d.",
+            worker_count,
+        )
+        raise RuntimeError(
+            "Redis is required for the session store when more than one worker runs. "
+            "Start Redis, or set WEB_WORKERS=1.",
+        )
+    if client is None:  # A single worker may keep its sessions in the process.
+        logger.warning(
+            "Session store fallback is active. Sessions live in this process only. "
+            "A restart ends every session, and the fallback is unsafe with more than one worker.",
+        )
     logger.debug("Session store build done. Redis is in use: %s.", client is not None)
     return SessionStore(redis_client=client)
+
+
+def _read_worker_count() -> int:
+    """Return the configured worker count, and refuse a count below one."""
+    worker_count = get_settings().worker_count  # The deployment names its worker count here.
+    if worker_count < 1:  # A count below one is a misconfiguration, not a valid setting.
+        raise RuntimeError("WEB_WORKERS must be at least 1.")
+    return worker_count
 
 
 def _connect_redis() -> Any:
@@ -186,8 +256,7 @@ def _connect_redis() -> Any:
     try:
         import redis as redis_lib  # Import here, so a missing driver does not stop the import.
 
-        from src.shared.config.settings import get_settings
-        from src.shared.redis_timeouts import redis_timeout_kwargs
+        from src.shared.redis_timeouts import redis_timeout_kwargs  # Shared socket limits.
 
         logger.info("Session store Redis connect starts.")  # Announce the connect attempt.
         # WHY: a client with no socket limit holds this worker forever on a silent Redis host.
