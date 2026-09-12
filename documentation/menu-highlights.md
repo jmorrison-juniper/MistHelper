@@ -76,9 +76,18 @@ This page names the operations that arrived most recently.
 | 260 | Run an org-scoped Mist get or list endpoint from a prompt | `interactive_safe` |
 | 261 | Run a site-scoped Mist get or list endpoint from a prompt | `interactive_safe` |
 | 262 | Run an MSP-scoped Mist get or list endpoint from a prompt | `interactive_safe` |
+| 263 | Run a site SLE endpoint from a prompt | `interactive_safe` |
+| 264 | Run a site map endpoint from a prompt | `interactive_safe` |
+| 265 | Run a site detail endpoint from a prompt | `interactive_safe` |
+| 266 | Run an org detail endpoint from a prompt | `interactive_safe` |
+| 267 | Run an MSP detail endpoint from a prompt | `interactive_safe` |
+| 268 | Run a remaining endpoint from a prompt | `interactive_safe` |
 
 Menus 259 through 262 use one prompt to select a simple endpoint.
 They write through `DataExporter`, so they honor all output backends.
+
+Menus 263 through 268 use one prompt flow for each identifier tuple.
+They keep the main menu small while they close the read-only endpoint backlog.
 
 Menu 197 writes to `data/packet_captures/<mac>/vlan_<id>/`. Every other
 operation in the table writes through `DataExporter`, so it honors the CSV,
