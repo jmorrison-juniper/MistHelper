@@ -1,150 +1,115 @@
-# Requirements Checklist: Organization Upgrade Mode for Many Sites
+# Requirements Checklist: Organization Multi-Site Firmware Upgrade
 
-**Feature**: Organization upgrade mode for many sites
-**Purpose**: Grade the specification and the result against the live portal
-**Application**: `src/upgrade_portal` (Flask, Jinja, plain JavaScript)
+**Issue**: #2475
 
-## Architecture Accuracy
+## Source Evidence
 
-- [ ] CHK001 Every file anchor names a file that exists in the repository.
-- [ ] CHK002 No document names `ops-portal`, React, or TypeScript as the live
-      portal.
-- [ ] CHK003 The documents name Flask, Jinja, and plain JavaScript.
-- [ ] CHK004 The route names match `select.py`, `upgrade.py`, and
-      `org_upgrade.py`.
-- [ ] CHK005 The template paths match the files under `assets/templates`.
-- [ ] CHK006 The session keys match the constants near line 89 of `select.py`.
-- [ ] CHK007 The run states match `RunState` in `runtime/runs.py`.
-- [ ] CHK008 The service names match `src/firmware/org_upgrade_service.py`.
-- [ ] CHK009 The blueprint list of `factory.py` holds `org_upgrade`.
+- [ ] CHK001 The specification names the exact organization device path.
+- [ ] CHK002 The specification records the verified AP-only description.
+- [ ] CHK003 The specification records the `ap`, `switch`, and `gateway`
+      schema conflict.
+- [ ] CHK004 The specification records the `ap` and `junos` firmware conflict.
+- [ ] CHK005 The specification records the saved organization guide conflict.
+- [ ] CHK006 The decision routes only APs through `upgradeOrgDevices`.
 
-## Flow Accuracy
+## Routing
 
-- [ ] CHK010 The flow starts with authentication.
-- [ ] CHK011 The organization choice comes before the mode choice.
-- [ ] CHK012 The mode choice comes before the site choice.
-- [ ] CHK013 The pre-check capture comes before the options page.
-- [ ] CHK014 The options page comes before the typed confirmation.
-- [ ] CHK015 The typed confirmation comes before the organization job.
-- [ ] CHK016 The poll comes after the job submission.
-- [ ] CHK017 The post-check and the comparison come last.
+- [ ] CHK007 The plan creates at most one organization AP child.
+- [ ] CHK008 The AP child includes AP targets only.
+- [ ] CHK009 Switch children use site routes from `upgrade_service.py`.
+- [ ] CHK010 Junos gateway children use site routes from `upgrade_service.py`.
+- [ ] CHK011 SSR children use the existing organization SSR route.
+- [ ] CHK012 The gateway classifier selects Junos or SSR.
+- [ ] CHK013 The planner rejects Mist Edge.
 
-## Mist Contract
+## Aggregate Model
 
-- [ ] CHK018 The submit path is `POST /api/v1/orgs/{org_id}/devices/upgrade`.
-- [ ] CHK019 The submit operation is `upgradeOrgDevices`.
-- [ ] CHK020 The history operation is `listOrgDeviceUpgrades`.
-- [ ] CHK021 The status operation is `getOrgDeviceUpgrade`.
-- [ ] CHK022 The cancel operation is `cancelOrgDeviceUpgrade`.
-- [ ] CHK023 The import path is `mistapi.api.v1.orgs.devices`.
-- [ ] CHK024 The body sets `device_type` to `ap`.
-- [ ] CHK025 The body sets `all_sites` to false.
-- [ ] CHK026 The body uses `versions` and `site_ids`, not `version` and
-      `device_ids`.
-- [ ] CHK027 No document claims switch support for the organization endpoint.
-- [ ] CHK028 No document claims gateway support for the organization endpoint.
-- [ ] CHK029 SSR routers stay out of the first implementation.
-- [ ] CHK030 Mist Edge stays out of the first implementation.
-- [ ] CHK031 The portal reads the job identifier from `id`.
+- [ ] CHK014 One durable aggregate owns all child jobs.
+- [ ] CHK015 Every child has a stable child identifier.
+- [ ] CHK016 Every child stores its route and scope.
+- [ ] CHK017 Every child stores its organization and site.
+- [ ] CHK018 Every child stores its UI family and planned family.
+- [ ] CHK019 Every child stores immutable target identifiers.
+- [ ] CHK020 Every child stores status, errors, and cancellation state.
+- [ ] CHK021 The aggregate survives a process restart.
 
-## API Conflicts
+## Partial and Unknown Results
 
-- [ ] CHK032 The documents record the conflict between the description and the
-      device enumeration.
-- [ ] CHK033 The documents record the conflict between the Markdown SDK path and
-      the code import.
-- [ ] CHK034 The documents record the conflict between `id` and `upgrade_id`.
-- [ ] CHK035 The documents record the conflict in the peer cluster default.
-- [ ] CHK036 The documents record the deprecated schedule field.
-- [ ] CHK037 Each conflict row states a decision.
+- [ ] CHK022 The model keeps accepted and failed children separately.
+- [ ] CHK023 The model keeps unsubmitted children separately.
+- [ ] CHK024 The model keeps uncertain writes as `unknown`.
+- [ ] CHK025 The model keeps uncertain cancels as `cancel_unknown`.
+- [ ] CHK026 The aggregate status does not hide child detail.
+- [ ] CHK027 The UI offers no retry for an unknown write.
+- [ ] CHK028 Cancellation claims no firmware rollback.
 
-## Safety
+## User Flow
 
-- [ ] CHK038 The typed word `CONFIRM` gates every submission.
-- [ ] CHK039 The server checks the word, and the browser gate alone is not
-      enough.
-- [ ] CHK040 The portal holds one lock for each selected site.
-- [ ] CHK041 A locked site gives HTTP 409.
-- [ ] CHK042 An unreachable lock store gives HTTP 503.
-- [ ] CHK043 The portal releases every lock when one acquire fails.
-- [ ] CHK044 The portal adds no automatic retry to any write.
-- [ ] CHK045 The write session disables the SDK retry loop.
-- [ ] CHK046 The write session disables the transport retry.
-- [ ] CHK047 The service refuses a session that permits a retry.
-- [ ] CHK048 HTTP 200 does not prove a completed upgrade.
-- [ ] CHK049 A cancellation claims no rollback.
-- [ ] CHK050 A malformed answer gives an error, not an empty job.
-- [ ] CHK051 Every warning names the exact consequence.
-- [ ] CHK052 The audit logger masks the API token.
+- [ ] CHK029 The sequence is organization, mode, sites, options, confirmation,
+      and progress.
+- [ ] CHK030 The UI uses AP, switch, and gateway terms.
+- [ ] CHK031 The confirmation page shows every child route.
+- [ ] CHK032 The progress page shows every child.
+- [ ] CHK033 The progress page distinguishes partial and unknown results.
+- [ ] CHK034 Every driven control has a stable `data-testid`.
+- [ ] CHK035 Every state appears as text and not as color alone.
 
-## Pre-Checks and Comparison
+## Write Safety
 
-- [ ] CHK053 The options page shows the pre-check state of each site.
-- [ ] CHK054 A missing pre-check blocks the confirmation page.
-- [ ] CHK055 The portal starts a post-check for each site.
-- [ ] CHK056 The review page opens a comparison for each site.
-- [ ] CHK057 A failed post-check marks one site only.
+- [ ] CHK036 The store creates the aggregate before any cloud write.
+- [ ] CHK037 The store creates every child before confirmation.
+- [ ] CHK038 An atomic claim precedes each cloud write.
+- [ ] CHK039 Each child has no more than one write attempt.
+- [ ] CHK040 SDK retries are zero for writes.
+- [ ] CHK041 Transport retries are zero for writes.
+- [ ] CHK042 The service refuses a write session that permits retries.
+- [ ] CHK043 A repeated submit request starts no second child write.
+- [ ] CHK044 The service never retries an uncertain write.
+- [ ] CHK045 Read operations alone reconcile an unknown outcome.
 
-## User Interface
+## Access Protection
 
-- [ ] CHK058 The organization pages use `portal-card` and `portal-table`.
-- [ ] CHK059 The organization pages add no new color system.
-- [ ] CHK060 The lock state appears as a word and not as a color alone.
-- [ ] CHK061 Every driven control carries a `data-testid` attribute.
-- [ ] CHK062 The confirmation field name matches between the template and the
-      route of the same lane.
-- [ ] CHK063 The confirmation word sits in one Jinja variable.
-- [ ] CHK064 The start button carries `disabled` in the markup.
-- [ ] CHK065 The browser code holds no copy of the confirmation word.
-- [ ] CHK066 The progress page names every failed access point.
-- [ ] CHK067 The progress page shows a true device count.
+- [ ] CHK046 The server verifies the authenticated owner.
+- [ ] CHK047 The server verifies the active organization.
+- [ ] CHK048 The server verifies that every site belongs to the organization.
+- [ ] CHK049 The server verifies that every target belongs to a selected site.
+- [ ] CHK050 The server verifies every required site lock.
+- [ ] CHK051 The server verifies the stored plan hash.
+- [ ] CHK052 The server verifies the exact confirmation text.
+- [ ] CHK053 Every browser write includes CSRF protection.
+- [ ] CHK054 Records, logs, and errors contain no credential.
 
-## Tests
+## Cancellation
 
-- [ ] CHK068 Every unit test and contract test runs offline.
-- [ ] CHK069 The socket block in `tests/conftest.py` stays active.
-- [ ] CHK070 A test proves one cloud write for one submission.
-- [ ] CHK071 A test proves that a refused body starts no cloud call.
-- [ ] CHK072 A test proves that a missing word starts no cloud call.
-- [ ] CHK073 A test proves that a locked site blocks the submission.
-- [ ] CHK074 A test proves that a session with retries fails the write check.
-- [ ] CHK075 The single-site tests pass without a change.
-- [ ] CHK076 The whole portal suite runs in under 30 seconds.
+- [ ] CHK055 The server verifies ownership and scope before cancellation.
+- [ ] CHK056 The server selects the cancel route from the stored child route.
+- [ ] CHK057 An atomic cancel claim precedes each cancel write.
+- [ ] CHK058 Each child has no more than one cancel attempt.
+- [ ] CHK059 The service sends no automatic cancel retry.
+- [ ] CHK060 Mixed cancel results remain visible.
 
-## Specification Quality
+## Offline Tests
 
-- [ ] CHK077 Each requirement is testable.
-- [ ] CHK078 Each user story holds acceptance scenarios.
-- [ ] CHK079 Each user story holds an independent test.
-- [ ] CHK080 The edge cases name a real failure mode.
-- [ ] CHK081 The success criteria hold a measurable value.
-- [ ] CHK082 The non-goals name the excluded families.
-- [ ] CHK083 The risks name a countermeasure.
-- [ ] CHK084 No requirement holds an open marker.
+- [ ] CHK061 Unit tests cover grouping and route selection.
+- [ ] CHK062 Unit tests cover gateway classification.
+- [ ] CHK063 Unit tests cover aggregate state and claims.
+- [ ] CHK064 Contract tests cover every Mist child request.
+- [ ] CHK065 Contract tests cover malformed answers.
+- [ ] CHK066 Integration tests cover partial submission.
+- [ ] CHK067 Integration tests cover unknown outcomes.
+- [ ] CHK068 Integration tests cover replay prevention.
+- [ ] CHK069 Integration tests cover ownership and scope failures.
+- [ ] CHK070 Integration tests cover lock loss and cancellation.
+- [ ] CHK071 Playwright covers the complete six-page sequence.
+- [ ] CHK072 Playwright covers AP, switch, gateway, and mixed plans.
+- [ ] CHK073 The socket guard blocks outbound traffic.
+- [ ] CHK074 No test uses a Mist credential.
+- [ ] CHK075 No test sends a live Mist write.
 
 ## Writing Quality
 
-- [ ] CHK085 Every changed Markdown file scores 80 or more with the STE linter.
-- [ ] CHK086 No sentence uses a semicolon.
-- [ ] CHK087 No sentence uses a contraction.
-- [ ] CHK088 No sentence uses a Latin abbreviation.
-- [ ] CHK089 Every warning starts with the signal word.
-- [ ] CHK090 Every instruction keeps to 20 words.
-
-## Release Readiness
-
-- [ ] CHK091 The seven present routes keep their behavior.
-- [ ] CHK092 The two present test suites stay green.
-- [ ] CHK093 The changelog names the feature.
-- [ ] CHK094 The README names the access point limit.
-- [ ] CHK095 The open questions of `research.md` hold answers.
-- [ ] CHK096 A laboratory run proves the whole flow.
-- [ ] CHK097 A reviewer confirms every non-negotiable principle.
-
-## Notes
-
-Grade this checklist twice. Grade it after the specification review, and grade
-it again before the merge.
-
-Warning: do not mark CHK044 without a code read, because a hidden retry can
-start a second upgrade job at every selected site.
+- [ ] CHK076 Every changed Markdown file scores 80 or more.
+- [ ] CHK077 The prose uses active voice.
+- [ ] CHK078 The prose uses simple tense.
+- [ ] CHK079 No sentence uses a semicolon.
+- [ ] CHK080 Every warning states the consequence.

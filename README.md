@@ -13,7 +13,7 @@ devices, and your clients, and it writes what it finds to a file or to a
 database. It also runs a small set of change operations, such as a firmware
 upgrade.
 
-The tool holds **261 operations**, numbered 1 to 262 with one gap at 152. Menu 0
+The tool holds **267 operations**, numbered 1 to 268 with one gap at 152. Menu 0
 is Exit. Read [the menu reference](documentation/menu_reference.md) for the full
 list, which is generated from the code.
 
@@ -21,6 +21,10 @@ Menu 259 runs no-identifier Mist get and list endpoints from a prompt. Menu
 260 runs org-scoped endpoints. Menu 261 runs site-scoped endpoints. Menu 262
 runs MSP-scoped endpoints. Together they cover 151 unique simple endpoint
 operations from issue #1807.
+
+Menus 263 through 268 run the remaining read-only endpoint families. They group
+SLE, map, site detail, org detail, MSP detail, and other endpoints by prompt
+flow.
 
 ## What MistHelper does
 

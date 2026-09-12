@@ -28,7 +28,7 @@ from __future__ import annotations  # WHY: postponed evaluation for forward-ref 
 
 import logging  # WHY: workflow telemetry emitted from the phase 3 orchestrator
 from dataclasses import dataclass  # WHY: bundle site-assignment identity fields
-from datetime import datetime  # WHY: assignment timestamps
+from datetime import UTC, datetime  # WHY: assignment timestamps
 from typing import Any  # WHY: broad typing for opaque cache / row payloads
 
 from ._ssid_template_cluster import _ClusterBase  # WHY: shared parent-proxy wrapper
@@ -204,7 +204,7 @@ def _build_assign_results(
     group_id: str,
 ) -> list[dict[str, Any]]:  # WHY: exported for tests + re-export
     """Build assignment result records for successful operations."""
-    ctx = _AssignRowContext(group=group, group_id=group_id, timestamp=datetime.now().isoformat())  # WHY: pack once
+    ctx = _AssignRowContext(group=group, group_id=group_id, timestamp=datetime.now(UTC).isoformat())  # WHY: pack once
     return [_success_row(site, existing_ids, ctx) for site in sites]  # WHY: one row per site
 
 
@@ -225,7 +225,7 @@ def _build_failed_assign_results(
     error: Exception,
 ) -> list[dict[str, Any]]:  # WHY: exported for tests + re-export
     """Build failed assignment result records."""
-    ctx = _AssignRowContext(group=group, group_id=group_id, timestamp=datetime.now().isoformat())  # WHY: pack once
+    ctx = _AssignRowContext(group=group, group_id=group_id, timestamp=datetime.now(UTC).isoformat())  # WHY: pack once
     reason = str(error)  # WHY: cached string form of the raised exception
     return [_result_row(site, ctx, status=_STATUS_FAILED, reason=reason) for site in sites]  # WHY: one row per site
 

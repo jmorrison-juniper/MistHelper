@@ -12,7 +12,7 @@ import importlib  # WHY: lazy MistHelper import avoids circular load at module i
 import logging  # WHY: structured trace for collection lifecycle events.
 import os  # WHY: filesystem existence check for optional speedtest CSV.
 import time  # WHY: pace API calls between exporters and back off on failure.
-from datetime import datetime  # WHY: timestamp banner per loop iteration.
+from datetime import UTC, datetime  # WHY: timestamp banner per loop iteration.
 from typing import Any  # WHY: callable/step tuple lists are duck-typed.
 
 from src.export.org_inventory_exporter import (
@@ -52,7 +52,7 @@ class DataCollectionManager:
             while True:  # Loop until stopped.
                 loop_count += 1  # Count the iteration.
                 # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-                logger.info("\n  Loop iteration %d - %s", loop_count, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                logger.info("\n  Loop iteration %d - %s", loop_count, datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"))
                 if DataCollectionManager._check_stop_signal():  # Stop requested.
                     break  # Exit the loop.
                 DataCollectionManager._execute_collection_cycle(loop_count)  # Run one cycle.

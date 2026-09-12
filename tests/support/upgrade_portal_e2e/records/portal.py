@@ -63,6 +63,20 @@ class PortalRecordStore:  # Own portal records for one isolated server process.
         logger.debug("The E2E run read found a record: %s", result is not None)  # Report no record data.
         return result  # Give the route an isolated copy.
 
+    def compare_and_set_run(  # Replace one run only when its stored version matches.
+        self, run_id: str, expected_version: int, replacement: dict[str, Any]
+    ) -> bool:
+        """Replace one owned run record only when its version still matches."""
+        logger.info("Compare and replace one E2E run record")  # Record the atomic claim before it starts.
+        with self._lock_guard:  # Keep the comparison and the replacement in one process step.
+            record = self._runs.get(run_id)  # An absent identifier can satisfy no comparison.
+            if record is None or record.get("record_version") != expected_version:  # Reject a stale caller.
+                logger.debug("The E2E run comparison found no matching version")  # Report the lost race.
+                return False  # The caller must read the current record again.
+            self._runs[run_id] = self._owned(replacement)  # Store the owned replacement under the same key.
+        logger.debug("The E2E run comparison replaced one record")  # Report the successful transition.
+        return True  # Match the production compare-and-set contract.
+
     def runs_for_site(self, site_id: str) -> list[dict[str, Any]]:  # List owned runs for one site.
         """Return all owned runs for one site."""
         logger.info("List E2E run records for one site")  # Record the process-owned scan.

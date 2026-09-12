@@ -12,7 +12,7 @@ from __future__ import annotations  # WHY: enable PEP 604 union types on Python 
 import csv  # WHY: needed for CSV read/write of firmware cache.
 import logging  # WHY: structured logging of upgrade workflow steps.
 import os  # WHY: filesystem checks and path joining for cache file.
-from datetime import datetime  # WHY: timestamps for operation IDs and freshness checks.
+from datetime import UTC, datetime  # WHY: timestamps for operation IDs and freshness checks.
 from typing import Any  # WHY: Mist API returns loosely typed dicts.
 
 # ---------------------------------------------------------------------------
@@ -496,7 +496,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
     def _maybe_read_cache(self) -> list[dict[str, Any]] | None:
         """Return cache contents if the file is fresh and non-empty."""
         # WHY: age in hours drives freshness comparison against configured window.
-        file_age_hours = (datetime.now().timestamp() - os.path.getmtime(self.CACHE_FILE)) / SECONDS_PER_HOUR
+        file_age_hours = (datetime.now(UTC).timestamp() - os.path.getmtime(self.CACHE_FILE)) / SECONDS_PER_HOUR
         if file_age_hours >= self.CACHE_FRESHNESS_HOURS:  # WHY: skip stale cache.
             print(f"-> Cache file exists but is stale ({file_age_hours:.1f} hours old)")  # WHY: user note.
             self.logger.info("Cache file stale, will refresh from API")  # WHY: audit.
@@ -846,7 +846,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
     def _initialize_results(self) -> None:
         """Initialize results tracking structure."""
         self.upgrade_results = {  # WHY: canonical shape expected by consumers/tests.
-            "operation_id": f"switch_upgrade_{datetime.now().strftime('%Y%m%d_%H%M%S')}",  # WHY: unique per-run id.
+            "operation_id": f"switch_upgrade_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}",  # WHY: unique per-run id.
             "target_version": self.target_version,  # WHY: recap target.
             "strategy": self.upgrade_strategy,  # WHY: recap strategy.
             "force": self.force_upgrade,  # WHY: recap force flag.
@@ -856,7 +856,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
             "sites_successful": 0,  # WHY: counter for successful sites.
             "sites_failed": 0,  # WHY: counter for failed sites.
             "site_results": [],  # WHY: per-site detail records.
-            "start_time": datetime.now().isoformat(),  # WHY: audit start timestamp.
+            "start_time": datetime.now(UTC).isoformat(),  # WHY: audit start timestamp.
             "end_time": None,  # WHY: filled by _finalize_results.
         }
 
@@ -1084,7 +1084,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
 
     def _finalize_results(self) -> None:
         """Finalize results and display summary."""
-        self.upgrade_results["end_time"] = datetime.now().isoformat()  # WHY: stamp completion time.
+        self.upgrade_results["end_time"] = datetime.now(UTC).isoformat()  # WHY: stamp completion time.
         self._display_results_summary()  # WHY: emit final report to console.
 
     def _display_results_summary(self) -> None:
@@ -1124,6 +1124,6 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
         error_msg = f"Critical error in switch firmware upgrade: {error}"  # WHY: uniform prefix.
         print(f"\nX  {error_msg}")  # WHY: user-visible failure.
         self.logger.error(error_msg)  # WHY: audit failure.
-        self.upgrade_results["end_time"] = datetime.now().isoformat()  # WHY: stamp completion.
+        self.upgrade_results["end_time"] = datetime.now(UTC).isoformat()  # WHY: stamp completion.
         self.upgrade_results["error"] = str(error)  # WHY: expose error to caller.
         return self.upgrade_results  # WHY: caller sees partial results.

@@ -4,7 +4,7 @@ from __future__ import annotations  # WHY: enables PEP 563 postponed evaluation 
 
 import logging  # WHY: structured operator log emission.
 from dataclasses import dataclass  # WHY: frozen dependency container avoids >5-param signatures.
-from datetime import datetime  # WHY: timestamped export filenames disambiguate runs.
+from datetime import UTC, datetime  # WHY: timestamped export filenames disambiguate runs.
 from typing import Any  # WHY: Mist API responses are heterogeneous dicts.
 
 _SEPARATOR: str = "=" * 60  # WHY: shared 60-char rule used across UI banners.
@@ -429,7 +429,7 @@ class SiteAnalyticsConfigurator:  # WHY: static namespace collecting configurato
     @staticmethod
     def _export_deviation_report(deviations: list[dict[str, Any]], deps: SiteAnalyticsConfiguratorDeps) -> None:
         """Export deviation report before applying changes."""  # WHY: pre-mutation evidence export.
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # WHY: filename-safe timestamp.
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")  # WHY: filename-safe timestamp.
         rows = [SiteAnalyticsConfigurator._build_deviation_row(site) for site in deviations]  # WHY: map builder.
         filename = f"SiteAnalytics_Deviations_PREVIEW_{timestamp}.csv"  # WHY: preview-tagged filename.
         deps.save_data_fn(rows, filename, api_function_name="site_analytics_deviations")  # WHY: persist rows.
@@ -551,7 +551,7 @@ class SiteAnalyticsConfigurator:  # WHY: static namespace collecting configurato
     @staticmethod
     def _export_results(results: list[dict[str, Any]], deps: SiteAnalyticsConfiguratorDeps) -> None:
         """Export configuration results."""  # WHY: post-mutation evidence export.
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # WHY: filename-safe timestamp.
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")  # WHY: filename-safe timestamp.
         rows: list[dict[str, Any]] = [  # WHY: single comprehension keeps helper short.
             {
                 "site_id": result["site_id"],  # WHY: primary key column.

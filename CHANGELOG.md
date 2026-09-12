@@ -12,6 +12,72 @@ the merged fragments into this file at release time.
 
 ## [Unreleased]
 
+### Citation reference lint performance (issue #2487)
+
+- **Changed**: The citation lint tool now builds the default file index and
+  source list in one repository walk.
+- **Changed**: The checker now skips the citation regex on lines that cannot
+  hold a citation, and it reuses the source file line count when possible.
+- **Added**: Unit coverage keeps the single-walk path and regex skip path
+  stable.
+
+### Data browser preview latency (issue #2511)
+
+- **Changed**: The web portal data browser now detects JSON Lines in one pass.
+  It reuses the first parsed record and keeps bounded preview memory.
+- **Changed**: CSV, JSON Lines, and log previews now skip fallback tail work
+  after the requested page starts. A page past the end still returns the last
+  valid page.
+- **Added**: Unit and parity coverage keep the preview response dictionary,
+  search behavior, JSON fallback behavior, and log line numbers stable.
+
+### Upgrade portal browser-token sign-in journey (issue #2472)
+
+- **Added**: Playwright coverage signs in with a safe browser token, opens the
+  organization picker, selects a site, opens the inventory, signs out, and
+  proves that later signed-in pages refuse the cleared session.
+- **Added**: The browser-token journey covers a refused token, an empty token,
+  a missing session, and the existing cookie-session boundary. The safe
+  stand-in records only non-secret evidence.
+
+### Upgrade capture stored size performance (issue #2486)
+
+- **Changed**: The upgrade capture store now solves the `stored_size_bytes`
+  width after one body serialization. The write path keeps the same canonical
+  JSON size rule.
+- **Added**: Unit coverage compares the fast size stamp with the documented
+  convergence loop. The tests cover 99, 100, 999, and 1000 byte boundaries.
+
+### Capture log baseline performance (issue #2483)
+
+- **Changed**: `tools.capture_log_baseline` now builds one call-line index
+  after it parses the source file. It reuses the index for each fixture lookup.
+- **Added**: Unit coverage keeps the same-line first-call rule and the old
+  line collector result stable.
+
+### Complexity guard for scripts and tests (issue #1771)
+
+- **Changed**: Refactored two Zscaler and Marvis report builders and the
+  Zscaler cache promotion tests to remove critical complexity blocks.
+- **Changed**: The Radon gate now covers the refactored script files and the
+  Zscaler catalogue test file.
+
+### Portal favicon direct path (issue #2495)
+
+- **Fixed**: Both web portals now answer `/favicon.ico` with the shipped SVG
+  icon, the correct media type, and a one-day public cache header.
+
+### Diagram reference lint performance (issue #2488)
+
+- **Changed**: The diagram reference lint now reads diagram files first, then
+  stops Python file reads after it resolves each diagram reference.
+- **Changed**: The diagram reference lint now reads Python symbol tables instead
+  of full abstract syntax trees.
+- **Added**: Unit coverage keeps valid references, stale references, plain
+  Markdown, and non-Mermaid code blocks stable.
+- **Added**: Unit coverage keeps nested definitions, synchronous function
+  names, asynchronous function omission, strings, and comments stable.
+
 ### Simple endpoint family stage one (issue #1807)
 
 - **Added**: Menus 259 through 262 run no-identifier, org-scoped,
@@ -20,6 +86,12 @@ the merged fragments into this file at release time.
   excludes the unresolved phantom operation `searchOrgClientFingerprints`.
 - **Added**: Unit coverage verifies SDK resolution, prompt failures, call
   shape, primary-key strategy coverage, and table drift.
+
+### Endpoint family stage two (issue #1807)
+
+- **Added**: Menus 263 through 268 run the remaining read-only endpoint families from a prompt.
+- **Added**: `EndpointFamilyExporter` covers 134 endpoint operations and excludes known unsafe or missing entries.
+- **Added**: Unit coverage verifies SDK resolution, identifier order, prompt errors, empty results, and strategy coverage.
 
 ### Flatten nested fields performance (issue #2485)
 
@@ -5415,6 +5487,14 @@ that runs without a proxy needs no action.
 - **Menu 13 still undercounted APs (claimed-but-never-connected APs dropped)** (#417): Even after #415, AP counts were short because the AP path used `countOrgDevices(distinct="version")`, which only returns version-keyed buckets. APs that are **claimed and assigned to a site but have never connected** report no firmware version and were silently dropped (e.g. T-Mobile_USA_Retail AP41 showed 9428 vs the portal's 9676). These APs have a `site_id`, so the #415 unassigned supplement did not catch them either. APs are now counted directly from `getOrgInventory(type="ap")` — the same source as the portal "Claim APs" screen — so every claimed AP is counted exactly once with a three-way version bucket: `unassigned` (no `site_id`), the real firmware version (assigned + connected), or `unknown` (assigned but never connected). Switches and gateways are unchanged, and the unassigned supplement is now switch-only to avoid double counting APs. Conservation is verified against real inventory data and four new unit tests cover every AP state.
 - **Menu 13 undercounted devices (unassigned AP/switch inventory excluded)** (#415): The Org Device Inventory Summary counted APs via `countOrgDevices` and switches via `searchOrgDevices`, both of which return only devices **assigned to a site**. Unassigned APs and switches sitting in org inventory were therefore omitted from the model-count, firmware-summary, and version-per-model reports, understating totals and leaving the reports internally inconsistent (gateways already used `getOrgInventory`, which includes unassigned stock). A supplemental `getOrgInventory(type="ap,switch")` fetch now pulls claimed-but-unassigned APs and switches (filtered client-side on a missing `site_id`), merges them into the model counts, and surfaces them under a dedicated `unassigned` firmware column in the firmware summary and version-per-model pivot (single-org and MSP combined). The `unassigned` bucket is kept distinct from `unknown` (an assigned device that never reported firmware). Assigned-but-offline/disconnected devices were already counted (the assigned-device APIs do not filter on connection state), so no change was needed there. Gateways are intentionally excluded from the supplemental fetch to avoid double counting.
 
+### Data browser preview memory use (issue #2484)
+
+- **Changed**: The web portal data browser now streams CSV, JSON Lines, and
+  log preview rows. It still counts all matching rows for page metadata.
+- **Added**: Unit coverage keeps CSV page clamping, log search, JSON Lines
+  single-item fallback, and JSON column order stable.
+- **Measured**: Peak traced memory fell by 99.62 percent for a large CSV page
+  and 99.81 percent for a filtered large log page in the local harness.
 ## [26.06.09.22.10] - Fix E911BSSIDReportGenerator module-level access
 
 ### Fixed
@@ -6862,3 +6942,4 @@ Closes #368
 - Locations: Single AP pre-check, multi-AP pre-check, site PCAP polling, org PCAP polling
 - Function names now match mistapi SDK and Mist API operationId values
 - operationId: listSitePacketCaptures and listOrgPacketCaptures per OpenAPI spec
+

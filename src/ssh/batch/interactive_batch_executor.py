@@ -18,7 +18,7 @@ import re  # WHY: ANSI escape + control-sequence cleanup on shell output.
 import time  # WHY: inter-command pacing + response-wait windows.
 from collections.abc import Callable  # WHY: type alias for injected writer/closure.
 from dataclasses import dataclass  # WHY: frozen dataclasses collapse param counts.
-from datetime import datetime  # WHY: per-host log timestamps + headers/footers.
+from datetime import UTC, datetime  # WHY: per-host log timestamps + headers/footers.
 from typing import TYPE_CHECKING, Any  # WHY: type hints + guarded runtime imports.
 
 from src.ssh.connection.connector import SshConnector  # WHY: real SSH connect collaborator.
@@ -220,7 +220,7 @@ def _resolve_log_dir(logger: logging.Logger) -> str:  # WHY: shared per-host log
 
 def _build_header(hostname: str, num_commands: int) -> str:  # WHY: verbatim per-host header builder.
     """Return the verbatim header block written at the top of each per-host log."""
-    started = datetime.now().strftime(_TS_FMT_HUMAN)  # WHY: human-readable start timestamp.
+    started = datetime.now(UTC).strftime(_TS_FMT_HUMAN)  # WHY: human-readable start timestamp.
     return (  # WHY: verbatim header format preserved from the original entrypoint.
         f"\n{_HEADER_BAR}\n"
         f"SSH Interactive Session Log for Host: {hostname}\n"
@@ -233,7 +233,7 @@ def _build_header(hostname: str, num_commands: int) -> str:  # WHY: verbatim per
 def _build_footer_text(overall_success: bool, host_log_file: str) -> str:  # WHY: verbatim footer builder.
     """Return the verbatim footer block appended at the end of each per-host log."""
     final_success = overall_success if isinstance(overall_success, bool) else False  # WHY: coerce non-bool.
-    completed = datetime.now().strftime(_TS_FMT_HUMAN)  # WHY: human-readable completion timestamp.
+    completed = datetime.now(UTC).strftime(_TS_FMT_HUMAN)  # WHY: human-readable completion timestamp.
     status = "SUCCESS" if final_success else "FAILED"  # WHY: verbatim status label.
     return (  # WHY: verbatim footer format preserved from the original entrypoint.
         f"\n{_HEADER_BAR}\n"
@@ -337,7 +337,7 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
         """Construct the sanitised per-host log file path. Fall back on chmod errors."""
         from src.ssh.ssh_runner import EnhancedSSHRunner  # WHY: local import avoids circular load.
 
-        timestamp = datetime.now().strftime(_TS_FMT_FILE)  # WHY: verbatim filename timestamp format.
+        timestamp = datetime.now(UTC).strftime(_TS_FMT_FILE)  # WHY: verbatim filename timestamp format.
         safe_hostname = EnhancedSSHRunner.sanitize_filename(hostname)  # WHY: filesystem-safe hostname.
         log_dir = _resolve_log_dir(logger)  # WHY: resolve subdir (falls back on OSError).
         data_dir = EnhancedSSHRunner._get_data_directory()  # WHY: detect subdir-fallback path.
@@ -760,7 +760,7 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
             footer_error,
         )
         try:
-            simple_footer = f"Session completed at {datetime.now().strftime(_TS_FMT_HUMAN)}"  # WHY: parity.
+            simple_footer = f"Session completed at {datetime.now(UTC).strftime(_TS_FMT_HUMAN)}"  # WHY: parity.
             writer(simple_footer)  # WHY: best-effort persistence of the minimal footer.
         except Exception as fallback_error:  # last-resort path (verbatim)
             logger.error("Even simple interactive footer failed: %s", fallback_error)  # WHY: log parity.

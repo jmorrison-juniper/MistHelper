@@ -56,6 +56,8 @@ from datetime import datetime  # Import datetime for timestamping logs and event
 from logging.handlers import RotatingFileHandler  # Rotate script.log before the data volume fills
 from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, TextIO, cast
 
+from packaging.version import InvalidVersion, Version  # WHY: PEP 440 version comparison.
+
 from src.utils.console import echo  # WHY: 1031 stdout + INFO log helper replaces legacy WARNING-channel echoes.
 from src.utils.subprocess_runner import (  # Centralized subprocess dispatch + exception re-exports (initiative 1016).
     SubprocessError,  # Base class for subprocess errors (parent of TimeoutExpired/CalledProcessError).
@@ -439,6 +441,9 @@ from src.export.count_exporter import (
 )
 from src.export.device_events_52w_exporter import (
     DeviceEvents52wExporter,  # Re-export preserved after OrgAlarmEventExporter extraction (1013 SC-001 position 18)
+)
+from src.export.endpoint_family_exporter import (
+    EndpointFamilyExporter,  # Issue #1807 stage two -- remaining endpoint issues grouped by prompt family.
 )
 from src.export.gateway_test_exporter import (
     GatewayTestExporter,  # Cat B (1013 SC-001 position 37) -- re-export for MistHelper.GatewayTestExporter callers
@@ -869,25 +874,13 @@ def _get_installed_version(package_name: str) -> str:  # Look up the installed v
         return ""  # Return empty string to signal 'not installed' to callers
 
 
-def _leading_digits(segment: str) -> str:  # Extract the numeric prefix of one version segment
-    """Return the leading digit run of a version segment (for example '0a1' -> '0')."""
-    numeric = ""  # Accumulate the leading digit characters of this segment
-    for char in segment:  # Walk characters left to right until a non-digit ends the prefix
-        if not char.isdigit():  # First non-digit (for example the 'a' in '0a1') ends the numeric prefix
-            break  # Ignore any pre-release suffix for comparison purposes
-        numeric += char  # Append this digit to the numeric prefix
-    return numeric  # Caller defaults empty results to 0
-
-
-def _parse_version(version_str: str) -> tuple[int, ...]:  # Convert a version string into a comparable integer tuple
-    """Parse version string into comparable tuple (for example '0.59.3' -> (0, 59, 3))."""
+def _parse_version(version_str: str) -> Version:  # Convert a version string into a PEP 440 version
+    """Parse a version string with the PEP 440 version parser."""
     try:  # The except below handles malformed input
-        parts = [
-            int(_leading_digits(part) or "0") for part in version_str.split(".")
-        ]  # Numeric prefix of each dotted segment, defaulting empty/non-numeric segments to 0
-        return tuple(parts)  # Return as a tuple so versions compare element-by-element
-    except Exception:  # Malformed version string that cannot be parsed
-        return (0,)  # Return a minimal tuple so comparisons treat it as the lowest possible version
+        return Version(str(version_str))  # Use packaging to compare suffixes and unequal segments correctly
+    except (InvalidVersion, TypeError):  # Malformed version string that cannot be parsed
+        logging.debug("Treating invalid version '%s' as 0", version_str)  # Leave a diagnostic breadcrumb
+        return Version("0")  # Return a low sentinel so invalid metadata does not satisfy a real constraint
 
 
 def _extract_version_constraint(spec: str) -> tuple[str, str]:  # Split a spec into operator + required version
@@ -904,19 +897,8 @@ def _extract_version_constraint(spec: str) -> tuple[str, str]:  # Split a spec i
     return ">=", ""  # No operator found: signal 'no constraint' to the caller
 
 
-def _pad_version_tuples(
-    installed_tuple: tuple[int, ...],
-    required_tuple: tuple[int, ...],
-) -> tuple[tuple[int, ...], tuple[int, ...]]:  # Zero-pad two version tuples to equal length
-    """Right-pad both version tuples with zeros so they compare element-by-element."""
-    max_len = max(len(installed_tuple), len(required_tuple))  # Longest of the two drives the padding width
-    installed_padded = installed_tuple + (0,) * (max_len - len(installed_tuple))  # Pad installed to equal length
-    required_padded = required_tuple + (0,) * (max_len - len(required_tuple))  # Pad required to align lengths
-    return installed_padded, required_padded  # Equal-length tuples ready for comparison
-
-
-# Operator symbol -> comparison predicate. Dict dispatch keeps _version_satisfies flat (no if/elif chain).
-_VERSION_COMPARATORS: dict[str, Callable[[tuple[int, ...], tuple[int, ...]], bool]] = {
+# Operator symbol -> comparison predicate. Dict dispatch keeps _version_satisfies flat.
+_VERSION_COMPARATORS: dict[str, Callable[[Version, Version], bool]] = {
     ">=": lambda installed, required: installed >= required,  # 'at least' constraint
     ">": lambda installed, required: installed > required,  # 'strictly newer' constraint
     "<=": lambda installed, required: installed <= required,  # 'at most' constraint
@@ -935,15 +917,12 @@ def _version_satisfies(installed: str, spec: str) -> bool:  # Decide whether ins
     if not required_version:  # The spec had no version constraint
         return True  # No version requirement, any version satisfies
 
-    installed_tuple, required_tuple = _pad_version_tuples(  # Align both versions to equal length for comparison
-        _parse_version(installed),
-        _parse_version(required_version),  # Convert each to a comparable integer tuple
-    )
-
+    installed_version = _parse_version(installed)  # Parse installed with PEP 440 comparison rules
+    required = _parse_version(required_version)  # Parse required with PEP 440 comparison rules
     comparator = _VERSION_COMPARATORS.get(operator_symbol)  # Look up the predicate for this operator
     if comparator is None:  # Unknown operator (should not happen given the parser)
         return True  # Be permissive and treat the requirement as satisfied
-    return comparator(installed_tuple, required_tuple)  # Apply the matched comparison predicate
+    return comparator(installed_version, required)  # Apply the matched comparison predicate
 
 
 def _get_latest_pypi_version(package_name: str) -> str:  # Ask PyPI for a package's newest published version
@@ -3823,11 +3802,35 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     ),
     "261": (
         SimpleEndpointExporter.site_endpoints,
-        "Run any site-scoped Mist get or list endpoint (57 operations, issue #1807)",
+        "Run any site-scoped simple Mist read endpoint (58 operations, issue #1807)",
     ),
     "262": (
         SimpleEndpointExporter.msp_endpoints,
         "Run any MSP-scoped Mist get or list endpoint (10 operations, issue #1807)",
+    ),
+    "263": (
+        EndpointFamilyExporter.site_sle_endpoints,
+        "Run any site SLE endpoint with scope prompts (17 operations, issue #1807)",
+    ),
+    "264": (
+        EndpointFamilyExporter.site_map_endpoints,
+        "Run any site map endpoint with map prompts (7 operations, issue #1807)",
+    ),
+    "265": (
+        EndpointFamilyExporter.site_detail_endpoints,
+        "Run any site detail endpoint with identifier prompts (33 operations, issue #1807)",
+    ),
+    "266": (
+        EndpointFamilyExporter.org_detail_endpoints,
+        "Run any org detail endpoint with identifier prompts (61 operations, issue #1807)",
+    ),
+    "267": (
+        EndpointFamilyExporter.msp_detail_endpoints,
+        "Run any MSP detail endpoint with identifier prompts (10 operations, issue #1807)",
+    ),
+    "268": (
+        EndpointFamilyExporter.other_endpoints,
+        "Run any remaining endpoint with identifier prompts (6 operations, issue #1807)",
     ),
     "238": (
         MSPLicenseExporter.licenses,
