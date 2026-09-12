@@ -20,7 +20,7 @@ from __future__ import annotations  # WHY: PEP 604 unions for future annotations
 import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured trace + info/warn/error logging.
 import time  # WHY: wall-time epoch + elapsed timing.
-from datetime import datetime  # WHY: format epoch to human timestamp. Timestamp CSV filename.
+from datetime import UTC, datetime  # WHY: format epoch to human timestamp. Timestamp CSV filename.
 from typing import Any  # WHY: device dicts carry heterogeneous values.
 
 from prettytable import PrettyTable  # WHY: render offline device rows as a table.
@@ -236,7 +236,7 @@ class OfflineDeviceReporter:  # Offline device inventory report.
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter.
         fields = OfflineDeviceReporter._OFFLINE_DISPLAY_FIELDS  # Column order.
         csv_records = [{f: record.get(f, "") for f in fields} for record in offline_records]  # Strip helper keys.
-        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")  # Timestamp for filename.
+        timestamp_str = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")  # Timestamp for filename.
         filename = f"OfflineDeviceReport_{timestamp_str}.csv"  # Output filename.
         mh.DataExporter.write_with_format_selection(
             data=csv_records, filename_or_table=filename, api_function_name="listOrgDevicesStats"

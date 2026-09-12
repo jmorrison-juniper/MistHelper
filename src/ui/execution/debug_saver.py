@@ -5,7 +5,7 @@ from __future__ import annotations  # Enable PEP 563 postponed annotations for f
 import json  # Serializer for the debug artifact payload.
 import logging  # Structured action logs for the save workflow.
 import os  # Filesystem path composition and directory creation.
-from datetime import datetime  # Timestamp source for filename and payload metadata.
+from datetime import UTC, datetime  # Timestamp source for filename and payload metadata.
 from typing import Any  # Generic typing for opaque API result values.
 
 DEBUG_DIR = os.path.join("data", "tui_debug_results")  # Where debug artifacts land
@@ -35,14 +35,14 @@ class DebugResultSaver:  # Owns the debug artifact write path for one API result
     def _build_filepath(func_name: str) -> str:  # Compose timestamped path under DEBUG_DIR.
         """Compose the artifact file path under ``DEBUG_DIR`` with a timestamp."""
         os.makedirs(DEBUG_DIR, exist_ok=True)  # Ensure the directory exists
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # Compact timestamp for filename
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")  # Compact timestamp for filename
         return os.path.join(DEBUG_DIR, f"{func_name}_{timestamp}.json")  # Joined cross-platform path
 
     def _build_payload(self, func_name: str, raw_result: Any, parsed_data: Any) -> dict[str, Any]:  # JSON body.
         """Build the JSON-serializable artifact dict (with secret redaction)."""
         return {
             "function": func_name,  # Function name for the artifact
-            "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S"),  # Same format as filename
+            "timestamp": datetime.now(UTC).strftime("%Y%m%d_%H%M%S"),  # Same format as filename
             "parameters": self._redact_params(self._tui.function_params),  # Redacted captured params
             "raw_response": _Serializer.to_jsonable(raw_result),  # Recursive APIResponse -> dict
             "parsed_data": parsed_data,  # Already parsed payload

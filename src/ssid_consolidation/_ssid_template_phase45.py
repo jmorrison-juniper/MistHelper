@@ -40,7 +40,7 @@ import json  # WHY: deviation ``unique_values`` are stored as JSON strings
 import logging  # WHY: workflow telemetry across phases 4 + 5
 import os  # WHY: MIST_TEMPLATE_BASENAME env override lookup
 from dataclasses import dataclass  # WHY: bundle template-op params + result payload
-from datetime import datetime  # WHY: ISO timestamps for template + disable operations
+from datetime import UTC, datetime  # WHY: ISO timestamps for template + disable operations
 from typing import Any  # WHY: broad typing for opaque cache / row payloads
 
 from ._ssid_template_cluster import _ClusterBase  # WHY: shared parent-proxy wrapper
@@ -224,7 +224,7 @@ def _apply_choice(
         param,
         selected,
         len(unique_values),
-        datetime.now().isoformat(),
+        datetime.now(UTC).isoformat(),
     )
 
 
@@ -563,7 +563,7 @@ class _SsidTemplatePhase45Cluster(_ClusterBase):
             template_name=f"{_MISTHELPER_PREFIX}{group_name}_{basename}",
             wlan_config=config,
             group_info=group_plan.get(group_name, {}),  # WHY: empty dict when group missing from plan
-            timestamp=datetime.now().isoformat(),  # WHY: per-row timestamp for the result record
+            timestamp=datetime.now(UTC).isoformat(),  # WHY: per-row timestamp for the result record
             target_ssid=parent.target_ssid,
             org_id=parent.org_id,
             apisession=parent.apisession,

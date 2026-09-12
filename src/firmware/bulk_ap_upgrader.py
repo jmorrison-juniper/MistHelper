@@ -669,7 +669,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         for model, devices in self.aps_by_model.items():  # WHY: iterate collection
             versions = set(self.ap_versions.get(str(d.get("id", "")), "Unknown") for d in devices)  # WHY: capture in...
             versions_text = ", ".join(sorted(versions, reverse=True)) if "Unknown" not in versions else "Unknown"
-            print(f"   !? {model}: {len(devices)} devices" f" (Current versions: {versions_text})")  # WHY: user-faci...
+            print(f"   !? {model}: {len(devices)} devices (Current versions: {versions_text})")  # WHY: user-faci...
 
     # =========================================================================
     # STEP 4: AVAILABLE FIRMWARE VERSIONS
@@ -946,7 +946,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             "devices": needing_upgrade,  # WHY: only devices still needing upgrade are targeted
         }
         # WHY: FR-017 verbatim acceptance banner preserved from pre-refactor UI
-        print(f"! Selected version {target_version} for {model}" f" ({len(needing_upgrade)} devices need upgrade)")
+        print(f"! Selected version {target_version} for {model} ({len(needing_upgrade)} devices need upgrade)")
         logging.debug("record_selection_in_plan committed model=%s", model)  # WHY: FR-007 debug-after
 
     def _validate_upgrade_plan(self) -> bool:
@@ -1066,7 +1066,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             "reboot": True,  # WHY: default on. User can override via reboot toggle
         }
         # WHY: FR-017 verbatim final-strategy banner preserved from pre-refactor UI
-        print(f"\n! Final strategy: Download={download_strategy.upper()}," f" Reboot={reboot_strategy.upper()}")
+        print(f"\n! Final strategy: Download={download_strategy.upper()}, Reboot={reboot_strategy.upper()}")
         logging.debug("init_upgrade_config committed keys=%s", len(self.upgrade_config))  # WHY: FR-007 debug-after
 
     def _configure_strategy_options(self) -> None:  # WHY: helper definition (see docstring)
@@ -1233,8 +1233,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         # WHY: only render auto-upgrade note when auto-upgrade would add calls
         if estimate["auto_upgrade_calls"] > 0:  # WHY: guard on condition
             print(  # WHY: FR-017 verbatim auto-upgrade hint preserved
-                f"   Note: If you configure auto-upgrade (Step 9),"
-                f" add {estimate['auto_upgrade_calls']} more call(s)"
+                f"   Note: If you configure auto-upgrade (Step 9), add {estimate['auto_upgrade_calls']} more call(s)"
             )
         # WHY: FR-007 debug-after with total call count for traceability
         logging.debug(  # WHY: debug log (FR-007)
@@ -1256,13 +1255,13 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         print("\n   Breakdown by site:")  # WHY: FR-017 verbatim breakdown banner preserved
         for item in breakdown[:10]:  # WHY: cap at first 10 rows to match pre-refactor truncation policy
             print(  # WHY: FR-017 verbatim row format preserved
-                f"     - {item['site_name']}: {item['calls']} call(s)" f" ({item['reason']}, {item['devices']} devices)"
+                f"     - {item['site_name']}: {item['calls']} call(s) ({item['reason']}, {item['devices']} devices)"
             )
         if len(breakdown) > 10:  # WHY: summarize hidden rows when truncation occurred
             remaining = len(breakdown) - 10  # WHY: count of sites not individually shown
             remaining_calls = sum(b["calls"] for b in breakdown[10:])  # WHY: aggregate call count of tail
             # WHY: FR-017 verbatim "... and N more sites" line preserved
-            print(f"     ... and {remaining} more sites" f" ({remaining_calls} additional calls)")  # WHY: user-facin...
+            print(f"     ... and {remaining} more sites ({remaining_calls} additional calls)")  # WHY: user-facin...
 
     def _display_multi_site_summary(self) -> None:  # WHY: helper definition (see docstring)
         """Display comprehensive summary for multi-site upgrades (PCPP orchestrator)."""
@@ -1319,7 +1318,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         print(f"   Total: {len(site_summary)} sites, {total_aps} APs")  # WHY: user-facing feedback
         # WHY: only mention skipped-at-target when non-zero to keep output tidy
         if self.skipped_already_at_target > 0:  # WHY: guard on condition
-            print(f"   Skipped: {self.skipped_already_at_target}" " APs already at target version")  # WHY: user-faci...
+            print(f"   Skipped: {self.skipped_already_at_target} APs already at target version")  # WHY: user-faci...
 
     def _display_upgrade_warnings(self) -> None:  # WHY: helper definition (see docstring)
         """Display critical upgrade warnings."""
@@ -1333,8 +1332,8 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         print("!? APs will REBOOT during upgrade")  # WHY: user-facing feedback
         print("!? Wi-Fi connectivity will be TEMPORARILY LOST")  # WHY: user-facing feedback
         print("!? Upgrades take 5-15 minutes per device")  # WHY: user-facing feedback
-        print(f"!? Download Strategy:" f" {self.upgrade_config['download_strategy'].upper()}")  # WHY: user-facing fe...
-        print(f"!? Reboot Strategy:" f" {self.upgrade_config['reboot_strategy'].upper()}")  # WHY: user-facing feedback
+        print(f"!? Download Strategy: {self.upgrade_config['download_strategy'].upper()}")  # WHY: user-facing fe...
+        print(f"!? Reboot Strategy: {self.upgrade_config['reboot_strategy'].upper()}")  # WHY: user-facing feedback
         print("??" * 50)  # WHY: user-facing feedback
 
     def _display_final_plan(self) -> None:  # WHY: helper definition (see docstring)
@@ -1343,7 +1342,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         if len(self.sites_to_upgrade) > 1:  # WHY: guard on condition
             print(f"   Bulk upgrade: {len(self.sites_to_upgrade)} sites")  # WHY: user-facing feedback
         for model, plan in self.upgrade_plan.items():  # WHY: iterate collection
-            print(f"   {model}: {len(plan['devices'])} devices" f" firmware {plan['version']}")  # WHY: user-facing f...
+            print(f"   {model}: {len(plan['devices'])} devices firmware {plan['version']}")  # WHY: user-facing f...
 
     def _get_upgrade_confirmation(self, total: int) -> bool:
         """Prompt user for UPGRADE confirmation token. Return True on match."""
@@ -1429,7 +1428,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
     ) -> None:
         """Execute upgrade for a single site."""
         site_name = site_data["name"]  # WHY: capture intermediate value
-        print(f"\n   Site {index}/{total}: {site_name}" f" ({len(site_data['devices'])} devices)")  # WHY: user-facin...
+        print(f"\n   Site {index}/{total}: {site_name} ({len(site_data['devices'])} devices)")  # WHY: user-facin...
 
         try:
             versions = set(m["version"] for m in site_data["models"].values())  # WHY: capture intermediate value
@@ -1470,7 +1469,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
     ) -> None:
         """Print dry-run banner + bump success counter (no API call)."""
         # WHY: user-visible dry-run banner mirrors pre-refactor format for FR-017 equivalence
-        print(f"      [DRY-RUN] Would upgrade {len(device_ids)}" f" devices to {version}")  # WHY: user-facing feedback
+        print(f"      [DRY-RUN] Would upgrade {len(device_ids)} devices to {version}")  # WHY: user-facing feedback
         # WHY: preserved verbatim from pre-refactor log line to satisfy FR-017 observable equivalence
         logging.info(  # WHY: info log (FR-007)
             "DRY-RUN: Would call upgradeSiteDevices for site %s with %s devices",
@@ -1769,8 +1768,8 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
 
         print("\n  Site Auto-Upgrade Configuration")  # WHY: user-facing feedback
         print("=" * 60)  # WHY: user-facing feedback
-        print(f"   This will configure auto-upgrade for" f" {len(self.sites_to_upgrade)} site(s)")  # WHY: user-facin...
-        print("   Auto-upgrade ensures new APs automatically upgrade" " to target firmware")  # WHY: user-facing feed...
+        print(f"   This will configure auto-upgrade for {len(self.sites_to_upgrade)} site(s)")  # WHY: user-facin...
+        print("   Auto-upgrade ensures new APs automatically upgrade to target firmware")  # WHY: user-facing feed...
 
         try:
             prompt = self._input_fn("\n  Configure site auto-upgrade? (Y/n): ").strip().lower()  # WHY: capture inter...
@@ -1827,7 +1826,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
     def _prompt_family_selection(self, ap_families: dict[str, list[str]]) -> dict[str, list[str]]:  # WHY: helper def...
         """Compute phase: render family list and parse operator's selection string."""
         print(
-            "\n  AP Model Families (select by family to set ONE version" " for all models in that family):"
+            "\n  AP Model Families (select by family to set ONE version for all models in that family):"
         )  # WHY: banner explains that a single choice will apply to all models in each picked family
         print("-" * 60)  # WHY: horizontal rule delimits the family-picker block
         family_list = list(ap_families.items())  # WHY: freeze insertion order so numeric picks are stable
@@ -1835,7 +1834,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             models_str = ", ".join(models)  # WHY: single-line preview of every model under this family
             print(f"   [{idx}] {ap_type}: {models_str}")  # WHY: family entry rendered as "[N] type: models"
         print("\n  Options:")  # WHY: help block clarifies acceptable input formats
-        print("   - Enter family numbers (e.g., '1,3,5')" " - you will select ONE version per family")  # WHY: user-f...
+        print("   - Enter family numbers (e.g., '1,3,5') - you will select ONE version per family")  # WHY: user-f...
         print("   - Enter 'all' to configure all AP model families")  # WHY: user-facing feedback
         print("   - Press Enter to skip")  # WHY: user-facing feedback
         try:
@@ -1976,7 +1975,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             selected_version = sorted_versions[idx]  # WHY: fetch the chosen version string
             for model in new_models:  # WHY: fan out chosen version to every model in the family
                 custom_versions[model] = selected_version  # WHY: mutate shared dict passed by caller
-            print(f"   -> Applied {selected_version}" f" to: {', '.join(new_models)}")  # WHY: FR-017 verbatim echo
+            print(f"   -> Applied {selected_version} to: {', '.join(new_models)}")  # WHY: FR-017 verbatim echo
         logging.debug("commit_family_version done family=%s", ap_type)  # WHY: FR-007 debug-after
 
     def _find_universal_versions_for_models(self, models: set[str]) -> list[str]:
@@ -2080,7 +2079,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         """Apply auto-upgrade configuration to ALL selected sites."""
         import mistapi  # WHY: required module import
 
-        print(f"\n  Applying Auto-Upgrade to" f" {len(self.sites_to_upgrade)} Site(s)")  # WHY: user-facing feedback
+        print(f"\n  Applying Auto-Upgrade to {len(self.sites_to_upgrade)} Site(s)")  # WHY: user-facing feedback
         print("=" * 60)  # WHY: user-facing feedback
 
         settings = {"auto_upgrade": self._build_auto_upgrade_settings(custom_versions, schedule)}  # WHY: capture int...
@@ -2142,7 +2141,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         for model, version in sorted(custom_versions.items()):  # WHY: iterate collection
             print(f"      {model}: {version}")  # WHY: user-facing feedback
         if schedule.get("day_of_week") != "any" or schedule.get("time_of_day") != "any":  # WHY: guard on condition
-            print(f"   Schedule: {schedule.get('day_of_week', 'any')}" f" at {schedule.get('time_of_day', 'any')}")
+            print(f"   Schedule: {schedule.get('day_of_week', 'any')} at {schedule.get('time_of_day', 'any')}")
 
     # =========================================================================
     # STEP 10: STATUS CHECK
@@ -2268,7 +2267,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         return os.path.join(  # WHY: surface computed result
             "data",
             f"AdvancedAPFirmwareUpgrade_{site_name.replace(' ', '_')}"
-            f"_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            f"_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
             f"{dry_run_suffix}.csv",
         )
 

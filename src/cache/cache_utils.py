@@ -19,7 +19,7 @@ import logging  # WHY: debug/trace + failure reporting.
 import os  # WHY: filesystem existence checks + listdir/remove.
 import time  # WHY: fast_cache_hit uses time.time() for age math.
 from collections.abc import Callable  # WHY: generator callable annotation for CSV producers.
-from datetime import datetime, timedelta  # WHY: mtime comparisons in freshness gate.
+from datetime import UTC, datetime, timedelta  # WHY: mtime comparisons in freshness gate.
 from typing import Any  # WHY: dynamic row payload annotations.
 
 
@@ -75,9 +75,9 @@ class CacheUtils:
             logging.info("* %s not found. Generating...", file_name)  # Tell operator it will be generated
             return False  # Not fresh -- caller regenerates
         try:  # Reading mtime can fail on permission/metadata errors
-            file_mtime = datetime.fromtimestamp(os.path.getmtime(full_file_path))  # Last-modified timestamp
+            file_mtime = datetime.fromtimestamp(os.path.getmtime(full_file_path), UTC)  # Last-modified timestamp
             logging.debug("File I/O: read mtime for %s: %s", full_file_path, file_mtime)  # Trace the mtime read
-            if datetime.now() - file_mtime < timedelta(minutes=freshness_minutes):  # Within the freshness window
+            if datetime.now(UTC) - file_mtime < timedelta(minutes=freshness_minutes):  # Within the freshness window
                 logging.info("! Using cached %s (fresh)", file_name)  # Tell operator the cache is being used
                 return True  # Fresh -- skip regeneration
             logging.info("* %s is older than %s minutes. Regenerating...", file_name, freshness_minutes)  # Stale notice

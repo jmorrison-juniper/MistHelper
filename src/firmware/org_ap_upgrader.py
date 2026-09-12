@@ -485,8 +485,7 @@ class OrgLevelAPFirmwareUpgrader:
         for idx, msp in enumerate(self._msp_privileges, start=1):  # WHY: iterate collection
             current_marker = " <-- currently selected" if default_idx == idx else ""  # WHY: compute current_marker
             print(  # WHY: surface user-facing message
-                f"    [{idx:>2}] {msp.get('msp_name', 'Unknown')} "
-                f"(role: {msp.get('role', 'unknown')}){current_marker}"
+                f"    [{idx:>2}] {msp.get('msp_name', 'Unknown')} (role: {msp.get('role', 'unknown')}){current_marker}"
             )
         print("")  # WHY: surface user-facing message
         print("  Selection Options:")  # WHY: surface user-facing message
@@ -1143,7 +1142,10 @@ class OrgLevelAPFirmwareUpgrader:
         logging.info("Calling getOrgInventory for org %s", self.org_id)  # WHY: trace API-boundary call
         org_inventory_api = importlib.import_module("mistapi.api.v1.orgs.inventory")  # WHY: lazy import to keep top of
         response = org_inventory_api.getOrgInventory(  # WHY: paginated AP inventory fetch
-            self.apisession, self.org_id, type="ap", limit=1000  # WHY: cap page size to reduce round-trips
+            self.apisession,
+            self.org_id,
+            type="ap",
+            limit=1000,  # WHY: cap page size to reduce round-trips
         )
         logging.debug("getOrgInventory returned response=%s", bool(response))  # WHY: post-op observability
         return response  # WHY: hand raw response to shape predicate
@@ -2012,7 +2014,7 @@ class OrgLevelAPFirmwareUpgrader:
     @staticmethod
     def _format_site_local_time(hour: int, minute: int) -> str:  # WHY: declare private helper _format_site_local_time
         """Format time for site-local scheduling."""
-        now = datetime.now()  # WHY: compute now
+        now = datetime.now(UTC)  # WHY: compute now
         target_dt = now.replace(hour=hour, minute=minute, second=0, microsecond=0)  # WHY: compute target_dt
         if target_dt <= now:  # WHY: branch on condition
             target_dt += timedelta(days=1)  # WHY: assign computed value
@@ -2027,13 +2029,11 @@ class OrgLevelAPFirmwareUpgrader:
             if target_dt <= now:  # WHY: branch on condition
                 target_dt += timedelta(days=1)  # WHY: assign computed value
             return target_dt.strftime("%Y-%m-%dT%H:%M:%SZ")  # WHY: return computed result
-        now_utc = datetime.now(UTC)  # WHY: compute now_utc
-        local_now = datetime.now()  # WHY: compute local_now
+        local_now = datetime.now(UTC).astimezone()  # WHY: read the local timezone as an aware datetime.
         target_local = local_now.replace(hour=hour, minute=minute, second=0, microsecond=0)  # WHY: compute target_local
         if target_local <= local_now:  # WHY: branch on condition
             target_local += timedelta(days=1)  # WHY: assign computed value
-        utc_offset = now_utc.replace(tzinfo=None) - local_now  # WHY: compute utc_offset
-        target_utc = target_local + utc_offset  # WHY: compute target_utc
+        target_utc = target_local.astimezone(UTC)  # WHY: convert local wall time to UTC safely.
         return target_utc.strftime("%Y-%m-%dT%H:%M:%SZ")  # WHY: return computed result
 
     def _parse_download_datetime(self, time_str: str) -> datetime | None:  # WHY: declare private helper _parse_download
@@ -2076,13 +2076,11 @@ class OrgLevelAPFirmwareUpgrader:
     @staticmethod
     def _resolve_local_to_utc_datetime(hour: int, minute: int) -> datetime:  # WHY: declare private helper _resolve_loca
         """Resolve local hour:minute to UTC datetime."""
-        now_utc = datetime.now(UTC)  # WHY: compute now_utc
-        local_now = datetime.now()  # WHY: compute local_now
+        local_now = datetime.now(UTC).astimezone()  # WHY: read the local timezone as an aware datetime.
         target_local = local_now.replace(hour=hour, minute=minute, second=0, microsecond=0)  # WHY: compute target_local
         if target_local <= local_now:  # WHY: branch on condition
             target_local += timedelta(days=1)  # WHY: assign computed value
-        offset = now_utc.replace(tzinfo=None) - local_now  # WHY: compute offset
-        return target_local + offset  # WHY: return computed result
+        return target_local.astimezone(UTC)  # WHY: return the matching UTC instant.
 
     def _configure_scheduling(self) -> bool:  # WHY: declare private helper _configure_scheduling
         """Configure download and reboot scheduling."""
