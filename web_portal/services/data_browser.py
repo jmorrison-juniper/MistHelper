@@ -160,62 +160,129 @@ class DataBrowserService:
             import json
 
             with open(filepath, encoding="utf-8", errors="replace") as fh:
-                if self._looks_like_json_lines(fh):
-                    return self._preview_json_lines(fh, page, per_page, search)
+                prefix = self._read_json_line_prefix(fh)  # Detect JSON Lines without parsing the first item twice.
+                if prefix["is_json_lines"]:
+                    state = self._new_json_line_state(page, per_page, search)  # Keep only bounded preview state.
+                    self._add_json_line_item(state, prefix["first_item"])  # Reuse the first parsed JSON Lines item.
+                    self._add_remaining_json_lines(state, fh)  # Continue from the second JSON Lines record.
+                    return self._format_json_lines_preview(state)  # Format the same response as the old path.
                 data = json.load(fh)
         except Exception as exc:
             return {"error": f"Failed to read JSON: {exc}"}
         return self._paginate_json_data(data, page, per_page, search)
 
     @staticmethod
-    def _looks_like_json_lines(fh) -> bool:
-        """Report whether the file starts with more than one JSON value line."""
+    def _read_json_line_prefix(fh) -> dict:
+        """Read enough prefix data to detect JSON Lines without duplicate parse work."""
         import json
 
-        for line in fh:
+        while True:
+            line = fh.readline()  # Use readline so tell() remains valid on Windows text streams.
+            if not line:
+                fh.seek(0)
+                return {"is_json_lines": False, "first_item": None}
             stripped = line.strip()
             if not stripped:
                 continue
             try:
-                json.loads(stripped)
+                first_item = json.loads(stripped)  # Parse the first item once for the JSON Lines path.
             except json.JSONDecodeError:
                 fh.seek(0)
-                return False
-            for next_line in fh:
-                if next_line.strip():
+                return {"is_json_lines": False, "first_item": None}
+            while True:
+                position = fh.tell()  # Preserve the next record start so the stream can continue there.
+                next_line = fh.readline()
+                if not next_line:
                     fh.seek(0)
-                    return True
-            fh.seek(0)
-            return False
-        fh.seek(0)
-        return False
+                    return {"is_json_lines": False, "first_item": None}
+                if next_line.strip():
+                    fh.seek(position)
+                    return {"is_json_lines": True, "first_item": first_item}
 
     def _preview_json_lines(self, fh, page: int, per_page: int, search: str) -> dict:
         """Read and paginate JSON Lines after the JSON parser rejects the file."""
         preview = self._paginate_json_line_items(fh, page, per_page, search)
+        return self._format_json_lines_preview(preview)
+
+    def _format_json_lines_preview(self, preview: dict) -> dict:
+        """Format a JSON Lines preview after the stream has been parsed."""
         if preview["count"] == 1:
-            return self._paginate_json_data(preview["first_item"], page, per_page, search)
+            return self._paginate_json_data(
+                preview["first_item"], preview["page"], preview["per_page"], preview["search"]
+            )
         if not isinstance(preview["first_item"], dict):
-            return self._paginate_json_data(preview["items"], page, per_page, search)
+            return self._paginate_json_data(preview["items"], preview["page"], preview["per_page"], preview["search"])
         return self._build_paginated_result(
             preview["columns"],
             preview["page_rows"],
             preview["last_rows"],
             preview["total"],
-            page,
-            per_page,
+            preview["page"],
+            preview["per_page"],
         )
 
     def _paginate_json_line_items(self, fh, page: int, per_page: int, search: str) -> dict:
         """Parse JSON Lines once and keep only the requested object rows."""
+        state = self._new_json_line_state(page, per_page, search)
+        self._add_remaining_json_lines(state, fh)  # Parse the stream with the same state used by prefix detection.
+        return state
+
+    def _add_remaining_json_lines(self, state: dict, fh) -> None:
+        """Parse the rest of a JSON Lines stream into the bounded page state."""
         import json
 
-        state = self._new_json_line_state(page, per_page, search)
+        loads = json.loads  # Keep the hot decoder lookup local for each JSON Lines record.
+        columns = state["columns"]  # Reuse the column list while the stream adds new keys.
+        seen = state["seen"]  # Reuse the key index while the stream adds new columns.
+        count = state["count"]  # Keep the total JSON item count in a local variable.
+        total = state["total"]  # Keep the matching row count in a local variable.
+        page_rows = state["page_rows"]  # Keep requested rows in a local variable for the hot loop.
+        last_rows = state["last_rows"]  # Keep the fallback tail in a local variable for the hot loop.
+        search_lower = state["search_lower"]  # Keep the filter term in a local variable for the hot loop.
+        requested_start = state["requested_start"]  # Keep the start offset in a local variable for the hot loop.
+        requested_end = state["requested_end"]  # Keep the end offset in a local variable for the hot loop.
         for line in fh:
-            stripped = line.strip()
-            if stripped:
-                self._add_json_line_item(state, json.loads(stripped))
-        return state
+            if not line.strip():
+                continue
+            item = loads(line)  # Parse one JSON Lines item and do not keep the raw line.
+            if count == 0:
+                state["first_item"] = item  # Preserve the single-item fallback rule.
+            if not isinstance(state["first_item"], dict):
+                state["items"].append(item)  # Preserve the old non-object JSON Lines behavior.
+                count += 1
+                continue
+            if not isinstance(item, dict):
+                item.get("")  # Raise the same AttributeError that the previous path raised.
+            for key in item:
+                if key not in seen:
+                    seen[key] = len(seen)
+                    columns.append(key)
+                    self._extend_saved_json_rows(state, columns)  # Align saved rows when a late key appears.
+            row = []  # Build one row for output and search without a second pass.
+            matches_search = not search_lower  # Empty search always matches the row.
+            for column in columns:
+                cell = str(item.get(column, ""))  # Match the existing string conversion rule.
+                row.append(cell)  # Keep the converted cell for the response row.
+                if search_lower and search_lower in cell.lower():
+                    matches_search = True  # Preserve case-insensitive substring search in any cell.
+            if not matches_search:
+                count += 1
+                continue
+            if requested_start <= total < requested_end:
+                page_rows.append(row)  # Keep the requested page for the response.
+            elif total < requested_start:
+                last_rows.append(row)  # Keep a fallback tail only before the requested page starts.
+            total += 1
+            count += 1
+        state["count"] = count  # Store the final item count for fallback decisions.
+        state["total"] = total  # Store the final matching row count for page metadata.
+
+    @staticmethod
+    def _extend_saved_json_rows(state: dict, columns: list) -> None:
+        """Extend saved JSON Lines rows when a later object adds a column."""
+        for saved_row in list(state["last_rows"]) + state["page_rows"]:
+            if len(saved_row) < len(columns):
+                saved_row.extend([""] * (len(columns) - len(saved_row)))
 
     @staticmethod
     def _new_json_line_state(page: int, per_page: int, search: str) -> dict:
@@ -226,9 +293,12 @@ class DataBrowserService:
             "first_item": None,
             "items": [],
             "last_rows": deque(maxlen=per_page),
+            "page": page,
             "page_rows": [],
+            "per_page": per_page,
             "requested_end": page * per_page,
             "requested_start": (page - 1) * per_page,
+            "search": search,
             "search_lower": search.lower() if search else "",
             "seen": {},
             "total": 0,
@@ -252,15 +322,13 @@ class DataBrowserService:
     @staticmethod
     def _extend_json_columns(state: dict, item) -> None:
         """Add new object keys and extend saved rows with blank cells."""
-        seen = {}
-        seen.update(state["seen"])
+        seen = state["seen"]  # Reuse the dictionary so each JSON Lines row avoids a copy.
         added_column = False
         for key in item:
             if key not in seen:
                 seen[key] = len(seen)
                 state["columns"].append(key)
                 added_column = True
-        state["seen"] = seen
         if not added_column:
             return
         for saved_row in list(state["last_rows"]) + state["page_rows"]:
@@ -374,7 +442,8 @@ class DataBrowserService:
                 continue
             if requested_start <= total < requested_end:
                 page_rows.append(row)
-            last_rows.append(row)
+            elif total < requested_start:
+                last_rows.append(row)
             total += 1
         total_pages = max(1, math.ceil(total / per_page))
         page = max(1, min(requested_page, total_pages))
@@ -393,10 +462,8 @@ class DataBrowserService:
             last_rows.append(row)
             skipped_rows += 1
         page_rows = list(islice(rows, per_page))
-        last_rows.extend(page_rows)
         total = skipped_rows + len(page_rows)
-        for row in rows:
-            last_rows.append(row)
+        for _row in rows:  # Count the remaining rows without saving them in the common page path.
             total += 1
         total_pages = max(1, math.ceil(total / per_page))
         page = max(1, min(requested_page, total_pages))

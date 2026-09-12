@@ -7,6 +7,16 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Data browser preview latency (issue #2511)
+
+- **Changed**: The web portal data browser now detects JSON Lines in one pass.
+  It reuses the first parsed record and keeps bounded preview memory.
+- **Changed**: CSV, JSON Lines, and log previews now skip fallback tail work
+  after the requested page starts. A page past the end still returns the last
+  valid page.
+- **Added**: Unit and parity coverage keep the preview response dictionary,
+  search behavior, JSON fallback behavior, and log line numbers stable.
+
 ### Upgrade portal browser-token sign-in journey (issue #2472)
 
 - **Added**: Playwright coverage signs in with a safe browser token, opens the
