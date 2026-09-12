@@ -1,0 +1,656 @@
+{
+  "workflow": "companion",
+  "specName": "browser session upgrades",
+  "branch": "2133-browser-session-token-upgrades",
+  "currentStep": "implement",
+  "status": "implementing",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-08-29T05:56:03.432Z"
+    },
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-08-29T06:00:44.982Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-08-29T06:03:20.968Z"
+    },
+    {
+      "step": "plan",
+      "substep": "research",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:06:21.151Z"
+    },
+    {
+      "step": "plan",
+      "substep": "design",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:07:03.935Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-08-29T06:07:14.180Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-08-29T06:07:28.432Z"
+    },
+    {
+      "step": "tasks",
+      "substep": "generate",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:08:25.010Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-08-29T06:08:26.019Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-08-29T06:08:41.156Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T001",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:17:51.924Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T002",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:18:20.600Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T003",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:18:49.393Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T004",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:19:18.300Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T005",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:20:28.948Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T006",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:21:10.752Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T007",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:23:07.840Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T008",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:25:08.103Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T009",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:28:03.352Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T010",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:32:22.085Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T011",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:35:32.186Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T012",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:36:50.003Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T013",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:37:53.548Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T014",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:40:37.430Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T015",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:41:14.296Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T016",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:42:34.245Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T017",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:43:45.725Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T018",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:45:02.672Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T019",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:45:35.025Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T020",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:53:50.003Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T021",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:53:51.630Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T022",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:53:53.386Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T023",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:54:32.964Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T024",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:56:15.572Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T025",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:56:17.339Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T026",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T06:56:19.043Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T027",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-08-29T07:41:25.873Z"
+    }
+  ],
+  "unattended": true,
+  "coverage": {
+    "FR-001": {
+      "title": "Gate browser-token sign-in on startup environment state.",
+      "tasks": [
+        "T001",
+        "T002",
+        "T007",
+        "T010",
+        "T013",
+        "T014"
+      ]
+    },
+    "FR-002": {
+      "title": "Keep browser tokens out of all durable and rendered data.",
+      "tasks": [
+        "T001",
+        "T002",
+        "T005",
+        "T006",
+        "T008",
+        "T010"
+      ]
+    },
+    "FR-003": {
+      "title": "Use each active browser credential for every portal API call.",
+      "tasks": [
+        "T005",
+        "T008",
+        "T010",
+        "T015"
+      ]
+    },
+    "FR-004": {
+      "title": "Use a GetSelf token name for audit and lock holder identity.",
+      "tasks": [
+        "T001",
+        "T005",
+        "T008",
+        "T010"
+      ]
+    },
+    "FR-005": {
+      "title": "Preserve full capture rows regardless of later type selection.",
+      "tasks": [
+        "T003",
+        "T009",
+        "T011",
+        "T019"
+      ]
+    },
+    "FR-006": {
+      "title": "Offer all, selected, and single type selection controls.",
+      "tasks": [
+        "T003",
+        "T009",
+        "T017",
+        "T018"
+      ]
+    },
+    "FR-007": {
+      "title": "Filter target rows and stored plans to selected supported types.",
+      "tasks": [
+        "T003",
+        "T009",
+        "T011",
+        "T017",
+        "T018",
+        "T019"
+      ]
+    },
+    "FR-008": {
+      "title": "Preserve validation for every selected target.",
+      "tasks": [
+        "T003",
+        "T009",
+        "T011",
+        "T016"
+      ]
+    },
+    "FR-009": {
+      "title": "Mark known firmware values that differ from safe targets.",
+      "tasks": [
+        "T004",
+        "T021",
+        "T022"
+      ]
+    },
+    "FR-010": {
+      "title": "Prefer compatible overrides and use a compatible model fallback.",
+      "tasks": [
+        "T004",
+        "T009",
+        "T021"
+      ]
+    },
+    "FR-011": {
+      "title": "Preserve unknown running-version behavior.",
+      "tasks": [
+        "T004",
+        "T020",
+        "T023"
+      ]
+    },
+    "FR-012": {
+      "title": "Never start a real firmware upgrade.",
+      "tasks": [
+        "T027",
+        "T028",
+        "T029"
+      ]
+    }
+  },
+  "size": "oversized",
+  "classification": {
+    "projectedFiles": 18,
+    "projectedTasks": 24,
+    "scopeSignal": "larger",
+    "verdict": "oversized"
+  },
+  "context": [
+    "area: portal authentication and server-side session access",
+    "area: capture, upgrade options, and inventory target selection",
+    "constraint: credentials never leave the server-side session boundary",
+    "constraint: no real firmware upgrade may start"
+  ],
+  "intent": "Let an operator safely prepare and review a site upgrade when no environment token exists at portal startup.",
+  "expectations": [
+    "Do not start a real firmware upgrade.",
+    "Do not store, expose, log, export, or commit a raw browser token."
+  ],
+  "approach": "Use the existing in-memory session registry for a GetSelf-derived browser identity and enforce selected device types before target records are stored.",
+  "decisions": [
+    {
+      "decision": "Freeze environment token availability at factory startup",
+      "why": "The browser token field must appear only when boot had no environment token.",
+      "rejected": "Reading the environment on each request."
+    },
+    {
+      "decision": "Use the safe GetSelf token name as browser-token identity",
+      "why": "Audit and site lock holder data need an operator-readable nonsecret identity.",
+      "rejected": "Using a raw token, its digest, or a typed email."
+    },
+    {
+      "decision": "Enforce selected types in target construction",
+      "why": "A browser-only filter cannot stop a crafted submitted plan.",
+      "rejected": "Filtering only table rows."
+    },
+    {
+      "decision": "Fall back to highest compatible model version",
+      "why": "A shared type override can be unavailable for mixed models.",
+      "rejected": "Applying the highest type-wide version."
+    }
+  ],
+  "step_summaries": {
+    "plan": {
+      "summary": "Planned session-safe sign-in, selected upgrade types, and model-safe mismatch markers.",
+      "key_finding": "The existing in-memory session registry and model version builder provide the safe extension seams."
+    },
+    "tasks": {
+      "summary": "29 tasks across setup, foundational work, three user stories, and polished delivery waves."
+    }
+  },
+  "currentTask": "T027",
+  "task_summaries": {
+    "T001": {
+      "status": "DONE",
+      "did": "Added browser-token unit fixtures and no-leak sign-in cases.",
+      "files": [
+        "tests/unit/upgrade_portal/test_auth.py"
+      ]
+    },
+    "T002": {
+      "status": "DONE",
+      "did": "Added browser-token page gate and sign-in response contract cases.",
+      "files": [
+        "tests/contract/upgrade_portal/test_auth.py"
+      ]
+    },
+    "T003": {
+      "status": "DONE",
+      "did": "Added selected-type defaults, rejection, and target-filter unit cases.",
+      "files": [
+        "tests/unit/upgrade_portal/test_upgrade_options.py"
+      ]
+    },
+    "T004": {
+      "status": "DONE",
+      "did": "Added contract coverage for safe targets and known firmware mismatch markers.",
+      "files": [
+        "tests/contract/upgrade_portal/test_upgrade_options.py"
+      ]
+    },
+    "T005": {
+      "status": "DONE",
+      "did": "Added safe token-name owner and browser-token registry identity cases.",
+      "files": [
+        "tests/unit/upgrade_portal/test_identity.py"
+      ]
+    },
+    "T006": {
+      "status": "DONE",
+      "did": "Added a browser-token response, session-record, and log leak contract.",
+      "files": [
+        "tests/contract/upgrade_portal/test_no_credential_leak.py"
+      ]
+    },
+    "T007": {
+      "status": "DONE",
+      "did": "Captured environment-token presence at startup and exposed the browser-token gate.",
+      "files": [
+        "src/upgrade_portal/app/config.py",
+        "src/upgrade_portal/app/factory.py"
+      ]
+    },
+    "T008": {
+      "status": "DONE",
+      "did": "Added browser-token sessions and safe token-name identities with lock compatibility.",
+      "files": [
+        "src/upgrade_portal/runtime/identity.py",
+        "src/upgrade_portal/runtime/lock.py"
+      ]
+    },
+    "T009": {
+      "status": "DONE",
+      "did": "Added selected-type validation, selected target filtering, and safe model fallback selection.",
+      "files": [
+        "src/upgrade_portal/upgrade/options.py"
+      ]
+    },
+    "T010": {
+      "status": "DONE",
+      "did": "Built browser-token sessions, GetSelf token-name lookup, and safe sign-in refusal paths.",
+      "files": [
+        "src/upgrade_portal/app/routes/auth.py"
+      ]
+    },
+    "T011": {
+      "status": "DONE",
+      "did": "Stored and returned selected device types with the saved upgrade targets.",
+      "files": [
+        "src/upgrade_portal/app/routes/upgrade.py"
+      ]
+    },
+    "T012": {
+      "status": "DONE",
+      "did": "Ran focused authentication and identity tests successfully.",
+      "files": [
+        "tests/unit/upgrade_portal/test_auth.py",
+        "tests/unit/upgrade_portal/test_identity.py"
+      ]
+    },
+    "T013": {
+      "status": "DONE",
+      "did": "Added the startup-gated browser-token control with token-safe guidance.",
+      "files": [
+        "src/upgrade_portal/app/assets/templates/auth/signin.html"
+      ]
+    },
+    "T014": {
+      "status": "DONE",
+      "did": "Added browser-token client submission to the sign-in endpoint and cleared the input.",
+      "files": [
+        "src/upgrade_portal/app/assets/static/js/portal.js"
+      ]
+    },
+    "T015": {
+      "status": "DONE",
+      "did": "Verified the guarded selection, capture, upgrade, and driver paths read the active registry session.",
+      "files": [
+        "src/upgrade_portal/app/wiring.py",
+        "src/upgrade_portal/app/routes/select.py",
+        "src/upgrade_portal/app/routes/capture.py",
+        "src/upgrade_portal/app/routes/upgrade.py"
+      ]
+    },
+    "T016": {
+      "status": "DONE",
+      "did": "Ran selected-type option validation and target filtering tests successfully.",
+      "files": [
+        "tests/unit/upgrade_portal/test_upgrade_options.py"
+      ]
+    },
+    "T017": {
+      "status": "DONE",
+      "did": "Added all and per-type upgrade selection checkboxes and row type attributes.",
+      "files": [
+        "src/upgrade_portal/app/assets/templates/upgrade/options.html"
+      ]
+    },
+    "T018": {
+      "status": "DONE",
+      "did": "Added selected-type payloads, target filtering, and all-type checkbox behavior.",
+      "files": [
+        "src/upgrade_portal/app/assets/static/js/portal.js"
+      ]
+    },
+    "T019": {
+      "status": "DONE",
+      "did": "Verified that capture assembly reads every inventory section independently of selected upgrade types.",
+      "files": [
+        "src/upgrade_portal/capture/assembly.py"
+      ]
+    },
+    "T020": {
+      "status": "DONE",
+      "did": "Ran safe target and firmware mismatch contracts successfully.",
+      "files": [
+        "tests/contract/upgrade_portal/test_upgrade_options.py"
+      ]
+    },
+    "T021": {
+      "status": "DONE",
+      "did": "Added safe target sources, compatible fallbacks, and known-version mismatch fields.",
+      "files": [
+        "src/upgrade_portal/upgrade/options.py"
+      ]
+    },
+    "T022": {
+      "status": "DONE",
+      "did": "Added visible safe-target mismatch markers for known firmware differences.",
+      "files": [
+        "src/upgrade_portal/app/assets/templates/upgrade/options.html"
+      ]
+    },
+    "T023": {
+      "status": "DONE",
+      "did": "Verified capture device indexing keeps an unknown firmware version empty for safe mismatch handling.",
+      "files": [
+        "src/upgrade_portal/capture/devices.py"
+      ]
+    },
+    "T024": {
+      "status": "DONE",
+      "did": "Documented browser-token startup gating, safe identity, and no-token-retention rules.",
+      "files": [
+        "documentation/upgrade_capture_portal.md"
+      ]
+    },
+    "T025": {
+      "status": "DONE",
+      "did": "Documented browser-token safety, type selection, and firmware mismatch markers.",
+      "files": [
+        "README.md"
+      ]
+    },
+    "T026": {
+      "status": "DONE",
+      "did": "Added the browser-token and safe device selection release note.",
+      "files": [
+        "CHANGELOG.md"
+      ]
+    },
+    "T027": {
+      "status": "DONE",
+      "did": "Ran focused unit, contract, browser, syntax, security, and prose validation.",
+      "files": [
+        "tests/e2e/upgrade_portal/conftest.py"
+      ]
+    }
+  }
+}

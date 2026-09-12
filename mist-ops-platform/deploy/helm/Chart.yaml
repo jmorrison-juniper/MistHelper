@@ -1,0 +1,12 @@
+apiVersion: v2
+name: mist-ops-platform
+description: Juniper Mist Ops Platform — config versioning, drift detection, and rollouts
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - mist
+  - network-ops
+  - config-management
+maintainers:
+  - name: Platform Team

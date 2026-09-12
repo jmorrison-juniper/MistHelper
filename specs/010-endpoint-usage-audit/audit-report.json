@@ -1,0 +1,179 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2026-03-08T08:13:56Z",
+  "branch": "010-endpoint-usage-audit",
+  "scope": {
+    "files_audited": [
+      "MistHelper.py",
+      "maps_manager.py",
+      "wsgi.py"
+    ],
+    "total_call_sites": 370,
+    "unique_api_functions": 107,
+    "menu_operations_covered": 123,
+    "reference_docs_available": 1013
+  },
+  "summary": {
+    "total_findings": 10,
+    "by_severity": {
+      "Critical": 1,
+      "High": 3,
+      "Medium": 4,
+      "Low": 2
+    },
+    "by_tier": {
+      "Incorrect": 7,
+      "Suboptimal": 3
+    },
+    "by_category": {
+      "endpoint-selection": 0,
+      "parameter-usage": 4,
+      "pagination": 6,
+      "deprecation": 0,
+      "best-practice": 0
+    },
+    "coverage_percentage": 100.0
+  },
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "Critical",
+      "tier": "Incorrect",
+      "category": "parameter-usage",
+      "menu_operations": [90],
+      "source_file": "MistHelper.py",
+      "line_number": 42487,
+      "api_function": "mistapi.api.v1.sites.setting.getSiteSettings",
+      "current_behavior": "Calls getSiteSettings (plural) in FirmwareManager._fetch_current_site_settings(). The SDK module mistapi.api.v1.sites.setting only exposes getSiteSetting (singular). This will raise AttributeError at runtime when the firmware management workflow reaches this code path.",
+      "recommended_change": "Replace getSiteSettings with getSiteSetting (singular) at line 42487. All 5 other call sites in MistHelper.py already use the correct singular form.",
+      "rationale": "The SDK function is getSiteSetting (singular), confirmed by inspecting mistapi.api.v1.sites.setting module exports: ['getSiteJseInfo', 'getSiteSetting', 'getSiteSettingDerived', 'updateSiteSettings']. The plural form does not exist and will cause an AttributeError.",
+      "reference_doc": "documentation/api/sites/GET_sites_site_id_setting.md"
+    },
+    {
+      "id": "F-002",
+      "severity": "High",
+      "tier": "Incorrect",
+      "category": "pagination",
+      "menu_operations": [5, 6, 7, 8, 9, 12, 87, 88, 89, 90, 91, 92, 93],
+      "source_file": "MistHelper.py",
+      "line_number": 9473,
+      "api_function": "mistapi.api.v1.sites.devices.listSiteDevices",
+      "current_behavior": "Seven call sites access response.data directly instead of using mistapi.get_all() for pagination: L9473 (select_ap_mac), L9554 (select_gateway_mac), L9627 (select_switch_mac), L10257 (select_device_by_index), L10719 (get_all_ap_macs_from_site), L12989 (export_device_inventory_data, menu 12), L14520 (firmware device selection, menu 90). All correctly pass the type parameter but skip pagination.",
+      "recommended_change": "Wrap each call with mistapi.get_all(response=response, mist_session=apisession) instead of accessing response.data directly. The APIDataFetcher class at L9063 already implements this pattern correctly and can serve as a reference.",
+      "rationale": "Sites with more than DEFAULT_API_PAGE_LIMIT (1000) devices will have silently truncated device lists. Device selection menus will show incomplete results, firmware operations may miss devices, and inventory exports will be partial. The 16 other listSiteDevices call sites in MistHelper.py correctly use get_all().",
+      "reference_doc": "documentation/api/sites/GET_sites_site_id_devices.md"
+    },
+    {
+      "id": "F-003",
+      "severity": "High",
+      "tier": "Incorrect",
+      "category": "pagination",
+      "menu_operations": [90, 99, 100],
+      "source_file": "MistHelper.py",
+      "line_number": 37611,
+      "api_function": "mistapi.api.v1.orgs.sites.listOrgSites",
+      "current_behavior": "Three call sites lack both a limit parameter and get_all() pagination: L37611 (APIBootstrapUtils.has_org_access), L38228 (FirmwareUpgradeManager._select_sites_for_upgrade, menu 90), L44890 (SSRUpgradeRunner._interactive_site_selection, menus 99-100). Without limit, the API returns its default page size (~100 items).",
+      "recommended_change": "Add limit=DEFAULT_API_PAGE_LIMIT and wrap with mistapi.get_all(). Other listOrgSites call sites in the codebase already use this pattern correctly.",
+      "rationale": "Organizations with more than ~100 sites will have incomplete site lists during firmware upgrade site selection. This could cause operators to miss sites during upgrade campaigns, creating inconsistent firmware versions across the organization.",
+      "reference_doc": "documentation/api/orgs/GET_orgs_org_id_sites.md"
+    },
+    {
+      "id": "F-004",
+      "severity": "High",
+      "tier": "Incorrect",
+      "category": "pagination",
+      "menu_operations": [99, 100],
+      "source_file": "MistHelper.py",
+      "line_number": 38410,
+      "api_function": "mistapi.api.v1.orgs.inventory.getOrgInventory",
+      "current_behavior": "Three call sites lack both a limit parameter and get_all() pagination: L38410 (SSRFirmwareManager device check), L38534 (SSRFirmwareManager inventory validation), L45105 (switch firmware inventory fetch). A fourth site at L41576 passes limit=1000 but still lacks get_all(), returning only the first page.",
+      "recommended_change": "Add limit=DEFAULT_API_PAGE_LIMIT and wrap responses with mistapi.get_all(). Reference the correct pattern at L7502 (org_devices utility) and L28209 (AP firmware scan) which both use get_all() properly.",
+      "rationale": "Large organizations with many gateways or switches will have silently truncated inventory during firmware upgrade operations. SSR and switch firmware upgrades could miss devices, leaving some at outdated firmware versions without any warning to the operator.",
+      "reference_doc": "documentation/api/orgs/GET_orgs_org_id_inventory.md"
+    },
+    {
+      "id": "F-005",
+      "severity": "High",
+      "tier": "Incorrect",
+      "category": "parameter-usage",
+      "menu_operations": [55],
+      "source_file": "MistHelper.py",
+      "line_number": 31810,
+      "api_function": "mistapi.api.v1.sites.stats.listSiteDevicesStats",
+      "current_behavior": "Four call sites in maps functionality omit the type parameter: L31810 (map initialization), L33793 (map figure generation), L34044 (URL map switch), L36518 (device fetch for map). The log at L31810 states 'Fetching device stats for site {site_id} (type=all)' but the actual API call does not pass type='all'. Without the parameter, the endpoint defaults to AP-only results.",
+      "recommended_change": "Add type='all' to all four listSiteDevicesStats calls in the maps functionality. The non-maps call sites at L13048, L36968, and L38982 already correctly pass type='all'.",
+      "rationale": "Maps will only display access points, omitting switches and gateways from the indoor map visualization. The developer's log message proves type='all' was intended. The SDK signature confirms type is an optional parameter: listSiteDevicesStats(mist_session, site_id, type=None, status=None, limit=None, page=None).",
+      "reference_doc": "documentation/api/sites/GET_sites_site_id_stats_devices.md"
+    },
+    {
+      "id": "F-006",
+      "severity": "Medium",
+      "tier": "Incorrect",
+      "category": "parameter-usage",
+      "menu_operations": [],
+      "source_file": "MistHelper.py",
+      "line_number": 11101,
+      "api_function": "mistapi.api.v1.orgs.devices.listOrgDevices",
+      "current_behavior": "The APIDataFetcher initialization at L11101 calls listOrgDevices without specifying the type parameter. Without type, the endpoint defaults to returning only APs, excluding switches and gateways from the fetched data.",
+      "recommended_change": "Add type='all' to the listOrgDevices call if the APIDataFetcher is intended to fetch all device types. If AP-only is intentional, add a code comment documenting this design choice.",
+      "rationale": "The listOrgDevices endpoint defaults to type='ap' when no type parameter is specified. If the APIDataFetcher is used in contexts requiring all device types, switches and gateways will be silently excluded. All 23 listSiteDevices calls in MistHelper.py correctly pass the type parameter.",
+      "reference_doc": "documentation/api/orgs/GET_orgs_org_id_devices.md"
+    },
+    {
+      "id": "F-007",
+      "severity": "Medium",
+      "tier": "Incorrect",
+      "category": "pagination",
+      "menu_operations": [],
+      "source_file": "MistHelper.py",
+      "line_number": 41576,
+      "api_function": "mistapi.api.v1.orgs.inventory.getOrgInventory",
+      "current_behavior": "The MSP portal inventory fetch at L41576 passes limit=1000 but does not wrap the response with get_all(). Only the first page of results (up to 1000 items) is returned.",
+      "recommended_change": "Add mistapi.get_all(response=response, mist_session=apisession) after the API call to retrieve all pages of inventory data.",
+      "rationale": "MSP organizations managing more than 1000 devices will receive truncated inventory data. While limit=1000 is set correctly as the page size, get_all() is required to iterate through subsequent pages. Other getOrgInventory calls at L7502 and L28209 correctly use get_all().",
+      "reference_doc": "documentation/api/orgs/GET_orgs_org_id_inventory.md"
+    },
+    {
+      "id": "F-008",
+      "severity": "Medium",
+      "tier": "Suboptimal",
+      "category": "pagination",
+      "menu_operations": [17],
+      "source_file": "MistHelper.py",
+      "line_number": 13803,
+      "api_function": "mistapi.api.v1.sites.stats.listSiteWirelessClientsStats",
+      "current_behavior": "Client hostname lookup at L13803 uses limit=100 and accesses response.data directly without get_all(). On sites with more than 100 active wireless clients, the target client MAC may not appear in the first page of results, causing the hostname to default to 'Unknown'.",
+      "recommended_change": "Either increase limit to DEFAULT_API_PAGE_LIMIT and use get_all(), or filter by the specific client MAC using the SDK's search parameters instead of iterating through all clients. The call at L13217 already uses get_all() correctly for the same endpoint.",
+      "rationale": "High-density enterprise sites routinely have hundreds or thousands of concurrent wireless clients. A limit of 100 with no pagination makes the hostname lookup unreliable in these environments. The existing code at L13217 in the same module demonstrates the correct pattern.",
+      "reference_doc": "documentation/api/sites/GET_sites_site_id_stats_clients.md"
+    },
+    {
+      "id": "F-009",
+      "severity": "Low",
+      "tier": "Suboptimal",
+      "category": "parameter-usage",
+      "menu_operations": [51, 55],
+      "source_file": "MistHelper.py",
+      "line_number": 31810,
+      "api_function": "mistapi.api.v1.sites.maps.listSiteMaps",
+      "current_behavior": "All 20 listSiteMaps call sites across MistHelper.py and maps_manager.py omit the explicit limit parameter, relying on the API's default page size. While most sites have fewer maps than the default limit, very large campus deployments could have truncated map lists.",
+      "recommended_change": "Add limit=DEFAULT_API_PAGE_LIMIT to listSiteMaps calls in performance-critical paths (map initialization, map selection). Lower-traffic call sites may remain at defaults with a code comment explaining the design choice.",
+      "rationale": "Defensive programming practice. While campus sites rarely exceed the default API page limit for maps, explicitly setting the limit documents the developer's intent and prevents unexpected truncation in edge cases. No functional bug in typical deployments.",
+      "reference_doc": "documentation/api/sites/GET_sites_site_id_maps.md"
+    },
+    {
+      "id": "F-010",
+      "severity": "Low",
+      "tier": "Suboptimal",
+      "category": "pagination",
+      "menu_operations": [55],
+      "source_file": "MistHelper.py",
+      "line_number": 33793,
+      "api_function": "mistapi.api.v1.sites.stats.listSiteDevicesStats",
+      "current_behavior": "Three of four listSiteDevicesStats calls in maps functionality (L31810, L33793, L36518) pass limit=1000 but do not use get_all() for pagination. Only L34044 uses get_all(). Sites with more than 1000 devices of any type would have incomplete map displays.",
+      "recommended_change": "Add get_all() pagination to the three non-paginated map call sites. The call at L34044 already demonstrates the correct pattern within the same module.",
+      "rationale": "While sites rarely have more than 1000 APs, adding type='all' (per finding F-005) would include switches and gateways in the count. Large campus sites with hundreds of APs plus switches could approach or exceed the 1000 limit. The inconsistency with L34044 using get_all() suggests an oversight.",
+      "reference_doc": "documentation/api/sites/GET_sites_site_id_stats_devices.md"
+    }
+  ]
+}

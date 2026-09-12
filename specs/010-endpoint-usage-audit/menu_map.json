@@ -1,0 +1,494 @@
+{
+  "0": {
+    "handler": "lambda: sys.exit(0)",
+    "description": "Exit MistHelper"
+  },
+  "1": {
+    "handler": "OrgAlarmEventExporter.alarms",
+    "description": "Export all organization alarms from the past day"
+  },
+  "2": {
+    "handler": "OrgAlarmEventExporter.device_events",
+    "description": "Export all device events from the past 24 hours"
+  },
+  "3": {
+    "handler": "lambda: OrgExportUtils.audit_logs(full_history=False)",
+    "description": "Export audit logs for the organization (last 24 hours)"
+  },
+  "4": {
+    "handler": "lambda fast=False: GatewayExportUtils.management_ips(fast=fast)",
+    "description": "Export gateway management overlay IPs grouped by template association"
+  },
+  "5": {
+    "handler": "WebSocketCommands.show_mac_table",
+    "description": "Show MAC table on switch device via WebSocket (Layer 2 switching table)"
+  },
+  "6": {
+    "handler": "WebSocketCommands.show_forwarding_table",
+    "description": "Show forwarding table on gateway device via WebSocket (Layer 3 routing table)"
+  },
+  "7": {
+    "handler": "WebSocketCommands.show_routing_table",
+    "description": "Show routing table on switches via WebSocket (Switch L3 routing - BGP/OSPF/Static)"
+  },
+  "8": {
+    "handler": "WebSocketCommands.show_ssr_routes",
+    "description": "Show SSR/SRX routing table via dedicated API (128T/SRX gateways - Advanced BGP analysis)"
+  },
+  "9": {
+    "handler": "lambda: PacketCaptureManager(apisession, ConfigUtils.get_cached_or_prompted_org_id()).start_site_packet_capture()",
+    "description": "Start Site Packet Capture - Wireless/Wired/Gateway/Scan captures with WebSocket streaming"
+  },
+  "10": {
+    "handler": "lambda: PacketCaptureManager(apisession, ConfigUtils.get_cached_or_prompted_org_id()).start_org_packet_capture()",
+    "description": "Start Organization Packet Capture - MxEdge captures for org-level Mist Edges only"
+  },
+  "11": {
+    "handler": "OrgSiteExporter.sites",
+    "description": "Export a list of all sites in the organization"
+  },
+  "12": {
+    "handler": "OrgInventoryExporter.inventory",
+    "description": "Export the full inventory of devices in the organization"
+  },
+  "13": {
+    "handler": "OrgDeviceStatsExporter.device_stats",
+    "description": "Export statistics for all devices in the organization"
+  },
+  "14": {
+    "handler": "OrgDeviceStatsExporter.device_port_stats",
+    "description": "Export port-level statistics for switches and gateways"
+  },
+  "15": {
+    "handler": "OrgDeviceStatsExporter.vpn_peer_stats",
+    "description": "Export VPN peer path statistics for the organization"
+  },
+  "16": {
+    "handler": "GatewayTestExporter.synthetic_tests",
+    "description": "Export synthetic test results for all gateways"
+  },
+  "17": {
+    "handler": "OrgInventoryExporter.devices",
+    "description": "Export a list of all devices in the organization"
+  },
+  "18": {
+    "handler": "SiteConfigExporter.settings",
+    "description": "Export configuration settings for all sites"
+  },
+  "19": {
+    "handler": "GatewayTestExporter.test_results_by_site",
+    "description": "Export all synthetic test results (including speed tests) for gateways"
+  },
+  "20": {
+    "handler": "OrgSiteExporter.sites_with_location",
+    "description": "Export a list of sites with location and timezone info"
+  },
+  "21": {
+    "handler": "OrgInventoryExporter.gateways_with_site_info",
+    "description": "Export a list of gateways with associated site and address info"
+  },
+  "22": {
+    "handler": "OrgInventoryExporter.devices_with_site_info",
+    "description": "Export a list of all devices with associated site and address info"
+  },
+  "23": {
+    "handler": "lambda: (OrgSiteExporter.current_guests(), OrgSiteExporter.historical_guests())",
+    "description": "Export all current guest users and last 7 days of historical guests to CSV"
+  },
+  "24": {
+    "handler": "OrgDeviceStatsExporter.switch_vc_stats",
+    "description": "Export all switch virtual chassis (VC/stacking) stats to CSV"
+  },
+  "25": {
+    "handler": "OrgInventoryExporter.combined_inventory_with_site_info",
+    "description": "Export combined inventory with site and address info by calendar week"
+  },
+  "26": {
+    "handler": "GatewayExportUtils.templates",
+    "description": "Export gateway templates from the organization"
+  },
+  "27": {
+    "handler": "OrgSiteExporter.sites_list_api",
+    "description": "Export all sites using the 'list' sites API endpoint (to SiteList_ListAPI.csv, only if not already present)"
+  },
+  "28": {
+    "handler": "lambda fast=False: GatewayExportUtils.with_wan_overrides(fast=fast)",
+    "description": "Find gateway ports overridden from template (outliers for compliance correction)"
+  },
+  "29": {
+    "handler": "SiteDeviceExporter.port_stats",
+    "description": "Export port statistics for a selected site"
+  },
+  "30": {
+    "handler": "SiteClientExporter.clients",
+    "description": "Export client statistics for a selected site"
+  },
+  "31": {
+    "handler": "SiteDeviceExporter.devices",
+    "description": "Export device list for a selected site"
+  },
+  "32": {
+    "handler": "SiteDeviceExporter.device_stats",
+    "description": "Export device statistics for a selected site"
+  },
+  "33": {
+    "handler": "SiteDeviceExporter.device_virtual_chassis",
+    "description": "Export virtual chassis information for a selected switch device"
+  },
+  "34": {
+    "handler": "SiteClientExporter.wifi_clients",
+    "description": "Export currently connected WiFi clients and session data for a selected site to SiteWiFiClients.CSV"
+  },
+  "35": {
+    "handler": "OrgTemplateExporter.all_templates",
+    "description": "Export all organization templates (gateway, network, RF, site, AP)"
+  },
+  "36": {
+    "handler": "OrgTemplateExporter.network_templates",
+    "description": "Export network template information for the organization"
+  },
+  "37": {
+    "handler": "OrgTemplateExporter.rf_templates",
+    "description": "Export RF template information for the organization"
+  },
+  "38": {
+    "handler": "OrgTemplateExporter.ap_templates",
+    "description": "Export AP template information for the organization"
+  },
+  "39": {
+    "handler": "OrgTemplateExporter.switch_templates",
+    "description": "Export switch template information for the organization"
+  },
+  "40": {
+    "handler": "OrgClientSecurityExporter.wireless_clients",
+    "description": "Export wireless client statistics for the organization"
+  },
+  "41": {
+    "handler": "OrgClientSecurityExporter.wired_clients",
+    "description": "Export wired client statistics for the organization"
+  },
+  "42": {
+    "handler": "OrgClientSecurityExporter.security_events",
+    "description": "Export security events for the organization"
+  },
+  "43": {
+    "handler": "OrgClientSecurityExporter.rogue_clients",
+    "description": "Export rogue client detections for the organization"
+  },
+  "44": {
+    "handler": "OrgClientSecurityExporter.rogue_aps",
+    "description": "Export rogue AP detections for the organization"
+  },
+  "45": {
+    "handler": "OrgAdminExporter.licenses",
+    "description": "Export license information for the organization"
+  },
+  "46": {
+    "handler": "OrgConfigExporter.psks",
+    "description": "Export PSK (Pre-Shared Key) information for the organization"
+  },
+  "47": {
+    "handler": "OrgConfigExporter.webhooks",
+    "description": "Export webhook configuration for the organization"
+  },
+  "48": {
+    "handler": "OrgConfigExporter.wlans",
+    "description": "Export WLAN configuration for the organization"
+  },
+  "49": {
+    "handler": "SiteConfigExporter.wlans",
+    "description": "Export WLAN configuration for a selected site"
+  },
+  "50": {
+    "handler": "SiteClientExporter.beacons",
+    "description": "Export beacon information for a selected site"
+  },
+  "51": {
+    "handler": "SiteConfigExporter.maps",
+    "description": "Export map information for a selected site"
+  },
+  "52": {
+    "handler": "SiteConfigExporter.zones",
+    "description": "Export zone information for a selected site"
+  },
+  "53": {
+    "handler": "SiteExportUtils.insights",
+    "description": "Export SLE (Service Level Experience) metrics insights for a selected site"
+  },
+  "54": {
+    "handler": "OrgAdminExporter.api_tokens",
+    "description": "Export API token information for the organization"
+  },
+  "55": {
+    "handler": "OrgAdminExporter.admins",
+    "description": "Export administrator information for the organization"
+  },
+  "56": {
+    "handler": "OrgConfigExporter.msp",
+    "description": "MSP (Managed Service Provider) info - Displays guidance only (MSP data requires MSP-level API access, not org-level)"
+  },
+  "57": {
+    "handler": "OrgAdminExporter.sso",
+    "description": "Export SSO (Single Sign-On) information for the organization"
+  },
+  "58": {
+    "handler": "OrgAdminExporter.usage",
+    "description": "Export license usage information for the organization"
+  },
+  "59": {
+    "handler": "OrgConfigExporter.mx_edges",
+    "description": "Export MX Edge information for the organization"
+  },
+  "60": {
+    "handler": "lambda: FirmwareManager(apisession, ConfigUtils.get_cached_or_prompted_org_id()).check_firmware_upgrade_status()",
+    "description": "Check current firmware upgrade status across organization with detailed progress monitoring and export to CSV"
+  },
+  "61": {
+    "handler": "lambda fast=False, address_check=False, debug=False, skip_ssl_verify=False: InventoryCSVComparator(fast=fast, address_check=address_check, debug=debug, skip_ssl_verify=skip_ssl_verify).execute()",
+    "description": "Compare inventory data with external CSV file using configurable address similarity threshold (ADDRESS_MATCH_THRESHOLD in .env)"
+  },
+  "62": {
+    "handler": "TroubleshootUtils.launch_interactive",
+    "description": "Interactive Marvis (VNA) AI troubleshooting - guided client, device, and network analysis"
+  },
+  "63": {
+    "handler": "OrgAlarmEventExporter.device_events_52w",
+    "description": "WIP Export all org device events from the last 52 weeks"
+  },
+  "64": {
+    "handler": "lambda: OrgExportUtils.audit_logs(full_history=True, duration=\"52w\")",
+    "description": "WIP Export ALL audit logs for the organization (last 52 weeks)"
+  },
+  "65": {
+    "handler": "GatewayExportUtils.device_configs",
+    "description": "WIP Export configuration details for all gateway devices across all sites"
+  },
+  "66": {
+    "handler": "OrgExportUtils.sle_metrics",
+    "description": "Export Organization SLE Metrics (Service Level Experience)"
+  },
+  "67": {
+    "handler": "OrgExportUtils.sites_sle_summary",
+    "description": "Export SLE summary metrics for all sites in the organization"
+  },
+  "68": {
+    "handler": "SiteExportUtils.insight_metrics",
+    "description": "Export general insight metrics for a selected site"
+  },
+  "69": {
+    "handler": "SiteClientExporter.client_insights",
+    "description": "Export client-specific insight metrics for a selected site"
+  },
+  "70": {
+    "handler": "PromptUtils.select_site_with_logging",
+    "description": "Select a site (used by other functions)"
+  },
+  "71": {
+    "handler": "InteractiveDisplayUtils.site_inventory",
+    "description": "View device inventory for a selected site"
+  },
+  "72": {
+    "handler": "InteractiveDisplayUtils.device_stats",
+    "description": "View statistics for a selected device at a site"
+  },
+  "73": {
+    "handler": "InteractiveDisplayUtils.device_tests",
+    "description": "View synthetic test stats for a selected gateway device"
+  },
+  "74": {
+    "handler": "InteractiveDisplayUtils.device_config",
+    "description": "View configuration details for a selected device"
+  },
+  "75": {
+    "handler": "DataCollectionManager.continuous_loop",
+    "description": "Loop refresh of core datasets (site list, inventory, stats, ports, VPN) Stop with CTRL+C or create 'stop_loop.txt'"
+  },
+  "76": {
+    "handler": "DataCollectionManager.continuous_loop",
+    "description": "Run continuous data collection loop (5 core API calls with rate limiting)"
+  },
+  "77": {
+    "handler": "SFPTransceiverDataProcessor.merge_transceiver_data",
+    "description": "Process and merge CSV files of SFP Module locations into a single CSV file"
+  },
+  "78": {
+    "handler": "DataCollectionManager.generate_support_packages",
+    "description": "Generate support package for each site"
+  },
+  "79": {
+    "handler": "CLIShellManager.launch",
+    "description": "Interactively execute a CLI command on a gateway or switch (exit with ~)"
+  },
+  "80": {
+    "handler": "ARPCommandManager.execute",
+    "description": "Run ARP command on an AP and receive output via WebSocket"
+  },
+  "81": {
+    "handler": "SiteExportUtils.device_insights",
+    "description": "Export device-specific insight metrics for a selected site"
+  },
+  "82": {
+    "handler": "lambda: ConstDefinitionsExporter(apisession).export_all()",
+    "description": "Export all available const definitions from the Mist API (comprehensive endpoint coverage)"
+  },
+  "83": {
+    "handler": "OrgExportUtils.insight_metrics",
+    "description": "Export Organization Insight Metrics (comprehensive operational insights)"
+  },
+  "84": {
+    "handler": "SiteAnomalyExporter.anomaly_events",
+    "description": "Export Site Anomaly Events (dynamic discovery of all anomaly-related metrics from Mist API)"
+  },
+  "85": {
+    "handler": "SiteAnomalyExporter.device_anomaly_events",
+    "description": "Export Site Device Anomaly Events (device-specific anomaly detection)"
+  },
+  "86": {
+    "handler": "SiteAnomalyExporter.client_anomaly_events",
+    "description": "Export Site Client Anomaly Events (client-specific anomaly detection: connectivity, roaming, throughput)"
+  },
+  "87": {
+    "handler": "WebSocketNetworkDiagCommands.ping_device",
+    "description": "WebSocket Device Ping - Execute ping command on device via WebSocket stream (real-time output)"
+  },
+  "88": {
+    "handler": "WebSocketNetworkDiagCommands.arp_device",
+    "description": "WebSocket Device ARP - Execute ARP command on device via WebSocket stream (real-time output)"
+  },
+  "89": {
+    "handler": "WebSocketNetworkDiagCommands.service_ping_device",
+    "description": "WebSocket Service Ping - Execute service-specific ping on SSR gateways via WebSocket stream (real-time output)"
+  },
+  "90": {
+    "handler": "lambda: FirmwareManager(apisession, ConfigUtils.get_cached_or_prompted_org_id()).execute_firmware_upgrade_with_mode_selection()",
+    "description": "DESTRUCTIVE: Advanced AP firmware upgrade with mode selection - upgrade by site list/selection or by Gateway Template assignment"
+  },
+  "91": {
+    "handler": "DeviceRebootManager.by_gateway_template_list",
+    "description": "DESTRUCTIVE: Reboot all devices associated with templates listed in GatewayTemplateRebootList.CSV and log results"
+  },
+  "92": {
+    "handler": "VirtualChassisManager.convert_single",
+    "description": "DESTRUCTIVE: Convert a virtual chassis switch to virtual MAC (interactive selection)(WIP)"
+  },
+  "93": {
+    "handler": "VirtualChassisManager.convert_by_site_list",
+    "description": "DESTRUCTIVE: Convert all virtual chassis switches in sites listed in VCConvert.CSV (bulk operation)"
+  },
+  "94": {
+    "handler": "VirtualChassisManager.check_status",
+    "description": "Check virtual chassis to virtual MAC conversion status for all switches"
+  },
+  "95": {
+    "handler": "lambda fast=False: GatewayStatsExporter.device_stats_with_freshness(fast=fast)",
+    "description": "Export detailed device statistics for all gateways (with freshness check)"
+  },
+  "96": {
+    "handler": "GatewayStatsExporter.wan_port_conflicts",
+    "description": "Check and export gateways with duplicate WAN port IP addresses (0/0/0, 0/0/1, 0/0/2)"
+  },
+  "97": {
+    "handler": "SSHRunnerManager.interactive",
+    "description": "Enhanced SSH Command Runner - Execute commands on remote network devices via SSH"
+  },
+  "98": {
+    "handler": "SSHRunnerManager.by_gateway_template",
+    "description": "SSH Runner - Target gateways by template name (online gateways with management IPs only)"
+  },
+  "99": {
+    "handler": "lambda: FirmwareManager(apisession, ConfigUtils.get_cached_or_prompted_org_id()).execute_switch_firmware_upgrade_with_mode_selection()",
+    "description": "DESTRUCTIVE: Advanced Switch firmware upgrade with mode selection - upgrade by site list/selection or by Gateway Template assignment"
+  },
+  "100": {
+    "handler": "lambda: FirmwareManager(apisession, ConfigUtils.get_cached_or_prompted_org_id()).execute_ssr_firmware_upgrade_with_mode_selection()",
+    "description": "DESTRUCTIVE: Advanced SSR firmware upgrade with mode selection - upgrade by site list/selection or by Gateway Template assignment"
+  },
+  "101": {
+    "handler": "lambda: TUILauncher().launch()",
+    "description": "Launch Terminal User Interface (TUI) mode - Visual navigation of Mist API library with interactive exploration"
+  },
+  "102": {
+    "handler": "lambda: WLANRadiusTimerManager().manage()",
+    "description": "Manage WLAN RADIUS Authentication Timers - Configure auth_servers_timeout, auth_servers_retries, auth_server_selection, and fast_dot1x_timers for site or template WLANs"
+  },
+  "103": {
+    "handler": "lambda: WAN2MigrationManager().set_site_variable()",
+    "description": "Set WAN2 Interface Site Variable - Configure 'wan2_interface' site variable for template-based WAN migration (Reports sites with ge-0/0/1 overrides)"
+  },
+  "104": {
+    "handler": "lambda fast=False, dry_run=False: update_gateway_templates_wan2_variable(fast=fast, dry_run=dry_run)",
+    "description": "DESTRUCTIVE: Update Gateway Templates to Use WAN2 Variable - Replace hardcoded 'ge-0/0/1' references with {{wan2_interface}} variable (Requires uppercase 'MIGRATE' confirmation, supports --dry-run)"
+  },
+  "105": {
+    "handler": "GatewayTemplateConfigManager.extract",
+    "description": "Extract Gateway Template Configuration (DIA_Pico, Picocell) - Save specific configs to JSON for replication"
+  },
+  "106": {
+    "handler": "GatewayTemplateConfigManager.apply",
+    "description": "DESTRUCTIVE: Apply Gateway Template Configuration - Replicate extracted configs to other templates (Requires uppercase 'APPLY' confirmation)"
+  },
+  "107": {
+    "handler": "SiteConfigManager.create_test_sites_from_csv",
+    "description": "DESTRUCTIVE: Create 137 test sites from NorthAmericanTestSites.csv - Real landmarks across 13 North American countries (Requires uppercase 'CREATE' confirmation)"
+  },
+  "108": {
+    "handler": "SiteConfigManager.create_country_rf_templates_and_assign",
+    "description": "DESTRUCTIVE: Create country-specific RF templates and assign sites to matching templates (Requires uppercase 'CREATE' confirmation)"
+  },
+  "109": {
+    "handler": "SiteConfigManager.create_ap_model_device_profiles",
+    "description": "DESTRUCTIVE: Scan org for AP models and create Device Profile per model with inherit/auto settings (Requires uppercase 'CREATE' confirmation)"
+  },
+  "110": {
+    "handler": "SiteConfigManager.assign_aps_to_matching_device_profiles",
+    "description": "DESTRUCTIVE: Assign APs to Device Profiles matching their model type (AP-{model}) - Skips APs without matching profiles (Requires uppercase 'ASSIGN' confirmation)"
+  },
+  "111": {
+    "handler": "GatewayTemplateConfigManager.clone_by_location",
+    "description": "DESTRUCTIVE: Clone Gateway Template by State and Country - Create state/country-specific templates and assign sites (Requires uppercase 'CLONE' confirmation)"
+  },
+  "112": {
+    "handler": "lambda: MapsManagerLauncher().launch()",
+    "description": "Maps Manager - Interactive site floorplan and map operations (sub-menu)"
+  },
+  "113": {
+    "handler": "lambda dry_run=False: WANProbeConfigManager.configure(dry_run=dry_run)",
+    "description": "DESTRUCTIVE: Configure WAN Probe Override on Gateway Templates - Set ICMP probe IPs and profile for all WAN interfaces (Requires uppercase 'APPLY' confirmation, supports --dry-run)"
+  },
+  "114": {
+    "handler": "lambda dry_run=False: WANProbeDeviceOverrideManager.configure(dry_run=dry_run)",
+    "description": "DESTRUCTIVE: Configure WAN Probe on Device Port Overrides - Set ICMP probe on device-level WAN overrides only (Requires uppercase 'APPLY' confirmation, supports --dry-run)"
+  },
+  "115": {
+    "handler": "switch_to_interactive_login",
+    "description": "Switch to interactive login (email/password) - Enables MSP-level API access for current session"
+  },
+  "116": {
+    "handler": "OrgLevelAPFirmwareUpgrader.run",
+    "description": "DESTRUCTIVE: Org-Level AP Firmware Upgrade - Efficient multi-site upgrade using org-level API (1 call per version vs 1 per site), MSP multi-org support, supports --dry-run"
+  },
+  "117": {
+    "handler": "MSPInventoryExporter.execute",
+    "description": "MSP Inventory Export - Export device inventory across all MSPs and all organizations to CSV (requires MSP privileges via --login)"
+  },
+  "118": {
+    "handler": "SiteAutoUpgradeConfigurator.execute",
+    "description": "Site Auto-Upgrade Configuration - Configure AP auto-upgrade settings for sites with MSP multi-org support (supports --dry-run)"
+  },
+  "119": {
+    "handler": "ZoneConfigurationAnalyzer.analyze",
+    "description": "Site Config Analysis - Scan all sites for zone, engagement dwell tag, and occupancy setting deviations"
+  },
+  "120": {
+    "handler": "SiteAnalyticsConfigurator.execute",
+    "description": "DESTRUCTIVE: Site Analytics Configuration - Apply standard RTSA/Rogue/Engagement/Occupancy settings to deviating sites"
+  },
+  "121": {
+    "handler": "SiteInventoryHealthAnalyzer.analyze",
+    "description": "Site Inventory Health Analysis - Find sites with APs missing switches/gateways, or with offline infrastructure"
+  },
+  "122": {
+    "handler": "lambda dry_run=False: BulkRadiusWLANConfigManager().manage(dry_run=dry_run)",
+    "description": "Bulk RADIUS WLAN Configuration - Configure auth_servers_timeout, auth_servers_retries, fast_dot1x_timers for org-level RADIUS WLANs"
+  }
+}

@@ -1,0 +1,592 @@
+# getSiteAllClientsStatsByDevice
+
+> getSiteAllClientsStatsByDevice
+
+## HTTP
+
+`GET /api/v1/sites/{site_id}/stats/devices/{device_id}/clients`
+
+## Description
+
+Get wireless client stat by Device
+
+## Authentication
+
+Requires API token authentication (`Authorization: Token {api_token}` header or `X-CSRFToken` cookie). See Mist API authentication documentation.
+
+## Parameters
+
+### Path Parameters
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| site_id | string | Yes |  |
+| device_id | string | Yes |  |
+
+## Request Body
+
+None.
+
+## Response
+
+### 200
+
+OK
+
+```json
+{
+  "type": "array",
+  "items": {
+    "title": "stats_wireless_client",
+    "required": [
+      "ap_id",
+      "ap_mac",
+      "band",
+      "channel",
+      "is_guest",
+      "key_mgmt",
+      "mac",
+      "proto",
+      "rssi",
+      "snr",
+      "ssid",
+      "wlan_id"
+    ],
+    "type": "object",
+    "properties": {
+      "accuracy": {
+        "type": "integer",
+        "description": "Estimated client location accuracy, in meter",
+        "contentEncoding": "int32"
+      },
+      "airespace_ifname": {
+        "type": "string"
+      },
+      "airwatch": {
+        "type": "object",
+        "properties": {
+          "authorized": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "authorized"
+        ],
+        "description": "Information if airwatch enabled"
+      },
+      "annotation": {
+        "type": "string"
+      },
+      "ap_id": {
+        "type": "string",
+        "description": "AP ID the client is connected to",
+        "contentEncoding": "uuid"
+      },
+      "ap_mac": {
+        "type": "string",
+        "description": "AP the client is connected to"
+      },
+      "assoc_time": {
+        "type": "integer",
+        "contentEncoding": "int32"
+      },
+      "band": {
+        "type": "string",
+        "description": "enum: `24`, `5`, `6`"
+      },
+      "bssid": {
+        "type": "string"
+      },
+      "channel": {
+        "type": "integer",
+        "description": "Current channel",
+        "contentEncoding": "int32"
+      },
+      "dual_band": {
+        "type": "boolean",
+        "description": "Whether the client is dual_band capable (determined by whether we\u2019ve seen probe requests from both bands)"
+      },
+      "family": {
+        "type": "string",
+        "description": "Device family, through fingerprinting. iPod / Nexus Galaxy / Windows Mobile or CE \u2026"
+      },
+      "group": {
+        "type": "string"
+      },
+      "guest": {
+        "type": "object",
+        "properties": {
+          "access_code_email": {
+            "type": "string",
+            "description": "If `auth_method`==`email`, the email address where the authorization code has been sent to",
+            "readOnly": true
+          },
+          "ap_mac": {
+            "type": "string",
+            "description": "MAC Address of the AP the guest was connected to during the registration process",
+            "readOnly": true
+          },
+          "auth_method": {
+            "type": "string",
+            "description": "Type of guest authorization",
+            "readOnly": true
+          },
+          "authorized": {
+            "type": "boolean",
+            "description": "Whether the guest is current authorized",
+            "default": true
+          },
+          "authorized_expiring_time": {
+            "type": "number",
+            "description": "When the authorization would expire",
+            "readOnly": true,
+            "examples": [
+              1480704955
+            ]
+          },
+          "authorized_time": {
+            "type": "number",
+            "description": "When the guest was authorized",
+            "readOnly": true,
+            "examples": [
+              1480704355
+            ]
+          },
+          "company": {
+            "type": "string",
+            "description": "Optional, the info provided by user",
+            "examples": [
+              "abc"
+            ]
+          },
+          "email": {
+            "type": "string",
+            "description": "Optional, the info provided by user",
+            "examples": [
+              "john@abc.com"
+            ]
+          },
+          "field1": {
+            "type": "string",
+            "description": "Optional, the info provided by user"
+          },
+          "field2": {
+            "type": "string"
+          },
+          "field3": {
+            "type": "string"
+          },
+          "field4": {
+            "type": "string"
+          },
+          "mac": {
+            "type": "string",
+            "description": "MAC Address",
+            "readOnly": true
+          },
+          "minutes": {
+            "maximum": 259200.0,
+            "minimum": 0.0,
+            "type": "integer",
+            "description": "Authorization duration, in minutes. Default is 1440 minutes (1 day), maximum is 259200 (180 days)",
+            "contentEncoding": "int32",
+            "default": 1440
+          },
+          "name": {
+            "type": "string",
+            "description": "Optional, the info provided by user",
+            "readOnly": true,
+            "examples": [
+              "John Smith"
+            ]
+          },
+          "random_mac": {
+            "type": "boolean",
+            "description": "If the client is using a randomized MAC Address to connect the SSID",
+            "readOnly": true
+          },
+          "ssid": {
+            "type": "string",
+            "description": "Name of the SSID",
+            "readOnly": true,
+            "examples": [
+              "Guest-SSID"
+            ]
+          },
+          "wlan_id": {
+            "type": "string",
+            "description": "ID of the SSID",
+            "contentEncoding": "uuid",
+            "readOnly": true,
+            "examples": [
+              "6748cfa6-4e12-11e6-9188-0242ac110007"
+            ]
+          }
+        },
+        "description": "Guest"
+      },
+      "hostname": {
+        "type": "string",
+        "description": "Hostname that we learned from sniffing DHCP"
+      },
+      "idle_time": {
+        "type": "number",
+        "description": "How long, in seconds, has the client been idle (since the last RX packet)"
+      },
+      "ip": {
+        "type": "string"
+      },
+      "is_guest": {
+        "type": "boolean",
+        "description": "Whether this is a guest"
+      },
+      "key_mgmt": {
+        "type": "string",
+        "description": "E.g. WPA2-PSK/CCMP"
+      },
+      "last_seen": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "description": "Last seen timestamp",
+        "readOnly": true,
+        "examples": [
+          1470417522
+        ]
+      },
+      "mac": {
+        "type": "string",
+        "description": "Client mac"
+      },
+      "manufacture": {
+        "type": "string",
+        "description": "Device manufacture, through fingerprinting or OUI"
+      },
+      "map_id": {
+        "type": "string",
+        "description": "Estimated client location - map_id",
+        "contentEncoding": "uuid"
+      },
+      "model": {
+        "type": "string",
+        "description": "Device model, may be available if we can identify them"
+      },
+      "num_locating_aps": {
+        "type": "integer",
+        "description": "Number of APs used to locate this client",
+        "contentEncoding": "int32"
+      },
+      "os": {
+        "type": "string",
+        "description": "Device os, through fingerprinting"
+      },
+      "power_saving": {
+        "type": "boolean",
+        "description": "If it\u2019s currently in power-save mode"
+      },
+      "proto": {
+        "type": "string",
+        "description": "enum: `a`, `ac`, `ax`, `b`, `be`, `g`, `n`"
+      },
+      "psk_id": {
+        "type": "string",
+        "description": "PSK id (if multi-psk is used)",
+        "contentEncoding": "uuid"
+      },
+      "rssi": {
+        "type": "number",
+        "description": "Signal strength"
+      },
+      "rssizones": {
+        "type": "array",
+        "items": {
+          "title": "stats_wireless_client_rssi_zone",
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Unique ID of the object instance in the Mist Organization",
+              "contentEncoding": "uuid",
+              "readOnly": true,
+              "examples": [
+                "53f10664-3ce8-4c27-b382-0ef66432349f"
+              ]
+            },
+            "since": {
+              "type": "number"
+            }
+          }
+        },
+        "description": "List of rssizone_id\u2019s where client is in and since when (if known)"
+      },
+      "rx_bps": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "description": "Rate of receiving traffic, bits/seconds, last known",
+        "contentEncoding": "int64",
+        "readOnly": true,
+        "examples": [
+          60003
+        ]
+      },
+      "rx_bytes": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "description": "Amount of traffic received since connection",
+        "contentEncoding": "int64",
+        "readOnly": true,
+        "examples": [
+          8515104416
+        ]
+      },
+      "rx_pkts": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "description": "Amount of packets received since connection",
+        "contentEncoding": "int64",
+        "readOnly": true,
+        "examples": [
+          57770567
+        ]
+      },
+      "rx_rate": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "description": "RX Rate, Mbps",
+        "readOnly": true
+      },
+      "rx_retries": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "description": "Amount of rx retries",
+        "contentEncoding": "int32",
+        "readOnly": true
+      },
+      "site_id": {
+        "type": "string",
+        "contentEncoding": "uuid",
+        "readOnly": true,
+        "examples": [
+          "441a1214-6928-442a-8e92-e1d34b8ec6a6"
+        ]
+      },
+      "snr": {
+        "type": "number",
+        "description": "Signal over noise"
+      },
+      "ssid": {
+        "type": "string",
+        "description": "SSID the client is connected to"
+      },
+      "tx_bps": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "description": "Rate of transmitting traffic, bits/seconds, last known",
+        "contentEncoding": "int64",
+        "readOnly": true,
+        "examples": [
+          634301
+        ]
+      },
+      "tx_bytes": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "description": "Amount of traffic sent since connection",
+        "contentEncoding": "int64",
+        "readOnly": true,
+        "examples": [
+          211217389682
+        ]
+      },
+      "tx_pkts": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "description": "Amount of packets sent since connection",
+        "contentEncoding": "int64",
+        "readOnly": true,
+        "examples": [
+          812204062
+        ]
+      },
+      "tx_rate": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "description": "TX Rate, Mbps",
+        "readOnly": true
+      },
+      "tx_retries": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "description": "Amount of tx retries",
+        "contentEncoding": "int32",
+        "readOnly": true
+      },
+      "type": {
+        "type": "string",
+        "description": "Client\u2019s type, regular / vip / resource / blocked (if client object is created)"
+      },
+      "uptime": {
+        "type": "number",
+        "description": "How long, in seconds, has the client been connected"
+      },
+      "username": {
+        "type": "string",
+        "description": "Username that we learned from 802.1X exchange or Per_user PSK or User Portal"
+      },
+      "vbeacons": {
+        "type": "array",
+        "items": {
+          "title": "stats_wireless_client_vbeacon",
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Unique ID of the object instance in the Mist Organization",
+              "contentEncoding": "uuid",
+              "readOnly": true,
+              "examples": [
+                "53f10664-3ce8-4c27-b382-0ef66432349f"
+              ]
+            },
+            "since": {
+              "type": "number"
+            }
+          }
+        },
+        "description": "List of beacon_id\u2019s where the client is in and since when (if known)"
+      },
+      "vlan_id": {
+        "type": "string",
+        "description": "VLAN id, could be empty (from older AP)"
+      },
+      "wlan_id": {
+        "type": "string",
+        "description": "WLAN ID the client is connected to",
+        "contentEncoding": "uuid"
+      },
+      "wxrule_id": {
+        "type": "string",
+        "description": "Current WxlanRule using for a Client or an authorized Guest (portal user). null if default rule is matched.",
+        "contentEncoding": "uuid"
+      },
+      "wxrule_usage": {
+        "type": "array",
+        "items": {
+          "title": "stats_wireless_client_wxrule_usage",
+          "type": "object",
+          "properties": {
+            "tag_id": {
+              "type": "string",
+              "contentEncoding": "uuid"
+            },
+            "usage": {
+              "type": "integer",
+              "contentEncoding": "int32"
+            }
+          }
+        },
+        "description": "Current WxlanRule usage per tag_id"
+      },
+      "x": {
+        "type": "number",
+        "description": "Estimated client location in pixels"
+      },
+      "x_m": {
+        "type": "number",
+        "description": "Estimated client location in meter"
+      },
+      "y": {
+        "type": "number",
+        "description": "Estimated client location in pixels"
+      },
+      "y_m": {
+        "type": "number",
+        "description": "Estimated client location in meter"
+      },
+      "zones": {
+        "type": "array",
+        "items": {
+          "title": "stats_wireless_client_zone",
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Unique ID of the object instance in the Mist Organization",
+              "contentEncoding": "uuid",
+              "readOnly": true,
+              "examples": [
+                "53f10664-3ce8-4c27-b382-0ef66432349f"
+              ]
+            },
+            "since": {
+              "type": "number"
+            }
+          }
+        },
+        "description": "List of zone_id\u2019s where client is in and since when (if known)"
+      }
+    }
+  },
+  "description": ""
+}
+```
+
+## Errors
+
+| Status | Description |
+|--------|-------------|
+| 400 | Bad Syntax |
+| 401 | Unauthorized |
+| 403 | Permission Denied |
+| 404 | Not found. The API endpoint doesn’t exist or resource doesn’ t exist |
+| 429 | Too Many Request. The API Token used for the request reached the 5000 API Calls per hour threshold |
+
+## Pagination
+
+Not paginated.
+
+## Rate Limiting
+
+Standard Mist API rate limits apply.
+
+## mistapi SDK
+
+`mistapi.api.v1.sites.stats_-_devices.getSiteAllClientsStatsByDevice()`
+
+## Usage Context
+
+Retrieves the list of clients currently connected to a specific device. Useful for per-AP or per-switch client analysis.
+
+## Gotchas
+
+- Only shows currently connected clients, not historical.
+
+## Related Endpoints
+
+- [GET_sites_site_id_stats_devices_device_id.md](GET_sites_site_id_stats_devices_device_id.md) — Device stats
+- [GET_sites_site_id_stats_clients.md](GET_sites_site_id_stats_clients.md) — All client stats
+
+## MistHelper Notes
+
+Not currently used by MistHelper directly.

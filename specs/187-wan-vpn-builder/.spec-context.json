@@ -1,0 +1,10 @@
+{
+  "workflow": "speckit",
+  "specName": "187-wan-vpn-builder",
+  "branch": "187-wan-vpn-builder",
+  "selectedAt": "2026-04-22T21:01:19.027Z",
+  "currentStep": "specify",
+  "status": "draft",
+  "stepHistory": {},
+  "transitions": []
+}

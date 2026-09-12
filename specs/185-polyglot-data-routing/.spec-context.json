@@ -1,0 +1,10 @@
+{
+  "workflow": "speckit",
+  "specName": "185-polyglot-data-routing",
+  "branch": "185-polyglot-data-routing",
+  "selectedAt": "2026-04-22T16:40:16.769Z",
+  "currentStep": "specify",
+  "status": "draft",
+  "stepHistory": {},
+  "transitions": []
+}

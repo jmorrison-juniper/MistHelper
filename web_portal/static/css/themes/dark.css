@@ -1,0 +1,265 @@
+/*
+ * dark.css - MistHelper Dark Theme
+ *
+ * Charcoal background, light text, cyan/green accents.
+ * Overrides Bootstrap 5 defaults for dark mode.
+ */
+
+:root {
+    --portal-bg: #1e1e2e;
+    --portal-bg-secondary: #2b2b3d;
+    --portal-text: #cdd6f4;
+    --portal-text-muted: #a6adc8;
+    --portal-border: #45475a;
+    --portal-link: #89b4fa;
+    --portal-link-hover: #b4d0fb;
+    --portal-success: #a6e3a1;
+    --portal-danger: #f38ba8;
+    --portal-warning: #f9e2af;
+    --portal-info: #89dceb;
+    --portal-card-bg: #313244;
+    --portal-input-bg: #313244;
+    --portal-input-border: #45475a;
+    --portal-input-text: #cdd6f4;
+    --portal-navbar-bg: #181825;
+    --portal-table-hover: #3b3b52;
+    --portal-badge-bg: #45475a;
+}
+
+body {
+    background-color: var(--portal-bg);
+    color: var(--portal-text);
+}
+
+a {
+    color: var(--portal-link);
+}
+
+a:hover {
+    color: var(--portal-link-hover);
+}
+
+/* Navbar */
+.portal-navbar {
+    background-color: var(--portal-navbar-bg) !important;
+    border-bottom: 1px solid var(--portal-border);
+}
+
+.portal-navbar .nav-link {
+    color: var(--portal-text-muted);
+}
+
+.portal-navbar .nav-link:hover,
+.portal-navbar .nav-link.active {
+    color: var(--portal-text);
+}
+
+.portal-navbar .navbar-brand {
+    color: var(--portal-text);
+}
+
+/* Cards */
+.portal-card,
+.card {
+    background-color: var(--portal-card-bg);
+    border-color: var(--portal-border);
+    color: var(--portal-text);
+}
+
+.card-header {
+    background-color: var(--portal-bg-secondary);
+    border-color: var(--portal-border);
+}
+
+/* Tables */
+.portal-table,
+.table {
+    color: var(--portal-text);
+    --bs-table-bg: transparent;
+    --bs-table-hover-bg: var(--portal-table-hover);
+    border-color: var(--portal-border);
+}
+
+.portal-table th {
+    background-color: var(--portal-bg-secondary);
+    border-color: var(--portal-border);
+    color: var(--portal-text);
+}
+
+.portal-table td {
+    border-color: var(--portal-border);
+}
+
+/* Forms */
+.form-control,
+.form-select {
+    background-color: var(--portal-input-bg);
+    border-color: var(--portal-input-border);
+    color: var(--portal-input-text);
+}
+
+.form-control:focus,
+.form-select:focus {
+    background-color: var(--portal-input-bg);
+    border-color: var(--portal-link);
+    color: var(--portal-input-text);
+    box-shadow: 0 0 0 0.2rem rgba(137, 180, 250, 0.25);
+}
+
+.form-control::placeholder {
+    color: var(--portal-text-muted);
+}
+
+/* Accordion */
+.accordion-item {
+    background-color: var(--portal-card-bg);
+    border-color: var(--portal-border);
+}
+
+.accordion-button {
+    background-color: var(--portal-bg-secondary);
+    color: var(--portal-text);
+    border-color: var(--portal-border);
+}
+
+.accordion-button:not(.collapsed) {
+    background-color: var(--portal-card-bg);
+    color: var(--portal-link);
+}
+
+.accordion-button::after {
+    filter: invert(0.8);
+}
+
+.accordion-body {
+    background-color: var(--portal-card-bg);
+}
+
+/* List Groups */
+.list-group-item {
+    background-color: var(--portal-card-bg);
+    border-color: var(--portal-border);
+    color: var(--portal-text);
+}
+
+.list-group-item-action:hover {
+    background-color: var(--portal-table-hover);
+    color: var(--portal-text);
+}
+
+.list-group-item.active {
+    background-color: var(--portal-link);
+    border-color: var(--portal-link);
+    color: #1e1e2e;
+}
+
+/* Badges */
+.badge {
+    background-color: var(--portal-badge-bg);
+}
+
+.bg-success { background-color: var(--portal-success) !important; color: #1e1e2e !important; }
+.bg-danger { background-color: var(--portal-danger) !important; color: #1e1e2e !important; }
+.bg-warning { background-color: var(--portal-warning) !important; color: #1e1e2e !important; }
+.bg-info { background-color: var(--portal-info) !important; color: #1e1e2e !important; }
+.bg-primary { background-color: var(--portal-link) !important; color: #1e1e2e !important; }
+
+/* Log Viewer */
+.log-viewer {
+    background-color: #11111b;
+    border-color: var(--portal-border);
+    color: #a6e3a1;
+}
+
+/* Progress Bar */
+.portal-progress {
+    background-color: var(--portal-bg-secondary);
+}
+
+/* Buttons */
+.btn-outline-secondary {
+    color: var(--portal-text-muted);
+    border-color: var(--portal-border);
+}
+
+.btn-outline-secondary:hover {
+    background-color: var(--portal-bg-secondary);
+    color: var(--portal-text);
+    border-color: var(--portal-text-muted);
+}
+
+/* Footer */
+.portal-footer {
+    background-color: var(--portal-navbar-bg);
+    border-top: 1px solid var(--portal-border);
+    color: var(--portal-text-muted);
+}
+
+/* Dropdowns */
+.dropdown-menu {
+    background-color: var(--portal-card-bg);
+    border-color: var(--portal-border);
+}
+
+.dropdown-item {
+    color: var(--portal-text);
+}
+
+.dropdown-item:hover {
+    background-color: var(--portal-table-hover);
+    color: var(--portal-text);
+}
+
+/* Pagination */
+.page-link {
+    background-color: var(--portal-card-bg);
+    border-color: var(--portal-border);
+    color: var(--portal-link);
+}
+
+.page-link:hover {
+    background-color: var(--portal-bg-secondary);
+    color: var(--portal-link-hover);
+}
+
+.page-item.active .page-link {
+    background-color: var(--portal-link);
+    border-color: var(--portal-link);
+    color: #1e1e2e;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--portal-bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--portal-border);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--portal-text-muted);
+}
+
+/* Text helpers */
+.text-muted {
+    color: var(--portal-text-muted) !important;
+}
+
+.text-danger {
+    color: var(--portal-danger) !important;
+}
+
+.text-warning {
+    color: var(--portal-warning) !important;
+}
+
+.text-success {
+    color: var(--portal-success) !important;
+}

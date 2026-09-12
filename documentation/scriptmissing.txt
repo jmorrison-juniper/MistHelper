@@ -1,0 +1,18 @@
+Gateway/SSR Specific:
+❌ Service Ping - POST /api/v1/sites/:site_id/devices/:device_id/service_ping
+❌ Show Service Path - POST /api/v1/sites/{site_id}/devices/{device_id}/show_service_path
+❌ Show Forwarding Table - POST /api/v1/sites/{site_id}/devices/{device_id}/show_forwarding_table
+❌ Show SSR Routes - POST /api/v1/sites/{site_id}/devices/{device_id}/show_route
+❌ Show SSR Sessions - POST /api/v1/sites/{site_id}/devices/{device_id}/show_session
+Switch Specific:
+❌ Bounce Port - POST /api/v1/sites/{site_id}/devices/{device_id}/bounce_port
+❌ Show MAC Table - POST /api/v1/sites/{site_id}/devices/{device_id}/show_mac_table
+❌ Show DHCP Leases - POST /api/v1/sites/{site_id}/devices/{device_id}/show_dhcp_leases
+❌ MISSING - Advanced Shell Commands
+These commands from the script needs are not directly available:
+
+❌ Show Service-Path for specific services (only generic shell available)
+❌ Bounce specific ports (disable/enable interfaces)
+❌ Show POE interface details (available in port stats but not as command)
+❌ Show BGP information (would need specific routing commands)
+❌ Show FIB information (forwarding table via POST not implemented)

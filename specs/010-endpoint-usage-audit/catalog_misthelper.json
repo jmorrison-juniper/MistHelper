@@ -1,0 +1,1670 @@
+[
+  {
+    "function": "mistapi.api.v1.sites.pcaps.listSitePacketCaptures",
+    "line": 5474,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures("
+  },
+  {
+    "function": "mistapi.api.v1.sites.pcaps.listSitePacketCaptures",
+    "line": 5527,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures("
+  },
+  {
+    "function": "mistapi.api.v1.sites.pcaps.startSitePacketCapture",
+    "line": 5657,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.pcaps.startSitePacketCapture("
+  },
+  {
+    "function": "mistapi.api.v1.sites.pcaps.startSitePacketCapture",
+    "line": 5727,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.pcaps.startSitePacketCapture("
+  },
+  {
+    "function": "mistapi.api.v1.sites.pcaps.listSitePacketCaptures",
+    "line": 5823,
+    "source_file": "MistHelper.py",
+    "code_context": "pcaps_response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures("
+  },
+  {
+    "function": "mistapi.api.v1.sites.pcaps.startSitePacketCapture",
+    "line": 5925,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.pcaps.startSitePacketCapture("
+  },
+  {
+    "function": "mistapi.api.v1.sites.pcaps.listSitePacketCaptures",
+    "line": 6018,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.mxedges.listOrgMxEdges",
+    "line": 6104,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.mxedges.listOrgMxEdges("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.stats.listOrgMxEdgesStats",
+    "line": 6125,
+    "source_file": "MistHelper.py",
+    "code_context": "stats_response = mistapi.api.v1.orgs.stats.listOrgMxEdgesStats("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.stats.getOrgMxEdgeStats",
+    "line": 6231,
+    "source_file": "MistHelper.py",
+    "code_context": "stats_response = mistapi.api.v1.orgs.stats.getOrgMxEdgeStats("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.pcaps.startOrgPacketCapture",
+    "line": 6464,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.pcaps.startOrgPacketCapture("
+  },
+  {
+    "function": "mistapi.api.v1.sites.pcaps.listSitePacketCaptures",
+    "line": 6672,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.pcaps.listSitePacketCaptures("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.pcaps.listOrgPacketCaptures",
+    "line": 6837,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.pcaps.listOrgPacketCaptures("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.sites.listOrgSites",
+    "line": 7485,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.inventory.getOrgInventory",
+    "line": 7502,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=DEFAULT_API_PAGE_LIMIT)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.networks.listOrgNetworks",
+    "line": 7530,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.networks.listOrgNetworks(apisession, org_id, limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.networks.listSiteNetworksDerived",
+    "line": 7586,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.networks.listSiteNetworksDerived(apisession, site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.servicepolicies.listOrgServicePolicies",
+    "line": 7646,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.servicepolicies.listOrgServicePolicies(apisession, org_id, limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.servicepolicies.listSiteServicePoliciesDerived",
+    "line": 7687,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.servicepolicies.listSiteServicePoliciesDerived(apisession, site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates",
+    "line": 7753,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(apisession, org_id, limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.gatewaytemplates.listSiteGatewayTemplatesDerived",
+    "line": 7803,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.gatewaytemplates.listSiteGatewayTemplatesDerived(apisession, site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.services.listOrgServices",
+    "line": 7879,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.services.listOrgServices(apisession, org_id, limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.setting.getSiteSetting",
+    "line": 7933,
+    "source_file": "MistHelper.py",
+    "code_context": "config = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id).data"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.inventory.getOrgInventory",
+    "line": 7961,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.getSiteDevice",
+    "line": 7998,
+    "source_file": "MistHelper.py",
+    "code_context": "config_response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, work_site_id, work_device_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 9473,
+    "source_file": "MistHelper.py",
+    "code_context": "rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type=\"ap\").data"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 9554,
+    "source_file": "MistHelper.py",
+    "code_context": "rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type=\"gateway\").data"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 9627,
+    "source_file": "MistHelper.py",
+    "code_context": "rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type=\"switch\").data"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 9711,
+    "source_file": "MistHelper.py",
+    "code_context": "devices_response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type=device_type)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts",
+    "line": 9743,
+    "source_file": "MistHelper.py",
+    "code_context": "ports_search_response = mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.getSiteDeviceStats",
+    "line": 9771,
+    "source_file": "MistHelper.py",
+    "code_context": "stats_response = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.getSiteDevice",
+    "line": 9783,
+    "source_file": "MistHelper.py",
+    "code_context": "device_config_response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.clients.searchSiteWirelessClients",
+    "line": 10053,
+    "source_file": "MistHelper.py",
+    "code_context": "wireless_response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.wired_clients.searchSiteWiredClients",
+    "line": 10057,
+    "source_file": "MistHelper.py",
+    "code_context": "wired_response = mistapi.api.v1.sites.wired_clients.searchSiteWiredClients(apisession, site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 10257,
+    "source_file": "MistHelper.py",
+    "code_context": "rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type=\"all\").data"
+  },
+  {
+    "function": "mistapi.api.v1.sites.clients.searchSiteWirelessClients",
+    "line": 10471,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id, limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.wired_clients.searchSiteWiredClients",
+    "line": 10486,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.wired_clients.searchSiteWiredClients(apisession, site_id, limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.clients.searchOrgWirelessClients",
+    "line": 10501,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.clients.searchOrgWirelessClients(apisession, org_id, limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients",
+    "line": 10515,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(apisession, org_id, limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 10719,
+    "source_file": "MistHelper.py",
+    "code_context": "rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type=\"ap\").data"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.devices.searchOrgDeviceEvents",
+    "line": 10916,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.devices.searchOrgDeviceEvents",
+    "line": 10940,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization",
+    "line": 11034,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization(apisession, org_id, limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization",
+    "line": 11054,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.sites.listOrgSites",
+    "line": 11536,
+    "source_file": "MistHelper.py",
+    "code_context": "site_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts",
+    "line": 11551,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis",
+    "line": 11747,
+    "source_file": "MistHelper.py",
+    "code_context": "vc_stats = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(apisession, site_id, device_id).data"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles",
+    "line": 11865,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles(apisession, org_id, type=\"ap\", limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates",
+    "line": 11894,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates(apisession, org_id, limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.secpolicies.listOrgSecPolicies",
+    "line": 11953,
+    "source_file": "MistHelper.py",
+    "code_context": "resp = mistapi.api.v1.orgs.secpolicies.listOrgSecPolicies(apisession, current_org_id, limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.secintelprofiles.listOrgSecIntelProfiles",
+    "line": 11971,
+    "source_file": "MistHelper.py",
+    "code_context": "resp_secintel = mistapi.api.v1.orgs.secintelprofiles.listOrgSecIntelProfiles(apisession, current_org_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.insights.listSiteRogueAPs",
+    "line": 12000,
+    "source_file": "MistHelper.py",
+    "code_context": "response_aps = mistapi.api.v1.sites.insights.listSiteRogueAPs(apisession, site_id, duration=\"7d\", limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.insights.listSiteRogueClients",
+    "line": 12007,
+    "source_file": "MistHelper.py",
+    "code_context": "response_clients = mistapi.api.v1.sites.insights.listSiteRogueClients(apisession, site_id, duration=\"7d\", limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.insights.listSiteRogueClients",
+    "line": 12052,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.insights.listSiteRogueClients("
+  },
+  {
+    "function": "mistapi.api.v1.sites.insights.listSiteRogueAPs",
+    "line": 12095,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.insights.listSiteRogueAPs("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.insights.getOrgSitesSle",
+    "line": 12440,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.insights.getOrgSitesSle(apisession, org_id, sle=sle_type, duration=\"7d\", limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.insights.getOrgSitesSle",
+    "line": 12515,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.insights.getOrgSitesSle("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.insights.getOrgSle",
+    "line": 12546,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.insights.getOrgSle("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.insights.getOrgSitesSle",
+    "line": 12574,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.insights.getOrgSitesSle(apisession, org_id, duration=\"7d\", limit=100)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.logs.listOrgAuditLogs",
+    "line": 12791,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(apisession, org_id, **kwargs)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.insights.getOrgSitesSle",
+    "line": 12847,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.insights.getOrgSitesSle("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.insights.getOrgSle",
+    "line": 12879,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.insights.getOrgSle("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.insights.getOrgSitesSle",
+    "line": 12907,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.insights.getOrgSitesSle("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 12989,
+    "source_file": "MistHelper.py",
+    "code_context": "rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type=\"all\").data"
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteDevicesStats",
+    "line": 13048,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.stats.listSiteDevicesStats(apisession, site_id, type=\"all\", limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 13086,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type='all')"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis",
+    "line": 13091,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(apisession, site_id, device_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 13132,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type=\"all\")"
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteWirelessClientsStats",
+    "line": 13173,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(apisession, site_id, limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.listSites",
+    "line": 13206,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.listSites(apisession, site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteWirelessClientsStats",
+    "line": 13217,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(apisession, site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.insights.getSiteInsightMetricsForClient",
+    "line": 13282,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.insights.getSiteInsightMetricsForClient(apisession, site_id, client_mac, metric)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.clients.searchSiteWirelessClients",
+    "line": 13362,
+    "source_file": "MistHelper.py",
+    "code_context": "client_response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(apisession, site_id, limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.clients.searchSiteWirelessClientSessions",
+    "line": 13367,
+    "source_file": "MistHelper.py",
+    "code_context": "session_response = mistapi.api.v1.sites.clients.searchSiteWirelessClientSessions(apisession, site_id, limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.listSites",
+    "line": 13572,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.listSites(apisession, site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.anomaly.listSiteAnomalyEvents",
+    "line": 13615,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.anomaly.listSiteAnomalyEvents("
+  },
+  {
+    "function": "mistapi.api.v1.sites.listSites",
+    "line": 13677,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.listSites(apisession, site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForDevice",
+    "line": 13721,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForDevice("
+  },
+  {
+    "function": "mistapi.api.v1.sites.listSites",
+    "line": 13787,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.listSites(apisession, site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteWirelessClientsStats",
+    "line": 13803,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(apisession, site_id, limit=100, duration=\"1d\")"
+  },
+  {
+    "function": "mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForClient",
+    "line": 13843,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForClient("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.sites.listOrgSites",
+    "line": 13927,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, ConfigUtils.get_cached_or_prompted_org_id())"
+  },
+  {
+    "function": "mistapi.api.v1.sites.listSites",
+    "line": 14023,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.listSites(apisession, site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.insights.getSiteInsightMetrics",
+    "line": 14053,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.insights.getSiteInsightMetrics(apisession, site_id, metric)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.listSites",
+    "line": 14109,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.listSites(apisession, site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 14116,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type=\"all\")"
+  },
+  {
+    "function": "mistapi.api.v1.sites.insights.getSiteInsightMetricsForDevice",
+    "line": 14151,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.insights.getSiteInsightMetricsForDevice(apisession, site_id, metric, device_mac)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 14520,
+    "source_file": "MistHelper.py",
+    "code_context": "rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type=\"all\").data"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 15233,
+    "source_file": "MistHelper.py",
+    "code_context": "rawdata = mistapi.api.v1.sites.devices.listSiteDevices("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.getSiteDevice",
+    "line": 15368,
+    "source_file": "MistHelper.py",
+    "code_context": "config_response = mistapi.api.v1.sites.devices.getSiteDevice("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.getSiteDeviceStats",
+    "line": 15441,
+    "source_file": "MistHelper.py",
+    "code_context": "stats_response = mistapi.api.v1.sites.stats.getSiteDeviceStats("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.servicePingFromSsr",
+    "line": 15893,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.devices.servicePingFromSsr("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 17007,
+    "source_file": "MistHelper.py",
+    "code_context": "rawdata = mistapi.api.v1.sites.devices.listSiteDevices("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes",
+    "line": 17700,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.devices.showSiteSsrAndSrxRoutes("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest",
+    "line": 19053,
+    "source_file": "MistHelper.py",
+    "code_context": "stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(apisession, site_id, device_id).data"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest",
+    "line": 19055,
+    "source_file": "MistHelper.py",
+    "code_context": "stats = mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(apisession, site_id, device_id).data"
+  },
+  {
+    "function": "mistapi.api.v1.sites.synthetic_test.searchSiteSyntheticTest",
+    "line": 19207,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.synthetic_test.searchSiteSyntheticTest(apisession, site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.synthetic_test.searchSiteSyntheticTest",
+    "line": 19209,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.synthetic_test.searchSiteSyntheticTest(apisession, site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.getSiteDeviceStats",
+    "line": 19323,
+    "source_file": "MistHelper.py",
+    "code_context": "stats = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id).data"
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.getSiteDeviceStats",
+    "line": 19325,
+    "source_file": "MistHelper.py",
+    "code_context": "stats = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id).data"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates",
+    "line": 19787,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(apisession, current_org_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.getSiteDevice",
+    "line": 19958,
+    "source_file": "MistHelper.py",
+    "code_context": "resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id_inner, device_id_inner)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.getSiteDeviceStats",
+    "line": 19967,
+    "source_file": "MistHelper.py",
+    "code_context": "stats_resp = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id_inner, device_id_inner)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.getSiteDevice",
+    "line": 20013,
+    "source_file": "MistHelper.py",
+    "code_context": "resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.getSiteDeviceStats",
+    "line": 20022,
+    "source_file": "MistHelper.py",
+    "code_context": "stats_resp = mistapi.api.v1.sites.stats.getSiteDeviceStats(apisession, site_id, device_id)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.sites.listOrgSites",
+    "line": 20193,
+    "source_file": "MistHelper.py",
+    "code_context": "site_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.troubleshoot.troubleshootOrg",
+    "line": 20285,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(apisession, org_id, **params)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.getSiteDevice",
+    "line": 20361,
+    "source_file": "MistHelper.py",
+    "code_context": "device_response = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.troubleshoot.troubleshootOrg",
+    "line": 20390,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.troubleshoot.troubleshootOrg",
+    "line": 20481,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.troubleshoot.troubleshootOrg("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.orgs.getOrg",
+    "line": 20628,
+    "source_file": "MistHelper.py",
+    "code_context": "org_response = mistapi.api.v1.orgs.orgs.getOrg(apisession, org_id)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.insights.getOrgSitesSle",
+    "line": 20659,
+    "source_file": "MistHelper.py",
+    "code_context": "(\"Organization Sites SLE\", lambda: mistapi.api.v1.orgs.insights.getOrgSitesSle(apisession, org_id)),"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates",
+    "line": 20908,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate",
+    "line": 20966,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate",
+    "line": 21186,
+    "source_file": "MistHelper.py",
+    "code_context": "resp = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate",
+    "line": 21228,
+    "source_file": "MistHelper.py",
+    "code_context": "update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates",
+    "line": 21464,
+    "source_file": "MistHelper.py",
+    "code_context": "resp = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate",
+    "line": 21493,
+    "source_file": "MistHelper.py",
+    "code_context": "resp = mistapi.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate("
+  },
+  {
+    "function": "mistapi.api.v1.sites.sites.updateSiteInfo",
+    "line": 21533,
+    "source_file": "MistHelper.py",
+    "code_context": "resp = mistapi.api.v1.sites.sites.updateSiteInfo("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.createSiteDeviceShellSession",
+    "line": 21954,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.devices.createSiteDeviceShellSession(apisession, site_id, device_id)"
+  },
+  {
+    "function": "mistapi.api.v1.self.usage.getSelfApiUsage",
+    "line": 22503,
+    "source_file": "MistHelper.py",
+    "code_context": "usage = mistapi.api.v1.self.usage.getSelfApiUsage(apisession).data"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.orgs.getOrg",
+    "line": 24675,
+    "source_file": "MistHelper.py",
+    "code_context": "org_response = mistapi.api.v1.orgs.orgs.getOrg(apisession, org_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.setting.getSiteSetting",
+    "line": 25481,
+    "source_file": "MistHelper.py",
+    "code_context": "settings_resp = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.setting.updateSiteSettings",
+    "line": 25495,
+    "source_file": "MistHelper.py",
+    "code_context": "update_resp = mistapi.api.v1.sites.setting.updateSiteSettings("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate",
+    "line": 25778,
+    "source_file": "MistHelper.py",
+    "code_context": "template_resp = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate",
+    "line": 25941,
+    "source_file": "MistHelper.py",
+    "code_context": "update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 26015,
+    "source_file": "MistHelper.py",
+    "code_context": "device_resp = mistapi.api.v1.sites.devices.listSiteDevices("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.getSiteDevice",
+    "line": 26028,
+    "source_file": "MistHelper.py",
+    "code_context": "device_config_resp = mistapi.api.v1.sites.devices.getSiteDevice("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.getSiteDevice",
+    "line": 26094,
+    "source_file": "MistHelper.py",
+    "code_context": "device_resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.updateSiteDevice",
+    "line": 26142,
+    "source_file": "MistHelper.py",
+    "code_context": "update_resp = mistapi.api.v1.sites.devices.updateSiteDevice("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate",
+    "line": 26491,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate",
+    "line": 26636,
+    "source_file": "MistHelper.py",
+    "code_context": "update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 26938,
+    "source_file": "MistHelper.py",
+    "code_context": "resp = mistapi.api.v1.sites.devices.listSiteDevices("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.getSiteDevice",
+    "line": 27093,
+    "source_file": "MistHelper.py",
+    "code_context": "resp = mistapi.api.v1.sites.devices.getSiteDevice(apisession, site_id, device_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.updateSiteDevice",
+    "line": 27134,
+    "source_file": "MistHelper.py",
+    "code_context": "update_resp = mistapi.api.v1.sites.devices.updateSiteDevice("
+  },
+  {
+    "function": "mistapi.api.v1.sites.getSite",
+    "line": 27370,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.getSite(apisession, site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac",
+    "line": 27430,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac(apisession, site_id, device_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac",
+    "line": 27558,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac(apisession, site_id, device_id)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.sites.createOrgSite",
+    "line": 27819,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.sites.createOrgSite("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.sites.listOrgSites",
+    "line": 27926,
+    "source_file": "MistHelper.py",
+    "code_context": "sites_response = mistapi.api.v1.orgs.sites.listOrgSites("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates",
+    "line": 27971,
+    "source_file": "MistHelper.py",
+    "code_context": "templates_response = mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.rftemplates.updateOrgRfTemplate",
+    "line": 28066,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.rftemplates.updateOrgRfTemplate("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.rftemplates.createOrgRfTemplate",
+    "line": 28087,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.rftemplates.createOrgRfTemplate("
+  },
+  {
+    "function": "mistapi.api.v1.sites.sites.updateSiteInfo",
+    "line": 28117,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.sites.updateSiteInfo("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.inventory.getOrgInventory",
+    "line": 28209,
+    "source_file": "MistHelper.py",
+    "code_context": "inventory_response = mistapi.api.v1.orgs.inventory.getOrgInventory("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles",
+    "line": 28244,
+    "source_file": "MistHelper.py",
+    "code_context": "profiles_response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.deviceprofiles.createOrgDeviceProfile",
+    "line": 28297,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.deviceprofiles.createOrgDeviceProfile("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.inventory.getOrgInventory",
+    "line": 28380,
+    "source_file": "MistHelper.py",
+    "code_context": "inventory_response = mistapi.api.v1.orgs.inventory.getOrgInventory("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles",
+    "line": 28402,
+    "source_file": "MistHelper.py",
+    "code_context": "profiles_response = mistapi.api.v1.orgs.deviceprofiles.listOrgDeviceProfiles("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.deviceprofiles.assignOrgDeviceProfile",
+    "line": 28478,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.deviceprofiles.assignOrgDeviceProfile("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.restartSiteDevice",
+    "line": 28830,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.devices.restartSiteDevice("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 29030,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 29075,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.devices.listSiteDevices("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 29087,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.zones.listSiteZones(self.apisession, site_id=self.site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.beacons.listSiteBeacons",
+    "line": 29096,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.beacons.listSiteBeacons(self.apisession, site_id=self.site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.vbeacons.listSiteVBeacons",
+    "line": 29100,
+    "source_file": "MistHelper.py",
+    "code_context": "vresponse = mistapi.api.v1.sites.vbeacons.listSiteVBeacons(self.apisession, site_id=self.site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.updateSiteMap",
+    "line": 29424,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.maps.updateSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.addSiteMapImageFile",
+    "line": 29489,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.maps.addSiteMapImageFile("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.updateSiteDevice",
+    "line": 29526,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.devices.updateSiteDevice("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.updateSiteZone",
+    "line": 29562,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.zones.updateSiteZone("
+  },
+  {
+    "function": "mistapi.api.v1.sites.beacons.updateSiteBeacon",
+    "line": 29595,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.beacons.updateSiteBeacon("
+  },
+  {
+    "function": "mistapi.api.v1.sites.vbeacons.updateSiteVBeacon",
+    "line": 29624,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.vbeacons.updateSiteVBeacon("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.sites.listOrgSites",
+    "line": 29685,
+    "source_file": "MistHelper.py",
+    "code_context": "resp = mistapi.api.v1.orgs.sites.listOrgSites("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 29761,
+    "source_file": "MistHelper.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 29843,
+    "source_file": "MistHelper.py",
+    "code_context": "map_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 29950,
+    "source_file": "MistHelper.py",
+    "code_context": "devices_response = mistapi.api.v1.sites.devices.listSiteDevices("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 29983,
+    "source_file": "MistHelper.py",
+    "code_context": "zones_response = mistapi.api.v1.sites.zones.listSiteZones("
+  },
+  {
+    "function": "mistapi.api.v1.sites.beacons.listSiteBeacons",
+    "line": 30002,
+    "source_file": "MistHelper.py",
+    "code_context": "beacons_response = mistapi.api.v1.sites.beacons.listSiteBeacons("
+  },
+  {
+    "function": "mistapi.api.v1.sites.vbeacons.listSiteVBeacons",
+    "line": 30020,
+    "source_file": "MistHelper.py",
+    "code_context": "vbeacons_response = mistapi.api.v1.sites.vbeacons.listSiteVBeacons("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 30214,
+    "source_file": "MistHelper.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 30269,
+    "source_file": "MistHelper.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 30328,
+    "source_file": "MistHelper.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 30386,
+    "source_file": "MistHelper.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 30442,
+    "source_file": "MistHelper.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 30498,
+    "source_file": "MistHelper.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 30580,
+    "source_file": "MistHelper.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 30628,
+    "source_file": "MistHelper.py",
+    "code_context": "detail_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.createSiteMap",
+    "line": 30729,
+    "source_file": "MistHelper.py",
+    "code_context": "create_response = mistapi.api.v1.sites.maps.createSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 30790,
+    "source_file": "MistHelper.py",
+    "code_context": "source_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 30877,
+    "source_file": "MistHelper.py",
+    "code_context": "zones_check = mistapi.api.v1.sites.zones.listSiteZones("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.createSiteMap",
+    "line": 30939,
+    "source_file": "MistHelper.py",
+    "code_context": "clone_response = mistapi.api.v1.sites.maps.createSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.addSiteMapImageFile",
+    "line": 30966,
+    "source_file": "MistHelper.py",
+    "code_context": "upload_response = mistapi.api.v1.sites.maps.addSiteMapImageFile("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 30993,
+    "source_file": "MistHelper.py",
+    "code_context": "zones_response = mistapi.api.v1.sites.zones.listSiteZones("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.createSiteZone",
+    "line": 31021,
+    "source_file": "MistHelper.py",
+    "code_context": "zone_response = mistapi.api.v1.sites.zones.createSiteZone("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 31097,
+    "source_file": "MistHelper.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 31176,
+    "source_file": "MistHelper.py",
+    "code_context": "map_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.updateSiteMap",
+    "line": 31259,
+    "source_file": "MistHelper.py",
+    "code_context": "update_response = mistapi.api.v1.sites.maps.updateSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 31300,
+    "source_file": "MistHelper.py",
+    "code_context": "map_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.deleteSiteMap",
+    "line": 31331,
+    "source_file": "MistHelper.py",
+    "code_context": "delete_response = mistapi.api.v1.sites.maps.deleteSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.addSiteMapImageFile",
+    "line": 31426,
+    "source_file": "MistHelper.py",
+    "code_context": "upload_response = mistapi.api.v1.sites.maps.addSiteMapImageFile("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 31467,
+    "source_file": "MistHelper.py",
+    "code_context": "devices_response = mistapi.api.v1.sites.devices.listSiteDevices("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 31578,
+    "source_file": "MistHelper.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 31773,
+    "source_file": "MistHelper.py",
+    "code_context": "map_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteDevicesStats",
+    "line": 31810,
+    "source_file": "MistHelper.py",
+    "code_context": "devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 31839,
+    "source_file": "MistHelper.py",
+    "code_context": "zones_response = mistapi.api.v1.sites.zones.listSiteZones("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteWirelessClientsStats",
+    "line": 31864,
+    "source_file": "MistHelper.py",
+    "code_context": "clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 33711,
+    "source_file": "MistHelper.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteDevicesStats",
+    "line": 33793,
+    "source_file": "MistHelper.py",
+    "code_context": "devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 34004,
+    "source_file": "MistHelper.py",
+    "code_context": "fresh_maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 34027,
+    "source_file": "MistHelper.py",
+    "code_context": "map_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteDevicesStats",
+    "line": 34044,
+    "source_file": "MistHelper.py",
+    "code_context": "devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 34053,
+    "source_file": "MistHelper.py",
+    "code_context": "zones_response = mistapi.api.v1.sites.zones.listSiteZones("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteWirelessClientsStats",
+    "line": 34062,
+    "source_file": "MistHelper.py",
+    "code_context": "clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.createSiteZone",
+    "line": 35055,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.zones.createSiteZone("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 35082,
+    "source_file": "MistHelper.py",
+    "code_context": "map_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.updateSiteMap",
+    "line": 35105,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.maps.updateSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 35132,
+    "source_file": "MistHelper.py",
+    "code_context": "map_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.updateSiteMap",
+    "line": 35154,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.maps.updateSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.updateSiteMap",
+    "line": 35181,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.maps.updateSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.updateSiteMap",
+    "line": 35203,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.maps.updateSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.updateSiteMap",
+    "line": 35223,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.maps.updateSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 35241,
+    "source_file": "MistHelper.py",
+    "code_context": "zones_response = mistapi.api.v1.sites.zones.listSiteZones("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.deleteSiteZone",
+    "line": 35265,
+    "source_file": "MistHelper.py",
+    "code_context": "del_response = mistapi.api.v1.sites.zones.deleteSiteZone("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.deleteSiteMap",
+    "line": 35405,
+    "source_file": "MistHelper.py",
+    "code_context": "delete_response = mistapi.api.v1.sites.maps.deleteSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.deleteSiteZone",
+    "line": 35525,
+    "source_file": "MistHelper.py",
+    "code_context": "delete_response = mistapi.api.v1.sites.zones.deleteSiteZone("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 35697,
+    "source_file": "MistHelper.py",
+    "code_context": "source_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.createSiteMap",
+    "line": 35768,
+    "source_file": "MistHelper.py",
+    "code_context": "clone_response = mistapi.api.v1.sites.maps.createSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.addSiteMapImageFile",
+    "line": 35788,
+    "source_file": "MistHelper.py",
+    "code_context": "upload_response = mistapi.api.v1.sites.maps.addSiteMapImageFile("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 35809,
+    "source_file": "MistHelper.py",
+    "code_context": "zones_response = mistapi.api.v1.sites.zones.listSiteZones("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.createSiteZone",
+    "line": 35829,
+    "source_file": "MistHelper.py",
+    "code_context": "zone_response = mistapi.api.v1.sites.zones.createSiteZone("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 35885,
+    "source_file": "MistHelper.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteWirelessClientsStats",
+    "line": 35956,
+    "source_file": "MistHelper.py",
+    "code_context": "clients_response = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 36069,
+    "source_file": "MistHelper.py",
+    "code_context": "zones_response = mistapi.api.v1.sites.zones.listSiteZones("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.getSiteMap",
+    "line": 36086,
+    "source_file": "MistHelper.py",
+    "code_context": "map_response = mistapi.api.v1.sites.maps.getSiteMap("
+  },
+  {
+    "function": "mistapi.api.v1.sites.maps.listSiteMaps",
+    "line": 36475,
+    "source_file": "MistHelper.py",
+    "code_context": "maps_response = mistapi.api.v1.sites.maps.listSiteMaps("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteDevicesStats",
+    "line": 36518,
+    "source_file": "MistHelper.py",
+    "code_context": "devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 36533,
+    "source_file": "MistHelper.py",
+    "code_context": "zones_response = mistapi.api.v1.sites.zones.listSiteZones("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.getSiteClientsStats",
+    "line": 36547,
+    "source_file": "MistHelper.py",
+    "code_context": "clients_response = mistapi.api.v1.sites.stats.getSiteClientsStats("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteDevicesStats",
+    "line": 36968,
+    "source_file": "MistHelper.py",
+    "code_context": "stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.stats.listOrgDevicesStats",
+    "line": 36978,
+    "source_file": "MistHelper.py",
+    "code_context": "stats_resp = mistapi.api.v1.orgs.stats.listOrgDevicesStats("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.orgs.getOrg",
+    "line": 38205,
+    "source_file": "MistHelper.py",
+    "code_context": "org_info = mistapi.api.v1.orgs.orgs.getOrg(self.apisession, self.org_id)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.sites.listOrgSites",
+    "line": 38228,
+    "source_file": "MistHelper.py",
+    "code_context": "sites_response = mistapi.api.v1.orgs.sites.listOrgSites(self.apisession, self.org_id)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.ssr.listOrgAvailableSsrVersions",
+    "line": 38369,
+    "source_file": "MistHelper.py",
+    "code_context": "versions_response = mistapi.api.v1.orgs.ssr.listOrgAvailableSsrVersions("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.inventory.getOrgInventory",
+    "line": 38410,
+    "source_file": "MistHelper.py",
+    "code_context": "ssrs_response = mistapi.api.v1.orgs.inventory.getOrgInventory("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.inventory.getOrgInventory",
+    "line": 38534,
+    "source_file": "MistHelper.py",
+    "code_context": "ssrs_response = mistapi.api.v1.orgs.inventory.getOrgInventory("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 38579,
+    "source_file": "MistHelper.py",
+    "code_context": "site_devices_response = mistapi.api.v1.sites.devices.listSiteDevices("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.ssr.upgradeOrgSsrs",
+    "line": 38694,
+    "source_file": "MistHelper.py",
+    "code_context": "upgrade_response = mistapi.api.v1.orgs.ssr.upgradeOrgSsrs("
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteDevicesStats",
+    "line": 38982,
+    "source_file": "MistHelper.py",
+    "code_context": "stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.stats.listOrgDevicesStats",
+    "line": 38995,
+    "source_file": "MistHelper.py",
+    "code_context": "stats_resp = mistapi.api.v1.orgs.stats.listOrgDevicesStats("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.ssr.listOrgSsrUpgrades",
+    "line": 39342,
+    "source_file": "MistHelper.py",
+    "code_context": "ssr_resp = mistapi.api.v1.orgs.ssr.listOrgSsrUpgrades(apisession, self.org_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.getSiteDeviceUpgrade",
+    "line": 39446,
+    "source_file": "MistHelper.py",
+    "code_context": "resp = mistapi.api.v1.sites.devices.getSiteDeviceUpgrade(apisession, site_id, upgrade_id)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.logs.listOrgAuditLogs",
+    "line": 39473,
+    "source_file": "MistHelper.py",
+    "code_context": "resp = mistapi.api.v1.orgs.logs.listOrgAuditLogs("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.devices.searchOrgDeviceEvents",
+    "line": 39517,
+    "source_file": "MistHelper.py",
+    "code_context": "resp = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDeviceUpgrades",
+    "line": 39570,
+    "source_file": "MistHelper.py",
+    "code_context": "resp = mistapi.api.v1.sites.devices.listSiteDeviceUpgrades(apisession, site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 40121,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type=\"ap\")"
+  },
+  {
+    "function": "mistapi.api.v1.sites.stats.listSiteDevicesStats",
+    "line": 40196,
+    "source_file": "MistHelper.py",
+    "code_context": "stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions",
+    "line": 40250,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions(apisession, self.org_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.upgradeSiteDevices",
+    "line": 40845,
+    "source_file": "MistHelper.py",
+    "code_context": "resp = mistapi.api.v1.sites.devices.upgradeSiteDevices(apisession, site_id, body=body)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.upgradeSiteDevices",
+    "line": 40883,
+    "source_file": "MistHelper.py",
+    "code_context": "resp = mistapi.api.v1.sites.devices.upgradeSiteDevices(apisession, site_id, body=body)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.setting.updateSiteSettings",
+    "line": 41274,
+    "source_file": "MistHelper.py",
+    "code_context": "mistapi.api.v1.sites.setting.updateSiteSettings(apisession, site_id, body=settings)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.setting.getSiteSettings",
+    "line": 42487,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.setting.getSiteSettings(apisession, site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.setting.updateSiteSettings",
+    "line": 42859,
+    "source_file": "MistHelper.py",
+    "code_context": "mistapi.api.v1.sites.setting.updateSiteSettings(apisession, site_id, body=settings)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 43689,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type=\"ap\")"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.orgs.getOrg",
+    "line": 44848,
+    "source_file": "MistHelper.py",
+    "code_context": "org_info = mistapi.api.v1.orgs.orgs.getOrg(apisession, self.org_id)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.sites.listOrgSites",
+    "line": 44890,
+    "source_file": "MistHelper.py",
+    "code_context": "sites_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, self.org_id)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.inventory.getOrgInventory",
+    "line": 45105,
+    "source_file": "MistHelper.py",
+    "code_context": "switches_response = mistapi.api.v1.orgs.inventory.getOrgInventory("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions",
+    "line": 45210,
+    "source_file": "MistHelper.py",
+    "code_context": "versions_response = mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 45514,
+    "source_file": "MistHelper.py",
+    "code_context": "site_devices_response = mistapi.api.v1.sites.devices.listSiteDevices("
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.upgradeSiteDevices",
+    "line": 45563,
+    "source_file": "MistHelper.py",
+    "code_context": "upgrade_response = mistapi.api.v1.sites.devices.upgradeSiteDevices("
+  },
+  {
+    "function": "mistapi.api.v1.sites.sites.getSiteInfo",
+    "line": 45865,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.sites.getSiteInfo(apisession, self.site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.wlans.listSiteWlans",
+    "line": 45898,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.wlans.listSiteWlans(apisession, self.site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate",
+    "line": 45913,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.templates.listOrgTemplates",
+    "line": 45940,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.templates.listOrgTemplates(apisession, self.org_id)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.wlans.listOrgWlans",
+    "line": 45973,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.wlans.listOrgWlans(apisession, self.org_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.wlans.updateSiteWlan",
+    "line": 46349,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.wlans.updateSiteWlan("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate",
+    "line": 46366,
+    "source_file": "MistHelper.py",
+    "code_context": "template_response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.sitetemplates.updateOrgSiteTemplate",
+    "line": 46388,
+    "source_file": "MistHelper.py",
+    "code_context": "update_response = mistapi.api.v1.orgs.sitetemplates.updateOrgSiteTemplate("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.wlans.updateOrgWlan",
+    "line": 46410,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.wlans.updateOrgWlan("
+  },
+  {
+    "function": "mistapi.api.v1.orgs.wlans.listOrgWlans",
+    "line": 46510,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.wlans.listOrgWlans(apisession, self.org_id)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.wlans.updateOrgWlan",
+    "line": 46707,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.wlans.updateOrgWlan("
+  },
+  {
+    "function": "mistapi.api.v1.sites.setting.getSiteSetting",
+    "line": 48962,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.setting.getSiteSetting("
+  },
+  {
+    "function": "mistapi.api.v1.sites.zones.listSiteZones",
+    "line": 49225,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.zones.listSiteZones("
+  },
+  {
+    "function": "mistapi.api.v1.sites.setting.getSiteSetting",
+    "line": 49903,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.setting.getSiteSetting("
+  },
+  {
+    "function": "mistapi.api.v1.sites.setting.getSiteSetting",
+    "line": 50226,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id=site_id)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.setting.updateSiteSettings",
+    "line": 50235,
+    "source_file": "MistHelper.py",
+    "code_context": "update_response = mistapi.api.v1.sites.setting.updateSiteSettings(apisession, site_id, body=current_settings)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.inventory.getOrgInventory",
+    "line": 50367,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)"
+  },
+  {
+    "function": "mistapi.api.v1.orgs.sites.listOrgSites",
+    "line": 51413,
+    "source_file": "MistHelper.py",
+    "code_context": "sites_response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id, limit=1)"
+  },
+  {
+    "function": "mistapi.api.v1.sites.devices.listSiteDevices",
+    "line": 54323,
+    "source_file": "MistHelper.py",
+    "code_context": "response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type='all')"
+  }
+]

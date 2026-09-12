@@ -1,0 +1,51 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: mist-ops-worker
+  namespace: mist-ops
+  labels:
+    app.kubernetes.io/name: mist-ops-worker
+    app.kubernetes.io/component: worker
+spec:
+  scaleTargetRef:
+    name: mist-ops-worker
+  pollingInterval: 15
+  cooldownPeriod: 120
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  triggers:
+    - type: redis
+      metadata:
+        address: redis.mist-ops.svc.cluster.local:6379
+        listName: default
+        listLength: "5"
+        activationListLength: "1"
+      authenticationRef:
+        name: mist-ops-redis-auth
+    - type: redis
+      metadata:
+        address: redis.mist-ops.svc.cluster.local:6379
+        listName: sync
+        listLength: "3"
+        activationListLength: "1"
+      authenticationRef:
+        name: mist-ops-redis-auth
+    - type: redis
+      metadata:
+        address: redis.mist-ops.svc.cluster.local:6379
+        listName: deploy
+        listLength: "2"
+        activationListLength: "1"
+      authenticationRef:
+        name: mist-ops-redis-auth
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: mist-ops-redis-auth
+  namespace: mist-ops
+spec:
+  secretTargetRef:
+    - parameter: password
+      name: mist-ops-redis
+      key: redis-password
