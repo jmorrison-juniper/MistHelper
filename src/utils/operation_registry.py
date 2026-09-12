@@ -305,6 +305,30 @@ class OperationRegistry:
         "260": {"category": "interactive_safe", "skip_reason": "Requires a simple endpoint operation and org"},
         "261": {"category": "interactive_safe", "skip_reason": "Requires a simple endpoint operation and site"},
         "262": {"category": "interactive_safe", "skip_reason": "Requires a simple endpoint operation and MSP ID"},
+        "263": {
+            "category": "interactive_safe",
+            "skip_reason": "Requires a site SLE endpoint operation and identifier prompts",
+        },
+        "264": {
+            "category": "interactive_safe",
+            "skip_reason": "Requires a site map endpoint operation and identifier prompts",
+        },
+        "265": {
+            "category": "interactive_safe",
+            "skip_reason": "Requires a site detail endpoint operation and identifier prompts",
+        },
+        "266": {
+            "category": "interactive_safe",
+            "skip_reason": "Requires an org detail endpoint operation and identifier prompts",
+        },
+        "267": {
+            "category": "interactive_safe",
+            "skip_reason": "Requires an MSP detail endpoint operation and identifier prompts",
+        },
+        "268": {
+            "category": "interactive_safe",
+            "skip_reason": "Requires an endpoint operation choice and identifier prompts",
+        },
         "238": {"category": "interactive_safe", "skip_reason": "Requires an MSP ID"},
         "240": {
             "category": "interactive_safe",
