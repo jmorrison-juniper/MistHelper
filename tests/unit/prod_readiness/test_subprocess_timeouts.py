@@ -130,7 +130,7 @@ class TestVerdictRegisterTimeout:
     def test_gh_api_passes_a_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from scripts import codeql_verdict_register as register
 
-        recorder = _RecordingRun(returncode=0, stdout="[]")
+        recorder = _RecordingRun(returncode=0, stdout="[[]]")
         monkeypatch.setattr(register.subprocess, "run", recorder)
 
         register.AlertSource("owner/repo", "py/rule").fetch()

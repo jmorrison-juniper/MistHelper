@@ -31,6 +31,8 @@ _DEFAULT_SYNC_INTERVAL_SECONDS = 300
 _DEFAULT_LOG_LEVEL = "INFO"
 # WHY: a Redis client with no limit waits forever. Five seconds frees the worker.
 _DEFAULT_REDIS_TIMEOUT_SECONDS = 5.0
+# WHY: one worker is the only count that may hold sessions in process memory (issue #2051).
+_DEFAULT_WEB_WORKERS = 1
 
 
 def _env_str(name: str, default: str) -> str:
@@ -89,6 +91,7 @@ class AppSettings:
     session_cookie_secure: bool = True
     redis_socket_timeout_seconds: float = _DEFAULT_REDIS_TIMEOUT_SECONDS
     redis_connect_timeout_seconds: float = _DEFAULT_REDIS_TIMEOUT_SECONDS
+    worker_count: int = _DEFAULT_WEB_WORKERS
 
 
 def build_settings() -> AppSettings:
@@ -117,6 +120,7 @@ def build_settings() -> AppSettings:
             "REDIS_CONNECT_TIMEOUT_SECONDS",
             _DEFAULT_REDIS_TIMEOUT_SECONDS,
         ),  # Limits the Redis connect, so a host that drops packets fails fast.
+        worker_count=_env_int("WEB_WORKERS", _DEFAULT_WEB_WORKERS),  # Names the worker count.
     )
     # WHY: the operator needs proof of the cookie policy. The value is a flag, not a secret.
     logger.debug(
