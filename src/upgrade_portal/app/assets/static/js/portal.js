@@ -177,7 +177,7 @@
     /* The run poll stops on these three states. data-model.md section 4.1 ends
      * every path at one of them. */
     var RUN_FINISHED_STATES = ["complete", "stopped", "failed"];
-    var ORG_UPGRADE_FINISHED_STATES = ["cancelled", "completed", "failed"];
+    var ORG_UPGRADE_FINISHED_STATES = ["attention_required", "cancelled", "completed", "failed"];
     var RUN_RETRYABLE_STATES = ["failed", "stopped", "cancelled"];
 
     /* Each device cell of the run table carries one of these field names. The
@@ -2733,6 +2733,19 @@
         }
     }
 
+    function cancellationText(cancellation) {
+        if (!cancellation) {  // A child without a cancellation result shows an empty cell.
+            return "";  // Never imply that the portal requested a cancellation.
+        }
+        var parts = [cancellation.status || "", cancellation.message || ""];  // Keep the exact cloud words.
+        ["cancelled", "already_writing", "no_cancel_available"].forEach(function (field) {  // Keep every group.
+            if (Array.isArray(cancellation[field]) && cancellation[field].length) {  // Show only a filled group.
+                parts.push(field.replace(/_/g, " ") + ": " + cancellation[field].join(", "));  // Name each device.
+            }
+        });
+        return parts.filter(Boolean).join(" - ");  // Join with an ASCII separator for every terminal and browser.
+    }
+
     function paintOrgUpgradeSites(status) {
         var body = document.querySelector("[data-org-upgrade-sites]");
         if (!body) {
@@ -2743,20 +2756,30 @@
         if (!sites.length) {
             var emptyRow = document.createElement("tr");
             var emptyCell = document.createElement("td");
-            emptyCell.colSpan = 6;
-            emptyCell.textContent = "The cloud has not reported a site state yet.";
+            emptyCell.colSpan = 9;
+            emptyCell.textContent = "The cloud has not reported a child state yet.";
             emptyRow.appendChild(emptyCell);
             body.appendChild(emptyRow);
             return;
         }
         sites.forEach(function (site) {
             var row = document.createElement("tr");
-            [site.site_id || "Unknown", site.status || "unknown", site.total || 0, site.upgraded || 0, site.failed || 0, site.id || ""].forEach(function (value, index) {
+            [
+                site.site_name || site.site_id || "Unknown",
+                site.device_family || "ap",
+                site.status || "unknown",
+                site.total || 0,
+                site.upgraded || 0,
+                site.failed || 0,
+                site.id || "",
+                site.error || "",
+                cancellationText(site.cancellation)
+            ].forEach(function (value, index) {
                 var cell = document.createElement(index === 0 ? "th" : "td");
                 if (index === 0) {
                     cell.scope = "row";
                 }
-                if (index === 0 || index === 5) {
+                if (index === 6) {
                     cell.className = "cell-mono";
                 }
                 cell.textContent = String(value);
