@@ -65,6 +65,8 @@ class TestOrganizationUpgradeBrowserFlow:
         page.get_by_test_id("org-upgrade-review").click()
         page.wait_for_url(re.compile(r".*/upgrade/org/confirm$"))
         sync_api.expect(page.get_by_test_id("org-upgrade-confirm")).to_be_visible()
+        sync_api.expect(page.get_by_test_id("org-upgrade-firmware")).to_contain_text("Access points 0.15.1")
+        sync_api.expect(page.get_by_test_id("org-upgrade-firmware")).to_contain_text("Switches 0.15.1")
         sync_api.expect(page.get_by_test_id("org-upgrade-start")).to_be_disabled()
 
         page.get_by_test_id("org-upgrade-confirmation").fill("CONFIRM")
