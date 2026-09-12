@@ -1,0 +1,19 @@
+# Docker/Podman build context exclusions
+.git/
+.gitignore
+.env
+.env.*
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+*.log
+data/
+tests/
+deploy/
+*.md
+LICENSE

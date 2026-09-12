@@ -1,0 +1,543 @@
+{#
+  capture/capture.html - the capture page of the upgrade capture portal.
+
+  Why this file exists:
+    One page covers the whole life of one capture. It starts the capture, it
+    shows the progress, and it shows the result. A second page would need a
+    second poll and a second set of test identifiers for the same six sections.
+
+  Why the page holds no script:
+    The content security policy is 'self' only. See src/upgrade_portal/app/
+    security.py. The policy blocks an inline script and blocks the style
+    attribute. Every behavior of this page therefore lives in portal.js, and
+    every color lives in a stylesheet.
+
+  Why the links hold a literal path:
+    contracts/http-api.md fixes every public path of this portal. The blueprint
+    endpoint names are not fixed, and the route modules do not exist yet. A
+    url_for call against an endpoint name would raise while this page renders,
+    so every path follows the contract. url_for stays for a static asset.
+
+  The contract with portal.js:
+    portal.js reads data-capture-id and data-poll-seconds from the progress
+    region. With a capture identifier it polls GET /api/captures/<id>/status
+    every 30 seconds and paints the values below. The start button carries
+    data-site-id, data-run-id, and data-role, which build the body of
+    POST /api/sites/<site_id>/captures.
+
+  Why the page polls instead of listening:
+    Decision D3 of the plan fixes a 30-second poll. The portal sends no
+    server-sent event, because the existing event bus caps at 10 subscribers.
+
+  Variables a route may supply:
+    site_id       - the site the capture reads. The start button needs it.
+    site_name     - the site name for the heading.
+    capture_id    - the identifier of an existing capture. Empty before a start.
+    status        - the last known status. The shape matches the body of
+                    GET /api/captures/<id>/status exactly: state, percent,
+                    sections, counts, partial_reasons, verified, and message.
+                    portal.js paints the same fields from the poll, so the
+                    server render and the poll never disagree.
+    stored_size_bytes     - the stored size of the capture, in bytes.
+    tier                  - 2 or 3. Defaults to 2, as contracts/http-api.md
+                            states.
+    run_id                - the run this capture belongs to. May be absent.
+    role                  - `pre` or `post`. Defaults to `pre`.
+    poll_interval_seconds - the poll period. Defaults to 30.
+    page_title            - the heading text and the tab text.
+    theme, themes         - see layout.html.
+#}
+{% extends 'layout.html' %}
+
+{% block title %}{{ page_title | default('Capture', true) }}{% endblock %}
+
+{% block heading %}<h1>{{ page_title | default('Capture', true) }}</h1>{% endblock %}
+
+{% block content %}
+{#
+  The six section names come from contracts/http-api.md:155-159. The identifier
+  appends the section key of that body without any change, so portal.js finds
+  the element straight from the key it reads. A second spelling would need a
+  translation table in the script and in every test.
+#}
+{% set section_labels = [
+  ('devices', 'Devices'),
+  ('clients_wired', 'Wired clients'),
+  ('clients_wireless', 'Wireless clients'),
+  ('clients_guest', 'Guest clients'),
+  ('extras', 'Extra data'),
+  ('alarms', 'Alarms')
+] %}
+
+{# data-model.md fixes these nine count keys and this order. #}
+{% set count_labels = [
+  ('devices_total', 'Devices in total'),
+  ('devices_connected', 'Devices connected'),
+  ('devices_disconnected', 'Devices disconnected'),
+  ('gateways', 'Gateways'),
+  ('switches', 'Switches'),
+  ('access_points', 'Access points'),
+  ('clients_wired', 'Wired clients'),
+  ('clients_wireless', 'Wireless clients'),
+  ('clients_guest', 'Guest clients')
+] %}
+
+{#
+  Every value passes through a default filter first. The portal runs Jinja with
+  the standard undefined type, and this step also holds if a later setting turns
+  on the strict undefined type.
+#}
+{% set status_record = status | default({}, true) %}
+{% set state_value = status_record.state | default('pending', true) %}
+{% set percent_value = status_record.percent | default(0, true) %}
+{% set sections_map = status_record.sections | default({}, true) %}
+{% set counts_map = status_record.counts | default({}, true) %}
+{% set partial_reasons = status_record.partial_reasons | default([], true) %}
+{% set is_verified = status_record.verified | default(false, true) %}
+{% set status_message = status_record.message | default('', true) %}
+{% set capture_identifier = capture_id | default(status_record.capture_id, true) | default('', true) %}
+{% set chosen_tier = tier | default(2, true) | int %}
+{% set site_label = site_name | default('', true) %}
+
+{#
+  FR-072 gives one site to one operator. The banner sits above the start
+  control, so the operator reads who holds the site before the start button
+  comes into view. `select.lock_banner_context` supplies the six values.
+#}
+{% include 'partials/lock_banner.html' %}
+
+<div class="portal-card">
+  <h2 class="portal-card-title">Start a capture</h2>
+
+  {% if site_label %}
+    <p class="portal-card-note">The capture reads the site {{ site_label }}.</p>
+  {% endif %}
+
+  <div class="mb-3">
+    <label class="form-label" for="capture-tier-select">Data tier</label>
+
+    {#
+      Tier 2 is the default, as contracts/http-api.md:140-141 states. The
+      endpoint refuses any other value with the code bad_tier.
+    #}
+    <select class="form-select"
+            id="capture-tier-select"
+            data-testid="capture-tier-select"
+            aria-describedby="capture-tier-note">
+      <option value="2" {{ 'selected' if chosen_tier != 3 else '' }}>
+        Tier 2. The device state and the client lists.
+      </option>
+      <option value="3" {{ 'selected' if chosen_tier == 3 else '' }}>
+        Tier 3. Tier 2, the port state, the radio state, and the alarms.
+      </option>
+    </select>
+
+    <p class="portal-card-note" id="capture-tier-note">
+      Tier 3 reads more data and takes more time.
+    </p>
+  </div>
+
+  {#
+    The button sends JSON and reads the capture identifier from the answer, so
+    it is a button and not a form. A form would move the browser to a new page
+    and would lose the 202 body. portal.js adds the token header.
+  #}
+  {#
+    Issue #2200: the site lock guards this write. The control renders disabled
+    for an operator who does not hold the site, and it names the reason. The
+    server refuses such a call with 409 site_locked either way, and a live
+    control that answers a refusal wastes the time of the operator.
+
+    The page decides this, not the script. A control that is live until the
+    script runs invites a press in that moment.
+  #}
+  {% set write_allowed = lock_write_allowed | default(false, true) %}
+  <button type="button"
+          class="portal-button portal-button-primary"
+          data-testid="capture-start-button"
+          data-needs-lock
+          data-site-id="{{ site_id | default('', true) }}"
+          data-run-id="{{ run_id | default('', true) }}"
+          data-role="{{ role | default('pre', true) }}"
+          {% if not write_allowed %}disabled aria-describedby="capture-start-locked"{% endif %}
+          >Start the capture</button>
+
+  {% if not write_allowed %}
+    <p class="portal-note" id="capture-start-locked" data-testid="capture-start-locked-note" data-lock-reason-note>
+      {% if lock_holder | default('', true) %}
+        {{ lock_holder | default('', true) }} holds this site, so this control is off. Take the site
+        to start a capture.
+      {% else %}
+        Another operator holds this site, so this control is off.
+      {% endif %}
+    </p>
+  {% endif %}
+
+  {#
+    FR-040 requires a manual refresh control. The poll runs every 30 seconds,
+    and this control reads the status at once.
+  #}
+  <button type="button"
+          class="portal-button"
+          data-testid="capture-refresh-button">Refresh now</button>
+</div>
+
+{#
+  aria-live="polite" makes a screen reader read the new state after the poll
+  paints it. The reader waits for a pause, so the text never cuts off a
+  sentence the operator is already reading.
+#}
+<section class="status-panel"
+         data-testid="capture-progress"
+         data-capture-id="{{ capture_identifier }}"
+         data-poll-seconds="{{ poll_interval_seconds | default(30, true) }}"
+         data-capture-tables-ready="{{ 'true' if is_verified else 'false' }}"
+         aria-live="polite">
+
+  <h2 class="status-panel-title">
+    Capture progress
+    <span class="status-panel-state" data-capture-field="state">{{ state_value }}</span>
+    <span class="capture-progress-percent"
+          data-testid="capture-progress-percent">{{ percent_value }}%</span>
+  </h2>
+
+  {#
+    The track carries the ARIA values and the bar carries the paint. portal.js
+    sets the bar width through the style property of the element. The content
+    security policy blocks the style attribute in this file, and it does not
+    block the style property that a script sets.
+  #}
+  <div class="capture-progress-track"
+       data-capture-field="track"
+       role="progressbar"
+       aria-label="Capture progress"
+       aria-valuemin="0"
+       aria-valuemax="100"
+       aria-valuenow="{{ percent_value }}">
+    <div class="capture-progress-bar" data-capture-field="bar"></div>
+  </div>
+
+  <ul class="status-section-list">
+    {% for key, label in section_labels %}
+      <li class="status-section" data-testid="capture-section-{{ key }}">
+        {{ label }}:
+        <span data-section-state>{{ sections_map.get(key, 'pending') }}</span>
+      </li>
+    {% endfor %}
+  </ul>
+
+  <p class="status-message" data-capture-field="message">{{ status_message }}</p>
+
+  <dl class="row mb-0">
+    {% for key, label in count_labels %}
+      <dt class="col-sm-4">{{ label }}</dt>
+      <dd class="col-sm-8 cell-number" data-capture-count="{{ key }}">{{ counts_map.get(key, 0) }}</dd>
+    {% endfor %}
+  </dl>
+</section>
+
+<div class="portal-card">
+  <h2 class="portal-card-title">Result</h2>
+
+  {#
+    The badge names the result in words as well as in a color. WCAG 1.4.1
+    forbids color as the only signal. The badge always renders, so a test finds
+    it before the capture ends and after it ends.
+  #}
+  <p>
+    <span class="portal-badge {{ 'badge-verified' if is_verified else 'badge-partial' }}"
+          data-testid="capture-verified-badge">{{ 'Verified' if is_verified else 'Not verified' }}</span>
+  </p>
+
+  <dl class="row mb-0">
+    <dt class="col-sm-4">Capture identifier</dt>
+    {#
+      The field sits outside the progress region above, so a script that
+      searches that region finds nothing. The test identifier gives portal.js a
+      document-wide address, in the same way as the stored size below.
+    #}
+    <dd class="col-sm-8 font-monospace"
+        data-testid="capture-identifier"
+        data-capture-field="identifier">{{ capture_identifier }}</dd>
+
+    {#
+      FR-032b requires the stored size. The value is the raw byte count, so a
+      test reads one number and no unit.
+    #}
+    <dt class="col-sm-4">Stored size in bytes</dt>
+    <dd class="col-sm-8 cell-number"
+        data-testid="capture-size-bytes">{{ stored_size_bytes | default(0, true) }}</dd>
+  </dl>
+
+  {#
+    FR-027 requires a file download of a completed capture. The two controls
+    appear once the portal verified the capture, because a capture the portal
+    never read back may hold rows that never reached the store. The controls are
+    plain links, so a browser with no script still downloads the file. The
+    content security policy of this portal is 'self' and blocks an inline style
+    attribute, so each control carries a class and no style.
+  #}
+  {% if can_download | default(false, true) %}
+    <p class="mt-3 mb-0">
+      <a class="portal-button"
+         data-testid="capture-export-csv"
+         href="{{ export_csv_href | default('', true) }}"
+         download>Download as CSV</a>
+      <a class="portal-button"
+         data-testid="capture-export-json"
+         href="{{ export_json_href | default('', true) }}"
+         download>Download as JSON</a>
+    </p>
+  {% endif %}
+
+  {#
+    FR-101 offers an upgrade path once the capture verifies. The control always
+    renders, so the poll can reveal it with no reload after a fresh capture
+    verifies. A capture that never verified keeps the button hidden, because it
+    holds no clean pre-check. portal.js posts the run and opens the options page
+    (FR-102). The button sends JSON, so it is a button and not a form, in the
+    same way as the start control above.
+  #}
+  <p class="mt-3 mb-0">
+    <button type="button"
+            class="portal-button portal-button-primary"
+            data-testid="capture-start-upgrade-button"
+            data-site-id="{{ site_id | default('', true) }}"
+            {% if not is_verified %}hidden{% endif %}>Start the upgrade</button>
+  </p>
+  {#
+    FR-104 and FR-105 name the cause of a refusal. aria-live lets a screen
+    reader read the lock holder or the running run after portal.js paints it.
+    The region stays empty until a refusal arrives, so a clean start shows
+    nothing here.
+  #}
+  <p class="portal-card-note"
+     data-testid="capture-start-upgrade-error"
+     aria-live="polite"></p>
+</div>
+
+{#
+  FR-026 requires that the portal shows a completed capture as tables. The page
+  showed the counts alone before this section, so an operator read that a site
+  holds eight devices and could not read which eight.
+
+  Every table renders, even for a capture that holds no row. Acceptance
+  Scenario 1 calls an empty capture valid, so an empty table is the right answer
+  and an error is not. A test therefore finds each table on every render.
+#}
+<div class="portal-card">
+  <h2 class="portal-card-title">Devices</h2>
+
+  {#
+    Issue #2075 caps each table. A capped table must state what it removed,
+    because an operator would otherwise read a cut table as the whole site.
+    An uncapped table states nothing, so the common page carries no noise.
+  #}
+  {% if (device_rows_held | default(0, true)) > (device_rows | length) %}
+    <p class="portal-note" data-testid="capture-device-cap-note">
+      This table shows the first {{ device_rows | length }} of
+      {{ device_rows_held }} devices. Download the capture to read every record.
+    </p>
+  {% endif %}
+
+  <div class="portal-table-scroll">
+    <table class="portal-table" data-testid="capture-device-table"
+                 data-sortable>
+      <caption class="visually-hidden">
+        Every device of this capture. A chassis member appears as its own row,
+        so a stack that loses a member shows the loss as a missing row.
+      </caption>
+
+      <thead>
+        <tr>
+          <th scope="col">Name</th>
+          <th scope="col">MAC address</th>
+          <th scope="col">Type</th>
+          <th scope="col">Model</th>
+          <th scope="col">Serial number</th>
+          <th scope="col">Version</th>
+          <th scope="col">Status</th>
+          <th scope="col">Uptime in seconds</th>
+          <th scope="col">Chassis role</th>
+          <th scope="col">Members</th>
+          <th scope="col">IP address</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for device in device_rows | default([], true) %}
+          {% set device_mac = device.mac | default('', true) %}
+
+          <tr data-testid="capture-device-row-{{ device_mac }}">
+            <th scope="row">{{ device.name | default('Unnamed device', true) }}</th>
+            <td class="cell-mono">{{ device_mac }}</td>
+            <td>{{ device.type | default('unknown', true) }}</td>
+            <td>{{ device.model | default('unknown', true) }}</td>
+            <td class="cell-mono">{{ device.serial | default('unknown', true) }}</td>
+            {#
+              User Story 1 names the version, the status, and the uptime. The
+              device index holds all three, because the raw device list holds
+              the configured version and not the running version.
+            #}
+            <td class="cell-mono">{{ device.version | default('unknown', true) }}</td>
+            <td>{{ device.status | default('unknown', true) }}</td>
+            <td class="cell-number">{{ device.uptime | default('', true) }}</td>
+            <td>{{ device.vc_role | default('', true) }}</td>
+            <td class="cell-number">{{ device.num_members | default('', true) }}</td>
+            <td class="cell-mono">{{ device.ip | default('', true) }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="11" class="portal-table-empty">
+              This capture holds no device.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="portal-card">
+  <h2 class="portal-card-title">Wired clients</h2>
+
+  {% if (wired_rows_held | default(0, true)) > (wired_rows | length) %}
+    <p class="portal-note" data-testid="capture-wired-cap-note">
+      This table shows the first {{ wired_rows | length }} of
+      {{ wired_rows_held }} wired clients. Download the capture to read every
+      record.
+    </p>
+  {% endif %}
+
+  <div class="portal-table-scroll">
+    <table class="portal-table" data-testid="capture-client-wired-table"
+                 data-sortable>
+      <caption class="visually-hidden">
+        Every wired client of this capture, with the switch and the port that
+        holds it.
+      </caption>
+
+      <thead>
+        <tr>
+          <th scope="col">Host name</th>
+          <th scope="col">MAC address</th>
+          <th scope="col">IP address</th>
+          <th scope="col">Manufacturer</th>
+          <th scope="col">Parent device</th>
+          <th scope="col">Port</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for client in wired_rows | default([], true) %}
+          {% set client_mac = client.mac | default('', true) %}
+
+          <tr data-testid="capture-client-row-{{ client_mac }}">
+            <th scope="row">{{ client.hostname | default('Unnamed client', true) }}</th>
+            <td class="cell-mono">{{ client_mac }}</td>
+            <td class="cell-mono">{{ client.ip | default('', true) }}</td>
+            <td>{{ client.manufacture | default('', true) }}</td>
+            <td>{{ client.parent_device | default('unknown', true) }}</td>
+            <td class="cell-mono">{{ client.port_id | default('', true) }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="6" class="portal-table-empty">
+              This capture holds no wired client.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="portal-card">
+  <h2 class="portal-card-title">Wireless clients</h2>
+
+  {% if (wireless_rows_held | default(0, true)) > (wireless_rows | length) %}
+    <p class="portal-note" data-testid="capture-wireless-cap-note">
+      This table shows the first {{ wireless_rows | length }} of
+      {{ wireless_rows_held }} wireless clients. Download the capture to read
+      every record.
+    </p>
+  {% endif %}
+
+  <div class="portal-table-scroll">
+    <table class="portal-table" data-testid="capture-client-wireless-table"
+                 data-sortable>
+      <caption class="visually-hidden">
+        Every wireless client of this capture, with the access point, the
+        network name, and the band that holds it.
+      </caption>
+
+      <thead>
+        <tr>
+          <th scope="col">Host name</th>
+          <th scope="col">MAC address</th>
+          <th scope="col">IP address</th>
+          <th scope="col">VLAN</th>
+          <th scope="col">Parent device</th>
+          <th scope="col">Network name</th>
+          <th scope="col">Band</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for client in wireless_rows | default([], true) %}
+          {% set client_mac = client.mac | default('', true) %}
+
+          <tr data-testid="capture-client-row-{{ client_mac }}">
+            <th scope="row">{{ client.hostname | default('Unnamed client', true) }}</th>
+            <td class="cell-mono">{{ client_mac }}</td>
+            <td class="cell-mono">{{ client.ip | default('', true) }}</td>
+            <td class="cell-number">{{ client.vlan | default('', true) }}</td>
+            <td>{{ client.parent_device | default('unknown', true) }}</td>
+            <td>{{ client.ssid | default('', true) }}</td>
+            <td>{{ client.band | default('', true) }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="7" class="portal-table-empty">
+              This capture holds no wireless client.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{#
+  portal.css prepends "Caution:" to a flash-warning through a stylesheet rule.
+  A partial capture is recoverable, because the operator can run the capture
+  again, so the signal word is Caution and not Warning.
+#}
+<div class="flash-item flash-warning"
+     data-testid="capture-partial-warning"
+     {{ '' if partial_reasons else 'hidden' }}>
+  <span>
+    The capture did not read every section. A comparison that uses this capture
+    can miss a device or a client.
+    <span data-partial-list>
+      {% for reason in partial_reasons %}
+        {{ reason.section | default('unknown section', true) }}:
+        {{ reason.reason | default('no reason', true) }}.
+      {% endfor %}
+    </span>
+  </span>
+</div>
+
+{#
+  portal.css prepends "Warning:" to a flash-danger through a stylesheet rule.
+  role="alert" makes a screen reader read the fault at once, because the
+  operator must stop and act.
+#}
+<div class="flash-item flash-danger"
+     data-testid="capture-error"
+     role="alert"
+     hidden></div>
+{% endblock %}
+
+
+

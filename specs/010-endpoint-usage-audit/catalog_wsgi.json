@@ -1,0 +1,8 @@
+[
+  {
+    "function": "mistapi.api.v1.self.self.getSelf",
+    "line": 58,
+    "source_file": "wsgi.py",
+    "code_context": "resp = mistapi.api.v1.self.self.getSelf(apisession)"
+  }
+]

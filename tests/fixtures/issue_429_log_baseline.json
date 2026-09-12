@@ -1,0 +1,22 @@
+{
+  "L1343": {
+    "line": 1343,
+    "pattern": "attribute_access",
+    "rendered": "Python executable: /usr/bin/python3"
+  },
+  "L315": {
+    "line": 315,
+    "pattern": "plain_fstring",
+    "rendered": "Python 3.10.0 detected. MistHelper requires Python 3.13+. Some features may not work correctly."
+  },
+  "L6120": {
+    "line": 6120,
+    "pattern": "g003_concat",
+    "rendered": "\nrow1\nrow2"
+  },
+  "L6988": {
+    "line": 6988,
+    "pattern": "format_spec_2f_with_arithmetic",
+    "rendered": "Retrying device dev-abc in 2.50s (attempt 2/4)"
+  }
+}

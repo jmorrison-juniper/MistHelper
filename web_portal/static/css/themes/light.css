@@ -1,0 +1,107 @@
+/*
+ * light.css - MistHelper Light Theme
+ *
+ * White background, blue accents, dark text.
+ * Default Bootstrap 5 styling with minor portal overrides.
+ */
+
+:root {
+    --portal-bg: #f8f9fa;
+    --portal-bg-secondary: #ffffff;
+    --portal-text: #212529;
+    --portal-text-muted: #6c757d;
+    --portal-border: #dee2e6;
+    --portal-link: #0d6efd;
+    --portal-link-hover: #0a58ca;
+    --portal-success: #198754;
+    --portal-danger: #dc3545;
+    --portal-warning: #ffc107;
+    --portal-info: #0dcaf0;
+    --portal-card-bg: #ffffff;
+    --portal-input-bg: #ffffff;
+    --portal-input-border: #ced4da;
+    --portal-input-text: #212529;
+    --portal-navbar-bg: #ffffff;
+    --portal-table-hover: #f2f2f2;
+    --portal-badge-bg: #e9ecef;
+}
+
+body {
+    background-color: var(--portal-bg);
+    color: var(--portal-text);
+}
+
+/* Navbar */
+.portal-navbar {
+    background-color: var(--portal-navbar-bg) !important;
+    border-bottom: 1px solid var(--portal-border);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.portal-navbar .nav-link {
+    color: var(--portal-text-muted);
+}
+
+.portal-navbar .nav-link:hover,
+.portal-navbar .nav-link.active {
+    color: var(--portal-text);
+}
+
+/* Cards */
+.portal-card {
+    background-color: var(--portal-card-bg);
+    border: 1px solid var(--portal-border);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.card {
+    border-color: var(--portal-border);
+}
+
+/* Tables */
+.portal-table th {
+    background-color: var(--portal-bg);
+    border-color: var(--portal-border);
+    color: var(--portal-text);
+}
+
+.portal-table td {
+    border-color: var(--portal-border);
+}
+
+/* Forms */
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--portal-link);
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+/* Accordion */
+.accordion-button:not(.collapsed) {
+    background-color: #e7f1ff;
+    color: var(--portal-link);
+}
+
+/* Log Viewer */
+.log-viewer {
+    background-color: #f1f3f5;
+    border-color: var(--portal-border);
+    color: #212529;
+}
+
+/* Progress Bar */
+.portal-progress {
+    background-color: #e9ecef;
+}
+
+/* Footer */
+.portal-footer {
+    background-color: var(--portal-navbar-bg);
+    border-top: 1px solid var(--portal-border);
+    color: var(--portal-text-muted);
+}
+
+/* Text helpers */
+.text-muted {
+    color: var(--portal-text-muted) !important;
+}

@@ -1,0 +1,10 @@
+{
+  "workflow": "speckit",
+  "specName": "184-polyglot-db-migration",
+  "branch": "184-polyglot-db-migration",
+  "selectedAt": "2026-04-22T16:22:52.361Z",
+  "currentStep": "specify",
+  "status": "draft",
+  "stepHistory": {},
+  "transitions": []
+}

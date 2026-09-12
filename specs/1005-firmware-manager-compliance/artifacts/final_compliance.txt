@@ -1,0 +1,3 @@
+Compliance report written to compliance_report.md
+Overall score: 100.0/100  Grade: A+
+  A+  100.0  src\firmware\firmware_manager.py

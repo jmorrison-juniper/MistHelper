@@ -1,0 +1,26 @@
+# Test-only dependencies for the mist-ops-platform sub-project (issue #2034).
+#
+# mist-ops-platform/pyproject.toml owns every runtime package under
+# [project.dependencies] and every test tool under
+# [project.optional-dependencies].dev, which already carries pytest,
+# pytest-asyncio, and pytest-cov. This file must never repeat one of those
+# names, because a second copy drifts away from the first one.
+#
+# The CI job "pytest (ops platform)" installs both lists in one command:
+#
+#     pip install -e ".[dev]" -r requirements-dev.txt
+#
+# Use the same command for a local run.
+#
+# Every pin is a floor, not an exact version. A security update therefore
+# still reaches this sub-project.
+
+# pytest-timeout backs the --timeout=120 argument that the CI job passes to
+# pytest. Without this package pytest rejects that argument and the job stops
+# before it collects a test. Issue #2036 added the argument.
+pytest-timeout>=2.3
+
+# starlette 0.49 and newer import httpx2 inside TestClient. The runner installs
+# starlette through fastapi, so every TestClient test raises
+# "ModuleNotFoundError: No module named 'httpx2'" without this pin.
+httpx2>=2.12.0
