@@ -178,6 +178,70 @@ class TestPythonSymbolExtraction:
         symbols = validator.extract_python_symbols(source)
         assert "top_level_func" in symbols
 
+    def test_extracts_nested_definitions_from_statement_bodies(self, validator, tmp_path):
+        """Nested definitions must stay visible to the diagram lint.
+
+        Why:
+            The symbol extraction path must keep the old AST verdict.
+        """
+        source = tmp_path / "nested_source.py"
+        source_text = dedent("""\
+            def outer_func():
+                def inner_func():
+                    pass
+                try:
+                    class TryManager:
+                        def run(self):
+                            pass
+                except ValueError:
+                    class ExceptManager:
+                        pass
+                match 1:
+                    case 1:
+                        def matched_func():
+                            pass
+        """)
+        source.write_text(source_text, encoding="utf-8")
+        symbols = validator.extract_python_symbols(source)
+        assert {"outer_func", "inner_func", "TryManager", "run", "ExceptManager", "matched_func"} <= symbols
+
+    def test_preserves_async_function_name_omission(self, validator, tmp_path):
+        """The symbol extraction path must omit async function names.
+
+        Why:
+            The optimized parser must keep the old AST symbol set.
+        """
+        source = tmp_path / "async_source.py"
+        source_text = dedent("""\
+            async def async_outer():
+                def nested_sync():
+                    pass
+        """)
+        source.write_text(source_text, encoding="utf-8")
+        symbols = validator.extract_python_symbols(source)
+        assert "async_outer" not in symbols
+        assert "nested_sync" in symbols
+
+    def test_ignores_definition_words_in_strings_and_comments(self, validator, tmp_path):
+        """Definition words in text must not become source symbols.
+
+        Why:
+            The optimized parser must not read strings or comments as code.
+        """
+        source = tmp_path / "literal_source.py"
+        source_text = dedent("""\
+            # def CommentFunction():
+            text = "class StringManager"
+
+            class RealManager:
+                pass
+        """)
+        source.write_text(source_text, encoding="utf-8")
+        symbols = validator.extract_python_symbols(source)
+        assert "RealManager" in symbols
+        assert "CommentFunction" not in symbols
+        assert "StringManager" not in symbols
+
     def test_handles_syntax_error(self, validator, tmp_path):
         source = tmp_path / "bad.py"
         source.write_text("def broken(\n")
@@ -267,3 +331,108 @@ class TestExitCodes:
         validator.files_scanned = 1
         validator.stale_references = [{"file": "test.md", "line": 1, "name": "Foo", "closest": None}]
         assert validator._report_results() == 1
+
+
+class TestDiagramFileValidation:
+    """Test full diagram file verdicts."""
+
+    def test_file_with_valid_reference_passes(self, validator, tmp_path):
+        """A diagram file with a known reference must pass.
+
+        Why:
+            The lint gate must accept valid Mermaid references.
+        """
+        diagram_file = tmp_path / "valid.md"
+        diagram_file.write_text("```mermaid\nclassDiagram\n    class DataExporter\n```\n", encoding="utf-8")
+        validator.python_symbols = {"DataExporter"}
+        assert validator.validate_file(diagram_file) == 0
+        assert validator.stale_references == []
+
+    def test_file_with_broken_reference_fails_gate(self, validator, tmp_path):
+        """A diagram file with an unknown reference must fail.
+
+        Why:
+            The lint gate must reject stale Mermaid references.
+        """
+        diagram_file = tmp_path / "broken.md"
+        diagram_file.write_text("```mermaid\nclassDiagram\n    class MissingExporter\n```\n", encoding="utf-8")
+        validator.python_symbols = {"DataExporter"}
+        assert validator.validate_file(diagram_file) == 1
+        assert validator._report_results() == 1
+
+    def test_run_with_broken_reference_fails_gate(self, tmp_path):
+        """A complete run with a stale reference must fail.
+
+        Why:
+            The optimized source scan must keep the lint gate verdict.
+        """
+        source_dir = tmp_path / "source"
+        docs_dir = tmp_path / "docs"
+        source_dir.mkdir()
+        docs_dir.mkdir()
+        (source_dir / "defined.py").write_text("class DataExporter:\n    pass\n", encoding="utf-8")
+        (docs_dir / "diagram.md").write_text(
+            "```mermaid\nclassDiagram\n    class MissingExporter\n```\n",
+            encoding="utf-8",
+        )
+        config = lint_diagram_refs.build_parser().parse_args(
+            ["--docs-dir", str(docs_dir), "--extra-files", "--source-files", str(source_dir)]
+        )
+        validator = DiagramReferenceValidator()
+        assert validator.run(config) == 1
+
+    def test_file_without_reference_skips_validation(self, validator, tmp_path):
+        """A diagram file without Mermaid content must not add findings.
+
+        Why:
+            Plain prose cannot hold a diagram reference.
+        """
+        diagram_file = tmp_path / "plain.md"
+        diagram_file.write_text("# Plain file\n\nNo diagram reference exists.\n", encoding="utf-8")
+        assert validator.validate_file(diagram_file) == 0
+        assert validator.files_scanned == 0
+
+    def test_non_mermaid_code_block_skips_validation(self, validator, tmp_path):
+        """A non-Mermaid code block must not add findings.
+
+        Why:
+            Python examples are not diagram references.
+        """
+        diagram_file = tmp_path / "python.md"
+        diagram_file.write_text("```python\nclass MissingExporter:\n    pass\n```\n", encoding="utf-8")
+        assert validator.validate_file(diagram_file) == 0
+        assert validator.stale_references == []
+
+    def test_run_stops_source_reads_after_references_resolve(self, validator, tmp_path, monkeypatch):
+        """The run must stop source reads after all references resolve.
+
+        Why:
+            The optimized gate avoids reading Python files that cannot change the verdict.
+        """
+        source_dir = tmp_path / "source"
+        docs_dir = tmp_path / "docs"
+        source_dir.mkdir()
+        docs_dir.mkdir()
+        first_source = source_dir / "a_first.py"
+        later_source = source_dir / "z_later.py"
+        first_source.write_text("class NeededManager:\n    pass\n", encoding="utf-8")
+        later_source.write_text("class OtherManager:\n    pass\n", encoding="utf-8")
+        (docs_dir / "diagram.md").write_text(
+            "```mermaid\nclassDiagram\n    class NeededManager\n```\n",
+            encoding="utf-8",
+        )
+        config = lint_diagram_refs.build_parser().parse_args(
+            ["--docs-dir", str(docs_dir), "--extra-files", "--source-files", str(source_dir)]
+        )
+        monkeypatch.setattr(validator, "_collect_source_files", lambda _source_files: [first_source, later_source])
+        real_read_text = Path.read_text
+        read_paths: list[Path] = []
+
+        def counted_read_text(path: Path, *args, **kwargs):
+            read_paths.append(path)
+            return real_read_text(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "read_text", counted_read_text)
+        assert validator.run(config) == 0
+        assert first_source in read_paths
+        assert later_source not in read_paths
