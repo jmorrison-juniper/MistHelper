@@ -30,7 +30,7 @@ try:  # pyte is optional (terminal emulation for parsing WebSocket output)
 
     _has_pyte = True  # Flag that terminal-emulation features are available
 except ImportError:  # pyte not installed
-    pyte = None  # type: ignore[assignment]
+    pyte = None  # Mark the optional terminal emulator absent, so the guard below can skip it.
     _has_pyte = False
 
 _RECEIVER_JOIN_TIMEOUT_SEC = 5.0  # WHY: bound the shutdown wait so a stuck socket cannot hang the menu.
