@@ -74,7 +74,7 @@ This page names the operations that arrived most recently.
 | 258 | Search other-device events for a selected site (`searchSiteOtherDeviceEvents`) | `interactive_safe` |
 | 259 | Run a no-identifier Mist get or list endpoint from a prompt | `interactive_safe` |
 | 260 | Run an org-scoped Mist get or list endpoint from a prompt | `interactive_safe` |
-| 261 | Run a site-scoped Mist get or list endpoint from a prompt | `interactive_safe` |
+| 261 | Run a site-scoped simple Mist read endpoint from a prompt | `interactive_safe` |
 | 262 | Run an MSP-scoped Mist get or list endpoint from a prompt | `interactive_safe` |
 | 263 | Run a site SLE endpoint from a prompt | `interactive_safe` |
 | 264 | Run a site map endpoint from a prompt | `interactive_safe` |

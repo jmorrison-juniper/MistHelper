@@ -1,6 +1,6 @@
 """SimpleEndpointExporter exports one-identifier Mist endpoints.
 
-Issue #1807 groups simple get and list endpoints by required identifier.
+Issue #1807 groups simple read endpoints by required identifier.
 Each table entry names one SDK function that takes only the session, or one
 required identifier after the session. The operator selects the operation from
 one prompt, and the exporter uses the shared output selector.
@@ -179,6 +179,9 @@ _SITE_OPS: tuple[_SimpleEndpointOp, ...] = (
     _SimpleEndpointOp("listSiteWxTags", "mistapi.api.v1.sites.wxtags"),  # Issue #1358.
     _SimpleEndpointOp("listSiteWxTunnels", "mistapi.api.v1.sites.wxtunnels"),  # Issue #1359.
     _SimpleEndpointOp("listSiteZonesStats", "mistapi.api.v1.sites.stats"),  # Issue #1360.
+    _SimpleEndpointOp(
+        "searchSiteClientFingerprints", "mistapi.api.v1.sites.insights"
+    ),  # Issue #1369 corrected the spec name.
 )
 
 _MSP_OPS: tuple[_SimpleEndpointOp, ...] = (
@@ -196,7 +199,7 @@ _MSP_OPS: tuple[_SimpleEndpointOp, ...] = (
 
 
 class SimpleEndpointExporter:
-    """Exporter for get and list endpoints with at most one identifier."""
+    """Exporter for simple read endpoints with at most one identifier."""
 
     @staticmethod
     def _resolve(operation: _SimpleEndpointOp) -> Any:
