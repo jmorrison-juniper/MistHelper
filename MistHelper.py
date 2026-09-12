@@ -440,6 +440,9 @@ from src.export.count_exporter import (
 from src.export.device_events_52w_exporter import (
     DeviceEvents52wExporter,  # Re-export preserved after OrgAlarmEventExporter extraction (1013 SC-001 position 18)
 )
+from src.export.endpoint_family_exporter import (
+    EndpointFamilyExporter,  # Issue #1807 stage two -- remaining endpoint issues grouped by prompt family.
+)
 from src.export.gateway_test_exporter import (
     GatewayTestExporter,  # Cat B (1013 SC-001 position 37) -- re-export for MistHelper.GatewayTestExporter callers
 )
@@ -3823,11 +3826,35 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     ),
     "261": (
         SimpleEndpointExporter.site_endpoints,
-        "Run any site-scoped Mist get or list endpoint (57 operations, issue #1807)",
+        "Run any site-scoped simple Mist read endpoint (58 operations, issue #1807)",
     ),
     "262": (
         SimpleEndpointExporter.msp_endpoints,
         "Run any MSP-scoped Mist get or list endpoint (10 operations, issue #1807)",
+    ),
+    "263": (
+        EndpointFamilyExporter.site_sle_endpoints,
+        "Run any site SLE endpoint with scope prompts (17 operations, issue #1807)",
+    ),
+    "264": (
+        EndpointFamilyExporter.site_map_endpoints,
+        "Run any site map endpoint with map prompts (7 operations, issue #1807)",
+    ),
+    "265": (
+        EndpointFamilyExporter.site_detail_endpoints,
+        "Run any site detail endpoint with identifier prompts (33 operations, issue #1807)",
+    ),
+    "266": (
+        EndpointFamilyExporter.org_detail_endpoints,
+        "Run any org detail endpoint with identifier prompts (61 operations, issue #1807)",
+    ),
+    "267": (
+        EndpointFamilyExporter.msp_detail_endpoints,
+        "Run any MSP detail endpoint with identifier prompts (10 operations, issue #1807)",
+    ),
+    "268": (
+        EndpointFamilyExporter.other_endpoints,
+        "Run any remaining endpoint with identifier prompts (6 operations, issue #1807)",
     ),
     "238": (
         MSPLicenseExporter.licenses,

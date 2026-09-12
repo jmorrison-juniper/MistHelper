@@ -7,6 +7,16 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Data browser preview latency (issue #2511)
+
+- **Changed**: The web portal data browser now detects JSON Lines in one pass.
+  It reuses the first parsed record and keeps bounded preview memory.
+- **Changed**: CSV, JSON Lines, and log previews now skip fallback tail work
+  after the requested page starts. A page past the end still returns the last
+  valid page.
+- **Added**: Unit and parity coverage keep the preview response dictionary,
+  search behavior, JSON fallback behavior, and log line numbers stable.
+
 ### Upgrade portal browser-token sign-in journey (issue #2472)
 
 - **Added**: Playwright coverage signs in with a safe browser token, opens the
@@ -38,6 +48,22 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Changed**: The Radon gate now covers the refactored script files and the
   Zscaler catalogue test file.
 
+### Portal favicon direct path (issue #2495)
+
+- **Fixed**: Both web portals now answer `/favicon.ico` with the shipped SVG
+  icon, the correct media type, and a one-day public cache header.
+
+### Diagram reference lint performance (issue #2488)
+
+- **Changed**: The diagram reference lint now reads diagram files first, then
+  stops Python file reads after it resolves each diagram reference.
+- **Changed**: The diagram reference lint now reads Python symbol tables instead
+  of full abstract syntax trees.
+- **Added**: Unit coverage keeps valid references, stale references, plain
+  Markdown, and non-Mermaid code blocks stable.
+- **Added**: Unit coverage keeps nested definitions, synchronous function
+  names, asynchronous function omission, strings, and comments stable.
+
 ### Simple endpoint family stage one (issue #1807)
 
 - **Added**: Menus 259 through 262 run no-identifier, org-scoped,
@@ -46,6 +72,12 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   excludes the unresolved phantom operation `searchOrgClientFingerprints`.
 - **Added**: Unit coverage verifies SDK resolution, prompt failures, call
   shape, primary-key strategy coverage, and table drift.
+
+### Endpoint family stage two (issue #1807)
+
+- **Added**: Menus 263 through 268 run the remaining read-only endpoint families from a prompt.
+- **Added**: `EndpointFamilyExporter` covers 134 endpoint operations and excludes known unsafe or missing entries.
+- **Added**: Unit coverage verifies SDK resolution, identifier order, prompt errors, empty results, and strategy coverage.
 
 ### Flatten nested fields performance (issue #2485)
 
@@ -6896,7 +6928,4 @@ Closes #368
 - Locations: Single AP pre-check, multi-AP pre-check, site PCAP polling, org PCAP polling
 - Function names now match mistapi SDK and Mist API operationId values
 - operationId: listSitePacketCaptures and listOrgPacketCaptures per OpenAPI spec
-
-
-
 

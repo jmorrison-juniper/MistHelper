@@ -3,9 +3,9 @@
 This page is generated. Run `python scripts/generate_menu_wiki.py` after any
 change to `menu_actions` in `MistHelper.py` or to `src/utils/operation_registry.py`.
 
-MistHelper defines **261 actionable menu entries**, numbered
-1 to 262 with gaps at 152.
-Menu 0 is Exit, so the registry holds 262 entries in total.
+MistHelper defines **267 actionable menu entries**, numbered
+1 to 268 with gaps at 152.
+Menu 0 is Exit, so the registry holds 268 entries in total.
 
 The Safety column reads from `src/utils/operation_registry.py`, which is the
 single source of truth. The classifier fails closed, so an unregistered option
@@ -22,7 +22,7 @@ never runs in an automated test pass.
 
 | Menu numbers | Category | Summary |
 |---|---|---|
-| 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256-262 | Interactive safe | 86 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
+| 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256-268 | Interactive safe | 92 operations. Read-only, but they prompt for a site or a device. The --testinteractive run includes them. |
 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-253, 255 | Safe org exports | 72 operations. Read-only org exports. The --test run includes them. |
 | 154-187, 189-191, 194, 206-208, 239 | Destructive | 42 operations. They change the Mist cloud configuration. Each one needs a typed confirmation. |
 | 0, 124-150, 192 | Interactive | 29 operations. They prompt the operator, so no automated run includes them. |
@@ -294,8 +294,14 @@ never runs in an automated test pass.
 | 258 | Search other-device events for a selected site (searchSiteOtherDeviceEvents) | Interactive safe | `SiteOtherDeviceEventsExporter.other_device_events` |
 | 259 | Run any no-identifier Mist get or list endpoint (29 operations, issue #1807) | Interactive safe | `SimpleEndpointExporter.global_endpoints` |
 | 260 | Run any org-scoped Mist get or list endpoint (55 operations, issue #1807) | Interactive safe | `SimpleEndpointExporter.org_endpoints` |
-| 261 | Run any site-scoped Mist get or list endpoint (57 operations, issue #1807) | Interactive safe | `SimpleEndpointExporter.site_endpoints` |
+| 261 | Run any site-scoped simple Mist read endpoint (58 operations, issue #1807) | Interactive safe | `SimpleEndpointExporter.site_endpoints` |
 | 262 | Run any MSP-scoped Mist get or list endpoint (10 operations, issue #1807) | Interactive safe | `SimpleEndpointExporter.msp_endpoints` |
+| 263 | Run any site SLE endpoint with scope prompts (17 operations, issue #1807) | Interactive safe | `EndpointFamilyExporter.site_sle_endpoints` |
+| 264 | Run any site map endpoint with map prompts (7 operations, issue #1807) | Interactive safe | `EndpointFamilyExporter.site_map_endpoints` |
+| 265 | Run any site detail endpoint with identifier prompts (33 operations, issue #1807) | Interactive safe | `EndpointFamilyExporter.site_detail_endpoints` |
+| 266 | Run any org detail endpoint with identifier prompts (61 operations, issue #1807) | Interactive safe | `EndpointFamilyExporter.org_detail_endpoints` |
+| 267 | Run any MSP detail endpoint with identifier prompts (10 operations, issue #1807) | Interactive safe | `EndpointFamilyExporter.msp_detail_endpoints` |
+| 268 | Run any remaining endpoint with identifier prompts (6 operations, issue #1807) | Interactive safe | `EndpointFamilyExporter.other_endpoints` |
 
 This page should be regenerated whenever `menu_actions` or the operation registry
 changes, so the wiki stays aligned with the code.

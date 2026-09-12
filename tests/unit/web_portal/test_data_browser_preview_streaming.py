@@ -25,6 +25,24 @@ def test_csv_preview_keeps_metadata_when_requested_page_is_too_high(tmp_path) ->
     }
 
 
+def test_csv_search_preview_keeps_last_page_when_request_is_too_high(tmp_path) -> None:
+    """A high filtered CSV page request returns the last valid page."""
+    csv_path = tmp_path / "sites.csv"  # Use an allowed name so the path guard accepts the fixture.
+    csv_path.write_text("id,name\n1,Alpha\n2,Beta\n3,Gamma\n", encoding="utf-8")  # Build three data rows.
+    service = DataBrowserService(str(tmp_path))  # Scope the service to the fixture directory.
+
+    result = service.preview_file("sites.csv", 99, 2, "a")  # Ask past the end with a case-insensitive search.
+
+    assert result == {  # The filtered high page response must match the old paginator.
+        "columns": ["id", "name"],
+        "rows": [["3", "Gamma"]],
+        "total_rows": 3,
+        "page": 2,
+        "per_page": 2,
+        "total_pages": 2,
+    }
+
+
 def test_log_preview_filters_case_insensitive_substrings(tmp_path) -> None:
     """A log search matches any cell with a case-insensitive substring."""
     log_path = tmp_path / "events.log"  # Use an allowed name so the path guard accepts the fixture.
@@ -48,6 +66,28 @@ def test_json_lines_single_item_keeps_key_value_fallback(tmp_path) -> None:
 
     assert result["columns"] == ["Key", "Value"]  # A single object must use the object preview format.
     assert result["rows"] == [["alpha", "1"], ["beta", "Two"]]  # Dict insertion order must stay stable.
+
+
+def test_json_lines_detection_reuses_the_first_parsed_item(tmp_path, monkeypatch) -> None:
+    """A JSON Lines preview parses each item one time."""
+    import json
+
+    json_path = tmp_path / "items.json"  # The JSON preview accepts the .json extension.
+    json_path.write_text('{"a": 1}\n{"a": 2}\n', encoding="utf-8")  # Use two records to select JSON Lines.
+    loads_calls = []  # Count decoder calls so the test guards the single-pass path.
+    original_loads = json.loads  # Keep the real decoder so behavior stays unchanged.
+
+    def counting_loads(content):
+        loads_calls.append(content)  # Record each parsed line for the assertion below.
+        return original_loads(content)  # Decode the item with the standard JSON decoder.
+
+    monkeypatch.setattr(json, "loads", counting_loads)  # Patch the module that the service imports.
+    service = DataBrowserService(str(tmp_path))  # Scope the service to the fixture directory.
+
+    result = service.preview_file("items.json", 1, 25, "")  # Preview the JSON Lines file.
+
+    assert result["rows"] == [["1"], ["2"]]  # The response must stay unchanged.
+    assert len(loads_calls) == 2  # The first JSON Lines item must not be parsed twice.
 
 
 def test_json_list_column_order_and_filtering_stay_stable(tmp_path) -> None:
