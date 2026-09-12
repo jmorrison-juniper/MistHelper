@@ -632,6 +632,8 @@ def store_chosen_sites(site_ids: list[str]) -> None:
     record = identity.current_session()
     if record is None:
         return
+    if tuple(site_ids) != tuple(record.selected_site_ids):  # A changed ordered site set invalidates its plan.
+        clear_org_upgrade_options()  # Remove the options, organization binding, and request nonce together.
     session.pop(SELECTED_SITE_KEY, None)
     record.selected_site_ids = tuple(site_ids)
     logger.info("select: the operator chose %s sites for the organization upgrade", len(site_ids))

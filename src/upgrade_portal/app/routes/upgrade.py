@@ -265,6 +265,20 @@ class MemoryRunStore:
             _RUNS[key] = dict(run)  # A copy stops a later edit of the caller dictionary.
         return True  # The record is readable from this moment.
 
+    def compare_and_set_run(
+        self,
+        run_id: str,
+        expected_version: int,
+        replacement: dict[str, Any],
+    ) -> bool:
+        """Replace one run only when its record version still matches."""
+        with _RUN_GUARD:  # The comparison and replacement must form one action.
+            held = _RUNS.get(run_id)  # An absent run cannot satisfy the comparison.
+            if held is None or held.get("record_version") != expected_version:  # Reject a stale caller.
+                return False  # The caller must read the current durable record.
+            _RUNS[run_id] = dict(replacement)  # Store a detached replacement under the same lock.
+        return True  # No other thread changed the record during this action.
+
     def runs_for_site(self, site_id: str) -> list[dict[str, Any]]:
         """Return every run record that this process holds for one site.
 

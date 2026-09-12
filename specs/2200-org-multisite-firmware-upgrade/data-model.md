@@ -1,264 +1,177 @@
-# Data Model: Organization Upgrade Mode for Many Sites
+# Data Model: Organization Multi-Site Firmware Upgrade
 
-**Feature**: Organization upgrade mode for many sites
-**Language**: Python 3.13 or newer
-**Storage**: The capture store in `src/upgrade_portal/capture/store.py`
+**Issue**: #2475
+**Storage**: Durable portal storage
 
-## 1. Browser Session State
+## 1. Aggregate Operation
 
-The portal keeps scalar scope values in the signed Flask session. The
-server-side `OperatorSession` keeps the multi-site target set.
+One aggregate operation represents one confirmed user action.
 
-| Value | Type | Set by | Meaning |
-| - | - | - | - |
-| `selected_org_id` | `str` | `select.choose_org` | The chosen organization |
-| `selected_upgrade_mode` | `str` | `select.choose_mode` | `single_site` or `multi_site` |
-| `selected_site_id` | `str` | `select.site_inventory_page` | The single-site target |
-| `OperatorSession.selected_site_ids` | `tuple[str, ...]` | `select.choose_sites` | The multi-site target set |
-| `site_lock_records` | `dict[str, dict]` | `select.take_site_lock` | One lock grant for each held site |
-| `org_upgrade_options` | `dict` | `org_upgrade.save_options` | The validated request body |
-| `org_upgrade_last_job` | `dict` | `org_upgrade.submit_upgrade` | The job identifier and the site count |
+| Field | Type | Rule |
+| - | - | - |
+| `operation_id` | `str` | A durable unique identifier |
+| `schema_version` | `int` | The stored model version |
+| `owner_id` | `str` | The authenticated user identity |
+| `org_id` | `str` | The selected organization |
+| `site_ids` | `list[str]` | Unique selected sites in display order |
+| `mode` | `str` | `multi_site` |
+| `state` | `str` | The aggregate display state |
+| `plan_hash` | `str` | A digest of the confirmed child plan |
+| `confirmation_at` | `str` | The confirmation time |
+| `cancel_requested_at` | `str` or `null` | The first cancel request time |
+| `created_at` | `str` | The creation time |
+| `updated_at` | `str` | The last durable change time |
+| `error` | `object` or `null` | An aggregate error |
 
-### Rules
+The aggregate stores no API token. The aggregate keeps child records as durable
+records or embedded durable entries.
 
-- The portal clears the server-side site set when the operator changes the
-  organization.
-- The portal clears the server-side site set when the operator changes the mode.
-- The portal clears `selected_site_id` when the mode becomes `multi_site`.
-- Move `org_upgrade_options` to the run record for durable recovery.
+## 2. Child Operation
 
-## 2. The Request Body
+Each child represents one cloud write plan.
 
-`src/firmware/org_upgrade_body.py` owns the body rules. The class validates the
-input and returns a new dictionary.
+| Field | Type | Rule |
+| - | - | - |
+| `child_id` | `str` | Stable before confirmation |
+| `operation_id` | `str` | The owning aggregate |
+| `ordinal` | `int` | The confirmed display and submit order |
+| `route` | `str` | The exact SDK operation name |
+| `scope` | `str` | `org` or `site` |
+| `org_id` | `str` | The aggregate organization |
+| `site_id` | `str` or `null` | Required for a site route |
+| `ui_family` | `str` | `ap`, `switch`, or `gateway` |
+| `planned_family` | `str` | `ap`, `switch`, `junos`, or `ssr` |
+| `target_ids` | `list[str]` | The immutable target device identifiers |
+| `target_macs` | `list[str]` | Optional display identifiers |
+| `request_body` | `object` | The confirmed cloud body |
+| `status` | `str` | The child submit status |
+| `claim_id` | `str` or `null` | The replay prevention token |
+| `claimed_at` | `str` or `null` | The first claim time |
+| `write_attempts` | `int` | Zero or one |
+| `cloud_job_id` | `str` or `null` | The returned cloud identity |
+| `raw_status` | `int` or `null` | The cloud HTTP status |
+| `error` | `object` or `null` | The submit error |
+| `cancel_status` | `str` | The child cancel status |
+| `cancel_claim_id` | `str` or `null` | The cancel replay token |
+| `cancel_raw_status` | `int` or `null` | The cancel HTTP status |
+| `cancel_error` | `object` or `null` | The cancel error |
+| `created_at` | `str` | The creation time |
+| `updated_at` | `str` | The last durable change time |
 
-```python
-body = {
-    "all_sites": False,
-    "device_type": "ap",
-    "site_ids": ["<uuid>", "<uuid>"],
-    "versions": [{"firmware_type": "ap", "version": "0.14.29538"}],
-    "strategy": "canary",
-    "start_time": 1789000000,
-    "canary_phases": [1, 10, 50, 100],
-    "max_failure_percentage": 5,
-}
-```
+## 3. Route Values
 
-### Field rules
+| Planned family | Route | Scope |
+| - | - | - |
+| `ap` | `upgradeOrgDevices` | `org` |
+| `switch` | `upgradeSiteDevices` or `upgradeDevice` | `site` |
+| `junos` | `upgradeSiteDevices` or `upgradeDevice` | `site` |
+| `ssr` | `upgradeOrgSsrs` | `org` |
 
-| Field | Type | Rule | Failure message |
-| - | - | - | - |
-| `all_sites` | `bool` | Always false | The all_sites field must be false. |
-| `device_type` | `str` | Always `ap` | The organization upgrade supports AP devices only. |
-| `site_ids` | `list[str]` | Nonempty, unique, UUID | The site_ids field must not contain duplicate sites. |
-| `versions` | `list[dict]` | Exactly one AP record | The AP upgrade needs exactly one versions record. |
-| `versions[0].version` | `str` | Nonempty, printable, no space | Each versions record needs a nonempty version string without whitespace. |
-| `versions[0].force` | `bool` | Optional | The force field in a versions record must be a boolean. |
-| `strategy` | `str` | `big_bang`, `canary`, `rrm`, `serial` | The strategy field must be big_bang, canary, rrm, or serial. |
-| `start_time` | `int` | 0 to 2147483647 | The start_time field must be an integer from 0 to 2147483647. |
-| `canary_phases` | `list[int]` | Increasing, ends at 100, canary only | The canary_phases percentages must increase and end at 100. |
-| `max_failure_percentage` | `int` | 0 to 100, never with `big_bang` | The max_failure_percentage field cannot use the big_bang strategy. |
+The data model contains no Mist Edge route.
 
-The class rejects any other field with this message: "The upgrade request
-contains an unsupported field."
+## 4. Child Submit States
 
-## 3. The Cloud Result
+| State | Meaning |
+| - | - |
+| `planned` | The child has no write claim |
+| `claimed` | The durable claim exists |
+| `accepted` | The cloud accepted the write |
+| `running` | A status read shows active work |
+| `complete` | A status read shows completion |
+| `failed` | The cloud rejected or failed the write |
+| `unknown` | The write can exist, but the result is uncertain |
+| `not_submitted` | The sequence stopped before this child claim |
 
-`src/firmware/org_upgrade_service.py` returns a frozen dataclass.
+A recovery process treats `claimed` as `unknown` when no final submit result
+exists.
 
-```python
-@dataclass(frozen=True, slots=True)
-class OrgUpgradeResult:
-    org_id: str
-    upgrade_id: str | None
-    raw_status: int
-    data: Mapping[str, object]
-    error: str | None
-```
+## 5. Child Cancel States
 
-### Rules
+| State | Meaning |
+| - | - |
+| `not_requested` | The aggregate has no cancel request |
+| `not_available` | The child has no valid cancel route |
+| `cancel_claimed` | The durable cancel claim exists |
+| `cancelled` | The cloud accepted the cancel request |
+| `cancel_failed` | The cloud rejected the cancel request |
+| `cancel_unknown` | The cancel outcome is uncertain |
 
-- The field `raw_status` holds zero when the answer carries no valid HTTP code.
-- The field `data` holds a detached copy of the answer and the `upgrades` array.
-- The field `error` holds a message for a failed request or a malformed answer.
-- A valid answer with HTTP 200 sets `error` to `None`.
-- The service reads the job identifier from the `id` field.
+The `cancelled` state does not mean that firmware returned to an earlier
+version.
 
-## 4. The Job Answer
+## 6. Aggregate States
 
-The cloud answer holds one entry for each site job.
+| State | Rule |
+| - | - |
+| `planned` | All children are `planned` |
+| `confirmed` | The plan hash and confirmation exist |
+| `submitting` | A child submit sequence is active |
+| `running` | Submitted children are active and none need attention |
+| `partial` | Children have mixed terminal results |
+| `attention_required` | A submit or cancel result is unknown |
+| `complete` | Every child completed |
+| `cancelling` | A child cancel sequence is active |
+| `cancelled` | All cancellable children accepted cancellation |
+| `failed` | No child succeeded and no result is unknown |
+
+The aggregate state is a display summary. The child records remain the source
+of truth.
+
+## 7. Confirmation Snapshot
+
+The confirmation snapshot contains:
+
+- The organization identifier.
+- The ordered site identifiers.
+- The selected UI families.
+- The target identifiers of each child.
+- The route and scope of each child.
+- The firmware options of each child.
+- The warnings.
+
+The server creates `plan_hash` from a canonical form of this snapshot. A submit
+request must match the stored hash.
+
+## 8. Claim Rules
+
+The store uses an atomic conditional update.
+
+For a submit claim:
+
+1. The child status must be `planned`.
+2. The child claim must be empty.
+3. The store writes the claim and increments `write_attempts`.
+4. The value of `write_attempts` must become one.
+
+For a cancel claim:
+
+1. The child must have a submitted cloud identity or a valid cancel context.
+2. The cancel state must be `not_requested`.
+3. The cancel claim must be empty.
+4. The store writes one cancel claim.
+
+A failed conditional update sends no cloud request.
+
+## 9. Ownership and Scope Rules
+
+- The authenticated user must equal `owner_id`.
+- The active organization must equal `org_id`.
+- Every `site_id` must belong to `org_id`.
+- Every target must belong to its recorded site and organization.
+- Every site route must hold a `site_id`.
+- Every organization route must hold the aggregate `org_id`.
+- Every required site lock must belong to the owner and operation.
+
+## 10. Error Shape
 
 ```json
 {
-  "id": "33333333-3333-3333-3333-333333333333",
-  "status": "upgrading",
-  "upgrades": [
-    {
-      "id": "44444444-4444-4444-4444-444444444444",
-      "site_id": "11111111-1111-1111-1111-111111111111",
-      "status": "upgrading",
-      "start_time": 1789000000,
-      "targets": {
-        "total": 12,
-        "scheduled": ["000000000001"],
-        "downloading": [],
-        "downloaded": [],
-        "download_requested": [],
-        "reboot_in_progress": [],
-        "rebooted": [],
-        "upgraded": ["000000000002"],
-        "failed": [],
-        "skipped": []
-      }
-    }
-  ]
+  "code": "upgrade_outcome_unknown",
+  "message": "The cloud write outcome is unknown.",
+  "stage": "submit",
+  "retryable": false,
+  "observed_at": "2026-09-11T19:00:00Z"
 }
 ```
 
-### Rules
-
-- The portal keeps every array, even an empty array.
-- The portal keeps an absent field absent. The portal adds no default.
-- The portal derives no final state from the arrays.
-- The portal counts the failed array and shows the count.
-
-## 5. The Run Record
-
-`src/upgrade_portal/runtime/runs.py` owns the run model. The store writes the
-record to the `upgrade_runs` collection.
-
-### Current fields
-
-`RunRecordBuilder.REQUIRED_FIELDS` names these keys:
-
-`_key`, `run_id`, `schema_version`, `org_id`, `org_name`, `site_id`,
-`site_name`, `actor_email`, `browser_id`, `created_at`, `updated_at`, `state`,
-`tier`, `targets`, `options`, `phases`, `stop_request`, `pre_capture_id`,
-`post_capture_id`, `error`.
-
-### New fields for this feature
-
-| Field | Type | Meaning |
-| - | - | - |
-| `upgrade_mode` | `str` | `single_site` or `multi_site` |
-| `site_ids` | `list[str]` | The selected sites, in the operator order |
-| `org_upgrade_id` | `str` | The job identifier from the cloud |
-| `org_upgrade_body` | `dict` | The validated request body |
-| `pre_capture_ids` | `dict[str, str]` | One pre-check identifier for each site |
-| `post_capture_ids` | `dict[str, str]` | One post-check identifier for each site |
-| `site_lock_ids` | `dict[str, str]` | One lock token for each site |
-
-### Rules
-
-- The record always holds the explicit mode. The portal never derives the mode
-  from the site count.
-- A multi-site record keeps `site_id` empty and fills `site_ids`.
-- A single-site record keeps `site_ids` empty and fills `site_id`.
-- The record keeps the request body, so an audit can replay the scope.
-
-## 6. The Run States
-
-`RunState` in `runtime/runs.py` names seventeen values.
-
-| Value | Meaning |
-| - | - |
-| `created` | The portal made the record. |
-| `pre_capture_running` | A pre-check runs. |
-| `pre_capture_done` | Every pre-check finished. |
-| `awaiting_confirmation` | The portal waits for the typed word. |
-| `upgrade_submitting` | The portal sends the write. |
-| `upgrade_running` | The cloud runs the job. |
-| `settling_gateways` | The gateway phase settles. |
-| `settling_switches` | The switch phase settles. |
-| `settling_aps` | The access point phase settles. |
-| `settling_clients` | The client phase settles. |
-| `post_capture_running` | A post-check runs. |
-| `post_capture_done` | Every post-check finished. |
-| `complete` | The run finished. |
-| `stopping` | The operator asked for a stop. |
-| `stopped` | The run stopped. |
-| `failed` | The run failed. |
-| `cancelled` | The operator cancelled the run. |
-
-An organization run uses `settling_aps` only, because the job upgrades access
-points only. The other settle states stay unused in this mode.
-
-`PHASE_ORDER` holds `("gateways", "switches", "aps", "clients")`. `PhaseState`
-holds `pending`, `waiting`, `settled`, `skipped`, and `failed`. An organization
-run marks the gateway phase, the switch phase, and the client phase as
-`skipped`.
-
-## 7. The Status View
-
-`RunStatusView.build` returns these keys today:
-
-`run_id`, `state`, `phase_order`, `phases`, `targets`, `stop_request`,
-`pre_capture_id`, `post_capture_id`, `message`, and an optional `lock`.
-
-`org_upgrade.status_summary` returns these keys today:
-
-`status`, `current_phase`, `total`, `upgraded_count`, `failed_count`, and
-`site_upgrades`.
-
-`status_summary` reads each nested target object and sums its device counts.
-
-The planned run record adds these keys:
-
-| Key | Type | Meaning |
-| - | - | - |
-| `upgrade_mode` | `str` | Always `multi_site` |
-| `site_count` | `int` | The number of selected sites |
-
-Each entry of `site_upgrades` adds `site_name`, `total`, `upgraded`, `failed`,
-`pre_capture_id`, and `post_capture_id`.
-
-## 8. The Site Lock Record
-
-`select.py` stores one grant for each held site under `site_lock_records`.
-
-| Field | Type | Meaning |
-| - | - | - |
-| `site_id` | `str` | The held site |
-| `lock_token` | `str` | The grant token |
-| `holder` | `str` | The operator address |
-| `expires_at` | `str` | The expiry time |
-
-The three lock states are `free`, `locked`, and `unknown`. The site picker shows
-`Unknown` when the store does not answer, because a free site and an unreadable
-site both give an empty holder.
-
-## 9. Entity Relations
-
-- One organization holds many sites.
-- One run holds one mode.
-- One multi-site run holds one organization and many sites.
-- One multi-site run holds one cloud job.
-- One cloud job holds one site job for each selected site.
-- One site holds one pre-check and one post-check for each run.
-- One site holds one lock at a time.
-
-## 10. Validation Rules
-
-The portal applies these rules in order:
-
-1. The mode must equal `multi_site` for every organization path.
-2. The site set must hold at least one site.
-3. The site set must hold unique UUID strings.
-4. Every site must belong to the chosen organization.
-5. Every site must hold a verified pre-check.
-6. Every site must hold a live lock for this operator.
-7. The body must pass `OrgUpgradeBody.build`.
-8. The confirmation field must equal `CONFIRM` exactly. The field name is
-   `confirmation` in the organization lane.
-
-A failure at any step gives a refusal. The portal then calls no cloud
-operation.
-
-## 11. Persistence Rules
-
-- The store writes the run record before the cloud write.
-- The store writes the job identifier after the cloud answer.
-- The store keeps the request body for the audit trail.
-- The audit logger masks the API token in every entry.
-- A malformed cloud answer writes an error field and no job identifier.
+The model stores no secret, cookie, authorization header, or CSRF token.

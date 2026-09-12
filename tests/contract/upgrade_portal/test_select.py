@@ -551,6 +551,39 @@ def test_multi_site_selection_reaches_the_session(
     assert b'data-testid="org-upgrade-options"' in options.data
 
 
+def test_changed_site_tuple_clears_saved_upgrade_options(
+    signed_in_client: FlaskClient,
+    wired_app: Flask,
+    fake_site_id: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A changed ordered site tuple invalidates options, organization, and nonce."""
+    other_site_id = "00000000-0000-0000-0000-0000000000dd"  # Supply a second permitted site.
+    monkeypatch.setattr(
+        select,
+        "build_site_rows",
+        lambda org_id: [{"site_id": fake_site_id}, {"site_id": other_site_id}],
+    )  # Keep the selection test offline.
+    wired_app.config["WTF_CSRF_ENABLED"] = False  # Permit the two JSON posts.
+    with signed_in_client.session_transaction() as browser_session:  # Prepare the multi-site workflow.
+        browser_session[SELECTED_MODE_SESSION_KEY] = "multi_site"  # Select the required mode.
+    first = signed_in_client.post(SITE_PAGE_PATH, json={"site_ids": [fake_site_id]})  # Store the first tuple.
+    assert first.status_code == 200  # Confirm the first selection.
+    with signed_in_client.session_transaction() as browser_session:  # Seed options for the first tuple.
+        browser_session["org_upgrade_options"] = {"operation_id": "old-plan"}  # Store the old plan identity.
+        browser_session["org_upgrade_options_org"] = browser_session[SELECTED_ORG_SESSION_KEY]  # Bind its scope.
+        browser_session["org_upgrade_options_nonce"] = "old-nonce"  # Store the old confirmation nonce.
+    changed = signed_in_client.post(
+        SITE_PAGE_PATH,
+        json={"site_ids": [other_site_id, fake_site_id]},
+    )  # Change both membership and order.
+    assert changed.status_code == 200  # Accept the new permitted tuple.
+    with signed_in_client.session_transaction() as browser_session:  # Inspect the signed browser state.
+        assert "org_upgrade_options" not in browser_session  # Remove the stale plan identity.
+        assert "org_upgrade_options_org" not in browser_session  # Remove the stale organization binding.
+        assert "org_upgrade_options_nonce" not in browser_session  # Remove the stale request nonce.
+
+
 def test_multi_site_selection_refuses_an_empty_set(signed_in_client: FlaskClient, wired_app: Flask) -> None:
     """A multi-site operation cannot continue with no selected site."""
     wired_app.config["WTF_CSRF_ENABLED"] = False
