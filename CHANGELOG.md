@@ -43,6 +43,13 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Fixed**: Both web portals now answer `/favicon.ico` with the shipped SVG
   icon, the correct media type, and a one-day public cache header.
 
+### Diagram reference lint performance (issue #2488)
+
+- **Changed**: The diagram reference lint now reads diagram files first, then
+  stops Python file reads after it resolves each diagram reference.
+- **Added**: Unit coverage keeps valid references, stale references, plain
+  Markdown, and non-Mermaid code blocks stable.
+
 ### Simple endpoint family stage one (issue #1807)
 
 - **Added**: Menus 259 through 262 run no-identifier, org-scoped,
@@ -6901,6 +6908,5 @@ Closes #368
 - Locations: Single AP pre-check, multi-AP pre-check, site PCAP polling, org PCAP polling
 - Function names now match mistapi SDK and Mist API operationId values
 - operationId: listSitePacketCaptures and listOrgPacketCaptures per OpenAPI spec
-
 
 
