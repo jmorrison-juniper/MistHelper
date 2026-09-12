@@ -47,6 +47,11 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Changed**: The Radon gate now covers the refactored script files and the
   Zscaler catalogue test file.
 
+### Portal favicon direct path (issue #2495)
+
+- **Fixed**: Both web portals now answer `/favicon.ico` with the shipped SVG
+  icon, the correct media type, and a one-day public cache header.
+
 ### Simple endpoint family stage one (issue #1807)
 
 - **Added**: Menus 259 through 262 run no-identifier, org-scoped,
@@ -6905,8 +6910,6 @@ Closes #368
 - Locations: Single AP pre-check, multi-AP pre-check, site PCAP polling, org PCAP polling
 - Function names now match mistapi SDK and Mist API operationId values
 - operationId: listSitePacketCaptures and listOrgPacketCaptures per OpenAPI spec
-
-
 
 
 

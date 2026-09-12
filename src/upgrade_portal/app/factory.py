@@ -37,6 +37,7 @@ from flask import (  # The web framework surface.
     has_request_context,
     jsonify,
     request,
+    send_from_directory,
 )
 
 from ..api.run_controls import E2EFactoryOverrides  # Type the complete test-only dependency set.
@@ -55,6 +56,10 @@ ROUTES_PACKAGE = __name__.rsplit(".", maxsplit=1)[0] + ".routes"  # A sibling pa
 ASSET_ROOT = Path(__file__).resolve().parent / "assets"  # The templates and the static files live together.
 TEMPLATE_FOLDER = str(ASSET_ROOT / "templates")  # Flask needs the folder as text.
 STATIC_FOLDER = str(ASSET_ROOT / "static")  # The vendored stylesheets and scripts.
+FAVICON_ROUTE = "/favicon.ico"  # Browsers and crawlers request this fixed path.
+FAVICON_ASSET = "favicon.svg"  # Reuse the icon that issue 2398 added.
+FAVICON_MIMETYPE = "image/svg+xml"  # Tell clients that the icon is an SVG document.
+FAVICON_CACHE_SECONDS = 86400  # Cache the small icon for one day.
 
 # The five route modules match the five stages of the operator journey: sign in,
 # choose a site, capture the state, drive the upgrade, and review the difference.
@@ -859,6 +864,43 @@ def register_theme_context(app: Flask) -> None:
         return {THEME_ARGUMENT: name, "themes": list(allowed_themes()), "theme_scheme": theme_scheme(name)}
 
 
+def serve_favicon() -> Response:
+    """Serve the shipped favicon from the direct browser path.
+
+    Why:
+        The page keeps the SVG icon declaration. This route serves the same
+        file when a client requests the legacy path directly.
+    """
+    logger.info("Serving the upgrade capture portal favicon")  # Log before Flask reads the static asset.
+    response = send_from_directory(  # Serve the existing asset through Flask static helpers.
+        STATIC_FOLDER,
+        FAVICON_ASSET,
+        mimetype=FAVICON_MIMETYPE,
+        max_age=FAVICON_CACHE_SECONDS,
+    )
+    response.cache_control.public = True  # Allow shared caches to keep this immutable asset briefly.
+    response.cache_control.max_age = FAVICON_CACHE_SECONDS  # Keep the cache header explicit for tests.
+    logger.debug("Served the upgrade capture portal favicon with status %s.", response.status_code)  # Log the result.
+    return response  # Return the prepared asset response to the client.
+
+
+def register_favicon(app: Flask) -> None:
+    """Register the direct favicon path.
+
+    Why:
+        Some clients request `/favicon.ico` without reading the page markup.
+        The route reuses the shipped SVG icon, so those clients do not create
+        a 404 log line.
+    """
+    logger.info("Registering the upgrade capture portal favicon route")  # Log before the route table change.
+    app.add_url_rule(  # Add the direct route without changing the static folder behavior.
+        FAVICON_ROUTE,
+        endpoint="favicon",
+        view_func=serve_favicon,
+    )
+    logger.debug("Registered the upgrade capture portal favicon route")  # Confirm the route table change.
+
+
 def arm_application(
     app: Flask,
     settings: PortalSettings,
@@ -875,6 +917,7 @@ def arm_application(
     register_readiness(app)  # The orchestrator readiness probe needs the store reading.
     register_teardown(app)  # Every request must release its sockets.
     register_theme_context(app)  # Without this the theme picker of the navigation changes nothing.
+    register_favicon(app)  # Answer the direct browser icon request before the route modules load.
     install_seams(app, overrides)  # Install every dependency before a route module registers.
     if overrides is not None:  # Production responses must never carry a test identifier.
 

@@ -8,12 +8,17 @@ security middleware.
 import atexit
 import logging
 import os
-from typing import Any, Optional
+from typing import Any
 
-from flask import Flask
+from flask import Flask, Response, send_from_directory
 
 from web_portal.services.config import PortalConfigLoader, SecurityMiddleware, ThemeManager
 from web_portal.services.input_hook import InputInterceptor
+
+FAVICON_ROUTE = "/favicon.ico"  # Browsers and crawlers request this fixed path.
+FAVICON_ASSET = "favicon.svg"  # Reuse the icon that issue 2398 added.
+FAVICON_MIMETYPE = "image/svg+xml"  # Tell clients that the icon is an SVG document.
+FAVICON_CACHE_SECONDS = 86400  # Cache the small icon for one day.
 
 
 class WebPortalApp:
@@ -29,9 +34,9 @@ class WebPortalApp:
 
     @staticmethod
     def create_app(
-        apisession: Optional[Any],
+        apisession: Any | None,
         menu_actions: dict,
-        org_id: Optional[str],
+        org_id: str | None,
     ) -> Flask:
         """Create and configure the Flask application instance."""
         app = Flask(
@@ -46,6 +51,7 @@ class WebPortalApp:
         WebPortalApp._apply_security(app, config)
         WebPortalApp._register_blueprints(app)
         WebPortalApp._register_context_processor(app)
+        WebPortalApp._register_favicon_route(app)  # Answer the direct browser icon request.
         WebPortalApp._register_shutdown_hook(app)  # Wire teardown now, so every app built here shuts down cleanly.
         InputInterceptor.install()
         return app
@@ -61,6 +67,43 @@ class WebPortalApp:
         """Return absolute path to the static assets directory."""
         base = os.path.dirname(os.path.abspath(__file__))
         return os.path.join(base, "static")
+
+    @staticmethod
+    def _register_favicon_route(app: Flask) -> None:
+        """Register the direct favicon path.
+
+        Why:
+            Some clients request `/favicon.ico` without reading the page
+            markup. The route reuses the shipped SVG icon, so those clients
+            do not create a 404 log line.
+        """
+        logging.info("Registering the web portal favicon route")  # Log before the route table change.
+        app.add_url_rule(  # Add the direct route without changing the static folder behavior.
+            FAVICON_ROUTE,
+            endpoint="favicon",
+            view_func=WebPortalApp._serve_favicon,
+        )
+        logging.debug("Registered the web portal favicon route")  # Confirm the route table change.
+
+    @staticmethod
+    def _serve_favicon() -> Response:
+        """Serve the shipped favicon from the direct browser path.
+
+        Why:
+            The page keeps the SVG icon declaration. This route serves the same
+            file when a client requests the legacy path directly.
+        """
+        logging.info("Serving the web portal favicon")  # Log before Flask reads the static asset.
+        response = send_from_directory(  # Serve the existing asset through Flask static helpers.
+            WebPortalApp._get_static_dir(),
+            FAVICON_ASSET,
+            mimetype=FAVICON_MIMETYPE,
+            max_age=FAVICON_CACHE_SECONDS,
+        )
+        response.cache_control.public = True  # Allow shared caches to keep this immutable asset briefly.
+        response.cache_control.max_age = FAVICON_CACHE_SECONDS  # Keep the cache header explicit for tests.
+        logging.debug("Served the web portal favicon with status %s", response.status_code)  # Log the result.
+        return response  # Return the prepared asset response to the client.
 
     @staticmethod
     def _load_portal_config(app: Flask) -> dict:
@@ -99,9 +142,9 @@ class WebPortalApp:
     @staticmethod
     def _inject_dependencies(
         app: Flask,
-        apisession: Optional[Any],
+        apisession: Any | None,
         menu_actions: dict,
-        org_id: Optional[str],
+        org_id: str | None,
     ) -> None:
         """Store shared MistHelper objects on app.config."""
         from web_portal.services.event_bus import PortalEventBus
