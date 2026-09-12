@@ -352,6 +352,8 @@ class OperationRegistry:
         },
         "248": {"category": "safe"},
         "249": {"category": "safe"},  # Classify the read-only organization device search for automated tests.
+        # WHY: menu 250 reads organization MxEdge data and writes an export without changing Mist Cloud.
+        "250": {"category": "safe"},
         # WHY: menu 239 starts a local web server and drives a firmware upgrade, so it writes
         # device state. The fail-closed guardrail needs this row or the build breaks.
         #

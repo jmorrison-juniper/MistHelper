@@ -13,6 +13,7 @@ Covered operations:
     - ``searchOrgWanClientEvents`` (menu 233)
     - ``searchOrgSystemEvents`` (menu 234)
     - ``searchOrgSites`` (menu 248)
+    - ``searchOrgMxEdges`` (menu 250)
 
 Why:
     Every endpoint takes a session and an organization and returns
@@ -37,6 +38,22 @@ import mistapi  # WHY: direct SDK access for the search endpoints and get_all pa
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: canonical flatten and escape helpers keep CSV output consistent with peers.
+
+_MXEDGE_FILTER_PROMPTS = {  # Keep the prompt order aligned with the endpoint contract.
+    "mxedge_id": "MxEdge ID",  # Identify one Mist Edge when the operator supplies it.
+    "site_id": "site ID",  # Restrict the search to one site when supplied.
+    "mxcluster_id": "MxCluster ID",  # Restrict the search to one cluster when supplied.
+    "model": "model",  # Restrict the search to one hardware model when supplied.
+    "distro": "distro",  # Restrict the search to one distribution when supplied.
+    "tunterm_version": "tunterm version",  # Restrict the search to one tunterm version when supplied.
+    "stats": "stats (true/false)",  # Request statistics when the operator selects true.
+    "limit": "limit",  # Limit the number of rows when supplied.
+    "start": "start time",  # Set the start of the search window when supplied.
+    "end": "end time",  # Set the end of the search window when supplied.
+    "duration": "duration",  # Set the relative search window when supplied.
+    "sort": "sort",  # Set the Mist sort expression when supplied.
+    "search_after": "search_after cursor",  # Continue from a Mist pagination cursor when supplied.
+}
 
 
 class OrgSearchExporter:
@@ -181,3 +198,57 @@ class OrgSearchExporter:
             "OrgSitesSearch",  # Use a stable filename prefix for the export.
             "site",  # Report the result type in operator messages.
         )
+
+    @staticmethod
+    def _prompt_mxedge_filters() -> dict[str, Any]:
+        """Prompt for optional searchOrgMxEdges filters and omit blank values."""
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the safe prompt helper.
+        filters: dict[str, Any] = {}  # Blank optional filters stay out of the SDK call.
+        for name, label in _MXEDGE_FILTER_PROMPTS.items():  # Ask for each optional filter without using bare input().
+            answer = mh.InputUtils.safe_input(  # safe_input keeps SSH, EOF, and Ctrl-C paths clean.
+                f"Enter {label} for searchOrgMxEdges (optional): ",
+                context=f"org_search_exporter.searchOrgMxEdges.{name}",
+            ).strip()
+            logging.debug("searchOrgMxEdges filter %s present=%s", name, bool(answer))  # Prompt result trace.
+            if not answer:  # An empty optional filter means the SDK default.
+                continue
+            converted = OrgSearchExporter._coerce_mxedge_filter(name, answer)  # Validate each supplied filter.
+            if converted is not None:  # Keep valid values and omit invalid integer input.
+                filters[name] = converted  # Forward the validated value to the SDK.
+        return filters
+
+    @staticmethod
+    def _coerce_mxedge_filter(name: str, answer: str) -> Any | None:
+        """Convert one optional MxEdge filter to its SDK type."""
+        if name == "stats":  # Convert the documented boolean text to the SDK boolean type.
+            return answer.lower() in {"1", "true", "yes", "y"}  # Normalize common true values.
+        if name == "limit":  # Convert the documented integer text before the request.
+            try:
+                return int(answer)  # Keep the SDK call type-safe for the limit.
+            except ValueError:
+                logging.warning("Ignoring invalid searchOrgMxEdges limit: %s", answer)  # Surface bad input.
+                return None  # Omit invalid input instead of sending a bad request.
+        return answer  # Forward string filters exactly as entered.
+
+    @staticmethod
+    def mx_edges() -> None:
+        """Search organization MxEdges and export the result (menu 249)."""
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of shared session and export helpers.
+        logging.info("Organization MxEdge Search:")  # Menu header echoed to the operator.
+        logging.info("Starting the searchOrgMxEdges export...")  # Pre-call trace.
+        org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the organization context.
+        if not org_id:  # The operator declined, or no organization could be resolved.
+            logging.error("No org_id available for searchOrgMxEdges. Exiting.")  # Abort reason.
+            logging.info("! No organization selected. Exiting.")  # User-facing cancel line.
+            return
+        filters = OrgSearchExporter._prompt_mxedge_filters()  # Collect optional query filters safely.
+        try:
+            logging.info("Calling searchOrgMxEdges for org_id=%s", org_id)  # Pre-call log.
+            response = mistapi.api.v1.orgs.mxedges.searchOrgMxEdges(  # Invoke the installed SDK endpoint.
+                mh.apisession, org_id, **filters
+            )
+            rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page through all rows.
+            OrgSearchExporter._persist(rawdata, "OrgMxEdges", "searchOrgMxEdges", "MxEdge")  # Persist results.
+        except Exception as e:  # Surface SDK or network errors without crashing the menu loop.
+            logging.error("Error fetching MxEdge data for org %s: %s", org_id, e)  # Failure context.
+            logging.info("! Error fetching MxEdge data: %s", e)  # ASCII-only user notice.

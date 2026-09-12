@@ -23,6 +23,14 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Added**: Unit coverage for the SDK binding, pagination, export path, empty
   results, unresolved organizations, and API errors.
 
+### Search organization Mist Edges (menu 250)
+
+- **Added**: Menu 250 calls `searchOrgMxEdges` for an organization, prompts
+  safely for its optional filters, follows all response pages, and exports the
+  rows through CSV, SQLite, or ArangoDB. Issue #1375.
+- **Added**: Unit coverage for typed filter forwarding, empty-filter defaults,
+  pagination, and the standard `DataExporter` write path.
+
 ### Verify an email change token (menu 247)
 
 - **Added**: Menu 247 verifies a single-use email change token through the
