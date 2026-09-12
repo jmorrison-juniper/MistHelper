@@ -1,241 +1,205 @@
-# UI Contract: Organization Upgrade Mode for Many Sites
+# UI Contract: Organization Multi-Site Firmware Upgrade
 
-**Feature**: Organization upgrade mode for many sites
-**Rendering**: Flask with Jinja templates
-**Browser code**: `src/upgrade_portal/app/assets/static/js/portal.js`
+**Issue**: #2475
+**Rendering**: Flask, Jinja, and plain JavaScript
 
-## 1. The Rendering Rule
+## 1. Flow
 
-The server renders every page. The browser runs one plain JavaScript file. The
-portal uses no React, no TypeScript, and no bundler.
+The portal uses one continuous sequence:
 
-Every template extends `layout.html`. Every template fills the blocks `title`,
-`heading`, and `content`.
+`organization -> mode -> sites -> options -> confirmation -> progress`
 
-Every value passes through a `default` filter first. A template must render even
-when a route supplies no value.
+The operator does not enter a separate flow for each device family.
 
-## 2. The Page Sequence
+## 2. User Terms
 
-| Step | Path | Template |
-| - | - | - |
-| Sign in | `/auth/signin` | `auth/signin.html` |
-| Second factor | `/auth/twofactor` | `auth/twofactor.html` |
-| Pick the organization | `/select/org` | `select/orgs.html` |
-| Pick the mode | `/select/mode` | `select/mode.html` |
-| Pick the sites | `/select/site` | `select/sites.html` |
-| Capture a pre-check | `/captures/new` | `capture/capture.html` |
-| Set the options | `/upgrade/org/options` | `upgrade/org_options.html` |
-| Confirm the job | `/upgrade/org/confirm` | `upgrade/org_confirm.html` |
-| Watch the job | `/upgrade/org/jobs/<upgrade_id>` | `upgrade/org_progress.html` |
-| Compare the captures | `/compare` | `review/compare.html` |
+Use these terms in controls, headings, tables, warnings, and status messages:
 
-The blueprint `org_upgrade` serves the three organization pages. The route
-module is `src/upgrade_portal/app/routes/org_upgrade.py`.
+- AP
+- Switch
+- Gateway
 
-The single-site sequence keeps `select/inventory.html`, `upgrade/options.html`,
-`upgrade/confirm.html`, and `upgrade/progress.html`.
+Do not ask the operator to choose Junos or SSR as the primary family. The
+planner classifies gateways after selection.
 
-## 3. The Style Rule
+The confirmation and progress pages can show `Junos gateway` or `SSR gateway`
+as route details.
 
-The organization pages use the same classes as the single-site pages.
+## 3. Organization Page
 
-| Element | Class |
-| - | - |
-| A card | `portal-card` |
-| A card title | `portal-card-title` |
-| A card note | `portal-card-note` |
-| A table | `portal-table` inside `portal-table-scroll` |
-| A button | `portal-button` with `portal-button-primary` or `portal-button-danger` |
-| An option group | `bubble-group` with `bubble-option` |
-| A badge | `portal-badge` with `badge-verified`, `badge-partial`, or `badge-unknown` |
-| A monospace cell | `cell-mono` |
+The organization page selects one organization. A mode or site change cannot
+change the organization silently.
 
-The portal adds no second color system. The portal adds no second icon set.
+The next page is the mode page.
 
-## 4. The Mode Picker
+## 4. Mode Page
 
-`select/mode.html` already exists. It carries `data-testid="mode-picker"`.
+The mode page offers `single_site` and `multi_site`.
 
-| Control | Test identifier | Value |
-| - | - | - |
-| The single-site option | `mode-single-site` | `single_site` |
-| The multi-site option | `mode-multi-site` | `multi_site` |
-| The continue button | `mode-continue` | — |
+Issue #2475 uses `multi_site`. The page clears old site and target state when
+the operator changes the mode.
 
-The form posts to `/select/mode` with the field `mode`. The page shows the
-organization name in the card note.
+## 5. Sites Page
 
-## 5. The Site Picker
+The sites page shows sites from the selected organization only.
 
-`select/sites.html` already serves both modes. The template reads
-`selected_mode`.
+Each row shows:
 
-| Mode | Heading | Action cell |
-| - | - | - |
-| `single_site` | `Find a site` | An `Open` link |
-| `multi_site` | `Select sites` | A checkbox |
+- The site name.
+- The site identifier.
+- The lock state.
+- A selection control.
 
-| Control | Test identifier |
-| - | - |
-| The search input | `site-search` |
-| The table | `site-table` |
-| One row | `site-row-<site_id>` |
-| The lock cell | `site-lock-state-<site_id>` |
-| The open link | `site-open-<site_id>` |
-| The checkbox | `site-select-<site_id>` |
-| The form | `multi-site-form` |
-| The continue button | `multi-site-continue` |
+The page rejects an empty selection. It also rejects duplicate site
+identifiers.
 
-The lock cell names the state in words. The three words are `Free`, `Locked`,
-and `Unknown`. The cell never uses color alone, because color alone fails
-WCAG 1.4.1.
+## 6. Options Page
 
-The filter runs in the browser. `portal.js` reads `data-filter-target` and hides
-each row that does not match `data-filter-text`.
+The options page lists the inventory of the selected sites. It groups controls
+under AP, switch, and gateway headings.
 
-## 6. The Options Page
+Each target row shows:
 
-`upgrade/org_options.html` already exists. It carries
-`data-testid="org-upgrade-options"`.
+- A selection control.
+- The site name.
+- The device name.
+- The model.
+- The current version.
+- The UI family.
 
-| Control | Test identifier | Field |
-| - | - | - |
-| The version input | `org-upgrade-version` | `version` |
-| The canary option | `org-strategy-canary` | `strategy` |
-| The big bang option | `org-strategy-big_bang` | `strategy` |
-| The RRM option | `org-strategy-rrm` | `strategy` |
-| The phases input | `org-upgrade-canary-phases` | `canary_phases` |
-| The failure input | `org-upgrade-max-failures` | `max_failure_percentage` |
-| The start input | `org-upgrade-start-time` | `start_time` |
-| The review button | `org-upgrade-review` | — |
-| The site table | `org-upgrade-site-summary` | — |
+The page shows only relevant options for each selected family.
 
-### Required changes
+The page marks Mist Edge as unsupported. The operator cannot include it in the
+plan.
 
-Add a `serial` option, because `OrgUpgradeBody` accepts four strategies and the
-page offers three.
+## 7. Confirmation Page
 
-Add a `force` control, because `OrgUpgradeBody` accepts the force flag inside
-the version record.
+The confirmation page shows the complete immutable plan.
 
-Add a pre-check column to the site table. The column shows `Verified`,
-`Partial`, `Missing`, or `Unknown`.
+The page includes:
 
-Add a capture link for each site with no verified pre-check.
+- The organization.
+- The selected sites.
+- The selected target count.
+- One section for each child.
+- The UI family and planned family.
+- The route and scope.
+- The target count and identifiers.
+- The firmware version and schedule.
+- The route warnings.
 
-Hide the phases input when the strategy is not `canary`. `portal.js` already
-holds `filterAdvancedUpgradeControls` for this pattern.
+The page states that APs use one organization child. It states that switches
+and Junos gateways use site children. It states that SSR gateways use the
+existing organization SSR route.
 
-Hide the failure input when the strategy is `big_bang`.
+The start button remains disabled until the operator types `CONFIRM` exactly.
+The server performs the same check.
 
-## 7. The Confirmation Page
+Warning: a firmware upgrade can interrupt service at several sites. A
+cancellation does not restore firmware that a device already installed.
 
-`upgrade/org_confirm.html` already exists. It carries
-`data-testid="org-upgrade-confirm"`.
+## 8. Progress Page
 
-| Control | Test identifier | Field |
-| - | - | - |
-| The confirmation input | `org-upgrade-confirmation` | `confirmation` |
-| The start button | `org-upgrade-start` | — |
-| The back link | — | — |
+The progress page shows one aggregate card and one child table.
 
-The route `org_upgrade.submit_upgrade` reads the same field name. The two agree
-today.
+The aggregate card shows:
 
-### Confirmation gate
+- The operation identifier.
+- The organization.
+- The site count.
+- The target count.
+- The aggregate state.
+- The last update time.
 
-Keep the field name `confirmation` until a change updates both lanes. The
-single-site page uses `confirm`, and one name is better. Change both sides in
-one task.
+Each child row shows:
 
-The input uses `data-confirm-word`, `data-confirm-target`, and
-`data-confirm-hint-for`. The start button is disabled in the markup. The shared
-`applyConfirmGate` function enables it only after an exact match. One Jinja
-variable supplies the visible word and the gate word.
+- The child identifier.
+- AP, switch, or gateway.
+- The planned family.
+- The route and scope.
+- The site when the route uses a site.
+- The target count.
+- The cloud job identifier.
+- The submit status.
+- The error.
+- The cancel status.
 
-### The impact block
+The page uses distinct words for `failed`, `unknown`, and `not_submitted`.
+Color alone does not communicate a state.
 
-The page names the organization, the site count, the device count, the firmware
-version, and the strategy.
+## 9. Partial Submission
 
-The page holds a danger alert. The alert states two consequences. The upgrade
-can interrupt network service at every selected site. A cancellation does not
-restore an upgraded access point.
+The progress page must remain useful after a partial submission.
 
-## 8. The Progress Page
+It shows accepted children with their cloud identities. It shows failed
+children with their errors. It shows uncertain children as `Unknown`. It shows
+untouched children as `Not submitted`.
 
-`upgrade/org_progress.html` already exists. It carries
-`data-testid="org-upgrade-progress"`.
+The page does not offer a retry control for an unknown child.
+
+## 10. Cancellation
+
+The cancel control requires the exact text `CANCEL`.
+
+The page shows the cancel result for each child. It uses these visible terms:
+
+- Not requested
+- Not available
+- Cancel requested
+- Cancelled
+- Cancel failed
+- Cancel outcome unknown
+
+The page does not state that cancellation rolls back firmware.
+
+## 11. Browser Safety
+
+- Every write includes a CSRF token.
+- The browser stores no API token.
+- A page refresh sends read requests only.
+- A poll sends read requests only.
+- The browser never retries a write.
+- The server remains authoritative for ownership and scope checks.
+- The server remains authoritative for replay prevention.
+
+## 12. Accessibility
+
+- Every input has a visible label.
+- Every table has a caption.
+- Every status uses text.
+- Every error uses an alert region.
+- The confirmation hint uses `aria-live`.
+- Keyboard users can complete the full sequence.
+
+## 13. Test Identifiers
+
+Use stable identifiers for these controls:
 
 | Element | Test identifier |
 | - | - |
-| The job card | `org-upgrade-progress` |
-| The status card | `org-upgrade-status` |
-| The site table | `org-upgrade-site-progress` |
-| The refresh link | `org-upgrade-refresh` |
+| Mode picker | `mode-picker` |
+| Multi-site option | `mode-multi-site` |
+| Site form | `multi-site-form` |
+| Options page | `org-upgrade-options` |
+| AP target group | `org-upgrade-family-ap` |
+| Switch target group | `org-upgrade-family-switch` |
+| Gateway target group | `org-upgrade-family-gateway` |
+| Confirmation page | `org-upgrade-confirm` |
+| Confirmation input | `org-upgrade-confirmation` |
+| Start button | `org-upgrade-start` |
+| Progress page | `org-upgrade-progress` |
+| Child table | `org-upgrade-children` |
+| Cancel control | `org-upgrade-cancel` |
 
-### Required changes
+Each child row uses `org-upgrade-child-<child_id>`.
 
-The page keeps the refresh link. `portal.js` reloads the page on the configured
-interval until the job reaches a final state.
+## 14. Playwright Contract
 
-Read the job identifier from `data-upgrade-id`. Read the poll interval from
-`data-poll-seconds`.
+Playwright tests cover the six-page sequence. They use synthetic inventory and
+network stand-ins.
 
-The site table includes total, upgraded, and failed columns. The route reads
-these counts from each nested site entry.
+The tests cover AP-only, switch-only, gateway-only, and mixed plans. They cover
+stale confirmation, duplicate submission, partial results, unknown results,
+browser reload, and cancellation.
 
-Add a comparison link for each site after the post-check finishes.
-
-Add a cancel control with `data-testid="org-upgrade-cancel"`. The control posts
-the field `confirmation` with the word `CANCEL`.
-
-## 9. The Browser Contract
-
-`portal.js` holds these helpers. The organization pages reuse them.
-
-| Helper | Purpose |
-| - | - |
-| `getCsrfToken` | Reads the token from the page |
-| `withCsrf` | Adds the token to a request header |
-| `fetchJson` | Sends a request and reads the error envelope |
-| `showRequestError` | Paints a refusal in the flash region |
-| `applyConfirmGate` | Enables a button after an exact typed word |
-| `paintConfirmHint` | Paints the hint beside the input |
-| `applyTableFilter` | Hides a row that does not match |
-| `initTableSorting` | Sorts a table by a column |
-| `startLockBeat` | Keeps a site lock alive |
-| `handleLockRefusal` | Paints a lock refusal |
-
-### Rules
-
-- The script holds no confirmation word. The script reads
-  `data-confirm-word`.
-- The script holds no path. The template supplies each path in a data attribute.
-- The script sends the CSRF token with every write.
-- The script stops a poll on HTTP 401.
-- The script stops a poll on a final job state.
-
-## 10. Accessibility Rules
-
-- Every input keeps a visible label. A placeholder alone fails a screen reader.
-- Every table keeps a caption with the class `visually-hidden`.
-- Every state shows a word, not a color alone.
-- Every checkbox label names the site for a screen reader.
-- The confirmation hint uses `aria-live` so a screen reader reads the change.
-
-## 11. Test Identifier Rules
-
-- Every control that a test drives carries a `data-testid` attribute.
-- A row identifier ends with the site identifier.
-- A new identifier starts with `org-upgrade-` on an organization page.
-- A test never selects an element by a CSS class.
-
-## 12. Success Criteria
-
-- The operator moves from the organization to the job with the same page style.
-- The organization pages use no new class and no new color.
-- The confirmation gate behaves the same on both confirmation pages.
-- The progress page names every failed access point.
-- A screen reader reads every state as a word.
+No Playwright test sends a live Mist write.

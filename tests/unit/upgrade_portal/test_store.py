@@ -677,6 +677,51 @@ def test_write_capture_records_a_size_that_matches_the_stored_body(monkeypatch: 
     assert result.stored_size_bytes == store.measure_size_bytes(stored)
 
 
+def test_stamp_size_matches_the_slow_convergence_rule() -> None:
+    """The fast size stamp gives the same value as the documented loop."""
+    document = dict(_written_capture(), payload="x" * 153)
+    payload = dict(document)
+    payload["stored_size_bytes"] = 0
+    for _ in range(store._SIZE_ROUNDS):
+        size = store.measure_size_bytes(payload)
+        if size == payload["stored_size_bytes"]:
+            break
+        payload["stored_size_bytes"] = size
+    assert store._stamp_size(document)["stored_size_bytes"] == payload["stored_size_bytes"]
+
+
+@pytest.mark.parametrize("boundary", [99, 100, 999, 1000])
+def test_stamp_size_converges_at_size_digit_boundaries(boundary: int) -> None:
+    """The size stamp stays stable when the number width changes."""
+    document = _document_at_size_boundary(boundary)
+    stamped = store._stamp_size(document)
+    assert stamped["stored_size_bytes"] == _slow_size_stamp(document)
+    assert stamped["stored_size_bytes"] == store.measure_size_bytes(stamped)
+    assert abs(stamped["stored_size_bytes"] - boundary) <= 1
+
+
+def _document_at_size_boundary(boundary: int) -> dict[str, Any]:
+    """Return a document with a stamped size near one digit boundary."""
+    for length in range(boundary + 25):
+        document = {"capture_id": "cap-boundary", "schema_version": 1, "payload": "x" * length}
+        stamped_size = _slow_size_stamp(document)
+        if abs(stamped_size - boundary) <= 1:
+            return document
+    raise AssertionError(boundary)
+
+
+def _slow_size_stamp(document: Mapping[str, Any]) -> int:
+    """Return the stored size from the original convergence loop."""
+    payload = dict(document)
+    payload["stored_size_bytes"] = 0
+    for _ in range(store._SIZE_ROUNDS):
+        size = store.measure_size_bytes(payload)
+        if size == payload["stored_size_bytes"]:
+            break
+        payload["stored_size_bytes"] = size
+    return int(payload["stored_size_bytes"])
+
+
 # ---------------------------------------------------------------------------
 # T081: the capture state machine
 # ---------------------------------------------------------------------------
