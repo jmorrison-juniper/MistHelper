@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/devices/events/count`
 - **Tag**: `Orgs Devices`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.devices.events.count`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.devices`
 
 ### Description
 

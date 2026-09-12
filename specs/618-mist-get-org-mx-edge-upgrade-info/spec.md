@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/mxedges/versions`
 - **Tag**: `Orgs MxEdges`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.mxedges.versions`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.mxedges`
 
 ### Description
 

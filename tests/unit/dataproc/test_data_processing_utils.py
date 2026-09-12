@@ -110,6 +110,40 @@ class TestFlattenNestedFields:
         result = DataProcessingUtils.flatten_nested_fields([entry])  # Scalar merge path.
         assert result == [{"n": 42, "s": None}]  # Values preserved intact.
 
+    def test_json_and_python_literals_keep_equivalent_values(self) -> None:
+        """JSON and Python literal strings keep equivalent parsed values."""
+        entry = {  # Build paired values that differ only by literal syntax.
+            "json_cfg": '{"enabled": true, "count": 2}',  # JSON uses lowercase true.
+            "python_cfg": "{'enabled': True, 'count': 2}",  # Python literal uses uppercase True.
+        }
+        result = DataProcessingUtils.flatten_nested_fields([entry])  # Parse both strings through the hot path.
+        assert result == [  # Both parsers must produce the same value types and order.
+            {
+                "json_cfg_enabled": True,
+                "json_cfg_count": 2,
+                "python_cfg_enabled": True,
+                "python_cfg_count": 2,
+            }
+        ]
+
+    def test_flattened_key_order_and_empty_containers_stay_stable(self) -> None:
+        """Flattening keeps key order and current empty-container handling."""
+        entry = {  # Mix nested values and empty containers in the same order as an export row.
+            "first": {"b": 1, "a": 2},
+            "empty_dict": {},
+            "empty_list": [],
+            "last": [{"z": 3}],
+        }
+        result = DataProcessingUtils.flatten_nested_fields([entry])  # Flatten the representative row.
+        assert result == [{"first_b": 1, "first_a": 2, "last_0_z": 3}]  # Empty containers write no keys.
+        assert list(result[0]) == ["first_b", "first_a", "last_0_z"]  # Key order is part of CSV behavior.
+
+    def test_malformed_string_keeps_current_scalar_value(self) -> None:
+        """Malformed strings still remain scalar values."""
+        malformed = "{'not valid': [}"  # Use the malformed shape from large export benchmarks.
+        result = DataProcessingUtils.flatten_nested_fields([{"cfg": malformed}])  # Parse attempts must fail safely.
+        assert result == [{"cfg": malformed}]  # The original malformed string remains unchanged.
+
 
 class TestIsListOfDicts:
     """Cover the _is_list_of_dicts internal helper (line 117)."""

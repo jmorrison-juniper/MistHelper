@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/stats/rssizones`
 - **Tag**: `Sites Stats - Zones`
-- **mistapi SDK module**: `mistapi.api.v1.sites.stats.rssizones`
+- **mistapi SDK module**: `mistapi.api.v1.sites.stats`
 
 ### Description
 

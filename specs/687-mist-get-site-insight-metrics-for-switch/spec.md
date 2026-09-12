@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/insights/switch/{device_mac}/{metric}`
 - **Tag**: `Sites Insights`
-- **mistapi SDK module**: `mistapi.api.v1.sites.insights.switch`
+- **mistapi SDK module**: `mistapi.api.v1.sites.insights`
 
 ### Description
 

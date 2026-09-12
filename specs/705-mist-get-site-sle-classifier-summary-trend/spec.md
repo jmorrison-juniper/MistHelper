@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/classifier/{classifier}/summary-trend`
 - **Tag**: `Sites SLEs`
-- **mistapi SDK module**: `mistapi.api.v1.sites.sle.metric.classifier.summary_trend`
+- **mistapi SDK module**: `mistapi.api.v1.sites.sle`
 
 ### Description
 

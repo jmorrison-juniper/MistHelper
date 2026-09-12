@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/setting/{app_name}/link_accounts`
 - **Tag**: `Orgs Linked Applications`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.setting.link_accounts`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.setting`
 
 ### Description
 

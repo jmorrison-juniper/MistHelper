@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/pskportals/logs/count`
 - **Tag**: `Orgs Psk Portals`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.pskportals.logs.count`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.pskportals`
 
 ### Description
 

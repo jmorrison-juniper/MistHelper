@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/stats/clients/{client_mac}`
 - **Tag**: `Sites Stats - Clients Wireless`
-- **mistapi SDK module**: `mistapi.api.v1.sites.stats.clients`
+- **mistapi SDK module**: `mistapi.api.v1.sites.stats`
 
 ### Description
 

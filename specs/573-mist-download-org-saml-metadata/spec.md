@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/ssos/{sso_id}/metadata.xml`
 - **Tag**: `Orgs SSO`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.ssos.metadata_xml`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.ssos`
 
 ### Description
 

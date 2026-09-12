@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/self/update/verify/{token}`
 - **Tag**: `Self Account`
-- **mistapi SDK module**: `mistapi.api.v1.self.update.verify`
+- **mistapi SDK module**: `mistapi.api.v1.self.update`
 
 ### Description
 

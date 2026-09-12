@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/uisettings/derived`
 - **Tag**: `Sites UI Settings`
-- **mistapi SDK module**: `mistapi.api.v1.sites.uisettings.derived`
+- **mistapi SDK module**: `mistapi.api.v1.sites.uisettings`
 
 ### Description
 

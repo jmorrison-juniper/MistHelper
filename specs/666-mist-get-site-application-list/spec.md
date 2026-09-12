@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/wxtags/apps`
 - **Tag**: `Sites WxTags`
-- **mistapi SDK module**: `mistapi.api.v1.sites.wxtags.apps`
+- **mistapi SDK module**: `mistapi.api.v1.sites.wxtags`
 
 ### Description
 

@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/nac_clients/events/count`
 - **Tag**: `Sites Clients - NAC`
-- **mistapi SDK module**: `mistapi.api.v1.sites.nac_clients.events.count`
+- **mistapi SDK module**: `mistapi.api.v1.sites.nac_clients`
 
 ### Description
 

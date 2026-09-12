@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/installer/orgs/{org_id}/devices/{fpc0_mac}/vc`
 - **Tag**: `Installer`
-- **mistapi SDK module**: `mistapi.api.v1.installer.orgs.devices.vc`
+- **mistapi SDK module**: `mistapi.api.v1.installer.orgs.devices`
 
 ### Description
 

@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/usermacs/count`
 - **Tag**: `Orgs User MACs`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.usermacs.count`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.usermacs`
 
 ### Description
 
