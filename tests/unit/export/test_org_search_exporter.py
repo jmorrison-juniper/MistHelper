@@ -1,12 +1,7 @@
 """Unit tests for the organization-scoped search exporter.
 
-<<<<<<< HEAD
-Covers specs 870 and 874 to 879 (issues #1378, #1379, #1382, #1383, #1385
-and #1386), which are menus 230 to 234 and 248.
-=======
-Covers spec 863 and specs 874 to 879 (issues #1371, #1379, #1382, #1383,
-#1385 and #1386), which are menus 230 to 234 and 248.
->>>>>>> f5d40008 (feat: add searchOrgDevices export (#1371))
+Covers specs 863, 870, and 874 to 879 (issues #1371, #1378, #1379, #1382,
+#1383, #1385, and #1386), which are menus 230 to 234, 248, and 250.
 
 The six operations share one helper, so the shared behavior is tested once and
 each menu entry is checked for the binding that makes it distinct.

@@ -7,7 +7,6 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
-<<<<<<< HEAD
 ### Search sites for an organization (menu 248)
 
 - **Added**: Menu 248 calls `searchOrgSites` and exports organization site
@@ -16,14 +15,13 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   `id` field for upserts without duplicate rows.
 - **Added**: Unit coverage for the SDK binding, pagination, export path, empty
   results, unresolved organizations, and API errors.
-=======
-### Search organization devices (menu 248)
 
-- **Added**: Menu 248 calls `searchOrgDevices` for the active organization and
+### Search organization devices (menu 250)
+
+- **Added**: Menu 250 calls `searchOrgDevices` for the active organization and
   exports the device rows through CSV, SQLite, or ArangoDB. Issue #1371.
 - **Added**: Unit coverage for the SDK binding, pagination, empty results,
   errors, flattening, and persistence.
->>>>>>> f5d40008 (feat: add searchOrgDevices export (#1371))
 
 ### Verify an email change token (menu 247)
 
