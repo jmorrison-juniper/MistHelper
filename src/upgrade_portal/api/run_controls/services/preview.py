@@ -26,6 +26,11 @@ class PreviewError(ValueError):
     """Report one stable preview refusal code."""
 
     def __init__(self, code: str) -> None:
+        """Store one safe preview refusal code.
+
+        Args:
+            code: The stable refusal code for the client.
+        """
         super().__init__(code)
         self.code = code
 
@@ -42,6 +47,15 @@ class BulkActionPreviewService:
         clock: Callable[[], datetime] | None = None,
         lifetime: timedelta = DEFAULT_PREVIEW_LIFETIME,
     ) -> None:
+        """Bind the readers and the signer for one preview service.
+
+        Args:
+            run_reader: The reader that returns one run record.
+            visibility_reader: The reader that checks one run scope.
+            signing_key: The secret key that signs the preview.
+            clock: The optional clock for deterministic checks.
+            lifetime: The maximum age for one preview token.
+        """
         if not signing_key:
             raise ValueError("The preview signing key is empty.")
         if lifetime <= timedelta(0):
