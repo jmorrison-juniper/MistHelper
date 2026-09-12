@@ -6,6 +6,8 @@ from collections.abc import Callable  # WHY: Type hint for injected pure-functio
 from dataclasses import dataclass  # WHY: Bundle wide constructor + install-context state
 from typing import Any  # WHY: Injected stdlib modules are Any-typed for testability
 
+from packaging.version import Version  # WHY: PEP 440 comparisons replace tuple version ordering.
+
 from src.bootstrap.package_installer import PackageInstaller  # WHY: UV/pip installer collaborator
 
 _ENV_DISABLE_AUTO_INSTALL = "DISABLE_AUTO_INSTALL"  # WHY: Env var toggling auto-install off
@@ -72,7 +74,7 @@ class DependencyCheckOrchestrator:  # WHY: Public entry-point object called from
     get_installed_version_fn: Callable[[str], str]  # WHY: Reads installed distribution version
     version_satisfies_fn: Callable[[str, str], bool]  # WHY: Version-spec satisfaction predicate
     get_latest_pypi_version_fn: Callable[[str], str]  # WHY: Queries latest PyPI release version
-    parse_version_fn: Callable[[str], tuple[int, ...]]  # WHY: Parses version string to tuple
+    parse_version_fn: Callable[[str], Version]  # WHY: Parses a version string with PEP 440.
     installer: PackageInstaller  # WHY: UV/pip installer collaborator
 
     def run(self) -> None:  # WHY: Sole public method invoked by MistHelper at import time
@@ -200,7 +202,7 @@ class DependencyCheckOrchestrator:  # WHY: Public entry-point object called from
         latest = self.get_latest_pypi_version_fn(name)  # WHY: Query PyPI once per package
         if not latest:  # WHY: No latest info means no upgrade signal
             return False  # WHY: Fail closed - no signal, no upgrade
-        return self.parse_version_fn(latest) > self.parse_version_fn(installed)  # WHY: Tuple compare
+        return self.parse_version_fn(latest) > self.parse_version_fn(installed)  # WHY: Compare PEP 440 versions.
 
     def _prepare_installer(self) -> _InstallContext:  # WHY: Builds one _InstallContext for both loops
         """Resolve preferred installer and bootstrap UV when needed."""
