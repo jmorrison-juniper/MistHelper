@@ -9,7 +9,9 @@ import logging
 import math
 import os
 import sqlite3
+from collections import deque
 from contextlib import closing
+from itertools import islice
 
 ALLOWED_EXTENSIONS = {".csv", ".db", ".sqlite", ".log", ".json"}
 
@@ -145,28 +147,156 @@ class DataBrowserService:
     def _preview_csv(self, filepath: str, page: int, per_page: int, search: str) -> dict:
         """Read and paginate a CSV file."""
         try:
-            with open(filepath, "r", encoding="utf-8", errors="replace") as fh:
+            with open(filepath, encoding="utf-8", errors="replace") as fh:
                 reader = csv.reader(fh)
                 columns = next(reader, [])
-                all_rows = list(reader)
+                return self._paginate_iter_rows(columns, reader, page, per_page, search)
         except Exception as exc:
             return {"error": f"Failed to read CSV: {exc}"}
-        filtered = self._filter_rows(all_rows, search)
-        return self._paginate_rows(columns, filtered, page, per_page)
 
     def _preview_json(self, filepath: str, page: int, per_page: int, search: str) -> dict:
         """Read and paginate a JSON or JSONL file as tabular data."""
         try:
             import json
 
-            with open(filepath, "r", encoding="utf-8", errors="replace") as fh:
-                content = fh.read()
-            data = self._parse_json_or_jsonl(content)
+            with open(filepath, encoding="utf-8", errors="replace") as fh:
+                if self._looks_like_json_lines(fh):
+                    return self._preview_json_lines(fh, page, per_page, search)
+                data = json.load(fh)
         except Exception as exc:
             return {"error": f"Failed to read JSON: {exc}"}
-        rows, columns = self._json_to_rows(data)
-        filtered = self._filter_rows(rows, search)
-        return self._paginate_rows(columns, filtered, page, per_page)
+        return self._paginate_json_data(data, page, per_page, search)
+
+    @staticmethod
+    def _looks_like_json_lines(fh) -> bool:
+        """Report whether the file starts with more than one JSON value line."""
+        import json
+
+        for line in fh:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                json.loads(stripped)
+            except json.JSONDecodeError:
+                fh.seek(0)
+                return False
+            for next_line in fh:
+                if next_line.strip():
+                    fh.seek(0)
+                    return True
+            fh.seek(0)
+            return False
+        fh.seek(0)
+        return False
+
+    def _preview_json_lines(self, fh, page: int, per_page: int, search: str) -> dict:
+        """Read and paginate JSON Lines after the JSON parser rejects the file."""
+        preview = self._paginate_json_line_items(fh, page, per_page, search)
+        if preview["count"] == 1:
+            return self._paginate_json_data(preview["first_item"], page, per_page, search)
+        if not isinstance(preview["first_item"], dict):
+            return self._paginate_json_data(preview["items"], page, per_page, search)
+        return self._build_paginated_result(
+            preview["columns"],
+            preview["page_rows"],
+            preview["last_rows"],
+            preview["total"],
+            page,
+            per_page,
+        )
+
+    def _paginate_json_line_items(self, fh, page: int, per_page: int, search: str) -> dict:
+        """Parse JSON Lines once and keep only the requested object rows."""
+        import json
+
+        state = self._new_json_line_state(page, per_page, search)
+        for line in fh:
+            stripped = line.strip()
+            if stripped:
+                self._add_json_line_item(state, json.loads(stripped))
+        return state
+
+    @staticmethod
+    def _new_json_line_state(page: int, per_page: int, search: str) -> dict:
+        """Create the mutable state for a JSON Lines preview."""
+        return {
+            "columns": [],
+            "count": 0,
+            "first_item": None,
+            "items": [],
+            "last_rows": deque(maxlen=per_page),
+            "page_rows": [],
+            "requested_end": page * per_page,
+            "requested_start": (page - 1) * per_page,
+            "search_lower": search.lower() if search else "",
+            "seen": {},
+            "total": 0,
+        }
+
+    def _add_json_line_item(self, state: dict, item) -> None:
+        """Add one parsed JSON Lines item to the preview state."""
+        if state["count"] == 0:
+            state["first_item"] = item
+        if not isinstance(state["first_item"], dict):
+            state["items"].append(item)
+            state["count"] += 1
+            return
+        if not isinstance(item, dict):
+            item.get("")
+        self._extend_json_columns(state, item)
+        row = [str(item.get(col, "")) for col in state["columns"]]
+        self._add_json_line_row(state, row)
+        state["count"] += 1
+
+    @staticmethod
+    def _extend_json_columns(state: dict, item) -> None:
+        """Add new object keys and extend saved rows with blank cells."""
+        seen = {}
+        seen.update(state["seen"])
+        added_column = False
+        for key in item:
+            if key not in seen:
+                seen[key] = len(seen)
+                state["columns"].append(key)
+                added_column = True
+        state["seen"] = seen
+        if not added_column:
+            return
+        for saved_row in list(state["last_rows"]) + state["page_rows"]:
+            if len(saved_row) < len(state["columns"]):
+                saved_row.extend([""] * (len(state["columns"]) - len(saved_row)))
+
+    def _add_json_line_row(self, state: dict, row: list) -> None:
+        """Add a matching JSON Lines row to the page state."""
+        search_lower = state["search_lower"]
+        if search_lower and not self._row_matches(row, search_lower):
+            return
+        if state["requested_start"] <= state["total"] < state["requested_end"]:
+            state["page_rows"].append(row)
+        state["last_rows"].append(row)
+        state["total"] += 1
+
+    def _paginate_json_data(self, data, page: int, per_page: int, search: str) -> dict:
+        """Convert JSON data to rows while building only the requested page."""
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            columns = self._json_columns(data)
+            rows = ([str(item.get(col, "")) for col in columns] for item in data)
+            return self._paginate_iter_rows(columns, rows, page, per_page, search)
+        if isinstance(data, dict):
+            rows = ([str(key), str(value)] for key, value in data.items())
+            return self._paginate_iter_rows(["Key", "Value"], rows, page, per_page, search)
+        return self._paginate_iter_rows(["Content"], [[str(data)]], page, per_page, search)
+
+    @staticmethod
+    def _json_columns(data: list) -> list:
+        """Return JSON object columns in first-seen order."""
+        seen = {}
+        for item in data:
+            for key in item:
+                if key not in seen:
+                    seen[key] = len(seen)
+        return sorted(seen, key=lambda key: seen[key])
 
     def _parse_json_or_jsonl(self, content: str):
         """Parse standard JSON, falling back to JSONL (one object per line)."""
@@ -185,12 +315,7 @@ class DataBrowserService:
     def _json_to_rows(self, data) -> tuple:
         """Convert JSON data to a list of rows and column headers."""
         if isinstance(data, list) and data and isinstance(data[0], dict):
-            seen = {}
-            for item in data:
-                for key in item:
-                    if key not in seen:
-                        seen[key] = len(seen)
-            columns = sorted(seen, key=lambda k: seen[k])
+            columns = self._json_columns(data)
             rows = [[str(item.get(col, "")) for col in columns] for item in data]
             return rows, columns
         if isinstance(data, dict):
@@ -200,13 +325,23 @@ class DataBrowserService:
     def _preview_log(self, filepath: str, page: int, per_page: int, search: str) -> dict:
         """Read and paginate a log file as line-by-line preview."""
         try:
-            with open(filepath, "r", encoding="utf-8", errors="replace") as fh:
-                all_lines = fh.readlines()
+            with open(filepath, encoding="utf-8", errors="replace") as fh:
+                if search:
+                    rows = self._matching_log_rows(fh, search.lower())
+                    return self._paginate_iter_rows(["Line", "Content"], rows, page, per_page, "")
+                rows = ([str(i + 1), line.rstrip("\n")] for i, line in enumerate(fh))
+                return self._paginate_iter_rows(["Line", "Content"], rows, page, per_page, "")
         except Exception as exc:
             return {"error": f"Failed to read log: {exc}"}
-        rows = [[str(i + 1), line.rstrip("\n")] for i, line in enumerate(all_lines)]
-        filtered = self._filter_rows(rows, search)
-        return self._paginate_rows(["Line", "Content"], filtered, page, per_page)
+
+    @staticmethod
+    def _matching_log_rows(fh, search_lower: str):
+        """Yield log rows that match the lower-case search term."""
+        for index, line in enumerate(fh):
+            line_text = line.rstrip("\n")
+            line_number = str(index + 1)
+            if search_lower in line_number.lower() or search_lower in line_text.lower():
+                yield [line_number, line_text]
 
     def _paginate_rows(self, columns: list, rows: list, page: int, per_page: int) -> dict:
         """Return a paginated slice of rows with metadata."""
@@ -223,12 +358,100 @@ class DataBrowserService:
             "total_pages": total_pages,
         }
 
+    def _paginate_iter_rows(self, columns: list, rows, page: int, per_page: int, search: str) -> dict:
+        """Return a page from a row stream and count every matching row."""
+        if not search:
+            return self._paginate_unfiltered_iter_rows(columns, rows, page, per_page)
+        requested_page = page
+        requested_start = (requested_page - 1) * per_page
+        requested_end = requested_start + per_page
+        page_rows = []
+        last_rows = deque(maxlen=per_page)
+        total = 0
+        search_lower = search.lower() if search else ""
+        for row in rows:
+            if search_lower and not self._row_matches(row, search_lower):
+                continue
+            if requested_start <= total < requested_end:
+                page_rows.append(row)
+            last_rows.append(row)
+            total += 1
+        total_pages = max(1, math.ceil(total / per_page))
+        page = max(1, min(requested_page, total_pages))
+        if requested_page > total_pages:
+            last_page_size = total % per_page or per_page
+            page_rows = list(last_rows)[-last_page_size:] if total else []
+        return self._format_page_result(columns, page_rows, total, page, per_page, total_pages)
+
+    def _paginate_unfiltered_iter_rows(self, columns: list, rows, page: int, per_page: int) -> dict:
+        """Return a page from an unfiltered row stream and count all rows."""
+        requested_page = page
+        requested_start = (requested_page - 1) * per_page
+        skipped_rows = 0
+        last_rows = deque(maxlen=per_page)
+        for row in islice(rows, requested_start):
+            last_rows.append(row)
+            skipped_rows += 1
+        page_rows = list(islice(rows, per_page))
+        last_rows.extend(page_rows)
+        total = skipped_rows + len(page_rows)
+        for row in rows:
+            last_rows.append(row)
+            total += 1
+        total_pages = max(1, math.ceil(total / per_page))
+        page = max(1, min(requested_page, total_pages))
+        if requested_page > total_pages:
+            last_page_size = total % per_page or per_page
+            page_rows = list(last_rows)[-last_page_size:] if total else []
+        return self._format_page_result(columns, page_rows, total, page, per_page, total_pages)
+
+    def _build_paginated_result(
+        self,
+        columns: list,
+        page_rows: list,
+        last_rows: deque,
+        total: int,
+        page: int,
+        per_page: int,
+    ) -> dict:
+        """Format a streamed page after all rows are counted."""
+        total_pages = max(1, math.ceil(total / per_page))
+        safe_page = max(1, min(page, total_pages))
+        if page > total_pages:
+            last_page_size = total % per_page or per_page
+            page_rows = list(last_rows)[-last_page_size:] if total else []
+        return self._format_page_result(columns, page_rows, total, safe_page, per_page, total_pages)
+
+    @staticmethod
+    def _format_page_result(
+        columns: list,
+        page_rows: list,
+        total: int,
+        page: int,
+        per_page: int,
+        total_pages: int,
+    ) -> dict:
+        """Build the response dictionary for one preview page."""
+        return {
+            "columns": columns,
+            "rows": page_rows,
+            "total_rows": total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": total_pages,
+        }
+
     def _filter_rows(self, rows: list, search: str) -> list:
         """Filter rows by search string (case-insensitive)."""
         if not search:
             return rows
         search_lower = search.lower()
-        return [row for row in rows if any(search_lower in cell.lower() for cell in row)]
+        return [row for row in rows if self._row_matches(row, search_lower)]
+
+    @staticmethod
+    def _row_matches(row: list, search_lower: str) -> bool:
+        """Report whether a lower-case search term matches any cell."""
+        return any(search_lower in cell.lower() for cell in row)
 
     def _list_sqlite_tables(self, filepath: str) -> dict:
         """List tables and metadata in a SQLite database."""
