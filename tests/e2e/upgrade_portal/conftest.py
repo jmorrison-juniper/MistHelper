@@ -60,8 +60,51 @@ logger = logging.getLogger(__name__)
 # WHY: The portal reads CAPTURE_PORT and falls back to 8056, next to the
 # existing portal on port 8055. The tests read the same variable through the
 # same reader, so a changed port moves the server and the browser together.
-CAPTURE_PORT = read_port(PORT_VARIABLE, DEFAULT_PORT)
+#
+# Windows can reject a fixed bind such as 8056 with WinError 10013 even when no
+# other process is listening. The browser suite therefore chooses a free
+# loopback port when the default is unusable, and it keeps the environment
+# override as an explicit operator choice. This avoids a false-negative start on
+# a workstation that blocks one specific port.
+def _choose_capture_port() -> int:
+    """Return a usable loopback port for the browser suite.
+
+    Why:
+        A fixed port such as 8056 is a common default, but some workstations or
+        Windows policies reject one port while the next port remains open. The
+        suite must start its own portal, so it picks the first free loopback port
+        in the usual user range when the default is not usable.
+
+    Returns:
+        A loopback port that accepts a listen bind on this workstation.
+    """
+    preferred = read_port(PORT_VARIABLE, DEFAULT_PORT)
+    if os.environ.get(PORT_VARIABLE):  # An operator-supplied port is explicit and must be respected.
+        return preferred
+
+    try:  # A default bind that the platform accepts stays exactly as documented.
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind((LOOPBACK_HOST, preferred))
+        return preferred
+    except OSError:  # The port is blocked for this process, so choose the next free one.
+        logger.warning(
+            "The default capture port %s is not usable on this workstation, so the browser suite picks a free port.",
+            preferred,
+        )
+
+    start = max(1024, preferred)
+    for port in range(start, 65536):
+        try:  # A free port inside the user range accepts the bind. Keep the search small but broad enough.
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+                probe.bind((LOOPBACK_HOST, port))
+            return port
+        except OSError:
+            continue
+    raise RuntimeError("No free loopback port is available for the capture portal on this workstation.")
+
+
 LOOPBACK_HOST = "127.0.0.1"  # Loopback only. No test reaches an outside host.
+CAPTURE_PORT = _choose_capture_port()
 BASE_URL = f"http://{LOOPBACK_HOST}:{CAPTURE_PORT}"
 
 # WHY: Gunicorn and Waitress both load a target of this shape. `wsgi_capture.py`
@@ -300,19 +343,36 @@ def _playwright_is_installed() -> bool:
 
 
 def _probe_port(port: int) -> bool:
-    """Report whether a server answers on one port right now.
+    """Report whether a server really listens on one port right now.
 
     Why:
-        The fixture must start its own portal, so it tests the port first. A
-        listener that this fixture did not start holds no sign-in seam, and the
-        fixture reports that listener as a fault.
+        A closed port can leave a stale ``TIME_WAIT`` socket in the client stack,
+        and a plain connection attempt may behave differently across hosts and
+        proxies. The browser suite must start its own portal, so the check must
+        answer only when a real listener is present and not when a stale socket
+        or a previous run left the port in a transient state.
 
     Args:
         port: The port to test.
 
     Returns:
-        True when a server answers.
+        True when a real listener answers on that port.
     """
+    if os.name == "nt":
+        try:  # Windows exposes the exact local TCP states, so the check can ignore TIME_WAIT entries.
+            command = [
+                "powershell",
+                "-NoLogo",
+                "-NoProfile",
+                "-Command",
+                f"(Get-NetTCPConnection -LocalPort {port} -ErrorAction SilentlyContinue | Where-Object {{ $_.State -eq 'Listen' }} | Measure-Object).Count",
+            ]
+            completed = subprocess.run(command, capture_output=True, text=True, check=False)
+            if completed.returncode == 0 and completed.stdout.strip().isdigit():
+                return int(completed.stdout.strip()) > 0
+        except OSError:
+            logger.debug("The Windows port probe could not read the listening state for port %s", port)
+
     try:  # A closed port and an absent host both raise OSError.
         with socket.create_connection((LOOPBACK_HOST, port), timeout=PROBE_TIMEOUT_SECONDS):
             return True
