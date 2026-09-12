@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/pma/dashboards`
 - **Tag**: `Orgs Premium Analytics`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.pma.dashboards`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.pma`
 
 ### Description
 

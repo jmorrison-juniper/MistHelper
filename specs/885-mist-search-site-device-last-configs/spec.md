@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/devices/last_config/search`
 - **Tag**: `Sites Devices`
-- **mistapi SDK module**: `mistapi.api.v1.sites.devices.last_config.search`
+- **mistapi SDK module**: `mistapi.api.v1.sites.devices`
 
 ### Description
 

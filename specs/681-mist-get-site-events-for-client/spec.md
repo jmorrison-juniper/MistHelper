@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/clients/{client_mac}/events`
 - **Tag**: `Sites Clients - Wireless`
-- **mistapi SDK module**: `mistapi.api.v1.sites.clients.events`
+- **mistapi SDK module**: `mistapi.api.v1.sites.clients`
 
 ### Description
 

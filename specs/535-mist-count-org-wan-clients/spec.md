@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/wan_clients/count`
 - **Tag**: `Orgs Clients - Wan`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.wan_clients.count`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.wan_clients`
 
 ### Description
 

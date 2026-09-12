@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/stats/ports/count`
 - **Tag**: `Orgs Stats - Ports`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.stats.ports.count`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.stats`
 
 ### Description
 

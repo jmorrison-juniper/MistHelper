@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/aamwprofiles/derived`
 - **Tag**: `Sites Advanced Anti Malware Profiles`
-- **mistapi SDK module**: `mistapi.api.v1.sites.aamwprofiles.derived`
+- **mistapi SDK module**: `mistapi.api.v1.sites.aamwprofiles`
 
 ### Description
 

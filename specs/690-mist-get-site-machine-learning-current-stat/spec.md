@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/location/ml/current`
 - **Tag**: `Sites Location`
-- **mistapi SDK module**: `mistapi.api.v1.sites.location.ml.current`
+- **mistapi SDK module**: `mistapi.api.v1.sites.location`
 
 ### Description
 

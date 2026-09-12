@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/maps/{map_id}/auto_orient`
 - **Tag**: `Sites Maps - Auto-placement`
-- **mistapi SDK module**: `mistapi.api.v1.sites.maps.auto_orient`
+- **mistapi SDK module**: `mistapi.api.v1.sites.maps`
 
 ### Description
 

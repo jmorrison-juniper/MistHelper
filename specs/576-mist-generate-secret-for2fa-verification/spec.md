@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/self/two_factor/token`
 - **Tag**: `Self MFA`
-- **mistapi SDK module**: `mistapi.api.v1.self.two_factor.token`
+- **mistapi SDK module**: `mistapi.api.v1.self.two_factor`
 
 ### Description
 

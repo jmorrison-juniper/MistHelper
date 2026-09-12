@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/ssr/upgrade/{upgrade_id}`
 - **Tag**: `Utilities Upgrade`
-- **mistapi SDK module**: `mistapi.api.v1.sites.ssr.upgrade`
+- **mistapi SDK module**: `mistapi.api.v1.sites.ssr`
 
 ### Description
 

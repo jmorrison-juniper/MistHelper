@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/rfdiags/{rfdiag_id}/download`
 - **Tag**: `Sites Rfdiags`
-- **mistapi SDK module**: `mistapi.api.v1.sites.rfdiags.download`
+- **mistapi SDK module**: `mistapi.api.v1.sites.rfdiags`
 
 ### Description
 

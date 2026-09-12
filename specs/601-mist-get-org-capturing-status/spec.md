@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/pcaps/capture`
 - **Tag**: `Utilities PCAPs`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.pcaps.capture`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.pcaps`
 
 ### Description
 

@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/setting/jse/info`
 - **Tag**: `Sites JSE`
-- **mistapi SDK module**: `mistapi.api.v1.sites.setting.jse.info`
+- **mistapi SDK module**: `mistapi.api.v1.sites.setting`
 
 ### Description
 
