@@ -7,6 +7,14 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Upgrade capture stored size performance (issue #2486)
+
+- **Changed**: The upgrade capture store now solves the `stored_size_bytes`
+  width after one body serialization. The write path keeps the same canonical
+  JSON size rule.
+- **Added**: Unit coverage compares the fast size stamp with the documented
+  convergence loop. The tests cover 99, 100, 999, and 1000 byte boundaries.
+
 ### Dashboard data summary performance (issue #2439)
 
 - **Changed**: The web portal dashboard now builds the data summary with one
