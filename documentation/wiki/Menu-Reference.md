@@ -282,7 +282,7 @@ never runs in an automated test pass.
 | 246 | Troubleshoot a call for a site, client MAC, and meeting ID (troubleshootSiteCall) | Interactive safe | `SiteSearchExporter.troubleshoot_call` |
 | 247 | Verify an email change token from the Mist email (verifySelfEmail) | Interactive safe | `SelfAccountExporter.verify_email` |
 | 248 | Search sites for the organization (searchOrgSites) | Safe org exports | `OrgSearchExporter.sites` |
-| 249 | Search other-device events for the organization (searchOrgOtherDeviceEvents) | Safe org exports | `OrgExportUtils.other_device_events` |
+| 249 | Search devices for the organization (searchOrgDevices) | Safe org exports | `OrgSearchExporter.devices` |
 
 This page should be regenerated whenever `menu_actions` or the operation registry
 changes, so the wiki stays aligned with the code.

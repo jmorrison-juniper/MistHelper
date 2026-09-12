@@ -7,12 +7,12 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
-### Search organization other-device events (menu 249)
+### Search organization devices (menu 249)
 
-- **Added**: Menu 249 calls `searchOrgOtherDeviceEvents` and exports paginated
-  organization other-device events through CSV, SQLite, or ArangoDB. Issue #1376.
-- **Added**: Unit coverage for the SDK binding, event ordering, menu safety, and
-  the existing composite primary-key strategy.
+- **Added**: Menu 249 calls `searchOrgDevices` for the active organization and
+  exports the device rows through CSV, SQLite, or ArangoDB. Issue #1371.
+- **Added**: Unit coverage for the SDK binding, pagination, empty results,
+  errors, flattening, and persistence.
 
 ### Search sites for an organization (menu 248)
 
