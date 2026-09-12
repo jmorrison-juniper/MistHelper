@@ -154,7 +154,7 @@ class TestIdentifierExtraction:
 
 
 class TestPythonSymbolExtraction:
-    """Test Python symbol extraction via AST."""
+    """Test Python symbol extraction from source."""
 
     def test_extracts_class_names(self, validator, tmp_path):
         source = tmp_path / "test_source.py"
@@ -177,6 +177,55 @@ class TestPythonSymbolExtraction:
         source.write_text("def top_level_func():\n    pass\n")
         symbols = validator.extract_python_symbols(source)
         assert "top_level_func" in symbols
+
+    def test_extracts_nested_definitions_from_statement_bodies(self, validator, tmp_path):
+        source = tmp_path / "nested_source.py"
+        source_text = dedent("""\
+            def outer_func():
+                def inner_func():
+                    pass
+                try:
+                    class TryManager:
+                        def run(self):
+                            pass
+                except ValueError:
+                    class ExceptManager:
+                        pass
+                match 1:
+                    case 1:
+                        def matched_func():
+                            pass
+        """)
+        source.write_text(source_text)
+        symbols = validator.extract_python_symbols(source)
+        assert {"outer_func", "inner_func", "TryManager", "run", "ExceptManager", "matched_func"} <= symbols
+
+    def test_preserves_async_function_name_omission(self, validator, tmp_path):
+        source = tmp_path / "async_source.py"
+        source_text = dedent("""\
+            async def async_outer():
+                def nested_sync():
+                    pass
+        """)
+        source.write_text(source_text)
+        symbols = validator.extract_python_symbols(source)
+        assert "async_outer" not in symbols
+        assert "nested_sync" in symbols
+
+    def test_ignores_definition_words_in_strings_and_comments(self, validator, tmp_path):
+        source = tmp_path / "literal_source.py"
+        source_text = dedent("""\
+            # def CommentFunction():
+            text = "class StringManager"
+
+            class RealManager:
+                pass
+        """)
+        source.write_text(source_text)
+        symbols = validator.extract_python_symbols(source)
+        assert "RealManager" in symbols
+        assert "CommentFunction" not in symbols
+        assert "StringManager" not in symbols
 
     def test_handles_syntax_error(self, validator, tmp_path):
         source = tmp_path / "bad.py"

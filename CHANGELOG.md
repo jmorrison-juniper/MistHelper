@@ -7,6 +7,14 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Diagram reference lint performance (issue #2488)
+
+- **Changed**: The diagram reference lint now uses the Python symbol table and
+  source line checks to collect class names and synchronous function names.
+  This keeps syntax error handling and the public lint output stable.
+- **Added**: Unit coverage keeps nested definitions, synchronous function names,
+  asynchronous function omission, and string and comment handling stable.
+
 ### Dashboard data summary performance (issue #2439)
 
 - **Changed**: The web portal dashboard now builds the data summary with one
