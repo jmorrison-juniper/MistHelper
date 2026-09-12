@@ -7,6 +7,15 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Data browser preview memory use (issue #2484)
+
+- **Changed**: The web portal data browser now streams CSV, JSON Lines, and
+  log preview rows. It still counts all matching rows for page metadata.
+- **Added**: Unit coverage keeps CSV page clamping, log search, JSON Lines
+  single-item fallback, and JSON column order stable.
+- **Measured**: Peak traced memory fell by 99.62 percent for a large CSV page
+  and 99.81 percent for a filtered large log page in the local harness.
+
 ### Dashboard data summary performance (issue #2439)
 
 - **Changed**: The web portal dashboard now builds the data summary with one
