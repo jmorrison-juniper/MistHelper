@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/stats/filtered_assets`
 - **Tag**: `Sites Stats - Assets`
-- **mistapi SDK module**: `mistapi.api.v1.sites.stats.filtered_assets`
+- **mistapi SDK module**: `mistapi.api.v1.sites.stats`
 
 ### Description
 

@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/stats/bgp_peers/search`
 - **Tag**: `Sites Stats - BGP Peers`
-- **mistapi SDK module**: `mistapi.api.v1.sites.stats.bgp_peers.search`
+- **mistapi SDK module**: `mistapi.api.v1.sites.stats`
 
 ### Description
 

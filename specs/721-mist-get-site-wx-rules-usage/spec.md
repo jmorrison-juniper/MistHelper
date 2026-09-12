@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/stats/wxrules`
 - **Tag**: `Sites Stats - WxRules`
-- **mistapi SDK module**: `mistapi.api.v1.sites.stats.wxrules`
+- **mistapi SDK module**: `mistapi.api.v1.sites.stats`
 
 ### Description
 

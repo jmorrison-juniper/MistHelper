@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/stats/calls/troubleshoot`
 - **Tag**: `Sites Stats - Calls`
-- **mistapi SDK module**: `mistapi.api.v1.sites.stats.calls.troubleshoot`
+- **mistapi SDK module**: `mistapi.api.v1.sites.stats`
 
 ### Description
 

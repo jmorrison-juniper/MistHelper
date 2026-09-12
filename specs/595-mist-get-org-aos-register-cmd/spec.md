@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/aos/register_cmd`
 - **Tag**: `Orgs Devices - AOS`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.aos.register_cmd`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.aos`
 
 ### Description
 

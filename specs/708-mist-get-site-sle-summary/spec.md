@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/summary`
 - **Tag**: `Sites SLEs`
-- **mistapi SDK module**: `mistapi.api.v1.sites.sle.metric.summary`
+- **mistapi SDK module**: `mistapi.api.v1.sites.sle`
 
 ### Description
 

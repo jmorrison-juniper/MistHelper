@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/setting/cradlepoint/setup`
 - **Tag**: `Orgs Integration Cradlepoint`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.setting.cradlepoint.setup`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.setting`
 
 ### Description
 

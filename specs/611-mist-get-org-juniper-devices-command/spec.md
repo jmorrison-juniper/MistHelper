@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/ocdevices/outbound_ssh_cmd`
 - **Tag**: `Orgs Devices`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.ocdevices.outbound_ssh_cmd`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.ocdevices`
 
 ### Description
 

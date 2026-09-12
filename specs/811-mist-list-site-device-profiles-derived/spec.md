@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/deviceprofiles/derived`
 - **Tag**: `Sites Device Profiles`
-- **mistapi SDK module**: `mistapi.api.v1.sites.deviceprofiles.derived`
+- **mistapi SDK module**: `mistapi.api.v1.sites.deviceprofiles`
 
 ### Description
 
