@@ -88,4 +88,21 @@ Three rules matter most.
    workflow. MistHelper is public, so a standard runner costs nothing. A
    private repository spends the 2,000 free minutes each month.
 
+## Test and debug containers
+
+Every container that you start for a test, for a debug session, or for an
+end-to-end run obeys four rules.
+`documentation/container-deployment.md` § "Test and debug containers" is
+authoritative.
+
+1. Start the container inside the compose group with `.\scripts\compose.ps1`,
+   or add the service to `compose.yml` under a profile. Never start a one-off
+   container with a bare `podman run`.
+2. Name an ephemeral container for the issue or the pull request that it
+   serves. Use `misthelper-tmp-<issue|pr><number>-<slug>`.
+3. Publish a port in the range 9600 through 9699. Never publish a production
+   local port. Read `compose.yml` for the current set.
+4. Remove the container, its volume, and its network when the test ends. Never
+   leave a test container running.
+
 <!-- MANUAL ADDITIONS END -->
