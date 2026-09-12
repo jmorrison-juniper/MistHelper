@@ -15,6 +15,15 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Added**: Unit coverage compares the fast size stamp with the documented
   convergence loop. The tests cover 99, 100, 999, and 1000 byte boundaries.
 
+### Simple endpoint family stage one (issue #1807)
+
+- **Added**: Menus 259 through 262 run no-identifier, org-scoped,
+  site-scoped, and MSP-scoped Mist get and list endpoints from a prompt.
+- **Added**: `SimpleEndpointExporter` covers 151 unique simple operations and
+  excludes the unresolved phantom operation `searchOrgClientFingerprints`.
+- **Added**: Unit coverage verifies SDK resolution, prompt failures, call
+  shape, primary-key strategy coverage, and table drift.
+
 ### Flatten nested fields performance (issue #2485)
 
 - **Changed**: `DataProcessingUtils.flatten_nested_fields()` now writes nested
@@ -6842,4 +6851,5 @@ Closes #368
 - Locations: Single AP pre-check, multi-AP pre-check, site PCAP polling, org PCAP polling
 - Function names now match mistapi SDK and Mist API operationId values
 - operationId: listSitePacketCaptures and listOrgPacketCaptures per OpenAPI spec
+
 
