@@ -14,6 +14,14 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Added**: Unit coverage keeps the same-line first-call rule and the old
   line collector result stable.
 
+### Flatten nested fields performance (issue #2485)
+
+- **Changed**: `DataProcessingUtils.flatten_nested_fields()` now writes nested
+  flattened fields directly into each output row. This removes temporary merge
+  dictionaries from the export flatten path.
+- **Added**: Unit coverage keeps JSON and Python literal parse results, key
+  order, empty container handling, and malformed string behavior stable.
+
 ### Dashboard data summary performance (issue #2439)
 
 - **Changed**: The web portal dashboard now builds the data summary with one

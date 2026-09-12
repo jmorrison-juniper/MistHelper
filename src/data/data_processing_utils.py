@@ -31,31 +31,34 @@ class DataProcessingUtils:
     """
 
     @staticmethod
-    def _flatten_list_value(new_key: str, sep: str, v: list[Any]) -> list[tuple[str, Any]]:
-        """Flatten a list value: list-of-dicts gets index keys. Scalar lists join as CSV."""
-        out: list[tuple[str, Any]] = []  # Accumulator for produced pairs.
-        if all(isinstance(i, dict) for i in v):  # List of dicts: index each entry.
-            for idx, item in enumerate(v):  # Walk list items.
-                out.extend(DataProcessingUtils.flatten_dict(item, f"{new_key}{sep}{idx}", sep=sep).items())
-            return out  # Return the indexed pairs.
-        out.append((new_key, ",".join(map(str, v))))  # Join scalar list as CSV.
-        return out  # Return the single joined pair.
-
-    @staticmethod
     def flatten_dict(d: dict[str, Any], parent_key: str = "", sep: str = "_") -> dict[str, Any]:
         """Recursively flatten nested dict for CSV/JSON. Lists-of-dicts get index keys."""
-        items: list[tuple[str, Any]] = []  # Accumulate flattened (key, value) pairs.
+        flattened: dict[str, Any] = {}  # Accumulate flat fields without a temporary pair list.
+        DataProcessingUtils._flatten_dict_into(flattened, d, parent_key, sep)  # Fill the dict in key discovery order.
+        return flattened  # Return the flat dict.
+
+    @staticmethod
+    def _flatten_dict_into(out: dict[str, Any], d: dict[str, Any], parent_key: str = "", sep: str = "_") -> None:
+        """Recursively write flattened dict fields into ``out``."""
         for k, v in d.items():  # Walk every key/value in the input dict.
             k_str = str(k)  # Stringify the key for safe concatenation.
             new_key = f"{parent_key}{sep}{k_str}" if parent_key else k_str  # Compose the dotted key.
             if isinstance(v, dict):  # Recurse into nested dicts.
-                items.extend(DataProcessingUtils.flatten_dict(v, new_key, sep=sep).items())
+                DataProcessingUtils._flatten_dict_into(out, v, new_key, sep=sep)  # Avoid a temporary nested dict.
                 continue  # Move to next field.
             if isinstance(v, list):  # Lists need index expansion or CSV join.
-                items.extend(DataProcessingUtils._flatten_list_value(new_key, sep, v))
+                DataProcessingUtils._flatten_list_into(out, new_key, sep, v)  # Avoid a temporary pair list.
                 continue  # Move to next field.
-            items.append((new_key, v))  # Scalar value: keep as-is.
-        return dict(items)  # Return the flat dict.
+            out[new_key] = v  # Scalar value: keep as-is.
+
+    @staticmethod
+    def _flatten_list_into(out: dict[str, Any], new_key: str, sep: str, value: list[Any]) -> None:
+        """Write a flattened list value into ``out``."""
+        if all(isinstance(item, dict) for item in value):  # List of dicts: index each entry.
+            for idx, item in enumerate(value):  # Walk list items.
+                DataProcessingUtils._flatten_dict_into(out, item, f"{new_key}{sep}{idx}", sep=sep)  # Merge item keys.
+            return  # Preserve empty list-of-dicts behavior by writing no key.
+        out[new_key] = ",".join(map(str, value))  # Scalar list -- join as CSV.
 
     @staticmethod
     def flatten_nested_fields(data: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -76,9 +79,11 @@ class DataProcessingUtils:
     def _flatten_entry(entry: dict[str, Any]) -> dict[str, Any]:
         """Flatten a single dict entry, returning a new dict with nested values expanded."""
         new_entry: dict[str, Any] = {}  # Accumulator for the flattened output of this entry.
+        parse_value = DataProcessingUtils._parse_stringified_value  # Cache lookup for the per-field hot path.
+        flatten_value = DataProcessingUtils._flatten_value_into  # Cache lookup for the per-field hot path.
         for key, value in entry.items():  # Walk every field of the entry.
-            parsed = DataProcessingUtils._parse_stringified_value(value)  # Maybe parse stringified JSON.
-            DataProcessingUtils._flatten_value_into(new_entry, key, parsed)  # Expand nested value.
+            parsed = parse_value(value)  # Maybe parse stringified JSON.
+            flatten_value(new_entry, key, parsed)  # Expand nested value.
         return new_entry  # Return the flattened entry.
 
     @staticmethod
@@ -97,7 +102,7 @@ class DataProcessingUtils:
         """
         if not isinstance(value, str):  # Non-string values pass through unchanged.
             return value  # Nothing to parse.
-        if not value.startswith(("{", "[")):  # Not embedded JSON-ish. Skip parsing.
+        if not value or value[0] not in "{[":  # Not embedded JSON-ish. Skip parsing.
             return value  # Return as-is.
         try:
             return json.loads(value)  # Try the fast, common-case JSON parse first.
@@ -111,14 +116,14 @@ class DataProcessingUtils:
     def _flatten_value_into(new_entry: dict[str, Any], key: str, value: Any) -> None:
         """Merge a single (key, value) into ``new_entry``, expanding nested dicts/lists."""
         if isinstance(value, dict):  # Nested dict needs flattening.
-            new_entry.update(DataProcessingUtils.flatten_dict(value, parent_key=key))  # Merge flattened keys.
+            DataProcessingUtils._flatten_dict_into(new_entry, value, parent_key=key)  # Merge flattened keys in place.
             return  # Done for dict path.
         if not isinstance(value, list):  # Scalar (non-dict, non-list).
             new_entry[key] = value  # Keep scalar value as-is.
             return  # Done for scalar path.
         if DataProcessingUtils._is_list_of_dicts(value):  # List of dicts: index each element.
             for idx, item in enumerate(value):  # Walk list items.
-                new_entry.update(DataProcessingUtils.flatten_dict(item, parent_key=f"{key}_{idx}"))  # Merge item keys.
+                DataProcessingUtils._flatten_dict_into(new_entry, item, parent_key=f"{key}_{idx}")  # Merge item keys.
             return  # Done for list-of-dicts path.
         new_entry[key] = ",".join(map(str, value))  # Scalar list -- join as CSV.
 
