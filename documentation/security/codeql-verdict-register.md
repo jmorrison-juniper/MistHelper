@@ -4,7 +4,7 @@
 
 **Owner**: The repository security reviewer.
 
-**Generated**: 2026-09-10
+**Generated**: 2026-09-12
 
 **Rows**: 86
 
@@ -134,8 +134,8 @@ reason. Add the reason to the alert on GitHub, then run `generate` again.
 | 184 | - | src/capture/packet_capture.py | 553 | src/capture/packet_capture.py::L553 | false_positive | Warning: the dismissal recorded no reason. A reviewer must write one. | jmorrison-juniper | 2026-08-24 | 2027-02-20 | A reviewer writes the missing reason. |
 | 185 | - | src/capture/packet_capture.py | 647 | src/capture/packet_capture.py::L647 | false_positive | Warning: the dismissal recorded no reason. A reviewer must write one. | jmorrison-juniper | 2026-08-24 | 2027-02-20 | A reviewer writes the missing reason. |
 | 186 | - | src/capture/packet_capture.py | 861 | src/capture/packet_capture.py::L861 | false_positive | Warning: the dismissal recorded no reason. A reviewer must write one. | jmorrison-juniper | 2026-08-24 | 2027-02-20 | A reviewer writes the missing reason. |
-| 193 | #1834 | starlink_dashboard.py | 1401 | starlink_dashboard.py::L1401 | accepted_with_rationale | accepted_with_rationale, 2026-08-22, PR #1834. The dump now prints 3 decimal places, about 100 meters, not an exact position. The taint path stays, so CodeQL still reports it. Trigger: a change to _format_gps_coordinate or to GPS_PRECISION_DECIMALS. See issue #1737. | jmorrison-juniper | 2026-08-22 | 2027-02-18 | A later CodeQL scan raises the same alert again. |
-| 194 | #1834 | starlink_dashboard.py | 1402 | starlink_dashboard.py::L1402 | accepted_with_rationale | accepted_with_rationale, 2026-08-22, PR #1834. The dump now prints 3 decimal places, about 100 meters, not an exact position. The taint path stays, so CodeQL still reports it. Trigger: a change to _format_gps_coordinate or to GPS_PRECISION_DECIMALS. See issue #1737. | jmorrison-juniper | 2026-08-22 | 2027-02-18 | A later CodeQL scan raises the same alert again. |
+| 193 | #1834 | starlink_dashboard.py | 1403 | starlink_dashboard.py::L1403 | accepted_with_rationale | accepted_with_rationale, 2026-08-22, PR #1834. The dump now prints 3 decimal places, about 100 meters, not an exact position. The taint path stays, so CodeQL still reports it. Trigger: a change to _format_gps_coordinate or to GPS_PRECISION_DECIMALS. See issue #1737. | jmorrison-juniper | 2026-08-22 | 2027-02-18 | A later CodeQL scan raises the same alert again. |
+| 194 | #1834 | starlink_dashboard.py | 1404 | starlink_dashboard.py::L1404 | accepted_with_rationale | accepted_with_rationale, 2026-08-22, PR #1834. The dump now prints 3 decimal places, about 100 meters, not an exact position. The taint path stays, so CodeQL still reports it. Trigger: a change to _format_gps_coordinate or to GPS_PRECISION_DECIMALS. See issue #1737. | jmorrison-juniper | 2026-08-22 | 2027-02-18 | A later CodeQL scan raises the same alert again. |
 | 199 | #1735 | src/device/_utility_commands_action.py | 321 | src/device/_utility_commands_action.py::L321 | accepted_with_rationale | accepted_with_rationale. Issue #1735. Review 2026-08-22. Menu 144 must show the one-time ZTP password on screen. PR #1876 gates the print on sys.stdout.isatty(), so a redirect, a pipe, or a recorded SSH session receives a withheld notice. A test blocks the #886 logging migration. | jmorrison-juniper | 2026-08-23 | 2027-02-19 | A later CodeQL scan raises the same alert again. |
 | 211 | #1735 | src/device/_utility_commands_action.py | 321 | src/device/_utility_commands_action.py::L321 | accepted_with_rationale | accepted_with_rationale. Repeats dismissed alert 199 at the same file and line. Issue #1735, review 2026-08-22, PR #1876 gates the print on sys.stdout.isatty(). PR #1850 removed an unused noqa from that line, which changed the fingerprint. The behavior did not change. | jmorrison-juniper | 2026-08-26 | 2027-02-22 | A later CodeQL scan raises the same alert again. |
 
