@@ -3802,7 +3802,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     ),
     "261": (
         SimpleEndpointExporter.site_endpoints,
-        "Run any site-scoped Mist get or list endpoint (57 operations, issue #1807)",
+        "Run any site-scoped simple Mist read endpoint (58 operations, issue #1807)",
     ),
     "262": (
         SimpleEndpointExporter.msp_endpoints,

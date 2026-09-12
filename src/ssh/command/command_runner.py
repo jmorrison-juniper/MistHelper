@@ -17,7 +17,7 @@ from __future__ import annotations  # WHY: enable PEP 604 union types on older P
 import logging  # WHY: structured logging for the single-command executor lifecycle events.
 from collections.abc import Callable  # WHY: type alias for the log-writer closure.
 from dataclasses import dataclass  # WHY: frozen bundles collapse parameter counts below the limit.
-from datetime import datetime  # WHY: header + footer timestamps embedded in log output.
+from datetime import UTC, datetime  # WHY: header + footer timestamps embedded in log output.
 from typing import TYPE_CHECKING, Any  # WHY: guarded imports + loose runner typing.
 
 from src.ssh.connection.connector import SshConnector  # WHY: real connect collaborator (no facade).
@@ -191,7 +191,7 @@ class SingleCommandRunner:
         return (  # WHY: verbatim header format preserved from original _run_ssh_command.
             f"\n{_HEADER_BAR}\n"
             f"SSH Single Command Log for Host: {hostname}\n"
-            f"Started: {datetime.now().strftime(_TS_FMT_HUMAN)}\n"
+            f"Started: {datetime.now(UTC).strftime(_TS_FMT_HUMAN)}\n"
             f"Command: {command}\n"
             f"{_HEADER_BAR}"
         )
@@ -328,7 +328,7 @@ class SingleCommandRunner:
         """Return the verbatim footer block written at the end of each per-host log."""
         return (  # WHY: verbatim footer format preserved from the original entrypoint.
             f"\n{_HEADER_BAR}\n"
-            f"SSH Single Command Session Completed: {datetime.now().strftime(_TS_FMT_HUMAN)}\n"
+            f"SSH Single Command Session Completed: {datetime.now(UTC).strftime(_TS_FMT_HUMAN)}\n"
             f"Status: {_STATUS_SUCCESS if final_success else _STATUS_FAILED}\n"
             f"Log file: {host_log_file}\n"
             f"{_HEADER_BAR}"
@@ -345,7 +345,7 @@ class SingleCommandRunner:
             "Error in footer generation: %s: %s", type(footer_error).__name__, footer_error
         )
         try:
-            simple_footer = f"Session completed at {datetime.now().strftime(_TS_FMT_HUMAN)}"  # WHY: verbatim.
+            simple_footer = f"Session completed at {datetime.now(UTC).strftime(_TS_FMT_HUMAN)}"  # WHY: verbatim.
             writer(simple_footer)  # WHY: attempt to write the minimal fallback footer.
         except Exception as fallback_error:  # last-resort path
             logger.error("Even simple footer failed: %s", fallback_error)  # WHY: give up gracefully.

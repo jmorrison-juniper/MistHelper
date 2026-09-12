@@ -4,7 +4,7 @@ from __future__ import annotations  # WHY: enable PEP 563 postponed evaluation f
 
 import logging  # WHY: structured logging for analyzer progress/failures
 from dataclasses import dataclass  # WHY: frozen slotted deps container
-from datetime import datetime  # WHY: timestamp for CSV export filenames
+from datetime import UTC, datetime  # WHY: timestamp for CSV export filenames
 from typing import Any  # WHY: generic hints for opaque mistapi payloads
 
 logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
@@ -405,13 +405,13 @@ class SiteInventoryHealthAnalyzer:  # WHY: namespace for the analyzer entry poin
         deps: SiteInventoryHealthAnalyzerDeps,
     ) -> None:
         """Export analysis results to CSV files."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # WHY: filename-safe local timestamp
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")  # WHY: filename-safe local timestamp
         missing_spec = _ExportSpec(  # WHY: bundle missing-report export parameters
             filename=f"SitesMissingInfrastructure_{timestamp}.csv",
             api_function_name="sitesMissingInfrastructure",
             label="Missing infrastructure",
             empty_message=(
-                "! No sites found with missing infrastructure " "(all sites with APs have switches and gateways)"
+                "! No sites found with missing infrastructure (all sites with APs have switches and gateways)"
             ),
         )
         offline_spec = _ExportSpec(  # WHY: bundle offline-report export parameters

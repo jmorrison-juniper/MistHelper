@@ -10,7 +10,7 @@ import re  # WHY: compile the filename sanitization regex once at module scope
 import time  # WHY: measure command execution wall-clock time
 from collections.abc import Callable  # WHY: annotate the write-log callable returned to callers
 from dataclasses import dataclass, field  # WHY: define the two SSH configuration dataclasses
-from datetime import datetime  # WHY: build timestamped log filenames (patched by tests at module scope)
+from datetime import UTC, datetime  # WHY: build timestamped log filenames (patched by tests at module scope)
 from functools import partial  # WHY: build a per-log-file writer without an inner def (CC/blocks reduction)
 
 from src.ssh.connection.connector import SshConnector  # WHY: T013b - extracted connection establishment
@@ -257,7 +257,7 @@ class EnhancedSSHRunner:
             tuple: (log_file_path, write_function)
         """
         log_dir, safe_hostname = self._prepare_log_directory(hostname)  # WHY: extract dir setup to a helper
-        timestamp = datetime.now().strftime(_TIMESTAMP_FORMAT)  # WHY: filesystem-safe timestamp for the filename
+        timestamp = datetime.now(UTC).strftime(_TIMESTAMP_FORMAT)  # WHY: filesystem-safe timestamp for the filename
         log_path = os.path.join(log_dir, f"ssh_output_{safe_hostname}_{timestamp}.log")  # WHY: canonical filename shape
         writer = partial(self._write_to_host_log, log_path)  # WHY: bind log_path once so callers pass only messages
         return log_path, writer  # WHY: return path + callable exactly as legacy contract requires
@@ -381,7 +381,9 @@ class EnhancedSSHRunner:
             raise ValueError(_NO_ACTIVE_CONNECTION_MSG)  # WHY: reject a call made without a live client
         self.logger.debug("Attempting exec_command with get_pty=True")  # WHY: mark the branch in logs
         _, stdout, stderr = self.client.exec_command(  # WHY: paramiko returns (stdin, stdout, stderr)
-            command, timeout=self.timeout, get_pty=True  # nosec B601  # WHY: caller-supplied command by design
+            command,
+            timeout=self.timeout,
+            get_pty=True,  # nosec B601  # WHY: caller-supplied command by design
         )
         return self._collect_and_log(stdout, stderr, start_time, hostname, with_pty=True)  # WHY: shared reader
 

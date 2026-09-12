@@ -43,7 +43,11 @@ def mock_arango_client():  # WHY: fixture / helper function
         mock_client.db.return_value = mock_sys_db  # WHY: prime mock return value
         mock_sys_db.has_database.return_value = True  # WHY: prime mock return value
         mock_db = MagicMock()  # WHY: create mock double for python-arango
-        mock_client.db.side_effect = lambda name, **kw: (mock_sys_db if name == "_system" else mock_db)  # WHY: prime mo
+
+        def _select_db(name, **kw):  # WHY: black formats a named helper cleanly.
+            return mock_sys_db if name == "_system" else mock_db  # WHY: choose the mock database by name.
+
+        mock_client.db.side_effect = _select_db  # WHY: route client calls through the local selector.
         yield {  # WHY: hand mock context to the test
             "client_cls": mock_cls,
             "client": mock_client,
@@ -974,7 +978,7 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
         assert_vertex_config("searchSiteWanUsage", "wan_usage", "mac")  # WHY: vertex+key pair check
 
     def test_fingerprints_mapping_exists(self):  # WHY: pytest discovers this by name
-        assert_vertex_config("searchOrgClientFingerprints", "fingerprints", "mac")  # WHY: vertex+key pair check
+        assert_vertex_config("searchSiteClientFingerprints", "fingerprints", "mac")  # WHY: vertex+key pair check
 
     def test_ui_settings_mapping_exists(self):  # WHY: pytest discovers this by name
         assert_vertex_config("listSiteUiSettings", "ui_settings", "id")  # WHY: vertex+key pair check
@@ -1008,7 +1012,7 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
                 "listSiteApps": "applications",
                 "searchSiteCalls": "calls",
                 "searchSiteWanUsage": "wan_usage",
-                "searchOrgClientFingerprints": "fingerprints",
+                "searchSiteClientFingerprints": "fingerprints",
                 "listSiteUiSettings": "ui_settings",
                 "listSiteTroubleshootCalls": "troubleshoot_calls",
             }
@@ -1022,7 +1026,9 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
     def test_fingerprints_no_edges(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: schema map under test
 
-        assert COLLECTION_VERTEX_MAP["searchOrgClientFingerprints"]["edges"] == []  # WHY: fingerprints are leaf vertice
+        assert (
+            COLLECTION_VERTEX_MAP["searchSiteClientFingerprints"]["edges"] == []
+        )  # WHY: fingerprints are leaf vertices
 
     def test_ui_settings_no_edges(self):  # WHY: pytest discovers this by name
         from src.db.arango_writer import COLLECTION_VERTEX_MAP  # WHY: schema map under test
