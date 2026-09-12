@@ -257,6 +257,42 @@ class DocumentRunStore:
             mirror_run(run)  # The poll then reads the run back with no database at all.
         return landed
 
+    def compare_and_set_run(
+        self,
+        run_id: str,
+        expected_version: int,
+        replacement: dict[str, Any],
+    ) -> bool:
+        """Replace one database run only when its application version matches."""
+        store = load_module(STORE_MODULE)  # Load the production database boundary without a socket at import.
+        if store is None:  # A mirror cannot coordinate two workers.
+            return False  # Fail closed when the production store is absent.
+        try:  # The database action is one atomic AQL statement.
+            database: Any = store.connect_database()  # Open the same database that stores run documents.
+            if database is None:  # A file fallback cannot provide compare-and-set.
+                return False  # Fail closed instead of claiming an atomic update.
+            query = (
+                "FOR run IN @@collection "
+                "FILTER run._key == @key AND run.record_version == @expected "
+                "REPLACE run WITH @replacement IN @@collection RETURN NEW"
+            )  # Arango evaluates the filter and replacement in one transaction.
+            bind_vars = {  # Bind every value, including the collection name.
+                "@collection": store.RUN_COLLECTION,
+                "key": run_id,
+                "expected": expected_version,
+                "replacement": dict(replacement),
+            }
+            logger.info("wiring: compare and replace the run %s", run_id)  # Log before the atomic action.
+            rows = list(database.aql.execute(query, bind_vars=bind_vars))  # Run one atomic conditional replace.
+        except Exception as fault:  # A failed coordination write must stop the cloud action.
+            logger.warning("wiring: the compare and replace of run %s failed with %s", run_id, type(fault).__name__)
+            return False  # Do not use the mirror or the backup file for coordination.
+        if not rows:  # A stale version or absent row changed nothing.
+            return False  # Report the lost comparison without updating the mirror.
+        mirror_run(replacement)  # Cache only a database-confirmed replacement.
+        logger.debug("wiring: the compare and replace of run %s succeeded", run_id)  # Log after the action.
+        return True  # The database returned the replacement document.
+
     def runs_for_site(self, site_id: str) -> list[dict[str, Any]]:
         """Return one small row for each run that the store holds for one site.
 

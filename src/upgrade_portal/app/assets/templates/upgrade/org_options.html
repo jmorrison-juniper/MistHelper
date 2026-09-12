@@ -8,7 +8,7 @@
 <div class="portal-card" data-testid="org-upgrade-options">
   <h2 class="portal-card-title">Upgrade options</h2>
   <p class="portal-card-note">
-    The organization job targets {{ rows | length }} selected sites. The first release supports access points only.
+    One operation targets {{ rows | length }} selected sites. The portal selects the safe route for each device family.
   </p>
 
   <form method="post" action="/api/org-upgrades/options">
@@ -16,14 +16,48 @@
            name="csrf_token"
            value="{{ csrf_token() if csrf_token is defined else '' }}">
 
+    <fieldset class="bubble-group mb-3" data-testid="org-upgrade-device-types">
+      <legend class="bubble-group-legend">Device types to upgrade</legend>
+      {% for value, label in [('ap', 'Access points'), ('switch', 'Switches'), ('gateway', 'Gateways')] %}
+        <span class="bubble-option">
+          <input class="bubble-option-input"
+                 type="checkbox"
+                 id="org-upgrade-type-{{ value }}"
+                 name="selected_types"
+                 value="{{ value }}"
+                 data-testid="org-upgrade-type-{{ value }}"
+                 checked>
+          <label class="bubble-option-label" for="org-upgrade-type-{{ value }}">{{ label }}</label>
+        </span>
+      {% endfor %}
+    </fieldset>
+
     <div class="mb-3">
-      <label class="form-label" for="firmware-version">Target firmware version</label>
+      <label class="form-label" for="firmware-version">Access point target version</label>
       <input class="form-control"
              id="firmware-version"
-             name="version"
+             name="version_ap"
              data-testid="org-upgrade-version"
              value="{{ options.version | default('', true) }}"
-             required>
+             placeholder="For example, 0.15.1">
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label" for="switch-firmware-version">Switch target version</label>
+      <input class="form-control"
+             id="switch-firmware-version"
+             name="version_switch"
+             data-testid="org-upgrade-switch-version"
+             placeholder="For example, 23.4R1.9">
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label" for="gateway-firmware-version">Gateway target version</label>
+      <input class="form-control"
+             id="gateway-firmware-version"
+             name="version_gateway"
+             data-testid="org-upgrade-gateway-version"
+             placeholder="For example, 23.4R1.9">
     </div>
 
     <fieldset class="bubble-group mb-3">
@@ -53,6 +87,44 @@
       <p class="portal-card-note" id="canary-phases-help">Enter increasing percentages that end with 100.</p>
     </div>
 
+    <fieldset class="bubble-group mb-3" data-testid="org-upgrade-reboot-group">
+      <legend class="bubble-group-legend">Reboot each switch and each gateway after the write</legend>
+      <span class="bubble-option">
+        <input class="bubble-option-input" type="radio" name="reboot" value="yes" id="org-reboot-yes" checked>
+        <label class="bubble-option-label" for="org-reboot-yes">Yes</label>
+      </span>
+      <span class="bubble-option">
+        <input class="bubble-option-input" type="radio" name="reboot" value="no" id="org-reboot-no">
+        <label class="bubble-option-label" for="org-reboot-no">No</label>
+      </span>
+    </fieldset>
+
+    <fieldset class="bubble-group mb-3" data-testid="org-upgrade-junos-file-action-group">
+      <legend class="bubble-group-legend">Complete the Junos file action after the reboot</legend>
+      <span class="bubble-option">
+        <input class="bubble-option-input"
+               type="radio"
+               name="junos_file_action"
+               value="yes"
+               id="org-junos-yes"
+               checked>
+        <label class="bubble-option-label" for="org-junos-yes">Yes</label>
+      </span>
+      <span class="bubble-option">
+        <input class="bubble-option-input"
+               type="radio"
+               name="junos_file_action"
+               value="no"
+               id="org-junos-no">
+        <label class="bubble-option-label" for="org-junos-no">No</label>
+      </span>
+    </fieldset>
+
+    <div class="form-check mb-3">
+      <input class="form-check-input" type="checkbox" id="org-upgrade-force" name="force">
+      <label class="form-check-label" for="org-upgrade-force">Write the firmware when a device already runs it</label>
+    </div>
+
     <div class="mb-3">
       <label class="form-label" for="max-failure-percentage">Maximum failure percentage</label>
       <input class="form-control"
@@ -80,6 +152,29 @@
             class="portal-button portal-button-primary"
             data-testid="org-upgrade-review">Review</button>
   </form>
+</div>
+
+<div class="portal-table-scroll">
+  <table class="portal-table" data-testid="org-upgrade-device-summary">
+    <caption class="visually-hidden">The devices available to this operation.</caption>
+    <thead>
+      <tr><th scope="col">Site</th><th scope="col">Device</th><th scope="col">Type</th><th scope="col">Model</th></tr>
+    </thead>
+    <tbody>
+      {% for view in device_views | default([], true) %}
+        {% for target in view.targets | default([], true) %}
+          <tr>
+            <td>{{ view.site.name }}</td>
+            <th scope="row">{{ target.name }}</th>
+            <td>{{ target.device_type }}</td>
+            <td>{{ target.model }}</td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="4">The portal found no supported device.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </div>
 
 <div class="portal-table-scroll">
