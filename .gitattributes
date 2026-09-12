@@ -29,3 +29,6 @@
 *.pdf binary
 *.db binary
 *.sqlite binary
+
+# Merge concurrent changelog entries
+CHANGELOG.md text eol=lf merge=union
