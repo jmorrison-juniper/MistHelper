@@ -23,6 +23,14 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   a missing session, and the existing cookie-session boundary. The safe
   stand-in records only non-secret evidence.
 
+### Upgrade capture stored size performance (issue #2486)
+
+- **Changed**: The upgrade capture store now solves the `stored_size_bytes`
+  width after one body serialization. The write path keeps the same canonical
+  JSON size rule.
+- **Added**: Unit coverage compares the fast size stamp with the documented
+  convergence loop. The tests cover 99, 100, 999, and 1000 byte boundaries.
+
 ### Capture log baseline performance (issue #2483)
 
 - **Changed**: `tools.capture_log_baseline` now builds one call-line index
@@ -6880,3 +6888,7 @@ Closes #368
 - Locations: Single AP pre-check, multi-AP pre-check, site PCAP polling, org PCAP polling
 - Function names now match mistapi SDK and Mist API operationId values
 - operationId: listSitePacketCaptures and listOrgPacketCaptures per OpenAPI spec
+
+
+
+
