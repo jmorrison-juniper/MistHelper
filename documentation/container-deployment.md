@@ -51,6 +51,86 @@ The script needs the native provider. Install it one time with this command:
 .venv\Scripts\python.exe -m pip install podman-compose
 ```
 
+## Test and debug containers
+
+This section covers every container that you start for a test, for a debug
+session, or for an end-to-end run. It does not cover the deployment methods
+above. `.github/copilot-instructions.md` § "Test and Debug Containers" holds the
+same policy for an agent.
+
+**Rule 1. Start the container inside the compose group.**
+
+Never start a one-off container outside the group. A container outside the
+group joins no `misthelper-network`, so it cannot reach `misthelper-arangodb`
+or `misthelper-redis` by name.
+
+```powershell
+.\scripts\compose.ps1 run --rm misthelper python -m pytest tests/<file>
+.\scripts\compose.ps1 --profile test up -d
+```
+
+If the test needs a new service, add the service to `compose.yml` under a
+profile. A profile keeps the service out of the normal `up`.
+
+**Rule 2. Name an ephemeral container for its issue or its pull request.**
+
+An ephemeral container serves one investigation and then goes away. Give the
+container, the volume, and the network this name.
+
+```text
+misthelper-tmp-<issue|pr><number>-<slug>
+```
+
+For example, `misthelper-tmp-issue2059-portcheck`. A reader who finds the
+container three days later can open the issue and learn why it runs.
+
+**Rule 3. Never publish a production local port.**
+
+| Port | Owner |
+| - | - |
+| 1161/udp | The SNMP service |
+| 1514/udp | The Observium syslog receiver |
+| 2200 | The SSH runner |
+| 8055 | The web portal |
+| 8056 | The upgrade capture portal |
+| 8057 | The metrics gateway |
+| 8668 | The Observium web interface |
+| 9379 | Redis |
+| 9526 | The RedisInsight web UI |
+| 9529 | ArangoDB |
+
+Read `compose.yml` before you pick a port. That file is the source of truth,
+and the table above can drift.
+
+Publish an ephemeral port in the range 9600 through 9699 instead, and bind it
+to `127.0.0.1`.
+
+Warning: an ephemeral container that publishes 9529 or 9379 takes the port from
+the running store. The portal then writes a capture into the wrong database, and
+the operator loses the upgrade record. Issue #2059 records that collision.
+
+**Rule 4. Remove the container when the test ends.**
+
+Never leave a test container running. A stopped container still holds its image
+layers, its volume, and its log file.
+
+```powershell
+.\scripts\compose.ps1 rm -s -f <the test service>
+podman rm -f misthelper-tmp-<issue|pr><number>-<slug>
+podman volume rm misthelper-tmp-<issue|pr><number>-<slug>
+podman ps -a --filter "name=misthelper-tmp-" --format "{{.Names}} {{.Status}}"
+podman system df
+```
+
+The fourth command confirms the cleanup. An empty result means the cleanup
+finished. The fifth command reports the reclaimed space.
+
+Warning: never run `podman volume prune`, and never pass `-v` to a compose
+`down` command. Both remove `misthelper-arangodb-data` and
+`misthelper-redis-data`. Those two volumes hold every capture and every upgrade
+run, and a removed volume is not recoverable. Remove a test volume by name
+instead.
+
 ## Update the stack to the newest code
 
 Warning: a plain `up` rebuilds. `podman-compose up -d` with no service argument

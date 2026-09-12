@@ -114,9 +114,30 @@ Apply the first strategy that fits.
 | Sequential merge | The conflicts are small. | Merge the cleanest pull request. Every other agent rebases. Repeat. |
 | Merge agent | The conflicts are large. | One agent owns the reconciliation. Every other agent stops pushing. |
 | New boundary | The same file conflicts again and again. | Split the contested code into separate modules. |
+| Unique file | A shared record conflicts, such as a changelog or a handoff. | Give each change its own file, named for its pull request, its issue, or the date. |
 
 If a conflict covers more than 20 lines, abandon the branch. Start again from a
 fresh `main`.
+
+### Never write a shared record on a feature branch
+
+A shared record is a tracked file that every change appends to. A changelog, a
+progress ledger, and a handoff index are shared records. Each one conflicts on
+every parallel rebase, because each change edits the same lines.
+
+Give each change its own file instead. Put the pull request number, the issue
+number, or the date in the file name, so no two changes choose one name.
+
+| Record | Feature branch writes | Feature branch never writes |
+| - | - | - |
+| Release note | `changelog.d/pr-<number>.md` | `CHANGELOG.md` |
+| Handoff | A comment in the issue or the pull request | A tracked handoff file |
+
+Warning: never resolve such a conflict by deleting the entry of another change.
+That delete removes a record that a reader needs, and no gate reports the loss.
+Move each conflicting entry into its own file, then resolve the rest.
+
+Each repository holds the naming rule in `changelog.d/README.md`.
 
 ## Part 3. GitHub Actions minutes
 
@@ -155,11 +176,36 @@ registry build an image that Podman can build here.
 
 ```powershell
 podman build -t misthelper:local .
-podman stop misthelper ; podman rm misthelper
-podman run -d --name misthelper -p 2200:2200 -p 8055:8055 `
-  -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" misthelper:local
+.\scripts\compose.ps1 up -d --no-deps misthelper
 podman ps
 ```
+
+Caution: pass `--no-deps` and name the service. Without both, compose tries to
+create `misthelper-arangodb` and `misthelper-redis` again, and it stops with
+`the container name is already in use`. Issue #2228 holds that report.
+
+### Rules for a test container or a debug container
+
+Every container that you start for a test, for a debug session, or for an
+end-to-end run obeys these four rules. `.github/copilot-instructions.md`
+§ "Test and Debug Containers" holds the full policy and the cleanup commands.
+
+1. Start the container inside the compose group. Use
+   `.\scripts\compose.ps1 run --rm`, or add the service to `compose.yml` under
+   a profile. Never start a one-off container with a bare `podman run`.
+2. Name an ephemeral container for the issue or the pull request that it
+   serves. Use the format `misthelper-tmp-<issue|pr><number>-<slug>`. Apply the
+   same name to the volume and the network.
+3. Publish a port in the range 9600 through 9699. Never publish a production
+   local port. Read `compose.yml` for the current set. Today it holds 1161/udp,
+   1514/udp, 2200, 8055, 8056, 8057, 8668, 9379, 9526, and 9529.
+4. Remove the container, its volume, and its network when the test ends. Never
+   leave a test container running.
+
+Warning: a test container that publishes 9529 or 9379 takes the port from the
+running store. The upgrade portal then writes a capture into the wrong
+database, and the operator loses the upgrade record. Issue #2059 records that
+collision.
 
 ### Spend a run only for these reasons
 
@@ -172,7 +218,7 @@ podman ps
 | You want to confirm a lint result. | No. Run the linter here. |
 | You want to confirm a format result. | No. Run the formatter here. |
 | You want a container image for local use. | No. Build it with Podman here. |
-| You changed a comment, a document, or a changelog line. | No. |
+| You changed a comment, a document, or a release-note fragment. | No. |
 | A maintainer already merged the tree and every gate passed. | No. Never start `workflow_dispatch` on a validated tree. |
 
 ### Batch the work
@@ -303,11 +349,12 @@ contract test reads the workflow file and asserts the setting.
 
 1. Link the issue. Write `Closes #<issue>`.
 2. Add a type label and a scope label.
-3. Complete every checklist item in the template.
-4. Wait for every required check, including CodeQL. Use
+3. Add the release-note fragment under `changelog.d/` for a user-visible change.
+4. Complete every checklist item in the template.
+5. Wait for every required check, including CodeQL. Use
    `gh pr checks <number> --watch`.
-5. Add the `auto-merge` label only after every check reports green.
-6. Never add `auto-merge` to a pull request that changes a destructive
+6. Add the `auto-merge` label only after every check reports green.
+7. Never add `auto-merge` to a pull request that changes a destructive
    operation. A human reviews that change.
 
 Warning: a pull request from a fork receives a read-only token and no secrets.

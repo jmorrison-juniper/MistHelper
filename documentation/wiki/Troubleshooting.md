@@ -12,7 +12,7 @@
 | SSH connection refused | Container not running | Check `podman ps`, restart container with SSH enabled |
 | SSH wrong password | Using incorrect credentials | Default password is `misthelper123!` |
 | SSH session won't start | ForceCommand or session issues | Check container logs, verify SSH server is running |
-| SSH port conflict | Port 2200 already in use | Stop other services on port 2200 or modify container config |
+| SSH port conflict | Port 2200 already in use | Stop other services on port 2200 or modify container config. A test container must never publish 2200. See [Container Setup](Container-Setup#test-and-debug-containers). |
 | Multiple SSH sessions interfering | Session isolation problem | Each connection should get unique session ID -- check logs |
 | `script.log` permission error | Data directory not writable | Run `chmod -R 777 data/` on host before starting container |
 

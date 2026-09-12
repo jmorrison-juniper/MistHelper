@@ -232,12 +232,67 @@ echo "Note: Rootless requires ports >= 1024 unless net.ipv4.ip_unprivileged_port
 podman ps --format '{{.Names}}\t{{.Ports}}' | grep -v "^$" | column -t
 ```
 
+## Project policy: a test container joins the compose group
+
+This policy governs every container that you start in MistHelper for a test,
+for a debug session, or for an end-to-end run. The full text and the cleanup
+commands live in `.github/copilot-instructions.md` § "Test and Debug
+Containers".
+
+1. **Join the group.** Start the container through
+   `.\scripts\compose.ps1`, or add the service to `compose.yml` under a
+   profile. Never start a one-off container with a bare `podman run`. A
+   container outside the group joins no `misthelper-network`, so it cannot
+   reach `misthelper-arangodb` or `misthelper-redis` by name.
+2. **Name it for its issue.** An ephemeral container that serves one
+   investigation carries the issue number or the pull request number in its
+   name. Use `misthelper-tmp-<issue|pr><number>-<slug>` for the container, the
+   volume, and the network.
+3. **Keep off the production local ports.** Read `compose.yml` for the current
+   set. Today it holds 1161/udp, 1514/udp, 2200, 8055, 8056, 8057, 8668, 9379,
+   9526, and 9529. Publish an ephemeral port in the range 9600 through 9699,
+   bound to `127.0.0.1`.
+4. **Remove it when the test ends.** Remove the container, its volume, and its
+   network. Never leave a test container running.
+
+```powershell
+# Preferred: declare the test service in compose.yml under a profile, then
+# start the profile. The profile keeps the service out of the normal `up`.
+.\scripts\compose.ps1 --profile test up -d
+
+# One command inside the existing service, with no extra container left behind.
+.\scripts\compose.ps1 run --rm misthelper python -m pytest tests/<file>
+
+# Remove everything the test created, then confirm that nothing is left.
+.\scripts\compose.ps1 rm -s -f <the test service>
+podman volume rm misthelper-tmp-<issue|pr><number>-<slug>
+podman ps -a --filter "name=misthelper-tmp-" --format "{{.Names}} {{.Status}}"
+```
+
+An empty result from the last command means the cleanup finished. Read
+`podman system df` when you want the reclaimed space.
+
+Warning: never run `podman volume prune`, and never pass `-v` to a compose
+`down` command. Both remove `misthelper-arangodb-data` and
+`misthelper-redis-data`. Those two volumes hold every capture and every upgrade
+run, and a removed volume is not recoverable.
+
+Warning: a test container that publishes 9529 or 9379 takes the port from the
+running store. The upgrade portal then writes a capture into the wrong
+database, and the operator loses the upgrade record. Issue #2059 records that
+collision.
+
+Warning: a test container that stays running holds its image layers, its
+volume, and its log file. Read `podman system df` to measure the cost.
+
 ## Safety rules
 
 - Stay read-only by default. Use `podman inspect`, `podman ps`, `podman logs`,
   and `podman stats`.
 - Warning: never remove a container or an image without explicit user
-  confirmation. A removed container is not recoverable.
+  confirmation. A removed container is not recoverable. The one exception is a
+  container that carries the `misthelper-tmp-` prefix. You created it for a
+  test, so remove it when the test ends.
 - Rootless mode limits the ports, the storage, and the networking. Keep those
   limits in mind.
 - A generated systemd unit is safe. An installed systemd unit changes the state

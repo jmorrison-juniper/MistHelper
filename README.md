@@ -108,6 +108,23 @@ curl http://127.0.0.1:8055/ready
 
 Three containers answer, and the address reports a ready state.
 
+### Start a container for a test or a debug session
+
+A container that you start for a test, for a debug session, or for an
+end-to-end run follows four rules.
+
+1. Start it inside the compose group with `.\scripts\compose.ps1`. Never start
+   a one-off container with a bare `podman run`.
+2. Name it for the issue or the pull request that it serves. Use the format
+   `misthelper-tmp-<issue|pr><number>-<slug>`.
+3. Publish a port in the range 9600 through 9699. Never publish a production
+   local port, such as 2200, 8055, 8056, or 9529.
+4. Remove it when the test ends. Never leave a test container running.
+
+Read [the container deployment
+page](documentation/container-deployment.md) for the full policy and the
+cleanup commands.
+
 ## Use
 
 ### Open the menu
@@ -299,6 +316,7 @@ machine.
 | [NOC runbooks](documentation/noc-runbooks) | Task guides for the operations center |
 | [API notes](documentation/api) | The Mist API specification and the endpoint notes |
 | [Changelog](CHANGELOG.md) | The version history |
+| [Release-note fragments](changelog.d/README.md) | The file that each change adds for its release note |
 
 ## License
 

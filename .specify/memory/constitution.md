@@ -136,7 +136,7 @@ executed. No steps may be skipped.
 6. **Restart container** — Stop, remove, and re-run with volume mounts.
 7. **Verify** — `podman ps` confirms the container is healthy.
 
-Every changelog update triggers this pipeline. There are no standalone
+Every release-note fragment triggers this pipeline. There are no standalone
 git operations.
 
 **Rationale**: The user expects the running container to reflect the
@@ -247,6 +247,14 @@ The following technology choices are binding for all MistHelper code:
   MUST be maintained for pip compatibility.
 - **Container Runtime**: Podman is the primary runtime. Docker is
   compatible but all documentation and examples MUST use Podman.
+- **Test Containers**: Every container started for a test, a debug
+  session, or an end-to-end run MUST join the compose group. A bare
+  `podman run` outside the group is prohibited. An ephemeral container
+  MUST carry the issue number or the pull request number in its name
+  (`misthelper-tmp-<issue|pr><number>-<slug>`), MUST NOT publish a
+  production local port (read `compose.yml` for the current set), and
+  MUST be removed when the test ends. See
+  `documentation/container-deployment.md` § "Test and debug containers".
 - **File Paths**: MUST use `os.path.join()` or `pathlib.Path()`. Never
   hardcode `/` or `\\` separators. Windows compatibility is required.
 - **Output Backends**: All data operations MUST support multi-backend output
@@ -282,8 +290,10 @@ Every new operation MUST follow this sequence:
    api_function_name=...)`.
 5. **Update README** — Modify the operation count and add the new
    operation to the menu table.
-6. **Version Changelog** — Update README with
-   `version YY.MM.DD.HH.MM` format (UTC timestamp).
+6. **Release Note** — Add one new fragment under `changelog.d/`. Name
+   it `pr-<number>.md`, `issue-<number>-<slug>.md`, or
+   `<YYYY-MM-DD>-<slug>.md`. Never edit `CHANGELOG.md` on a feature
+   branch.
 7. **Execute Full Pipeline** — Run the complete deployment pipeline
    (Principle IV).
 
@@ -328,7 +338,12 @@ findings left unresolved become real attack surfaces.
 - **agents.md**: Internal agent coding guide (~400 lines). MUST be
   consulted before making architectural decisions.
 - **Version format**: `YY.MM.DD.HH.MM` (UTC timestamp), consistent
-  across changelog entries, commit messages, and container tags.
+  across released changelog entries, commit messages, and container
+  tags. The release coordinator writes that stamp.
+- **Release notes**: Each change MUST add one unique fragment under
+  `changelog.d/`. A feature branch MUST NOT edit `CHANGELOG.md`,
+  because a shared file conflicts on every parallel rebase. See
+  `changelog.d/README.md`.
 
 ### Audience Standard
 

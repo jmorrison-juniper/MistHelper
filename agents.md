@@ -60,7 +60,8 @@ run the tests again. See issue #1866.
 - **SpecKit agents**: Use `speckit.specify` / `speckit.plan` / `speckit.tasks` / `speckit.implement`
   for multi-file changes (see copilot-instructions.md for escalation criteria)
 - **Copilot Spaces**: Use for planning sessions and architecture discussions --
-  attach `agents.md`, `MistHelper.py`, and `CHANGELOG.md` for persistent context
+  attach `agents.md`, `MistHelper.py`, and `CHANGELOG.md` for persistent context.
+  Read `CHANGELOG.md` there. Never edit it on a feature branch.
 - **Scratchpads**: Use for quick API exploration and prototyping -- no git, discard after use
 - **Memory**: Store codebase facts in `/memories/repo/` for cross-session persistence
 
@@ -73,10 +74,21 @@ run the tests again. See issue #1866.
 - **Natural business keys**: Define PK strategy in `ENDPOINT_PRIMARY_KEY_STRATEGIES` for new operations
 - **ASCII only in logs**: No Unicode/emoji
 - **File paths**: Use `os.path.join()` or `pathlib.Path()`, never hardcoded separators
-- **Container**: Podman primary, port 2200 (SSH), port 8055 (web UI)
-- **Zscaler**: Zscaler blocks a `podman push` to `ghcr.io`. Build and run the image
-  locally with `podman build` and `podman run`. Use GitHub Actions only when the
-  registry must hold the image, such as a release.
+- **Release notes**: Add one unique fragment under `changelog.d/`, named for the
+  pull request, the issue, or the date. Never edit `CHANGELOG.md` on a feature
+  branch, because every branch then conflicts on the same lines. See
+  `changelog.d/README.md`.
+- **Container**: Podman primary, port 2200 (SSH), port 8055 (web UI).
+- **Test containers**: A container started for a test, a debug session, or an
+  end-to-end run joins the compose group. Never start a one-off container with a
+  bare `podman run`. Name an ephemeral container
+  `misthelper-tmp-<issue|pr><number>-<slug>`. Publish a port in the range 9600
+  through 9699. Never publish a production local port. Remove the container when
+  the test ends. See `documentation/container-deployment.md`
+  § "Test and debug containers".
+- **Zscaler**: Zscaler blocks a `podman push` to `ghcr.io`. Build the image
+  locally with `podman build`, and start it with `.\scripts\compose.ps1`. Use
+  GitHub Actions only when the registry must hold the image, such as a release.
 - **Actions minutes**: MistHelper is public, so a standard runner costs nothing.
   A private repository spends the 2,000 free minutes each month. Validate locally
   first. Never push a commit only to start a workflow. See

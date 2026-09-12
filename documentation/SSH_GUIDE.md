@@ -184,10 +184,25 @@ To modify SSH settings, edit the Containerfile and rebuild:
 3. Restart with SSH: `python run-misthelper.py --ssh`
 
 ### Port Forwarding
-To use a different host port:
-```bash
-podman run -p 2222:2200 misthelper
+`compose.yml` publishes the SSH port as `2200:2200`. To use a different host
+port, add a compose override file that remaps the host side, then start the
+service through the helper script:
+```yaml
+# compose.override.yml
+services:
+  misthelper:
+    ports:
+      - "2222:2200"
 ```
+
+Caution: if you need the SSH port for a test or for a debug session, obey the
+"Test and debug containers" policy in
+`documentation/container-deployment.md`. Start the container inside the compose
+group, name it `misthelper-tmp-<issue|pr><number>-<slug>`, publish a port in
+the range 9600 through 9699, and remove the container when the test ends. Never
+start a one-off container with a bare `podman run`, and never publish a
+production local port. Those ports are 1161/udp, 1514/udp, 2200, 8055, 8056,
+8057, 8668, 9379, 9526, and 9529.
 
 ### Network Access
 For remote access from other machines, ensure:

@@ -99,7 +99,7 @@ MistHelper uses **natural business keys** from the Mist API, not artificial IDs.
 3. **Flatten JSON**: Use existing `flatten_dict()` helpers for nested structures
 4. **Multi-Backend Output**: Call `DataExporter.write_with_format_selection(data, filename, api_function_name=...)`
 5. **Update README**: Modify operation count and add to menu table
-6. **Version Changelog**: Update `CHANGELOG.md` with `version YY.MM.DD.HH.MM` format (UTC timestamp)
+6. **Release Note**: Add one new fragment file under `changelog.d/`. Never edit `CHANGELOG.md` on a feature branch. See [Release notes](#release-notes-each-change-owns-one-fragment)
 7. **Git Workflow**: Follow [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md)
 
 ### Validate locally, then push once
@@ -137,6 +137,11 @@ builds here in one minute. A registry build spends runner minutes, and the
 account holds a fixed balance each month. Pull
 `ghcr.io/jmorrison-juniper/misthelper:latest` only when you need the exact
 image that a release produced.
+
+Every container that you start for a test, for a debug session, or for an
+end-to-end run obeys four rules. The "Test and Debug Containers" section below
+holds them. Start it in the compose group. Name it for its issue or its pull
+request. Keep it off a production local port. Remove it when the test ends.
 
 ### Automated Sweep Safety
 
@@ -271,6 +276,96 @@ FAST_MODE_MAX_CONCURRENT_CONNECTIONS=8  # Environment tunable
 
 ## Container & SSH Architecture
 
+### Test and Debug Containers (NON-NEGOTIABLE)
+
+This policy covers every container that you start for a test, for a debug
+session, or for an end-to-end run. Issue #2059 records the collision that
+created the policy. A second project took the vendor default port, and the
+upgrade portal then read a foreign database as its own store.
+
+**Rule 1. Start the container inside the compose group.**
+
+Never start a one-off container outside the group. A container outside the
+group joins no project network, so it cannot reach `misthelper-arangodb` or
+`misthelper-redis` by name. Use one of these three forms.
+
+```powershell
+.\scripts\compose.ps1 run --rm misthelper python -m pytest tests/<file>
+.\scripts\compose.ps1 --profile test up -d
+.\scripts\compose.ps1 up -d --no-deps misthelper
+```
+
+If a test needs a new service, add the service to `compose.yml` under a
+profile. A profile keeps the service out of the normal `up`. Do not replace
+the service with a bare `podman run`.
+
+**Rule 2. Name an ephemeral container for its issue or its pull request.**
+
+An ephemeral container serves one investigation and then goes away. Its name
+states the reason it exists. Use this format for the container, the volume, and
+the network.
+
+```text
+misthelper-tmp-<issue|pr><number>-<slug>
+```
+
+For example, `misthelper-tmp-issue2059-portcheck`. A reader who finds the
+container three days later can open the issue and learn why it runs. Keep the
+`misthelper` prefix, because the guardrail test
+`tests/guardrails/test_compose_naming_policy.py` reads that prefix.
+
+**Rule 3. Never publish a production local port.**
+
+These ports belong to the production local stack. An ephemeral container must
+not publish one of them.
+
+| Port | Owner |
+| - | - |
+| 1161/udp | The SNMP service |
+| 1514/udp | The Observium syslog receiver |
+| 2200 | The SSH runner |
+| 8055 | The Gunicorn web UI |
+| 8056 | The upgrade capture portal |
+| 8057 | The metrics gateway |
+| 8668 | The Observium web interface |
+| 9379 | Redis |
+| 9526 | The RedisInsight web UI |
+| 9529 | ArangoDB |
+
+Read `compose.yml` before you pick a port. That file is the source of truth,
+and the table above can drift.
+
+Publish an ephemeral port in the range 9600 through 9699 instead. That range
+sits inside the policy range 1000 through 10000, and it holds no production
+service. Bind the port to `127.0.0.1`.
+
+Warning: an ephemeral container that publishes 9529 or 9379 takes the port
+from the running store. The portal then writes a capture into the wrong
+database, and the operator loses the upgrade record.
+
+**Rule 4. Remove the container when the test ends.**
+
+Never leave a test container running. A stopped container still holds its
+image layers, its volume, and its log file. Run the cleanup in the same session
+that started the container.
+
+```powershell
+.\scripts\compose.ps1 rm -s -f <the test service>
+podman rm -f misthelper-tmp-<issue|pr><number>-<slug>
+podman volume rm misthelper-tmp-<issue|pr><number>-<slug>
+podman ps -a --filter "name=misthelper-tmp-" --format "{{.Names}} {{.Status}}"
+podman volume ls --filter "name=misthelper-tmp-" --format "{{.Name}}"
+```
+
+The last two commands confirm the cleanup. An empty result from each one means
+the cleanup finished. Read `podman system df` when you want the reclaimed space.
+
+Warning: never run `podman volume prune`, and never pass `-v` to a compose
+`down` command. Both remove `misthelper-arangodb-data` and
+`misthelper-redis-data`. Those two volumes hold every capture and every upgrade
+run, and a removed volume is not recoverable. Remove a test volume by name
+instead.
+
 ### Container Registry & CI/CD
 - **Registry**: `ghcr.io/jmorrison-juniper/misthelper`
 - **Build Workflow**: `.github/workflows/container-build.yml`
@@ -403,7 +498,8 @@ See [coding-standards.instructions.md](instructions/coding-standards.instruction
 | File | Purpose |
 |------|---------|
 | `MistHelper.py` | Entrypoint and menu registry (6,054 lines; `src/` holds 123,785 across 360 files) |
-| `CHANGELOG.md` | Version history (Keep a Changelog format) |
+| `CHANGELOG.md` | Released version history (Keep a Changelog format). The release coordinator owns it. |
+| `changelog.d/` | One release-note fragment for each change. Add your file here. |
 | `agents.md` | VS Code Chat agent supplement (points here) |
 | `README.md` | User-facing operations guide |
 | `SSH_GUIDE.md` | SSH runner detailed usage |
@@ -489,12 +585,54 @@ Follows `.github/copilot-instructions.md` automatically. Cannot run `--test` (no
 
 **Scratchpads**: Throwaway exploration. No git. Discard after use.
 
+### Release notes: each change owns one fragment
+
+`CHANGELOG.md` holds more than 5,000 lines, and every change added its entry at
+the top of the same `## [Unreleased]` section. Each open pull request therefore
+touched the same lines, and every rebase reported a conflict. One unique file for
+each change removes that shared line.
+
+Add one new Markdown file under `changelog.d/` for a user-visible change. Use the
+first name rule that fits.
+
+| Condition | File name | Example |
+| - | - | - |
+| The pull request exists. | `pr-<number>.md` | `pr-2451.md` |
+| The issue exists, and the pull request does not. | `issue-<number>-<slug>.md` | `issue-2439-dashboard-summary.md` |
+| No issue and no pull request exist. | `<YYYY-MM-DD>-<slug>.md` | `2026-09-11-token-refresh.md` |
+
+Write one `###` heading and one bullet for each change type. Use `Added`,
+`Changed`, `Fixed`, `Removed`, or `Security`. Name the issue in the bullet. A
+fragment carries no version number, because the release coordinator writes the
+`version YY.MM.DD.HH.MM` heading at release time.
+
+Obey these rules.
+
+1. Edit your own fragment only.
+2. Do not edit `CHANGELOG.md` on a feature branch.
+3. Do not edit the fragment of another change.
+4. Add no fragment for an internal-only change. State that reason in the pull
+   request body.
+5. Create no index file and no summary file under `changelog.d/`.
+
+Only the release coordinator moves the merged fragments into `CHANGELOG.md`, on
+the release branch, after the feature merges. The coordinator deletes the
+fragments in that release only.
+
+[`changelog.d/README.md`](../changelog.d/README.md) holds the full rule and an
+example fragment.
+
 ### Conflict Resolution Playbook
 
 See [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md)
 § "When the same files keep conflicting" for the three strategies and the rules.
 One MistHelper addition: paste both versions into chat and let Copilot propose
 the resolution.
+
+Warning: never resolve a `CHANGELOG.md` conflict by deleting the entry of another
+change. That delete removes a released record, and no gate reports the loss. Move
+each conflicting entry into its own fragment under `changelog.d/`, then resolve
+the rest of the difference.
 
 ### Agent Observability & Efficiency
 
@@ -556,6 +694,10 @@ for the full rules. The short list:
 - Run `git checkout` while VS Code has files open (use worktrees instead)
 - Skip `python -m py_compile`, `ruff check`, or `black --check` before committing
 - Push a commit only to make a workflow build a container that Podman builds here
+- Start a test container outside the compose group with a bare `podman run`
+- Publish a production local port (1161/udp, 1514/udp, 2200, 8055, 8056, 8057,
+  8668, 9379, 9526, 9529) from a test container
+- Leave a test container running after the test ends
 
 ---
 
@@ -716,7 +858,7 @@ When implementing a Feature Spec, AI agents must follow this protocol:
 6. **Add/modify tests** to meet unit + property requirements and maintain >= 80% coverage.
 7. **Update `deploy/.env.example`** if introducing new environment variables.
 8. **For UI features**: open the Gunicorn page using browser agent tools, interact to validate behavior, generate Playwright tests, save to `tests/e2e/`.
-9. **Prepare the PR** using the PR template; include `Closes #<issue-number>`, link the Spec, and complete all checklist items.
+9. **Prepare the PR** using the PR template; include `Closes #<issue-number>`, link the Spec, add the `changelog.d/` fragment for a user-visible change, and complete all checklist items.
 10. **Ensure CI is green**: Ruff, mypy, pytest+cov, Hypothesis, Bandit, pip-audit, CodeQL, Playwright E2E.
 11. **Add the `auto-merge` label** once all checks pass.
 12. **Do not skip deployment steps**: the release tag publishes host bundle + wheel and pushes the GHCR image.
