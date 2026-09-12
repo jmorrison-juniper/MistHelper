@@ -1,13 +1,10 @@
-"""Test the compose warnings that issue #2272 asked for.
+"""Test the compose separation that issue #2272 asked for.
 
-`podman-compose up -d` with no service argument builds the application image
-from the working tree and overwrites the published tag with that build. The
-build prints no line that names it.
+The old `compose.yml` held an application build section. Therefore, a plain
+`podman-compose up -d` could overwrite the published tag with a local build.
 
-Warning: if the checkout is behind `main`, that command downgrades the running
-container and clears the labels that name the commit. One measured run replaced
-the image of commit `6eb253f7` with a build of commit `6095392c`, and the
-running code lost a firmware repair.
+The application build section now lives in `compose.build.yml`. The helper
+script reads that file only when an operator requests a local build.
 
 The header of `compose.yml` once stated the opposite. It said that naming the
 image stops a local build, and it does not. These tests hold the correction in
@@ -21,10 +18,12 @@ from pathlib import Path
 
 import pytest
 
-# The two files that carry the warning.
+# The three files that carry the repair, and the script that enforces it.
 _ROOT = Path(__file__).resolve().parents[3]
 _COMPOSE = _ROOT / "compose.yml"
+_COMPOSE_BUILD = _ROOT / "compose.build.yml"
 _GUIDE = _ROOT / "documentation" / "container-deployment.md"
+_SCRIPT = _ROOT / "scripts" / "compose.ps1"
 
 # The sentence that the old header carried. It is false under podman-compose, so
 # no file may state it again.
@@ -49,6 +48,24 @@ def fixture_guide_text() -> str:
     return text
 
 
+@pytest.fixture(name="compose_build_text", scope="module")
+def fixture_compose_build_text() -> str:
+    """Read the build file that holds the build section."""
+    logging.info("Reading the build file at %s", _COMPOSE_BUILD)  # Report the read before the work.
+    text = _COMPOSE_BUILD.read_text(encoding="utf-8")
+    logging.debug("The build file holds %d characters", len(text))  # Record the size.
+    return text
+
+
+@pytest.fixture(name="script_text", scope="module")
+def fixture_script_text() -> str:
+    """Read the helper script that enforces the split."""
+    logging.info("Reading the helper script at %s", _SCRIPT)  # Report the read before the work.
+    text = _SCRIPT.read_text(encoding="utf-8")
+    logging.debug("The script holds %d characters", len(text))  # Record the size.
+    return text
+
+
 def test_the_compose_header_never_repeats_the_retired_claim(compose_text: str) -> None:
     """The header MUST NOT claim that the image key stops a local build.
 
@@ -61,8 +78,8 @@ def test_the_compose_header_never_repeats_the_retired_claim(compose_text: str) -
     assert _RETIRED_CLAIM not in compose_text, "the compose header must not repeat the retired claim"
 
 
-def test_the_compose_header_warns_about_the_rebuild(compose_text: str) -> None:
-    """The header MUST warn that a plain `up` rebuilds and overwrites the tag."""
+def test_the_compose_header_warns_about_a_combined_build(compose_text: str) -> None:
+    """The header MUST warn that a compose build section can overwrite the tag."""
     logging.info("Checking the rebuild warning of the compose header")  # Report the plan.
 
     assert "does not stop a rebuild" in compose_text, "the header must state that a rebuild still happens"
@@ -90,11 +107,44 @@ def test_the_compose_header_names_the_revision_check(compose_text: str) -> None:
     assert "org.opencontainers.image.revision" in compose_text, "the header must name the label"
 
 
-def test_the_guide_warns_about_the_rebuild(guide_text: str) -> None:
-    """The guide MUST warn that a plain `up` rebuilds."""
-    logging.info("Checking the rebuild warning of the guide")  # Report the plan.
+def test_the_compose_file_carries_no_build_section(compose_text: str) -> None:
+    """The compose file MUST NOT carry a build section.
 
-    assert "Warning: a plain `up` rebuilds." in guide_text, "the guide must carry the warning"
+    Why:
+        podman-compose builds every service that holds a build section when a
+        plain `up` runs. A build section in this file can therefore overwrite
+        the published tag with a local build.
+    """
+    logging.info("Checking that the compose file holds no build section")  # Report the plan.
+
+    assert "build:" not in compose_text, "the compose file must not hold a build section; move it to compose.build.yml"
+
+
+def test_the_build_file_holds_the_build_section(compose_build_text: str) -> None:
+    """The build file MUST hold the build section that the compose file lost."""
+    logging.info("Checking the build section of the build file")  # Report the plan.
+
+    assert "context: ." in compose_build_text, "the build file must name the build context"
+    assert "dockerfile: Containerfile" in compose_build_text, "the build file must name the build file"
+
+
+def test_the_script_builds_only_through_the_build_file(script_text: str) -> None:
+    """The script MUST build through the build file, and it MUST offer the revision check."""
+    logging.info("Checking the build and revision paths of the helper script")  # Report the plan.
+
+    assert "compose.build.yml" in script_text, "the build subcommand must load the build file"
+    assert "check-revision" in script_text, "the script must offer the revision check"
+    revision_message = "the revision check must read the label that names the commit"  # Explain the required label.
+    assert "org.opencontainers.image.revision" in script_text, revision_message  # Hold the revision check in place.
+
+
+def test_the_guide_names_the_build_separation(guide_text: str) -> None:
+    """The guide MUST state that a plain `up` cannot build the application image."""
+    logging.info("Checking the build separation in the guide")  # Report the plan.
+
+    assert "A plain `up`" in guide_text, "the guide must name the default command"
+    assert "cannot build the application image" in guide_text, "the guide must state the safe result"
+    assert "Warning: a plain `up` rebuilds." not in guide_text, "the guide must not repeat the old behavior"
     assert "#2272" in guide_text, "the guide must cite the measurement"
 
 
@@ -110,9 +160,8 @@ def test_the_guide_updates_the_checkout_before_the_pull(guide_text: str) -> None
     """The update recipe MUST pull the code before it pulls the image.
 
     Why:
-        A plain `up` builds from the working tree, so a stale checkout is the
-        source of the downgrade. The recipe therefore updates the checkout
-        first, and the order carries that meaning.
+        An explicit local build reads the working tree. The recipe updates the
+        checkout first, so a later local build does not use old code.
     """
     logging.info("Checking the order of the update recipe")  # Report the plan.
     checkout = guide_text.index("git pull")
