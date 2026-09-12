@@ -622,6 +622,23 @@
     align-items: center;
 }
 
+.bulk-preview-dialog {
+    width: min(42rem, calc(100vw - 2rem));
+    max-width: calc(100vw - 2rem);
+    max-height: calc(100vh - 2rem);
+    overflow: auto;
+}
+
+.bulk-preview-input {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+}
+
+[data-bulk-action-result] {
+    overflow-wrap: anywhere;
+}
+
 /* ==========================================================================
  * 7. Buttons
  * ========================================================================== */

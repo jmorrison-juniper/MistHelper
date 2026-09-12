@@ -25,6 +25,13 @@ import pytest
 from src.refactors.endpoint_primary_key_strategies import (  # Read the registered action domain key.
     ENDPOINT_PRIMARY_KEY_STRATEGIES,
 )
+from src.upgrade_portal.api.run_controls.services import (
+    BulkRunActionService,
+    RetryCopyPolicy,
+    RetryPolicyError,
+    SiteMutationGuard,
+)
+from src.upgrade_portal.api.run_controls.services.retry import OPTION_FIELDS
 from src.upgrade_portal.capture import store as capture_store  # Verify the existing export boundary unchanged.
 from src.upgrade_portal.persistence.actions import (  # Exercise immutable action records without a live store.
     ActionIdentity,
@@ -49,6 +56,8 @@ from src.upgrade_portal.runtime.runs import (
     RunStateMachine,
     RunTransitionError,
 )
+from tests.support.upgrade_portal_e2e.records.actions import ActionRecordStore
+from tests.support.upgrade_portal_e2e.records.portal import PortalRecordStore
 
 # WHY: The twenty required fields of data-model.md section 4, lines 219 to 236.
 # The test carries its own copy, so a field dropped from the module fails here.
@@ -1227,3 +1236,244 @@ def test_existing_run_export_still_uses_data_exporter(monkeypatch: pytest.Monkey
     assert RecordingExporter.calls == [  # Preserve the existing file and operation names.
         ("upgrade_run_run-one.csv", capture_store.RUN_OPERATION),  # Keep the current DataExporter route.
     ]
+
+
+def test_bulk_cancel_processes_stable_sites_and_stops_one_site_after_token_loss() -> None:
+    """A site guard loss blocks later site writes and does not stop another site."""
+    portal = PortalRecordStore("unit-bulk-cancel")
+    for run_id, site_id in (("run-b", "site-b"), ("run-a2", "site-a"), ("run-a1", "site-a")):
+        portal.write_run(
+            {
+                "run_id": run_id,
+                "org_id": "org-one",
+                "site_id": site_id,
+                "state": "awaiting_confirmation",
+                "updated_at": "2026-09-11T13:00:00+00:00",
+            }
+        )
+    actions = ActionRecordStore("unit-bulk-cancel", portal)
+    guard_reads: list[str] = []
+
+    def permission(_organization_id: str, site_id: str) -> bool:
+        guard_reads.append(site_id)
+        return True
+
+    guard = SiteMutationGuard(
+        permission,
+        lambda _org, site_id: {"lock_token": "changed" if site_id == "site-a" else "token-b"},
+        {"site-a": "token-a", "site-b": "token-b"},
+    )
+    service = BulkRunActionService(
+        actions,
+        portal.read_run,
+        guard,
+        clock=lambda: datetime.fromisoformat(ACTION_TIME),
+    )
+    preview = {
+        "preview_id": "preview-one",
+        "organization_id": "org-one",
+        "history_scope": "all-sites",
+        "run_ids": ["run-b", "run-a2", "run-a1"],
+        "run_count": 3,
+        "site_count": 2,
+        "site_counts": {"site-b": 1, "site-a": 2},
+        "expires_at": LEASE_TIME,
+    }
+
+    result = service.cancel(
+        actor=DurableActorScope.build("email", "operator@example.invalid"),
+        idempotency_key="bulk-cancel-key-0001",
+        confirmation="CANCEL 3 RUNS",
+        preview=preview,
+    )
+
+    assert [item.source_run_id for item in result.items] == ["run-b", "run-a2", "run-a1"]
+    assert result.item("run-a2").reason == "site_lock_token_changed"
+    assert result.item("run-a1").reason == "not_processed_after_site_guard_loss"
+    assert result.item("run-b").reason == "precloud_run_cancelled"
+    assert portal.read_run("run-b")["state"] == "cancelled"
+    assert portal.read_run("run-a1")["state"] == "awaiting_confirmation"
+    assert guard_reads == ["site-a", "site-b"]
+
+
+def test_retry_policy_selects_newest_source_by_time_then_run_id() -> None:
+    """The retry policy uses the update time and then the run identifier."""
+    policy = RetryCopyPolicy(datetime.fromisoformat(ACTION_TIME))
+    records = (
+        {
+            "run_id": "run-a",
+            "site_id": "site-one",
+            "state": "failed",
+            "updated_at": "2026-09-11T13:00:00+00:00",
+        },
+        {
+            "run_id": "run-c",
+            "site_id": "site-one",
+            "state": "stopped",
+            "updated_at": "2026-09-11T13:30:00+00:00",
+        },
+        {
+            "run_id": "run-b",
+            "site_id": "site-one",
+            "state": "cancelled",
+            "updated_at": "2026-09-11T13:30:00+00:00",
+        },
+        {
+            "run_id": "run-z",
+            "site_id": "site-one",
+            "state": "complete",
+            "updated_at": "2026-09-11T13:59:00+00:00",
+        },
+    )
+
+    assert policy.newest_by_site(records) == {"site-one": "run-c"}
+
+
+def test_retry_policy_uses_the_exact_approved_top_level_allowlist() -> None:
+    """The retry policy accepts no top-level option outside the approved list."""
+    assert OPTION_FIELDS == {
+        "reboot",
+        "junos_file_action",
+        "strategy",
+        "force",
+        "stable_version",
+        "canary",
+        "rrm",
+        "peer_to_peer",
+        "ssr",
+        "schedule",
+    }
+
+
+@pytest.mark.parametrize("updated_at", [None, "not-a-time", "2026-09-11T15:00:00+00:00"])
+def test_retry_policy_refuses_an_unknown_source_time(updated_at: str | None) -> None:
+    """A missing, invalid, or future source time cannot select a retry."""
+    policy = RetryCopyPolicy(datetime.fromisoformat(ACTION_TIME))
+
+    with pytest.raises(RetryPolicyError, match="retry_source_time_unknown"):
+        policy.source_time({"updated_at": updated_at})
+
+
+def test_retry_policy_applies_the_exact_allowlist_and_existing_validator() -> None:
+    """The retry policy rejects unknown fields and invalid approved values."""
+    policy = RetryCopyPolicy(datetime.fromisoformat(ACTION_TIME))
+    valid = {
+        "options": {
+            "reboot": True,
+            "strategy": "big_bang",
+            "canary": {"max_failure_percentage": None},
+            "schedule": {"start_time_after": 60, "reboot_at_after": 120},
+        }
+    }
+    copied = policy.copy_options(valid)
+    assert copied["schedule"]["start_time_after"] == 60
+    assert copied["start_time"] == int(datetime.fromisoformat(ACTION_TIME).timestamp()) + 60
+    with pytest.raises(RetryPolicyError, match="retry_options_unsupported"):
+        policy.copy_options({"options": {"pre_capture_id": "capture-one"}})
+    with pytest.raises(RetryPolicyError, match="retry_options_unsupported"):
+        policy.copy_options({"options": {"schedule": {"start_time_after": 60, "absolute": 1}}})
+    with pytest.raises(RetryPolicyError, match="retry_options_invalid"):
+        policy.copy_options({"options": {"strategy": "not-a-strategy"}})
+
+
+def test_bulk_retry_creates_only_the_newest_source_and_copies_safe_fields() -> None:
+    """A bulk retry creates one fresh run for the newest source of one site."""
+    portal = PortalRecordStore("unit-bulk-retry")
+    for run_id, updated_at in (
+        ("run-old", "2026-09-11T12:00:00+00:00"),
+        ("run-new", "2026-09-11T13:00:00+00:00"),
+    ):
+        portal.write_run(
+            {
+                "run_id": run_id,
+                "org_id": "org-one",
+                "site_id": "site-one",
+                "state": "failed",
+                "updated_at": updated_at,
+                "targets": [{"device_id": run_id}],
+                "options": {"strategy": "big_bang", "reboot": True},
+                "pre_capture_id": "must-not-copy",
+            }
+        )
+    actions = ActionRecordStore("unit-bulk-retry", portal)
+    service = BulkRunActionService(
+        actions,
+        portal.read_run,
+        SiteMutationGuard(lambda _org, _site: True, lambda _org, _site: {"lock_token": "token"}, {"site-one": "token"}),
+        portal.runs_for_site,
+        lambda _source, targets, options: {
+            "run_id": "run-retry",
+            "site_id": "site-one",
+            "state": "created",
+            "targets": targets,
+            "options": dict(options),
+        },
+        clock=lambda: datetime.fromisoformat(ACTION_TIME),
+    )
+    preview = {
+        "preview_id": "preview-retry",
+        "organization_id": "org-one",
+        "history_scope": "all-sites",
+        "run_ids": ["run-old", "run-new"],
+        "site_count": 1,
+    }
+
+    result = service.retry(
+        actor=DurableActorScope.build("email", "operator@example.invalid"),
+        idempotency_key="bulk-retry-key-0001",
+        confirmation="RETRY 2 RUNS",
+        preview=preview,
+    )
+
+    assert result.item("run-old").reason == "site_duplicate_retry_source"
+    assert result.item("run-new").reason == "retry_created"
+    created = portal.read_run("run-retry")
+    assert created is not None
+    assert created["targets"] == [{"device_id": "run-new"}]
+    assert created["options"]["strategy"] == "big_bang"
+    assert "pre_capture_id" not in created
+
+
+def test_bulk_retry_refuses_a_current_live_run_without_creating_another() -> None:
+    """A fresh live-run check returns its identifier and creates no retry."""
+    portal = PortalRecordStore("unit-bulk-retry-live")
+    portal.write_run(
+        {
+            "run_id": "run-source",
+            "org_id": "org-one",
+            "site_id": "site-one",
+            "state": "stopped",
+            "updated_at": "2026-09-11T13:00:00+00:00",
+            "targets": [],
+            "options": {},
+        }
+    )
+    portal.write_run({"run_id": "run-live", "site_id": "site-one", "state": "upgrade_running"})
+    actions = ActionRecordStore("unit-bulk-retry-live", portal)
+    builder_calls: list[str] = []
+    service = BulkRunActionService(
+        actions,
+        portal.read_run,
+        SiteMutationGuard(lambda _org, _site: True, lambda _org, _site: {"lock_token": "token"}, {"site-one": "token"}),
+        portal.runs_for_site,
+        lambda source, _targets, _options: builder_calls.append(str(source["run_id"])) or {"run_id": "run-retry"},
+        clock=lambda: datetime.fromisoformat(ACTION_TIME),
+    )
+    preview = {
+        "preview_id": "preview-retry",
+        "organization_id": "org-one",
+        "history_scope": "all-sites",
+        "run_ids": ["run-source"],
+        "site_count": 1,
+    }
+
+    result = service.retry(
+        actor=DurableActorScope.build("email", "operator@example.invalid"),
+        idempotency_key="bulk-retry-key-0002",
+        confirmation="RETRY 1 RUNS",
+        preview=preview,
+    )
+
+    assert result.item("run-source").reason == "upgrade_already_running"
+    assert result.item("run-source").completion.live_run_id == "run-live"
+    assert builder_calls == []

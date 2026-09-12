@@ -120,42 +120,42 @@ an action. It cannot lose an item outcome.
 
 **Goal**: Store each cancel or reconciliation result durably.
 
-- [ ] T070 Write cancel, site guard, and outcome-only unit tests.
-- [ ] T071 Write reconciliation decision tests for pre-cloud and `stopping` runs.
-- [ ] T072 Write cancel and reconciliation integration tests.
-- [ ] T073 Implement the permission and exact lock-token recheck.
-- [ ] T074 Implement stable site processing and the durable site stop rule.
-- [ ] T075 Implement the cancel transaction with verified persistence.
-- [ ] T076 Implement `TargetEvidence`, `ReconciliationEvidence`, and `ReconciliationEvidenceSummary` with the required types, null rules, safe fields, and canonical serializer.
-- [ ] T077 Implement the single-run reconciliation action initializer with no preview dependency.
-- [ ] T078 Implement the atomic reconciliation transaction and outcome-only paths. Store the summary and matching action digest in the same write unit.
-- [ ] T079 Implement cancel and reconciliation routes.
-- [ ] T080 Add reconciliation controls and results to the run page.
-- [ ] T081 Add browser cancel and reconciliation tests.
+- [x] T070 Write cancel, site guard, and outcome-only unit tests.
+- [x] T071 Write reconciliation decision tests for pre-cloud and `stopping` runs.
+- [x] T072 Write cancel and reconciliation integration tests.
+- [x] T073 Implement the permission and exact lock-token recheck.
+- [x] T074 Implement stable site processing and the durable site stop rule.
+- [x] T075 Implement the cancel transaction with verified persistence.
+- [x] T076 Implement `TargetEvidence`, `ReconciliationEvidence`, and `ReconciliationEvidenceSummary` with the required types, null rules, safe fields, and canonical serializer.
+- [x] T077 Implement the single-run reconciliation action initializer with no preview dependency.
+- [x] T078 Implement the atomic reconciliation transaction and outcome-only paths. Store the summary and matching action digest in the same write unit.
+- [x] T079 Implement cancel and reconciliation routes.
+- [x] T080 Add reconciliation controls and results to the run page.
+- [x] T081 Add browser cancel and reconciliation tests.
 
 ## Phase 8: Atomic Retry
 
 **Goal**: Copy only valid options and preserve one live run for each site.
 
-- [ ] T082 Write retry source time, allowlist, validator, winner, and live-run tests.
-- [ ] T083 Write retry API reason and response contracts.
-- [ ] T084 Write concurrent retry, rollback, outcome-only, and crash-recovery integration tests.
-- [ ] T085 Implement `RetryCopyPolicy`.
-- [ ] T086 Implement the live-run check, retry insert, and successful outcome transaction.
-- [ ] T087 Add retry processing to the durable bulk service.
-- [ ] T088 Add retry result links and fresh pre-check navigation.
-- [ ] T089 Add browser retry tests.
+- [x] T082 Write retry source time, allowlist, validator, winner, and live-run tests.
+- [x] T083 Write retry API reason and response contracts.
+- [x] T084 Write concurrent retry, rollback, outcome-only, and crash-recovery integration tests.
+- [x] T085 Implement `RetryCopyPolicy`.
+- [x] T086 Implement the live-run check, retry insert, and successful outcome transaction.
+- [x] T087 Add retry processing to the durable bulk service.
+- [x] T088 Add retry result links and fresh pre-check navigation.
+- [x] T089 Add browser retry tests.
 
 ## Phase 9: Browser Lifecycle and Persistent-Store Proof
 
 **Goal**: Prove browser behavior without persistent data changes.
 
-- [ ] T090 Add browser tests for reload, navigation, two tabs, session renewal, another actor, response loss, keyboard use, and three viewports.
-- [ ] T091 Add browser header and trap assertions.
-- [ ] T092 Complete focus, alert, dialog, and narrow viewport behavior.
-- [ ] T093 Reverify the backup and record its freshness before the full E2E and deployment sequence.
-- [ ] T094 Record the persistent run, action, and audit baselines before the full E2E suite.
-- [ ] T095 Run the complete `tests/e2e/upgrade_portal` suite with strict mode and all traps active.
+- [x] T090 Add browser tests for reload, navigation, two tabs, session renewal, another actor, response loss, keyboard use, and three viewports.
+- [x] T091 Add browser header and trap assertions.
+- [x] T092 Complete focus, alert, dialog, and narrow viewport behavior.
+- [x] T093 Reverify the backup and record its freshness before the full E2E and deployment sequence.
+- [x] T094 Record the persistent run, action, and audit baselines before the full E2E suite.
+- [x] T095 Run the complete `tests/e2e/upgrade_portal` suite with strict mode and all traps active.
 - [ ] T096 Compare persistent run, action, and audit counts with the T094 baseline immediately after the suite.
 - [ ] T097 Stop the workflow and create an issue if any persistent count changed.
 
