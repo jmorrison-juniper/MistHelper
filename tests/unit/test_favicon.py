@@ -42,6 +42,14 @@ def _assert_favicon(client: Any, page_path: str) -> None:
     assert icon.data.startswith(b"<svg")  # Confirm the response contains the expected SVG document.
 
 
+def _assert_favicon_ico(client: Any) -> None:
+    """Check the icon path that a client requests without reading the markup."""
+    icon = client.get("/favicon.ico")  # Request the path that a crawler and an older browser use.
+    assert icon.status_code == 200  # Issue #2495: this path answered 404 before the route existed.
+    assert icon.content_type.startswith("image/svg+xml")  # Require the media type that the browser reads.
+    assert icon.data.startswith(b"<svg")  # Confirm the portal served the shipped icon document.
+
+
 def test_main_portal_declares_and_serves_favicon(main_portal: Flask) -> None:
     """The main portal must serve the favicon that its base template declares."""
     _assert_favicon(main_portal.test_client(), "/")  # Exercise the main portal through its real test fixture.
@@ -52,3 +60,15 @@ def test_upgrade_portal_declares_and_serves_favicon() -> None:
     app = factory.create_app()  # Build the production upgrade portal without a network request.
     app.config["TESTING"] = True  # Surface unexpected route errors directly during the focused test.
     _assert_favicon(app.test_client(), "/auth/signin")  # Exercise a public page that extends the layout.
+
+
+def test_main_portal_serves_favicon_ico(main_portal: Flask) -> None:
+    """The main portal must answer `/favicon.ico` for a client that reads no markup."""
+    _assert_favicon_ico(main_portal.test_client())  # Exercise the main portal through its real test fixture.
+
+
+def test_upgrade_portal_serves_favicon_ico() -> None:
+    """The upgrade portal must answer `/favicon.ico` for a client that reads no markup."""
+    app = factory.create_app()  # Build the production upgrade portal without a network request.
+    app.config["TESTING"] = True  # Surface unexpected route errors directly during the focused test.
+    _assert_favicon_ico(app.test_client())  # Exercise the route that the factory registers.

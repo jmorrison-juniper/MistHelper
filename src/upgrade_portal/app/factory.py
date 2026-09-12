@@ -37,6 +37,7 @@ from flask import (  # The web framework surface.
     has_request_context,
     jsonify,
     request,
+    send_from_directory,
 )
 
 from ..api.run_controls import E2EFactoryOverrides  # Type the complete test-only dependency set.
@@ -55,6 +56,8 @@ ROUTES_PACKAGE = __name__.rsplit(".", maxsplit=1)[0] + ".routes"  # A sibling pa
 ASSET_ROOT = Path(__file__).resolve().parent / "assets"  # The templates and the static files live together.
 TEMPLATE_FOLDER = str(ASSET_ROOT / "templates")  # Flask needs the folder as text.
 STATIC_FOLDER = str(ASSET_ROOT / "static")  # The vendored stylesheets and scripts.
+
+FAVICON_FILENAME = "favicon.svg"  # The one icon that the layout declares and this portal ships.
 
 # The five route modules match the five stages of the operator journey: sign in,
 # choose a site, capture the state, drive the upgrade, and review the difference.
@@ -327,6 +330,33 @@ def register_health(app: Flask) -> None:
             The status word and the portal version.
         """
         return jsonify({"status": "ok", "version": PORTAL_VERSION}), HEALTH_STATUS  # No database call.
+
+
+def register_favicon(app: Flask) -> None:
+    """Register the icon route that a client requests without the page markup.
+
+    Why:
+        The layout declares the icon with a `link` element, so a browser that
+        reads the page requests the SVG directly. A crawler, a bookmark tool,
+        and an older browser each request `/favicon.ico` and read no markup.
+        Without this route each one receives 404, and the portal log records a
+        refusal that no operator can act on. Issue #2495 holds that report.
+
+    Args:
+        app: The application to add the route to.
+    """
+
+    @app.get("/favicon.ico")  # The path that a client requests without reading the page.
+    def favicon() -> Response:
+        """Answer the icon request with the shipped SVG document.
+
+        Returns:
+            The icon file, with the SVG media type that the browser reads.
+        """
+        logger.info("Serve the portal icon for the favicon request")  # Record the action before the read.
+        answer = send_from_directory(STATIC_FOLDER, FAVICON_FILENAME)  # One asset, so no second copy can drift.
+        logger.debug("Served the portal icon as %s", FAVICON_FILENAME)  # Name the file that answered.
+        return answer  # Flask sends the file with the media type of its name.
 
 
 def probe_stamp() -> str:
@@ -872,6 +902,7 @@ def arm_application(
     PortalSecurity().apply(app, settings)  # The guards register first, so they run before any view.
     register_error_handlers(app)  # The JSON envelope must cover a fault the guards raise.
     register_health(app)  # The container probe needs this route from the first day.
+    register_favicon(app)  # A client that reads no markup still asks for the icon.
     register_readiness(app)  # The orchestrator readiness probe needs the store reading.
     register_teardown(app)  # Every request must release its sockets.
     register_theme_context(app)  # Without this the theme picker of the navigation changes nothing.

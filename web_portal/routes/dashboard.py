@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from heapq import nlargest
 from urllib.parse import urlsplit
 
-from flask import Blueprint, current_app, jsonify, render_template
+from flask import Blueprint, current_app, jsonify, render_template, send_from_directory
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -32,6 +32,24 @@ DEFAULT_REDIS_HOST = "misthelper-redis"
 DEFAULT_REDIS_PORT = 9379
 POLYGLOT_OUTPUT_FORMAT = "polyglot"
 SQLITE_OUTPUT_FORMATS = {"sqlite", "standalone"}
+
+FAVICON_FILENAME = "favicon.svg"  # The one icon that the base template declares and this portal ships.
+
+
+@dashboard_bp.route("/favicon.ico")
+def favicon():
+    """Answer the icon request with the shipped SVG document.
+
+    The base template declares the icon with a `link` element, so a browser
+    that reads the page requests the SVG directly. A crawler, a bookmark
+    tool, and an older browser each request this path and read no markup.
+    Without this route each one receives 404. Issue #2495 holds that report.
+    """
+    logging.info("Serving the portal icon for the favicon request")  # Record the action before the read.
+    static_folder = current_app.static_folder  # The folder that already serves every other asset.
+    answer = send_from_directory(static_folder, FAVICON_FILENAME)  # One asset, so no second copy can drift.
+    logging.debug("Served the portal icon as %s", FAVICON_FILENAME)  # Name the file that answered.
+    return answer  # Flask sends the file with the media type of its name.
 
 
 @dashboard_bp.route("/")
