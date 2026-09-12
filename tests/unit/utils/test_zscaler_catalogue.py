@@ -506,84 +506,258 @@ class TestEnsureFresh:
         assert result is refreshed
 
 
-def test_v2_cache_promotes_to_v3_shape_in_memory(caplog: pytest.LogCaptureFixture) -> None:
-    """A v2 (flat-string) cache is loaded and every host bag becomes a v3 dict.
+def _load_v2_fixture(name: str) -> dict[str, Any]:
+    """Load a legacy Zscaler cache fixture.
 
     Why:
-        Feature 1023 (contract ``cenr_cache_schema_v3.md``) requires the
-        loader adapter :func:`promote_cache_document` to convert existing
-        v2 on-disk caches into the v3 per-host object shape without any
-        refresh cycle. Regressing this would either crash menu 206 on load
-        of a legacy cache (breaking FR-006) or silently pass v2 strings
-        through to ``_probe_target``, which would then dispatch on the
-        wrong branch. Both cache kinds (CENR + ZCC) must be exercised so a
-        typo in ``kind=`` cannot silently drop half the fleet.
+        Promotion tests must start with v2 data so the adapter does real work.
     """
-    fixtures = Path(__file__).parent / "fixtures"  # v2 fixtures live alongside the test module
-    cenr_v2 = json.loads((fixtures / "zscaler_cenr_hostnames_v2.json").read_text(encoding="utf-8"))
-    zcc_v2 = json.loads((fixtures / "zscaler_client_connector_probes_v2.json").read_text(encoding="utf-8"))
-    # Pre-conditions: fixtures MUST be v2-shaped so the adapter has real work.
-    assert cenr_v2.get("schema_version") != 3  # ensure fixture is actually legacy
-    assert zcc_v2.get("schema_version") != 3  # ensure fixture is actually legacy
+    fixtures = Path(__file__).parent / "fixtures"  # Read fixtures that live beside this test module.
+    return json.loads((fixtures / name).read_text(encoding="utf-8"))  # Load the fixture as an editable dict.
 
-    with caplog.at_level("INFO", logger="src.utils.zscaler_catalogue"):
-        cenr_v3 = zc_mod.promote_cache_document(cenr_v2, kind="cenr")  # v2 -> v3
-        zcc_v3 = zc_mod.promote_cache_document(zcc_v2, kind="zcc")  # v2 -> v3
 
-    # Post: version stamped so re-load short-circuits without logging.
-    assert cenr_v3["schema_version"] == 3
-    assert zcc_v3["schema_version"] == 3
+def _promote_v2_fixture(name: str, kind: str, caplog: pytest.LogCaptureFixture) -> dict[str, Any]:
+    """Promote one legacy fixture and capture its log.
 
-    # Every top-level CENR host is now a dict of the v3 shape.
-    for bag_key in ("proxy_hostnames", "vpn_hostnames"):
-        bag = cenr_v3.get(bag_key) or []
-        assert bag, f"fixture CENR bag {bag_key} was empty; test is meaningless"
-        for entry in bag:
-            assert isinstance(entry, dict), f"non-dict entry in {bag_key}: {entry!r}"
-            assert "host" in entry and isinstance(entry["host"], str) and entry["host"]
-            # Observation fields absent per contract for a freshly-promoted entry.
-            assert "observed_protocol" not in entry or entry["observed_protocol"] is None
-            assert "observed_port" not in entry or entry["observed_port"] is None
-            assert "last_probed" not in entry or entry["last_probed"] is None
+    Why:
+        Each test needs the same precondition and the same INFO capture level.
+    """
+    legacy_doc = _load_v2_fixture(name)  # Load fresh data so tests do not share mutations.
+    assert legacy_doc.get("schema_version") != 3  # Prove the fixture is still legacy-shaped.
+    with caplog.at_level("INFO", logger="src.utils.zscaler_catalogue"):  # Capture the promotion notice.
+        promoted_doc = zc_mod.promote_cache_document(legacy_doc, kind=kind)  # Convert v2 cache data to v3 shape.
+    assert promoted_doc["schema_version"] == 3  # Prove the adapter stamped the v3 schema.
+    return promoted_doc  # Return the promoted document for focused assertions.
 
-    # Every per-city CENR host must also be promoted.
-    by_city = cenr_v3.get("by_city") or {}
-    assert by_city, "fixture must exercise the by_city bags too"
-    for city_slot in by_city.values():
-        if not isinstance(city_slot, dict):
-            continue
-        for bag_key in ("proxy_hostnames", "vpn_hostnames"):
-            for entry in city_slot.get(bag_key, []) or []:
-                assert isinstance(entry, dict) and "host" in entry
 
-    # Every roles[*].fqdns entry in the ZCC cache must be a v3 dict too. The
-    # ZCC schema stores ``roles`` as a list of role objects (each with its own
-    # ``fqdns`` bag), not as a dict keyed by role name — iterate the list.
-    roles_iter = zcc_v3.get("roles") or []
-    assert isinstance(roles_iter, list) and roles_iter, "ZCC fixture must have roles"
-    zcc_fqdn_dicts = 0
-    for role_body in roles_iter:
-        if not isinstance(role_body, dict):
-            continue
-        for entry in role_body.get("fqdns", []) or []:
-            assert isinstance(entry, dict) and "host" in entry
-            zcc_fqdn_dicts += 1
-    assert zcc_fqdn_dicts > 0, "ZCC promotion produced zero v3 fqdn dicts"
+def _assert_fresh_promotion_entry(entry: Any, bag_key: str) -> None:
+    """Assert that one promoted host entry has the v3 empty-observation shape.
 
-    # Exactly one INFO line per promotion event (two total: one per kind).
-    info_lines = [r for r in caplog.records if r.levelname == "INFO" and r.name == "src.utils.zscaler_catalogue"]
-    assert len(info_lines) == 2, f"expected 2 INFO lines (one per kind); got {len(info_lines)}"
-    for record in info_lines:
-        assert "loaded v" in record.getMessage()
-        assert "observations absent" in record.getMessage()
+    Why:
+        A freshly promoted entry must add the host key without invented probe
+        observations.
+    """
+    assert isinstance(entry, dict), f"non-dict entry in {bag_key}: {entry!r}"  # Require the v3 object shape.
+    _assert_host_key(entry)  # Require a usable host value.
+    _assert_absent_or_none(entry, "observed_protocol")  # Keep observations absent.
+    _assert_absent_or_none(entry, "observed_port")  # Keep the observed port empty.
+    _assert_absent_or_none(entry, "last_probed")  # Keep the probe time empty.
 
-    # Idempotency: re-promoting a v3 doc must NOT emit any additional INFO line.
-    caplog.clear()
-    with caplog.at_level("INFO", logger="src.utils.zscaler_catalogue"):
-        zc_mod.promote_cache_document(cenr_v3, kind="cenr")
-        zc_mod.promote_cache_document(zcc_v3, kind="zcc")
-    idem_info = [r for r in caplog.records if r.levelname == "INFO"]
-    assert idem_info == [], f"re-promotion must be silent; got {[r.getMessage() for r in idem_info]}"
+
+def _assert_host_key(entry: dict[str, Any]) -> None:
+    """Assert that a promoted entry has a usable host key.
+
+    Why:
+        The probe target builder needs a non-empty host string.
+    """
+    assert "host" in entry  # Require the key that the v3 schema defines.
+    assert isinstance(entry["host"], str)  # Require the host value type.
+    assert entry["host"]  # Reject an empty host string.
+
+
+def _assert_absent_or_none(entry: dict[str, Any], key: str) -> None:
+    """Assert that an optional observation field has no value.
+
+    Why:
+        Promotion must not invent observations before a probe runs.
+    """
+    if key not in entry:  # Missing optional fields are valid for fresh promotion.
+        return  # Leave the caller with a passing empty field check.
+    assert entry[key] is None  # Present optional fields must hold a null value.
+
+
+def _assert_top_level_cenr_entries(cenr_v3: dict[str, Any]) -> None:
+    """Assert that all top-level CENR bags hold v3 host objects.
+
+    Why:
+        Menu 206 reads these bags when it builds synthetic probe targets.
+    """
+    for bag_key in ("proxy_hostnames", "vpn_hostnames"):  # Check both top-level CENR host lists.
+        bag = cenr_v3.get(bag_key) or []  # Use the same absent-list fallback as callers.
+        assert bag, f"fixture CENR bag {bag_key} was empty; test is meaningless"  # Keep the fixture meaningful.
+        for entry in bag:  # Validate each promoted top-level host entry.
+            _assert_fresh_promotion_entry(entry, bag_key)  # Reuse the shared v3 shape contract.
+
+
+def _assert_city_cenr_entries(cenr_v3: dict[str, Any]) -> None:
+    """Assert that all per-city CENR bags hold v3 host objects.
+
+    Why:
+        City-scoped host bags must promote with the same shape as top-level
+        bags.
+    """
+    by_city = cenr_v3.get("by_city") or {}  # Read the city map with the existing absent-map fallback.
+    assert by_city, "fixture must exercise the by_city bags too"  # Keep city coverage active.
+    for entry in _city_cenr_entries(by_city):  # Walk each city host entry.
+        assert isinstance(entry, dict)  # Preserve the original city entry shape assertion.
+        assert "host" in entry  # Preserve the original city host key assertion.
+
+
+def _city_cenr_entries(by_city: dict[str, Any]) -> list[Any]:
+    """Return all host entries from city CENR bags.
+
+    Why:
+        City assertions should focus on entry shape, not nested bag traversal.
+    """
+    entries: list[Any] = []  # Collect city entries in fixture order.
+    for city_slot in by_city.values():  # Walk each city entry in fixture order.
+        entries.extend(_entries_from_city_slot(city_slot))  # Add entries from valid city slots.
+    return entries  # Return the flattened city entry list.
+
+
+def _entries_from_city_slot(city_slot: Any) -> list[Any]:
+    """Return host entries from one city slot.
+
+    Why:
+        The loader tolerates malformed city slots, so this helper keeps that
+        tolerance local.
+    """
+    if not isinstance(city_slot, dict):  # Ignore malformed slots the loader must tolerate.
+        return []  # Match the old tolerant assertion behavior.
+    entries: list[Any] = []  # Collect entries from both city bag names.
+    for bag_key in ("proxy_hostnames", "vpn_hostnames"):  # Check both city host bag names.
+        entries.extend(city_slot.get(bag_key, []) or [])  # Add present host entries only.
+    return entries  # Return the entries for this city slot.
+
+
+def _assert_zcc_role_entries(zcc_v3: dict[str, Any]) -> None:
+    """Assert that all ZCC role FQDNs hold v3 host objects.
+
+    Why:
+        The ZCC schema stores role objects in a list, and each object owns an
+        FQDN bag.
+    """
+    roles_iter = _zcc_roles(zcc_v3)  # Read and validate the role list.
+    entries = _zcc_role_fqdn_entries(roles_iter)  # Flatten FQDN entries across role objects.
+    assert entries, "ZCC promotion produced zero v3 fqdn dicts"  # Keep the fixture meaningful.
+    for entry in entries:  # Walk each promoted FQDN object.
+        assert isinstance(entry, dict)  # Preserve the original ZCC entry shape assertion.
+        assert "host" in entry  # Preserve the original ZCC host key assertion.
+
+
+def _zcc_roles(zcc_v3: dict[str, Any]) -> list[Any]:
+    """Return the ZCC role list from a promoted cache document.
+
+    Why:
+        The fixture must include roles before FQDN entry assertions are useful.
+    """
+    roles_iter = zcc_v3.get("roles") or []  # Read role objects with the existing absent-list fallback.
+    assert isinstance(roles_iter, list) and roles_iter, "ZCC fixture must have roles"  # Keep role coverage active.
+    return roles_iter  # Return the validated role list.
+
+
+def _zcc_role_fqdn_entries(roles_iter: list[Any]) -> list[Any]:
+    """Return all FQDN entries from ZCC role objects.
+
+    Why:
+        The ZCC schema nests FQDN entries under role objects.
+    """
+    entries: list[Any] = []  # Collect FQDN entries in role order.
+    for role_body in roles_iter:  # Walk each role object in fixture order.
+        entries.extend(_entries_from_zcc_role(role_body))  # Add entries from valid role objects.
+    return entries  # Return the flattened FQDN list.
+
+
+def _entries_from_zcc_role(role_body: Any) -> list[Any]:
+    """Return FQDN entries from one ZCC role object.
+
+    Why:
+        The loader tolerates malformed role slots, so this helper keeps that
+        tolerance local.
+    """
+    if not isinstance(role_body, dict):  # Ignore malformed slots the loader must tolerate.
+        return []  # Match the old tolerant assertion behavior.
+    return list(role_body.get("fqdns", []) or [])  # Return entries under the role FQDN bag.
+
+
+def _assert_promotion_info_lines(caplog: pytest.LogCaptureFixture, expected_count: int) -> None:
+    """Assert that promotion emitted the expected INFO lines.
+
+    Why:
+        The loader must warn once for each legacy document and stay quiet for
+        already promoted documents.
+    """
+    info_lines = _catalogue_info_records(caplog)  # Filter catalogue INFO lines.
+    count_message = f"expected {expected_count} INFO lines, got {len(info_lines)}"  # Explain a count failure.
+    assert len(info_lines) == expected_count, count_message  # Check the count.
+    for record in info_lines:  # Inspect each emitted promotion line.
+        _assert_promotion_record(record)  # Verify the promotion message shape.
+
+
+def _catalogue_info_records(caplog: pytest.LogCaptureFixture) -> list[Any]:
+    """Return INFO records from the Zscaler catalogue logger.
+
+    Why:
+        Promotion tests must ignore unrelated loggers.
+    """
+    return [
+        r for r in caplog.records if r.levelname == "INFO" and r.name == "src.utils.zscaler_catalogue"
+    ]  # Preserve the old log filter.
+
+
+def _assert_promotion_record(record: Any) -> None:
+    """Assert the required legacy promotion log text.
+
+    Why:
+        Operators need the version marker and the missing-observation note.
+    """
+    message = record.getMessage()  # Read the rendered log message once.
+    assert "loaded v" in message  # Require the legacy version marker.
+    assert "observations absent" in message  # Require the missing-observation message.
+
+
+def test_v2_cenr_cache_promotes_top_level_bags(caplog: pytest.LogCaptureFixture) -> None:
+    """A v2 CENR cache promotes top-level host bags to v3.
+
+    Why:
+        The loader adapter must convert legacy CENR host strings before menu
+        206 builds synthetic probe targets.
+    """
+    cenr_v3 = _promote_v2_fixture("zscaler_cenr_hostnames_v2.json", "cenr", caplog)  # Promote the CENR fixture.
+    _assert_top_level_cenr_entries(cenr_v3)  # Verify the top-level host bags.
+    _assert_promotion_info_lines(caplog, 1)  # Verify the promotion notice.
+
+
+def test_v2_cenr_cache_promotes_city_bags(caplog: pytest.LogCaptureFixture) -> None:
+    """A v2 CENR cache promotes per-city host bags to v3.
+
+    Why:
+        City host bags feed regional targets and must not keep legacy strings.
+    """
+    cenr_v3 = _promote_v2_fixture("zscaler_cenr_hostnames_v2.json", "cenr", caplog)  # Promote the CENR fixture.
+    _assert_city_cenr_entries(cenr_v3)  # Verify city host bags.
+    _assert_promotion_info_lines(caplog, 1)  # Verify the promotion notice.
+
+
+def test_v2_zcc_cache_promotes_role_fqdns(caplog: pytest.LogCaptureFixture) -> None:
+    """A v2 ZCC cache promotes role FQDN bags to v3.
+
+    Why:
+        ZCC role FQDNs must become host objects before the probe target builder
+        reads them.
+    """
+    zcc_v3 = _promote_v2_fixture("zscaler_client_connector_probes_v2.json", "zcc", caplog)  # Promote the ZCC fixture.
+    _assert_zcc_role_entries(zcc_v3)  # Verify role FQDN host objects.
+    _assert_promotion_info_lines(caplog, 1)  # Verify the promotion notice.
+
+
+def test_v3_cache_promotion_is_silent(caplog: pytest.LogCaptureFixture) -> None:
+    """A promoted v3 cache does not emit a second promotion message.
+
+    Why:
+        The loader must log once for legacy cache use and stay silent on a
+        later v3 load.
+    """
+    cenr_v3 = _promote_v2_fixture("zscaler_cenr_hostnames_v2.json", "cenr", caplog)  # Create one promoted CENR doc.
+    zcc_v3 = _promote_v2_fixture(
+        "zscaler_client_connector_probes_v2.json", "zcc", caplog
+    )  # Create one promoted ZCC doc.
+    _assert_promotion_info_lines(caplog, 2)  # Verify both first-promotion notices.
+    caplog.clear()  # Remove first-promotion log records before the silent check.
+    with caplog.at_level("INFO", logger="src.utils.zscaler_catalogue"):  # Capture any unexpected idempotency notices.
+        zc_mod.promote_cache_document(cenr_v3, kind="cenr")  # Re-promote the CENR v3 document.
+        zc_mod.promote_cache_document(zcc_v3, kind="zcc")  # Re-promote the ZCC v3 document.
+    assert [r for r in caplog.records if r.levelname == "INFO"] == []  # Require silence for v3 re-promotion.
 
 
 # ----------------------------------------------------------------------
@@ -685,6 +859,145 @@ def _install_refresh_returning(monkeypatch, refreshed: dict[str, Any]) -> None:
     monkeypatch.setattr(zc_mod, "refresh_cenr", _stub)
 
 
+def _write_observation_refresh_fixture(cenr_path: Path) -> dict[str, Any]:
+    """Write a CENR fixture for the observation persistence path.
+
+    Why:
+        The test needs one HTTPS host, one UDP host, and one silent host to
+        cover the priority table.
+    """
+    _write_min_cenr_file(  # Seed a stale v2 file so ensure_fresh rewrites it.
+        cenr_path,  # Use the test-specific cache path.
+        ["chi1-2.sme.zscaler.net", "chi1-2-vpn.zscaler.net", "silent.zs"],  # Cover each observation result type.
+    )
+    return {
+        "schema_version": 3,  # Simulate merge_clouds output.
+        "fetched_utc": _fresh_ts(),  # Prevent a second refresh after the write.
+        "proxy_hostnames": [{"host": "chi1-2.sme.zscaler.net"}, {"host": "silent.zs"}],  # Keep proxy hosts grouped.
+        "vpn_hostnames": [{"host": "chi1-2-vpn.zscaler.net"}],  # Keep the UDP host in the VPN bag.
+        "by_city": {},  # Keep this fixture focused on top-level persistence.
+    }
+
+
+def _mixed_observation_results() -> list[Any]:
+    """Build probe results that cover HTTPS, UDP, and silent endpoints.
+
+    Why:
+        The observation merger chooses a value from the first responsive
+        protocol, so the test needs each important class.
+    """
+    return [
+        _make_probe_result(  # Build the HTTPS responder.
+            "chi1-2.sme.zscaler.net",  # Match the proxy host in the fixture.
+            tcp={443: "open"},  # Mark HTTPS TCP as available.
+            https_status=200,  # Show that the HTTPS request received a response.
+            responding_protocols=["HTTPS"],  # Let the merger choose HTTPS.
+        ),
+        _make_probe_result(  # Build the UDP responder.
+            "chi1-2-vpn.zscaler.net",  # Match the VPN host in the fixture.
+            udp={500: "open"},  # Mark IKE UDP as available.
+            responding_protocols=["UDP/500"],  # Let the merger choose UDP/500.
+        ),
+        _make_probe_result("silent.zs"),  # Keep one host without observations.
+    ]
+
+
+def _load_cenr_hosts_by_name(cenr_path: Path) -> dict[str, dict[str, Any]]:
+    """Load a CENR cache and return host entries by name.
+
+    Why:
+        Observation tests assert host fields, not list order.
+    """
+    on_disk = json.loads(cenr_path.read_text(encoding="utf-8"))  # Read the persisted cache after ensure_fresh.
+    assert on_disk["schema_version"] == 3  # Prove the write path stored a v3 document.
+    by_host = {entry["host"]: entry for entry in on_disk["proxy_hostnames"]}  # Index proxy entries by host.
+    by_host.update({entry["host"]: entry for entry in on_disk["vpn_hostnames"]})  # Add VPN entries to the same index.
+    return by_host  # Return a combined view for concise assertions.
+
+
+def _assert_observation(entry: dict[str, Any], protocol: str | None, port: int | None) -> None:
+    """Assert the persisted observation fields for one host.
+
+    Why:
+        The test uses the same contract for responsive and silent hosts.
+    """
+    assert entry.get("observed_protocol") == protocol  # Verify the selected protocol or the silent marker.
+    assert entry.get("observed_port") == port  # Verify the selected port or the silent marker.
+    if protocol is None:  # Silent hosts must not invent a probe time.
+        assert entry.get("last_probed") is None  # Keep the no-observation timestamp empty.
+    else:  # Responsive hosts must record when the probe occurred.
+        assert isinstance(entry.get("last_probed"), str)  # Verify that the write path stored a timestamp string.
+
+
+def _assert_null_observation_bags(promoted: dict[str, Any]) -> None:
+    """Assert that promoted CENR bags do not invent observations.
+
+    Why:
+        A load-only promotion must not create probe data.
+    """
+    for bag_key in ("proxy_hostnames", "vpn_hostnames"):  # Check the two top-level CENR bags.
+        for entry in promoted.get(bag_key) or []:  # Walk each promoted host entry.
+            assert isinstance(entry, dict)  # Require the v3 object shape.
+            assert entry.get("observed_protocol") in (None, ""), entry  # Permit only empty protocol values.
+            assert entry.get("observed_port") in (None, 0) or entry.get("observed_port") is None  # Permit empty ports.
+            assert entry.get("last_probed") in (None, "") or entry.get("last_probed") is None  # Permit empty times.
+
+
+def _write_zcc_v2_fixture(probes_path: Path) -> None:
+    """Write a ZCC v2 fixture to the requested path.
+
+    Why:
+        The observation write path must also update the ZCC cache file.
+    """
+    probes_v2 = {
+        "schema_version": 2,  # Force ZCC promotion during ensure_fresh.
+        "roles": [  # Keep one role because the merger walks roles[*].fqdns.
+            {
+                "role": "zcc_health",  # Preserve the role name used in assertions.
+                "description": "core zcc reachability",  # Preserve role metadata.
+                "critical": True,  # Preserve role metadata.
+                "fqdns": ["gateway.zscaler.net", "mobile.zscaler.net"],  # Cover responsive and silent ZCC hosts.
+            }
+        ],
+    }
+    probes_path.write_text(json.dumps(probes_v2), encoding="utf-8")  # Persist the v2 ZCC cache beside the CENR cache.
+
+
+def _zcc_observation_results() -> list[Any]:
+    """Build ZCC probe results for one responsive and one silent host.
+
+    Why:
+        The ZCC observation path must write both populated and empty fields.
+    """
+    return [
+        _make_probe_result(  # Build the responsive ZCC host.
+            "gateway.zscaler.net",  # Match the first fixture FQDN.
+            tcp={443: "open"},  # Mark HTTPS TCP as available.
+            https_status=200,  # Show that HTTPS returned a response.
+            responding_protocols=["HTTPS"],  # Let the merger choose HTTPS.
+        ),
+        _make_probe_result("mobile.zscaler.net"),  # Keep one ZCC host silent.
+    ]
+
+
+def _load_zcc_hosts_by_name(probes_path: Path) -> dict[str, dict[str, Any]]:
+    """Load a ZCC cache and return FQDN entries by host name.
+
+    Why:
+        The ZCC cache nests FQDN entries under role objects.
+    """
+    rewritten = json.loads(probes_path.read_text(encoding="utf-8"))  # Read the rewritten ZCC cache file.
+    assert rewritten.get("schema_version") == 3  # Prove the write path stored a v3 document.
+    roles_iter = rewritten.get("roles") or []  # Read the role list with the existing absent-list fallback.
+    assert roles_iter, "ZCC probes file must retain its roles bag"  # Keep role coverage active.
+    flattened: dict[str, dict[str, Any]] = {}  # Build a lookup by host name.
+    for role_body in roles_iter:  # Walk each role object in fixture order.
+        for entry in role_body.get("fqdns") or []:  # Walk FQDN entries under this role.
+            assert isinstance(entry, dict) and "host" in entry  # Require the v3 object shape.
+            flattened[entry["host"]] = entry  # Store the entry for direct assertions.
+    return flattened  # Return all ZCC FQDN entries by host.
+
+
 class TestUS3PersistedObservations:
     """Cover the observation-merge write path introduced by US3."""
 
@@ -698,65 +1011,20 @@ class TestUS3PersistedObservations:
             A single mixed batch (HTTPS + UDP/500 + silent) exercises the
             three main branches of the priority table.
         """
-        cenr_path = tmp_path / "zscaler_cenr_hostnames.json"  # target file for the atomic write
-        # Pre-seed a stale v2 file so ensure_fresh takes the refresh + write path.
-        _write_min_cenr_file(cenr_path, ["chi1-2.sme.zscaler.net", "chi1-2-vpn.zscaler.net", "silent.zs"])
+        cenr_path = tmp_path / "zscaler_cenr_hostnames.json"  # Target file for the atomic write.
+        refreshed = _write_observation_refresh_fixture(cenr_path)  # Seed the stale input and build refreshed data.
+        _install_refresh_returning(monkeypatch, refreshed)  # Stub the network refresh step.
+        monkeypatch.setattr(
+            zc_mod, "run_full_validation", lambda *_a, **_kw: _mixed_observation_results()
+        )  # Stub probe output.
 
-        # The refreshed dict is what the write-path merger will decorate.
-        refreshed = {
-            "schema_version": 3,  # merge_clouds already emits v3
-            "fetched_utc": _fresh_ts(),  # fresh so a re-read short-circuits
-            "proxy_hostnames": [
-                {"host": "chi1-2.sme.zscaler.net"},  # HTTPS observation expected
-                {"host": "silent.zs"},  # no observation expected
-            ],
-            "vpn_hostnames": [
-                {"host": "chi1-2-vpn.zscaler.net"},  # UDP/500 observation expected
-            ],
-            "by_city": {},
-        }
-        _install_refresh_returning(monkeypatch, refreshed)
+        stale_in_memory = json.loads(cenr_path.read_text(encoding="utf-8"))  # Load freshness gate input.
+        zc_mod.ensure_fresh(cenr_path, stale_in_memory)  # Run the refresh, merge, and write path.
 
-        # Fake validation results: one HTTPS, one UDP/500, one silent.
-        results = [
-            _make_probe_result(
-                "chi1-2.sme.zscaler.net",
-                tcp={443: "open"},
-                https_status=200,
-                responding_protocols=["HTTPS"],
-            ),
-            _make_probe_result(
-                "chi1-2-vpn.zscaler.net",
-                udp={500: "open"},
-                responding_protocols=["UDP/500"],
-            ),
-            _make_probe_result("silent.zs"),  # nothing responded
-        ]
-        monkeypatch.setattr(zc_mod, "run_full_validation", lambda *_a, **_kw: results)
-
-        stale_in_memory = json.loads(cenr_path.read_text(encoding="utf-8"))  # freshness gate input
-        zc_mod.ensure_fresh(cenr_path, stale_in_memory)
-
-        # Re-read the file to prove the observations were persisted (not merely in memory).
-        on_disk = json.loads(cenr_path.read_text(encoding="utf-8"))
-        assert on_disk["schema_version"] == 3
-
-        by_host = {entry["host"]: entry for entry in on_disk["proxy_hostnames"]}
-        by_host.update({entry["host"]: entry for entry in on_disk["vpn_hostnames"]})
-
-        assert by_host["chi1-2.sme.zscaler.net"]["observed_protocol"] == "HTTPS"
-        assert by_host["chi1-2.sme.zscaler.net"]["observed_port"] == 443
-        assert isinstance(by_host["chi1-2.sme.zscaler.net"].get("last_probed"), str)
-
-        assert by_host["chi1-2-vpn.zscaler.net"]["observed_protocol"] == "UDP/500"
-        assert by_host["chi1-2-vpn.zscaler.net"]["observed_port"] == 500
-        assert isinstance(by_host["chi1-2-vpn.zscaler.net"].get("last_probed"), str)
-
-        # Silent host: observation fields present but null (contract §Per-Host Entry).
-        silent = by_host["silent.zs"]
-        assert silent.get("observed_protocol") is None
-        assert silent.get("observed_port") is None
-        assert silent.get("last_probed") is None
+        by_host = _load_cenr_hosts_by_name(cenr_path)  # Re-read the file to prove persistence.
+        _assert_observation(by_host["chi1-2.sme.zscaler.net"], "HTTPS", 443)  # Verify the HTTPS observation.
+        _assert_observation(by_host["chi1-2-vpn.zscaler.net"], "UDP/500", 500)  # Verify the UDP observation.
+        _assert_observation(by_host["silent.zs"], None, None)  # Verify the silent host fields.
 
     def test_schema_v2_compat_load_produces_null_observations(self, caplog):
         """T022 [US3]: v2 fixture loads clean and every host has null observations.
@@ -766,25 +1034,11 @@ class TestUS3PersistedObservations:
             promoted v2 document yields entries whose observation fields are
             all absent/None -- observations never appear out of thin air.
         """
-        fixtures = Path(__file__).parent / "fixtures"
-        cenr_v2 = json.loads((fixtures / "zscaler_cenr_hostnames_v2.json").read_text(encoding="utf-8"))
-        assert cenr_v2.get("schema_version") != 3, "fixture must be v2 for this test to matter"
-
-        with caplog.at_level("INFO", logger="src.utils.zscaler_catalogue"):
-            promoted = zc_mod.promote_cache_document(cenr_v2, kind="cenr")
-
-        for bag_key in ("proxy_hostnames", "vpn_hostnames"):
-            for entry in promoted.get(bag_key) or []:
-                assert isinstance(entry, dict)
-                assert entry.get("observed_protocol") in (None, ""), entry
-                assert entry.get("observed_port") in (None, 0) or entry.get("observed_port") is None
-                assert entry.get("last_probed") in (None, "") or entry.get("last_probed") is None
-
-        # Contract §Logging: exactly one INFO line per load with the fixed format.
-        info_lines = [r for r in caplog.records if r.levelname == "INFO" and r.name == "src.utils.zscaler_catalogue"]
-        assert len(info_lines) == 1, f"expected exactly 1 INFO line; got {len(info_lines)}"
-        assert "loaded v" in info_lines[0].getMessage()
-        assert "observations absent" in info_lines[0].getMessage()
+        promoted = _promote_v2_fixture(
+            "zscaler_cenr_hostnames_v2.json", "cenr", caplog
+        )  # Promote the legacy CENR fixture.
+        _assert_null_observation_bags(promoted)  # Verify that promotion does not invent probe observations.
+        _assert_promotion_info_lines(caplog, 1)  # Verify the promotion notice.
 
     def test_zcc_probes_file_gets_same_v3_shape_under_roles_fqdns(self, monkeypatch, tmp_path):
         """T023 [US3]: the ZCC probes file receives the same v3 observation triplet.
@@ -794,60 +1048,22 @@ class TestUS3PersistedObservations:
             §v3 Top-Level Shape (ZCC) requires the exact same per-host object
             shape, so the write-path merger must decorate those entries too.
         """
-        cenr_path = tmp_path / "zscaler_cenr_hostnames.json"
-        _write_min_cenr_file(cenr_path, ["placeholder.zs"])
-        probes_path = tmp_path / "zscaler_client_connector_probes.json"
-        probes_v2 = {
-            "schema_version": 2,
-            "roles": [
-                {
-                    "role": "zcc_health",
-                    "description": "core zcc reachability",
-                    "critical": True,
-                    "fqdns": ["gateway.zscaler.net", "mobile.zscaler.net"],
-                }
-            ],
-        }
-        probes_path.write_text(json.dumps(probes_v2), encoding="utf-8")
+        cenr_path = tmp_path / "zscaler_cenr_hostnames.json"  # Build the CENR cache path that ensure_fresh requires.
+        _write_min_cenr_file(cenr_path, ["placeholder.zs"])  # Seed a minimal stale CENR file.
+        probes_path = tmp_path / "zscaler_client_connector_probes.json"  # Build the sibling ZCC cache path.
+        _write_zcc_v2_fixture(probes_path)  # Seed the legacy ZCC cache file.
+        refreshed = _write_observation_refresh_fixture(cenr_path)  # Build refreshed CENR data for the write path.
+        _install_refresh_returning(monkeypatch, refreshed)  # Stub the CENR refresh.
+        monkeypatch.setattr(
+            zc_mod, "run_full_validation", lambda *_a, **_kw: _zcc_observation_results()
+        )  # Stub ZCC probes.
 
-        refreshed = {
-            "schema_version": 3,
-            "fetched_utc": _fresh_ts(),
-            "proxy_hostnames": [{"host": "placeholder.zs"}],
-            "vpn_hostnames": [],
-            "by_city": {},
-        }
-        _install_refresh_returning(monkeypatch, refreshed)
+        stale_in_memory = json.loads(cenr_path.read_text(encoding="utf-8"))  # Load freshness gate input.
+        zc_mod.ensure_fresh(cenr_path, stale_in_memory)  # Run the refresh path that updates both cache files.
 
-        results = [
-            _make_probe_result(
-                "gateway.zscaler.net",
-                tcp={443: "open"},
-                https_status=200,
-                responding_protocols=["HTTPS"],
-            ),
-            _make_probe_result("mobile.zscaler.net"),
-        ]
-        monkeypatch.setattr(zc_mod, "run_full_validation", lambda *_a, **_kw: results)
-
-        stale_in_memory = json.loads(cenr_path.read_text(encoding="utf-8"))
-        zc_mod.ensure_fresh(cenr_path, stale_in_memory)
-
-        # The probes file MUST have been rewritten to v3 with observation fields.
-        rewritten = json.loads(probes_path.read_text(encoding="utf-8"))
-        assert rewritten.get("schema_version") == 3
-        roles_iter = rewritten.get("roles") or []
-        assert roles_iter, "ZCC probes file must retain its roles bag"
-        flattened: dict[str, dict[str, Any]] = {}
-        for role_body in roles_iter:
-            for entry in role_body.get("fqdns") or []:
-                assert isinstance(entry, dict) and "host" in entry
-                flattened[entry["host"]] = entry
-        assert flattened["gateway.zscaler.net"]["observed_protocol"] == "HTTPS"
-        assert flattened["gateway.zscaler.net"]["observed_port"] == 443
-        # Silent ZCC host still records null observation fields.
-        assert flattened["mobile.zscaler.net"].get("observed_protocol") is None
-        assert flattened["mobile.zscaler.net"].get("observed_port") is None
+        flattened = _load_zcc_hosts_by_name(probes_path)  # Re-read the ZCC cache to prove persistence.
+        _assert_observation(flattened["gateway.zscaler.net"], "HTTPS", 443)  # Verify the responsive ZCC host.
+        _assert_observation(flattened["mobile.zscaler.net"], None, None)  # Verify the silent ZCC host.
 
     def test_stale_observation_replaced_on_refresh(self, monkeypatch, tmp_path):
         """T024 [US3]: an old cached observation is overwritten by the fresh probe.
@@ -898,9 +1114,8 @@ class TestUS3PersistedObservations:
 
         on_disk = json.loads(cenr_path.read_text(encoding="utf-8"))
         vpn_entry = on_disk["vpn_hostnames"][0]
-        assert (
-            vpn_entry["observed_protocol"] == "UDP/500"
-        ), "stale HTTPS observation was not replaced by fresh UDP/500 probe"
+        protocol_message = "stale HTTPS observation was not replaced by fresh UDP/500 probe"  # Explain protocol drift.
+        assert vpn_entry["observed_protocol"] == "UDP/500", protocol_message  # Verify the fresh protocol value.
         assert vpn_entry["observed_port"] == 500
         assert vpn_entry["last_probed"] != "1999-01-01T00:00:00Z"
 
