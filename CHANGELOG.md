@@ -52,6 +52,12 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Added**: Unit coverage verifies SDK resolution, prompt failures, call
   shape, primary-key strategy coverage, and table drift.
 
+### Endpoint family stage two (issue #1807)
+
+- **Added**: Menus 263 through 268 run the remaining read-only endpoint families from a prompt.
+- **Added**: `EndpointFamilyExporter` covers 134 endpoint operations and excludes known unsafe or missing entries.
+- **Added**: Unit coverage verifies SDK resolution, identifier order, prompt errors, empty results, and strategy coverage.
+
 ### Flatten nested fields performance (issue #2485)
 
 - **Changed**: `DataProcessingUtils.flatten_nested_fields()` now writes nested
