@@ -4,6 +4,9 @@ Duplicates the strategies dict from MistHelper.py to avoid import side effects
 (research.md R1 pattern). Validates structural integrity of every entry.
 """
 
+from src.export.endpoint_family_exporter import (
+    ALL_STAGE_TWO_ENDPOINT_OPS,
+)
 from src.export.simple_endpoint_exporter import (
     _MSP_OPS as SIMPLE_MSP_OPS,
 )
@@ -353,6 +356,15 @@ class TestEndpointPrimaryKeyStrategies:
         missing = [
             entry.operation
             for entry in SIMPLE_ENDPOINT_OPS
+            if entry.operation not in PRODUCTION_ENDPOINT_PRIMARY_KEY_STRATEGIES
+        ]
+        assert missing == []
+
+    def test_stage_two_endpoint_family_has_production_strategies(self):
+        """Issue 1807 stage-two table entries must have primary-key strategies."""
+        missing = [
+            entry.operation
+            for entry in ALL_STAGE_TWO_ENDPOINT_OPS
             if entry.operation not in PRODUCTION_ENDPOINT_PRIMARY_KEY_STRATEGIES
         ]
         assert missing == []
