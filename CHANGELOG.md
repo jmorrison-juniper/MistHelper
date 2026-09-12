@@ -7,6 +7,7 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+<<<<<<< HEAD
 ### Search organization devices (menu 249)
 
 - **Added**: Menu 249 calls `searchOrgDevices` for the active organization and
@@ -15,13 +16,24 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   errors, flattening, and persistence.
 
 ### Search sites for an organization (menu 248)
+=======
+### Search organization Mist Edges (menu 251)
+>>>>>>> 5907eac6 (feat(org-search): add searchOrgUserMacs menu 248)
 
-- **Added**: Menu 248 calls `searchOrgSites` and exports organization site
-  search results through CSV, SQLite, or ArangoDB. Issue #1378.
-- **Added**: The `searchOrgSites` primary-key strategy uses the stable site
-  `id` field for upserts without duplicate rows.
-- **Added**: Unit coverage for the SDK binding, pagination, export path, empty
-  results, unresolved organizations, and API errors.
+- **Added**: Menu 251 calls `searchOrgMxEdges` for an organization, prompts
+  safely for its optional filters, follows all response pages, and exports the
+  rows through CSV, SQLite, or ArangoDB. Issue #1375.
+- **Added**: Unit coverage for typed filter forwarding, empty-filter defaults,
+  pagination, and the standard `DataExporter` write path.
+
+### Search user MAC assignments for an organization (menu 249)
+
+- **Added**: Menu 249 calls the read-only `searchOrgUserMacs` endpoint and
+  exports all paginated organization user-MAC records through CSV, SQLite, or
+  ArangoDB. Issue #1380.
+- **Added**: Unit coverage for the SDK binding, pagination, empty results, and
+  export pipeline. The existing `searchOrgUserMacs` primary-key strategy
+  provides stable upserts by record ID and MAC address.
 
 ### Verify an email change token (menu 247)
 
@@ -1812,7 +1824,7 @@ that runs without a proxy needs no action.
   per-menu bindings are checked by a parametrized case, so each entry is proven
   to call its own endpoint and write its own file.
 
-### Add five site-scoped search operations, menus 225 to 229 (issues #1401, #1393, #1391, #1395, #1412)
+### Add five site-scoped search operations, menus 225 to 229 (issues #1401, #1393, #1391, #1396, #1412)
 
 - **Menu 225 (Added)**: `searchSiteOspfStats` searches the OSPF neighbor
   statistics for a site. Spec 893, issue #1401.

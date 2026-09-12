@@ -350,8 +350,15 @@ class OperationRegistry:
             "category": "interactive_safe",
             "skip_reason": "Requires an email change token from the Mist email",
         },
+        # WHY: menus 248-251 read organization data and write exports without changing Mist Cloud.
         "248": {"category": "safe"},
+<<<<<<< HEAD
         "249": {"category": "safe"},  # Classify the read-only organization device search for automated tests.
+=======
+        "249": {"category": "safe"},
+        "250": {"category": "safe"},
+        "251": {"category": "safe"},
+>>>>>>> 5907eac6 (feat(org-search): add searchOrgUserMacs menu 248)
         # WHY: menu 239 starts a local web server and drives a firmware upgrade, so it writes
         # device state. The fail-closed guardrail needs this row or the build breaks.
         #

@@ -1,9 +1,14 @@
 """Unit tests for the organization-scoped search exporter.
 
+<<<<<<< HEAD
 Covers specs 863 and 870 and specs 874 to 879 (issues #1371, #1378, #1379,
 #1382, #1383, #1385 and #1386), which are menus 230 to 234 and 248 to 249.
+=======
+Covers specs 872 and 874 to 879 (issues #1379, #1380, #1382, #1383, #1385 and
+#1386), which are menus 230 to 234 and 248.
+>>>>>>> 5907eac6 (feat(org-search): add searchOrgUserMacs menu 248)
 
-The six operations share one helper, so the shared behavior is tested once and
+The five operations share one helper, so the shared behavior is tested once and
 each menu entry is checked for the binding that makes it distinct.
 """
 
@@ -42,7 +47,7 @@ MENU_BINDINGS = [
         ("wan_clients", "searchOrgWanClientEvents"),
     ),
     ("system_events", "searchOrgSystemEvents", "OrgSystemEvents", ("events", "searchOrgSystemEvents")),
-    ("sites", "searchOrgSites", "OrgSitesSearch", ("sites", "searchOrgSites")),
+    ("user_macs", "searchOrgUserMacs", "OrgUserMacs", ("usermacs", "searchOrgUserMacs")),
 ]
 
 
@@ -80,12 +85,11 @@ def wired(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     }
 
 
-def _sdk_target(mistapi_mod: MagicMock, chain: tuple[str, ...]) -> MagicMock:
+def _sdk_target(mistapi_mod: MagicMock, chain: tuple[str, str]) -> MagicMock:
     """Return the SDK callable double that a menu entry is expected to call."""
-    target: Any = mistapi_mod.api.v1.orgs  # Start at the organization API namespace.
-    for attribute in chain:  # Walk the SDK module path for the selected endpoint.
-        target = getattr(target, attribute)  # Resolve one SDK namespace or function.
-    return target  # Return the function double for the test assertion.
+    module_attribute, function_name = chain  # Split the module and the function halves.
+    module = getattr(mistapi_mod.api.v1.orgs, module_attribute)  # Walk to the SDK submodule double.
+    return getattr(module, function_name)  # Return the function double itself.
 
 
 class TestMenuBindings:
@@ -93,7 +97,7 @@ class TestMenuBindings:
 
     @pytest.mark.parametrize(("method", "operation", "prefix", "chain"), MENU_BINDINGS)
     def test_entry_calls_its_endpoint_and_persists(
-        self, wired: dict[str, Any], method: str, operation: str, prefix: str, chain: tuple[str, ...]
+        self, wired: dict[str, Any], method: str, operation: str, prefix: str, chain: tuple[str, str]
     ) -> None:
         """The entry must call its endpoint once and write with its own operationId."""
         target = _sdk_target(wired["mistapi"], chain)
@@ -110,7 +114,7 @@ class TestMenuBindings:
 
     @pytest.mark.parametrize(("method", "operation", "prefix", "chain"), MENU_BINDINGS)
     def test_entry_aborts_when_org_is_unresolved(
-        self, wired: dict[str, Any], method: str, operation: str, prefix: str, chain: tuple[str, ...]
+        self, wired: dict[str, Any], method: str, operation: str, prefix: str, chain: tuple[str, str]
     ) -> None:
         """An unresolved organization must stop before any API call."""
         wired["ConfigUtils"].get_cached_or_prompted_org_id.return_value = None
@@ -162,9 +166,60 @@ class TestSharedBehavior:
 
         wired["mistapi"].get_all.assert_called_once_with(response=[{"id": "row-1"}], mist_session=wired["apisession"])
 
+<<<<<<< HEAD
     def test_device_search_has_a_composite_primary_key(self) -> None:
         """Device search rows must use the existing id and MAC key pair."""
         strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES["searchOrgDevices"]  # Read the catalog entry used by persistence.
 
         assert strategy["type"] == "composite_pk"  # Require update-safe device search storage.
         assert strategy["primary_key"] == ["id", "mac"]  # Require stable uniqueness for repeated exports.
+=======
+
+class TestMxEdgeSearch:
+    """Cover the organization MxEdge search filters and export binding."""
+
+    def test_mx_edges_forwards_optional_filters(self, wired: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+        """The menu entry must convert and forward entered filters to the SDK."""
+        target = wired["mistapi"].api.v1.orgs.mxedges.searchOrgMxEdges
+        target.return_value = [{"id": "edge-1"}]
+        answers = iter(["edge-1", "site-1", "", "SSR", "", "1.2.3", "true", "25", "-1d", "", "7d", "-last_seen", ""])
+        safe_input = MagicMock(side_effect=lambda *args, **kwargs: next(answers))
+        monkeypatch.setattr("MistHelper.InputUtils", MagicMock(safe_input=safe_input), raising=False)
+
+        OrgSearchExporter.mx_edges()
+
+        target.assert_called_once_with(
+            wired["apisession"],
+            "org-1",
+            mxedge_id="edge-1",
+            site_id="site-1",
+            model="SSR",
+            tunterm_version="1.2.3",
+            stats=True,
+            limit=25,
+            start="-1d",
+            duration="7d",
+            sort="-last_seen",
+        )
+        wired["DataExporter"].write_with_format_selection.assert_called_once_with(
+            [{"id": "edge-1"}],
+            "OrgMxEdges.csv",
+            api_function_name="searchOrgMxEdges",
+        )
+
+    def test_mx_edges_with_empty_filters_uses_sdk_defaults(
+        self, wired: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """EOF-safe empty answers must still run one unfiltered organization search."""
+        target = wired["mistapi"].api.v1.orgs.mxedges.searchOrgMxEdges
+        target.return_value = [{"id": "edge-1"}]
+        monkeypatch.setattr(
+            "MistHelper.InputUtils",
+            MagicMock(safe_input=MagicMock(return_value="")),
+            raising=False,
+        )
+
+        OrgSearchExporter.mx_edges()
+
+        target.assert_called_once_with(wired["apisession"], "org-1")
+>>>>>>> 5907eac6 (feat(org-search): add searchOrgUserMacs menu 248)
