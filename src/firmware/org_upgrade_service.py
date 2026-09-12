@@ -281,7 +281,7 @@ class OrgUpgradeService:
     """
 
     @staticmethod
-    def _check_write_session(session: APISession) -> None:
+    def check_write_session(session: APISession) -> None:
         """Reject sessions that can retry an SDK write.
 
         Why:
@@ -313,7 +313,7 @@ class OrgUpgradeService:
         """
         identifier = OrgUpgradeBody.identifier(org_id, "org_id")
         body = OrgUpgradeBody.build(request)
-        cls._check_write_session(session)
+        cls.check_write_session(session)
         logger.info("Submit the organization AP upgrade for organization %s", identifier)
         response = org_devices.upgradeOrgDevices(session, identifier, body=body)
         result = _OrgUpgradeResponse.normalize(response, identifier)
@@ -348,7 +348,7 @@ class OrgUpgradeService:
         """
         identifier = OrgUpgradeBody.identifier(org_id, "org_id")
         job_id = OrgUpgradeBody.identifier(upgrade_id, "upgrade_id")
-        cls._check_write_session(session)
+        cls.check_write_session(session)
         logger.info("Cancel organization upgrade %s for organization %s", job_id, identifier)
         response = org_devices.cancelOrgDeviceUpgrade(session, identifier, job_id)
         result = _OrgUpgradeResponse.normalize(response, identifier, job_id, cancel=True)

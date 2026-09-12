@@ -51,6 +51,7 @@ import pytest
 from flask.sessions import SecureCookieSessionInterface
 
 from src.firmware.org_upgrade_service import OrgUpgradeResult
+from src.firmware.upgrade_service import CancelOutcome, UpgradeSubmission  # Build stand-in site child results.
 from src.upgrade_portal.api.run_controls import E2EFactoryOverrides  # Type the complete isolated dependency set.
 from src.upgrade_portal.app.config import PORT_VARIABLE, SECRET_KEY_VARIABLE  # Read child server setting names.
 from src.upgrade_portal.runtime import identity  # Build the signed test session owners.
@@ -694,6 +695,8 @@ class StandInCloudSession:  # Carries a privilege list and a narrow read, so eve
     def __init__(self) -> None:
         """Store the one privilege record that the organization picker shows."""
         self.privileges = [{"scope": "org", "org_id": STAND_IN_ORG_ID, "name": STAND_IN_ORG_NAME}]
+        self._MAX_429_RETRIES = 0  # The destructive write guard requires no SDK retry.
+        self._session = SimpleNamespace(adapters={})  # The transport layer has no retrying adapter.
 
     def mist_get(self, uri: str, query: dict[str, str] | None = None) -> SimpleNamespace:
         """Answer the one read the inventory page's stale-firmware check needs.
@@ -866,6 +869,53 @@ class E2EOrgUpgradeService:
     def cancel(cloud_session: Any, org_id: str, upgrade_id: str) -> OrgUpgradeResult:
         """Return one accepted cancellation."""
         return OrgUpgradeResult(org_id, upgrade_id, 200, {}, None)
+
+
+class E2EDeviceUpgradeService:
+    """Return deterministic site child results without a Mist call."""
+
+    ACCEPTED_STATUS = (200, 202)  # Match the production service contract.
+
+    @staticmethod
+    def invoke_upgrade(cloud_session: Any, plan: Any) -> UpgradeSubmission:
+        """Accept one site child."""
+        del cloud_session  # The stand-in reads no credential.
+        return UpgradeSubmission(
+            f"{plan.targets[0].device_type}-job",
+            plan.scope,
+            tuple(target.mac for target in plan.targets),
+            (),
+            202,
+        )
+
+    @staticmethod
+    def read_upgrade_status(
+        cloud_session: Any,
+        scope: str,
+        identifier: str,
+        upgrade_id: str,
+        family: Any,
+    ) -> dict[str, Any]:
+        """Return one running child status."""
+        del cloud_session, scope, identifier, family  # The fixed answer needs no request value.
+        return {
+            "upgrade_id": upgrade_id,
+            "raw_status": 200,
+            "status": "running",
+            "status_known": True,
+            "targets": {},
+        }
+
+    @staticmethod
+    def cancel_upgrade(cloud_session: Any, plan: Any, upgrade_id: str, status: Any) -> CancelOutcome:
+        """Accept one site child cancellation."""
+        del cloud_session, upgrade_id, status  # The fixed answer needs the plan targets only.
+        return CancelOutcome(
+            tuple(target.mac for target in plan.targets),
+            (),
+            (),
+            "The stand-in accepted the cancellation.",
+        )
 
 
 def stand_in_cloud_read(name: str, **parameters: Any) -> list[dict[str, Any]]:
@@ -1562,6 +1612,16 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
     from src.upgrade_portal.app.routes import org_upgrade
 
     built.config[org_upgrade.SERVICE_CONFIG_KEY] = E2EOrgUpgradeService
+    built.config[org_upgrade.OPTIONS_VIEW_CONFIG_KEY] = stand_in_options_view
+    built.config[org_upgrade.OPTIONS_BUILDER_CONFIG_KEY] = (
+        lambda cloud_session, org_id, site_id, body: stand_in_options_builder({}, body)
+    )
+    from src.firmware.aggregate_upgrade_service import AggregateUpgradeService
+
+    built.config[org_upgrade.AGGREGATE_SERVICE_CONFIG_KEY] = AggregateUpgradeService(
+        E2EOrgUpgradeService,
+        E2EDeviceUpgradeService,
+    )
     built.config[org_upgrade.WRITES_ENABLED_CONFIG_KEY] = True
     built.config["CLOUD_BROWSER_TOKEN_SESSION"] = stand_in_browser_token_session  # Replace the live token builder.
     built.config["CLOUD_TOKEN_IDENTITY"] = stand_in_token_identity  # Replace the live GetSelf identity read.

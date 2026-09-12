@@ -10,11 +10,11 @@
      data-upgrade-id="{{ upgrade_id }}"
      data-job-status="{{ status.status | default('unknown', true) }}"
      data-poll-seconds="{{ poll_interval_seconds | default(30, true) }}">
-  <h2 class="portal-card-title">Organization upgrade job</h2>
-  <p><strong>Job identifier:</strong> <span class="cell-mono">{{ upgrade_id }}</span></p>
+  <h2 class="portal-card-title">Multi-site upgrade operation</h2>
+  <p><strong>Operation identifier:</strong> <span class="cell-mono">{{ upgrade_id }}</span></p>
   <p><strong>Sites:</strong> {{ site_count }}</p>
   <p class="portal-card-note">
-    The portal reads the organization job state at the configured interval. A completed job can still contain failed devices.
+    The portal reads every child state at the configured interval. One failed child does not hide another result.
   </p>
   <button class="portal-button portal-button-primary"
           type="button"
@@ -60,26 +60,40 @@
     <caption class="visually-hidden">The state of each site job.</caption>
     <thead>
       <tr>
-        <th scope="col">Site identifier</th>
+        <th scope="col">Site</th>
+        <th scope="col">Device family</th>
         <th scope="col">Status</th>
         <th scope="col">Targets</th>
         <th scope="col">Upgraded</th>
         <th scope="col">Failed</th>
         <th scope="col">Upgrade identifier</th>
+        <th scope="col">Error</th>
+        <th scope="col">Cancellation</th>
       </tr>
     </thead>
     <tbody data-org-upgrade-sites>
       {% for site in status.site_upgrades | default([], true) %}
         <tr>
-          <th scope="row" class="cell-mono">{{ site.site_id | default('Unknown', true) }}</th>
+          <th scope="row">{{ site.site_name | default(site.site_id, true) }}</th>
+          <td>{{ site.device_family | default('ap', true) }}</td>
           <td>{{ site.status | default('unknown', true) }}</td>
           <td>{{ site.total | default(0, true) }}</td>
           <td>{{ site.upgraded | default(0, true) }}</td>
           <td>{{ site.failed | default(0, true) }}</td>
           <td class="cell-mono">{{ site.id | default('', true) }}</td>
+          <td>{{ site.error | default('', true) }}</td>
+          <td>
+            {% if site.cancellation %}
+              {{ site.cancellation.status | default('', true) }}
+              {{ site.cancellation.message | default('', true) }}
+              {% if site.cancellation.cancelled %} Cancelled: {{ site.cancellation.cancelled | join(', ') }}.{% endif %}
+              {% if site.cancellation.already_writing %} Already writing: {{ site.cancellation.already_writing | join(', ') }}.{% endif %}
+              {% if site.cancellation.no_cancel_available %} No cancellation: {{ site.cancellation.no_cancel_available | join(', ') }}.{% endif %}
+            {% endif %}
+          </td>
         </tr>
       {% else %}
-        <tr><td colspan="6">The cloud has not reported a site state yet.</td></tr>
+        <tr><td colspan="9">The cloud has not reported a child state yet.</td></tr>
       {% endfor %}
     </tbody>
   </table>
