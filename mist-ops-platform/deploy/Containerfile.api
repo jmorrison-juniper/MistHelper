@@ -41,9 +41,14 @@ USER mistops
 
 EXPOSE 8000
 
+# WHY: the session store refuses the process-local fallback when more than one
+# worker runs, so the operator can name the count (issue #2051).
+ENV WEB_WORKERS=4
+
 HEALTHCHECK --interval=15s --timeout=5s --retries=3 \
     CMD ["python", "-c", "import httpx; httpx.get('http://localhost:8000/api/v1/healthz').raise_for_status()"]
 
-ENTRYPOINT ["uvicorn", "src.api.main:create_app", "--factory", \
-            "--host", "0.0.0.0", "--port", "8000", \
-            "--workers", "4", "--log-level", "info"]
+# WHY: a shell form lets the entrypoint read WEB_WORKERS from the environment.
+ENTRYPOINT ["sh", "-c", "uvicorn src.api.main:create_app --factory \
+            --host 0.0.0.0 --port 8000 \
+            --workers ${WEB_WORKERS:-4} --log-level info"]

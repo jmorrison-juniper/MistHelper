@@ -103,6 +103,22 @@ curl -X POST http://localhost:8000/api/v1/audit/export \
 2. Check config sync ran: `GET /api/v1/sync/status?org_id=...`
 3. Review worker logs: `docker compose logs worker`
 
+### Sessions Lost Between Requests (Intermittent 401)
+
+The session store keeps its records in Redis. When Redis does not answer, the
+store falls back to a process-local map. That map is invisible to every other
+worker, so a multi-worker deployment loses a session on every request that
+lands on another worker (issue #2051).
+
+1. Verify Redis connectivity: `docker compose exec redis redis-cli PING`
+2. If Redis is down, expect the warning `Session store fallback is active` in
+   the API log. The fallback is safe with one worker only.
+3. A build with `WEB_WORKERS` greater than 1 and no Redis raises
+   `Redis is required for the session store when more than one worker runs`.
+   Start Redis, or set `WEB_WORKERS=1`.
+4. The fallback map expires each record after the 8 hour session lifetime, so
+   it cannot grow without bound.
+
 ### Database Migrations Failed
 
 ```bash
