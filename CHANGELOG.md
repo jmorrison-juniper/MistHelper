@@ -7,6 +7,15 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Citation reference lint performance (issue #2487)
+
+- **Changed**: The citation lint tool now builds the default file index and
+  source list in one repository walk.
+- **Changed**: The checker now skips the citation regex on lines that cannot
+  hold a citation, and it reuses the source file line count when possible.
+- **Added**: Unit coverage keeps the single-walk path and regex skip path
+  stable.
+
 ### Dashboard data summary performance (issue #2439)
 
 - **Changed**: The web portal dashboard now builds the data summary with one
