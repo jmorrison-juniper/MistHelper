@@ -1,0 +1,97 @@
+{
+  "scan_command": {
+    "tracked": "git ls-files '*.py'",
+    "untracked": "git ls-files --others --exclude-standard '*.py'"
+  },
+  "eligible_file_count": 1411,
+  "tracked_file_count": 1411,
+  "untracked_file_count": 0,
+  "function_count": 27651,
+  "async_function_count": 149,
+  "class_count": 4103,
+  "symbol_count": 31903,
+  "nested_symbol_count": 18107,
+  "parse_error_count": 0,
+  "parse_errors": [],
+  "disposition_counts": {
+    "aggregate boundary only": 407,
+    "benchmark/profile only": 850,
+    "no hook": 95,
+    "production hook": 59
+  },
+  "inclusion_roots": {
+    "MistHelper.py": 1,
+    "__init__.py": 1,
+    "diag_rbo.py": 1,
+    "mist-ops-platform/migrations": 4,
+    "mist-ops-platform/src": 71,
+    "mist-ops-platform/tests": 54,
+    "scripts": 43,
+    "specs": 2,
+    "src": 464,
+    "starlink_dashboard.py": 1,
+    "tests": 673,
+    "tools": 78,
+    "web_portal": 16,
+    "wsgi.py": 1,
+    "wsgi_capture.py": 1
+  },
+  "documented_exclusions": [
+    {
+      "root": ".venv",
+      "python_file_count": 9618,
+      "reason": "Git ignores this package-managed virtual environment. Its files are external dependencies, not repository source."
+    }
+  ],
+  "ignored_python_file_count": 9618,
+  "temporary_scanner_files": {
+    "names": [
+      "_generate.py",
+      "_scan.py"
+    ],
+    "included": false,
+    "reason": "The scan uses these temporary scripts inside the specification directory and removes them before final validation."
+  },
+  "hook_catalog": {
+    "hook_count": 756,
+    "files_with_hooks": 515,
+    "monitor_type_counts": {
+      "allocation_trace": 19,
+      "bounded_diagnostic": 1,
+      "cProfile correlation": 407,
+      "cache": 7,
+      "cache_file": 1,
+      "compute_span": 15,
+      "database": 9,
+      "database_events": 1,
+      "file_io": 4,
+      "gc_diagnostic": 8,
+      "http_transport": 26,
+      "loop_counter": 214,
+      "native_boundary": 1,
+      "operation_span": 27,
+      "serializer": 4,
+      "serializer_file": 5,
+      "stage_span": 1,
+      "startup_import": 6
+    },
+    "disposition_counts": {
+      "aggregate boundary only": 407,
+      "production hook": 89,
+      "targeted diagnostic hook": 260
+    },
+    "strategy_hook_counts": {
+      "1 algorithms/repeated work": 681,
+      "2 I/O/sequential batching": 149,
+      "3 data structures": 390,
+      "4 allocations/copying": 601,
+      "5 serialization/validation": 198,
+      "6 bounded caching": 62,
+      "7 measured Python loops": 651,
+      "8 object layout/GC": 284,
+      "9 startup/imports": 11,
+      "10 native acceleration": 17
+    },
+    "validation_error_count": 0
+  }
+}

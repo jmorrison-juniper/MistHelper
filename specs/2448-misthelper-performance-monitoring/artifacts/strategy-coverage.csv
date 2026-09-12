@@ -1,0 +1,11 @@
+strategy,hook_count,file_count,monitor_types,example_hook_ids
+1 algorithms/repeated work,681,488,cProfile correlation; cache; compute_span; database; database_events; loop_counter; native_boundary; operation_span; serializer; stage_span,hook-0001; hook-0003; hook-0005; hook-0006; hook-0007
+2 I/O/sequential batching,149,126,cProfile correlation; cache_file; database; database_events; file_io; http_transport; operation_span; serializer_file; stage_span,hook-0001; hook-0002; hook-0003; hook-0005; hook-0006
+3 data structures,390,362,allocation_trace; cProfile correlation; cache; compute_span; database; gc_diagnostic; native_boundary; serializer,hook-0014; hook-0015; hook-0016; hook-0017; hook-0018
+4 allocations/copying,601,426,allocation_trace; bounded_diagnostic; cProfile correlation; cache; cache_file; file_io; gc_diagnostic; loop_counter; serializer; serializer_file; startup_import,hook-0004; hook-0014; hook-0015; hook-0016; hook-0017
+5 serialization/validation,198,184,cProfile correlation; file_io; http_transport; serializer; serializer_file; startup_import,hook-0002; hook-0003; hook-0004; hook-0005; hook-0007
+6 bounded caching,62,48,cProfile correlation; cache; cache_file; database; database_events; http_transport,hook-0002; hook-0019; hook-0020; hook-0021; hook-0022
+7 measured Python loops,651,472,bounded_diagnostic; cProfile correlation; compute_span; loop_counter; operation_span; serializer; serializer_file; stage_span,hook-0001; hook-0003; hook-0005; hook-0006; hook-0007
+8 object layout/GC,284,271,allocation_trace; bounded_diagnostic; cProfile correlation; cache; gc_diagnostic,hook-0019; hook-0020; hook-0026; hook-0034; hook-0035
+9 startup/imports,11,11,cProfile correlation; startup_import,hook-0004; hook-0094; hook-0095; hook-0096; hook-0097
+10 native acceleration,17,16,bounded_diagnostic; cProfile correlation; native_boundary; serializer; startup_import,hook-0004; hook-0094; hook-0095; hook-0096; hook-0097
