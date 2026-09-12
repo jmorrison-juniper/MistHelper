@@ -24,9 +24,9 @@ operations because two issues name `getOrgSsrRegistrationCommands`.
 
 ## Phantom Result
 
-The full endpoint issue scan found one operation that does not resolve against
-the installed SDK: `searchOrgClientFingerprints` in issue #1369. It is not in
-any stage-one table.
+The full endpoint issue scan found one wrong operation name in issue #1369.
+The OpenAPI path is site scoped, and the installed SDK defines `searchSiteClientFingerprints`.
+The site table now ships that corrected operation.
 
 ## Constraints
 

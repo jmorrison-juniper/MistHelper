@@ -1,19 +1,24 @@
-# Feature Specification: Mist API Read Operation -- searchOrgClientFingerprints
+# Feature Specification: Mist API Read Operation -- searchSiteClientFingerprints
 
 **Feature Branch**: `861-mist-search-org-client-fingerprints`
 **Created**: 2026-06-29
-**Status**: Draft
-**Input**: User description: "Catalog the missing Mist API GET endpoint `searchOrgClientFingerprints` and add it as a new MistHelper menu item."
+**Status**: Corrected and delivered by issue #1807 stage one
+**Input**: User description: "Catalog the missing Mist API GET endpoint `searchSiteClientFingerprints` and add it as a new MistHelper menu item."
 
 ## Source Endpoint
 
-- **operationId**: `searchOrgClientFingerprints`
+- **operationId**: `searchSiteClientFingerprints`
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/insights/fingerprints/search`
 - **Tag**: `Orgs NAC Fingerprints`
-- **mistapi SDK module**: Not available in the installed `mistapi` package.
-- **mistapi SDK status**: The installed SDK does not define `searchOrgClientFingerprints`.
-- **Nearest SDK operation**: `searchSiteClientFingerprints` in `mistapi.api.v1.sites.insights`.
+- **mistapi SDK module**: `mistapi.api.v1.sites.insights`
+- **mistapi SDK status**: The installed SDK defines `searchSiteClientFingerprints`.
+
+### Decision
+
+The OpenAPI path is site scoped. It takes `site_id`.
+The installed SDK names the operation `searchSiteClientFingerprints`.
+MistHelper ships it in menu 261 with the stage-one site table.
 
 ### Description
 
@@ -45,7 +50,7 @@ Search Client Fingerprints
 ### User Story 1 - Read-only data retrieval (Priority: P1)
 
 A junior NOC engineer launches MistHelper, selects the new menu item, supplies the required identifiers
-(org / site / device as applicable), and receives the JSON payload exposed by `searchOrgClientFingerprints` -- exported to the
+(org / site / device as applicable), and receives the JSON payload exposed by `searchSiteClientFingerprints` -- exported to the
 configured storage backend (CSV, SQLite, or ArangoDB+Redis) under `data/`.
 
 **Why this priority**: This is a read-only Mist API call -- no destructive effect, so it can ship as P1
@@ -59,7 +64,7 @@ item upserts cleanly into SQLite (no duplicate primary keys).
 **Acceptance Scenarios**:
 
 1. **Given** valid credentials and org context, **When** the user selects the new menu item, **Then**
-   MistHelper invokes `mistapi.api.v1.sites.insights.fingerprints.search.searchOrgClientFingerprints()` exactly once per required scope and persists results.
+   MistHelper invokes `mistapi.api.v1.sites.insights.searchSiteClientFingerprints()` once for each selected site and persists results.
 2. **Given** an SSH or container session, **When** the user is prompted for identifiers, **Then**
    `safe_input()` handles EOF gracefully and the operation exits 0 without a traceback.
 3. **Given** repeated runs, **When** SQLite is the active backend, **Then** rows upsert by the configured
@@ -75,11 +80,11 @@ item upserts cleanly into SQLite (no duplicate primary keys).
 
 ## Requirements *(mandatory)*
 
-**FR-001**: Provide a new menu item that invokes `mistapi.api.v1.sites.insights.fingerprints.search.searchOrgClientFingerprints()` via the `mistapi` SDK.
+**FR-001**: Provide a menu path that invokes `mistapi.api.v1.sites.insights.searchSiteClientFingerprints()` via the `mistapi` SDK.
 **FR-002**: Collect required inputs using `safe_input()` so the operation works in SSH and container contexts.
 **FR-003**: Apply rate limiting and retry logic consistent with adjacent menu items (delay_metrics.json + tuning_data.json).
 **FR-004**: Persist results using `DataExporter.write_with_format_selection(data, filename, api_function_name=...)` so CSV/SQLite/ArangoDB backends all work.
-**FR-005**: Register the operationId `searchOrgClientFingerprints` in `ENDPOINT_PRIMARY_KEY_STRATEGIES` with the correct PK strategy (natural / composite / auto-increment).
+**FR-005**: Register the operationId `searchSiteClientFingerprints` in `ENDPOINT_PRIMARY_KEY_STRATEGIES` with the correct PK strategy (natural / composite / auto-increment).
 **FR-006**: Log `INFO` before the API call and `DEBUG` with response counts after, ASCII-only, per Action Logging principle.
 **FR-007**: Add inline comments on every new executable line per Inline Comments principle.
 **FR-008**: Update README.md menu table and CHANGELOG.md with the new operation number.
@@ -109,11 +114,11 @@ item upserts cleanly into SQLite (no duplicate primary keys).
 
 ## Acceptance Criteria Checklist
 
-- [ ] Menu item added with sequential operation number.
+- [ ] Menu 261 includes `searchSiteClientFingerprints`.
 - [ ] `ENDPOINT_PRIMARY_KEY_STRATEGIES` updated.
 - [ ] Inline comments + action logging on every new line.
 - [ ] `DataExporter.write_with_format_selection` used for output.
 - [ ] `safe_input()` used for prompts.
-- [ ] README.md and CHANGELOG.md updated.
+- [ ] Menu documentation states that menu 261 has 58 operations.
 - [ ] `python -m py_compile MistHelper.py`, `python -m ruff check`, `python -m black --check` all green.
-- [ ] Test invocation via `python MistHelper.py --menu <num>` returns 0 on a known org.
+- [ ] The safe exporter tests pass for the corrected SDK operation.
