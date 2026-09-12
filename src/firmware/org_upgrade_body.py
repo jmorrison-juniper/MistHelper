@@ -36,7 +36,7 @@ class OrgUpgradeBody:
         removal could change the target set or the requested schedule.
     """
 
-    _FIELDS = (
+    FIELDS = (
         "all_sites",
         "device_type",
         "site_ids",
@@ -107,7 +107,7 @@ class OrgUpgradeBody:
         """
         if not isinstance(request, Mapping):
             raise ValueError("The upgrade request must contain an object.")
-        if any(key not in cls._FIELDS for key in request):
+        if any(key not in cls.FIELDS for key in request):
             raise ValueError("The upgrade request contains an unsupported field.")
         if request.get("all_sites", False) is not False:
             raise ValueError("The all_sites field must be false.")

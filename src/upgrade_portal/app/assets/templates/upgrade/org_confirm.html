@@ -10,6 +10,7 @@
   <p><strong>Organization:</strong> {{ org_name }}</p>
   <p><strong>Sites:</strong> {{ site_count }}</p>
   <p><strong>Devices:</strong> {{ device_count }}</p>
+  <p><strong>Device families:</strong> {{ device_families | join(', ') if device_families else 'Access points' }}</p>
   <p><strong>Firmware:</strong> {{ options.version }}</p>
   <p><strong>Strategy:</strong> {{ options.strategy }}</p>
 

@@ -1,507 +1,153 @@
-# Tasks: Organization Upgrade Mode for Many Sites
-
-**Feature**: Organization upgrade mode for many sites
-**Source of truth**: `spec.md`, `plan.md`, `research.md`, `data-model.md`,
-`contracts/api-contract.md`, and `contracts/ui-contract.md`
-**Application**: `src/upgrade_portal` (Flask, Jinja, plain JavaScript)
-
-## Baseline
-
-The route lane already exists. `src/upgrade_portal/app/routes/org_upgrade.py`
-serves seven paths, and `factory.py` registers the blueprint `org_upgrade`.
-
-Two offline suites already pass with 180 tests. They are
-`tests/contract/upgrade_portal/test_org_upgrade_routes.py` and
-`tests/unit/upgrade_portal/test_org_upgrade_service.py`.
-
-These tasks close the remaining gaps. They keep every passing test green.
-
-## Format
-
-`[ID] [P?] [Story] Description`
-
-`[P]` marks a task that runs beside another `[P]` task. Two parallel tasks touch
-no common file.
-
-`[Story]` names the user story of `spec.md`.
-
-## Path Conventions
-
-| Area | Root |
-| - | - |
-| Routes | `src/upgrade_portal/app/routes/` |
-| Templates | `src/upgrade_portal/app/assets/templates/` |
-| Browser code | `src/upgrade_portal/app/assets/static/js/portal.js` |
-| Wiring | `src/upgrade_portal/app/wiring.py` |
-| Run model | `src/upgrade_portal/runtime/runs.py` |
-| Cloud service | `src/firmware/org_upgrade_service.py` |
-| Body rules | `src/firmware/org_upgrade_body.py` |
-| Tests | `tests/unit/`, `tests/contract/`, `tests/e2e/` |
-
-## Phase 1: Confirm the Baseline
-
-### T001 [P] Record the passing suites
-
-Run the two present suites. Record the count and the duration.
-
-- **Command**:
-  `python -m pytest tests\contract\upgrade_portal\test_org_upgrade_routes.py tests\unit\upgrade_portal\test_org_upgrade_service.py -q`
-- **Done when**: The report shows 180 passing tests in under 30 seconds.
-
-### T002 [P] Confirm the offline guard
-
-Prove that the socket block stops a live call.
-
-- **Files**: `tests/conftest.py`
-- **Done when**: A test that opens a socket fails with a clear message.
-
-### T003 [P] Record the cloud answer shape
-
-Read one organization job with a laboratory token. Save the answer as a fixture.
-
-- **Files**: `tests/fixtures/org_upgrade_answer.json`
-- **Done when**: The fixture holds `id`, `status`, and a nested `targets` object
-  inside each entry of `upgrades`.
-
-## Phase 2: Defects in the Present Lane
-
-### T004 [Done] Fix the site count defect
-
-- **Files**: `src/upgrade_portal/app/routes/org_upgrade.py`
-- **Depends on**: T003
-- **Work**: Read the counts from each site entry. Sum the totals.
-- **Done when**: The answer shows a true total, a true upgraded count, and a
-  true failed count.
-
-### T005 Add the counts to each site entry
-
-Add `site_name`, `total`, `upgraded`, and `failed` to each entry of
-`site_upgrades`.
-
-- **Files**: `src/upgrade_portal/app/routes/org_upgrade.py`
-- **Depends on**: T004
-- **Done when**: The progress page shows a count for each site.
-
-### T006 [Done] Use a write session with no retry
-
-Each portal sign-in sets zero SDK retries. The default transport adapter permits
-zero retries.
-
-- **Files**: `src/upgrade_portal/app/routes/auth.py`,
-  `src/upgrade_portal/app/routes/org_upgrade.py`
-- **Work**: Check both retry layers before a write.
-- **Done when**: `OrgUpgradeService._check_write_session` passes for a live
-  submission.
-
-### T007 [P] Test the write session rule
-
-Prove that a session with retries fails the write check.
-
-- **Files**: `tests/contract/upgrade_portal/test_org_upgrade_routes.py`
-- **Depends on**: T006
-- **Done when**: The route answers a refusal and calls no SDK operation.
-
-## Phase 3: User Story 5 - The Browser Confirmation Gate (Priority: P1)
-
-### T008 [Done] [US5] Add the gate attributes
-
-Add `data-confirm-word`, `data-confirm-target`, and `data-confirm-hint-for` to
-the confirmation input. Add a hint element.
-
-- **Files**: `src/upgrade_portal/app/assets/templates/upgrade/org_confirm.html`
-- **Done when**: `applyConfirmGate` drives the button with no new JavaScript.
-
-### T009 [Done] [US5] Disable the start button in the markup
-
-Set the `disabled` attribute on the start button.
-
-- **Files**: `src/upgrade_portal/app/assets/templates/upgrade/org_confirm.html`
-- **Depends on**: T008
-- **Done when**: The button stays disabled until the operator types `CONFIRM`.
-
-### T010 [Done] [US5] Move the word into one Jinja variable
-
-Hold the word in one variable, as `upgrade/confirm.html` does at line 74.
-
-- **Files**: `src/upgrade_portal/app/assets/templates/upgrade/org_confirm.html`
-- **Depends on**: T008
-- **Done when**: One line changes the word on the page and in the attribute.
-
-### T011 [P] [US5] Test the browser gate
-
-- **Files**: `tests/e2e/upgrade_portal/test_org_upgrade_flow.py`
-- **Done when**: A lower-case word keeps the button disabled.
-
-## Phase 4: User Story 9 - Locks for Many Sites (Priority: P1)
-
-### T012 [US9] Take one lock for each selected site
-
-Request one lock in `select.choose_sites`. Store each grant under
-`site_lock_records`.
-
-- **Files**: `src/upgrade_portal/app/routes/select.py`
-- **Done when**: Two sites give two grants in the session.
-
-### T013 [US9] Release every lock when one acquire fails
-
-Release each held grant when one request fails.
-
-- **Files**: `src/upgrade_portal/app/routes/select.py`
-- **Depends on**: T012
-- **Done when**: A partial lock set leaves no held grant.
-
-### T014 [US9] Add the lock guard to the write path
-
-Read every lock again in `submit_upgrade`. Answer `site_locked` with HTTP 409.
-Answer `lock_store_unreachable` with HTTP 503.
-
-- **Files**: `src/upgrade_portal/app/routes/org_upgrade.py`
-- **Depends on**: T012
-- **Done when**: A locked site blocks the submission.
-
-### T015 [US9] Beat every held lock in the browser
-
-Extend `startLockBeat` to hold a list of site identifiers.
-
-- **Files**: `src/upgrade_portal/app/assets/static/js/portal.js`,
-  `src/upgrade_portal/app/assets/templates/partials/lock_banner.html`
-- **Depends on**: T012
-- **Done when**: The banner posts one heartbeat for each site.
-
-### T016 [US9] Release every lock when the run ends
-
-- **Files**: `src/upgrade_portal/app/routes/org_upgrade.py`
-- **Depends on**: T014
-- **Done when**: A final job state leaves no held grant.
-
-### T017 [P] [US9] Test the lock refusals
-
-Cover the five acceptance scenarios of User Story 9.
-
-- **Files**: `tests/unit/upgrade_portal/test_org_upgrade_guards.py`
-- **Done when**: HTTP 409 and HTTP 503 both appear with the right code.
-
-## Phase 5: User Story 3 - Pre-Checks (Priority: P1)
-
-### T018 [US3] Read the pre-check state of each site
-
-Write a helper that reads the newest verified capture of each selected site.
-
-- **Files**: `src/upgrade_portal/app/routes/org_upgrade.py`
-- **Done when**: The helper returns one state for each site.
-
-### T019 [US3] Show the pre-check column
-
-Add a pre-check column and a capture link to the site table.
-
-- **Files**: `src/upgrade_portal/app/assets/templates/upgrade/org_options.html`
-- **Depends on**: T018
-- **Done when**: A site with no capture shows `Missing` and a capture link.
-
-### T020 [US3] Add the pre-check guard to the write path
-
-Answer `precheck_missing` with HTTP 409 when one site holds no baseline.
-
-- **Files**: `src/upgrade_portal/app/routes/org_upgrade.py`
-- **Depends on**: T018
-- **Done when**: A missing baseline blocks the submission.
-
-### T021 [P] [US3] Test the pre-check gate
-
-Cover the four acceptance scenarios of User Story 3.
-
-- **Files**: `tests/unit/upgrade_portal/test_org_upgrade_guards.py`
-- **Done when**: The refusal names the site with no baseline.
-
-## Phase 6: User Story 4 - Options (Priority: P2)
-
-### T022 [P] [US4] Test the body rules
-
-Cover every rule of `OrgUpgradeBody`.
-
-- **Files**: `tests/unit/firmware/test_org_upgrade_body.py`
-- **Done when**: Each invalid input raises `ValueError` with a plain message.
-
-### T023 [US4] Add the serial strategy option
-
-Add a `serial` option to the strategy group.
-
-- **Files**: `src/upgrade_portal/app/assets/templates/upgrade/org_options.html`
-- **Done when**: The page offers four strategies.
-
-### T024 [US4] Add the force control
-
-Add a `force` control. `read_options` maps it to `versions[0].force`.
-
-- **Files**: `src/upgrade_portal/app/assets/templates/upgrade/org_options.html`,
-  `src/upgrade_portal/app/routes/org_upgrade.py`
-- **Done when**: The body carries the boolean flag.
-
-### T025 [US4] Hide the dependent controls
-
-Hide the phases input outside the canary strategy. Hide the failure input for
-the big bang strategy.
-
-- **Files**: `src/upgrade_portal/app/assets/templates/upgrade/org_options.html`
-- **Depends on**: T023
-- **Done when**: `filterAdvancedUpgradeControls` drives both controls.
-
-### T026 [US4] Move the stored body to the run record
-
-The session holds `org_upgrade_options` today. A worker restart loses that
-request context.
-
-- **Files**: `src/upgrade_portal/app/routes/org_upgrade.py`,
-  `src/upgrade_portal/runtime/runs.py`
-- **Depends on**: T028
-- **Done when**: The session holds a run identifier and no body.
-
-## Phase 7: User Story 6 - The Run Record and the Audit (Priority: P2)
-
-### T027 [US6] Extend the run record
-
-Add the seven new fields of `data-model.md`.
-
-- **Files**: `src/upgrade_portal/runtime/runs.py`
-- **Fields**: `upgrade_mode`, `site_ids`, `org_upgrade_id`, `org_upgrade_body`,
-  `pre_capture_ids`, `post_capture_ids`, `site_lock_ids`.
-- **Done when**: The builder writes every field and the present tests pass.
-
-### T028 [US6] Create a run record for the organization job
-
-- **Files**: `src/upgrade_portal/app/routes/org_upgrade.py`
-- **Depends on**: T027
-- **Done when**: The store holds one record for each organization job.
-
-### T029 [US6] Write the audit entry
-
-Write one audit entry for each write. Mask the API token.
-
-- **Files**: `src/upgrade_portal/app/routes/org_upgrade.py`,
-  `src/upgrade_portal/audit/logger.py`
-- **Depends on**: T028
-- **Done when**: The entry names the organization, the sites, and the answer.
-
-### T030 [P] [US6] Test the record and the audit
-
-- **Files**: `tests/contract/upgrade_portal/test_org_upgrade_routes.py`
-- **Depends on**: T029
-- **Done when**: A submission writes one record and one audit entry.
-
-## Phase 8: User Story 7 - Progress, Poll, and History (Priority: P2)
-
-### T031 [US7] Add the browser poll
-
-Add a poll block beside `refreshRunStatus`. Read the identifier from
-`data-upgrade-id`.
-
-- **Files**: `src/upgrade_portal/app/assets/static/js/portal.js`,
-  `src/upgrade_portal/app/assets/templates/upgrade/org_progress.html`
-- **Depends on**: T005
-- **Done when**: The page refreshes without an operator action.
-
-### T032 [US7] Stop the poll on a final state
-
-Stop the poll on HTTP 401 and on a final job state.
-
-- **Files**: `src/upgrade_portal/app/assets/static/js/portal.js`
-- **Depends on**: T031
-- **Done when**: A finished job stops the network traffic.
-
-### T033 [US7] Add the job history route
-
-Add `GET /api/org-upgrades`. Call `listOrgDeviceUpgrades`.
-
-- **Files**: `src/upgrade_portal/app/routes/org_upgrade.py`,
-  `src/firmware/org_upgrade_service.py`
-- **Done when**: The operator finds a job after an uncertain answer.
-
-### T034 [US7] Add the cancel control to the page
-
-Add a control with `data-testid="org-upgrade-cancel"`. The control posts
-`confirmation` with the word `CANCEL`.
-
-- **Files**: `src/upgrade_portal/app/assets/templates/upgrade/org_progress.html`
-- **Done when**: The page states that a cancellation restores no upgraded
-  device.
-
-### T035 [P] [US7] Test the poll and the history
-
-- **Files**: `tests/contract/upgrade_portal/test_org_upgrade_routes.py`
-- **Done when**: The history answer lists the jobs of the organization.
-
-## Phase 9: User Story 8 - Post-Checks and Comparison (Priority: P2)
-
-### T036 [US8] Start a post-check for each site
-
-Start a capture for each selected site when the job reaches a final state.
-
-- **Files**: `src/upgrade_portal/app/routes/org_upgrade.py`,
-  `src/upgrade_portal/app/routes/capture.py`
-- **Depends on**: T028
-- **Done when**: The record holds one post-check identifier for each site.
-
-### T037 [US8] Add the comparison links
-
-Add one comparison link for each site to the progress page.
-
-- **Files**: `src/upgrade_portal/app/assets/templates/upgrade/org_progress.html`
-- **Depends on**: T036
-- **Done when**: Each link opens the comparison of two captures.
-
-### T038 [P] [US8] Test the post-check path
-
-Cover the four acceptance scenarios of User Story 8.
-
-- **Files**: `tests/e2e/upgrade_portal/test_org_upgrade_flow.py`
-- **Done when**: A failed post-check marks one site and keeps the others.
-
-## Phase 10: User Story 1 and User Story 2 - Scope Hygiene (Priority: P3)
-
-### T039 [Done] [US1] Clear the stale site set
-
-Clear `OperatorSession.selected_site_ids` when the operator changes the
-organization or the mode.
-
-- **Files**: `src/upgrade_portal/app/routes/select.py`
-- **Done when**: A mode change removes the previous site set.
-
-### T040 [US2] Refuse an empty site set
-
-Refuse `POST /select/site` when the multi-site body names no site.
-
-- **Files**: `src/upgrade_portal/app/routes/select.py`
-- **Done when**: The answer names the empty selection.
-
-### T041 [US2] Refuse a duplicate site
-
-- **Files**: `src/upgrade_portal/app/routes/select.py`
-- **Done when**: The answer names the duplicate site.
-
-### T042 [P] [US1] [US2] Test the scope rules
-
-- **Files**: `tests/contract/upgrade_portal/test_select_mode.py`
-- **Done when**: The nine acceptance scenarios of the two stories pass.
-
-## Phase 11: Polish
-
-### T043 Align the confirmation field names
-
-Change the organization lane to `confirm`, or change the single-site lane to
-`confirmation`. Change both sides in one task.
-
-- **Files**: `src/upgrade_portal/app/routes/org_upgrade.py`,
-  `src/upgrade_portal/app/routes/upgrade.py`, both confirmation templates
-- **Depends on**: T008
-- **Done when**: One field name serves both lanes and every test passes.
-
-### T044 [P] Lint the Python code
-
-```powershell
-python -m ruff check src\upgrade_portal src\firmware
-python -m ruff format --check src\upgrade_portal src\firmware
-```
-
-- **Done when**: The command reports no violation.
-
-### T045 [P] Grade every changed Markdown file
-
-```powershell
-python -m tools.ste_linter --min-score 80 specs\2200-org-multisite-firmware-upgrade\spec.md
-```
-
-- **Done when**: Every file scores 80 or more.
-
-### T046 Run the whole portal suite
-
-```powershell
-python -m pytest tests\unit\upgrade_portal tests\contract\upgrade_portal tests\e2e\upgrade_portal -q
-```
-
-- **Done when**: Every test passes offline in under 30 seconds.
-
-### T047 Check the single-site flow for a regression
-
-- **Files**: `tests/contract/upgrade_portal/test_select.py`,
-  `tests/e2e/upgrade_portal/test_site_selection.py`
-- **Done when**: Every single-site test passes without a change.
-
-### T048 Add the inline comments and the action logs
-
-Add one inline comment to every new line. Add an information log before each
-action and a debug log after it.
-
-- **Files**: Every changed Python file
-- **Done when**: A review finds no uncommented line and no silent action.
-
-### T049 Record the answers to the open questions
-
-Write the answers of `research.md` section 7 into that file.
-
-- **Files**: `specs/2200-org-multisite-firmware-upgrade/research.md`
-- **Done when**: Each open question holds a verified answer.
-
-### T050 Update the changelog and the README
-
-Add the feature to `CHANGELOG.md`. Add the mode to the portal section of
-`README.md`.
-
-- **Done when**: Both files name the access point limit.
-
-## Dependencies
-
-```text
-T001, T002, T003 -> T004 -> T005 -> T031 -> T032
-T006 -> T007
-T008 -> T009, T010, T011, T043
-T012 -> T013, T014, T015
-T014 -> T016, T017
-T018 -> T019, T020, T021
-T023 -> T025
-T027 -> T028 -> T026, T029, T036
-T029 -> T030
-T036 -> T037 -> T038
-Every task -> T044, T045, T046, T047
-```
-
-## Parallel Opportunities
-
-Run these groups together. Each group touches separate files.
-
-**Group A (baseline)**: T001, T002, T003.
-
-**Group B (tests)**: T007, T011, T017, T021, T022, T030, T035, T038, T042.
-
-**Group C (polish)**: T044, T045.
-
-## Implementation Strategy
-
-### The safety release
-
-Finish Phase 2 through Phase 5. The lane then holds a true device count and a
-write session with no retry. It also holds a browser gate, a lock for each site,
-and a baseline for each site.
-
-Warning: do not ship the lane without Phase 4 and Phase 5, because a job can
-interrupt service with no proof of the result.
-
-### Incremental delivery
-
-1. Phase 1 records the baseline.
-2. Phase 2 repairs the present defects.
-3. Phase 3 adds the browser gate.
-4. Phase 4 adds the locks.
-5. Phase 5 adds the baseline gate.
-6. Phase 6 and Phase 7 add the options and the record.
-7. Phase 8 and Phase 9 add the watch and the proof.
-8. Phase 10 and Phase 11 add the hygiene and the quality gates.
-
-## Notes
-
-- Keep every view function under 25 lines.
-- Keep the cloud calls in the service class.
-- Keep the confirmation word in one Jinja variable.
-- Keep the site operations of the single-site flow without a change.
-- Add no automatic retry to any write path.
-- Add no switch support and no gateway support in this feature.
-- Add no SSR support and no Mist Edge support in this feature.
+# Tasks: Organization Multi-Site Firmware Upgrade
+
+**Issue**: #2475
+**Source**: The specification files in this directory
+
+## Phase 1: Verify the Contracts
+
+- [ ] T001 Record the OpenAPI AP-only description for
+  `POST /api/v1/orgs/{org_id}/devices/upgrade`.
+- [ ] T002 Add a contract test for the conflicting `device_type` values.
+- [ ] T003 Add a contract test for the conflicting `firmware_type` values.
+- [ ] T004 Record the conflicting saved organization guide example.
+- [ ] T005 Verify the existing site and SSR routes in
+  `src/firmware/upgrade_service.py`.
+
+## Phase 2: Model the Aggregate
+
+- [ ] T006 Add a durable aggregate operation record.
+- [ ] T007 Add durable child operation records.
+- [ ] T008 Store child identity, route, scope, organization, site, and family.
+- [ ] T009 Store target identifiers, request body, status, and errors.
+- [ ] T010 Store submit claims and cancel claims.
+- [ ] T011 Add atomic conditional updates for every claim.
+- [ ] T012 Recover an incomplete claimed child as `unknown`.
+
+## Phase 3: Build the Mixed Plan
+
+- [ ] T013 Build an immutable target snapshot.
+- [ ] T014 Verify organization ownership for every selected site.
+- [ ] T015 Verify site ownership for every selected target.
+- [ ] T016 Create at most one organization AP child.
+- [ ] T017 Set `all_sites` to false for the AP child.
+- [ ] T018 Set `device_type` and `firmware_type` to `ap`.
+- [ ] T019 Route switch groups by site through `upgrade_service.py`.
+- [ ] T020 Route Junos gateway groups by site through `upgrade_service.py`.
+- [ ] T021 Keep the organization SSR route for classified SSR targets.
+- [ ] T022 Reject every Mist Edge target.
+- [ ] T023 Store stable child identifiers before confirmation.
+
+## Phase 4: Build the Seamless UI
+
+- [ ] T024 Keep the sequence organization, mode, sites, options, confirmation,
+  and progress.
+- [ ] T025 Use AP, switch, and gateway terms in all operator text.
+- [ ] T026 Add family and target controls to the options page.
+- [ ] T027 Show each child route and target count on the confirmation page.
+- [ ] T028 Show family-specific warnings on the confirmation page.
+- [ ] T029 Show one progress row for every child.
+- [ ] T030 Show partial, failed, unknown, and unsubmitted states.
+- [ ] T031 Show cancel status and cancel errors for every child.
+- [ ] T032 Keep every driven control under a stable `data-testid`.
+
+## Phase 5: Protect Submission
+
+- [ ] T033 Verify the authenticated owner before each action.
+- [ ] T034 Verify the active organization before each action.
+- [ ] T035 Verify every site and target before submission.
+- [ ] T036 Verify every required site lock before each child claim.
+- [ ] T037 Store and verify the canonical confirmation plan hash.
+- [ ] T038 Require the exact confirmation text.
+- [ ] T039 Require a valid CSRF token for every browser write.
+- [ ] T040 Reject a stale confirmation after any plan change.
+- [ ] T041 Reject a repeated submit after a child claim.
+
+## Phase 6: Enforce One Write Attempt
+
+- [ ] T042 Use a session with zero SDK retries.
+- [ ] T043 Use transport adapters with zero retries.
+- [ ] T044 Refuse a write session that permits retries.
+- [ ] T045 Claim each child before its cloud request.
+- [ ] T046 Increment `write_attempts` only during the first claim.
+- [ ] T047 Send one cloud request for each claimed child.
+- [ ] T048 Store `unknown` after an uncertain write result.
+- [ ] T049 Never replay an `unknown` or claimed child.
+- [ ] T050 Reconcile unknown children with read operations only.
+
+## Phase 7: Aggregate Status and Cancellation
+
+- [ ] T051 Derive the aggregate display state from child states.
+- [ ] T052 Preserve child detail when the aggregate is partial.
+- [ ] T053 Preserve every accepted child after a later failure.
+- [ ] T054 Mark untouched children as `not_submitted`.
+- [ ] T055 Require owner, organization, confirmation, and CSRF checks for cancel.
+- [ ] T056 Select each cancel route from the stored child route.
+- [ ] T057 Claim each child cancel before the cloud request.
+- [ ] T058 Send no automatic cancel retry.
+- [ ] T059 Store `cancel_unknown` after an uncertain cancel result.
+- [ ] T060 State that cancellation does not restore firmware.
+
+## Phase 8: Unit Tests
+
+- [ ] T061 Test AP aggregation across many sites.
+- [ ] T062 Test switch grouping by site and version.
+- [ ] T063 Test Junos gateway grouping by site and version.
+- [ ] T064 Test SSR classification and organization routing.
+- [ ] T065 Test Mist Edge rejection.
+- [ ] T066 Test aggregate state calculation.
+- [ ] T067 Test submit and cancel claim transitions.
+- [ ] T068 Test stale plan hash rejection.
+
+## Phase 9: Contract Tests
+
+- [ ] T069 Test the AP-only organization request body.
+- [ ] T070 Test each site request body from `upgrade_service.py`.
+- [ ] T071 Test the organization SSR request body.
+- [ ] T072 Test cloud identifier storage for each route.
+- [ ] T073 Test malformed and empty cloud answers.
+- [ ] T074 Test status and cancel answer normalization.
+- [ ] T075 Keep every contract test offline.
+
+## Phase 10: Integration Tests
+
+- [ ] T076 Test one aggregate with AP, switch, Junos, and SSR children.
+- [ ] T077 Test partial submission after a child failure.
+- [ ] T078 Test process loss after a durable claim.
+- [ ] T079 Test an uncertain cloud answer.
+- [ ] T080 Test duplicate form posts and replay prevention.
+- [ ] T081 Test cross-user operation access.
+- [ ] T082 Test a site from another organization.
+- [ ] T083 Test lock loss before a later child claim.
+- [ ] T084 Test mixed cancellation results.
+
+## Phase 11: Playwright Tests
+
+- [ ] T085 Test the complete six-page sequence.
+- [ ] T086 Test an AP-only selection.
+- [ ] T087 Test a switch-only selection.
+- [ ] T088 Test a gateway-only selection.
+- [ ] T089 Test a mixed selection.
+- [ ] T090 Test the confirmation gate and stale confirmation refusal.
+- [ ] T091 Test progress after a browser reload.
+- [ ] T092 Test cancellation with partial and unknown results.
+
+## Phase 12: Validation
+
+- [ ] T093 Run the focused unit, contract, and integration tests.
+- [ ] T094 Run the Playwright suite with network stand-ins.
+- [ ] T095 Run the full offline portal suite.
+- [ ] T096 Verify that the socket guard blocks outbound traffic.
+- [ ] T097 Grade every changed Markdown file with the STE linter.
+- [ ] T098 Confirm that no live Mist write ran.
+
+## Dependency Order
+
+Complete T001 through T005 before route implementation.
+
+Complete T006 through T012 before submission work.
+
+Complete T013 through T023 before the confirmation UI.
+
+Complete T033 through T050 before cancellation work.
+
+Complete all implementation tasks before T093 through T098.
