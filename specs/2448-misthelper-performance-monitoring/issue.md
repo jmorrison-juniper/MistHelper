@@ -11,10 +11,10 @@ Do not add permanent timers to every function.
 
 The AST inventory covers every Python file from the required tracked and
 untracked Git lists.
-It contains 1,411 files and 31,903 symbols.
+It contains 1,465 files and 32,859 symbols.
 The symbols include 27,651 functions, 149 asynchronous functions, and 4,103
 classes.
-The scan found 18,107 nested symbols and no parse errors.
+The scan found 18,611 nested symbols and no parse errors.
 
 The scan excludes 9,618 ignored Python files under `.venv`.
 These files are package-managed external dependencies.
@@ -22,22 +22,22 @@ These files are package-managed external dependencies.
 The file dispositions are:
 
 - 59 `production hook` files.
-- 407 `aggregate boundary only` files.
-- 850 `benchmark/profile only` files.
-- 95 `no hook` files.
+- 416 `aggregate boundary only` files.
+- 886 `benchmark/profile only` files.
+- 104 `no hook` files.
 
 ## Hook catalog
 
 | Measure | Value |
 | --- | --- |
-| Planned hooks | 756 |
-| Files with a planned hook | 515 |
+| Planned hooks | 765 |
+| Files with a planned hook | 524 |
 | Catalog validation errors | 0 |
 
 The hook dispositions are:
 
 - 89 `production hook` rows at resource boundaries.
-- 407 `aggregate boundary only` rows for profiler correlation.
+- 416 `aggregate boundary only` rows for profiler correlation.
 - 260 `targeted diagnostic hook` rows for loop, allocation, object layout, and
   native costs.
 
@@ -51,7 +51,7 @@ defines each type, its tool, its clock, its metrics, and its measured boundary.
 
 | Monitor type | Hooks |
 | --- | --- |
-| `cProfile correlation` | 407 |
+| `cProfile correlation` | 416 |
 | `loop_counter` | 214 |
 | `operation_span` | 27 |
 | `http_transport` | 26 |
@@ -77,14 +77,14 @@ Each of the ten optimization strategies has hook evidence.
 
 | Strategy | Hooks | Files |
 | --- | --- | --- |
-| 1 algorithms and repeated work | 681 | 488 |
-| 2 input and output counts | 149 | 126 |
-| 3 data structures | 390 | 362 |
-| 4 allocations and copying | 601 | 426 |
-| 5 serialization and validation | 198 | 184 |
+| 1 algorithms and repeated work | 690 | 497 |
+| 2 input and output counts | 152 | 129 |
+| 3 data structures | 399 | 371 |
+| 4 allocations and copying | 607 | 432 |
+| 5 serialization and validation | 202 | 188 |
 | 6 bounded caching | 62 | 48 |
-| 7 measured Python loops | 651 | 472 |
-| 8 object layout and collection | 284 | 271 |
+| 7 measured Python loops | 660 | 481 |
+| 8 object layout and collection | 287 | 274 |
 | 9 startup and imports | 11 | 11 |
 | 10 native acceleration | 17 | 16 |
 

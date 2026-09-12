@@ -18,9 +18,9 @@ git ls-files '*.py'
 git ls-files --others --exclude-standard '*.py'
 ```
 
-The final inventory contains 1,411 Python files and 31,903 symbols.
-The symbols include 27,651 functions, 149 asynchronous functions, and 4,103 classes.
-The inventory identifies 18,107 nested symbols and no parse errors.
+The final inventory contains 1,465 Python files and 32,859 symbols.
+The symbols include 28,501 functions, 167 asynchronous functions, and 4,191 classes.
+The inventory identifies 18,611 nested symbols and no parse errors.
 
 The scan excludes 9,618 ignored Python files under `.venv`.
 Git identifies this directory as a virtual environment.
@@ -37,11 +37,11 @@ Each eligible file has one disposition.
 | Disposition | Meaning | File count |
 | --- | --- | ---: |
 | `production hook` | Add one or more low-overhead hooks at a stable runtime boundary. | 59 |
-| `aggregate boundary only` | Use a parent span and an opt-in profiler. Do not add a local timer. | 407 |
-| `benchmark/profile only` | Use the file only to drive or support controlled measurements. | 850 |
-| `no hook` | The file has no useful runtime boundary, or it is a migration or specification file. | 95 |
+| `aggregate boundary only` | Use a parent span and an opt-in profiler. Do not add a local timer. | 416 |
+| `benchmark/profile only` | Use the file only to drive or support controlled measurements. | 886 |
+| `no hook` | The file has no useful runtime boundary, or it is a migration or specification file. | 104 |
 
-The hook catalog contains 89 production-hook records and 407 aggregate records.
+The hook catalog contains 89 production-hook records and 416 aggregate records.
 Each record names an exact file and an exact symbol or class.
 
 ## Functional requirements

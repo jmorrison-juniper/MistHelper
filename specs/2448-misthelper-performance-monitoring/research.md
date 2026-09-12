@@ -16,7 +16,7 @@ This content review supports the disposition and hook choices.
 
 ## Inclusion and exclusion
 
-The scan includes 1,411 files from the two required Git commands.
+The scan includes 1,465 files from the two required Git commands.
 It includes application, portal, platform, test, tool, script, migration, and specification Python files.
 
 Git reports 9,618 ignored Python files under `.venv`.
@@ -39,7 +39,7 @@ These files can drive benchmarks and profiles, but they must not emit production
 
 The production roots hold central transport, database, cache, export, portal, and startup boundaries.
 The hook catalog selects 59 files for durable hooks.
-It assigns 407 other runtime files to profiler correlation.
+It assigns 416 other runtime files to profiler correlation.
 
 ## Existing measurement facilities
 

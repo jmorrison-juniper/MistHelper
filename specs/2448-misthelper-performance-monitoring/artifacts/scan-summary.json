@@ -3,34 +3,32 @@
     "tracked": "git ls-files '*.py'",
     "untracked": "git ls-files --others --exclude-standard '*.py'"
   },
-  "eligible_file_count": 1411,
-  "tracked_file_count": 1411,
+  "eligible_file_count": 1465,
+  "tracked_file_count": 1465,
   "untracked_file_count": 0,
-  "function_count": 27651,
-  "async_function_count": 149,
-  "class_count": 4103,
-  "symbol_count": 31903,
-  "nested_symbol_count": 18107,
+  "function_count": 28501,
+  "async_function_count": 167,
+  "class_count": 4191,
+  "symbol_count": 32859,
+  "nested_symbol_count": 18611,
   "parse_error_count": 0,
   "parse_errors": [],
   "disposition_counts": {
-    "aggregate boundary only": 407,
-    "benchmark/profile only": 850,
-    "no hook": 95,
-    "production hook": 59
+    "production hook": 59,
+    "benchmark/profile only": 886,
+    "no hook": 104,
+    "aggregate boundary only": 416
   },
   "inclusion_roots": {
     "MistHelper.py": 1,
     "__init__.py": 1,
     "diag_rbo.py": 1,
-    "mist-ops-platform/migrations": 4,
-    "mist-ops-platform/src": 71,
-    "mist-ops-platform/tests": 54,
+    "mist-ops-platform": 130,
     "scripts": 43,
     "specs": 2,
-    "src": 464,
+    "src": 475,
     "starlink_dashboard.py": 1,
-    "tests": 673,
+    "tests": 715,
     "tools": 78,
     "web_portal": 16,
     "wsgi.py": 1,
@@ -53,12 +51,13 @@
     "reason": "The scan uses these temporary scripts inside the specification directory and removes them before final validation."
   },
   "hook_catalog": {
-    "hook_count": 756,
-    "files_with_hooks": 515,
+    "inventory_file_rows": 1465,
+    "hook_count": 765,
+    "files_with_hooks": 524,
     "monitor_type_counts": {
       "allocation_trace": 19,
       "bounded_diagnostic": 1,
-      "cProfile correlation": 407,
+      "cProfile correlation": 416,
       "cache": 7,
       "cache_file": 1,
       "compute_span": 15,
@@ -76,22 +75,36 @@
       "startup_import": 6
     },
     "disposition_counts": {
-      "aggregate boundary only": 407,
       "production hook": 89,
+      "aggregate boundary only": 416,
       "targeted diagnostic hook": 260
     },
     "strategy_hook_counts": {
-      "1 algorithms/repeated work": 681,
-      "2 I/O/sequential batching": 149,
-      "3 data structures": 390,
-      "4 allocations/copying": 601,
-      "5 serialization/validation": 198,
+      "1 algorithms/repeated work": 690,
+      "2 I/O/sequential batching": 152,
+      "7 measured Python loops": 660,
+      "5 serialization/validation": 202,
       "6 bounded caching": 62,
-      "7 measured Python loops": 651,
-      "8 object layout/GC": 284,
+      "4 allocations/copying": 607,
       "9 startup/imports": 11,
-      "10 native acceleration": 17
+      "10 native acceleration": 17,
+      "3 data structures": 399,
+      "8 object layout/GC": 287
     },
-    "validation_error_count": 0
+    "strategy_file_counts": {
+      "1 algorithms/repeated work": 497,
+      "2 I/O/sequential batching": 129,
+      "7 measured Python loops": 481,
+      "5 serialization/validation": 188,
+      "6 bounded caching": 48,
+      "4 allocations/copying": 432,
+      "9 startup/imports": 11,
+      "10 native acceleration": 16,
+      "3 data structures": 371,
+      "8 object layout/GC": 274
+    },
+    "unresolved_symbol_count": 0,
+    "validation_error_count": 0,
+    "validation_errors": []
   }
 }
