@@ -123,6 +123,9 @@
     var UPGRADE_STATE_TESTID = "upgrade-state";
     var UPGRADE_REFRESH_TESTID = "upgrade-refresh-button";
     var ORG_UPGRADE_REFRESH_TESTID = "org-upgrade-refresh";
+    var SIGNIN_EMAIL_TESTID = "signin-email";  /* The browser-token mode must relax this provider field. */
+    var SIGNIN_PASSWORD_TESTID = "signin-password";  /* The browser-token mode must relax this provider field. */
+    var SIGNIN_ERROR_TESTID = "signin-error";  /* The sign-in page already owns a dedicated error region. */
     var BROWSER_TOKEN_SIGNIN_TESTID = "signin-browser-token";
 
     /* The stop identifiers. contracts/ui-testids.md lines 117-125 fix every
@@ -2137,32 +2140,78 @@
         if (!form) {
             return;
         }
+        var emailInput = byTestId(SIGNIN_EMAIL_TESTID, form);  /* The browser-token mode does not use an address. */
+        var passwordInput = byTestId(SIGNIN_PASSWORD_TESTID, form);  /* The browser-token mode does not use a password. */
+        var emailWasRequired = emailInput && emailInput.hasAttribute("required");  /* Keep the original page rule. */
+        var passwordWasRequired = passwordInput && passwordInput.hasAttribute("required");  /* Keep the original page rule. */
+
+        function selectedMode() {
+            return form.querySelector('input[name="mode"]:checked');  /* Read the form state at the time of use. */
+        }
+
+        function usesBrowserToken() {
+            var selected = selectedMode();  /* Store the mode once so the comparison stays stable. */
+            return Boolean(selected && selected.value === "browser_token");  /* Only the browser-token mode relaxes fields. */
+        }
+
+        function setRequired(control, required) {
+            if (!control) {  /* A trimmed template may omit one provider field. */
+                return;  /* No control exists, so no required state can change. */
+            }
+            if (required) {  /* The current credential mode needs this provider field. */
+                control.setAttribute("required", "");  /* Restore native browser validation for provider modes. */
+                return;  /* One state change is enough for this control. */
+            }
+            control.removeAttribute("required");  /* Let browser-token sign-in submit without provider fields. */
+        }
+
+        function syncCredentialRequirements() {
+            var browserTokenMode = usesBrowserToken();  /* The selected mode drives native validation. */
+            setRequired(emailInput, emailWasRequired && !browserTokenMode);  /* Keep the address guard for provider modes. */
+            setRequired(passwordInput, passwordWasRequired && !browserTokenMode);  /* Keep the password guard for provider modes. */
+        }
+
+        function showSigninError(message) {
+            var region = byTestId(SIGNIN_ERROR_TESTID);  /* Prefer the error region named in the sign-in contract. */
+            var text = String(message || "The request failed.");  /* Always give the operator a sentence. */
+            if (!region) {  /* A future template may not carry the sign-in region. */
+                return showFlash(text, "danger");  /* Fall back to the shared flash region. */
+            }
+            region.textContent = text;  /* Use text, never markup, because the value can come from a refusal. */
+            region.hidden = false;  /* Make the refusal visible without a page reload. */
+            return region;  /* Let a caller or a test inspect the updated region. */
+        }
+
+        Array.prototype.forEach.call(form.querySelectorAll('input[name="mode"]'), function (modeInput) {
+            modeInput.addEventListener("change", syncCredentialRequirements);  /* Native validation follows the mode. */
+        });
+        syncCredentialRequirements();  /* Initialize the required state before the first submit. */
+
         form.addEventListener("submit", function (event) {
-            var selected = form.querySelector('input[name="mode"]:checked');
-            if (!selected || selected.value !== "browser_token") {
-                return;
+            if (!usesBrowserToken()) {  /* Provider and environment modes keep the normal form submit path. */
+                return;  /* Native browser and server validation own non-browser-token modes. */
             }
-            event.preventDefault();
-            var token = tokenInput.value.trim();
-            if (!token) {
-                showFlash("Type a Mist API token before you sign in.", "danger");
-                return;
+            event.preventDefault();  /* The script sends JSON, so the token never enters a page URL. */
+            var token = tokenInput.value.trim();  /* Remove accidental spaces before the cloud-boundary call. */
+            if (!token) {  /* An empty token would spend a pointless server request. */
+                showSigninError("Type a Mist API token before you sign in.");  /* Tell the operator the missing field. */
+                return;  /* Stay on the form until the operator supplies a token. */
             }
-            var hostInput = form.querySelector('select[name="host"]');
-            var body = {
-                mode: "browser_token",
-                host: hostInput ? hostInput.value : "",
-                token: token
+            var hostInput = form.querySelector('select[name="host"]');  /* The route still checks the host catalog. */
+            var body = {  /* Build the only JSON body that the browser-token endpoint accepts. */
+                mode: "browser_token",  /* Tell the route to use the browser-token path. */
+                host: hostInput ? hostInput.value : "",  /* Keep the selected Mist cloud with the token. */
+                token: token  /* The route sends this value to the token session builder only. */
             };
-            tokenInput.value = "";
+            tokenInput.value = "";  /* Clear the field before a refusal can leave the value on screen. */
             fetchJson("/auth/signin", { method: "POST", body: body })
                 .then(function (answer) {
-                    if (answer && answer.next === "/select/org") {
-                        window.location.assign(answer.next);
+                    if (answer && answer.next === "/select/org") {  /* A clean sign-in returns the fixed next path. */
+                        window.location.assign(answer.next);  /* Open the first signed-in page of the journey. */
                     }
                 })
                 .catch(function (error) {
-                    showRequestError(error);
+                    showSigninError(error && error.message);  /* Show the refusal in the sign-in error region. */
                 });
         });
     }

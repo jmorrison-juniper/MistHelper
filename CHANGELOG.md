@@ -14,6 +14,15 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   This keeps syntax error handling and the public lint output stable.
 - **Added**: Unit coverage keeps nested definitions, synchronous function names,
   asynchronous function omission, and string and comment handling stable.
+### Upgrade portal browser-token sign-in journey (issue #2472)
+
+- **Added**: Playwright coverage signs in with a safe browser token, opens the
+  organization picker, selects a site, opens the inventory, signs out, and
+  proves that later signed-in pages refuse the cleared session.
+- **Added**: The browser-token journey covers a refused token, an empty token,
+  a missing session, and the existing cookie-session boundary. The safe
+  stand-in records only non-secret evidence.
+
 ### Capture log baseline performance (issue #2483)
 
 - **Changed**: `tools.capture_log_baseline` now builds one call-line index
