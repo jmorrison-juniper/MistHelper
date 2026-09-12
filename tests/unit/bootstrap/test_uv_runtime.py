@@ -26,6 +26,7 @@ import logging  # WHY: caplog verification of debug breadcrumbs.
 from typing import Any  # WHY: annotate the runtime-helpers dict return type.
 
 import pytest  # WHY: parametrize + caplog fixtures.
+from packaging.version import Version  # WHY: assert PEP 440 parser results.
 
 from src.bootstrap.uv_runtime import (  # WHY: direct SUT imports (module + factory).
     UVRuntimeHelper,
@@ -33,52 +34,28 @@ from src.bootstrap.uv_runtime import (  # WHY: direct SUT imports (module + fact
 )
 
 
-class TestParseNumericPrefix:
-    """Cover every branch of the digit-prefix extractor helper."""
-
-    @pytest.mark.parametrize(
-        ("raw_part", "expected"),
-        [
-            ("42", 42),  # WHY: pure digits produce the integer value.
-            ("0", 0),  # WHY: single-zero segment stays zero.
-            ("12abc", 12),  # WHY: digits then alpha terminate at first non-digit.
-            ("", 0),  # WHY: empty accumulator returns the legacy zero sentinel.
-            ("abc", 0),  # WHY: no leading digits -> zero sentinel.
-            ("3rc1", 3),  # WHY: prerelease-style tag stops at the first alpha.
-            ("100dev", 100),  # WHY: multi-digit prefix preserved intact.
-        ],
-    )
-    def test_prefix_returns_expected_int(self, raw_part: str, expected: int) -> None:
-        """The helper stops accumulating at the first non-digit character."""
-        assert UVRuntimeHelper._parse_numeric_prefix(raw_part) == expected  # WHY: exact int contract.
-
-
 class TestParseVersion:
-    """Cover valid, mixed, and failure paths of ``parse_version``."""
+    """Cover valid and invalid paths of ``parse_version``."""
 
     def test_pure_numeric_dotted_version(self) -> None:
-        """A clean ``X.Y.Z`` string parses to the matching int tuple."""
-        assert UVRuntimeHelper.parse_version("1.2.3") == (1, 2, 3)  # WHY: baseline dotted-numeric contract.
+        """A clean ``X.Y.Z`` string parses to a PEP 440 Version."""
+        assert UVRuntimeHelper.parse_version("1.2.3") == Version("1.2.3")  # WHY: baseline parser contract.
 
-    def test_two_segment_version(self) -> None:
-        """Two-segment version returns a 2-tuple (no forced padding here)."""
-        assert UVRuntimeHelper.parse_version("10.0") == (10, 0)  # WHY: no implicit third-segment fill.
+    def test_two_segment_version_equals_three_segments(self) -> None:
+        """PEP 440 treats ``10.0`` and ``10.0.0`` as equal versions."""
+        assert UVRuntimeHelper.parse_version("10.0") == Version("10.0.0")  # WHY: unequal lengths compare correctly.
 
-    def test_single_segment_version(self) -> None:
-        """Single-segment version returns a 1-tuple."""
-        assert UVRuntimeHelper.parse_version("7") == (7,)  # WHY: no split -> one-element tuple.
+    def test_leading_zero_version_normalizes(self) -> None:
+        """PEP 440 normalizes leading zeros in version segments."""
+        assert UVRuntimeHelper.parse_version("01.002") == Version("1.2")  # WHY: leading zeros do not alter order.
 
-    def test_segment_with_suffix_uses_numeric_prefix(self) -> None:
-        """Segment with alpha suffix uses only its leading digits."""
-        assert UVRuntimeHelper.parse_version("1.2.3rc1") == (1, 2, 3)  # WHY: 'rc1' collapses to 3.
+    def test_prerelease_suffix_keeps_pep440_order(self) -> None:
+        """A release candidate stays below the final release."""
+        assert UVRuntimeHelper.parse_version("1.0rc1") < Version("1.0")  # WHY: suffix order must stay intact.
 
-    def test_all_non_numeric_segment_becomes_zero(self) -> None:
-        """A pure-alpha segment collapses to the zero legacy sentinel per position."""
-        assert UVRuntimeHelper.parse_version("abc.def") == (0, 0)  # WHY: matches legacy behavior.
-
-    def test_broken_input_returns_zero_tuple(self) -> None:
-        """Non-string input raises inside the try block and yields the sentinel ``(0,)``."""
-        assert UVRuntimeHelper.parse_version(None) == (0,)  # type: ignore[arg-type]  # WHY: legacy contract.
+    def test_broken_input_returns_zero_version(self) -> None:
+        """Invalid input yields the low sentinel ``Version('0')``."""
+        assert UVRuntimeHelper.parse_version(None) == Version("0")  # type: ignore[arg-type]  # WHY: safe fallback.
 
 
 class TestSplitOperatorAndRequired:
@@ -118,29 +95,29 @@ class TestCompareVersions:
     @pytest.mark.parametrize(
         ("installed", "required", "operator", "expected"),
         [
-            ((1, 2, 3), (1, 2, 3), ">=", True),  # WHY: equal satisfies >=.
-            ((1, 2, 3), (1, 2, 4), ">=", False),  # WHY: below fails >=.
-            ((2, 0, 0), (1, 9, 9), ">", True),  # WHY: strictly greater satisfies >.
-            ((1, 0, 0), (1, 0, 0), ">", False),  # WHY: equal fails > (strict).
-            ((1, 0, 0), (2, 0, 0), "<=", True),  # WHY: below satisfies <=.
-            ((3, 0, 0), (2, 0, 0), "<=", False),  # WHY: above fails <=.
-            ((0, 9, 0), (1, 0, 0), "<", True),  # WHY: strictly less satisfies <.
-            ((1, 0, 0), (1, 0, 0), "<", False),  # WHY: equal fails < (strict).
-            ((1, 2, 3), (1, 2, 3), "==", True),  # WHY: tuples equal.
-            ((1, 2, 3), (1, 2, 4), "==", False),  # WHY: differing tuples.
-            ((1, 2, 3), (1, 2, 4), "!=", True),  # WHY: unequal satisfies !=.
-            ((1, 2, 3), (1, 2, 3), "!=", False),  # WHY: equal fails !=.
-            ((1, 0, 0), (1, 0, 0), "~=", True),  # WHY: unknown operator collapses to True (legacy).
+            (Version("1.2.3"), Version("1.2.3"), ">=", True),  # WHY: equal satisfies >=.
+            (Version("1.2.3"), Version("1.2.4"), ">=", False),  # WHY: below fails >=.
+            (Version("2.0.0"), Version("1.9.9"), ">", True),  # WHY: greater satisfies >.
+            (Version("1.0.0"), Version("1.0.0"), ">", False),  # WHY: equal fails >.
+            (Version("1.0.0"), Version("2.0.0"), "<=", True),  # WHY: below satisfies <=.
+            (Version("3.0.0"), Version("2.0.0"), "<=", False),  # WHY: above fails <=.
+            (Version("0.9.0"), Version("1.0.0"), "<", True),  # WHY: below satisfies <.
+            (Version("1.0.0"), Version("1.0.0"), "<", False),  # WHY: equal fails <.
+            (Version("1.2.3"), Version("1.2.3"), "==", True),  # WHY: versions equal.
+            (Version("1.2.3"), Version("1.2.4"), "==", False),  # WHY: versions differ.
+            (Version("1.2.3"), Version("1.2.4"), "!=", True),  # WHY: unequal satisfies !=.
+            (Version("1.2.3"), Version("1.2.3"), "!=", False),  # WHY: equal fails !=.
+            (Version("1.0.0"), Version("1.0.0"), "~=", True),  # WHY: unknown operator is safe.
         ],
     )
     def test_compare_returns_expected(
         self,
-        installed: tuple[int, ...],
-        required: tuple[int, ...],
+        installed: Version,
+        required: Version,
         operator: str,
         expected: bool,
     ) -> None:
-        """Every documented operator returns the expected boolean; unknown -> True."""
+        """Every documented operator returns the expected boolean."""
         assert UVRuntimeHelper._compare_versions(installed, required, operator) is expected  # WHY: bool contract.
 
 
@@ -163,17 +140,24 @@ class TestVersionSatisfies:
         """Installed below required violates >= constraint."""
         assert UVRuntimeHelper.version_satisfies("1.0.0", "pkg>=1.5") is False  # WHY: gte violated.
 
-    def test_length_mismatch_padded_with_zeros(self) -> None:
-        """Shorter tuple is right-padded with zeros so comparison is fair."""
-        # "1" (1,) vs "1.0.0" (1,0,0) -> pad to (1,0,0) == (1,0,0) -> True.
-        assert UVRuntimeHelper.version_satisfies("1", "pkg==1.0.0") is True  # WHY: pad-to-max-len contract.
+    def test_unequal_lengths_compare_equal(self) -> None:
+        """PEP 440 treats ``1`` and ``1.0.0`` as equal versions."""
+        assert UVRuntimeHelper.version_satisfies("1", "pkg==1.0.0") is True  # WHY: normalized lengths compare equal.
 
-    def test_length_mismatch_padded_installed_longer(self) -> None:
-        """Installed longer than required is also normalized to matching length."""
-        assert UVRuntimeHelper.version_satisfies("1.0.0", "pkg==1") is True  # WHY: pad both sides.
+    def test_leading_zeros_compare_equal(self) -> None:
+        """PEP 440 ignores leading zeros during comparison."""
+        assert UVRuntimeHelper.version_satisfies("01.002", "pkg==1.2") is True  # WHY: leading zeros normalize.
+
+    def test_numeric_order_handles_two_digits(self) -> None:
+        """PEP 440 compares numeric segments by value."""
+        assert UVRuntimeHelper.version_satisfies("1.10", "pkg>1.9") is True  # WHY: numeric order beats string order.
+
+    def test_prerelease_does_not_satisfy_final(self) -> None:
+        """A release candidate does not satisfy the final release."""
+        assert UVRuntimeHelper.version_satisfies("1.0rc1", "pkg>=1.0") is False  # WHY: suffix order stays correct.
 
     def test_debug_log_emitted(self, caplog: pytest.LogCaptureFixture) -> None:
-        """The comparison step emits a debug log with tuple form of both sides."""
+        """The comparison step emits a debug log with both versions."""
         with caplog.at_level(logging.DEBUG, logger="root"):  # WHY: log level check.
             UVRuntimeHelper.version_satisfies("1.0.0", "pkg>=1.0.0")  # WHY: any comparison triggers log.
         assert any("Comparing installed=" in rec.message for rec in caplog.records)  # WHY: log fired.
@@ -214,6 +198,6 @@ class TestBuildRuntimeHelpers:
     def test_helpers_are_callable_and_delegate(self) -> None:
         """The returned callables behave identically to the class-level statics."""
         helpers = build_runtime_helpers()  # WHY: fetch the DI bundle.
-        assert helpers["parse_version"]("2.1") == (2, 1)  # WHY: proves the callable is the real method.
+        assert helpers["parse_version"]("2.1") == Version("2.1")  # WHY: proves the callable is the real method.
         assert helpers["version_satisfies"]("2.0", "pkg>=1.0") is True  # WHY: driver reachable through dict.
         assert helpers["package_name_from_spec"]("requests>=2.0") == "requests"  # WHY: name extractor reachable.

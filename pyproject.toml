@@ -29,6 +29,7 @@ dependencies = [
     "mistapi>=0.63.3",
     "requests>=2.28.0",
     "websocket-client>=1.8.0",
+    "packaging>=24.0",
     
     # CLI and user interface
     "prettytable>=3.5.0",
