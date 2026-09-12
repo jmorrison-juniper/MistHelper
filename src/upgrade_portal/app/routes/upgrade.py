@@ -53,6 +53,7 @@ from typing import Any, NamedTuple, cast  # Run records are free-form; lock read
 
 from flask import Blueprint, Response, current_app, jsonify, request, session  # The framework of the portal.
 
+from ...api.run_controls.views import RunStalePolicy  # Use the same stale policy as the history page.
 from ...runtime import identity  # The real session guard. No copy of it lives here.
 from ...runtime.runs import (  # The record layer owns every rule below, so no copy of one lives here.
     RunRecordBuilder,
@@ -1706,26 +1707,32 @@ def run_page(run_id: str) -> str:
     """
     record = load_run(run_id) or {}  # An absent run still renders, so the operator reads a page and not a fault.
     poll_seconds = current_app.config.get("POLL_INTERVAL_SECONDS", 30)  # Decision D3 fixes this period.
-    logger.info("upgrade: show the run page of %s", run_id)  # One line for each page read.
+    logger.info("upgrade: assess the age of the run page")  # Record the shared stale decision before it starts.
+    stale = RunStalePolicy(datetime.now(tz=UTC)).assess(record)  # Supply one UTC clock value for this page.
+    logger.debug("upgrade: the run page has stale state %s", stale.is_stale)  # Report only the safe result.
+    logger.info("upgrade: show the run page of %s", run_id)  # Record the page render before it starts.
     status = RunStatusView().build(record)
-    context = {
+    context = {  # Merge the page values that existing helpers own.
         **site_labels(record),  # Issue #2100 names the site in words and keeps the identifier.
         **stop_control_state(record),  # The two values that the included stop partial reads.
         **run_lock_banner(record),  # The six values that the included lock banner reads.
     }  # One merged dict, because the banner repeats `site_id` and a second splat of it would fault.
-    return render_page(
-        PROGRESS_TEMPLATE,
+    rendered = render_page(  # Render one page after all server decisions are complete.
+        PROGRESS_TEMPLATE,  # Use the existing run progress template.
         run_id=run_id,  # The page builds every control identifier from this value.
         status=status,  # The same body that the poll answers.
         poll_interval_seconds=poll_seconds,  # The script reads this through `data-poll-seconds`.
+        stale_assessment=stale,  # The template prints the shared age and stale result.
         # Issue #2201 shows the reschedule and the cancel for a run that has not
         # reached the cloud. A run past that point offers the stop control alone.
-        run_not_started=run_not_started(record),
+        run_not_started=run_not_started(record),  # Preserve the existing reschedule and cancel rule.
         # Older records can say complete while a phase says failed. The status
-        # view repairs that contradiction for the page and the retry control.
+        # view repairs that contradiction for the retry control.
         run_state_name=str(status.get("state") or ""),
         **context,  # The site labels, the stop partial values, and the lock banner values.
     )
+    logger.debug("upgrade: the run page render is complete")  # Confirm the page action without response content.
+    return rendered  # Return the complete page to the signed-in operator.
 
 
 @upgrade_bp.get(OPTIONS_PAGE_PATH)

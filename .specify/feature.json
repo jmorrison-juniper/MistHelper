@@ -1,1 +1,3 @@
-{ "feature_directory": "specs/1992-upgrade-rehearsal" }
+{
+  "feature_directory": "specs/2447-stale-bulk-run-controls"
+}

@@ -1,33 +1,44 @@
 <!--
   Sync Impact Report
   ==================
-  Version change: 1.3.0 -> 1.4.0
+  Version change: 1.4.0 -> 1.5.0
   Modified principles:
-    - V. Observability & Logging: retained as-is
-  Added sections:
-    - VI. Inline Comments (NON-NEGOTIABLE): every executable line of
-      AI-generated code must have a same-line inline comment explaining
-      why, not just what. Code without comments is incomplete.
-    - VII. Action Logging (NON-NEGOTIABLE): every meaningful action must
-      have logging.info() before and logging.debug() after execution.
-      Code without logging is code without observability.
+    - I. Five-Item Rule: grandfathered existing hierarchy violations.
+      New feature code must use a compliant nested package. Surgical
+      edits may touch existing children without increasing child count.
+    - IV. Full Deployment Pipeline: replaced direct pushes to main with
+      the repository pull request and squash merge workflow.
+  Modified constraints:
+    - Output Backends: kept DataExporter mandatory for API exports and
+      data collection. Declared operational stores may hold internal
+      transactional coordination records under strict safety rules.
   Removed sections: N/A
-  Governance updated: compliance review now references all seven
-    principles; VI and VII are explicitly non-negotiable quality gates.
+  Governance updated:
+    - Minor amendments can reconcile established repository practice
+      when they preserve safety and add no new structural debt.
+    - Compliance review must record existing debt and its separate
+      incremental remediation plan.
   Templates requiring updates:
     - .specify/templates/plan-template.md: no changes needed
     - .specify/templates/spec-template.md: no changes needed
     - .specify/templates/tasks-template.md: no changes needed
     - .github/prompts/speckit.*.prompt.md: no changes needed
   Related files updated simultaneously:
-    - .github/copilot-instructions.md: added Inline Comments and
-      Action Logging subsections under Critical Patterns, plus
-      Code Readability Requirements under Project-Specific Conventions
-    - agents.md: added two Key Conventions bullet points for inline
-      comments and action logging
-    - coding-standards.instructions.md (global): added Inline Comments
-      and Action Logging sections between Safety-First and Quality Gates
-  Follow-up TODOs: None
+    - .specify/feature.json
+    - specs/2447-stale-bulk-run-controls/.spec-context.json
+    - specs/2447-stale-bulk-run-controls/feature-files.txt
+    - specs/2447-stale-bulk-run-controls/spec.md
+    - specs/2447-stale-bulk-run-controls/plan.md
+    - specs/2447-stale-bulk-run-controls/tasks.md
+    - specs/2447-stale-bulk-run-controls/data-model.md
+    - specs/2447-stale-bulk-run-controls/research.md
+    - specs/2447-stale-bulk-run-controls/quickstart.md
+    - specs/2447-stale-bulk-run-controls/contracts/http-api.md
+    - specs/2447-stale-bulk-run-controls/contracts/reconciliation.md
+    - specs/2447-stale-bulk-run-controls/contracts/test-isolation.md
+    - specs/2447-stale-bulk-run-controls/contracts/ui.md
+    - specs/2447-stale-bulk-run-controls/checklists/requirements.md
+  Follow-up actions: None
 -->
 
 <!-- Global coding standards (5-Item Rule, class-based architecture,
@@ -43,9 +54,19 @@
 
 ### I. Five-Item Rule (Structural Discipline)
 
-Every level of the project hierarchy MUST contain no more than five
-children. Violations MUST be resolved by extracting into sub-levels
-before merging.
+Every new hierarchy level MUST contain no more than five children.
+
+Existing tracked violations are grandfathered technical debt. A feature MUST
+NOT add a direct child to a noncompliant parent. New feature code MUST enter a
+compliant nested package.
+
+A change MAY edit an existing child when the edit is narrow and necessary.
+The change MUST NOT increase the number of children at that hierarchy level.
+The change does not need to restructure unrelated existing children.
+
+New functions, methods, classes, constants, and expressions remain subject to
+the limits below. The plan MUST record each touched existing violation. The
+plan MUST also record a separate incremental remediation action.
 
 Hierarchy levels (largest to smallest):
 1. Project Root
@@ -120,21 +141,32 @@ be mitigated at the code level.
 
 ### IV. Full Deployment Pipeline (NON-NEGOTIABLE)
 
-After any code change, the complete deployment pipeline MUST be
-executed. No steps may be skipped.
+After any code change, the complete deployment pipeline MUST run. No step may
+be skipped.
 
-1. **Validate syntax** — `python -m py_compile MistHelper.py` MUST
-   pass with zero errors before any commit.
-2. **Commit** — Message format: `version YY.MM.DD.HH.MM - description`
-   (UTC timestamp). All modified files (code + README) MUST be staged.
-3. **Push** — `git push origin main` triggers the container build
-   workflow (`.github/workflows/container-build.yml`).
-4. **Wait for CI** — `gh run watch <run-id>` until the container build
-   completes successfully.
-5. **Pull image** —
-   `podman pull ghcr.io/jmorrison-juniper/misthelper:latest`
-6. **Restart container** — Stop, remove, and re-run with volume mounts.
-7. **Verify** — `podman ps` confirms the container is healthy.
+1. **Run local gates** — Run every existing gate that applies to the changed
+   files.
+2. **Build the manifest** — Include committed branch changes, staged changes,
+   unstaged changes, and feature-owned untracked files.
+3. **Stage the feature** — Stage every file in the explicit feature manifest.
+   Do not stage unrelated files.
+4. **Commit** — Use `version YY.MM.DD.HH.MM - description` with a UTC
+   timestamp.
+5. **Rebase** — Fetch and rebase the committed feature branch onto
+   `origin/main`. Rerun affected local gates after the rebase.
+6. **Push the feature branch** — Push the rebased branch to its remote branch.
+7. **Open the pull request** — Target `main` and include the issue closure,
+   changed-file summary, local gate results, and deployment notes.
+8. **Pass CI** — All required pull request checks MUST pass.
+9. **Squash merge** — Merge the approved pull request with one squash commit.
+10. **Wait for the main build** — Wait for
+    `.github/workflows/container-build.yml` on the merged `main` revision.
+11. **Verify the revision** — The image revision label MUST equal the merged
+    commit SHA.
+12. **Deploy and check health** — Pull the approved image, deploy it, and
+    confirm the container and portal health checks.
+
+No feature workflow may push directly to `main`.
 
 Every changelog update triggers this pipeline. There are no standalone
 git operations.
@@ -249,9 +281,16 @@ The following technology choices are binding for all MistHelper code:
   compatible but all documentation and examples MUST use Podman.
 - **File Paths**: MUST use `os.path.join()` or `pathlib.Path()`. Never
   hardcode `/` or `\\` separators. Windows compatibility is required.
-- **Output Backends**: All data operations MUST support multi-backend output
-  (CSV, SQLite, and polyglot ArangoDB/Redis). The `DataExporter.write_with_format_selection()`
-  method is the standard entry point.
+- **Output Backends**: API export and data collection operations MUST support
+  the configured output backends through
+  `DataExporter.write_with_format_selection()`.
+- **Operational Store**: Internal coordination records MAY use the declared
+  operational store when they need transactions, locks, idempotency, or
+  compare-and-swap. The specification MUST define fail-closed behavior,
+  backup and recovery, retention, and verified persistence. The application
+  MUST NOT report success until it verifies the required durable write.
+- **Export Boundary**: The operational-store exception MUST NOT weaken the
+  multi-backend rule for API exports or collected API data.
 - **Database Keys**: Natural business keys from the Mist API (not
   artificial IDs). Primary key strategy MUST be defined in
   `ENDPOINT_PRIMARY_KEY_STRATEGIES` before implementing any new
@@ -428,7 +467,7 @@ When multiple agents work on MistHelper simultaneously:
    Only one agent should have an open PR modifying MistHelper.py at
    a time. Others should wait for merge or work on non-overlapping
    files (tests, docs, CI).
-4. **Rebase before push**: Always `git rebase main` before pushing
+4. **Rebase before push**: Always `git rebase origin/main` before pushing
    to ensure the branch is current.
 5. **Squash merge only**: All PRs merge to `main` via squash merge.
    This keeps history linear and readable.
@@ -439,6 +478,8 @@ Every PR MUST include in its description:
 - `Closes #<issue-number>` (auto-closes the linked issue)
 - CI status confirmation (all quality gates green)
 - Files changed summary (to help detect overlap)
+- Local gate results
+- Deployment and rollback notes
 - `auto-merge` label added only after all checks pass
 
 ## Governance
@@ -459,9 +500,15 @@ rules. It supersedes all other practice documents when conflicts arise.
 6. Execute the full deployment pipeline (Principle IV) if code changes
    accompany the amendment.
 
+A MINOR amendment MAY reconcile established repository practice with these
+rules. It MUST preserve safety, MUST prevent new debt, and MUST record existing
+debt for separate incremental remediation.
+
 **Compliance review**: Every PR and code review MUST verify adherence
 to all seven Core Principles. Complexity that violates a principle MUST
-be justified in writing (Complexity Tracking table in plan.md).
+be justified in writing (Complexity Tracking table in plan.md). The table MUST
+separate grandfathered debt from new design. A feature MUST NOT use
+grandfathered debt as permission to add another violation.
 Principles VI (Inline Comments) and VII (Action Logging) are
 non-negotiable quality gates -- code lacking either MUST NOT pass
 review, regardless of other merits.
@@ -471,4 +518,4 @@ patterns and is the primary reference for day-to-day coding decisions.
 The constitution provides the non-negotiable rules; agents.md provides
 the how-to.
 
-**Version**: 1.4.0 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-05-15
+**Version**: 1.5.0 | **Ratified**: 2026-03-05 | **Last Amended**: 2026-09-11

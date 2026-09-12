@@ -31,6 +31,7 @@ from typing import Any  # A late import answers with untyped objects.
 
 from flask import Flask  # The configuration that carries every seam lives on this object.
 
+from ..api.run_controls import E2EFactoryOverrides  # Type the complete test-only dependency set.
 from .config import read_post_check_mode  # Reads the environment at call time, so an import opens nothing.
 
 logger = logging.getLogger(__name__)  # One logger for each module keeps the source visible in the log.
@@ -1343,7 +1344,9 @@ def cancel_run(run_id: str) -> Any:
     return read_safely(lambda: runner(store, run_id, session, targets, word), reason)  # None on any fault.
 
 
-def install_seams(app: Flask) -> None:
+def install_seams(  # Install production defaults or one complete isolated dependency set.
+    app: Flask, overrides: E2EFactoryOverrides | None = None
+) -> None:
     """Write the store, the launcher, the stop runner, and the adopter into the config.
 
     Why:
@@ -1366,9 +1369,20 @@ def install_seams(app: Flask) -> None:
         Phase 2 T-006/T-008/T-009: CaptureService and UpgradeService are wired
         here via setdefault seams so routes can inject them from Flask config.
 
+        An E2E override set replaces every external seam. The E2E branch
+        returns before service construction and before storage bootstrap.
+
     Args:
         app: The application to fill the seams on.
+        overrides: The complete E2E dependency set, or None for production.
     """
+    if overrides is not None:  # E2E construction must not create one production dependency.
+        logger.info("wiring: install the complete E2E dependency set")  # Record the isolated installation.
+        values = overrides.config_values()  # Build one explicit map of every required seam.
+        for key, value in values.items():  # Install each value before blueprint registration.
+            app.config[key] = value  # An explicit E2E value must replace every default.
+        logger.debug("wiring: installed %s E2E dependency values", len(values))  # Report a safe count.
+        return  # Do not construct production services or start production storage.
     app.config.setdefault(RUN_STORE_KEY, DocumentRunStore())  # Replaces the memory store of the route module.
     app.config.setdefault(LAUNCHER_KEY, start_upgrade_run)  # Without this the confirmed run sends nothing.
     app.config.setdefault(STOP_RUNNER_KEY, cancel_run)  # Without this a stop cancels nothing at the cloud.
