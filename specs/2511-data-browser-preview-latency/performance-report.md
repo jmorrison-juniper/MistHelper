@@ -49,10 +49,10 @@ State C results came from `opt2_browserfix_state_c_final2.json`.
 
 | Workload | State A wall median ms | State B wall median ms | State C wall median ms | State C peak KiB |
 | --- | ---: | ---: | ---: | ---: |
-| CSV late page | 86.462 +/- 10.938 | 58.200 +/- 2.111 | 53.805 +/- 3.116 | 92.2 |
-| CSV all match | 134.666 +/- 8.026 | 126.164 +/- 6.637 | 108.059 +/- 8.014 | 90.4 |
-| JSON Lines | 114.753 +/- 8.026 | 164.152 +/- 12.985 | 109.805 +/- 13.956 | 60.4 |
-| Log search | 124.591 +/- 10.437 | 59.988 +/- 4.346 | 63.478 +/- 4.318 | 46.5 |
+| CSV late page | 86.462 +/- 10.938 | 58.200 +/- 2.111 | 45.887 +/- 2.717 | 92.2 |
+| CSV all match | 134.666 +/- 8.026 | 126.164 +/- 6.637 | 108.252 +/- 7.298 | 90.4 |
+| JSON Lines | 114.753 +/- 8.026 | 164.152 +/- 12.985 | 108.292 +/- 18.174 | 60.4 |
+| Log search | 124.591 +/- 10.437 | 59.988 +/- 4.346 | 61.511 +/- 4.122 | 46.5 |
 
 ## 5. Ranked hotspot list
 
@@ -85,8 +85,8 @@ That violates the memory objective.
 | Root cause | State B parsed the first JSON Lines record twice and appended rows to tail buffers on common requests. |
 | Change | The preview reuses the parsed first item and keeps fallback tail rows only until the requested page starts. |
 | Before result | State B JSON Lines wall median was 164.152 ms with MAD 12.985 ms. |
-| After result | State C JSON Lines wall median was 109.805 ms with MAD 13.956 ms. |
-| Percentage change | The JSON Lines wall time changed by -33.1 percent from state B to state C. |
+| After result | State C JSON Lines wall median was 108.292 ms with MAD 18.174 ms. |
+| Percentage change | The JSON Lines wall time changed by -34.0 percent from state B to state C. |
 | Memory change | JSON Lines peak traced memory changed from 68.9 KiB to 60.4 KiB. |
 | Test coverage | Added JSON Lines single-pass coverage and filtered high page coverage. |
 | Risks | The fallback tail logic could affect high page requests. The parity harness covers that case. |
@@ -97,10 +97,10 @@ That violates the memory objective.
 
 | Workload | Metric | State A median and MAD | State B median and MAD | State C median and MAD | State C versus State A | Decision |
 | --- | --- | ---: | ---: | ---: | ---: | --- |
-| CSV late page | Wall ms | 86.462 +/- 10.938 | 58.200 +/- 2.111 | 53.805 +/- 3.116 | -37.8 percent | Measured pass |
-| CSV all match | Wall ms | 134.666 +/- 8.026 | 126.164 +/- 6.637 | 108.059 +/- 8.014 | -19.8 percent | Measured pass |
-| JSON Lines | Wall ms | 114.753 +/- 8.026 | 164.152 +/- 12.985 | 109.805 +/- 13.956 | -4.3 percent | Measured pass within noise |
-| Log search | Wall ms | 124.591 +/- 10.437 | 59.988 +/- 4.346 | 63.478 +/- 4.318 | -49.1 percent | Measured pass |
+| CSV late page | Wall ms | 86.462 +/- 10.938 | 58.200 +/- 2.111 | 45.887 +/- 2.717 | -46.9 percent | Measured pass |
+| CSV all match | Wall ms | 134.666 +/- 8.026 | 126.164 +/- 6.637 | 108.252 +/- 7.298 | -19.6 percent | Measured pass |
+| JSON Lines | Wall ms | 114.753 +/- 8.026 | 164.152 +/- 12.985 | 108.292 +/- 18.174 | -5.6 percent | Measured pass |
+| Log search | Wall ms | 124.591 +/- 10.437 | 59.988 +/- 4.346 | 61.511 +/- 4.122 | -50.6 percent | Measured pass |
 
 **Measured**: Negative time change means a latency reduction.
 Each sample count was 31.
@@ -147,3 +147,4 @@ It does not restore the state A full-list behavior.
 | Hypothesis: specialize CSV search row matching | No profile shows it as the top remaining defect. | Add a CSV-only search benchmark with larger rows and compare medians. | Medium value, low risk |
 | Hypothesis: reduce log search cell checks | The log path already beats state A. | Add a line-number search and text-only search split. | Low value, low risk |
 | Blocked: production data validation | The task forbids production data and Mist API calls. | Use sanitized recordings if a maintainer supplies them. | Higher confidence, privacy risk if unsanitized |
+
