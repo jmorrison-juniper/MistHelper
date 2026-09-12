@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/rftemplates/derived`
 - **Tag**: `Sites RF Templates`
-- **mistapi SDK module**: `mistapi.api.v1.sites.rftemplates.derived`
+- **mistapi SDK module**: `mistapi.api.v1.sites.rftemplates`
 
 ### Description
 

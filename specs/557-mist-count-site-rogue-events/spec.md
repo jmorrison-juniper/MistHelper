@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/rogues/events/count`
 - **Tag**: `Sites Rogues`
-- **mistapi SDK module**: `mistapi.api.v1.sites.rogues.events.count`
+- **mistapi SDK module**: `mistapi.api.v1.sites.rogues`
 
 ### Description
 

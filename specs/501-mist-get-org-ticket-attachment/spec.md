@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/tickets/{ticket_id}/attachments/{attachment_id}`
 - **Tag**: `Orgs Tickets`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.tickets.attachments`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.tickets`
 
 ### Description
 

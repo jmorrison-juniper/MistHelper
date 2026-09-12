@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/stats/apps/count`
 - **Tag**: `Sites Stats - Apps`
-- **mistapi SDK module**: `mistapi.api.v1.sites.stats.apps.count`
+- **mistapi SDK module**: `mistapi.api.v1.sites.stats`
 
 ### Description
 

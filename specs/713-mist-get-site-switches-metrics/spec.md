@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/stats/switches/metrics`
 - **Tag**: `Sites Stats - Devices`
-- **mistapi SDK module**: `mistapi.api.v1.sites.stats.switches.metrics`
+- **mistapi SDK module**: `mistapi.api.v1.sites.stats`
 
 ### Description
 

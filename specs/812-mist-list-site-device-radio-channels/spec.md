@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/devices/ap_channels`
 - **Tag**: `Sites Devices - Wireless`
-- **mistapi SDK module**: `mistapi.api.v1.sites.devices.ap_channels`
+- **mistapi SDK module**: `mistapi.api.v1.sites.devices`
 
 ### Description
 

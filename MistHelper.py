@@ -500,6 +500,9 @@ from src.export.self_account_exporter import (
 from src.export.self_export_utils import (
     SelfExportUtils,  # Cat B (1013 SC-001 position 7) -- re-export for menu tuple at MistHelper:18167
 )
+from src.export.simple_endpoint_exporter import (
+    SimpleEndpointExporter,  # Issue #1807 -- simple get and list endpoints, grouped by scope.
+)
 from src.export.site_anomaly_exporter import (
     SiteAnomalyExporter,  # Cat B (1013 SC-001 position 43) -- re-export for MistHelper.SiteAnomalyExporter callers
 )
@@ -3809,6 +3812,22 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "237": (
         CountExporter.msp_counts,
         "Run any MSP-scoped Mist count endpoint (3 operations, issue #1802)",
+    ),
+    "259": (
+        SimpleEndpointExporter.global_endpoints,
+        "Run any no-identifier Mist get or list endpoint (29 operations, issue #1807)",
+    ),
+    "260": (
+        SimpleEndpointExporter.org_endpoints,
+        "Run any org-scoped Mist get or list endpoint (55 operations, issue #1807)",
+    ),
+    "261": (
+        SimpleEndpointExporter.site_endpoints,
+        "Run any site-scoped Mist get or list endpoint (57 operations, issue #1807)",
+    ),
+    "262": (
+        SimpleEndpointExporter.msp_endpoints,
+        "Run any MSP-scoped Mist get or list endpoint (10 operations, issue #1807)",
     ),
     "238": (
         MSPLicenseExporter.licenses,

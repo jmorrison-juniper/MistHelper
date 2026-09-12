@@ -7,6 +7,37 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Simple endpoint family stage one (issue #1807)
+
+- **Added**: Menus 259 through 262 run no-identifier, org-scoped,
+  site-scoped, and MSP-scoped Mist get and list endpoints from a prompt.
+- **Added**: `SimpleEndpointExporter` covers 151 unique simple operations and
+  excludes the unresolved phantom operation `searchOrgClientFingerprints`.
+- **Added**: Unit coverage verifies SDK resolution, prompt failures, call
+  shape, primary-key strategy coverage, and table drift.
+
+### Flatten nested fields performance (issue #2485)
+
+- **Changed**: `DataProcessingUtils.flatten_nested_fields()` now writes nested
+  flattened fields directly into each output row. This removes temporary merge
+  dictionaries from the export flatten path.
+- **Added**: Unit coverage keeps JSON and Python literal parse results, key
+  order, empty container handling, and malformed string behavior stable.
+
+### Endpoint spec SDK module paths (issue #1757)
+
+- **Fixed**: Endpoint specs now name the `mistapi` SDK module that defines each
+  operation. Three specs now state their unresolved SDK rename decision.
+- **Added**: A guard test scans installed `mistapi` source definitions and fails
+  when a spec declares a module path that does not define its operation.
+
+### Upgrade capture read-back numbers (issue #2471)
+
+- **Fixed**: The upgrade capture read-back now verifies a Tier 3 capture when
+  ArangoDB returns a whole float as an equal integer.
+- **Added**: Unit coverage for nested Tier 3 numbers, including whole floats,
+  fractional floats, integers, zero, negative values, and very large values.
+
 ### Dashboard data summary performance (issue #2439)
 
 - **Changed**: The web portal dashboard now builds the data summary with one

@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/stats/ospf_peers/search`
 - **Tag**: `Sites Stats - Ospf`
-- **mistapi SDK module**: `mistapi.api.v1.sites.stats.ospf_peers.search`
+- **mistapi SDK module**: `mistapi.api.v1.sites.stats`
 
 ### Description
 

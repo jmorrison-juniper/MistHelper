@@ -72,6 +72,13 @@ This page names the operations that arrived most recently.
 | 256 | Search organization webhook deliveries (`searchOrgWebhooksDeliveries`) | `interactive_safe` |
 | 257 | Search NAC clients for a selected site (`searchSiteNacClients`) | `interactive_safe` |
 | 258 | Search other-device events for a selected site (`searchSiteOtherDeviceEvents`) | `interactive_safe` |
+| 259 | Run a no-identifier Mist get or list endpoint from a prompt | `interactive_safe` |
+| 260 | Run an org-scoped Mist get or list endpoint from a prompt | `interactive_safe` |
+| 261 | Run a site-scoped Mist get or list endpoint from a prompt | `interactive_safe` |
+| 262 | Run an MSP-scoped Mist get or list endpoint from a prompt | `interactive_safe` |
+
+Menus 259 through 262 use one prompt to select a simple endpoint.
+They write through `DataExporter`, so they honor all output backends.
 
 Menu 197 writes to `data/packet_captures/<mac>/vlan_<id>/`. Every other
 operation in the table writes through `DataExporter`, so it honors the CSV,

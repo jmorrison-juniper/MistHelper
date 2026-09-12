@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/insights/gateway/{device_id}/stats/{metric}`
 - **Tag**: `Sites Insights`
-- **mistapi SDK module**: `mistapi.api.v1.sites.insights.gateway.stats`
+- **mistapi SDK module**: `mistapi.api.v1.sites.insights`
 
 ### Description
 

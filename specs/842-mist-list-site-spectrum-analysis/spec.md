@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/stats/analyze_spectrum`
 - **Tag**: `Sites Spectrum Analysis`
-- **mistapi SDK module**: `mistapi.api.v1.sites.stats.analyze_spectrum`
+- **mistapi SDK module**: `mistapi.api.v1.sites.stats`
 
 ### Description
 

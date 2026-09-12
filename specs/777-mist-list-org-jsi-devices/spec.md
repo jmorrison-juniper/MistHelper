@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/jsi/devices`
 - **Tag**: `Orgs JSI`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.jsi.devices`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.jsi`
 
 ### Description
 

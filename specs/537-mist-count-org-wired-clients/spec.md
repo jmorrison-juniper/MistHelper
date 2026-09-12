@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/wired_clients/count`
 - **Tag**: `Orgs Clients - Wired`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.wired_clients.count`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.wired_clients`
 
 ### Description
 

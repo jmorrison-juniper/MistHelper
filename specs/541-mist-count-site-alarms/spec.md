@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/alarms/count`
 - **Tag**: `Sites Alarms`
-- **mistapi SDK module**: `mistapi.api.v1.sites.alarms.count`
+- **mistapi SDK module**: `mistapi.api.v1.sites.alarms`
 
 ### Description
 
