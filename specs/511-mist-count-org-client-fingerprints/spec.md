@@ -11,7 +11,9 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/insights/fingerprints/count`
 - **Tag**: `Orgs NAC Fingerprints`
-- **mistapi SDK module**: `mistapi.api.v1.sites.insights.fingerprints.count`
+- **mistapi SDK module**: Not available in the installed `mistapi` package.
+- **mistapi SDK status**: The installed SDK does not define `countOrgClientFingerprints`.
+- **Nearest SDK operation**: `countSiteClientFingerprints` in `mistapi.api.v1.sites.insights`.
 
 ### Description
 

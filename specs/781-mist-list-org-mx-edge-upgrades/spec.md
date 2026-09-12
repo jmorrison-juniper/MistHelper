@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/mxedges/upgrade`
 - **Tag**: `Utilities Upgrade`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.mxedges.upgrade`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.mxedges`
 
 ### Description
 

@@ -32,6 +32,14 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   dictionaries from the export flatten path.
 - **Added**: Unit coverage keeps JSON and Python literal parse results, key
   order, empty container handling, and malformed string behavior stable.
+
+### Endpoint spec SDK module paths (issue #1757)
+
+- **Fixed**: Endpoint specs now name the `mistapi` SDK module that defines each
+  operation. Three specs now state their unresolved SDK rename decision.
+- **Added**: A guard test scans installed `mistapi` source definitions and fails
+  when a spec declares a module path that does not define its operation.
+
 ### Dashboard data summary performance (issue #2439)
 
 - **Changed**: The web portal dashboard now builds the data summary with one
@@ -6851,4 +6859,5 @@ Closes #368
 - Locations: Single AP pre-check, multi-AP pre-check, site PCAP polling, org PCAP polling
 - Function names now match mistapi SDK and Mist API operationId values
 - operationId: listSitePacketCaptures and listOrgPacketCaptures per OpenAPI spec
+
 

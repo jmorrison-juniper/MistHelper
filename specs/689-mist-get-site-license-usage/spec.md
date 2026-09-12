@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/licenses/usages`
 - **Tag**: `Sites Licenses`
-- **mistapi SDK module**: `mistapi.api.v1.sites.licenses.usages`
+- **mistapi SDK module**: `mistapi.api.v1.sites.licenses`
 
 ### Description
 

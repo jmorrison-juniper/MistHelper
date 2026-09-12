@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/rrm/current/devices/{device_id}/band/{band}`
 - **Tag**: `Sites RRM`
-- **mistapi SDK module**: `mistapi.api.v1.sites.rrm.current.devices.band`
+- **mistapi SDK module**: `mistapi.api.v1.sites.rrm`
 
 ### Description
 

@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/skyatp/events/search`
 - **Tag**: `Sites Skyatp`
-- **mistapi SDK module**: `mistapi.api.v1.sites.skyatp.events.search`
+- **mistapi SDK module**: `mistapi.api.v1.sites.skyatp`
 
 ### Description
 

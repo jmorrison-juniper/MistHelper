@@ -11,7 +11,9 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/128routers/register_cmd`
 - **Tag**: `Orgs Devices - SSR`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.128routers.register_cmd`
+- **mistapi SDK module**: Not available in the installed `mistapi` package.
+- **mistapi SDK status**: The installed SDK does not define `getOrg128TRegistrationCommands`.
+- **Nearest SDK operation**: `getOrgSsrRegistrationCommands` in `mistapi.api.v1.orgs.ssr`.
 
 ### Description
 

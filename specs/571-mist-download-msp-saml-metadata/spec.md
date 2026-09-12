@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/msps/{msp_id}/ssos/{sso_id}/metadata.xml`
 - **Tag**: `MSPs SSO`
-- **mistapi SDK module**: `mistapi.api.v1.msps.ssos.metadata_xml`
+- **mistapi SDK module**: `mistapi.api.v1.msps.ssos`
 
 ### Description
 

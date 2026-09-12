@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/stats/maps/{map_id}/sdkclients`
 - **Tag**: `Sites Stats - Clients SDK`
-- **mistapi SDK module**: `mistapi.api.v1.sites.stats.maps.sdkclients`
+- **mistapi SDK module**: `mistapi.api.v1.sites.stats`
 
 ### Description
 

@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/msps/{msp_id}/stats/licenses`
 - **Tag**: `MSPs Licenses`
-- **mistapi SDK module**: `mistapi.api.v1.msps.stats.licenses`
+- **mistapi SDK module**: `mistapi.api.v1.msps.stats`
 
 ### Description
 

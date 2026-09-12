@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/otherdevices/events/search`
 - **Tag**: `Sites Devices - Others`
-- **mistapi SDK module**: `mistapi.api.v1.sites.otherdevices.events.search`
+- **mistapi SDK module**: `mistapi.api.v1.sites.otherdevices`
 
 ### Description
 

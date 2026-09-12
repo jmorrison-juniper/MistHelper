@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/stats/assets`
 - **Tag**: `Orgs Stats - Assets`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.stats.assets`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.stats`
 
 ### Description
 

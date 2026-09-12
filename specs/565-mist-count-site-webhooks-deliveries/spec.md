@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/webhooks/{webhook_id}/events/count`
 - **Tag**: `Sites Webhooks`
-- **mistapi SDK module**: `mistapi.api.v1.sites.webhooks.events.count`
+- **mistapi SDK module**: `mistapi.api.v1.sites.webhooks`
 
 ### Description
 

@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/rogues/events/search`
 - **Tag**: `Sites Rogues`
-- **mistapi SDK module**: `mistapi.api.v1.sites.rogues.events.search`
+- **mistapi SDK module**: `mistapi.api.v1.sites.rogues`
 
 ### Description
 

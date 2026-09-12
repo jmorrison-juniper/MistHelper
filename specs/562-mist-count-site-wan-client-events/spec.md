@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/wan_client/events/count`
 - **Tag**: `Sites Clients - Wan`
-- **mistapi SDK module**: `mistapi.api.v1.sites.wan_client.events.count`
+- **mistapi SDK module**: `mistapi.api.v1.sites.wan_client`
 
 ### Description
 

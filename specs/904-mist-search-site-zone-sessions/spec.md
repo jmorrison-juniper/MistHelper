@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/{zone_type}/visits/search`
 - **Tag**: `Sites Zones`
-- **mistapi SDK module**: `mistapi.api.v1.sites.visits.search`
+- **mistapi SDK module**: `mistapi.api.v1.sites.visits`
 
 ### Description
 

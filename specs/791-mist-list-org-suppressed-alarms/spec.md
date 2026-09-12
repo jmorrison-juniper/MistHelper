@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/alarmtemplates/suppress`
 - **Tag**: `Orgs Alarm Templates`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.alarmtemplates.suppress`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.alarmtemplates`
 
 ### Description
 

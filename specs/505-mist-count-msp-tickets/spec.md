@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/msps/{msp_id}/tickets/count`
 - **Tag**: `MSPs Tickets`
-- **mistapi SDK module**: `mistapi.api.v1.msps.tickets.count`
+- **mistapi SDK module**: `mistapi.api.v1.msps.tickets`
 
 ### Description
 

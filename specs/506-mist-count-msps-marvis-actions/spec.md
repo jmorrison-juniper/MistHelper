@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/msps/{msp_id}/suggestion/count`
 - **Tag**: `MSPs Marvis`
-- **mistapi SDK module**: `mistapi.api.v1.msps.suggestion.count`
+- **mistapi SDK module**: `mistapi.api.v1.msps.suggestion`
 
 ### Description
 
