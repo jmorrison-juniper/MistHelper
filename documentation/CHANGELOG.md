@@ -6,6 +6,9 @@
 > This file keeps the earlier history, the migration guide, and the release
 > notes that the root file does not hold. The newest entry here is from January
 > 2026. Check the date of a section before you act on it.
+>
+> **Add no entry here.** A change adds one unique fragment under
+> [`changelog.d/`](../changelog.d/README.md) instead.
 
 ## Version History
 

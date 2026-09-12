@@ -99,7 +99,7 @@ MistHelper uses **natural business keys** from the Mist API, not artificial IDs.
 3. **Flatten JSON**: Use existing `flatten_dict()` helpers for nested structures
 4. **Multi-Backend Output**: Call `DataExporter.write_with_format_selection(data, filename, api_function_name=...)`
 5. **Update README**: Modify operation count and add to menu table
-6. **Version Changelog**: Update `CHANGELOG.md` with `version YY.MM.DD.HH.MM` format (UTC timestamp)
+6. **Release Note**: Add one new fragment file under `changelog.d/`. Never edit `CHANGELOG.md` on a feature branch. See [Release notes](#release-notes-each-change-owns-one-fragment)
 7. **Git Workflow**: Follow [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md)
 
 ### Validate locally, then push once
@@ -403,7 +403,8 @@ See [coding-standards.instructions.md](instructions/coding-standards.instruction
 | File | Purpose |
 |------|---------|
 | `MistHelper.py` | Entrypoint and menu registry (6,054 lines; `src/` holds 123,785 across 360 files) |
-| `CHANGELOG.md` | Version history (Keep a Changelog format) |
+| `CHANGELOG.md` | Released version history (Keep a Changelog format). The release coordinator owns it. |
+| `changelog.d/` | One release-note fragment for each change. Add your file here. |
 | `agents.md` | VS Code Chat agent supplement (points here) |
 | `README.md` | User-facing operations guide |
 | `SSH_GUIDE.md` | SSH runner detailed usage |
@@ -489,12 +490,58 @@ Follows `.github/copilot-instructions.md` automatically. Cannot run `--test` (no
 
 **Scratchpads**: Throwaway exploration. No git. Discard after use.
 
+### Release notes: each change owns one fragment
+
+`CHANGELOG.md` holds more than 5,000 lines, and every change added its entry at
+the top of the same `## [Unreleased]` section. Each open pull request therefore
+touched the same lines, and every rebase reported a conflict. One unique file for
+each change removes that shared line.
+
+`CHANGELOG.md` has a `merge=union` rule as a safety net for old branches. Do not
+use that rule as the release-note process. A union merge can keep duplicate
+entries, and it cannot prove that each branch kept the correct release note.
+
+Add one new Markdown file under `changelog.d/` for a user-visible change. Use the
+first name rule that fits.
+
+| Condition | File name | Example |
+| - | - | - |
+| The pull request exists. | `pr-<number>.md` | `pr-2451.md` |
+| The issue exists, and the pull request does not. | `issue-<number>-<slug>.md` | `issue-2439-dashboard-summary.md` |
+| No issue and no pull request exist. | `<YYYY-MM-DD>-<slug>.md` | `2026-09-11-token-refresh.md` |
+
+Write one `###` heading and one bullet for each change type. Use `Added`,
+`Changed`, `Fixed`, `Removed`, or `Security`. Name the issue in the bullet. A
+fragment carries no version number, because the release coordinator writes the
+`version YY.MM.DD.HH.MM` heading at release time.
+
+Obey these rules.
+
+1. Edit your own fragment only.
+2. Do not edit `CHANGELOG.md` on a feature branch.
+3. Do not edit the fragment of another change.
+4. Add no fragment for an internal-only change. State that reason in the pull
+   request body.
+5. Create no index file and no summary file under `changelog.d/`.
+
+Only the release coordinator moves the merged fragments into `CHANGELOG.md`, on
+the release branch, after the feature merges. The coordinator deletes the
+fragments in that release only.
+
+[`changelog.d/README.md`](../changelog.d/README.md) holds the full rule and an
+example fragment.
+
 ### Conflict Resolution Playbook
 
 See [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.instructions.md)
 § "When the same files keep conflicting" for the three strategies and the rules.
 One MistHelper addition: paste both versions into chat and let Copilot propose
 the resolution.
+
+Warning: never resolve a `CHANGELOG.md` conflict by deleting the entry of another
+change. That delete removes a released record, and no gate reports the loss. Move
+each conflicting entry into its own fragment under `changelog.d/`, then resolve
+the rest of the difference.
 
 ### Agent Observability & Efficiency
 
@@ -716,7 +763,7 @@ When implementing a Feature Spec, AI agents must follow this protocol:
 6. **Add/modify tests** to meet unit + property requirements and maintain >= 80% coverage.
 7. **Update `deploy/.env.example`** if introducing new environment variables.
 8. **For UI features**: open the Gunicorn page using browser agent tools, interact to validate behavior, generate Playwright tests, save to `tests/e2e/`.
-9. **Prepare the PR** using the PR template; include `Closes #<issue-number>`, link the Spec, and complete all checklist items.
+9. **Prepare the PR** using the PR template; include `Closes #<issue-number>`, link the Spec, add the `changelog.d/` fragment for a user-visible change, and complete all checklist items.
 10. **Ensure CI is green**: Ruff, mypy, pytest+cov, Hypothesis, Bandit, pip-audit, CodeQL, Playwright E2E.
 11. **Add the `auto-merge` label** once all checks pass.
 12. **Do not skip deployment steps**: the release tag publishes host bundle + wheel and pushes the GHCR image.

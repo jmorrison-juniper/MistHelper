@@ -11,7 +11,7 @@ This document contains detailed checklists for each of the issues created from t
 - [ ] Add preflight check in `DeviceUtilityCommands.readopt_device` to skip non-VC devices with a clear message.
 - [ ] Add unit tests (mocked API): VC vs non-VC flows.
 - [ ] Add integration test against lab device (if available).
-- [ ] Update menu help text and changelog.
+- [ ] Update menu help text and add a `changelog.d/` fragment.
 
 Acceptance criteria:
 - Non-VC devices do not call readopt API and produce a clear message.
