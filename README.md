@@ -13,15 +13,14 @@ devices, and your clients, and it writes what it finds to a file or to a
 database. It also runs a small set of change operations, such as a firmware
 upgrade.
 
-The tool holds **257 operations**, numbered 1 to 258 with one gap at 152. Menu 0
+The tool holds **261 operations**, numbered 1 to 262 with one gap at 152. Menu 0
 is Exit. Read [the menu reference](documentation/menu_reference.md) for the full
 list, which is generated from the code.
 
-Menu 253 searches Mist Edges for the selected organization through
-`searchOrgMxEdges`. Menu 255 searches PSK portal logs for the selected
-organization through `searchOrgPskPortalLogs`. Menu 257 searches NAC clients
-for a selected site through `searchSiteNacClients`. Menu 258 searches
-other-device events for a selected site through `searchSiteOtherDeviceEvents`.
+Menu 259 runs no-identifier Mist get and list endpoints from a prompt. Menu
+260 runs org-scoped endpoints. Menu 261 runs site-scoped endpoints. Menu 262
+runs MSP-scoped endpoints. Together they cover 151 unique simple endpoint
+operations from issue #1807.
 
 ## What MistHelper does
 

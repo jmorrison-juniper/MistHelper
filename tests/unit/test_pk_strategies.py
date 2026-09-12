@@ -4,6 +4,22 @@ Duplicates the strategies dict from MistHelper.py to avoid import side effects
 (research.md R1 pattern). Validates structural integrity of every entry.
 """
 
+from src.export.simple_endpoint_exporter import (
+    _MSP_OPS as SIMPLE_MSP_OPS,
+)
+from src.export.simple_endpoint_exporter import (
+    _NONE_OPS as SIMPLE_NONE_OPS,
+)
+from src.export.simple_endpoint_exporter import (
+    _ORG_OPS as SIMPLE_ORG_OPS,
+)
+from src.export.simple_endpoint_exporter import (
+    _SITE_OPS as SIMPLE_SITE_OPS,
+)
+from src.refactors.endpoint_primary_key_strategies import (
+    ENDPOINT_PRIMARY_KEY_STRATEGIES as PRODUCTION_ENDPOINT_PRIMARY_KEY_STRATEGIES,
+)
+
 # ---------------------------------------------------------------------------
 # Duplicated dict (R1: avoid MistHelper.py import side effects)
 # ---------------------------------------------------------------------------
@@ -251,6 +267,8 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
 VALID_PK_TYPES = {"natural_pk", "composite_pk", "auto_increment_with_unique"}
 REQUIRED_FIELDS = {"type", "primary_key", "indexes", "unique_constraints", "description"}
 
+SIMPLE_ENDPOINT_OPS = list(SIMPLE_NONE_OPS) + list(SIMPLE_ORG_OPS) + list(SIMPLE_SITE_OPS) + list(SIMPLE_MSP_OPS)
+
 
 # ---------------------------------------------------------------------------
 # Tests
@@ -329,3 +347,12 @@ class TestEndpointPrimaryKeyStrategies:
         """Dict keys are inherently unique, but verify count matches."""
         keys = list(ENDPOINT_PRIMARY_KEY_STRATEGIES.keys())
         assert len(keys) == len(set(keys))
+
+    def test_simple_endpoint_family_has_production_strategies(self):
+        """Issue 1807 table entries must have production primary-key strategies."""
+        missing = [
+            entry.operation
+            for entry in SIMPLE_ENDPOINT_OPS
+            if entry.operation not in PRODUCTION_ENDPOINT_PRIMARY_KEY_STRATEGIES
+        ]
+        assert missing == []
