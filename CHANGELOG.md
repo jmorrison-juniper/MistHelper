@@ -7,6 +7,15 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 ## [Unreleased]
 
+### Upgrade portal browser-token sign-in journey (issue #2472)
+
+- **Added**: Playwright coverage signs in with a safe browser token, opens the
+  organization picker, selects a site, opens the inventory, signs out, and
+  proves that later signed-in pages refuse the cleared session.
+- **Added**: The browser-token journey covers a refused token, an empty token,
+  a missing session, and the existing cookie-session boundary. The safe
+  stand-in records only non-secret evidence.
+
 ### Upgrade capture stored size performance (issue #2486)
 
 - **Changed**: The upgrade capture store now solves the `stored_size_bytes`
@@ -6872,6 +6881,7 @@ Closes #368
 - Locations: Single AP pre-check, multi-AP pre-check, site PCAP polling, org PCAP polling
 - Function names now match mistapi SDK and Mist API operationId values
 - operationId: listSitePacketCaptures and listOrgPacketCaptures per OpenAPI spec
+
 
 
 

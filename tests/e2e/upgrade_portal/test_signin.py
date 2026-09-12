@@ -92,6 +92,7 @@ PROBE_CODE = "424242"
 OK_STATUS = 200  # The contract fixes this status for every page below.
 UNAUTHORIZED_STATUS = 401  # `runtime/identity.py` answers this code with no session.
 NOT_FOUND_STATUS = 404  # The route is not registered yet.
+PAGE_LOAD_TIMEOUT_MS = 60000  # The sign-in dependency panel can need more time during the full suite.
 
 # The four signal words that section 12 of `portal.css` prints with generated
 # content, one for each flash level. A hidden container must print none of them.
@@ -162,7 +163,7 @@ def _page_status(page: Any, path: str) -> int:
     Returns:
         The status code that the portal answered.
     """
-    answer = page.goto(path, wait_until="domcontentloaded")
+    answer = page.goto(path, wait_until="domcontentloaded", timeout=PAGE_LOAD_TIMEOUT_MS)  # Open the real route.
     if answer is None:  # A page with no answer gives the test nothing to read.
         pytest.skip(f"The browser returned no response for {path}.")
     status: int = answer.status
