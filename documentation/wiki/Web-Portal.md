@@ -16,6 +16,15 @@ podman run -d --name misthelper -p 2200:2200 -p 8055:8055 \
 
 Open http://localhost:8055 in your browser.
 
+Caution: the command above starts the production local stack. If you start a
+container for a test, for a debug session, or for an end-to-end run, obey the
+policy in [Container Setup](Container-Setup#test-and-debug-containers). Start
+the container inside the compose group. Name it
+`misthelper-tmp-<issue|pr><number>-<slug>`. Publish a port in the range 9600
+through 9699. Remove the container when the test ends. A test container that
+publishes 8055 takes the port from the running portal, and the portal then stops
+answering.
+
 ## Features
 
 - **Data Browser**: Browse, preview, search, and download CSV/SQLite output files
