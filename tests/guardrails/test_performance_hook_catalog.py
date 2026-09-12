@@ -165,23 +165,30 @@ class TestPerformanceHookCatalog:
         Main changes can add, remove, or rename Python files and symbols.
     """
 
-    def test_inventory_matches_tracked_python_files(self) -> None:
+    def test_inventory_names_only_files_that_still_exist(self) -> None:
+        # WHY: the catalog is a snapshot, so a new file is normal and must not fail this gate.
+        # A REMOVED or RENAMED file is real rot, because a catalog row then names nothing.
         scanner = CatalogSourceScanner(_REPO_ROOT)  # Create the source scanner for this repository.
         catalog = PerformanceHookCatalog(_ARTIFACT_ROOT)  # Create the artifact reader for this spec.
-        tracked_paths = scanner.tracked_python_paths()  # Recreate the documented Git source set.
+        tracked_paths = set(scanner.tracked_python_paths())  # Recreate the documented Git source set.
         inventory_paths = sorted(row["file_path"] for row in catalog.inventory_rows())  # Read artifact paths.
-        assert inventory_paths == tracked_paths  # Require the inventory to cover current tracked Python files.
+        stale = [path for path in inventory_paths if path not in tracked_paths]  # Find rows naming no file.
+        assert not stale, "The catalog names files that no longer exist:\n" + "\n".join(stale)  # Report each one.
 
-    def test_inventory_counts_match_current_ast_scan(self) -> None:
+    def test_inventory_counts_match_the_recorded_snapshot(self) -> None:
+        # WHY: the summary describes the snapshot the catalog recorded, so this guard rescans
+        # exactly the inventory files. A scan of the whole tree would drift with every new file.
         scanner = CatalogSourceScanner(_REPO_ROOT)  # Create the source scanner for this repository.
         catalog = PerformanceHookCatalog(_ARTIFACT_ROOT)  # Create the artifact reader for this spec.
-        paths = scanner.tracked_python_paths()  # Recreate the documented Git source set.
-        symbol_index = scanner.symbol_index(paths)  # Parse each tracked source file through AST.
+        paths = sorted(row["file_path"] for row in catalog.inventory_rows())  # Read the recorded snapshot set.
+        symbol_index = scanner.symbol_index(paths)  # Parse each recorded source file through AST.
         scan_summary = catalog.scan_summary()  # Read the generated scan summary.
-        assert scan_summary["eligible_file_count"] == len(paths)  # Check the source file count.
+        assert scan_summary["eligible_file_count"] == len(paths)  # Check the recorded source file count.
         assert scan_summary["parse_error_count"] == 0  # Require every tracked Python file to parse.
         assert scan_summary["function_count"] == self._kind_count(symbol_index, "FunctionDef")  # Check funcs.
-        assert scan_summary["async_function_count"] == self._kind_count(symbol_index, "AsyncFunctionDef")  # Check async.
+        assert scan_summary["async_function_count"] == self._kind_count(
+            symbol_index, "AsyncFunctionDef"
+        )  # Check async.
         assert scan_summary["class_count"] == self._kind_count(symbol_index, "ClassDef")  # Check classes.
         assert scan_summary["symbol_count"] == self._symbol_count(symbol_index)  # Check all symbols.
         assert scan_summary["nested_symbol_count"] == self._nested_count(symbol_index)  # Check nested symbols.
@@ -208,7 +215,9 @@ class TestPerformanceHookCatalog:
         assert summary["files_with_hooks"] == len({row["file_path"] for row in hook_rows})  # Check files.
         assert summary["monitor_type_counts"] == self._count_by(hook_rows, "monitor_type")  # Check monitors.
         assert summary["disposition_counts"] == self._count_by(hook_rows, "disposition")  # Check dispositions.
-        assert {row["strategy"]: int(row["hook_count"]) for row in strategies} == summary["strategy_hook_counts"]  # Check strategies.
+        assert {row["strategy"]: int(row["hook_count"]) for row in strategies} == summary[
+            "strategy_hook_counts"
+        ]  # Check strategies.
 
     @staticmethod
     def _kind_count(symbol_index: dict[str, list[SymbolRecord]], kind: str) -> int:
@@ -220,7 +229,9 @@ class TestPerformanceHookCatalog:
 
     @staticmethod
     def _nested_count(symbol_index: dict[str, list[SymbolRecord]]) -> int:
-        return sum(1 for symbols in symbol_index.values() for symbol in symbols if symbol.nesting_depth > 0)  # Count nested.
+        return sum(
+            1 for symbols in symbol_index.values() for symbol in symbols if symbol.nesting_depth > 0
+        )  # Count nested.
 
     @staticmethod
     def _row_resolves(row: dict[str, str], symbol_index: dict[str, list[SymbolRecord]]) -> bool:
