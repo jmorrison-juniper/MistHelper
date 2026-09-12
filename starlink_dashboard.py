@@ -18,7 +18,7 @@ import os
 import shutil  # PATH lookup that turns a partial executable name into an absolute path.
 import subprocess  # nosec B404 - This is the bootstrap seam, and every call below uses shell=False.
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 # Configure logging first, because the bootstrap below writes DEBUG and INFO records.
@@ -164,7 +164,9 @@ def check_and_install_grpcio() -> tuple[bool, str]:
             print(f"Installing: {', '.join(packages)}")
             uv_path = _resolve_executable("uv")  # Absolute path, so PATH order cannot substitute another program.
             result = subprocess.run(  # nosec B603 - shutil.which resolved the path and packages is a module literal.
-                [uv_path, "pip", "install"] + packages, capture_output=False, timeout=300  # Show progress to user
+                [uv_path, "pip", "install"] + packages,
+                capture_output=False,
+                timeout=300,  # Show progress to user
             )
         else:
             # Fall back to pip
@@ -238,7 +240,9 @@ def check_and_install_pyqt6() -> tuple[bool, str]:
             print("Please wait, downloading and installing PyQt6 (approximately 50MB)...")
             uv_path = _resolve_executable("uv")  # Absolute path, so PATH order cannot substitute another program.
             result = subprocess.run(  # nosec B603 - shutil.which resolved the path and the rest are literals.
-                [uv_path, "pip", "install", "PyQt6"], capture_output=False, timeout=300  # Show progress to user
+                [uv_path, "pip", "install", "PyQt6"],
+                capture_output=False,
+                timeout=300,  # Show progress to user
             )
         else:
             # Fall back to pip
@@ -270,13 +274,11 @@ def check_and_install_pyqt6() -> tuple[bool, str]:
             return False, error_msg
 
     except subprocess.TimeoutExpired:
-        error_msg = "Installation timed out. Please check your internet connection and try:\n" "  pip install PyQt6"
+        error_msg = "Installation timed out. Please check your internet connection and try:\n  pip install PyQt6"
         return False, error_msg
     except Exception as error:
         error_msg = (
-            f"Unexpected error during installation: {error}\n\n"
-            f"Please try manual installation:\n"
-            f"  pip install PyQt6"
+            f"Unexpected error during installation: {error}\n\nPlease try manual installation:\n  pip install PyQt6"
         )
         return False, error_msg
 
@@ -645,7 +647,7 @@ class StarlinkDashboard(QMainWindow):
         status_font = QFont("Consolas", 10)  # Slightly larger font
         self.status_text.setFont(status_font)
         self.status_text.setStyleSheet(
-            "background-color: #1E1E1E; color: #E0E0E0; padding: 15px; " "border-radius: 5px; line-height: 1.5;"
+            "background-color: #1E1E1E; color: #E0E0E0; padding: 15px; border-radius: 5px; line-height: 1.5;"
         )
 
         layout.addWidget(self.status_text)
@@ -1206,7 +1208,7 @@ class StarlinkDashboard(QMainWindow):
             grpc.channel_ready_future(self.channel).result(timeout=5)
 
             logger.info("Successfully connected to Starlink terminal")
-            self.connection_start_time = datetime.now()
+            self.connection_start_time = datetime.now(UTC)
             return True
 
         except grpc.FutureTimeoutError:
@@ -1649,10 +1651,10 @@ class StarlinkDashboard(QMainWindow):
             self.update_metrics(stats)
 
             # Update timestamp
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            current_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
             self.timestamp_label.setText(f"Last Updated: {current_time}")
             self.status_bar.showMessage(
-                f"Connected to {self.starlink_ip} - Auto-refresh every {self.update_interval/1000}s"
+                f"Connected to {self.starlink_ip} - Auto-refresh every {self.update_interval / 1000}s"
             )
 
         except Exception as error:

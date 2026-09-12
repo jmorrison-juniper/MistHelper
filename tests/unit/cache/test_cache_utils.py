@@ -23,7 +23,7 @@ import importlib
 import logging  # WHY (#886 Phase 2): assert against caplog after print()->logging migration.
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -102,7 +102,7 @@ class TestIsCsvFresh:
         """An old file (mtime beyond the window) is stale."""
         path = tmp_path / "stale.csv"
         path.write_text("a,b\n1,2\n", encoding="utf-8")
-        old = (datetime.now() - timedelta(hours=2)).timestamp()
+        old = (datetime.now(UTC) - timedelta(hours=2)).timestamp()
         os.utime(str(path), (old, old))
         assert CacheUtils._is_csv_fresh(str(path), "stale.csv", freshness_minutes=60) is False
 

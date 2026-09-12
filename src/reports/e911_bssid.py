@@ -9,7 +9,7 @@ import os  # WHY: filesystem probes for checkpoint file lifecycle management
 import time  # WHY: measure wall-clock elapsed for report telemetry
 from collections.abc import Callable  # WHY: type-annotate injected input/write callbacks
 from dataclasses import dataclass, field  # WHY: bundle 7+ related params into ≤5-param call signatures
-from datetime import datetime, timedelta  # WHY: timestamp checkpoints and predict rate-limit reset window
+from datetime import UTC, datetime, timedelta  # WHY: timestamp checkpoints and predict rate-limit reset window
 from typing import Any, ClassVar  # WHY: mistapi returns untyped JSON dicts. ClassVar for typed static tables
 
 from src.utils.console import echo  # WHY: 1031 stdout + INFO log helper replaces legacy WARNING-channel echoes.
@@ -309,7 +309,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         """Save progress to checkpoint file for rate-limit recovery."""
         checkpoint = {  # WHY: single json-serializable dict written to disk
             "org_id": org_id,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "total_sites": len(completed_sites),
             "completed_sites": list(completed_sites),  # WHY: set is not JSON-serializable
             "org_data": org_data,
@@ -918,7 +918,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         E911BSSIDReportGenerator._save_checkpoint(
             batch.org_id, batch.org_data, batch.completed_sites, batch.map_lookup, batch.wlan_band_lookup
         )
-        next_hour = datetime.now().replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)  # WHY: rate reset
+        next_hour = datetime.now(UTC).replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)  # WHY: rate reset
         echo("    Checkpoint saved: %s/%s sites.", len(batch.completed_sites), batch.total_sites)
         echo("    Run Menu 160 again after %s to resume.", next_hour.strftime("%H:%M"))
         return False  # WHY: caller uses False to abort the run cleanly
@@ -1075,7 +1075,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
 
         WHY: extracted so `_write_report` stays ≤25 lines and file naming lives in one place.
         """
-        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")  # WHY: sortable timestamp in filename
+        timestamp_str = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")  # WHY: sortable timestamp in filename
         filename = f"E911_BSSID_Report_{timestamp_str}.csv"  # WHY: descriptive name for audit trail
         write_data_fn(  # WHY: exporter handles CSV encoding + directory placement
             data=rows,

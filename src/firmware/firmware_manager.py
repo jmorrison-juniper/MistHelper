@@ -605,9 +605,9 @@ class FirmwareManager:
             upgraded = len(targets.get("upgraded", []))  # WHY: count upgraded devices
             downloaded = len(targets.get("downloaded", []))  # WHY: count downloaded devices
             downloading = len(targets.get("download_requested", []))  # WHY: count in-flight downloads
-            progress_line = (
-                f"    Progress: {upgraded}/{total} upgraded, " f"{downloaded} downloaded, {downloading} downloading"
-            )  # WHY: build progress summary line
+            progress_prefix = f"    Progress: {upgraded}/{total} upgraded, "  # WHY: keep the text readable.
+            progress_suffix = f"{downloaded} downloaded, {downloading} downloading"  # WHY: keep the line short.
+            progress_line = f"{progress_prefix}{progress_suffix}"  # WHY: build the progress summary line.
             print(progress_line)  # WHY: report progress
         upgrades = details.get("upgrades", [])  # WHY: list of site-level upgrade records
         if upgrades:  # WHY: only render when present
@@ -2637,7 +2637,7 @@ class FirmwareManager:
         """
         logger = logging.getLogger(__name__)
         results: dict[str, Any] = {
-            "operation_id": f"ssr_upgrade_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            "operation_id": f"ssr_upgrade_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}",
             "target_version": target_version,
             "strategy": upgrade_config["strategy"],
             "channel": upgrade_config["channel"],
@@ -2645,7 +2645,7 @@ class FirmwareManager:
             "sites_processed": 0,
             "ssrs_upgraded": 0,
             "errors": [],
-            "start_time": datetime.now().isoformat(),
+            "start_time": datetime.now(UTC).isoformat(),
             "site_results": [],
         }
         logger.info("Starting SSR firmware upgrade operation: %s", results["operation_id"])
@@ -3232,10 +3232,10 @@ class FirmwareManager:
         print(f"\n{'=' * 60}\nEXECUTING SSR FIRMWARE UPGRADE\n{'=' * 60}")  # WHY: operator banner
         try:
             self._iterate_ssr_site_upgrades(selected_sites, upgrade_config, results)  # WHY: batch loop
-            results["end_time"] = datetime.now().isoformat()  # WHY: stamp completion time
+            results["end_time"] = datetime.now(UTC).isoformat()  # WHY: stamp completion time
             self._print_ssr_upgrade_completion(results)  # WHY: summary output
         except Exception as e:
-            results["end_time"] = datetime.now().isoformat()  # WHY: stamp failure time
+            results["end_time"] = datetime.now(UTC).isoformat()  # WHY: stamp failure time
             results["error"] = str(e)  # WHY: attach error message
             print(f"\nX  Critical error in SSR firmware upgrade: {str(e)}")  # WHY: operator failure marker
             logger.error("Critical error in SSR firmware upgrade: %s", str(e))  # WHY: audit failure
@@ -4240,7 +4240,7 @@ class FirmwareUpgradeStatusChecker:
 
     def _export_results(self) -> None:
         """Export results to CSV files."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # WHY: shared filename timestamp
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")  # WHY: shared filename timestamp
 
         self._export_device_status(timestamp)  # WHY: emit per-device firmware status CSV
         self._export_active_operations(timestamp)  # WHY: emit active-upgrade operations CSV

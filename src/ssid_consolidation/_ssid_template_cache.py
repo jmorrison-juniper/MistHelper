@@ -18,7 +18,7 @@ from __future__ import annotations  # WHY: postponed evaluation for forward-ref 
 import json  # WHY: cache is JSON-encoded on disk
 import logging  # WHY: emit cache/resume telemetry alongside other phases
 import os  # WHY: file existence + path composition on Windows/POSIX
-from datetime import datetime  # WHY: ISO timestamps for cache freshness math
+from datetime import UTC, datetime  # WHY: ISO timestamps for cache freshness math
 from typing import TYPE_CHECKING, Any  # WHY: broad typing for opaque payloads
 
 from ._ssid_template_cluster import _ClusterBase  # WHY: shared parent-proxy wrapper
@@ -143,7 +143,7 @@ class _SsidTemplateCacheCluster(_ClusterBase):  # WHY: proxy cluster grouping ca
     def _save_cache(self, data: dict[str, Any]) -> None:  # WHY: persists Phase-1 cache to disk
         """Write cache JSON with collection timestamp."""
         parent = self._mm  # WHY: bind parent state used across attribute writes
-        data["collected_at"] = datetime.now().isoformat()  # WHY: stamp for freshness math
+        data["collected_at"] = datetime.now(UTC).isoformat()  # WHY: stamp for freshness math
         data["target_ssid"] = parent.target_ssid  # WHY: preserve SSID scope in payload
         data["org_id"] = parent.org_id  # WHY: preserve org scope in payload
         try:  # WHY: tolerate disk/permission errors without failing pipeline
@@ -162,7 +162,7 @@ class _SsidTemplateCacheCluster(_ClusterBase):  # WHY: proxy cluster grouping ca
         payload = {  # WHY: standardized resume envelope shared with _load_phase_results
             "phase": phase,
             "target_ssid": parent.target_ssid,
-            "started_at": datetime.now().isoformat(),
+            "started_at": datetime.now(UTC).isoformat(),
             "total": len(results),
             "results": results,
         }
