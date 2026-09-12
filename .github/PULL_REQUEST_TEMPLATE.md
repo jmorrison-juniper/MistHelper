@@ -32,4 +32,6 @@
 
 ## Documentation
 - [ ] README.md updated (if user-facing changes)
-- [ ] Changelog entry added with version `YY.MM.DD.HH.MM` format
+- [ ] Release note added as one new fragment under `changelog.d/`
+- [ ] The fragment name carries the PR number, the issue number, or the date
+- [ ] `CHANGELOG.md` is unchanged by this branch (the release coordinator owns that file)

@@ -298,6 +298,7 @@ machine.
 | [NOC runbooks](documentation/noc-runbooks) | Task guides for the operations center |
 | [API notes](documentation/api) | The Mist API specification and the endpoint notes |
 | [Changelog](CHANGELOG.md) | The version history |
+| [Release-note fragments](changelog.d/README.md) | The file that each change adds for its release note |
 
 ## License
 
