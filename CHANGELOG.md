@@ -31,6 +31,11 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Added**: Unit coverage keeps the same-line first-call rule and the old
   line collector result stable.
 
+### Portal favicon direct path (issue #2495)
+
+- **Fixed**: Both web portals now answer `/favicon.ico` with the shipped SVG
+  icon, the correct media type, and a one-day public cache header.
+
 ### Simple endpoint family stage one (issue #1807)
 
 - **Added**: Menus 259 through 262 run no-identifier, org-scoped,
