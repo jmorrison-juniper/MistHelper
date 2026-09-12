@@ -38,6 +38,13 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Added**: Unit coverage keeps the same-line first-call rule and the old
   line collector result stable.
 
+### Complexity guard for scripts and tests (issue #1771)
+
+- **Changed**: Refactored two Zscaler and Marvis report builders and the
+  Zscaler cache promotion tests to remove critical complexity blocks.
+- **Changed**: The Radon gate now covers the refactored script files and the
+  Zscaler catalogue test file.
+
 ### Simple endpoint family stage one (issue #1807)
 
 - **Added**: Menus 259 through 262 run no-identifier, org-scoped,
