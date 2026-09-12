@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/events/fast_roam`
 - **Tag**: `Sites Events`
-- **mistapi SDK module**: `mistapi.api.v1.sites.events.fast_roam`
+- **mistapi SDK module**: `mistapi.api.v1.sites.events`
 
 ### Description
 

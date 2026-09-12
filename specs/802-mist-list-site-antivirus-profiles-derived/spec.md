@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/avprofiles/derived`
 - **Tag**: `Sites Antivirus Profiles`
-- **mistapi SDK module**: `mistapi.api.v1.sites.avprofiles.derived`
+- **mistapi SDK module**: `mistapi.api.v1.sites.avprofiles`
 
 ### Description
 

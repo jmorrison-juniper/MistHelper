@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/clients/events/search`
 - **Tag**: `Orgs Clients - Wireless`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.clients.events.search`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.clients`
 
 ### Description
 

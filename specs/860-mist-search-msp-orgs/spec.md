@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/msps/{msp_id}/orgs/search`
 - **Tag**: `MSPs Orgs`
-- **mistapi SDK module**: `mistapi.api.v1.msps.orgs.search`
+- **mistapi SDK module**: `mistapi.api.v1.msps.orgs`
 
 ### Description
 

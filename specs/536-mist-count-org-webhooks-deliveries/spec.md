@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/webhooks/{webhook_id}/events/count`
 - **Tag**: `Orgs Webhooks`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.webhooks.events.count`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.webhooks`
 
 ### Description
 

@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/wan_usages/count`
 - **Tag**: `Sites WAN Usages`
-- **mistapi SDK module**: `mistapi.api.v1.sites.wan_usages.count`
+- **mistapi SDK module**: `mistapi.api.v1.sites.wan_usages`
 
 ### Description
 

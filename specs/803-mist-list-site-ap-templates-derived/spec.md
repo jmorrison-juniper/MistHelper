@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/aptemplates/derived`
 - **Tag**: `Sites AP Templates`
-- **mistapi SDK module**: `mistapi.api.v1.sites.aptemplates.derived`
+- **mistapi SDK module**: `mistapi.api.v1.sites.aptemplates`
 
 ### Description
 

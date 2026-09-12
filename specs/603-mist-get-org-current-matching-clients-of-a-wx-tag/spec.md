@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/wxtags/{wxtag_id}/clients`
 - **Tag**: `Orgs WxTags`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.wxtags.clients`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.wxtags`
 
 ### Description
 

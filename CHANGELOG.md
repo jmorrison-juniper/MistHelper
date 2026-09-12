@@ -24,14 +24,23 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
   excludes the unresolved phantom operation `searchOrgClientFingerprints`.
 - **Added**: Unit coverage verifies SDK resolution, prompt failures, call
   shape, primary-key strategy coverage, and table drift.
+
 ### Flatten nested fields performance (issue #2485)
 
 - **Changed**: `DataProcessingUtils.flatten_nested_fields()` now writes nested
   flattened fields directly into each output row. This removes temporary merge
   dictionaries from the export flatten path.
 - **Added**: Unit coverage keeps JSON and Python literal parse results, key
-  order, empty container handling, and malformed string behavior stable.`r`n`r`n### Dashboard data summary performance (issue #2439)
+  order, empty container handling, and malformed string behavior stable.
 
+### Endpoint spec SDK module paths (issue #1757)
+
+- **Fixed**: Endpoint specs now name the `mistapi` SDK module that defines each
+  operation. Three specs now state their unresolved SDK rename decision.
+- **Added**: A guard test scans installed `mistapi` source definitions and fails
+  when a spec declares a module path that does not define its operation.
+
+### Dashboard data summary performance (issue #2439)
 - **Changed**: The web portal dashboard now builds the data summary with one
   directory scan. It formats only the recent files that the page shows.
 - **Added**: Unit coverage keeps the file count, recent-file order, hidden-file
@@ -6849,5 +6858,6 @@ Closes #368
 - Locations: Single AP pre-check, multi-AP pre-check, site PCAP polling, org PCAP polling
 - Function names now match mistapi SDK and Mist API operationId values
 - operationId: listSitePacketCaptures and listOrgPacketCaptures per OpenAPI spec
+
 
 

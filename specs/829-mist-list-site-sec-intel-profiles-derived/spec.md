@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/secintelprofiles/derived`
 - **Tag**: `Sites SecIntel Profiles`
-- **mistapi SDK module**: `mistapi.api.v1.sites.secintelprofiles.derived`
+- **mistapi SDK module**: `mistapi.api.v1.sites.secintelprofiles`
 
 ### Description
 

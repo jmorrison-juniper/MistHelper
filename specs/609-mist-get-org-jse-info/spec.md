@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/setting/jse/info`
 - **Tag**: `Orgs Integration JSE`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.setting.jse.info`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.setting`
 
 ### Description
 

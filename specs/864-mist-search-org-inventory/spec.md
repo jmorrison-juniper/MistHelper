@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/inventory/search`
 - **Tag**: `Orgs Inventory`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.inventory.search`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.inventory`
 
 ### Description
 

@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/maps/{map_id}/auto_zones`
 - **Tag**: `Sites Maps - Auto-Zone`
-- **mistapi SDK module**: `mistapi.api.v1.sites.maps.auto_zones`
+- **mistapi SDK module**: `mistapi.api.v1.sites.maps`
 
 ### Description
 

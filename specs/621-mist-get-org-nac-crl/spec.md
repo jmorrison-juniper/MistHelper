@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/setting/mist_nac_crls`
 - **Tag**: `Orgs NAC CRL`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.setting.mist_nac_crls`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.setting`
 
 ### Description
 

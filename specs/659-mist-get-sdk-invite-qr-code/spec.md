@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/sdkinvites/{sdkinvite_id}/qrcode`
 - **Tag**: `Orgs SDK Invites`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.sdkinvites.qrcode`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.sdkinvites`
 
 ### Description
 

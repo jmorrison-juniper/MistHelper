@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/sites/{site_id}/location/ml/defaults`
 - **Tag**: `Sites Location`
-- **mistapi SDK module**: `mistapi.api.v1.sites.location.ml.defaults`
+- **mistapi SDK module**: `mistapi.api.v1.sites.location`
 
 ### Description
 

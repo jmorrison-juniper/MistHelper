@@ -11,7 +11,7 @@
 - **Method**: `GET`
 - **Path**: `/api/v1/orgs/{org_id}/guests/count`
 - **Tag**: `Orgs Guests`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.guests.count`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.guests`
 
 ### Description
 
