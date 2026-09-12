@@ -52,6 +52,8 @@ RESPONSE_HEADERS = {
     "Referrer-Policy": "strict-origin-when-cross-origin",  # A site identifier must not leak in a referrer.
     "Cache-Control": "no-store",  # A shared workstation must not keep a page with site data.
 }
+FAVICON_ROUTE = "/favicon.ico"  # This public asset carries no site data.
+CACHE_CONTROL_HEADER = "Cache-Control"  # This header needs a favicon exception.
 
 FORWARDED_HEADER = "X-Forwarded-For"  # `ProxyFix` reads this header. No code here parses it by hand.
 BLOCKED_STATUS = 403  # The answer for an address outside the allow list.
@@ -133,6 +135,9 @@ class PortalSecurity:
                 The same response with the headers in place.
             """
             for name, value in RESPONSE_HEADERS.items():  # One pass over the fixed header table.
+                if name == CACHE_CONTROL_HEADER and request.path == FAVICON_ROUTE:  # Keep the asset cache header.
+                    logger.debug("Kept the favicon cache header")  # Confirm the narrow favicon exception.
+                    continue  # Do not replace the asset cache header with the page cache header.
                 response.headers[name] = value  # A later value replaces an earlier one.
             return response  # Flask sends the response the hook returns.
 
