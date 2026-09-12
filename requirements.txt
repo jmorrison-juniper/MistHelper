@@ -2,9 +2,9 @@
 # Requires Python 3.13 or newer
 
 # Core API and networking
-mistapi>=0.63.1
+mistapi>=0.63.3
 requests
-websocket-client>=1.8.0
+websocket-client>=1.9.2
 urllib3
 
 # SSH and remote access
@@ -26,7 +26,7 @@ python-dotenv
 PyYAML
 
 # AI analysis (Mist Ideas Analyzer)
-openai>=3.8.0
+openai>=3.13.0
 
 # Terminal emulation for SSH operations
 pyte
@@ -44,7 +44,7 @@ flask-wtf
 # Windows ships no `fcntl`. The upgrade capture portal therefore starts Waitress
 # on Windows. The marker keeps Waitress out of a Linux install, where Gunicorn
 # runs. Without this line, menu 238 has no server it can start on Windows.
-waitress>=3.0.2 ; sys_platform == 'win32'
+waitress>=3.0.2
 
 # Interactive visualization (Maps Manager uses Dash for interactive view, Plotly for static)
 dash
@@ -54,7 +54,7 @@ pillow
 kaleido
 
 # Polyglot database backends (ArangoDB + Redis TimeSeries)
-python-arango>=8.3.2
+python-arango>=8.3.5
 redis[hiredis]>=7.4.0
 
 # Structured logging for database modules
@@ -65,10 +65,10 @@ Pygments>=2.21.0
 
 # Testing (dev dependency - not needed at runtime)
 pytest
-hypothesis>=6.151.12
+hypothesis>=6.168.0
 
 # Codemod tooling for issue #429 logging f-string sweep (dev-only but listed for parity)
-libcst>=1.5
+libcst>=1.9.0
 
 # Note: The following are transitive dependencies installed automatically:
 # bcrypt, certifi, cffi, charset_normalizer, click, contourpy, cryptography,
