@@ -56,8 +56,12 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 
 - **Changed**: The diagram reference lint now reads diagram files first, then
   stops Python file reads after it resolves each diagram reference.
+- **Changed**: The diagram reference lint now reads Python symbol tables instead
+  of full abstract syntax trees.
 - **Added**: Unit coverage keeps valid references, stale references, plain
   Markdown, and non-Mermaid code blocks stable.
+- **Added**: Unit coverage keeps nested definitions, synchronous function
+  names, asynchronous function omission, strings, and comments stable.
 
 ### Simple endpoint family stage one (issue #1807)
 

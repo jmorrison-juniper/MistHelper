@@ -7,9 +7,9 @@ Exit codes: 0 = all valid, 1 = stale references found, 2 = script error.
 """
 
 import argparse
-import ast
 import logging
 import re
+import symtable
 import sys
 from pathlib import Path
 
@@ -161,7 +161,7 @@ class DiagramReferenceValidator:
         return CLASS_SUFFIX_PATTERN.findall(block)
 
     def extract_python_symbols(self, source_path: Path) -> set[str]:
-        """Extract class/function names from Python source via AST."""
+        """Extract class and function names from Python source."""
         try:
             source_text = source_path.read_text(encoding="utf-8")
         except OSError as exc:
@@ -176,21 +176,43 @@ class DiagramReferenceValidator:
             The lint run reuses source text and does not read a file twice.
         """
         try:
-            tree = ast.parse(source_text, filename=str(source_path))
+            source_table = symtable.symtable(source_text, str(source_path), "exec")
         except SyntaxError as exc:
             logger.error("Failed to parse %s: %s", source_path, exc)
             return set()
+        return self._extract_symbol_table_names(source_table, source_text)
 
+    def _extract_symbol_table_names(self, source_table: symtable.SymbolTable, source_text: str) -> set[str]:
+        """Extract class and synchronous function names from a symbol table.
+
+        Why:
+            The symbol table parser uses less memory than a full AST walk.
+        """
         symbols: set[str] = set()
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef):
-                symbols.add(node.name)
-                for item in node.body:
-                    if isinstance(item, ast.FunctionDef):
-                        symbols.add(item.name)
-            elif isinstance(node, ast.FunctionDef):
-                symbols.add(node.name)
+        source_lines = source_text.splitlines()
+        pending_tables = list(source_table.get_children())
+        while pending_tables:
+            child_table = pending_tables.pop()
+            pending_tables.extend(child_table.get_children())
+            if child_table.get_type() == "class":
+                symbols.add(child_table.get_name())
+            elif self._is_sync_function_table(child_table, source_lines):
+                symbols.add(child_table.get_name())
         return symbols
+
+    def _is_sync_function_table(self, child_table: symtable.SymbolTable, source_lines: list[str]) -> bool:
+        """Return true when a symbol table names a synchronous function.
+
+        Why:
+            The old AST path skipped `async def` names.
+        """
+        if child_table.get_type() != "function":
+            return False
+        line_index = child_table.get_lineno() - 1
+        if line_index < 0 or line_index >= len(source_lines):
+            return False
+        line = source_lines[line_index].lstrip()
+        return line.startswith("def ")
 
     def find_closest_match(self, name: str) -> str | None:
         """Find closest Python symbol by edit distance."""
