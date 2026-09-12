@@ -25,6 +25,34 @@ This index records the user workflow, the browser evidence, and the validation s
 | `2447-stale-bulk-run-controls` | Stale and bulk run controls | Show stale age, reconcile state, preview a bulk action, cancel or retry selected runs, and isolate concurrent operators. | `test_run_controls/test_stale.py`, `test_run_controls/test_bulk.py`, and `test_run_controls/test_isolation.py` cover stale display, bulk preview, bulk cancel, bulk retry, reconciliation, and operator isolation. | **Partial** | The browser journeys pass. The open tasks of `tasks.md` remain. Issue #2447 tracks this work. |
 | `991-upgrade-version-defaults` | Per-type version defaults | Show separate AP, switch, and gateway defaults, remove the global default, and apply configured defaults. | `test_upgrade.py` verifies the per-type controls and the removed global control. | **Partial** | Unit tests prove environment overrides. A browser test does not start the server with each override. |
 
+## Branch divergence, measured 2026-09-12
+
+`main` holds a version of this feature that another pull request delivered. That
+version is not the version of `fix/2447-stale-bulk-run-controls`. The two
+versions grew apart, so a plain rebase conflicts.
+
+`main` holds work that the feature branch does not hold. It holds the
+organization upgrade flow, the browser token sign-in test, and
+`app/security.py`. A wholesale overwrite from the feature branch would remove
+that work.
+
+The feature branch holds work that `main` does not hold:
+
+| Path | Value |
+|---|---|
+| `src/upgrade_portal/api/run_controls/routes.py` | The bulk preview route and the bulk action route. |
+| `src/upgrade_portal/api/run_controls/services/` | The preview, bulk, reconciliation, and retry services. |
+| `tests/e2e/upgrade_portal/test_run_controls/conftest.py` | The site lock release. Issue #2532 records the defect. |
+| `tests/contract/upgrade_portal/test_upgrade_routes/test_bulk_preview.py` | The preview contract proof. |
+| `tests/unit/upgrade_portal/test_runs/test_preview.py` | The preview unit proof. |
+| `specs/2447-stale-bulk-run-controls/traceability.md` | The requirement to test map. |
+| `specs/2447-stale-bulk-run-controls/recovery-drill.md` | The backup and restore record. |
+
+Warning: do not force the feature branch onto `main`. A wholesale overwrite can
+cause the loss of the organization upgrade flow and the browser token sign-in
+test. Port each file above one at a time, and run the browser suite after each
+port.
+
 ## Current validation evidence
 
 - The complete isolated Playwright suite passed: 203 tests passed and 4 tests skipped.
