@@ -40,6 +40,13 @@ Version format: `YY.MM.DD.HH.MM` (UTC timestamp).
 - **Added**: A guard test scans installed `mistapi` source definitions and fails
   when a spec declares a module path that does not define its operation.
 
+### Upgrade capture read-back numbers (issue #2471)
+
+- **Fixed**: The upgrade capture read-back now verifies a Tier 3 capture when
+  ArangoDB returns a whole float as an equal integer.
+- **Added**: Unit coverage for nested Tier 3 numbers, including whole floats,
+  fractional floats, integers, zero, negative values, and very large values.
+
 ### Dashboard data summary performance (issue #2439)
 - **Changed**: The web portal dashboard now builds the data summary with one
   directory scan. It formats only the recent files that the page shows.
