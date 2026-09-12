@@ -32,6 +32,7 @@ Why:
 from __future__ import annotations
 
 import importlib.util
+import json  # Write process-safe browser-token evidence without credential values.
 import logging
 import os
 import signal
@@ -166,6 +167,9 @@ SESSION_COOKIE_NAME = "session"  # Flask's default name. `factory.create_app` se
 # no mail host. The browser identifier holds 22 characters of the allowed set.
 STAND_IN_EMAIL = "e2e.operator@example.invalid"  # Lower case, so `normalize_email` leaves it unchanged.
 STAND_IN_BROWSER_ID = "e2eBrowserIdentity0001"  # Matches the browser cookie pattern that identity fixes.
+BROWSER_TOKEN_VALUE = "fake-browser-token-for-playwright-only"  # The browser submits this obvious stand-in only.
+BROWSER_TOKEN_NAME = "e2e-browser-token"  # The safe token name that GetSelf returns for the identity owner.
+BROWSER_TOKEN_EVIDENCE_PATH = ARTIFACT_DIRECTORY / "browser-token-evidence.jsonl"  # Holds facts, never a token.
 
 # WHY: The site lock identifies a holder by the pair of the work address and the
 # browser identifier. A test of two operators therefore needs a second pair that
@@ -721,6 +725,100 @@ class StandInCloudSession:  # Carries a privilege list and a narrow read, so eve
         return SimpleNamespace(data=rows)
 
 
+def record_browser_token_evidence(event: str, **fields: Any) -> None:
+    """Record browser-token evidence without writing the token value.
+
+    Why:
+        The browser-token test process cannot read the server process memory.
+        A small JSON Lines file proves that the server-side stand-in saw the
+        expected boundary calls. The file carries no credential value.
+
+    Args:
+        event: The event name that the test later reads.
+        **fields: Safe fields that contain no credential value.
+    """
+    logger.info("Record browser-token evidence for %s", event)  # Log the action with no token value.
+    row = {"event": event, "run_id": TEST_RUN_ID, **fields}  # Join only safe fields for the test process.
+    BROWSER_TOKEN_EVIDENCE_PATH.parent.mkdir(parents=True, exist_ok=True)  # The child may start before a writer.
+    with BROWSER_TOKEN_EVIDENCE_PATH.open("a", encoding="utf-8") as handle:  # Append so each call survives.
+        handle.write(json.dumps(row, sort_keys=True) + "\n")  # JSON Lines lets the test read partial evidence.
+    logger.debug("Recorded browser-token evidence for %s", event)  # Confirm the write without details.
+
+
+class BrowserTokenCloudSession(StandInCloudSession):
+    """The cloud session that a browser-token sign-in creates.
+
+    Why:
+        The session proves that the submitted browser token reached the cloud
+        boundary, and that a later Mist-backed page used the same session
+        object. It records only safe facts in the evidence file.
+    """
+
+    def mist_get(self, uri: str, query: dict[str, str] | None = None) -> SimpleNamespace:
+        """Answer one Mist read and record that the browser-token session was used.
+
+        Why:
+            The inventory page calls this method for available firmware
+            versions. Recording that call proves that a page below sign-in used
+            the token-built session, without writing the token value.
+
+        Args:
+            uri: The request path. Only the device-versions path answers rows.
+            query: The query parameters. The model is safe to record.
+
+        Returns:
+            An object with the data rows that the inventory route reads.
+        """
+        model = str((query or {}).get("model", ""))  # A model is not a credential and helps prove the request.
+        record_browser_token_evidence("mist_get", uri=uri, model=model)  # The evidence names the safe Mist read.
+        return super().mist_get(uri, query)  # Reuse the same deterministic answer as the cookie session.
+
+
+def stand_in_browser_token_session(host: str, token: str) -> BrowserTokenCloudSession:
+    """Build the browser-token cloud session and keep no token value.
+
+    Why:
+        The real builder would send the token to the Mist cloud. This stand-in
+        accepts one fake token, records that the cloud boundary ran, and returns
+        a session that answers only the reads this suite permits.
+
+    Args:
+        host: The Mist cloud host that the sign-in route checked.
+        token: The submitted browser token. This function discards it.
+
+    Returns:
+        The stand-in cloud session for the signed-in browser.
+
+    Raises:
+        ValueError: If the browser sends an invalid stand-in token.
+    """
+    accepted = token == BROWSER_TOKEN_VALUE  # Compare once, then discard the submitted value.
+    record_browser_token_evidence("browser_token_session", accepted=accepted, host=host)  # Store no token.
+    del token  # End the local token lifetime before any later code can use it.
+    if not accepted:  # A wrong value follows the same refusal route as a bad cloud token.
+        raise ValueError("The browser token stand-in refused the submitted value.")
+    return BrowserTokenCloudSession()  # The token-built session now serves the browser journey.
+
+
+def stand_in_token_identity(session: Any) -> dict[str, str]:
+    """Return the safe token identity for a browser-token cloud session.
+
+    Why:
+        The real identity read would call `getSelf` in the Mist cloud. This
+        stand-in proves that the identity step ran and returns a safe token
+        name that can become the browser owner.
+
+    Args:
+        session: The token-built cloud session. The value proves the sequence.
+
+    Returns:
+        The safe identity record that the route reads.
+    """
+    assert isinstance(session, BrowserTokenCloudSession)  # The identity read must follow the token builder.
+    record_browser_token_evidence("token_identity", name=BROWSER_TOKEN_NAME)  # The name is safe to store.
+    return {"name": BROWSER_TOKEN_NAME}  # `identity.build_token_owner` accepts this token-name shape.
+
+
 class E2EOrgUpgradeService:
     """Return deterministic organization job results to the browser server."""
 
@@ -1243,6 +1341,49 @@ def second_operator_cookies() -> list[dict[str, str]]:
     return operator_session_cookies(SECOND_EMAIL, SECOND_BROWSER_ID)
 
 
+@pytest.fixture
+def browser_token_value() -> str:
+    """Return the fake browser token that the server stand-in accepts.
+
+    Why:
+        The value is an obvious fake, and the test must submit the same value
+        that the isolated server accepts. A fixture keeps the test independent
+        from a live secret source.
+
+    Returns:
+        The fake browser-token value for this suite.
+    """
+    return BROWSER_TOKEN_VALUE  # The route stand-in accepts this fake value only.
+
+
+@pytest.fixture
+def browser_token_evidence_path() -> Path:
+    """Return the file that records browser-token stand-in events.
+
+    Why:
+        The server process writes this file, and the test process reads it.
+        The file records only safe facts and never the submitted token value.
+
+    Returns:
+        The evidence file path for this E2E server.
+    """
+    return BROWSER_TOKEN_EVIDENCE_PATH  # The parent and child resolve the same artifact path.
+
+
+@pytest.fixture
+def browser_token_server_log_path() -> Path:
+    """Return the log file of the isolated browser-test server.
+
+    Why:
+        The browser-token journey must prove that the submitted token does not
+        reach the portal log.
+
+    Returns:
+        The server log path for this E2E server.
+    """
+    return SERVER_LOG_PATH  # The child writes its log to this file.
+
+
 def _register_operator(email: str, browser_id: str) -> None:
     """Place one signed-in operator record into the process registry.
 
@@ -1422,6 +1563,8 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
 
     built.config[org_upgrade.SERVICE_CONFIG_KEY] = E2EOrgUpgradeService
     built.config[org_upgrade.WRITES_ENABLED_CONFIG_KEY] = True
+    built.config["CLOUD_BROWSER_TOKEN_SESSION"] = stand_in_browser_token_session  # Replace the live token builder.
+    built.config["CLOUD_TOKEN_IDENTITY"] = stand_in_token_identity  # Replace the live GetSelf identity read.
     _register_operator(STAND_IN_EMAIL, STAND_IN_BROWSER_ID)  # The operator that every test drives.
     _register_operator(SECOND_EMAIL, SECOND_BROWSER_ID)  # The operator that meets the lock refusal.
     _seed_fixture_runs(built, upgrade)  # Browser-only states that no safe page journey can create.
@@ -1486,6 +1629,30 @@ def second_operator_page(browser: Any, capture_portal_server: str) -> Iterator[A
     opened = context.new_page()
     yield opened
     opened.close()
+    context.close()  # The context holds a profile directory until it closes.
+
+
+@pytest.fixture
+def signed_out_page(browser: Any, capture_portal_server: str) -> Iterator[Any]:
+    """Open a page with no preloaded portal session.
+
+    Why:
+        Browser-token sign-in must start from the real form. The default
+        `page` fixture already carries a signed cookie, so this fixture creates
+        a separate clean browser context for that journey.
+
+    Args:
+        browser: The browser that `pytest-playwright` started.
+        capture_portal_server: The address of the running portal.
+
+    Yields:
+        The page of a browser context that holds no portal session.
+    """
+    del capture_portal_server  # Requested for its start-up work alone.
+    context = browser.new_context(base_url=BASE_URL)  # A clean cookie jar starts the real sign-in journey.
+    opened = context.new_page()  # The page carries no session cookie on its first request.
+    yield opened  # The caller drives the complete sign-in path through the browser.
+    opened.close()  # A page left open would hold a browser target for the whole run.
     context.close()  # The context holds a profile directory until it closes.
 
 
