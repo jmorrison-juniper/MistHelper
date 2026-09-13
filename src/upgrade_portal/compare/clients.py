@@ -29,6 +29,7 @@ from typing import Any
 
 from src.upgrade_portal.capture.clients import normalize_mac
 from src.upgrade_portal.compare.diff import matched_sections
+from src.utils.performance import EventSource, Recorder, RecorderSettings, bucket_size
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +79,33 @@ _ADDRESS_SEPARATORS = str.maketrans("", "", ":-. \t")
 # WHY: An address is 12 hexadecimal characters. The pattern finds one inside a
 # key that joins the address to a timestamp with nothing between them.
 _EMBEDDED_ADDRESS = re.compile(r"[0-9a-f]{12}")
+
+# WHY: The source names the hook row and keeps private data out of labels.
+_PERFORMANCE_SOURCE = EventSource(
+    file="src/upgrade_portal/compare/clients.py",  # The catalog path for this real comparison path.
+    symbol="compare_clients",  # The measured function that the benchmark drives.
+)  # The event source has no organization, site, client, or device identifier.
+_SUCCESS_SAMPLE_LIMIT = 0.01  # The catalog permits at most one sampled success in one hundred.
+
+
+def _performance_settings() -> RecorderSettings:
+    """Return the hook settings with the catalog sample cap applied."""
+    settings = RecorderSettings.from_env()  # Read the documented environment variables.
+    sample_rate = min(settings.sample_rate, _SUCCESS_SAMPLE_LIMIT)  # Apply the catalog success cap.
+    return RecorderSettings(  # Return a new immutable settings record.
+        level=settings.level,  # Preserve the selected off, base, targeted, or diagnostic level.
+        sample_rate=sample_rate,  # Keep no more than one success in one hundred.
+        capacity=settings.capacity,  # Preserve the configured sink capacity.
+        measure_cpu=settings.measure_cpu,  # Preserve the configured CPU clock setting.
+    )
+
+
+_PERFORMANCE_RECORDER = Recorder(_performance_settings())  # Read the opt-in level once at import.
+
+
+def _performance_span() -> object:
+    """Return the measuring span or the shared null span for this call."""
+    return _PERFORMANCE_RECORDER.span(_PERFORMANCE_SOURCE, family="operation")  # Measure the sampled call.
 
 
 # ---------------------------------------------------------------------------
@@ -566,16 +594,30 @@ def compare_clients(before: Mapping[str, Any], after: Mapping[str, Any]) -> Clie
         The client differences, each skipped client section, and the count of
         clients that the matching digests proved present.
     """
-    skipped = matched_sections(before, after, CLIENT_SECTIONS)
-    kinds = tuple(kind for kind in CLIENT_KINDS if SECTION_FOR_KIND[kind] not in skipped)
-    before_map = _client_map(before, kinds)
-    after_map = _client_map(after, kinds)
-    addresses = sorted(set(before_map) | set(after_map))
-    deltas = tuple(_compare_one_client(mac, before_map.get(mac), after_map.get(mac)) for mac in addresses)
-    proved = _proved_present_count(before, after, skipped)  # WHY: The count replaces the bare zero on the page.
-    logger.info("Upgrade portal compared %s clients and skipped %s sections", len(deltas), len(skipped))
-    logger.debug("Upgrade portal proved %s clients present over the skipped sections", proved)
-    return ClientComparison(deltas=deltas, skipped_sections=skipped, proved_present=proved)
+    span = _performance_span()  # Keep the hook off by default and cheap when unsampled.
+    with span:  # Measure the complete client comparison and never hide errors.
+        skipped = matched_sections(before, after, CLIENT_SECTIONS)  # Check digest matches before row work.
+        kinds = tuple(kind for kind in CLIENT_KINDS if SECTION_FOR_KIND[kind] not in skipped)  # Read changed kinds.
+        before_map = _client_map(before, kinds)  # Index pre-check clients by safe normalized address.
+        after_map = _client_map(after, kinds)  # Index post-check clients by safe normalized address.
+        addresses = sorted(set(before_map) | set(after_map))  # Keep stable output order for the report.
+        deltas = tuple(  # Build one immutable result in stable address order.
+            _compare_one_client(mac, before_map.get(mac), after_map.get(mac)) for mac in addresses
+        )  # Compare each client once.
+        proved = _proved_present_count(before, after, skipped)  # Replace the bare zero when a digest skipped work.
+        if span.sampled:  # Add labels and counters only when a success event will emit.
+            item_count = len(deltas) + proved  # Count compared rows and digest-proved rows for the event.
+            span.label("operation", "compare_clients")  # Use one fixed operation label.
+            span.label("workload_size", bucket_size(item_count))  # Emit a bucket, never the raw site size.
+            span.count("work.items_total", item_count)  # Emit the real work size as a measurement.
+            span.count("perf.calls_total", 1)  # Emit one operation event for this call.
+        logger.info(  # Log completion with counts only.
+            "Upgrade portal compared %s clients and skipped %s sections", len(deltas), len(skipped)
+        )
+        logger.debug(  # Log the proved count without private data.
+            "Upgrade portal proved %s clients present over the skipped sections", proved
+        )
+        return ClientComparison(deltas=deltas, skipped_sections=skipped, proved_present=proved)  # Preserve the result.
 
 
 def count_outcome(deltas: Iterable[ClientDelta], outcome: str) -> int:
