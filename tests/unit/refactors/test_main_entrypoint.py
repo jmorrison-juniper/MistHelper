@@ -40,6 +40,7 @@ def wired_misthelper(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         "_setup_runtime_flags": MagicMock(name="_setup_runtime_flags"),
         "_initialize_dependencies": MagicMock(name="_initialize_dependencies"),
         "_establish_mist_session": MagicMock(name="_establish_mist_session"),
+        "_systematic_test_has_api_token": MagicMock(return_value=True, name="_systematic_test_has_api_token"),
         "_configure_runtime_options": MagicMock(name="_configure_runtime_options"),
         "_dispatch_main_mode": MagicMock(name="_dispatch_main_mode"),
     }
@@ -86,6 +87,7 @@ class TestMainEntrypointRun:
         assert wired_misthelper["_setup_runtime_flags"].call_count == 1  # WHY: step 5 (flag propagation).
         assert wired_misthelper["_initialize_dependencies"].call_count == 1  # WHY: step 6 (deferred deps).
         assert wired_misthelper["_establish_mist_session"].call_count == 1  # WHY: step 7 (Mist auth).
+        assert wired_misthelper["_systematic_test_has_api_token"].call_count == 1  # WHY: step 7 guard check.
         assert wired_misthelper["_configure_runtime_options"].call_count == 1  # WHY: step 8a (runtime opts).
         assert wired_misthelper["_dispatch_main_mode"].call_count == 1  # WHY: step 8b (mode dispatch).
 
@@ -98,6 +100,41 @@ class TestMainEntrypointRun:
         assert wired_misthelper["_establish_mist_session"].call_args == call(expected_args)  # WHY: step 7 args-pass.
         assert wired_misthelper["_configure_runtime_options"].call_args == call(expected_args)  # WHY: step 8a pass.
         assert wired_misthelper["_dispatch_main_mode"].call_args == call(expected_args)  # WHY: step 8b args-pass.
+
+    def test_run_skips_startup_session_for_offline_safe_test(self, wired_misthelper: dict[str, Any]) -> None:
+        """A no-token `--test` run reaches the test dispatcher without Mist session startup."""
+        wired_misthelper["_parsed_args"].test = True  # WHY: simulate the documented safe test command.
+        wired_misthelper["_systematic_test_has_api_token"].return_value = False  # WHY: simulate a no-token host.
+
+        MainEntrypoint.run()  # WHY: exercise the entrypoint branch that must run offline.
+
+        wired_misthelper["_establish_mist_session"].assert_not_called()  # WHY: no-token --test must not auth.
+        wired_misthelper["_dispatch_main_mode"].assert_called_once_with(
+            wired_misthelper["_parsed_args"]
+        )  # WHY: the test dispatcher must still run.
+
+    def test_run_keeps_startup_session_when_safe_test_has_token(self, wired_misthelper: dict[str, Any]) -> None:
+        """A token-backed `--test` run still performs the original Mist session startup."""
+        wired_misthelper["_parsed_args"].test = True  # WHY: simulate --test with credentials present.
+        wired_misthelper["_systematic_test_has_api_token"].return_value = True  # WHY: credential path stays live.
+
+        MainEntrypoint.run()  # WHY: exercise the unchanged live-test startup path.
+
+        wired_misthelper["_establish_mist_session"].assert_called_once_with(
+            wired_misthelper["_parsed_args"]
+        )  # WHY: token-backed --test must behave as before.
+
+    def test_run_keeps_startup_session_when_safe_test_uses_login(self, wired_misthelper: dict[str, Any]) -> None:
+        """A login-backed `--test` run still performs interactive Mist session startup."""
+        wired_misthelper["_parsed_args"].test = True  # WHY: combine --test with the login path.
+        wired_misthelper["_parsed_args"].login = True  # WHY: login must override the offline no-token bypass.
+        wired_misthelper["_systematic_test_has_api_token"].return_value = False  # WHY: prove token absence is safe.
+
+        MainEntrypoint.run()  # WHY: exercise the login branch with no environment token.
+
+        wired_misthelper["_establish_mist_session"].assert_called_once_with(
+            wired_misthelper["_parsed_args"]
+        )  # WHY: --login must still build a session.
 
     def test_run_uses_module_level_proxy_singleton(self) -> None:
         """The module-level `_MH` singleton is an instance of `_MistHelperProxy`."""
