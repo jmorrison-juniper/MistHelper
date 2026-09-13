@@ -1,0 +1,8 @@
+18795:        from src.firmware.firmware_manager import FirmwareManager as _Impl  # noqa: PLC0415
+18796:        from src.firmware.firmware_manager import FirmwareManagerConfig  # noqa: PLC0415
+18812:# NOTE: check_firmware_upgrade_status_direct removed - use FirmwareManager.create(apisession, org_id).check_firmware_upgrade_status()  # noqa: E501
+19811:            check_firmware_status_fn=lambda: FirmwareManager.create(
+22099:        lambda: FirmwareManager.create(  # type: ignore[no-untyped-call]
+22156:        lambda: FirmwareManager.create(  # type: ignore[no-untyped-call]
+22239:        lambda: FirmwareManager.create(  # type: ignore[no-untyped-call]
+22248:        lambda: FirmwareManager.create(  # type: ignore[no-untyped-call]

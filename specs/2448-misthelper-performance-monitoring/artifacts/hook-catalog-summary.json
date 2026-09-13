@@ -1,0 +1,57 @@
+{
+  "inventory_file_rows": 1465,
+  "hook_count": 765,
+  "files_with_hooks": 524,
+  "monitor_type_counts": {
+    "allocation_trace": 19,
+    "bounded_diagnostic": 1,
+    "cProfile correlation": 416,
+    "cache": 7,
+    "cache_file": 1,
+    "compute_span": 15,
+    "database": 9,
+    "database_events": 1,
+    "file_io": 4,
+    "gc_diagnostic": 8,
+    "http_transport": 26,
+    "loop_counter": 214,
+    "native_boundary": 1,
+    "operation_span": 27,
+    "serializer": 4,
+    "serializer_file": 5,
+    "stage_span": 1,
+    "startup_import": 6
+  },
+  "disposition_counts": {
+    "production hook": 89,
+    "aggregate boundary only": 416,
+    "targeted diagnostic hook": 260
+  },
+  "strategy_hook_counts": {
+    "1 algorithms/repeated work": 690,
+    "2 I/O/sequential batching": 152,
+    "7 measured Python loops": 660,
+    "5 serialization/validation": 202,
+    "6 bounded caching": 62,
+    "4 allocations/copying": 607,
+    "9 startup/imports": 11,
+    "10 native acceleration": 17,
+    "3 data structures": 399,
+    "8 object layout/GC": 287
+  },
+  "strategy_file_counts": {
+    "1 algorithms/repeated work": 497,
+    "2 I/O/sequential batching": 129,
+    "7 measured Python loops": 481,
+    "5 serialization/validation": 188,
+    "6 bounded caching": 48,
+    "4 allocations/copying": 432,
+    "9 startup/imports": 11,
+    "10 native acceleration": 16,
+    "3 data structures": 371,
+    "8 object layout/GC": 274
+  },
+  "unresolved_symbol_count": 0,
+  "validation_error_count": 0,
+  "validation_errors": []
+}

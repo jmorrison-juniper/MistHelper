@@ -1,0 +1,73 @@
+{
+  "workflow": "speckit",
+  "specName": "Stale and Bulk Run Controls",
+  "branch": "fix/2447-stale-bulk-run-controls",
+  "currentStep": "tasks",
+  "status": "ready-to-implement",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-09-11T07:40:02.834Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-09-11T07:50:24.908Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-09-11T07:54:02.096Z"
+    },
+    {
+      "step": "analyze",
+      "substep": "remediation",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-11T08:47:22.766Z"
+    },
+    {
+      "step": "analyze",
+      "substep": "blocker-remediation",
+      "kind": "start",
+      "by": "copilot",
+      "at": "2026-09-11T10:20:35.357Z"
+    },
+    {
+      "step": "analyze",
+      "substep": "blocker-remediation",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-11T10:46:30.555125Z"
+    },
+    {
+      "step": "analyze",
+      "substep": "branch-reset-confirmation",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-11T11:14:07.547000Z"
+    },
+    {
+      "step": "analyze",
+      "substep": "artifact-gap-remediation",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-11T11:29:00.000000Z"
+    },
+    {
+      "step": "analyze",
+      "substep": "cross-artifact-validation",
+      "kind": "complete",
+      "by": "copilot",
+      "at": "2026-09-11T11:32:26.451873Z"
+    }
+  ],
+  "telemetryInstanceId": "4bf4a441-d276-4e4e-bd93-712d0faae7db"
+}

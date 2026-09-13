@@ -1,0 +1,2847 @@
+{
+  "_comment": [
+    "CENR dedup fixture for feature 1025 US1 tests.",
+    "Contains 315 sites all with country_code=US so region resolution is a",
+    "no-op (all resolve to americas). Paired with cenr_dedup_missing_observations.json",
+    "which enumerates the 7 SecB2B catalogue hosts intentionally MISSING from",
+    "the CENR observation cache so the CENR-fallback code path fires once per",
+    "(site, missing-host) pair before the fix and at most 7 times per run after."
+  ],
+  "sites": [
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000001",
+      "name": "US-site-001",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.01,
+        "lng": -99.99
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000002",
+      "name": "US-site-002",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.02,
+        "lng": -99.98
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000003",
+      "name": "US-site-003",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.03,
+        "lng": -99.97
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000004",
+      "name": "US-site-004",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.04,
+        "lng": -99.96
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000005",
+      "name": "US-site-005",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.05,
+        "lng": -99.95
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000006",
+      "name": "US-site-006",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.06,
+        "lng": -99.94
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000007",
+      "name": "US-site-007",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.07,
+        "lng": -99.93
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000008",
+      "name": "US-site-008",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.08,
+        "lng": -99.92
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000009",
+      "name": "US-site-009",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.09,
+        "lng": -99.91
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000000a",
+      "name": "US-site-010",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.1,
+        "lng": -99.9
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000000b",
+      "name": "US-site-011",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.11,
+        "lng": -99.89
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000000c",
+      "name": "US-site-012",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.12,
+        "lng": -99.88
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000000d",
+      "name": "US-site-013",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.13,
+        "lng": -99.87
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000000e",
+      "name": "US-site-014",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.14,
+        "lng": -99.86
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000000f",
+      "name": "US-site-015",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.15,
+        "lng": -99.85
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000010",
+      "name": "US-site-016",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.16,
+        "lng": -99.84
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000011",
+      "name": "US-site-017",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.17,
+        "lng": -99.83
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000012",
+      "name": "US-site-018",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.18,
+        "lng": -99.82
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000013",
+      "name": "US-site-019",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.19,
+        "lng": -99.81
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000014",
+      "name": "US-site-020",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.2,
+        "lng": -99.8
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000015",
+      "name": "US-site-021",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.21,
+        "lng": -99.79
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000016",
+      "name": "US-site-022",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.22,
+        "lng": -99.78
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000017",
+      "name": "US-site-023",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.23,
+        "lng": -99.77
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000018",
+      "name": "US-site-024",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.24,
+        "lng": -99.76
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000019",
+      "name": "US-site-025",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.25,
+        "lng": -99.75
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000001a",
+      "name": "US-site-026",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.26,
+        "lng": -99.74
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000001b",
+      "name": "US-site-027",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.27,
+        "lng": -99.73
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000001c",
+      "name": "US-site-028",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.28,
+        "lng": -99.72
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000001d",
+      "name": "US-site-029",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.29,
+        "lng": -99.71
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000001e",
+      "name": "US-site-030",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.3,
+        "lng": -99.7
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000001f",
+      "name": "US-site-031",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.31,
+        "lng": -99.69
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000020",
+      "name": "US-site-032",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.32,
+        "lng": -99.68
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000021",
+      "name": "US-site-033",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.33,
+        "lng": -99.67
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000022",
+      "name": "US-site-034",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.34,
+        "lng": -99.66
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000023",
+      "name": "US-site-035",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.35,
+        "lng": -99.65
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000024",
+      "name": "US-site-036",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.36,
+        "lng": -99.64
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000025",
+      "name": "US-site-037",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.37,
+        "lng": -99.63
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000026",
+      "name": "US-site-038",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.38,
+        "lng": -99.62
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000027",
+      "name": "US-site-039",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.39,
+        "lng": -99.61
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000028",
+      "name": "US-site-040",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.4,
+        "lng": -99.6
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000029",
+      "name": "US-site-041",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.41,
+        "lng": -99.59
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000002a",
+      "name": "US-site-042",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.42,
+        "lng": -99.58
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000002b",
+      "name": "US-site-043",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.43,
+        "lng": -99.57
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000002c",
+      "name": "US-site-044",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.44,
+        "lng": -99.56
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000002d",
+      "name": "US-site-045",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.45,
+        "lng": -99.55
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000002e",
+      "name": "US-site-046",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.46,
+        "lng": -99.54
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000002f",
+      "name": "US-site-047",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.47,
+        "lng": -99.53
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000030",
+      "name": "US-site-048",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.48,
+        "lng": -99.52
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000031",
+      "name": "US-site-049",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.49,
+        "lng": -99.51
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000032",
+      "name": "US-site-050",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.0,
+        "lng": -100.0
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000033",
+      "name": "US-site-051",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.01,
+        "lng": -99.99
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000034",
+      "name": "US-site-052",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.02,
+        "lng": -99.98
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000035",
+      "name": "US-site-053",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.03,
+        "lng": -99.97
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000036",
+      "name": "US-site-054",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.04,
+        "lng": -99.96
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000037",
+      "name": "US-site-055",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.05,
+        "lng": -99.95
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000038",
+      "name": "US-site-056",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.06,
+        "lng": -99.94
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000039",
+      "name": "US-site-057",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.07,
+        "lng": -99.93
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000003a",
+      "name": "US-site-058",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.08,
+        "lng": -99.92
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000003b",
+      "name": "US-site-059",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.09,
+        "lng": -99.91
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000003c",
+      "name": "US-site-060",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.1,
+        "lng": -99.9
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000003d",
+      "name": "US-site-061",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.11,
+        "lng": -99.89
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000003e",
+      "name": "US-site-062",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.12,
+        "lng": -99.88
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000003f",
+      "name": "US-site-063",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.13,
+        "lng": -99.87
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000040",
+      "name": "US-site-064",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.14,
+        "lng": -99.86
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000041",
+      "name": "US-site-065",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.15,
+        "lng": -99.85
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000042",
+      "name": "US-site-066",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.16,
+        "lng": -99.84
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000043",
+      "name": "US-site-067",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.17,
+        "lng": -99.83
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000044",
+      "name": "US-site-068",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.18,
+        "lng": -99.82
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000045",
+      "name": "US-site-069",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.19,
+        "lng": -99.81
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000046",
+      "name": "US-site-070",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.2,
+        "lng": -99.8
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000047",
+      "name": "US-site-071",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.21,
+        "lng": -99.79
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000048",
+      "name": "US-site-072",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.22,
+        "lng": -99.78
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000049",
+      "name": "US-site-073",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.23,
+        "lng": -99.77
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000004a",
+      "name": "US-site-074",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.24,
+        "lng": -99.76
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000004b",
+      "name": "US-site-075",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.25,
+        "lng": -99.75
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000004c",
+      "name": "US-site-076",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.26,
+        "lng": -99.74
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000004d",
+      "name": "US-site-077",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.27,
+        "lng": -99.73
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000004e",
+      "name": "US-site-078",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.28,
+        "lng": -99.72
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000004f",
+      "name": "US-site-079",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.29,
+        "lng": -99.71
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000050",
+      "name": "US-site-080",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.3,
+        "lng": -99.7
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000051",
+      "name": "US-site-081",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.31,
+        "lng": -99.69
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000052",
+      "name": "US-site-082",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.32,
+        "lng": -99.68
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000053",
+      "name": "US-site-083",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.33,
+        "lng": -99.67
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000054",
+      "name": "US-site-084",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.34,
+        "lng": -99.66
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000055",
+      "name": "US-site-085",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.35,
+        "lng": -99.65
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000056",
+      "name": "US-site-086",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.36,
+        "lng": -99.64
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000057",
+      "name": "US-site-087",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.37,
+        "lng": -99.63
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000058",
+      "name": "US-site-088",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.38,
+        "lng": -99.62
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000059",
+      "name": "US-site-089",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.39,
+        "lng": -99.61
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000005a",
+      "name": "US-site-090",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.4,
+        "lng": -99.6
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000005b",
+      "name": "US-site-091",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.41,
+        "lng": -99.59
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000005c",
+      "name": "US-site-092",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.42,
+        "lng": -99.58
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000005d",
+      "name": "US-site-093",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.43,
+        "lng": -99.57
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000005e",
+      "name": "US-site-094",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.44,
+        "lng": -99.56
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000005f",
+      "name": "US-site-095",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.45,
+        "lng": -99.55
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000060",
+      "name": "US-site-096",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.46,
+        "lng": -99.54
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000061",
+      "name": "US-site-097",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.47,
+        "lng": -99.53
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000062",
+      "name": "US-site-098",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.48,
+        "lng": -99.52
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000063",
+      "name": "US-site-099",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.49,
+        "lng": -99.51
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000064",
+      "name": "US-site-100",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.0,
+        "lng": -100.0
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000065",
+      "name": "US-site-101",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.01,
+        "lng": -99.99
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000066",
+      "name": "US-site-102",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.02,
+        "lng": -99.98
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000067",
+      "name": "US-site-103",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.03,
+        "lng": -99.97
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000068",
+      "name": "US-site-104",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.04,
+        "lng": -99.96
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000069",
+      "name": "US-site-105",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.05,
+        "lng": -99.95
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000006a",
+      "name": "US-site-106",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.06,
+        "lng": -99.94
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000006b",
+      "name": "US-site-107",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.07,
+        "lng": -99.93
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000006c",
+      "name": "US-site-108",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.08,
+        "lng": -99.92
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000006d",
+      "name": "US-site-109",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.09,
+        "lng": -99.91
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000006e",
+      "name": "US-site-110",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.1,
+        "lng": -99.9
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000006f",
+      "name": "US-site-111",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.11,
+        "lng": -99.89
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000070",
+      "name": "US-site-112",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.12,
+        "lng": -99.88
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000071",
+      "name": "US-site-113",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.13,
+        "lng": -99.87
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000072",
+      "name": "US-site-114",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.14,
+        "lng": -99.86
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000073",
+      "name": "US-site-115",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.15,
+        "lng": -99.85
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000074",
+      "name": "US-site-116",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.16,
+        "lng": -99.84
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000075",
+      "name": "US-site-117",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.17,
+        "lng": -99.83
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000076",
+      "name": "US-site-118",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.18,
+        "lng": -99.82
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000077",
+      "name": "US-site-119",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.19,
+        "lng": -99.81
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000078",
+      "name": "US-site-120",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.2,
+        "lng": -99.8
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000079",
+      "name": "US-site-121",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.21,
+        "lng": -99.79
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000007a",
+      "name": "US-site-122",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.22,
+        "lng": -99.78
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000007b",
+      "name": "US-site-123",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.23,
+        "lng": -99.77
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000007c",
+      "name": "US-site-124",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.24,
+        "lng": -99.76
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000007d",
+      "name": "US-site-125",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.25,
+        "lng": -99.75
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000007e",
+      "name": "US-site-126",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.26,
+        "lng": -99.74
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000007f",
+      "name": "US-site-127",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.27,
+        "lng": -99.73
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000080",
+      "name": "US-site-128",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.28,
+        "lng": -99.72
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000081",
+      "name": "US-site-129",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.29,
+        "lng": -99.71
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000082",
+      "name": "US-site-130",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.3,
+        "lng": -99.7
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000083",
+      "name": "US-site-131",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.31,
+        "lng": -99.69
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000084",
+      "name": "US-site-132",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.32,
+        "lng": -99.68
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000085",
+      "name": "US-site-133",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.33,
+        "lng": -99.67
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000086",
+      "name": "US-site-134",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.34,
+        "lng": -99.66
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000087",
+      "name": "US-site-135",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.35,
+        "lng": -99.65
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000088",
+      "name": "US-site-136",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.36,
+        "lng": -99.64
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000089",
+      "name": "US-site-137",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.37,
+        "lng": -99.63
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000008a",
+      "name": "US-site-138",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.38,
+        "lng": -99.62
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000008b",
+      "name": "US-site-139",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.39,
+        "lng": -99.61
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000008c",
+      "name": "US-site-140",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.4,
+        "lng": -99.6
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000008d",
+      "name": "US-site-141",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.41,
+        "lng": -99.59
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000008e",
+      "name": "US-site-142",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.42,
+        "lng": -99.58
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000008f",
+      "name": "US-site-143",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.43,
+        "lng": -99.57
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000090",
+      "name": "US-site-144",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.44,
+        "lng": -99.56
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000091",
+      "name": "US-site-145",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.45,
+        "lng": -99.55
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000092",
+      "name": "US-site-146",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.46,
+        "lng": -99.54
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000093",
+      "name": "US-site-147",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.47,
+        "lng": -99.53
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000094",
+      "name": "US-site-148",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.48,
+        "lng": -99.52
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000095",
+      "name": "US-site-149",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.49,
+        "lng": -99.51
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000096",
+      "name": "US-site-150",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.0,
+        "lng": -100.0
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000097",
+      "name": "US-site-151",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.01,
+        "lng": -99.99
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000098",
+      "name": "US-site-152",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.02,
+        "lng": -99.98
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000099",
+      "name": "US-site-153",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.03,
+        "lng": -99.97
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000009a",
+      "name": "US-site-154",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.04,
+        "lng": -99.96
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000009b",
+      "name": "US-site-155",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.05,
+        "lng": -99.95
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000009c",
+      "name": "US-site-156",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.06,
+        "lng": -99.94
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000009d",
+      "name": "US-site-157",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.07,
+        "lng": -99.93
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000009e",
+      "name": "US-site-158",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.08,
+        "lng": -99.92
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000009f",
+      "name": "US-site-159",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.09,
+        "lng": -99.91
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000a0",
+      "name": "US-site-160",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.1,
+        "lng": -99.9
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000a1",
+      "name": "US-site-161",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.11,
+        "lng": -99.89
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000a2",
+      "name": "US-site-162",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.12,
+        "lng": -99.88
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000a3",
+      "name": "US-site-163",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.13,
+        "lng": -99.87
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000a4",
+      "name": "US-site-164",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.14,
+        "lng": -99.86
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000a5",
+      "name": "US-site-165",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.15,
+        "lng": -99.85
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000a6",
+      "name": "US-site-166",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.16,
+        "lng": -99.84
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000a7",
+      "name": "US-site-167",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.17,
+        "lng": -99.83
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000a8",
+      "name": "US-site-168",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.18,
+        "lng": -99.82
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000a9",
+      "name": "US-site-169",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.19,
+        "lng": -99.81
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000aa",
+      "name": "US-site-170",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.2,
+        "lng": -99.8
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000ab",
+      "name": "US-site-171",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.21,
+        "lng": -99.79
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000ac",
+      "name": "US-site-172",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.22,
+        "lng": -99.78
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000ad",
+      "name": "US-site-173",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.23,
+        "lng": -99.77
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000ae",
+      "name": "US-site-174",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.24,
+        "lng": -99.76
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000af",
+      "name": "US-site-175",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.25,
+        "lng": -99.75
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000b0",
+      "name": "US-site-176",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.26,
+        "lng": -99.74
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000b1",
+      "name": "US-site-177",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.27,
+        "lng": -99.73
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000b2",
+      "name": "US-site-178",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.28,
+        "lng": -99.72
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000b3",
+      "name": "US-site-179",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.29,
+        "lng": -99.71
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000b4",
+      "name": "US-site-180",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.3,
+        "lng": -99.7
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000b5",
+      "name": "US-site-181",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.31,
+        "lng": -99.69
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000b6",
+      "name": "US-site-182",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.32,
+        "lng": -99.68
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000b7",
+      "name": "US-site-183",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.33,
+        "lng": -99.67
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000b8",
+      "name": "US-site-184",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.34,
+        "lng": -99.66
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000b9",
+      "name": "US-site-185",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.35,
+        "lng": -99.65
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000ba",
+      "name": "US-site-186",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.36,
+        "lng": -99.64
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000bb",
+      "name": "US-site-187",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.37,
+        "lng": -99.63
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000bc",
+      "name": "US-site-188",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.38,
+        "lng": -99.62
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000bd",
+      "name": "US-site-189",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.39,
+        "lng": -99.61
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000be",
+      "name": "US-site-190",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.4,
+        "lng": -99.6
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000bf",
+      "name": "US-site-191",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.41,
+        "lng": -99.59
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000c0",
+      "name": "US-site-192",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.42,
+        "lng": -99.58
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000c1",
+      "name": "US-site-193",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.43,
+        "lng": -99.57
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000c2",
+      "name": "US-site-194",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.44,
+        "lng": -99.56
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000c3",
+      "name": "US-site-195",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.45,
+        "lng": -99.55
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000c4",
+      "name": "US-site-196",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.46,
+        "lng": -99.54
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000c5",
+      "name": "US-site-197",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.47,
+        "lng": -99.53
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000c6",
+      "name": "US-site-198",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.48,
+        "lng": -99.52
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000c7",
+      "name": "US-site-199",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.49,
+        "lng": -99.51
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000c8",
+      "name": "US-site-200",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.0,
+        "lng": -100.0
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000c9",
+      "name": "US-site-201",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.01,
+        "lng": -99.99
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000ca",
+      "name": "US-site-202",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.02,
+        "lng": -99.98
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000cb",
+      "name": "US-site-203",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.03,
+        "lng": -99.97
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000cc",
+      "name": "US-site-204",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.04,
+        "lng": -99.96
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000cd",
+      "name": "US-site-205",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.05,
+        "lng": -99.95
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000ce",
+      "name": "US-site-206",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.06,
+        "lng": -99.94
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000cf",
+      "name": "US-site-207",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.07,
+        "lng": -99.93
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000d0",
+      "name": "US-site-208",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.08,
+        "lng": -99.92
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000d1",
+      "name": "US-site-209",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.09,
+        "lng": -99.91
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000d2",
+      "name": "US-site-210",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.1,
+        "lng": -99.9
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000d3",
+      "name": "US-site-211",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.11,
+        "lng": -99.89
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000d4",
+      "name": "US-site-212",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.12,
+        "lng": -99.88
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000d5",
+      "name": "US-site-213",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.13,
+        "lng": -99.87
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000d6",
+      "name": "US-site-214",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.14,
+        "lng": -99.86
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000d7",
+      "name": "US-site-215",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.15,
+        "lng": -99.85
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000d8",
+      "name": "US-site-216",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.16,
+        "lng": -99.84
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000d9",
+      "name": "US-site-217",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.17,
+        "lng": -99.83
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000da",
+      "name": "US-site-218",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.18,
+        "lng": -99.82
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000db",
+      "name": "US-site-219",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.19,
+        "lng": -99.81
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000dc",
+      "name": "US-site-220",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.2,
+        "lng": -99.8
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000dd",
+      "name": "US-site-221",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.21,
+        "lng": -99.79
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000de",
+      "name": "US-site-222",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.22,
+        "lng": -99.78
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000df",
+      "name": "US-site-223",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.23,
+        "lng": -99.77
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000e0",
+      "name": "US-site-224",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.24,
+        "lng": -99.76
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000e1",
+      "name": "US-site-225",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.25,
+        "lng": -99.75
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000e2",
+      "name": "US-site-226",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.26,
+        "lng": -99.74
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000e3",
+      "name": "US-site-227",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.27,
+        "lng": -99.73
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000e4",
+      "name": "US-site-228",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.28,
+        "lng": -99.72
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000e5",
+      "name": "US-site-229",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.29,
+        "lng": -99.71
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000e6",
+      "name": "US-site-230",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.3,
+        "lng": -99.7
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000e7",
+      "name": "US-site-231",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.31,
+        "lng": -99.69
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000e8",
+      "name": "US-site-232",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.32,
+        "lng": -99.68
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000e9",
+      "name": "US-site-233",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.33,
+        "lng": -99.67
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000ea",
+      "name": "US-site-234",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.34,
+        "lng": -99.66
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000eb",
+      "name": "US-site-235",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.35,
+        "lng": -99.65
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000ec",
+      "name": "US-site-236",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.36,
+        "lng": -99.64
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000ed",
+      "name": "US-site-237",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.37,
+        "lng": -99.63
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000ee",
+      "name": "US-site-238",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.38,
+        "lng": -99.62
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000ef",
+      "name": "US-site-239",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.39,
+        "lng": -99.61
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000f0",
+      "name": "US-site-240",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.4,
+        "lng": -99.6
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000f1",
+      "name": "US-site-241",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.41,
+        "lng": -99.59
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000f2",
+      "name": "US-site-242",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.42,
+        "lng": -99.58
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000f3",
+      "name": "US-site-243",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.43,
+        "lng": -99.57
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000f4",
+      "name": "US-site-244",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.44,
+        "lng": -99.56
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000f5",
+      "name": "US-site-245",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.45,
+        "lng": -99.55
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000f6",
+      "name": "US-site-246",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.46,
+        "lng": -99.54
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000f7",
+      "name": "US-site-247",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.47,
+        "lng": -99.53
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000f8",
+      "name": "US-site-248",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.48,
+        "lng": -99.52
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000f9",
+      "name": "US-site-249",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.49,
+        "lng": -99.51
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000fa",
+      "name": "US-site-250",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.0,
+        "lng": -100.0
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000fb",
+      "name": "US-site-251",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.01,
+        "lng": -99.99
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000fc",
+      "name": "US-site-252",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.02,
+        "lng": -99.98
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000fd",
+      "name": "US-site-253",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.03,
+        "lng": -99.97
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000fe",
+      "name": "US-site-254",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.04,
+        "lng": -99.96
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-0000000000ff",
+      "name": "US-site-255",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.05,
+        "lng": -99.95
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000100",
+      "name": "US-site-256",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.06,
+        "lng": -99.94
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000101",
+      "name": "US-site-257",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.07,
+        "lng": -99.93
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000102",
+      "name": "US-site-258",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.08,
+        "lng": -99.92
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000103",
+      "name": "US-site-259",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.09,
+        "lng": -99.91
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000104",
+      "name": "US-site-260",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.1,
+        "lng": -99.9
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000105",
+      "name": "US-site-261",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.11,
+        "lng": -99.89
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000106",
+      "name": "US-site-262",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.12,
+        "lng": -99.88
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000107",
+      "name": "US-site-263",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.13,
+        "lng": -99.87
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000108",
+      "name": "US-site-264",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.14,
+        "lng": -99.86
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000109",
+      "name": "US-site-265",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.15,
+        "lng": -99.85
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000010a",
+      "name": "US-site-266",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.16,
+        "lng": -99.84
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000010b",
+      "name": "US-site-267",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.17,
+        "lng": -99.83
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000010c",
+      "name": "US-site-268",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.18,
+        "lng": -99.82
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000010d",
+      "name": "US-site-269",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.19,
+        "lng": -99.81
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000010e",
+      "name": "US-site-270",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.2,
+        "lng": -99.8
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000010f",
+      "name": "US-site-271",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.21,
+        "lng": -99.79
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000110",
+      "name": "US-site-272",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.22,
+        "lng": -99.78
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000111",
+      "name": "US-site-273",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.23,
+        "lng": -99.77
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000112",
+      "name": "US-site-274",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.24,
+        "lng": -99.76
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000113",
+      "name": "US-site-275",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.25,
+        "lng": -99.75
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000114",
+      "name": "US-site-276",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.26,
+        "lng": -99.74
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000115",
+      "name": "US-site-277",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.27,
+        "lng": -99.73
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000116",
+      "name": "US-site-278",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.28,
+        "lng": -99.72
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000117",
+      "name": "US-site-279",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.29,
+        "lng": -99.71
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000118",
+      "name": "US-site-280",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.3,
+        "lng": -99.7
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000119",
+      "name": "US-site-281",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.31,
+        "lng": -99.69
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000011a",
+      "name": "US-site-282",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.32,
+        "lng": -99.68
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000011b",
+      "name": "US-site-283",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.33,
+        "lng": -99.67
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000011c",
+      "name": "US-site-284",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.34,
+        "lng": -99.66
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000011d",
+      "name": "US-site-285",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.35,
+        "lng": -99.65
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000011e",
+      "name": "US-site-286",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.36,
+        "lng": -99.64
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000011f",
+      "name": "US-site-287",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.37,
+        "lng": -99.63
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000120",
+      "name": "US-site-288",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.38,
+        "lng": -99.62
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000121",
+      "name": "US-site-289",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.39,
+        "lng": -99.61
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000122",
+      "name": "US-site-290",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.4,
+        "lng": -99.6
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000123",
+      "name": "US-site-291",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.41,
+        "lng": -99.59
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000124",
+      "name": "US-site-292",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.42,
+        "lng": -99.58
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000125",
+      "name": "US-site-293",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.43,
+        "lng": -99.57
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000126",
+      "name": "US-site-294",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.44,
+        "lng": -99.56
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000127",
+      "name": "US-site-295",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.45,
+        "lng": -99.55
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000128",
+      "name": "US-site-296",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.46,
+        "lng": -99.54
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000129",
+      "name": "US-site-297",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.47,
+        "lng": -99.53
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000012a",
+      "name": "US-site-298",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.48,
+        "lng": -99.52
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000012b",
+      "name": "US-site-299",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.49,
+        "lng": -99.51
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000012c",
+      "name": "US-site-300",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.0,
+        "lng": -100.0
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000012d",
+      "name": "US-site-301",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.01,
+        "lng": -99.99
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000012e",
+      "name": "US-site-302",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.02,
+        "lng": -99.98
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000012f",
+      "name": "US-site-303",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.03,
+        "lng": -99.97
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000130",
+      "name": "US-site-304",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.04,
+        "lng": -99.96
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000131",
+      "name": "US-site-305",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.05,
+        "lng": -99.95
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000132",
+      "name": "US-site-306",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.06,
+        "lng": -99.94
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000133",
+      "name": "US-site-307",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.07,
+        "lng": -99.93
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000134",
+      "name": "US-site-308",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.08,
+        "lng": -99.92
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000135",
+      "name": "US-site-309",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.09,
+        "lng": -99.91
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000136",
+      "name": "US-site-310",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.1,
+        "lng": -99.9
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000137",
+      "name": "US-site-311",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.11,
+        "lng": -99.89
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000138",
+      "name": "US-site-312",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.12,
+        "lng": -99.88
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-000000000139",
+      "name": "US-site-313",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.13,
+        "lng": -99.87
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000013a",
+      "name": "US-site-314",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.14,
+        "lng": -99.86
+      }
+    },
+    {
+      "id": "aaaaaaaa-2222-4000-8000-00000000013b",
+      "name": "US-site-315",
+      "country_code": "US",
+      "latlng": {
+        "lat": 40.15,
+        "lng": -99.85
+      }
+    }
+  ]
+}

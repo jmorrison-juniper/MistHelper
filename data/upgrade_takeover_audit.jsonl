@@ -1,0 +1,3 @@
+{"action": "take", "actor_email": "first.operator@example.invalid", "occurred_at": "2026-09-12T21:21:13.341996+00:00", "org_id": "00000000-0000-0000-0000-0000000000c3", "previous_actor_email": "", "site_id": "00000000-0000-0000-0000-0000000000d4"}
+{"action": "take", "actor_email": "first.operator@example.invalid", "occurred_at": "2026-09-12T21:21:13.486900+00:00", "org_id": "00000000-0000-0000-0000-0000000000c3", "previous_actor_email": "", "site_id": "00000000-0000-0000-0000-0000000000d4"}
+{"action": "take", "actor_email": "first.operator@example.invalid", "occurred_at": "2026-09-12T21:21:13.626603+00:00", "org_id": "00000000-0000-0000-0000-0000000000c3", "previous_actor_email": "", "site_id": "00000000-0000-0000-0000-0000000000d4"}

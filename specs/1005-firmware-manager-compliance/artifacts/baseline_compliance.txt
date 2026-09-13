@@ -1,0 +1,7 @@
+2026-07-02 01:39:17,328 INFO Starting compliance analysis of 1 target(s)
+2026-07-02 01:39:17,328 INFO Collecting Python files from 1 target(s)
+2026-07-02 01:39:17,559 INFO Analyzing file src\firmware\firmware_manager.py
+2026-07-02 01:39:17,763 INFO Writing compliance report to compliance_report.md
+Compliance report written to compliance_report.md
+Overall score: 51.0/100  Grade: F
+   F   51.0  src\firmware\firmware_manager.py

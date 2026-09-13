@@ -1,0 +1,87 @@
+# updateSitePacketCapture
+
+> updateSitePacketCapture
+
+## HTTP
+
+`PUT /api/v1/sites/{site_id}/pcaps/{pcap_id}`
+
+## Description
+
+Update or add notes to a completed packet capture
+
+## Authentication
+
+Requires API token authentication (`Authorization: Token {api_token}` header or `X-CSRFToken` cookie). See Mist API authentication documentation.
+
+## Parameters
+
+### Path Parameters
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| site_id | string | Yes |  |
+| pcap_id | string | Yes |  |
+
+## Request Body
+
+Content-Type: `application/json`
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "notes": {
+      "type": "string",
+      "examples": [
+        "wired pcap test"
+      ]
+    }
+  }
+}
+```
+
+## Response
+
+### 200
+
+OK
+
+## Errors
+
+| Status | Description |
+|--------|-------------|
+| 400 | Bad Syntax |
+| 401 | Unauthorized |
+| 403 | Permission Denied |
+| 404 | Not found. The API endpoint doesn’t exist or resource doesn’ t exist |
+| 429 | Too Many Request. The API Token used for the request reached the 5000 API Calls per hour threshold |
+
+## Pagination
+
+Not paginated.
+
+## Rate Limiting
+
+Standard Mist API rate limits apply.
+
+## mistapi SDK
+
+`mistapi.api.v1.utilities.pcaps.updateSitePacketCapture()`
+
+## Usage Context
+
+Updates metadata for an existing site-level packet capture, such as adding notes or labels. Does not modify the captured packet data itself.
+
+## Gotchas
+
+- Only metadata fields can be updated; the actual pcap file content is immutable.
+
+## Related Endpoints
+
+- [GET_sites_site_id_pcaps.md](GET_sites_site_id_pcaps.md) — List captures to find the pcap_id
+- [POST_sites_site_id_pcaps_capture.md](POST_sites_site_id_pcaps_capture.md) — Create a new capture
+
+## MistHelper Notes
+
+Not currently used by MistHelper directly.

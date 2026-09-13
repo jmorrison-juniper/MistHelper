@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Operations - {{ config.PORTAL.title }}{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <h4>Operations</h4>
+        <p class="text-muted">Run non-destructive data extraction operations (menus 1-89).</p>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Left: Operation List -->
+    <div class="col-md-5">
+        <input type="text" class="form-control portal-search mb-3" id="opSearch"
+               placeholder="Search operations..." data-testid="op-search">
+
+        <div class="accordion portal-accordion" id="operationAccordion" data-testid="operation-accordion">
+            <!-- Populated by operations.js -->
+            <div class="text-center text-muted py-3" id="opLoading">Loading operations...</div>
+        </div>
+    </div>
+
+    <!-- Right: Execution Panel -->
+    <div class="col-md-7">
+        <!-- Selected Operation -->
+        <div class="portal-card d-none" id="selectedOp" data-testid="selected-op-panel">
+            <h5 id="selectedOpTitle"></h5>
+            <p class="text-muted mb-2" id="selectedOpDesc"></p>
+
+            <!-- CLI-Only Message -->
+            <div id="cliOnlyPanel" class="alert alert-info d-none">
+                <strong>SSH Required</strong>
+                <p id="cliOnlyMessage" class="mb-0 mt-1"></p>
+            </div>
+
+            <!-- Parameter Form (if applicable) -->
+            <div id="parameterForm" class="d-none">
+                <div id="parameterFields"></div>
+                <div id="parameterLoading" class="text-center text-muted py-2 d-none">
+                    Loading parameters...
+                </div>
+                <div id="parameterError" class="alert alert-danger mt-2 d-none">
+                    <span id="parameterErrorMsg"></span>
+                    <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="retryLoadParameters()">Retry</button>
+                </div>
+            </div>
+
+            <button type="button" class="btn btn-accent mt-2" id="runBtn" onclick="runSelectedOperation()" data-testid="run-btn">
+                Run Operation
+            </button>
+            <button type="button" class="btn btn-outline-danger mt-2 ms-2 d-none" id="stopBtn" onclick="stopRunningOperation()" data-testid="stop-btn">
+                Stop Operation
+            </button>
+        </div>
+
+        <!-- Active Operations -->
+        <div id="activeOpsPanel" class="d-none">
+            <h6 class="mt-3">Active Operations</h6>
+            <div id="activeOpsList"></div>
+        </div>
+
+        <!-- Execution Log -->
+        <div id="executionPanel" class="d-none" data-testid="execution-panel">
+            <h6 class="mt-3">Execution Log</h6>
+
+            <!-- Progress Bar -->
+            <div class="portal-progress">
+                <div class="progress-bar" id="progressBar" role="progressbar"
+                     aria-label="Operation progress" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                    0%
+                </div>
+            </div>
+
+            <!-- Status -->
+            <div class="mb-2">
+                <span class="badge" id="statusBadge">Pending</span>
+                <small class="text-muted ms-2" id="statusMessage"></small>
+            </div>
+
+            <!-- Log Output -->
+            <div class="log-viewer" id="logViewer" data-testid="log-viewer"></div>
+
+            <!-- Debug Log (collapsible) -->
+            <div class="mt-2">
+                <button class="btn btn-sm btn-outline-secondary d-none" type="button"
+                        id="debugLogToggle"
+                        onclick="toggleDebugLog()">
+                    &#9654; Debug Log <span class="badge bg-secondary ms-1" id="debugLogCount">0</span>
+                </button>
+                <div id="debugLogPanel" class="d-none">
+                    <div class="log-viewer debug-log-viewer mt-1" id="debugLogViewer"></div>
+                </div>
+            </div>
+
+            <!-- Output Files -->
+            <div id="outputFiles" class="mt-2 d-none">
+                <strong>Output Files:</strong>
+                <ul id="outputFileList" class="list-unstyled mt-1"></ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Data Preview Modal (reused from data_preview.js) -->
+<div class="modal fade modal-fullscreen-custom" id="dataPreviewModal" tabindex="-1"
+     aria-labelledby="dataPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="dataPreviewModalLabel">Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="dataPreviewSearchRow" class="mb-2 d-none">
+                    <input type="text" class="form-control form-control-sm preview-search-input" id="dataPreviewSearch"
+                           placeholder="Search rows...">
+                </div>
+                <div id="dataPreviewLoading" class="modal-loading d-none">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading preview...</p>
+                </div>
+                <div id="dataPreviewBody"></div>
+                <div class="portal-pagination d-none" id="dataPreviewPagination">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="dataPreviewPrev"
+                            onclick="DataPreviewModal.changePage(-1)">Prev</button>
+                    <span class="page-info" id="dataPreviewPageInfo"></span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="dataPreviewNext"
+                            onclick="DataPreviewModal.changePage(1)">Next</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-outline-secondary btn-export"
+                        onclick="DataPreviewModal.exportCsv()">Export CSV</button>
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/operations.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,157 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MistHelper API Endpoint Usage Audit Report",
+  "description": "Structured audit findings for MistHelper's API endpoint usage, cross-referenced against enriched API documentation.",
+  "type": "object",
+  "required": ["version", "generated_at", "branch", "scope", "summary", "findings"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Report format version",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "examples": ["1.0.0"]
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of report generation"
+    },
+    "branch": {
+      "type": "string",
+      "description": "Git branch name where the audit was performed"
+    },
+    "scope": {
+      "type": "object",
+      "required": ["files_audited", "total_call_sites", "unique_api_functions", "menu_operations_covered", "reference_docs_available"],
+      "properties": {
+        "files_audited": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Source files analyzed"
+        },
+        "total_call_sites": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total API call sites examined"
+        },
+        "unique_api_functions": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Distinct API functions found"
+        },
+        "menu_operations_covered": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Menu operations with traceable API calls"
+        },
+        "reference_docs_available": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Enriched doc files used for cross-reference"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["total_findings", "by_severity", "by_tier", "by_category", "coverage_percentage"],
+      "properties": {
+        "total_findings": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "by_severity": {
+          "type": "object",
+          "properties": {
+            "Critical": { "type": "integer", "minimum": 0 },
+            "High": { "type": "integer", "minimum": 0 },
+            "Medium": { "type": "integer", "minimum": 0 },
+            "Low": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "by_tier": {
+          "type": "object",
+          "properties": {
+            "Incorrect": { "type": "integer", "minimum": 0 },
+            "Suboptimal": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "by_category": {
+          "type": "object",
+          "properties": {
+            "endpoint-selection": { "type": "integer", "minimum": 0 },
+            "parameter-usage": { "type": "integer", "minimum": 0 },
+            "pagination": { "type": "integer", "minimum": 0 },
+            "deprecation": { "type": "integer", "minimum": 0 },
+            "best-practice": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "coverage_percentage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage of API call sites reviewed"
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "severity", "tier", "category", "menu_operations", "source_file", "line_number", "api_function", "current_behavior", "recommended_change", "rationale"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^F-\\d{3}$",
+            "description": "Unique finding identifier"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["Critical", "High", "Medium", "Low"]
+          },
+          "tier": {
+            "type": "string",
+            "enum": ["Incorrect", "Suboptimal"]
+          },
+          "category": {
+            "type": "string",
+            "enum": ["endpoint-selection", "parameter-usage", "pagination", "deprecation", "best-practice"]
+          },
+          "menu_operations": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "description": "Menu numbers affected"
+          },
+          "source_file": {
+            "type": "string",
+            "description": "File containing the API call"
+          },
+          "line_number": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Line number of the call site"
+          },
+          "api_function": {
+            "type": "string",
+            "description": "Full mistapi function name"
+          },
+          "current_behavior": {
+            "type": "string",
+            "description": "What the code currently does"
+          },
+          "recommended_change": {
+            "type": "string",
+            "description": "Specific fix to apply"
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Why this change is needed"
+          },
+          "reference_doc": {
+            "type": "string",
+            "description": "Path to the enriched API doc file"
+          }
+        }
+      }
+    }
+  }
+}

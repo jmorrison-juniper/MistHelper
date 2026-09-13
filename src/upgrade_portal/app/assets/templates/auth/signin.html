@@ -1,0 +1,315 @@
+{#
+  auth/signin.html - the sign-in page of the upgrade capture portal.
+
+  Why this file exists:
+    FR-006 lets the operator choose between the environment API token and a
+    managed service provider login. FR-007 then asks for the work address and
+    the password. This page carries that whole choice, so no other page of the
+    portal shows a credential field.
+
+  Why the page holds a literal path:
+    contracts/http-api.md fixes every public path of this portal. The blueprint
+    endpoint names are not fixed in the template layer, so the form action
+    follows the contract path. url_for stays for a static asset.
+
+  Why the password field carries no value attribute:
+    A value attribute would place the password in the markup. A refused
+    attempt would then put it in the page source, in a screenshot, and in a
+    browser cache entry. FR-009 forbids that, so the field always starts empty
+    and the operator types the password again after a refusal.
+
+  Why the cloud picker is a select and not a text field:
+    The chosen host decides where the password travels. A text field would let
+    a crafted post name any server. The route also checks the submitted host
+    against the same catalog, so this control is the convenience and the route
+    is the guard.
+
+  Variables a route may supply:
+    clouds               - the label and the host of each Mist cloud.
+    default_host         - the host that the page marks as chosen.
+    token_mode_available - true when a token variable holds text.
+    browser_token_signin_allowed - true when startup found no environment token.
+    error_message        - the reason of a refused attempt. Empty otherwise.
+    page_title           - the heading text and the tab text.
+    theme                - the name of the current theme. See layout.html.
+    themes               - the theme names the operator may pick.
+    dependencies         - one row for each service the portal needs. Empty
+                           hides the panel.
+    dependencies_healthy - false when one service does not answer.
+#}
+{% extends 'layout.html' %}
+
+{#
+  Every value passes through a default filter first. The portal runs Jinja with
+  the standard undefined type, and this step also holds if a later setting turns
+  on the strict undefined type.
+
+  The second argument stays true for the list and the text, because an empty
+  list and an empty string both read as missing here. It stays absent for
+  token_ready, because false is the real answer when no token variable holds
+  text, and a true second argument would turn that false into the fallback.
+#}
+{% set cloud_rows = clouds | default([], true) %}
+{% set chosen_host = default_host | default('api.mist.com', true) %}
+{% set token_ready = token_mode_available | default(false) %}
+{% set browser_token_allowed = browser_token_signin_allowed | default(false) %}
+{% set refusal = error_message | default('', true) %}
+{% set heading = page_title | default('Sign in', true) %}
+{% set dependency_rows = dependencies | default([], true) %}
+{% set dependencies_ok = dependencies_healthy | default(true) %}
+
+{% block title %}{{ heading }}{% endblock %}
+
+{% block heading %}<h1>{{ heading }}</h1>{% endblock %}
+
+{% block content %}
+{#
+  The dependency panel.
+
+  Why it sits above the form:
+    The portal refuses to claim a site when the lock store does not answer, and
+    it answers 503 at that moment. Without this panel the operator meets that
+    refusal three pages after signing in, and the page that carries the cause is
+    not the page that shows the fault. The panel puts the cause first.
+
+  Why an empty list hides the panel:
+    The probe runs inside a guard, and a probe fault produces an empty list. A
+    healthy portal with a broken probe must still show a usable form, so an
+    empty list renders nothing at all.
+
+  What the rows never carry:
+    A row holds a service name, an address, a state word, and one sentence. It
+    never holds a password, a token, or a connection string.
+#}
+{% if dependency_rows %}
+<div class="portal-card"
+     id="dependency-panel"
+     data-testid="dependency-panel"
+     data-healthy="{{ 'true' if dependencies_ok else 'false' }}">
+  <h2 class="portal-card-title">Service check</h2>
+
+  {% if not dependencies_ok %}
+  <div class="alert alert-danger flash-danger"
+       id="dependency-warning"
+       data-testid="dependency-warning"
+       role="alert">
+    A service the portal needs does not answer. You may sign in, but a site
+    claim and an upgrade will refuse until every service below answers.
+  </div>
+  {% endif %}
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th scope="col">Service</th>
+        <th scope="col">Address</th>
+        <th scope="col">State</th>
+        <th scope="col">Next action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in dependency_rows %}
+      <tr data-testid="dependency-row-{{ row.key }}" data-state="{{ row.state }}">
+        <td>{{ row.label }}</td>
+        <td><code>{{ row.address }}</code></td>
+        <td data-testid="dependency-state-{{ row.key }}">{{ row.state }}</td>
+        <td>{{ row.detail }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {#
+    The panel opens a TCP connection and closes it, so it reports whether a
+    service listens. It does not sign in to that service. The route below writes
+    to both stores, so it also catches a store that listens and then refuses.
+  #}
+  <p class="text-muted">
+    This check tests that each service listens. For the deeper check that also
+    writes to each store, read <code>/readyz</code>.
+  </p>
+</div>
+{% endif %}
+
+<div class="portal-card">
+  <h2 class="portal-card-title">Sign in to the Mist cloud</h2>
+
+  {#
+    The region always stays in the markup, because a browser test reads it on
+    the first page as well as after a refusal. The role and the live setting
+    make a screen reader announce a new refusal without a page change.
+
+    An empty refusal leaves the region empty and hidden, so a reader never meets
+    an empty red box.
+  #}
+  <div class="alert alert-danger flash-danger"
+       id="signin-error"
+       data-testid="signin-error"
+       role="alert"
+       aria-live="assertive"
+       {% if not refusal %}hidden{% endif %}>
+    {{ refusal }}
+  </div>
+
+  <form method="post" action="/auth/signin">
+    {#
+      The token guard matches layout.html. The page stays renderable before the
+      security layer registers the csrf_token global. The server still refuses
+      a post that carries no token, so the fault stays visible instead of
+      passing quietly.
+    #}
+    <input type="hidden"
+           name="csrf_token"
+           value="{{ csrf_token() if csrf_token is defined else '' }}">
+
+    {#
+      The label stays visible. A placeholder disappears on the first key press,
+      so a placeholder alone leaves a screen reader and a returning operator
+      with no name for the field.
+    #}
+    <label class="form-label" for="signin-email">Work email address</label>
+    <input type="email"
+           id="signin-email"
+           name="email"
+           class="form-control"
+           data-testid="signin-email"
+           autocomplete="username"
+           spellcheck="false"
+           required
+           aria-describedby="signin-email-note">
+
+    <p class="portal-card-note" id="signin-email-note">
+      Use the address of your Mist account. The portal stores a one-way digest
+      of this address in each log record, and never the address itself.
+    </p>
+
+    {#
+      The required mark follows the token mode, because the two modes disagree
+      about an empty field.
+
+      With no token variable, the token row never renders and the provider
+      login is the only mode. An empty password then reaches `run_login`, which
+      hands it to the cloud without an emptiness check, so the attempt counts
+      against the Mist sign-in rate limit for nothing. The mark stops that
+      attempt in the browser.
+
+      With a token variable, FR-006 lets the operator pick the token mode and
+      leave this field empty. A plain required mark would make the browser
+      refuse that submission, so the mark stays absent in that state.
+    #}
+    <label class="form-label" for="signin-password">Password</label>
+    <input type="password"
+           id="signin-password"
+           name="password"
+           class="form-control"
+           data-testid="signin-password"
+           autocomplete="current-password"
+           spellcheck="false"
+           {% if not token_ready %}required{% endif %}
+           aria-describedby="signin-password-note">
+
+    <p class="portal-card-note" id="signin-password-note">
+      The portal sends this password to the Mist cloud and keeps no copy. No log
+      record holds it.
+      {% if token_ready %}Leave this field empty for the environment token mode.{% endif %}
+    </p>
+
+    <label class="form-label" for="signin-host">Mist cloud</label>
+    <select id="signin-host" name="host" class="form-select" aria-describedby="signin-host-note">
+      {% for cloud in cloud_rows %}
+        <option value="{{ cloud.host }}" {% if cloud.host == chosen_host %}selected{% endif %}>
+          {{ cloud.label }} ({{ cloud.host }})
+        </option>
+      {% endfor %}
+    </select>
+
+    <p class="portal-card-note" id="signin-host-note">
+      Choose the cloud that holds your organizations. The portal accepts a
+      listed cloud only.
+    </p>
+
+    {#
+      FR-006 names the two credential modes. The radio pair shows both, and the
+      token row appears only when a token variable holds text, because a mode
+      that cannot work must not look available.
+
+      The value strings match `identity.CredentialMode`, so the route compares
+      one spelling and the page states no second one.
+    #}
+    <fieldset class="bubble-group">
+      <legend class="bubble-group-legend">Credential</legend>
+
+      <div class="bubble-option">
+        <input type="radio"
+               id="signin-mode-provider"
+               name="mode"
+               class="bubble-option-input"
+               data-testid="signin-mode-provider"
+               value="provider_login"
+               checked>
+        <label class="bubble-option-label" for="signin-mode-provider">
+          Sign in with the address and the password above
+        </label>
+      </div>
+
+      {% if token_ready %}
+        <div class="bubble-option">
+          <input type="radio"
+                 id="signin-mode-token"
+                 name="mode"
+                 class="bubble-option-input"
+                 data-testid="signin-mode-token"
+                 value="environment_token">
+          <label class="bubble-option-label" for="signin-mode-token">
+            Sign in with the API token that this server already holds
+          </label>
+        </div>
+      {% endif %}
+
+      {% if browser_token_allowed %}
+        <div class="bubble-option">
+          <input type="radio"
+                 id="signin-mode-browser-token"
+                 name="mode"
+                 class="bubble-option-input"
+                 data-testid="signin-mode-browser-token"
+                 value="browser_token">
+          <label class="bubble-option-label" for="signin-mode-browser-token">
+            Sign in with a token for this browser session
+          </label>
+        </div>
+        <label class="form-label" for="signin-browser-token">Mist API token</label>
+        <input type="password"
+               id="signin-browser-token"
+               name="token"
+               class="form-control"
+               data-testid="signin-browser-token"
+               autocomplete="off"
+               spellcheck="false"
+               aria-describedby="signin-browser-token-note">
+        <p class="portal-card-note" id="signin-browser-token-note">
+          The portal sends this token to Mist for this browser session. The
+          portal does not store, show, or log the token value.
+        </p>
+      {% endif %}
+
+      <p class="bubble-option-hint">
+        {% if token_ready %}
+          This server holds an API token in an environment variable. The token
+          mode reaches the one organization that the token names. The portal
+          never shows the token value.
+        {% else %}
+          This server holds no API token variable. Set MIST_APITOKEN before you
+          start the portal to add the token mode.
+        {% endif %}
+      </p>
+    </fieldset>
+
+    <button type="submit"
+            class="portal-button portal-button-primary"
+            data-testid="signin-submit">
+      Sign in
+    </button>
+  </form>
+</div>
+{% endblock %}

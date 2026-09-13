@@ -1,0 +1,7 @@
+2026-07-02 00:38:02,850 INFO Starting compliance analysis of 1 target(s)
+2026-07-02 00:38:02,850 INFO Collecting Python files from 1 target(s)
+2026-07-02 00:38:03,093 INFO Analyzing file src\firmware\bulk_ap_upgrader.py
+2026-07-02 00:38:03,309 INFO Writing compliance report to compliance_report.md
+Compliance report written to compliance_report.md
+Overall score: 100.0/100  Grade: A+
+  A+  100.0  src\firmware\bulk_ap_upgrader.py

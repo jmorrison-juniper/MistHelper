@@ -1,0 +1,3041 @@
+{
+  "mistapi.api.v1.admins.login_-_oauth2.unlinkOauth2Provider": [
+    "documentation/api\\admins\\DELETE_login_oauth_provider.md"
+  ],
+  "mistapi.api.v1.admins.login_-_oauth2.getOauth2AuthorizationUrlForLogin": [
+    "documentation/api\\admins\\GET_login_oauth_provider.md"
+  ],
+  "mistapi.api.v1.admins.admins.getAdminRegistrationInfo": [
+    "documentation/api\\admins\\GET_register_recaptcha.md"
+  ],
+  "mistapi.api.v1.admins.admins.verifyAdminInvite": [
+    "documentation/api\\admins\\POST_invite_verify_token.md"
+  ],
+  "mistapi.api.v1.admins.login.login": [
+    "documentation/api\\admins\\POST_login.md"
+  ],
+  "mistapi.api.v1.admins.lookup.lookup": [
+    "documentation/api\\admins\\POST_login_lookup.md"
+  ],
+  "mistapi.api.v1.admins.login_-_oauth2.loginOauth2": [
+    "documentation/api\\admins\\POST_login_oauth_provider.md"
+  ],
+  "mistapi.api.v1.admins.login.twoFactor": [
+    "documentation/api\\admins\\POST_login_two_factor.md"
+  ],
+  "mistapi.api.v1.admins.logout.logout": [
+    "documentation/api\\admins\\POST_logout.md"
+  ],
+  "mistapi.api.v1.admins.recover_password.recoverPassword": [
+    "documentation/api\\admins\\POST_recover.md"
+  ],
+  "mistapi.api.v1.admins.recover_password.verifyRecoverPassword": [
+    "documentation/api\\admins\\POST_recover_verify_token.md"
+  ],
+  "mistapi.api.v1.admins.admins.registerNewAdmin": [
+    "documentation/api\\admins\\POST_register.md"
+  ],
+  "mistapi.api.v1.admins.admins.verifyRegistration": [
+    "documentation/api\\admins\\POST_register_verify_token.md"
+  ],
+  "mistapi.api.v1.constants.events.listAlarmDefinitions": [
+    "documentation/api\\constants\\GET_const_alarm_defs.md"
+  ],
+  "mistapi.api.v1.constants.definitions.listApplications": [
+    "documentation/api\\constants\\GET_const_applications.md"
+  ],
+  "mistapi.api.v1.constants.definitions.listAppCategoryDefinitions": [
+    "documentation/api\\constants\\GET_const_app_categories.md"
+  ],
+  "mistapi.api.v1.constants.definitions.listAppSubCategoryDefinitions": [
+    "documentation/api\\constants\\GET_const_app_subcategories.md"
+  ],
+  "mistapi.api.v1.constants.definitions.listApChannels": [
+    "documentation/api\\constants\\GET_const_ap_channels.md"
+  ],
+  "mistapi.api.v1.constants.definitions.listApLEslVersions": [
+    "documentation/api\\constants\\GET_const_ap_esl_versions.md"
+  ],
+  "mistapi.api.v1.constants.definitions.listApLedDefinition": [
+    "documentation/api\\constants\\GET_const_ap_led_status.md"
+  ],
+  "mistapi.api.v1.constants.events.listClientEventsDefinitions": [
+    "documentation/api\\constants\\GET_const_client_events.md"
+  ],
+  "mistapi.api.v1.constants.definitions.listCountryCodes": [
+    "documentation/api\\constants\\GET_const_countries.md"
+  ],
+  "mistapi.api.v1.constants.models.getGatewayDefaultConfig": [
+    "documentation/api\\constants\\GET_const_default_gateway_config.md"
+  ],
+  "mistapi.api.v1.constants.events.listDeviceEventsDefinitions": [
+    "documentation/api\\constants\\GET_const_device_events.md"
+  ],
+  "mistapi.api.v1.constants.models.listDeviceModels": [
+    "documentation/api\\constants\\GET_const_device_models.md"
+  ],
+  "mistapi.api.v1.constants.definitions.listFingerprintTypes": [
+    "documentation/api\\constants\\GET_const_fingerprint_types.md"
+  ],
+  "mistapi.api.v1.constants.definitions.listGatewayApplications": [
+    "documentation/api\\constants\\GET_const_gateway_applications.md"
+  ],
+  "mistapi.api.v1.constants.definitions.listInsightMetrics": [
+    "documentation/api\\constants\\GET_const_insight_metrics.md"
+  ],
+  "mistapi.api.v1.constants.definitions.listSiteLanguages": [
+    "documentation/api\\constants\\GET_const_languages.md"
+  ],
+  "mistapi.api.v1.constants.definitions.listLicenseTypes": [
+    "documentation/api\\constants\\GET_const_license_types.md"
+  ],
+  "mistapi.api.v1.constants.definitions.listMarvisClientVersions": [
+    "documentation/api\\constants\\GET_const_marvisclient_versions.md"
+  ],
+  "mistapi.api.v1.constants.events.listMxEdgeEventsDefinitions": [
+    "documentation/api\\constants\\GET_const_mxedge_events.md"
+  ],
+  "mistapi.api.v1.constants.models.listMxEdgeModels": [
+    "documentation/api\\constants\\GET_const_mxedge_models.md"
+  ],
+  "mistapi.api.v1.constants.events.listNacEventsDefinitions": [
+    "documentation/api\\constants\\GET_const_nac_events.md"
+  ],
+  "mistapi.api.v1.constants.events.listOtherDeviceEventsDefinitions": [
+    "documentation/api\\constants\\GET_const_otherdevice_events.md"
+  ],
+  "mistapi.api.v1.constants.models.listSupportedOtherDeviceModels": [
+    "documentation/api\\constants\\GET_const_otherdevice_models.md"
+  ],
+  "mistapi.api.v1.constants.definitions.listStates": [
+    "documentation/api\\constants\\GET_const_states.md"
+  ],
+  "mistapi.api.v1.constants.events.listSystemEventsDefinitions": [
+    "documentation/api\\constants\\GET_const_system_events.md"
+  ],
+  "mistapi.api.v1.constants.definitions.listTrafficTypes": [
+    "documentation/api\\constants\\GET_const_traffic_types.md"
+  ],
+  "mistapi.api.v1.constants.definitions.listWebhookTopics": [
+    "documentation/api\\constants\\GET_const_webhook_topics.md"
+  ],
+  "mistapi.api.v1.installer.installer.unassignInstallerRecentlyClaimedDevice": [
+    "documentation/api\\installer\\DELETE_installer_orgs_org_id_devices_device_mac.md"
+  ],
+  "mistapi.api.v1.installer.installer.deleteInstallerDeviceImage": [
+    "documentation/api\\installer\\DELETE_installer_orgs_org_id_devices_device_mac_image_name.md"
+  ],
+  "mistapi.api.v1.installer.installer.deleteInstallerMap": [
+    "documentation/api\\installer\\DELETE_installer_orgs_org_id_sites_site_name_maps_map_id.md"
+  ],
+  "mistapi.api.v1.installer.installer.listInstallerAlarmTemplates": [
+    "documentation/api\\installer\\GET_installer_orgs_org_id_alarmtemplates.md"
+  ],
+  "mistapi.api.v1.installer.installer.listInstallerDeviceProfiles": [
+    "documentation/api\\installer\\GET_installer_orgs_org_id_deviceprofiles.md"
+  ],
+  "mistapi.api.v1.installer.installer.listInstallerListOfRecentlyClaimedDevices": [
+    "documentation/api\\installer\\GET_installer_orgs_org_id_devices.md"
+  ],
+  "mistapi.api.v1.installer.installer.getInstallerDeviceVirtualChassis": [
+    "documentation/api\\installer\\GET_installer_orgs_org_id_devices_fpc0_mac_vc.md"
+  ],
+  "mistapi.api.v1.installer.installer.listInstallerRfTemplatesNames": [
+    "documentation/api\\installer\\GET_installer_orgs_org_id_rftemplates.md"
+  ],
+  "mistapi.api.v1.installer.installer.listInstallerSiteGroups": [
+    "documentation/api\\installer\\GET_installer_orgs_org_id_sitegroups.md"
+  ],
+  "mistapi.api.v1.installer.installer.listInstallerSites": [
+    "documentation/api\\installer\\GET_installer_orgs_org_id_sites.md"
+  ],
+  "mistapi.api.v1.installer.installer.listInstallerMaps": [
+    "documentation/api\\installer\\GET_installer_orgs_org_id_sites_site_name_maps.md"
+  ],
+  "mistapi.api.v1.installer.installer.optimizeInstallerRrm": [
+    "documentation/api\\installer\\GET_installer_sites_site_name_optimize.md"
+  ],
+  "mistapi.api.v1.installer.installer.claimInstallerDevices": [
+    "documentation/api\\installer\\POST_installer_orgs_org_id_devices.md"
+  ],
+  "mistapi.api.v1.installer.installer.addInstallerDeviceImage": [
+    "documentation/api\\installer\\POST_installer_orgs_org_id_devices_device_mac_image_name.md"
+  ],
+  "mistapi.api.v1.installer.installer.startInstallerLocateDevice": [
+    "documentation/api\\installer\\POST_installer_orgs_org_id_devices_device_mac_locate.md"
+  ],
+  "mistapi.api.v1.installer.installer.stopInstallerLocateDevice": [
+    "documentation/api\\installer\\POST_installer_orgs_org_id_devices_device_mac_unlocate.md"
+  ],
+  "mistapi.api.v1.installer.installer.createInstallerVirtualChassis": [
+    "documentation/api\\installer\\POST_installer_orgs_org_id_devices_fpc0_mac_vc.md"
+  ],
+  "mistapi.api.v1.installer.installer.importInstallerMap": [
+    "documentation/api\\installer\\POST_installer_orgs_org_id_sites_site_name_maps_import.md"
+  ],
+  "mistapi.api.v1.installer.installer.createInstallerMap": [
+    "documentation/api\\installer\\POST_installer_orgs_org_id_sites_site_name_maps_map_id.md"
+  ],
+  "mistapi.api.v1.installer.installer.provisionInstallerDevices": [
+    "documentation/api\\installer\\PUT_installer_orgs_org_id_devices_device_mac.md"
+  ],
+  "mistapi.api.v1.installer.installer.updateInstallerVirtualChassisMember": [
+    "documentation/api\\installer\\PUT_installer_orgs_org_id_devices_fpc0_mac_vc.md"
+  ],
+  "mistapi.api.v1.installer.installer.createOrUpdateInstallerSites": [
+    "documentation/api\\installer\\PUT_installer_orgs_org_id_sites_site_name.md"
+  ],
+  "mistapi.api.v1.installer.installer.updateInstallerMap": [
+    "documentation/api\\installer\\PUT_installer_orgs_org_id_sites_site_name_maps_map_id.md"
+  ],
+  "mistapi.api.v1.msps.msps.deleteMsp": [
+    "documentation/api\\msps\\DELETE_msps_msp_id.md"
+  ],
+  "mistapi.api.v1.msps.admins.revokeMspAdmin": [
+    "documentation/api\\msps\\DELETE_msps_msp_id_admins_admin_id.md"
+  ],
+  "mistapi.api.v1.msps.admins.uninviteMspAdmin": [
+    "documentation/api\\msps\\DELETE_msps_msp_id_invites_invite_id.md"
+  ],
+  "mistapi.api.v1.msps.logo.deleteMspLogo": [
+    "documentation/api\\msps\\DELETE_msps_msp_id_logo.md"
+  ],
+  "mistapi.api.v1.msps.org_groups.deleteMspOrgGroup": [
+    "documentation/api\\msps\\DELETE_msps_msp_id_orggroups_orggroup_id.md"
+  ],
+  "mistapi.api.v1.msps.orgs.deleteMspOrg": [
+    "documentation/api\\msps\\DELETE_msps_msp_id_orgs_org_id.md"
+  ],
+  "mistapi.api.v1.msps.sso_roles.deleteMspSsoRole": [
+    "documentation/api\\msps\\DELETE_msps_msp_id_ssoroles_ssorole_id.md"
+  ],
+  "mistapi.api.v1.msps.sso.deleteMspSso": [
+    "documentation/api\\msps\\DELETE_msps_msp_id_ssos_sso_id.md"
+  ],
+  "mistapi.api.v1.msps.msps.getMspDetails": [
+    "documentation/api\\msps\\GET_msps_msp_id.md"
+  ],
+  "mistapi.api.v1.msps.admins.listMspAdmins": [
+    "documentation/api\\msps\\GET_msps_msp_id_admins.md"
+  ],
+  "mistapi.api.v1.msps.admins.getMspAdmin": [
+    "documentation/api\\msps\\GET_msps_msp_id_admins_admin_id.md"
+  ],
+  "mistapi.api.v1.msps.sles.getMspSle": [
+    "documentation/api\\msps\\GET_msps_msp_id_insights_metric.md"
+  ],
+  "mistapi.api.v1.msps.inventory.getMspInventoryByMac": [
+    "documentation/api\\msps\\GET_msps_msp_id_inventory_device_mac.md"
+  ],
+  "mistapi.api.v1.msps.licenses.listMspLicenses": [
+    "documentation/api\\msps\\GET_msps_msp_id_licenses.md"
+  ],
+  "mistapi.api.v1.msps.logs.listMspAuditLogs": [
+    "documentation/api\\msps\\GET_msps_msp_id_logs.md"
+  ],
+  "mistapi.api.v1.msps.logs.countMspAuditLogs": [
+    "documentation/api\\msps\\GET_msps_msp_id_logs_count.md"
+  ],
+  "mistapi.api.v1.msps.org_groups.listMspOrgGroups": [
+    "documentation/api\\msps\\GET_msps_msp_id_orggroups.md"
+  ],
+  "mistapi.api.v1.msps.org_groups.getMspOrgGroup": [
+    "documentation/api\\msps\\GET_msps_msp_id_orggroups_orggroup_id.md"
+  ],
+  "mistapi.api.v1.msps.orgs.listMspOrgs": [
+    "documentation/api\\msps\\GET_msps_msp_id_orgs.md"
+  ],
+  "mistapi.api.v1.msps.orgs.getMspOrg": [
+    "documentation/api\\msps\\GET_msps_msp_id_orgs_org_id.md"
+  ],
+  "mistapi.api.v1.msps.orgs.searchMspOrgs": [
+    "documentation/api\\msps\\GET_msps_msp_id_orgs_search.md"
+  ],
+  "mistapi.api.v1.msps.msps.searchMspOrgGroup": [
+    "documentation/api\\msps\\GET_msps_msp_id_search.md"
+  ],
+  "mistapi.api.v1.msps.sso_roles.listMspSsoRoles": [
+    "documentation/api\\msps\\GET_msps_msp_id_ssoroles.md"
+  ],
+  "mistapi.api.v1.msps.sso.listMspSsos": [
+    "documentation/api\\msps\\GET_msps_msp_id_ssos.md"
+  ],
+  "mistapi.api.v1.msps.sso.getMspSso": [
+    "documentation/api\\msps\\GET_msps_msp_id_ssos_sso_id.md"
+  ],
+  "mistapi.api.v1.msps.sso.listMspSsoLatestFailures": [
+    "documentation/api\\msps\\GET_msps_msp_id_ssos_sso_id_failures.md"
+  ],
+  "mistapi.api.v1.msps.sso.getMspSamlMetadata": [
+    "documentation/api\\msps\\GET_msps_msp_id_ssos_sso_id_metadata.md"
+  ],
+  "mistapi.api.v1.msps.sso.downloadMspSamlMetadata": [
+    "documentation/api\\msps\\GET_msps_msp_id_ssos_sso_id_metadata.xml.md"
+  ],
+  "mistapi.api.v1.msps.licenses.listMspOrgLicenses": [
+    "documentation/api\\msps\\GET_msps_msp_id_stats_licenses.md"
+  ],
+  "mistapi.api.v1.msps.orgs.listMspOrgStats": [
+    "documentation/api\\msps\\GET_msps_msp_id_stats_orgs.md"
+  ],
+  "mistapi.api.v1.msps.marvis.countMspsMarvisActions": [
+    "documentation/api\\msps\\GET_msps_msp_id_suggestion_count.md"
+  ],
+  "mistapi.api.v1.msps.tickets.listMspTickets": [
+    "documentation/api\\msps\\GET_msps_msp_id_tickets.md"
+  ],
+  "mistapi.api.v1.msps.tickets.countMspTickets": [
+    "documentation/api\\msps\\GET_msps_msp_id_tickets_count.md"
+  ],
+  "mistapi.api.v1.msps.msps.createMsp": [
+    "documentation/api\\msps\\POST_msps.md"
+  ],
+  "mistapi.api.v1.msps.licenses.claimMspLicense": [
+    "documentation/api\\msps\\POST_msps_msp_id_claim.md"
+  ],
+  "mistapi.api.v1.msps.admins.inviteMspAdmin": [
+    "documentation/api\\msps\\POST_msps_msp_id_invites.md"
+  ],
+  "mistapi.api.v1.msps.logo.postMspLogo": [
+    "documentation/api\\msps\\POST_msps_msp_id_logo.md"
+  ],
+  "mistapi.api.v1.msps.org_groups.createMspOrgGroup": [
+    "documentation/api\\msps\\POST_msps_msp_id_orggroups.md"
+  ],
+  "mistapi.api.v1.msps.orgs.createMspOrg": [
+    "documentation/api\\msps\\POST_msps_msp_id_orgs.md"
+  ],
+  "mistapi.api.v1.msps.sso_roles.createMspSsoRole": [
+    "documentation/api\\msps\\POST_msps_msp_id_ssoroles.md"
+  ],
+  "mistapi.api.v1.msps.sso.createMspSso": [
+    "documentation/api\\msps\\POST_msps_msp_id_ssos.md"
+  ],
+  "mistapi.api.v1.msps.msps.updateMsp": [
+    "documentation/api\\msps\\PUT_msps_msp_id.md"
+  ],
+  "mistapi.api.v1.msps.admins.updateMspAdmin": [
+    "documentation/api\\msps\\PUT_msps_msp_id_admins_admin_id.md"
+  ],
+  "mistapi.api.v1.msps.admins.updateMspAdminInvite": [
+    "documentation/api\\msps\\PUT_msps_msp_id_invites_invite_id.md"
+  ],
+  "mistapi.api.v1.msps.licenses.moveOrDeleteMspLicenseToAnotherOrg": [
+    "documentation/api\\msps\\PUT_msps_msp_id_licenses.md"
+  ],
+  "mistapi.api.v1.msps.org_groups.updateMspOrgGroup": [
+    "documentation/api\\msps\\PUT_msps_msp_id_orggroups_orggroup_id.md"
+  ],
+  "mistapi.api.v1.msps.orgs.manageMspOrgs": [
+    "documentation/api\\msps\\PUT_msps_msp_id_orgs.md"
+  ],
+  "mistapi.api.v1.msps.orgs.updateMspOrg": [
+    "documentation/api\\msps\\PUT_msps_msp_id_orgs_org_id.md"
+  ],
+  "mistapi.api.v1.msps.sso_roles.updateMspSsoRole": [
+    "documentation/api\\msps\\PUT_msps_msp_id_ssoroles_ssorole_id.md"
+  ],
+  "mistapi.api.v1.msps.sso.updateMspSso": [
+    "documentation/api\\msps\\PUT_msps_msp_id_ssos_sso_id.md"
+  ],
+  "mistapi.api.v1.orgs.orgs.deleteOrg": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id.md"
+  ],
+  "mistapi.api.v1.orgs.advanced_anti_malware_profiles.deleteOrgAAMWProfile": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_aamwprofiles_aamwprofile_id.md"
+  ],
+  "mistapi.api.v1.orgs.admins.revokeOrgAdmin": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_admins_admin_id.md"
+  ],
+  "mistapi.api.v1.orgs.alarm_templates.deleteOrgAlarmTemplate": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_alarmtemplates_alarmtemplate_id.md"
+  ],
+  "mistapi.api.v1.orgs.alarm_templates.unsuppressOrgSuppressedAlarms": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_alarmtemplates_suppress.md"
+  ],
+  "mistapi.api.v1.orgs.api_tokens.deleteOrgApiToken": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_apitokens_apitoken_id.md"
+  ],
+  "mistapi.api.v1.orgs.ap_templates.deleteOrgAptemplate": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_aptemplates_aptemplate_id.md"
+  ],
+  "mistapi.api.v1.orgs.asset_filters.deleteOrgAssetFilter": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_assetfilters_assetfilter_id.md"
+  ],
+  "mistapi.api.v1.orgs.assets.deleteOrgAsset": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_assets_asset_id.md"
+  ],
+  "mistapi.api.v1.orgs.antivirus_profiles.deleteOrgAntivirusProfile": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_avprofiles_avprofile_id.md"
+  ],
+  "mistapi.api.v1.orgs.device_profiles.deleteOrgDeviceProfile": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_deviceprofiles_deviceprofile_id.md"
+  ],
+  "mistapi.api.v1.orgs.evpn_topologies.deleteOrgEvpnTopology": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_evpn_topologies_evpn_topology_id.md"
+  ],
+  "mistapi.api.v1.orgs.gateway_templates.deleteOrgGatewayTemplate": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_gatewaytemplates_gatewaytemplate_id.md"
+  ],
+  "mistapi.api.v1.orgs.guests.deleteOrgGuestAuthorization": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_guests_guest_mac.md"
+  ],
+  "mistapi.api.v1.orgs.idp_profiles.deleteOrgIdpProfile": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_idpprofiles_idpprofile_id.md"
+  ],
+  "mistapi.api.v1.orgs.admins.uninviteOrgAdmin": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_invites_invite_id.md"
+  ],
+  "mistapi.api.v1.orgs.marvis_invites.deleteOrgMarvisClientInvite": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_marvisinvites_marvisinvite_id.md"
+  ],
+  "mistapi.api.v1.orgs.mxclusters.deleteOrgMxEdgeCluster": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_mxclusters_mxcluster_id.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.deleteOrgMxEdge": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_mxedges_mxedge_id.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.deleteOrgMxEdgeImage": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_mxedges_mxedge_id_image_image_number.md"
+  ],
+  "mistapi.api.v1.orgs.mxtunnels.deleteOrgMxTunnel": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_mxtunnels_mxtunnel_id.md"
+  ],
+  "mistapi.api.v1.orgs.nac_portals.deleteOrgNacPortal": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_nacportals_nacportal_id.md"
+  ],
+  "mistapi.api.v1.orgs.nac_portals.deleteOrgNacPortalImage": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_nacportals_nacportal_id_portal_image.md"
+  ],
+  "mistapi.api.v1.orgs.nac_rules.deleteOrgNacRule": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_nacrules_nacrule_id.md"
+  ],
+  "mistapi.api.v1.orgs.nac_tags.deleteOrgNacTag": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_nactags_nactag_id.md"
+  ],
+  "mistapi.api.v1.orgs.networks.deleteOrgNetwork": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_networks_network_id.md"
+  ],
+  "mistapi.api.v1.orgs.network_templates.deleteOrgNetworkTemplate": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_networktemplates_networktemplate_id.md"
+  ],
+  "mistapi.api.v1.orgs.devices_-_others.deleteOrgOtherDevice": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_otherdevices_device_mac.md"
+  ],
+  "mistapi.api.v1.orgs.psk_portals.deleteOrgPskPortal": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_pskportals_pskportal_id.md"
+  ],
+  "mistapi.api.v1.orgs.psk_portals.deleteOrgPskPortalImage": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_pskportals_pskportal_id_portal_image.md"
+  ],
+  "mistapi.api.v1.orgs.psks.deleteOrgPsk": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_psks_psk_id.md"
+  ],
+  "mistapi.api.v1.orgs.rf_templates.deleteOrgRfTemplate": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_rftemplates_rftemplate_id.md"
+  ],
+  "mistapi.api.v1.orgs.sdk_invites.revokeSdkInvite": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_sdkinvites_sdkinvite_id.md"
+  ],
+  "mistapi.api.v1.orgs.sdk_templates.deleteSdkTemplate": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_sdktemplates_sdktemplate_id.md"
+  ],
+  "mistapi.api.v1.orgs.secintel_profiles.deleteOrgSecIntelProfile": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_secintelprofiles_secintelprofile_id.md"
+  ],
+  "mistapi.api.v1.orgs.security_policies.deleteOrgSecPolicy": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_secpolicies_secpolicy_id.md"
+  ],
+  "mistapi.api.v1.orgs.service_policies.deleteOrgServicePolicy": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_servicepolicies_servicepolicy_id.md"
+  ],
+  "mistapi.api.v1.orgs.services.deleteOrgService": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_services_service_id.md"
+  ],
+  "mistapi.api.v1.orgs.linked_applications.deleteOrgOauthAppAuthorization": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_setting_app_name_link_accounts_account_id.md"
+  ],
+  "mistapi.api.v1.orgs.setting.deleteOrgWirelessClientsBlocklist": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_setting_blacklist.md"
+  ],
+  "mistapi.api.v1.orgs.integration_cradlepoint.deleteOrgCradlepointConnection": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_setting_cradlepoint_setup.md"
+  ],
+  "mistapi.api.v1.orgs.integration_jse.deleteOrgJseIntegration": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_setting_jse_setup.md"
+  ],
+  "mistapi.api.v1.orgs.integration_juniper.unlinkOrgFromJuniperCustomerId": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_setting_juniper_unlink_account.md"
+  ],
+  "mistapi.api.v1.orgs.nac_crl.deleteOrgNacCrl": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_setting_mist_nac_crls_naccrl_id.md"
+  ],
+  "mistapi.api.v1.orgs.scep.disableOrgMistScep": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_setting_mist_scep.md"
+  ],
+  "mistapi.api.v1.orgs.integration_skyatp.deleteOrgSkyAtpIntegration": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_setting_skyatp_setup.md"
+  ],
+  "mistapi.api.v1.orgs.integration_zscaler.deleteOrgZscalerIntegration": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_setting_zscaler_setup.md"
+  ],
+  "mistapi.api.v1.orgs.sitegroups.deleteOrgSiteGroup": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_sitegroups_sitegroup_id.md"
+  ],
+  "mistapi.api.v1.orgs.site_templates.deleteOrgSiteTemplate": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_sitetemplates_sitetemplate_id.md"
+  ],
+  "mistapi.api.v1.orgs.sso_roles.deleteOrgSsoRole": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_ssoroles_ssorole_id.md"
+  ],
+  "mistapi.api.v1.orgs.sso.deleteOrgSso": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_ssos_sso_id.md"
+  ],
+  "mistapi.api.v1.orgs.clients_-_marvis.deleteOrgMarvisClient": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_stats_marvisclients.md"
+  ],
+  "mistapi.api.v1.orgs.alarms.unsubscribeOrgAlarmsReports": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_subscriptions.md"
+  ],
+  "mistapi.api.v1.orgs.wlan_templates.deleteOrgTemplate": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_templates_template_id.md"
+  ],
+  "mistapi.api.v1.orgs.ui_settings.deleteOrgUiSetting": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_uisettings_uisetting_id.md"
+  ],
+  "mistapi.api.v1.orgs.user_macs.deleteOrgUserMac": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_usermacs_usermac_id.md"
+  ],
+  "mistapi.api.v1.orgs.vpns.deleteOrgVpn": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_vpns_vpn_id.md"
+  ],
+  "mistapi.api.v1.orgs.webhooks.deleteOrgWebhook": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_webhooks_webhook_id.md"
+  ],
+  "mistapi.api.v1.orgs.wlans.deleteOrgWlan": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_wlans_wlan_id.md"
+  ],
+  "mistapi.api.v1.orgs.wlans.deleteOrgWlanPortalImage": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_wlans_wlan_id_portal_image.md"
+  ],
+  "mistapi.api.v1.orgs.wxrules.deleteOrgWxRule": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_wxrules_wxrule_id.md"
+  ],
+  "mistapi.api.v1.orgs.wxtags.deleteOrgWxTag": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_wxtags_wxtag_id.md"
+  ],
+  "mistapi.api.v1.orgs.wxtunnels.deleteOrgWxTunnel": [
+    "documentation/api\\orgs\\DELETE_orgs_org_id_wxtunnels_wxtunnel_id.md"
+  ],
+  "mistapi.api.v1.orgs.orgs.getOrg": [
+    "documentation/api\\orgs\\GET_orgs_org_id.md"
+  ],
+  "mistapi.api.v1.orgs.devices_-_ssr.getOrg128TRegistrationCommands": [
+    "documentation/api\\orgs\\GET_orgs_org_id_128routers_register_cmd.md"
+  ],
+  "mistapi.api.v1.orgs.advanced_anti_malware_profiles.listOrgAAMWProfiles": [
+    "documentation/api\\orgs\\GET_orgs_org_id_aamwprofiles.md"
+  ],
+  "mistapi.api.v1.orgs.advanced_anti_malware_profiles.getOrgAAMWProfile": [
+    "documentation/api\\orgs\\GET_orgs_org_id_aamwprofiles_aamwprofile_id.md"
+  ],
+  "mistapi.api.v1.orgs.admins.listOrgAdmins": [
+    "documentation/api\\orgs\\GET_orgs_org_id_admins.md"
+  ],
+  "mistapi.api.v1.orgs.alarms.countOrgAlarms": [
+    "documentation/api\\orgs\\GET_orgs_org_id_alarms_count.md"
+  ],
+  "mistapi.api.v1.orgs.alarms.searchOrgAlarms": [
+    "documentation/api\\orgs\\GET_orgs_org_id_alarms_search.md"
+  ],
+  "mistapi.api.v1.orgs.alarm_templates.listOrgAlarmTemplates": [
+    "documentation/api\\orgs\\GET_orgs_org_id_alarmtemplates.md"
+  ],
+  "mistapi.api.v1.orgs.alarm_templates.getOrgAlarmTemplate": [
+    "documentation/api\\orgs\\GET_orgs_org_id_alarmtemplates_alarmtemplate_id.md"
+  ],
+  "mistapi.api.v1.orgs.alarm_templates.listOrgSuppressedAlarms": [
+    "documentation/api\\orgs\\GET_orgs_org_id_alarmtemplates_suppress.md"
+  ],
+  "mistapi.api.v1.orgs.devices_-_aos.getOrgAosRegisterCmd": [
+    "documentation/api\\orgs\\GET_orgs_org_id_aos_register_cmd.md"
+  ],
+  "mistapi.api.v1.orgs.api_tokens.listOrgApiTokens": [
+    "documentation/api\\orgs\\GET_orgs_org_id_apitokens.md"
+  ],
+  "mistapi.api.v1.orgs.api_tokens.getOrgApiToken": [
+    "documentation/api\\orgs\\GET_orgs_org_id_apitokens_apitoken_id.md"
+  ],
+  "mistapi.api.v1.orgs.ap_templates.listOrgAptemplates": [
+    "documentation/api\\orgs\\GET_orgs_org_id_aptemplates.md"
+  ],
+  "mistapi.api.v1.orgs.ap_templates.getOrgAptemplate": [
+    "documentation/api\\orgs\\GET_orgs_org_id_aptemplates_aptemplate_id.md"
+  ],
+  "mistapi.api.v1.orgs.asset_filters.listOrgAssetFilters": [
+    "documentation/api\\orgs\\GET_orgs_org_id_assetfilters.md"
+  ],
+  "mistapi.api.v1.orgs.asset_filters.getOrgAssetFilter": [
+    "documentation/api\\orgs\\GET_orgs_org_id_assetfilters_assetfilter_id.md"
+  ],
+  "mistapi.api.v1.orgs.assets.listOrgAssets": [
+    "documentation/api\\orgs\\GET_orgs_org_id_assets.md"
+  ],
+  "mistapi.api.v1.orgs.assets.getOrgAsset": [
+    "documentation/api\\orgs\\GET_orgs_org_id_assets_asset_id.md"
+  ],
+  "mistapi.api.v1.orgs.antivirus_profiles.listOrgAntivirusProfiles": [
+    "documentation/api\\orgs\\GET_orgs_org_id_avprofiles.md"
+  ],
+  "mistapi.api.v1.orgs.antivirus_profiles.getOrgAntivirusProfile": [
+    "documentation/api\\orgs\\GET_orgs_org_id_avprofiles_avprofile_id.md"
+  ],
+  "mistapi.api.v1.orgs.cert.listOrgCertificates": [
+    "documentation/api\\orgs\\GET_orgs_org_id_cert.md"
+  ],
+  "mistapi.api.v1.orgs.licenses.GetOrgLicenseAsyncClaimStatus": [
+    "documentation/api\\orgs\\GET_orgs_org_id_claim_status.md"
+  ],
+  "mistapi.api.v1.orgs.clients_-_wireless.countOrgWirelessClients": [
+    "documentation/api\\orgs\\GET_orgs_org_id_clients_count.md"
+  ],
+  "mistapi.api.v1.orgs.clients_-_wireless.countOrgWirelessClientEvents": [
+    "documentation/api\\orgs\\GET_orgs_org_id_clients_events_count.md"
+  ],
+  "mistapi.api.v1.orgs.clients_-_wireless.searchOrgWirelessClientEvents": [
+    "documentation/api\\orgs\\GET_orgs_org_id_clients_events_search.md"
+  ],
+  "mistapi.api.v1.orgs.clients_-_wireless.searchOrgWirelessClients": [
+    "documentation/api\\orgs\\GET_orgs_org_id_clients_search.md"
+  ],
+  "mistapi.api.v1.orgs.clients_-_wireless.countOrgWirelessClientsSessions": [
+    "documentation/api\\orgs\\GET_orgs_org_id_clients_sessions_count.md"
+  ],
+  "mistapi.api.v1.orgs.clients_-_wireless.searchOrgWirelessClientSessions": [
+    "documentation/api\\orgs\\GET_orgs_org_id_clients_sessions_search.md"
+  ],
+  "mistapi.api.v1.orgs.crl.getOrgCrlFile": [
+    "documentation/api\\orgs\\GET_orgs_org_id_crl.md"
+  ],
+  "mistapi.api.v1.orgs.device_profiles.listOrgDeviceProfiles": [
+    "documentation/api\\orgs\\GET_orgs_org_id_deviceprofiles.md"
+  ],
+  "mistapi.api.v1.orgs.device_profiles.getOrgDeviceProfile": [
+    "documentation/api\\orgs\\GET_orgs_org_id_deviceprofiles_deviceprofile_id.md"
+  ],
+  "mistapi.api.v1.orgs.devices.listOrgDevices": [
+    "documentation/api\\orgs\\GET_orgs_org_id_devices.md"
+  ],
+  "mistapi.api.v1.orgs.devices.countOrgDevices": [
+    "documentation/api\\orgs\\GET_orgs_org_id_devices_count.md"
+  ],
+  "mistapi.api.v1.orgs.devices.countOrgDeviceEvents": [
+    "documentation/api\\orgs\\GET_orgs_org_id_devices_events_count.md"
+  ],
+  "mistapi.api.v1.orgs.devices.searchOrgDeviceEvents": [
+    "documentation/api\\orgs\\GET_orgs_org_id_devices_events_search.md"
+  ],
+  "mistapi.api.v1.orgs.devices.countOrgDeviceLastConfigs": [
+    "documentation/api\\orgs\\GET_orgs_org_id_devices_last_config_count.md"
+  ],
+  "mistapi.api.v1.orgs.devices.searchOrgDeviceLastConfigs": [
+    "documentation/api\\orgs\\GET_orgs_org_id_devices_last_config_search.md"
+  ],
+  "mistapi.api.v1.orgs.devices.listOrgApsMacs": [
+    "documentation/api\\orgs\\GET_orgs_org_id_devices_radio_macs.md"
+  ],
+  "mistapi.api.v1.orgs.devices.searchOrgDevices": [
+    "documentation/api\\orgs\\GET_orgs_org_id_devices_search.md"
+  ],
+  "mistapi.api.v1.orgs.devices.listOrgDevicesSummary": [
+    "documentation/api\\orgs\\GET_orgs_org_id_devices_summary.md"
+  ],
+  "mistapi.api.v1.orgs.events.searchOrgEvents": [
+    "documentation/api\\orgs\\GET_orgs_org_id_events_search.md"
+  ],
+  "mistapi.api.v1.orgs.events.countOrgSystemEvents": [
+    "documentation/api\\orgs\\GET_orgs_org_id_events_system_count.md"
+  ],
+  "mistapi.api.v1.orgs.events.searchOrgSystemEvents": [
+    "documentation/api\\orgs\\GET_orgs_org_id_events_system_search.md"
+  ],
+  "mistapi.api.v1.orgs.evpn_topologies.listOrgEvpnTopologies": [
+    "documentation/api\\orgs\\GET_orgs_org_id_evpn_topologies.md"
+  ],
+  "mistapi.api.v1.orgs.evpn_topologies.getOrgEvpnTopology": [
+    "documentation/api\\orgs\\GET_orgs_org_id_evpn_topologies_evpn_topology_id.md"
+  ],
+  "mistapi.api.v1.orgs.gateway_templates.listOrgGatewayTemplates": [
+    "documentation/api\\orgs\\GET_orgs_org_id_gatewaytemplates.md"
+  ],
+  "mistapi.api.v1.orgs.gateway_templates.getOrgGatewayTemplate": [
+    "documentation/api\\orgs\\GET_orgs_org_id_gatewaytemplates_gatewaytemplate_id.md"
+  ],
+  "mistapi.api.v1.orgs.guests.listOrgGuestAuthorizations": [
+    "documentation/api\\orgs\\GET_orgs_org_id_guests.md"
+  ],
+  "mistapi.api.v1.orgs.guests.countOrgGuestAuthorizations": [
+    "documentation/api\\orgs\\GET_orgs_org_id_guests_count.md"
+  ],
+  "mistapi.api.v1.orgs.guests.getOrgGuestAuthorization": [
+    "documentation/api\\orgs\\GET_orgs_org_id_guests_guest_mac.md"
+  ],
+  "mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization": [
+    "documentation/api\\orgs\\GET_orgs_org_id_guests_search.md"
+  ],
+  "mistapi.api.v1.orgs.idp_profiles.listOrgIdpProfiles": [
+    "documentation/api\\orgs\\GET_orgs_org_id_idpprofiles.md"
+  ],
+  "mistapi.api.v1.orgs.idp_profiles.getOrgIdpProfile": [
+    "documentation/api\\orgs\\GET_orgs_org_id_idpprofiles_idpprofile_id.md"
+  ],
+  "mistapi.api.v1.orgs.sles.getOrgSle": [
+    "documentation/api\\orgs\\GET_orgs_org_id_insights_metric.md"
+  ],
+  "mistapi.api.v1.orgs.sles.getOrgSitesSle": [
+    "documentation/api\\orgs\\GET_orgs_org_id_insights_sites-sle.md"
+  ],
+  "mistapi.api.v1.orgs.inventory.getOrgInventory": [
+    "documentation/api\\orgs\\GET_orgs_org_id_inventory.md"
+  ],
+  "mistapi.api.v1.orgs.inventory.countOrgInventory": [
+    "documentation/api\\orgs\\GET_orgs_org_id_inventory_count.md"
+  ],
+  "mistapi.api.v1.orgs.inventory.searchOrgInventory": [
+    "documentation/api\\orgs\\GET_orgs_org_id_inventory_search.md"
+  ],
+  "mistapi.api.v1.orgs.jsi.listOrgJsiDevices": [
+    "documentation/api\\orgs\\GET_orgs_org_id_jsi_devices.md"
+  ],
+  "mistapi.api.v1.orgs.jsi.adoptOrgJsiDevice": [
+    "documentation/api\\orgs\\GET_orgs_org_id_jsi_devices_outbound_ssh_cmd.md"
+  ],
+  "mistapi.api.v1.orgs.jsi.listOrgJsiPastPurchases": [
+    "documentation/api\\orgs\\GET_orgs_org_id_jsi_inventory.md"
+  ],
+  "mistapi.api.v1.orgs.jsi.countOrgJsiAssetsAndContracts": [
+    "documentation/api\\orgs\\GET_orgs_org_id_jsi_inventory_count.md"
+  ],
+  "mistapi.api.v1.orgs.jsi.searchOrgJsiAssetsAndContracts": [
+    "documentation/api\\orgs\\GET_orgs_org_id_jsi_inventory_search.md"
+  ],
+  "mistapi.api.v1.orgs.jsi.countOrgJsiPbn": [
+    "documentation/api\\orgs\\GET_orgs_org_id_jsi_pbn_count.md"
+  ],
+  "mistapi.api.v1.orgs.jsi.searchOrgJsiPbn": [
+    "documentation/api\\orgs\\GET_orgs_org_id_jsi_pbn_search.md"
+  ],
+  "mistapi.api.v1.orgs.jsi.countOrgJsiSirt": [
+    "documentation/api\\orgs\\GET_orgs_org_id_jsi_sirt_count.md"
+  ],
+  "mistapi.api.v1.orgs.jsi.searchOrgJsiSirt": [
+    "documentation/api\\orgs\\GET_orgs_org_id_jsi_sirt_search.md"
+  ],
+  "mistapi.api.v1.orgs.licenses.getOrgLicensesSummary": [
+    "documentation/api\\orgs\\GET_orgs_org_id_licenses.md"
+  ],
+  "mistapi.api.v1.orgs.licenses.getOrgLicensesBySite": [
+    "documentation/api\\orgs\\GET_orgs_org_id_licenses_usages.md"
+  ],
+  "mistapi.api.v1.orgs.logs.listOrgAuditLogs": [
+    "documentation/api\\orgs\\GET_orgs_org_id_logs.md"
+  ],
+  "mistapi.api.v1.orgs.logs.countOrgAuditLogs": [
+    "documentation/api\\orgs\\GET_orgs_org_id_logs_count.md"
+  ],
+  "mistapi.api.v1.orgs.marvis_invites.listOrgMarvisClientInvites": [
+    "documentation/api\\orgs\\GET_orgs_org_id_marvisinvites.md"
+  ],
+  "mistapi.api.v1.orgs.marvis_invites.getOrgMarvisClientInvite": [
+    "documentation/api\\orgs\\GET_orgs_org_id_marvisinvites_marvisinvite_id.md"
+  ],
+  "mistapi.api.v1.orgs.mxclusters.listOrgMxEdgeClusters": [
+    "documentation/api\\orgs\\GET_orgs_org_id_mxclusters.md"
+  ],
+  "mistapi.api.v1.orgs.mxclusters.getOrgMxEdgeCluster": [
+    "documentation/api\\orgs\\GET_orgs_org_id_mxclusters_mxcluster_id.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.listOrgMxEdges": [
+    "documentation/api\\orgs\\GET_orgs_org_id_mxedges.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.countOrgMxEdges": [
+    "documentation/api\\orgs\\GET_orgs_org_id_mxedges_count.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.countOrgSiteMxEdgeEvents": [
+    "documentation/api\\orgs\\GET_orgs_org_id_mxedges_events_count.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.searchOrgMistEdgeEvents": [
+    "documentation/api\\orgs\\GET_orgs_org_id_mxedges_events_search.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.getOrgMxEdge": [
+    "documentation/api\\orgs\\GET_orgs_org_id_mxedges_mxedge_id.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.getOrgMxEdgeVmParams": [
+    "documentation/api\\orgs\\GET_orgs_org_id_mxedges_mxedge_id_vm_params.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.searchOrgMxEdges": [
+    "documentation/api\\orgs\\GET_orgs_org_id_mxedges_search.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.getOrgMxEdgeUpgradeInfo": [
+    "documentation/api\\orgs\\GET_orgs_org_id_mxedges_versions.md"
+  ],
+  "mistapi.api.v1.orgs.mxtunnels.listOrgMxTunnels": [
+    "documentation/api\\orgs\\GET_orgs_org_id_mxtunnels.md"
+  ],
+  "mistapi.api.v1.orgs.mxtunnels.getOrgMxTunnel": [
+    "documentation/api\\orgs\\GET_orgs_org_id_mxtunnels_mxtunnel_id.md"
+  ],
+  "mistapi.api.v1.orgs.nac_portals.listOrgNacPortals": [
+    "documentation/api\\orgs\\GET_orgs_org_id_nacportals.md"
+  ],
+  "mistapi.api.v1.orgs.nac_portals.getOrgNacPortal": [
+    "documentation/api\\orgs\\GET_orgs_org_id_nacportals_nacportal_id.md"
+  ],
+  "mistapi.api.v1.orgs.nac_portals.listOrgNacPortalSsoLatestFailures": [
+    "documentation/api\\orgs\\GET_orgs_org_id_nacportals_nacportal_id_failures.md"
+  ],
+  "mistapi.api.v1.orgs.nac_portals.getOrgNacPortalSamlMetadata": [
+    "documentation/api\\orgs\\GET_orgs_org_id_nacportals_nacportal_id_saml_metadata.md"
+  ],
+  "mistapi.api.v1.orgs.nac_portals.downloadOrgNacPortalSamlMetadata": [
+    "documentation/api\\orgs\\GET_orgs_org_id_nacportals_nacportal_id_saml_metadata.xml.md"
+  ],
+  "mistapi.api.v1.orgs.nac_rules.listOrgNacRules": [
+    "documentation/api\\orgs\\GET_orgs_org_id_nacrules.md"
+  ],
+  "mistapi.api.v1.orgs.nac_rules.getOrgNacRule": [
+    "documentation/api\\orgs\\GET_orgs_org_id_nacrules_nacrule_id.md"
+  ],
+  "mistapi.api.v1.orgs.nac_tags.listOrgNacTags": [
+    "documentation/api\\orgs\\GET_orgs_org_id_nactags.md"
+  ],
+  "mistapi.api.v1.orgs.nac_tags.getOrgNacTag": [
+    "documentation/api\\orgs\\GET_orgs_org_id_nactags_nactag_id.md"
+  ],
+  "mistapi.api.v1.orgs.clients_-_nac.countOrgNacClients": [
+    "documentation/api\\orgs\\GET_orgs_org_id_nac_clients_count.md"
+  ],
+  "mistapi.api.v1.orgs.clients_-_nac.countOrgNacClientEvents": [
+    "documentation/api\\orgs\\GET_orgs_org_id_nac_clients_events_count.md"
+  ],
+  "mistapi.api.v1.orgs.clients_-_nac.searchOrgNacClientEvents": [
+    "documentation/api\\orgs\\GET_orgs_org_id_nac_clients_events_search.md"
+  ],
+  "mistapi.api.v1.orgs.clients_-_nac.searchOrgNacClients": [
+    "documentation/api\\orgs\\GET_orgs_org_id_nac_clients_search.md"
+  ],
+  "mistapi.api.v1.orgs.networks.listOrgNetworks": [
+    "documentation/api\\orgs\\GET_orgs_org_id_networks.md"
+  ],
+  "mistapi.api.v1.orgs.networks.getOrgNetwork": [
+    "documentation/api\\orgs\\GET_orgs_org_id_networks_network_id.md"
+  ],
+  "mistapi.api.v1.orgs.network_templates.listOrgNetworkTemplates": [
+    "documentation/api\\orgs\\GET_orgs_org_id_networktemplates.md"
+  ],
+  "mistapi.api.v1.orgs.network_templates.getOrgNetworkTemplate": [
+    "documentation/api\\orgs\\GET_orgs_org_id_networktemplates_networktemplate_id.md"
+  ],
+  "mistapi.api.v1.orgs.devices.getOrgJuniperDevicesCommand": [
+    "documentation/api\\orgs\\GET_orgs_org_id_ocdevices_outbound_ssh_cmd.md"
+  ],
+  "mistapi.api.v1.orgs.devices_-_others.listOrgOtherDevices": [
+    "documentation/api\\orgs\\GET_orgs_org_id_otherdevices.md"
+  ],
+  "mistapi.api.v1.orgs.devices_-_others.getOrgOtherDevice": [
+    "documentation/api\\orgs\\GET_orgs_org_id_otherdevices_device_mac.md"
+  ],
+  "mistapi.api.v1.orgs.devices_-_others.countOrgOtherDeviceEvents": [
+    "documentation/api\\orgs\\GET_orgs_org_id_otherdevices_events_count.md"
+  ],
+  "mistapi.api.v1.orgs.devices_-_others.searchOrgOtherDeviceEvents": [
+    "documentation/api\\orgs\\GET_orgs_org_id_otherdevices_events_search.md"
+  ],
+  "mistapi.api.v1.orgs.premium_analytics.listOrgPmaDashboards": [
+    "documentation/api\\orgs\\GET_orgs_org_id_pma_dashboards.md"
+  ],
+  "mistapi.api.v1.orgs.psk_portals.listOrgPskPortals": [
+    "documentation/api\\orgs\\GET_orgs_org_id_pskportals.md"
+  ],
+  "mistapi.api.v1.orgs.psk_portals.listOrgPskPortalLogs": [
+    "documentation/api\\orgs\\GET_orgs_org_id_pskportals_logs.md"
+  ],
+  "mistapi.api.v1.orgs.psk_portals.countOrgPskPortalLogs": [
+    "documentation/api\\orgs\\GET_orgs_org_id_pskportals_logs_count.md"
+  ],
+  "mistapi.api.v1.orgs.psk_portals.searchOrgPskPortalLogs": [
+    "documentation/api\\orgs\\GET_orgs_org_id_pskportals_logs_search.md"
+  ],
+  "mistapi.api.v1.orgs.psk_portals.getOrgPskPortal": [
+    "documentation/api\\orgs\\GET_orgs_org_id_pskportals_pskportal_id.md"
+  ],
+  "mistapi.api.v1.orgs.psks.listOrgPsks": [
+    "documentation/api\\orgs\\GET_orgs_org_id_psks.md"
+  ],
+  "mistapi.api.v1.orgs.psks.getOrgPsk": [
+    "documentation/api\\orgs\\GET_orgs_org_id_psks_psk_id.md"
+  ],
+  "mistapi.api.v1.orgs.rf_templates.listOrgRfTemplates": [
+    "documentation/api\\orgs\\GET_orgs_org_id_rftemplates.md"
+  ],
+  "mistapi.api.v1.orgs.rf_templates.getOrgRfTemplate": [
+    "documentation/api\\orgs\\GET_orgs_org_id_rftemplates_rftemplate_id.md"
+  ],
+  "mistapi.api.v1.orgs.sdk_invites.listSdkInvites": [
+    "documentation/api\\orgs\\GET_orgs_org_id_sdkinvites.md"
+  ],
+  "mistapi.api.v1.orgs.sdk_invites.getSdkInvite": [
+    "documentation/api\\orgs\\GET_orgs_org_id_sdkinvites_sdkinvite_id.md"
+  ],
+  "mistapi.api.v1.orgs.sdk_invites.getSdkInviteQrCode": [
+    "documentation/api\\orgs\\GET_orgs_org_id_sdkinvites_sdkinvite_id_qrcode.md"
+  ],
+  "mistapi.api.v1.orgs.sdk_templates.listSdkTemplates": [
+    "documentation/api\\orgs\\GET_orgs_org_id_sdktemplates.md"
+  ],
+  "mistapi.api.v1.orgs.sdk_templates.getSdkTemplate": [
+    "documentation/api\\orgs\\GET_orgs_org_id_sdktemplates_sdktemplate_id.md"
+  ],
+  "mistapi.api.v1.orgs.secintel_profiles.listOrgSecIntelProfiles": [
+    "documentation/api\\orgs\\GET_orgs_org_id_secintelprofiles.md"
+  ],
+  "mistapi.api.v1.orgs.secintel_profiles.getOrgSecIntelProfile": [
+    "documentation/api\\orgs\\GET_orgs_org_id_secintelprofiles_secintelprofile_id.md"
+  ],
+  "mistapi.api.v1.orgs.security_policies.listOrgSecPolicies": [
+    "documentation/api\\orgs\\GET_orgs_org_id_secpolicies.md"
+  ],
+  "mistapi.api.v1.orgs.security_policies.getOrgSecPolicy": [
+    "documentation/api\\orgs\\GET_orgs_org_id_secpolicies_secpolicy_id.md"
+  ],
+  "mistapi.api.v1.orgs.service_policies.listOrgServicePolicies": [
+    "documentation/api\\orgs\\GET_orgs_org_id_servicepolicies.md"
+  ],
+  "mistapi.api.v1.orgs.service_policies.getOrgServicePolicy": [
+    "documentation/api\\orgs\\GET_orgs_org_id_servicepolicies_servicepolicy_id.md"
+  ],
+  "mistapi.api.v1.orgs.services.listOrgServices": [
+    "documentation/api\\orgs\\GET_orgs_org_id_services.md"
+  ],
+  "mistapi.api.v1.orgs.services.getOrgService": [
+    "documentation/api\\orgs\\GET_orgs_org_id_services_service_id.md"
+  ],
+  "mistapi.api.v1.orgs.setting.getOrgSettings": [
+    "documentation/api\\orgs\\GET_orgs_org_id_setting.md"
+  ],
+  "mistapi.api.v1.orgs.linked_applications.getOrgOauthAppLinkedStatus": [
+    "documentation/api\\orgs\\GET_orgs_org_id_setting_app_name_link_accounts.md"
+  ],
+  "mistapi.api.v1.orgs.integration_cradlepoint.testOrgCradlepointConnection": [
+    "documentation/api\\orgs\\GET_orgs_org_id_setting_cradlepoint_setup.md"
+  ],
+  "mistapi.api.v1.orgs.integration_jse.getOrgJseInfo": [
+    "documentation/api\\orgs\\GET_orgs_org_id_setting_jse_info.md"
+  ],
+  "mistapi.api.v1.orgs.integration_jse.getOrgJseIntegration": [
+    "documentation/api\\orgs\\GET_orgs_org_id_setting_jse_setup.md"
+  ],
+  "mistapi.api.v1.orgs.nac_crl.getOrgNacCrl": [
+    "documentation/api\\orgs\\GET_orgs_org_id_setting_mist_nac_crls.md"
+  ],
+  "mistapi.api.v1.orgs.scep.getOrgMistScep": [
+    "documentation/api\\orgs\\GET_orgs_org_id_setting_mist_scep.md"
+  ],
+  "mistapi.api.v1.orgs.scep.listOrgIssuedClientCertificates": [
+    "documentation/api\\orgs\\GET_orgs_org_id_setting_mist_scep_client_certs.md"
+  ],
+  "mistapi.api.v1.orgs.integration_skyatp.getOrgSkyAtpIntegration": [
+    "documentation/api\\orgs\\GET_orgs_org_id_setting_skyatp_setup.md"
+  ],
+  "mistapi.api.v1.orgs.integration_zscaler.getOrgZscalerIntegration": [
+    "documentation/api\\orgs\\GET_orgs_org_id_setting_zscaler_setup.md"
+  ],
+  "mistapi.api.v1.orgs.sitegroups.listOrgSiteGroups": [
+    "documentation/api\\orgs\\GET_orgs_org_id_sitegroups.md"
+  ],
+  "mistapi.api.v1.orgs.sitegroups.getOrgSiteGroup": [
+    "documentation/api\\orgs\\GET_orgs_org_id_sitegroups_sitegroup_id.md"
+  ],
+  "mistapi.api.v1.orgs.sites.listOrgSites": [
+    "documentation/api\\orgs\\GET_orgs_org_id_sites.md"
+  ],
+  "mistapi.api.v1.orgs.sites.countOrgSites": [
+    "documentation/api\\orgs\\GET_orgs_org_id_sites_count.md"
+  ],
+  "mistapi.api.v1.orgs.sites.searchOrgSites": [
+    "documentation/api\\orgs\\GET_orgs_org_id_sites_search.md"
+  ],
+  "mistapi.api.v1.orgs.site_templates.listOrgSiteTemplates": [
+    "documentation/api\\orgs\\GET_orgs_org_id_sitetemplates.md"
+  ],
+  "mistapi.api.v1.orgs.site_templates.getOrgSiteTemplate": [
+    "documentation/api\\orgs\\GET_orgs_org_id_sitetemplates_sitetemplate_id.md"
+  ],
+  "mistapi.api.v1.orgs.cert.getOrgSslProxyCert": [
+    "documentation/api\\orgs\\GET_orgs_org_id_ssl_proxy_cert.md"
+  ],
+  "mistapi.api.v1.orgs.sso_roles.listOrgSsoRoles": [
+    "documentation/api\\orgs\\GET_orgs_org_id_ssoroles.md"
+  ],
+  "mistapi.api.v1.orgs.sso_roles.getOrgSsoRole": [
+    "documentation/api\\orgs\\GET_orgs_org_id_ssoroles_ssorole_id.md"
+  ],
+  "mistapi.api.v1.orgs.sso.listOrgSsos": [
+    "documentation/api\\orgs\\GET_orgs_org_id_ssos.md"
+  ],
+  "mistapi.api.v1.orgs.sso.getOrgSso": [
+    "documentation/api\\orgs\\GET_orgs_org_id_ssos_sso_id.md"
+  ],
+  "mistapi.api.v1.orgs.sso.listOrgSsoLatestFailures": [
+    "documentation/api\\orgs\\GET_orgs_org_id_ssos_sso_id_failures.md"
+  ],
+  "mistapi.api.v1.orgs.sso.getOrgSamlMetadata": [
+    "documentation/api\\orgs\\GET_orgs_org_id_ssos_sso_id_metadata.md"
+  ],
+  "mistapi.api.v1.orgs.sso.downloadOrgSamlMetadata": [
+    "documentation/api\\orgs\\GET_orgs_org_id_ssos_sso_id_metadata.xml.md"
+  ],
+  "mistapi.api.v1.orgs.devices_-_ssr.getOrgSsrRegistrationCommands": [
+    "documentation/api\\orgs\\GET_orgs_org_id_ssr_register_cmd.md"
+  ],
+  "mistapi.api.v1.orgs.stats.getOrgStats": [
+    "documentation/api\\orgs\\GET_orgs_org_id_stats.md"
+  ],
+  "mistapi.api.v1.orgs.stats_-_assets.listOrgAssetsStats": [
+    "documentation/api\\orgs\\GET_orgs_org_id_stats_assets.md"
+  ],
+  "mistapi.api.v1.orgs.stats_-_assets.countOrgAssetsByDistanceField": [
+    "documentation/api\\orgs\\GET_orgs_org_id_stats_assets_count.md"
+  ],
+  "mistapi.api.v1.orgs.stats_-_assets.searchOrgAssets": [
+    "documentation/api\\orgs\\GET_orgs_org_id_stats_assets_search.md"
+  ],
+  "mistapi.api.v1.orgs.stats_-_bgp_peers.countOrgBgpStats": [
+    "documentation/api\\orgs\\GET_orgs_org_id_stats_bgp_peers_count.md"
+  ],
+  "mistapi.api.v1.orgs.stats_-_bgp_peers.searchOrgBgpStats": [
+    "documentation/api\\orgs\\GET_orgs_org_id_stats_bgp_peers_search.md"
+  ],
+  "mistapi.api.v1.orgs.stats_-_devices.listOrgDevicesStats": [
+    "documentation/api\\orgs\\GET_orgs_org_id_stats_devices.md"
+  ],
+  "mistapi.api.v1.orgs.stats_-_mxedges.listOrgMxEdgesStats": [
+    "documentation/api\\orgs\\GET_orgs_org_id_stats_mxedges.md"
+  ],
+  "mistapi.api.v1.orgs.stats_-_mxedges.getOrgMxEdgeStats": [
+    "documentation/api\\orgs\\GET_orgs_org_id_stats_mxedges_mxedge_id.md"
+  ],
+  "mistapi.api.v1.orgs.stats_-_ospf.countOrgOspfStats": [
+    "documentation/api\\orgs\\GET_orgs_org_id_stats_ospf_peers_count.md"
+  ],
+  "mistapi.api.v1.orgs.stats_-_ospf.searchOrgOspfStats": [
+    "documentation/api\\orgs\\GET_orgs_org_id_stats_ospf_peers_search.md"
+  ],
+  "mistapi.api.v1.orgs.stats_-_other_devices.getOrgOtherDeviceStats": [
+    "documentation/api\\orgs\\GET_orgs_org_id_stats_otherdevices_device_mac.md"
+  ],
+  "mistapi.api.v1.orgs.stats_-_ports.countOrgSwOrGwPorts": [
+    "documentation/api\\orgs\\GET_orgs_org_id_stats_ports_count.md"
+  ],
+  "mistapi.api.v1.orgs.stats_-_ports.searchOrgSwOrGwPorts": [
+    "documentation/api\\orgs\\GET_orgs_org_id_stats_ports_search.md"
+  ],
+  "mistapi.api.v1.orgs.stats_-_sites.listOrgSiteStats": [
+    "documentation/api\\orgs\\GET_orgs_org_id_stats_sites.md"
+  ],
+  "mistapi.api.v1.orgs.stats_-_tunnels.countOrgTunnelsStats": [
+    "documentation/api\\orgs\\GET_orgs_org_id_stats_tunnels_count.md"
+  ],
+  "mistapi.api.v1.orgs.stats_-_tunnels.searchOrgTunnelsStats": [
+    "documentation/api\\orgs\\GET_orgs_org_id_stats_tunnels_search.md"
+  ],
+  "mistapi.api.v1.orgs.stats_-_vpn_peers.countOrgPeerPathStats": [
+    "documentation/api\\orgs\\GET_orgs_org_id_stats_vpn_peers_count.md"
+  ],
+  "mistapi.api.v1.orgs.stats_-_vpn_peers.searchOrgPeerPathStats": [
+    "documentation/api\\orgs\\GET_orgs_org_id_stats_vpn_peers_search.md"
+  ],
+  "mistapi.api.v1.orgs.wlan_templates.listOrgTemplates": [
+    "documentation/api\\orgs\\GET_orgs_org_id_templates.md"
+  ],
+  "mistapi.api.v1.orgs.wlan_templates.getOrgTemplate": [
+    "documentation/api\\orgs\\GET_orgs_org_id_templates_template_id.md"
+  ],
+  "mistapi.api.v1.orgs.tickets.listOrgTickets": [
+    "documentation/api\\orgs\\GET_orgs_org_id_tickets.md"
+  ],
+  "mistapi.api.v1.orgs.tickets.countOrgTickets": [
+    "documentation/api\\orgs\\GET_orgs_org_id_tickets_count.md"
+  ],
+  "mistapi.api.v1.orgs.tickets.getOrgTicket": [
+    "documentation/api\\orgs\\GET_orgs_org_id_tickets_ticket_id.md"
+  ],
+  "mistapi.api.v1.orgs.tickets.GetOrgTicketAttachment": [
+    "documentation/api\\orgs\\GET_orgs_org_id_tickets_ticket_id_attachments_attachment_id.md"
+  ],
+  "mistapi.api.v1.orgs.marvis.troubleshootOrg": [
+    "documentation/api\\orgs\\GET_orgs_org_id_troubleshoot.md"
+  ],
+  "mistapi.api.v1.orgs.ui_settings.listOrgUiSettings": [
+    "documentation/api\\orgs\\GET_orgs_org_id_uisettings.md"
+  ],
+  "mistapi.api.v1.orgs.ui_settings.getOrgUiSetting": [
+    "documentation/api\\orgs\\GET_orgs_org_id_uisettings_uisetting_id.md"
+  ],
+  "mistapi.api.v1.orgs.user_macs.countOrgUserMacs": [
+    "documentation/api\\orgs\\GET_orgs_org_id_usermacs_count.md"
+  ],
+  "mistapi.api.v1.orgs.user_macs.searchOrgUserMacs": [
+    "documentation/api\\orgs\\GET_orgs_org_id_usermacs_search.md"
+  ],
+  "mistapi.api.v1.orgs.user_macs.getOrgUserMac": [
+    "documentation/api\\orgs\\GET_orgs_org_id_usermacs_usermac_id.md"
+  ],
+  "mistapi.api.v1.orgs.vars.searchOrgVars": [
+    "documentation/api\\orgs\\GET_orgs_org_id_vars_search.md"
+  ],
+  "mistapi.api.v1.orgs.vpns.listOrgVpns": [
+    "documentation/api\\orgs\\GET_orgs_org_id_vpns.md"
+  ],
+  "mistapi.api.v1.orgs.vpns.getOrgVpn": [
+    "documentation/api\\orgs\\GET_orgs_org_id_vpns_vpn_id.md"
+  ],
+  "mistapi.api.v1.orgs.clients_-_wan.countOrgWanClients": [
+    "documentation/api\\orgs\\GET_orgs_org_id_wan_clients_count.md"
+  ],
+  "mistapi.api.v1.orgs.clients_-_wan.searchOrgWanClientEvents": [
+    "documentation/api\\orgs\\GET_orgs_org_id_wan_clients_events_search.md"
+  ],
+  "mistapi.api.v1.orgs.clients_-_wan.searchOrgWanClients": [
+    "documentation/api\\orgs\\GET_orgs_org_id_wan_clients_search.md"
+  ],
+  "mistapi.api.v1.orgs.clients_-_wan.countOrgWanClientEvents": [
+    "documentation/api\\orgs\\GET_orgs_org_id_wan_client_events_count.md"
+  ],
+  "mistapi.api.v1.orgs.webhooks.listOrgWebhooks": [
+    "documentation/api\\orgs\\GET_orgs_org_id_webhooks.md"
+  ],
+  "mistapi.api.v1.orgs.webhooks.getOrgWebhook": [
+    "documentation/api\\orgs\\GET_orgs_org_id_webhooks_webhook_id.md"
+  ],
+  "mistapi.api.v1.orgs.webhooks.countOrgWebhooksDeliveries": [
+    "documentation/api\\orgs\\GET_orgs_org_id_webhooks_webhook_id_events_count.md"
+  ],
+  "mistapi.api.v1.orgs.webhooks.searchOrgWebhooksDeliveries": [
+    "documentation/api\\orgs\\GET_orgs_org_id_webhooks_webhook_id_events_search.md"
+  ],
+  "mistapi.api.v1.orgs.clients_-_wired.countOrgWiredClients": [
+    "documentation/api\\orgs\\GET_orgs_org_id_wired_clients_count.md"
+  ],
+  "mistapi.api.v1.orgs.clients_-_wired.searchOrgWiredClients": [
+    "documentation/api\\orgs\\GET_orgs_org_id_wired_clients_search.md"
+  ],
+  "mistapi.api.v1.orgs.wlans.listOrgWlans": [
+    "documentation/api\\orgs\\GET_orgs_org_id_wlans.md"
+  ],
+  "mistapi.api.v1.orgs.wlans.getOrgWLAN": [
+    "documentation/api\\orgs\\GET_orgs_org_id_wlans_wlan_id.md"
+  ],
+  "mistapi.api.v1.orgs.wxrules.listOrgWxRules": [
+    "documentation/api\\orgs\\GET_orgs_org_id_wxrules.md"
+  ],
+  "mistapi.api.v1.orgs.wxrules.getOrgWxRule": [
+    "documentation/api\\orgs\\GET_orgs_org_id_wxrules_wxrule_id.md"
+  ],
+  "mistapi.api.v1.orgs.wxtags.listOrgWxTags": [
+    "documentation/api\\orgs\\GET_orgs_org_id_wxtags.md"
+  ],
+  "mistapi.api.v1.orgs.wxtags.getOrgApplicationList": [
+    "documentation/api\\orgs\\GET_orgs_org_id_wxtags_apps.md"
+  ],
+  "mistapi.api.v1.orgs.wxtags.getOrgWxTag": [
+    "documentation/api\\orgs\\GET_orgs_org_id_wxtags_wxtag_id.md"
+  ],
+  "mistapi.api.v1.orgs.wxtags.getOrgCurrentMatchingClientsOfAWxTag": [
+    "documentation/api\\orgs\\GET_orgs_org_id_wxtags_wxtag_id_clients.md"
+  ],
+  "mistapi.api.v1.orgs.wxtunnels.listOrgWxTunnels": [
+    "documentation/api\\orgs\\GET_orgs_org_id_wxtunnels.md"
+  ],
+  "mistapi.api.v1.orgs.wxtunnels.getOrgWxTunnel": [
+    "documentation/api\\orgs\\GET_orgs_org_id_wxtunnels_wxtunnel_id.md"
+  ],
+  "mistapi.api.v1.orgs.nac_fingerprints.countOrgClientFingerprints": [
+    "documentation/api\\orgs\\GET_sites_site_id_insights_fingerprints_count.md"
+  ],
+  "mistapi.api.v1.orgs.nac_fingerprints.searchOrgClientFingerprints": [
+    "documentation/api\\orgs\\GET_sites_site_id_insights_fingerprints_search.md"
+  ],
+  "mistapi.api.v1.orgs.sdk_invites.activateSdkInvite": [
+    "documentation/api\\orgs\\POST_mobile_verify_secret.md"
+  ],
+  "mistapi.api.v1.orgs.orgs.createOrg": [
+    "documentation/api\\orgs\\POST_orgs.md"
+  ],
+  "mistapi.api.v1.orgs.advanced_anti_malware_profiles.createOrgAAMWProfile": [
+    "documentation/api\\orgs\\POST_orgs_org_id_aamwprofiles.md"
+  ],
+  "mistapi.api.v1.orgs.alarms.ackOrgMultipleAlarms": [
+    "documentation/api\\orgs\\POST_orgs_org_id_alarms_ack.md"
+  ],
+  "mistapi.api.v1.orgs.alarms.ackOrgAllAlarms": [
+    "documentation/api\\orgs\\POST_orgs_org_id_alarms_ack_all.md"
+  ],
+  "mistapi.api.v1.orgs.alarms.ackOrgAlarm": [
+    "documentation/api\\orgs\\POST_orgs_org_id_alarms_alarm_id_ack.md"
+  ],
+  "mistapi.api.v1.orgs.alarms.unackOrgMultipleAlarms": [
+    "documentation/api\\orgs\\POST_orgs_org_id_alarms_unack.md"
+  ],
+  "mistapi.api.v1.orgs.alarms.unackOrgAllAlarms": [
+    "documentation/api\\orgs\\POST_orgs_org_id_alarms_unack_all.md"
+  ],
+  "mistapi.api.v1.orgs.alarm_templates.createOrgAlarmTemplate": [
+    "documentation/api\\orgs\\POST_orgs_org_id_alarmtemplates.md"
+  ],
+  "mistapi.api.v1.orgs.alarm_templates.suppressOrgAlarm": [
+    "documentation/api\\orgs\\POST_orgs_org_id_alarmtemplates_suppress.md"
+  ],
+  "mistapi.api.v1.orgs.api_tokens.createOrgApiToken": [
+    "documentation/api\\orgs\\POST_orgs_org_id_apitokens.md"
+  ],
+  "mistapi.api.v1.orgs.ap_templates.createOrgAptemplate": [
+    "documentation/api\\orgs\\POST_orgs_org_id_aptemplates.md"
+  ],
+  "mistapi.api.v1.orgs.asset_filters.createOrgAssetFilter": [
+    "documentation/api\\orgs\\POST_orgs_org_id_assetfilters.md"
+  ],
+  "mistapi.api.v1.orgs.assets.createOrgAsset": [
+    "documentation/api\\orgs\\POST_orgs_org_id_assets.md"
+  ],
+  "mistapi.api.v1.orgs.assets.importOrgAssets": [
+    "documentation/api\\orgs\\POST_orgs_org_id_assets_import.md"
+  ],
+  "mistapi.api.v1.orgs.antivirus_profiles.createOrgAntivirusProfile": [
+    "documentation/api\\orgs\\POST_orgs_org_id_avprofiles.md"
+  ],
+  "mistapi.api.v1.orgs.cert.rotateOrgCertificate": [
+    "documentation/api\\orgs\\POST_orgs_org_id_cert_apply_pending.md"
+  ],
+  "mistapi.api.v1.orgs.cert.clearOrgCertificates": [
+    "documentation/api\\orgs\\POST_orgs_org_id_cert_regenerate.md"
+  ],
+  "mistapi.api.v1.orgs.licenses.claimOrgLicense": [
+    "documentation/api\\orgs\\POST_orgs_org_id_claim.md"
+  ],
+  "mistapi.api.v1.orgs.orgs.cloneOrg": [
+    "documentation/api\\orgs\\POST_orgs_org_id_clone.md"
+  ],
+  "mistapi.api.v1.orgs.cert.truncateOrgCrlFile": [
+    "documentation/api\\orgs\\POST_orgs_org_id_crl_truncate.md"
+  ],
+  "mistapi.api.v1.orgs.device_profiles.createOrgDeviceProfile": [
+    "documentation/api\\orgs\\POST_orgs_org_id_deviceprofiles.md"
+  ],
+  "mistapi.api.v1.orgs.device_profiles.assignOrgDeviceProfile": [
+    "documentation/api\\orgs\\POST_orgs_org_id_deviceprofiles_deviceprofile_id_assign.md"
+  ],
+  "mistapi.api.v1.orgs.device_profiles.unassignOrgDeviceProfile": [
+    "documentation/api\\orgs\\POST_orgs_org_id_deviceprofiles_deviceprofile_id_unassign.md"
+  ],
+  "mistapi.api.v1.orgs.evpn_topologies.createOrgEvpnTopology": [
+    "documentation/api\\orgs\\POST_orgs_org_id_evpn_topologies.md"
+  ],
+  "mistapi.api.v1.orgs.gateway_templates.createOrgGatewayTemplate": [
+    "documentation/api\\orgs\\POST_orgs_org_id_gatewaytemplates.md"
+  ],
+  "mistapi.api.v1.orgs.idp_profiles.createOrgIdpProfile": [
+    "documentation/api\\orgs\\POST_orgs_org_id_idpprofiles.md"
+  ],
+  "mistapi.api.v1.orgs.inventory.addOrgInventory": [
+    "documentation/api\\orgs\\POST_orgs_org_id_inventory.md"
+  ],
+  "mistapi.api.v1.orgs.inventory.createOrgGatewayHaCluster": [
+    "documentation/api\\orgs\\POST_orgs_org_id_inventory_create_ha_cluster.md"
+  ],
+  "mistapi.api.v1.orgs.inventory.deleteOrgGatewayHaCluster": [
+    "documentation/api\\orgs\\POST_orgs_org_id_inventory_delete_ha_cluster.md"
+  ],
+  "mistapi.api.v1.orgs.inventory.reevaluateOrgAutoAssignment": [
+    "documentation/api\\orgs\\POST_orgs_org_id_inventory_reevaluate_auto_assignment.md"
+  ],
+  "mistapi.api.v1.orgs.inventory.replaceOrgDevices": [
+    "documentation/api\\orgs\\POST_orgs_org_id_inventory_replace.md"
+  ],
+  "mistapi.api.v1.orgs.admins.inviteOrgAdmin": [
+    "documentation/api\\orgs\\POST_orgs_org_id_invites.md"
+  ],
+  "mistapi.api.v1.orgs.jsi.createOrgJsiDeviceShellSession": [
+    "documentation/api\\orgs\\POST_orgs_org_id_jsi_devices_device_mac_shell.md"
+  ],
+  "mistapi.api.v1.orgs.maps.importOrgMaps": [
+    "documentation/api\\orgs\\POST_orgs_org_id_maps_import.md"
+  ],
+  "mistapi.api.v1.orgs.marvis_invites.createOrgMarvisClientInvite": [
+    "documentation/api\\orgs\\POST_orgs_org_id_marvisinvites.md"
+  ],
+  "mistapi.api.v1.orgs.nac_idp.validateOrgIdpCredential": [
+    "documentation/api\\orgs\\POST_orgs_org_id_mist_nac_test_idp.md"
+  ],
+  "mistapi.api.v1.orgs.mxclusters.createOrgMxEdgeCluster": [
+    "documentation/api\\orgs\\POST_orgs_org_id_mxclusters.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.createOrgMxEdge": [
+    "documentation/api\\orgs\\POST_orgs_org_id_mxedges.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.assignOrgMxEdgeToSite": [
+    "documentation/api\\orgs\\POST_orgs_org_id_mxedges_assign.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.claimOrgMxEdge": [
+    "documentation/api\\orgs\\POST_orgs_org_id_mxedges_claim.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.addOrgMxEdgeImage": [
+    "documentation/api\\orgs\\POST_orgs_org_id_mxedges_mxedge_id_image_image_number.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.restartOrgMxEdge": [
+    "documentation/api\\orgs\\POST_orgs_org_id_mxedges_mxedge_id_restart.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.controlOrgMxEdgeServices": [
+    "documentation/api\\orgs\\POST_orgs_org_id_mxedges_mxedge_id_services_name_action.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.bounceOrgMxEdgeDataPorts": [
+    "documentation/api\\orgs\\POST_orgs_org_id_mxedges_mxedge_id_services_tunterm_bounce_port.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.disconnectOrgMxEdgeTuntermAps": [
+    "documentation/api\\orgs\\POST_orgs_org_id_mxedges_mxedge_id_services_tunterm_disconnect_aps.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.uploadOrgMxEdgeSupportFiles": [
+    "documentation/api\\orgs\\POST_orgs_org_id_mxedges_mxedge_id_support.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.unregisterOrgMxEdge": [
+    "documentation/api\\orgs\\POST_orgs_org_id_mxedges_mxedge_id_unregister.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.unassignOrgMxEdgeFromSite": [
+    "documentation/api\\orgs\\POST_orgs_org_id_mxedges_unassign.md"
+  ],
+  "mistapi.api.v1.orgs.mxtunnels.createOrgMxTunnel": [
+    "documentation/api\\orgs\\POST_orgs_org_id_mxtunnels.md"
+  ],
+  "mistapi.api.v1.orgs.nac_portals.createOrgNacPortal": [
+    "documentation/api\\orgs\\POST_orgs_org_id_nacportals.md"
+  ],
+  "mistapi.api.v1.orgs.nac_portals.uploadOrgNacPortalImage": [
+    "documentation/api\\orgs\\POST_orgs_org_id_nacportals_nacportal_id_portal_image.md"
+  ],
+  "mistapi.api.v1.orgs.nac_rules.createOrgNacRule": [
+    "documentation/api\\orgs\\POST_orgs_org_id_nacrules.md"
+  ],
+  "mistapi.api.v1.orgs.nac_tags.createOrgNacTag": [
+    "documentation/api\\orgs\\POST_orgs_org_id_nactags.md"
+  ],
+  "mistapi.api.v1.orgs.networks.createOrgNetwork": [
+    "documentation/api\\orgs\\POST_orgs_org_id_networks.md"
+  ],
+  "mistapi.api.v1.orgs.network_templates.createOrgNetworkTemplate": [
+    "documentation/api\\orgs\\POST_orgs_org_id_networktemplates.md"
+  ],
+  "mistapi.api.v1.orgs.devices_-_others.rebootOrgOtherDevice": [
+    "documentation/api\\orgs\\POST_orgs_org_id_otherdevices_device_mac_reboot.md"
+  ],
+  "mistapi.api.v1.orgs.psk_portals.createOrgPskPortal": [
+    "documentation/api\\orgs\\POST_orgs_org_id_pskportals.md"
+  ],
+  "mistapi.api.v1.orgs.psk_portals.uploadOrgPskPortalImage": [
+    "documentation/api\\orgs\\POST_orgs_org_id_pskportals_pskportal_id_portal_image.md"
+  ],
+  "mistapi.api.v1.orgs.psks.createOrgPsk": [
+    "documentation/api\\orgs\\POST_orgs_org_id_psks.md"
+  ],
+  "mistapi.api.v1.orgs.psks.deleteOrgPskList": [
+    "documentation/api\\orgs\\POST_orgs_org_id_psks_delete.md"
+  ],
+  "mistapi.api.v1.orgs.psks.importOrgPsks": [
+    "documentation/api\\orgs\\POST_orgs_org_id_psks_import.md"
+  ],
+  "mistapi.api.v1.orgs.psks.deleteOrgPskOldPassphrase": [
+    "documentation/api\\orgs\\POST_orgs_org_id_psks_psk_id_delete_old_passphrase.md"
+  ],
+  "mistapi.api.v1.orgs.rf_templates.createOrgRfTemplate": [
+    "documentation/api\\orgs\\POST_orgs_org_id_rftemplates.md"
+  ],
+  "mistapi.api.v1.orgs.sdk_invites.createSdkInvite": [
+    "documentation/api\\orgs\\POST_orgs_org_id_sdkinvites.md"
+  ],
+  "mistapi.api.v1.orgs.sdk_invites.sendSdkInviteEmail": [
+    "documentation/api\\orgs\\POST_orgs_org_id_sdkinvites_sdkinvite_id_email.md"
+  ],
+  "mistapi.api.v1.orgs.sdk_invites.sendSdkInviteSms": [
+    "documentation/api\\orgs\\POST_orgs_org_id_sdkinvites_sdkinvite_id_sms.md"
+  ],
+  "mistapi.api.v1.orgs.sdk_templates.createSdkTemplate": [
+    "documentation/api\\orgs\\POST_orgs_org_id_sdktemplates.md"
+  ],
+  "mistapi.api.v1.orgs.secintel_profiles.createOrgSecIntelProfile": [
+    "documentation/api\\orgs\\POST_orgs_org_id_secintelprofiles.md"
+  ],
+  "mistapi.api.v1.orgs.security_policies.createOrgSecPolicy": [
+    "documentation/api\\orgs\\POST_orgs_org_id_secpolicies.md"
+  ],
+  "mistapi.api.v1.orgs.service_policies.createOrgServicePolicy": [
+    "documentation/api\\orgs\\POST_orgs_org_id_servicepolicies.md"
+  ],
+  "mistapi.api.v1.orgs.services.createOrgService": [
+    "documentation/api\\orgs\\POST_orgs_org_id_services.md"
+  ],
+  "mistapi.api.v1.orgs.linked_applications.addOrgOauthAppAccounts": [
+    "documentation/api\\orgs\\POST_orgs_org_id_setting_app_name_link_accounts.md"
+  ],
+  "mistapi.api.v1.orgs.setting.createOrgWirelessClientsBlocklist": [
+    "documentation/api\\orgs\\POST_orgs_org_id_setting_blacklist.md"
+  ],
+  "mistapi.api.v1.orgs.integration_cradlepoint.setupOrgCradlepointConnectionToMist": [
+    "documentation/api\\orgs\\POST_orgs_org_id_setting_cradlepoint_setup.md"
+  ],
+  "mistapi.api.v1.orgs.integration_cradlepoint.syncOrgCradlepointRouters": [
+    "documentation/api\\orgs\\POST_orgs_org_id_setting_cradlepoint_sync.md"
+  ],
+  "mistapi.api.v1.orgs.integration_jse.setupOrgJseIntegration": [
+    "documentation/api\\orgs\\POST_orgs_org_id_setting_jse_setup.md"
+  ],
+  "mistapi.api.v1.orgs.integration_juniper.linkOrgToJuniperJuniperAccount": [
+    "documentation/api\\orgs\\POST_orgs_org_id_setting_juniper_link_accounts.md"
+  ],
+  "mistapi.api.v1.orgs.nac_crl.importOrgNacCrl": [
+    "documentation/api\\orgs\\POST_orgs_org_id_setting_mist_nac_crls.md"
+  ],
+  "mistapi.api.v1.orgs.scep.revokeOrgIssuedClientCertificates": [
+    "documentation/api\\orgs\\POST_orgs_org_id_setting_mist_scep_client_certs_revoke.md"
+  ],
+  "mistapi.api.v1.orgs.setting.setOrgCustomBucket": [
+    "documentation/api\\orgs\\POST_orgs_org_id_setting_pcap_bucket_setup.md"
+  ],
+  "mistapi.api.v1.orgs.setting.verifyOrgCustomBucket": [
+    "documentation/api\\orgs\\POST_orgs_org_id_setting_pcap_bucket_verify.md"
+  ],
+  "mistapi.api.v1.orgs.integration_skyatp.setupOrgAtpIntegration": [
+    "documentation/api\\orgs\\POST_orgs_org_id_setting_skyatp_setup.md"
+  ],
+  "mistapi.api.v1.orgs.integration_zscaler.setupOrgZscalerIntegration": [
+    "documentation/api\\orgs\\POST_orgs_org_id_setting_zscaler_setup.md"
+  ],
+  "mistapi.api.v1.orgs.sitegroups.createOrgSiteGroup": [
+    "documentation/api\\orgs\\POST_orgs_org_id_sitegroups.md"
+  ],
+  "mistapi.api.v1.orgs.sites.createOrgSite": [
+    "documentation/api\\orgs\\POST_orgs_org_id_sites.md"
+  ],
+  "mistapi.api.v1.orgs.maps.importOrgMapToSite": [
+    "documentation/api\\orgs\\POST_orgs_org_id_sites_site_name_maps_import.md"
+  ],
+  "mistapi.api.v1.orgs.site_templates.createOrgSiteTemplate": [
+    "documentation/api\\orgs\\POST_orgs_org_id_sitetemplates.md"
+  ],
+  "mistapi.api.v1.orgs.sso_roles.createOrgSsoRole": [
+    "documentation/api\\orgs\\POST_orgs_org_id_ssoroles.md"
+  ],
+  "mistapi.api.v1.orgs.sso.createOrgSso": [
+    "documentation/api\\orgs\\POST_orgs_org_id_ssos.md"
+  ],
+  "mistapi.api.v1.orgs.devices_-_ssr.exportOrgSsrIdTokens": [
+    "documentation/api\\orgs\\POST_orgs_org_id_ssr_export_idtokens.md"
+  ],
+  "mistapi.api.v1.orgs.alarms.subscribeOrgAlarmsReports": [
+    "documentation/api\\orgs\\POST_orgs_org_id_subscriptions.md"
+  ],
+  "mistapi.api.v1.orgs.wlan_templates.createOrgTemplate": [
+    "documentation/api\\orgs\\POST_orgs_org_id_templates.md"
+  ],
+  "mistapi.api.v1.orgs.wlan_templates.cloneOrgTemplate": [
+    "documentation/api\\orgs\\POST_orgs_org_id_templates_template_id_clone.md"
+  ],
+  "mistapi.api.v1.orgs.tickets.createOrgTicket": [
+    "documentation/api\\orgs\\POST_orgs_org_id_tickets.md"
+  ],
+  "mistapi.api.v1.orgs.tickets.UploadOrgTicketAttachment": [
+    "documentation/api\\orgs\\POST_orgs_org_id_tickets_ticket_id_attachments.md"
+  ],
+  "mistapi.api.v1.orgs.tickets.addOrgTicketComment": [
+    "documentation/api\\orgs\\POST_orgs_org_id_tickets_ticket_id_comments.md"
+  ],
+  "mistapi.api.v1.orgs.ui_settings.createOrgUiSettings": [
+    "documentation/api\\orgs\\POST_orgs_org_id_uisettings.md"
+  ],
+  "mistapi.api.v1.orgs.ui_settings.updateOrgUiSetting": [
+    "documentation/api\\orgs\\POST_orgs_org_id_uisettings_uisetting_id.md"
+  ],
+  "mistapi.api.v1.orgs.user_macs.createOrgUserMac": [
+    "documentation/api\\orgs\\POST_orgs_org_id_usermacs.md"
+  ],
+  "mistapi.api.v1.orgs.user_macs.deleteOrgMultipleUserMacs": [
+    "documentation/api\\orgs\\POST_orgs_org_id_usermacs_delete.md"
+  ],
+  "mistapi.api.v1.orgs.user_macs.importOrgUserMacs": [
+    "documentation/api\\orgs\\POST_orgs_org_id_usermacs_import.md"
+  ],
+  "mistapi.api.v1.orgs.vpns.createOrgVpn": [
+    "documentation/api\\orgs\\POST_orgs_org_id_vpns.md"
+  ],
+  "mistapi.api.v1.orgs.webhooks.createOrgWebhook": [
+    "documentation/api\\orgs\\POST_orgs_org_id_webhooks.md"
+  ],
+  "mistapi.api.v1.orgs.webhooks.pingOrgWebhook": [
+    "documentation/api\\orgs\\POST_orgs_org_id_webhooks_webhook_id_ping.md"
+  ],
+  "mistapi.api.v1.orgs.wlans.createOrgWlan": [
+    "documentation/api\\orgs\\POST_orgs_org_id_wlans.md"
+  ],
+  "mistapi.api.v1.orgs.wlans.uploadOrgWlanPortalImage": [
+    "documentation/api\\orgs\\POST_orgs_org_id_wlans_wlan_id_portal_image.md"
+  ],
+  "mistapi.api.v1.orgs.wxrules.createOrgWxRule": [
+    "documentation/api\\orgs\\POST_orgs_org_id_wxrules.md"
+  ],
+  "mistapi.api.v1.orgs.wxtags.createOrgWxTag": [
+    "documentation/api\\orgs\\POST_orgs_org_id_wxtags.md"
+  ],
+  "mistapi.api.v1.orgs.wxtunnels.createOrgWxTunnel": [
+    "documentation/api\\orgs\\POST_orgs_org_id_wxtunnels.md"
+  ],
+  "mistapi.api.v1.orgs.orgs.updateOrg": [
+    "documentation/api\\orgs\\PUT_orgs_org_id.md"
+  ],
+  "mistapi.api.v1.orgs.advanced_anti_malware_profiles.updateOrgAAMWProfile": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_aamwprofiles_aamwprofile_id.md"
+  ],
+  "mistapi.api.v1.orgs.admins.updateOrgAdmin": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_admins_admin_id.md"
+  ],
+  "mistapi.api.v1.orgs.alarm_templates.updateOrgAlarmTemplate": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_alarmtemplates_alarmtemplate_id.md"
+  ],
+  "mistapi.api.v1.orgs.api_tokens.updateOrgApiToken": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_apitokens_apitoken_id.md"
+  ],
+  "mistapi.api.v1.orgs.ap_templates.updateOrgAptemplate": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_aptemplates_aptemplate_id.md"
+  ],
+  "mistapi.api.v1.orgs.asset_filters.updateOrgAssetFilter": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_assetfilters_assetfilter_id.md"
+  ],
+  "mistapi.api.v1.orgs.assets.updateOrgAsset": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_assets_asset_id.md"
+  ],
+  "mistapi.api.v1.orgs.antivirus_profiles.updateOrgAntivirusProfile": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_avprofiles_avprofile_id.md"
+  ],
+  "mistapi.api.v1.orgs.device_profiles.updateOrgDeviceProfile": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_deviceprofiles_deviceprofile_id.md"
+  ],
+  "mistapi.api.v1.orgs.evpn_topologies.updateOrgEvpnTopology": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_evpn_topologies_evpn_topology_id.md"
+  ],
+  "mistapi.api.v1.orgs.gateway_templates.updateOrgGatewayTemplate": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_gatewaytemplates_gatewaytemplate_id.md"
+  ],
+  "mistapi.api.v1.orgs.guests.updateOrgGuestAuthorization": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_guests_guest_mac.md"
+  ],
+  "mistapi.api.v1.orgs.idp_profiles.updateOrgIdpProfile": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_idpprofiles_idpprofile_id.md"
+  ],
+  "mistapi.api.v1.orgs.inventory.updateOrgInventoryAssignment": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_inventory.md"
+  ],
+  "mistapi.api.v1.orgs.admins.updateOrgAdminInvite": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_invites_invite_id.md"
+  ],
+  "mistapi.api.v1.orgs.licenses.moveOrDeleteOrgLicenseToAnotherOrg": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_licenses.md"
+  ],
+  "mistapi.api.v1.orgs.marvis_invites.updateOrgMarvisClientInvite": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_marvisinvites_marvisinvite_id.md"
+  ],
+  "mistapi.api.v1.orgs.mxclusters.updateOrgMxEdgeCluster": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_mxclusters_mxcluster_id.md"
+  ],
+  "mistapi.api.v1.orgs.mxedges.updateOrgMxEdge": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_mxedges_mxedge_id.md"
+  ],
+  "mistapi.api.v1.orgs.mxtunnels.updateOrgMxTunnel": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_mxtunnels_mxtunnel_id.md"
+  ],
+  "mistapi.api.v1.orgs.nac_portals.updateOrgNacPortal": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_nacportals_nacportal_id.md"
+  ],
+  "mistapi.api.v1.orgs.nac_portals.updateOrgNacPortalTemplate": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_nacportals_nacportal_id_portal_template.md"
+  ],
+  "mistapi.api.v1.orgs.nac_rules.updateOrgNacRule": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_nacrules_nacrule_id.md"
+  ],
+  "mistapi.api.v1.orgs.nac_tags.updateOrgNacTag": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_nactags_nactag_id.md"
+  ],
+  "mistapi.api.v1.orgs.networks.updateOrgNetwork": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_networks_network_id.md"
+  ],
+  "mistapi.api.v1.orgs.network_templates.updateOrgNetworkTemplate": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_networktemplates_networktemplate_id.md"
+  ],
+  "mistapi.api.v1.orgs.devices_-_others.updateOrgOtherDevices": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_otherdevices.md"
+  ],
+  "mistapi.api.v1.orgs.devices_-_others.updateOrgOtherDevice": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_otherdevices_device_mac.md"
+  ],
+  "mistapi.api.v1.orgs.psk_portals.updateOrgPskPortal": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_pskportals_pskportal_id.md"
+  ],
+  "mistapi.api.v1.orgs.psk_portals.updateOrgPskPortalTemplate": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_pskportals_pskportal_id_portal_template.md"
+  ],
+  "mistapi.api.v1.orgs.psks.updateOrgMultiplePsks": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_psks.md"
+  ],
+  "mistapi.api.v1.orgs.psks.updateOrgPsk": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_psks_psk_id.md"
+  ],
+  "mistapi.api.v1.orgs.rf_templates.updateOrgRfTemplate": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_rftemplates_rftemplate_id.md"
+  ],
+  "mistapi.api.v1.orgs.clients_-_sdk.updateSdkClient": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_sdkclients_sdkclient_id.md"
+  ],
+  "mistapi.api.v1.orgs.sdk_invites.updateSdkInvite": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_sdkinvites_sdkinvite_id.md"
+  ],
+  "mistapi.api.v1.orgs.sdk_templates.updateSdkTemplate": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_sdktemplates_sdktemplate_id.md"
+  ],
+  "mistapi.api.v1.orgs.secintel_profiles.updateOrgSecIntelProfile": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_secintelprofiles_secintelprofile_id.md"
+  ],
+  "mistapi.api.v1.orgs.security_policies.updateOrgSecPolicy": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_secpolicies_secpolicy_id.md"
+  ],
+  "mistapi.api.v1.orgs.service_policies.updateOrgServicePolicy": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_servicepolicies_servicepolicy_id.md"
+  ],
+  "mistapi.api.v1.orgs.services.updateOrgService": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_services_service_id.md"
+  ],
+  "mistapi.api.v1.orgs.setting.updateOrgSettings": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_setting.md"
+  ],
+  "mistapi.api.v1.orgs.linked_applications.updateOrgOauthAppAccount": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_setting_app_name_link_accounts_account_id.md"
+  ],
+  "mistapi.api.v1.orgs.integration_cradlepoint.updateOrgCradlepointConnectionToMist": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_setting_cradlepoint_setup.md"
+  ],
+  "mistapi.api.v1.orgs.scep.updateOrgMistScep": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_setting_mist_scep.md"
+  ],
+  "mistapi.api.v1.orgs.integration_skyatp.udpateOrgAtpAllowedList": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_setting_skyatp_secintel_allowlist.md"
+  ],
+  "mistapi.api.v1.orgs.integration_skyatp.udpateOrgAtpBlockedList": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_setting_skyatp_secintel_blocklist.md"
+  ],
+  "mistapi.api.v1.orgs.integration_skyatp.udpateOrgAtpIntegration": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_setting_skyatp_setup.md"
+  ],
+  "mistapi.api.v1.orgs.sitegroups.updateOrgSiteGroup": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_sitegroups_sitegroup_id.md"
+  ],
+  "mistapi.api.v1.orgs.site_templates.updateOrgSiteTemplate": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_sitetemplates_sitetemplate_id.md"
+  ],
+  "mistapi.api.v1.orgs.sso_roles.updateOrgSsoRole": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_ssoroles_ssorole_id.md"
+  ],
+  "mistapi.api.v1.orgs.sso.updateOrgSso": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_ssos_sso_id.md"
+  ],
+  "mistapi.api.v1.orgs.wlan_templates.updateOrgTemplate": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_templates_template_id.md"
+  ],
+  "mistapi.api.v1.orgs.tickets.updateOrgTicket": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_tickets_ticket_id.md"
+  ],
+  "mistapi.api.v1.orgs.user_macs.updateOrgMultipleUserMacs": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_usermacs.md"
+  ],
+  "mistapi.api.v1.orgs.user_macs.updateOrgUserMac": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_usermacs_usermac_id.md"
+  ],
+  "mistapi.api.v1.orgs.vpns.updateOrgVpn": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_vpns_vpn_id.md"
+  ],
+  "mistapi.api.v1.orgs.webhooks.updateOrgWebhook": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_webhooks_webhook_id.md"
+  ],
+  "mistapi.api.v1.orgs.wlans.updateOrgWlan": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_wlans_wlan_id.md"
+  ],
+  "mistapi.api.v1.orgs.wlans.updateOrgWlanPortalTemplate": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_wlans_wlan_id_portal_template.md"
+  ],
+  "mistapi.api.v1.orgs.wxrules.updateOrgWxRule": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_wxrules_wxrule_id.md"
+  ],
+  "mistapi.api.v1.orgs.wxtags.updateOrgWxTag": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_wxtags_wxtag_id.md"
+  ],
+  "mistapi.api.v1.orgs.wxtunnels.updateOrgWxTunnel": [
+    "documentation/api\\orgs\\PUT_orgs_org_id_wxtunnels_wxtunnel_id.md"
+  ],
+  "mistapi.api.v1.self.account.deleteSelf": [
+    "documentation/api\\self\\DELETE_self.md"
+  ],
+  "mistapi.api.v1.self.api_token.deleteApiToken": [
+    "documentation/api\\self\\DELETE_self_apitokens_apitoken_id.md"
+  ],
+  "mistapi.api.v1.self.account.getSelf": [
+    "documentation/api\\self\\GET_self.md"
+  ],
+  "mistapi.api.v1.self.api_token.listApiTokens": [
+    "documentation/api\\self\\GET_self_apitokens.md"
+  ],
+  "mistapi.api.v1.self.api_token.getApiToken": [
+    "documentation/api\\self\\GET_self_apitokens_apitoken_id.md"
+  ],
+  "mistapi.api.v1.self.account.getSelfLoginFailures": [
+    "documentation/api\\self\\GET_self_login_failures.md"
+  ],
+  "mistapi.api.v1.self.audit_logs.listSelfAuditLogs": [
+    "documentation/api\\self\\GET_self_logs.md"
+  ],
+  "mistapi.api.v1.self.oauth2.getOauth2UrlForLinking": [
+    "documentation/api\\self\\GET_self_oauth_provider.md"
+  ],
+  "mistapi.api.v1.self.alarms.listAlarmSubscriptions": [
+    "documentation/api\\self\\GET_self_subscriptions.md"
+  ],
+  "mistapi.api.v1.self.mfa.generateSecretFor2faVerification": [
+    "documentation/api\\self\\GET_self_two_factor_token.md"
+  ],
+  "mistapi.api.v1.self.account.verifySelfEmail": [
+    "documentation/api\\self\\GET_self_update_verify_token.md"
+  ],
+  "mistapi.api.v1.self.account.getSelfApiUsage": [
+    "documentation/api\\self\\GET_self_usage.md"
+  ],
+  "mistapi.api.v1.self.api_token.createApiToken": [
+    "documentation/api\\self\\POST_self_apitokens.md"
+  ],
+  "mistapi.api.v1.self.oauth2.linkOauth2MistAccount": [
+    "documentation/api\\self\\POST_self_oauth_provider.md"
+  ],
+  "mistapi.api.v1.self.mfa.verifyTwoFactor": [
+    "documentation/api\\self\\POST_self_two_factor_verify.md"
+  ],
+  "mistapi.api.v1.self.account.updateSelfEmail": [
+    "documentation/api\\self\\POST_self_update.md"
+  ],
+  "mistapi.api.v1.self.account.updateSelf": [
+    "documentation/api\\self\\PUT_self.md"
+  ],
+  "mistapi.api.v1.self.api_token.updateApiToken": [
+    "documentation/api\\self\\PUT_self_apitokens_apitoken_id.md"
+  ],
+  "mistapi.api.v1.sites.sites.deleteSite": [
+    "documentation/api\\sites\\DELETE_sites_site_id.md"
+  ],
+  "mistapi.api.v1.sites.asset_filters.deleteSiteAssetFilter": [
+    "documentation/api\\sites\\DELETE_sites_site_id_assetfilters_assetfilter_id.md"
+  ],
+  "mistapi.api.v1.sites.assets.deleteSiteAsset": [
+    "documentation/api\\sites\\DELETE_sites_site_id_assets_asset_id.md"
+  ],
+  "mistapi.api.v1.sites.assets.deleteSiteAssetImage": [
+    "documentation/api\\sites\\DELETE_sites_site_id_assets_asset_id_image.md"
+  ],
+  "mistapi.api.v1.sites.beacons.deleteSiteBeacon": [
+    "documentation/api\\sites\\DELETE_sites_site_id_beacons_beacon_id.md"
+  ],
+  "mistapi.api.v1.sites.devices_-_wan_cluster.deleteSiteDeviceHaCluster": [
+    "documentation/api\\sites\\DELETE_sites_site_id_devices_device_id_ha.md"
+  ],
+  "mistapi.api.v1.sites.devices.deleteSiteDeviceImage": [
+    "documentation/api\\sites\\DELETE_sites_site_id_devices_device_id_image_image_number.md"
+  ],
+  "mistapi.api.v1.sites.devices_-_wired.deleteSiteLocalSwitchPortConfig": [
+    "documentation/api\\sites\\DELETE_sites_site_id_devices_device_id_local_port_config.md"
+  ],
+  "mistapi.api.v1.sites.devices_-_wired_-_virtual_chassis.deleteSiteVirtualChassis": [
+    "documentation/api\\sites\\DELETE_sites_site_id_devices_device_id_vc.md"
+  ],
+  "mistapi.api.v1.sites.evpn_topologies.deleteSiteEvpnTopology": [
+    "documentation/api\\sites\\DELETE_sites_site_id_evpn_topologies_evpn_topology_id.md"
+  ],
+  "mistapi.api.v1.sites.guests.deleteSiteGuestAuthorization": [
+    "documentation/api\\sites\\DELETE_sites_site_id_guests_guest_mac.md"
+  ],
+  "mistapi.api.v1.sites.location.clearSiteMlOverwriteForDevice": [
+    "documentation/api\\sites\\DELETE_sites_site_id_location_ml_device_device_id.md"
+  ],
+  "mistapi.api.v1.sites.location.clearSiteMlOverwriteForMap": [
+    "documentation/api\\sites\\DELETE_sites_site_id_location_ml_map_map_id.md"
+  ],
+  "mistapi.api.v1.sites.maps.deleteSiteMap": [
+    "documentation/api\\sites\\DELETE_sites_site_id_maps_map_id.md"
+  ],
+  "mistapi.api.v1.sites.maps_-_auto-placement.deleteSiteApAutoOrientation": [
+    "documentation/api\\sites\\DELETE_sites_site_id_maps_map_id_auto_orient.md"
+  ],
+  "mistapi.api.v1.sites.maps_-_auto-placement.deleteSiteApAutoplacement": [
+    "documentation/api\\sites\\DELETE_sites_site_id_maps_map_id_auto_placement.md"
+  ],
+  "mistapi.api.v1.sites.maps_-_auto-zone.deleteSiteMapAutoZone": [
+    "documentation/api\\sites\\DELETE_sites_site_id_maps_map_id_auto_zones.md"
+  ],
+  "mistapi.api.v1.sites.maps.deleteSiteMapImage": [
+    "documentation/api\\sites\\DELETE_sites_site_id_maps_map_id_image.md"
+  ],
+  "mistapi.api.v1.sites.mxedges.deleteSiteMxEdge": [
+    "documentation/api\\sites\\DELETE_sites_site_id_mxedges_mxedge_id.md"
+  ],
+  "mistapi.api.v1.sites.psks.deleteSitePsk": [
+    "documentation/api\\sites\\DELETE_sites_site_id_psks_psk_id.md"
+  ],
+  "mistapi.api.v1.sites.rfdiags.deleteSiteRfdiagRecording": [
+    "documentation/api\\sites\\DELETE_sites_site_id_rfdiags_rfdiag_id.md"
+  ],
+  "mistapi.api.v1.sites.rssi_zones.deleteSiteRssiZone": [
+    "documentation/api\\sites\\DELETE_sites_site_id_rssizones_rssizone_id.md"
+  ],
+  "mistapi.api.v1.sites.setting.deleteSiteWirelessClientsBlocklist": [
+    "documentation/api\\sites\\DELETE_sites_site_id_setting_blacklist.md"
+  ],
+  "mistapi.api.v1.sites.setting.deleteSiteWatchedStations": [
+    "documentation/api\\sites\\DELETE_sites_site_id_setting_watched_station.md"
+  ],
+  "mistapi.api.v1.sites.setting.deleteSiteWirelessClientsAllowlist": [
+    "documentation/api\\sites\\DELETE_sites_site_id_setting_whitelist.md"
+  ],
+  "mistapi.api.v1.sites.alarms.UnsubscribeSiteAlarms": [
+    "documentation/api\\sites\\DELETE_sites_site_id_subscriptions.md"
+  ],
+  "mistapi.api.v1.sites.ui_settings.deleteSiteUiSetting": [
+    "documentation/api\\sites\\DELETE_sites_site_id_uisettings_uisetting_id.md"
+  ],
+  "mistapi.api.v1.sites.vbeacons.deleteSiteVBeacon": [
+    "documentation/api\\sites\\DELETE_sites_site_id_vbeacons_vbeacon_id.md"
+  ],
+  "mistapi.api.v1.sites.webhooks.deleteSiteWebhook": [
+    "documentation/api\\sites\\DELETE_sites_site_id_webhooks_webhook_id.md"
+  ],
+  "mistapi.api.v1.sites.wlans.deleteSiteWlan": [
+    "documentation/api\\sites\\DELETE_sites_site_id_wlans_wlan_id.md"
+  ],
+  "mistapi.api.v1.sites.wlans.deleteSiteWlanPortalImage": [
+    "documentation/api\\sites\\DELETE_sites_site_id_wlans_wlan_id_portal_image.md"
+  ],
+  "mistapi.api.v1.sites.wxrules.deleteSiteWxRule": [
+    "documentation/api\\sites\\DELETE_sites_site_id_wxrules_wxrule_id.md"
+  ],
+  "mistapi.api.v1.sites.wxtags.deleteSiteWxTag": [
+    "documentation/api\\sites\\DELETE_sites_site_id_wxtags_wxtag_id.md"
+  ],
+  "mistapi.api.v1.sites.wxtunnels.deleteSiteWxTunnel": [
+    "documentation/api\\sites\\DELETE_sites_site_id_wxtunnels_wxtunnel_id.md"
+  ],
+  "mistapi.api.v1.sites.zones.deleteSiteZone": [
+    "documentation/api\\sites\\DELETE_sites_site_id_zones_zone_id.md"
+  ],
+  "mistapi.api.v1.sites.sites.getSiteInfo": [
+    "documentation/api\\sites\\GET_sites_site_id.md"
+  ],
+  "mistapi.api.v1.sites.advanced_anti_malware_profiles.listSiteAAMWProfilesDerived": [
+    "documentation/api\\sites\\GET_sites_site_id_aamwprofiles_derived.md"
+  ],
+  "mistapi.api.v1.sites.alarms.countSiteAlarms": [
+    "documentation/api\\sites\\GET_sites_site_id_alarms_count.md"
+  ],
+  "mistapi.api.v1.sites.alarms.searchSiteAlarms": [
+    "documentation/api\\sites\\GET_sites_site_id_alarms_search.md"
+  ],
+  "mistapi.api.v1.sites.spectrum_analysis.getSiteRunningSpectrumAnalysis": [
+    "documentation/api\\sites\\GET_sites_site_id_analyze_spectrum.md"
+  ],
+  "mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForClient": [
+    "documentation/api\\sites\\GET_sites_site_id_anomaly_client_client_mac_metric.md"
+  ],
+  "mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForDevice": [
+    "documentation/api\\sites\\GET_sites_site_id_anomaly_device_device_mac_metric.md"
+  ],
+  "mistapi.api.v1.sites.anomaly.listSiteAnomalyEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_anomaly_metric.md"
+  ],
+  "mistapi.api.v1.sites.applications.listSiteApps": [
+    "documentation/api\\sites\\GET_sites_site_id_apps.md"
+  ],
+  "mistapi.api.v1.sites.ap_templates.listSiteApTemplatesDerived": [
+    "documentation/api\\sites\\GET_sites_site_id_aptemplates_derived.md"
+  ],
+  "mistapi.api.v1.sites.asset_filters.listSiteAssetFilters": [
+    "documentation/api\\sites\\GET_sites_site_id_assetfilters.md"
+  ],
+  "mistapi.api.v1.sites.asset_filters.getSiteAssetFilter": [
+    "documentation/api\\sites\\GET_sites_site_id_assetfilters_assetfilter_id.md"
+  ],
+  "mistapi.api.v1.sites.assets.listSiteAssets": [
+    "documentation/api\\sites\\GET_sites_site_id_assets.md"
+  ],
+  "mistapi.api.v1.sites.assets.getSiteAsset": [
+    "documentation/api\\sites\\GET_sites_site_id_assets_asset_id.md"
+  ],
+  "mistapi.api.v1.sites.antivirus_profiles.listSiteAntivirusProfilesDerived": [
+    "documentation/api\\sites\\GET_sites_site_id_avprofiles_derived.md"
+  ],
+  "mistapi.api.v1.sites.beacons.listSiteBeacons": [
+    "documentation/api\\sites\\GET_sites_site_id_beacons.md"
+  ],
+  "mistapi.api.v1.sites.beacons.getSiteBeacon": [
+    "documentation/api\\sites\\GET_sites_site_id_beacons_beacon_id.md"
+  ],
+  "mistapi.api.v1.sites.clients_-_wireless.getSiteEventsForClient": [
+    "documentation/api\\sites\\GET_sites_site_id_clients_client_mac_events.md"
+  ],
+  "mistapi.api.v1.sites.clients_-_wireless.countSiteWirelessClients": [
+    "documentation/api\\sites\\GET_sites_site_id_clients_count.md"
+  ],
+  "mistapi.api.v1.sites.clients_-_wireless.countSiteWirelessClientEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_clients_events_count.md"
+  ],
+  "mistapi.api.v1.sites.clients_-_wireless.searchSiteWirelessClientEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_clients_events_search.md"
+  ],
+  "mistapi.api.v1.sites.clients_-_wireless.searchSiteWirelessClients": [
+    "documentation/api\\sites\\GET_sites_site_id_clients_search.md"
+  ],
+  "mistapi.api.v1.sites.clients_-_wireless.countSiteWirelessClientSessions": [
+    "documentation/api\\sites\\GET_sites_site_id_clients_sessions_count.md"
+  ],
+  "mistapi.api.v1.sites.clients_-_wireless.searchSiteWirelessClientSessions": [
+    "documentation/api\\sites\\GET_sites_site_id_clients_sessions_search.md"
+  ],
+  "mistapi.api.v1.sites.device_profiles.listSiteDeviceProfilesDerived": [
+    "documentation/api\\sites\\GET_sites_site_id_deviceprofiles_derived.md"
+  ],
+  "mistapi.api.v1.sites.devices.listSiteDevices": [
+    "documentation/api\\sites\\GET_sites_site_id_devices.md"
+  ],
+  "mistapi.api.v1.sites.devices_-_wireless.listSiteDeviceRadioChannels": [
+    "documentation/api\\sites\\GET_sites_site_id_devices_ap_channels.md"
+  ],
+  "mistapi.api.v1.sites.devices.countSiteDeviceConfigHistory": [
+    "documentation/api\\sites\\GET_sites_site_id_devices_config_history_count.md"
+  ],
+  "mistapi.api.v1.sites.devices.searchSiteDeviceConfigHistory": [
+    "documentation/api\\sites\\GET_sites_site_id_devices_config_history_search.md"
+  ],
+  "mistapi.api.v1.sites.devices.countSiteDevices": [
+    "documentation/api\\sites\\GET_sites_site_id_devices_count.md"
+  ],
+  "mistapi.api.v1.sites.devices.getSiteDevice": [
+    "documentation/api\\sites\\GET_sites_site_id_devices_device_id.md"
+  ],
+  "mistapi.api.v1.sites.devices_-_wan_cluster.GetSiteDeviceHaClusterNode": [
+    "documentation/api\\sites\\GET_sites_site_id_devices_device_id_ha.md"
+  ],
+  "mistapi.api.v1.sites.devices_-_wireless.getSiteDeviceIotPort": [
+    "documentation/api\\sites\\GET_sites_site_id_devices_device_id_iot.md"
+  ],
+  "mistapi.api.v1.sites.synthetic_tests.getSiteDeviceSyntheticTest": [
+    "documentation/api\\sites\\GET_sites_site_id_devices_device_id_synthetic_test.md"
+  ],
+  "mistapi.api.v1.sites.devices_-_wired_-_virtual_chassis.getSiteDeviceVirtualChassis": [
+    "documentation/api\\sites\\GET_sites_site_id_devices_device_id_vc.md"
+  ],
+  "mistapi.api.v1.sites.devices.countSiteDeviceEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_devices_events_count.md"
+  ],
+  "mistapi.api.v1.sites.devices.searchSiteDeviceEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_devices_events_search.md"
+  ],
+  "mistapi.api.v1.sites.devices.exportSiteDevices": [
+    "documentation/api\\sites\\GET_sites_site_id_devices_export.md"
+  ],
+  "mistapi.api.v1.sites.devices.countSiteDeviceLastConfig": [
+    "documentation/api\\sites\\GET_sites_site_id_devices_last_config_count.md"
+  ],
+  "mistapi.api.v1.sites.devices.searchSiteDeviceLastConfigs": [
+    "documentation/api\\sites\\GET_sites_site_id_devices_last_config_search.md"
+  ],
+  "mistapi.api.v1.sites.devices.searchSiteDevices": [
+    "documentation/api\\sites\\GET_sites_site_id_devices_search.md"
+  ],
+  "mistapi.api.v1.sites.events.listSiteRoamingEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_events_fast_roam.md"
+  ],
+  "mistapi.api.v1.sites.events.countSiteSystemEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_events_system_count.md"
+  ],
+  "mistapi.api.v1.sites.events.searchSiteSystemEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_events_system_search.md"
+  ],
+  "mistapi.api.v1.sites.evpn_topologies.listSiteEvpnTopologies": [
+    "documentation/api\\sites\\GET_sites_site_id_evpn_topologies.md"
+  ],
+  "mistapi.api.v1.sites.evpn_topologies.getSiteEvpnTopology": [
+    "documentation/api\\sites\\GET_sites_site_id_evpn_topologies_evpn_topology_id.md"
+  ],
+  "mistapi.api.v1.sites.gateway_templates.listSiteGatewayTemplatesDerived": [
+    "documentation/api\\sites\\GET_sites_site_id_gatewaytemplates_derived.md"
+  ],
+  "mistapi.api.v1.sites.guests.listSiteAllGuestAuthorizations": [
+    "documentation/api\\sites\\GET_sites_site_id_guests.md"
+  ],
+  "mistapi.api.v1.sites.guests.countSiteGuestAuthorizations": [
+    "documentation/api\\sites\\GET_sites_site_id_guests_count.md"
+  ],
+  "mistapi.api.v1.sites.guests.listSiteAllGuestAuthorizationsDerived": [
+    "documentation/api\\sites\\GET_sites_site_id_guests_derived.md"
+  ],
+  "mistapi.api.v1.sites.guests.getSiteGuestAuthorization": [
+    "documentation/api\\sites\\GET_sites_site_id_guests_guest_mac.md"
+  ],
+  "mistapi.api.v1.sites.guests.searchSiteGuestAuthorization": [
+    "documentation/api\\sites\\GET_sites_site_id_guests_search.md"
+  ],
+  "mistapi.api.v1.sites.idp_profiles.listSiteIdpProfilesDerived": [
+    "documentation/api\\sites\\GET_sites_site_id_idpprofiles_derived.md"
+  ],
+  "mistapi.api.v1.sites.insights.getSiteInsightMetricsForClient": [
+    "documentation/api\\sites\\GET_sites_site_id_insights_client_client_mac_metric.md"
+  ],
+  "mistapi.api.v1.sites.insights.getSiteInsightMetricsForDevice": [
+    "documentation/api\\sites\\GET_sites_site_id_insights_device_device_mac_metric.md"
+  ],
+  "mistapi.api.v1.sites.insights.getSiteInsightMetricsForGateway": [
+    "documentation/api\\sites\\GET_sites_site_id_insights_gateway_device_id_stats_metric.md"
+  ],
+  "mistapi.api.v1.sites.insights.getSiteInsightMetrics": [
+    "documentation/api\\sites\\GET_sites_site_id_insights_metric.md"
+  ],
+  "mistapi.api.v1.sites.insights.getSiteInsightMetricsForMxEdge": [
+    "documentation/api\\sites\\GET_sites_site_id_insights_mxedge_device_mac_metric.md"
+  ],
+  "mistapi.api.v1.sites.rogues.listSiteRogueAPs": [
+    "documentation/api\\sites\\GET_sites_site_id_insights_rogues.md"
+  ],
+  "mistapi.api.v1.sites.rogues.listSiteRogueClients": [
+    "documentation/api\\sites\\GET_sites_site_id_insights_rogues_clients.md"
+  ],
+  "mistapi.api.v1.sites.insights.getSiteInsightMetricsForSwitch": [
+    "documentation/api\\sites\\GET_sites_site_id_insights_switch_device_mac_metric.md"
+  ],
+  "mistapi.api.v1.sites.licenses.getSiteLicenseUsage": [
+    "documentation/api\\sites\\GET_sites_site_id_licenses_usages.md"
+  ],
+  "mistapi.api.v1.sites.location.getSiteBeamCoverageOverview": [
+    "documentation/api\\sites\\GET_sites_site_id_location_coverage.md"
+  ],
+  "mistapi.api.v1.sites.location.getSiteMachineLearningCurrentStat": [
+    "documentation/api\\sites\\GET_sites_site_id_location_ml_current.md"
+  ],
+  "mistapi.api.v1.sites.location.getSiteDefaultPlfForModels": [
+    "documentation/api\\sites\\GET_sites_site_id_location_ml_defaults.md"
+  ],
+  "mistapi.api.v1.sites.maps.listSiteMaps": [
+    "documentation/api\\sites\\GET_sites_site_id_maps.md"
+  ],
+  "mistapi.api.v1.sites.map_stacks.listSiteMapStacks": [
+    "documentation/api\\sites\\GET_sites_site_id_mapstacks.md"
+  ],
+  "mistapi.api.v1.sites.maps.getSiteMap": [
+    "documentation/api\\sites\\GET_sites_site_id_maps_map_id.md"
+  ],
+  "mistapi.api.v1.sites.maps_-_auto-placement.getSiteApAutoOrientation": [
+    "documentation/api\\sites\\GET_sites_site_id_maps_map_id_auto_orient.md"
+  ],
+  "mistapi.api.v1.sites.maps_-_auto-placement.getSiteApAutoPlacement": [
+    "documentation/api\\sites\\GET_sites_site_id_maps_map_id_auto_placement.md"
+  ],
+  "mistapi.api.v1.sites.maps_-_auto-zone.getSiteMapAutoZoneStatus": [
+    "documentation/api\\sites\\GET_sites_site_id_maps_map_id_auto_zones.md"
+  ],
+  "mistapi.api.v1.sites.mxedges.listSiteMxEdges": [
+    "documentation/api\\sites\\GET_sites_site_id_mxedges.md"
+  ],
+  "mistapi.api.v1.sites.mxedges.countSiteMxEdgeEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_mxedges_events_count.md"
+  ],
+  "mistapi.api.v1.sites.mxedges.searchSiteMistEdgeEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_mxedges_events_search.md"
+  ],
+  "mistapi.api.v1.sites.mxedges.getSiteMxEdge": [
+    "documentation/api\\sites\\GET_sites_site_id_mxedges_mxedge_id.md"
+  ],
+  "mistapi.api.v1.sites.clients_-_nac.countSiteNacClients": [
+    "documentation/api\\sites\\GET_sites_site_id_nac_clients_count.md"
+  ],
+  "mistapi.api.v1.sites.clients_-_nac.countSiteNacClientEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_nac_clients_events_count.md"
+  ],
+  "mistapi.api.v1.sites.clients_-_nac.searchSiteNacClientEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_nac_clients_events_search.md"
+  ],
+  "mistapi.api.v1.sites.clients_-_nac.searchSiteNacClients": [
+    "documentation/api\\sites\\GET_sites_site_id_nac_clients_search.md"
+  ],
+  "mistapi.api.v1.sites.networks.listSiteNetworksDerived": [
+    "documentation/api\\sites\\GET_sites_site_id_networks_derived.md"
+  ],
+  "mistapi.api.v1.sites.network_templates.listSiteNetworkTemplatesDerived": [
+    "documentation/api\\sites\\GET_sites_site_id_networktemplates_derived.md"
+  ],
+  "mistapi.api.v1.sites.devices_-_others.listSiteOtherDevices": [
+    "documentation/api\\sites\\GET_sites_site_id_otherdevices.md"
+  ],
+  "mistapi.api.v1.sites.devices_-_others.countSiteOtherDeviceEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_otherdevices_events_count.md"
+  ],
+  "mistapi.api.v1.sites.devices_-_others.searchSiteOtherDeviceEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_otherdevices_events_search.md"
+  ],
+  "mistapi.api.v1.sites.psks.listSitePsks": [
+    "documentation/api\\sites\\GET_sites_site_id_psks.md"
+  ],
+  "mistapi.api.v1.sites.psks.getSitePsk": [
+    "documentation/api\\sites\\GET_sites_site_id_psks_psk_id.md"
+  ],
+  "mistapi.api.v1.sites.rfdiags.getSiteSiteRfdiagRecording": [
+    "documentation/api\\sites\\GET_sites_site_id_rfdiags.md"
+  ],
+  "mistapi.api.v1.sites.rfdiags.getSiteRfdiagRecording": [
+    "documentation/api\\sites\\GET_sites_site_id_rfdiags_rfdiag_id.md"
+  ],
+  "mistapi.api.v1.sites.rfdiags.downloadSiteRfdiagRecording": [
+    "documentation/api\\sites\\GET_sites_site_id_rfdiags_rfdiag_id_download.md"
+  ],
+  "mistapi.api.v1.sites.rf_templates.listSiteRfTemplatesDerived": [
+    "documentation/api\\sites\\GET_sites_site_id_rftemplates_derived.md"
+  ],
+  "mistapi.api.v1.sites.rogues.countSiteRogueEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_rogues_events_count.md"
+  ],
+  "mistapi.api.v1.sites.rogues.searchSiteRogueEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_rogues_events_search.md"
+  ],
+  "mistapi.api.v1.sites.rogues.getSiteRogueAP": [
+    "documentation/api\\sites\\GET_sites_site_id_rogues_rogue_bssid.md"
+  ],
+  "mistapi.api.v1.sites.rrm.getSiteCurrentChannelPlanning": [
+    "documentation/api\\sites\\GET_sites_site_id_rrm_current.md"
+  ],
+  "mistapi.api.v1.sites.rrm.getSiteCurrentRrmConsiderations": [
+    "documentation/api\\sites\\GET_sites_site_id_rrm_current_devices_device_id_band_band.md"
+  ],
+  "mistapi.api.v1.sites.rrm.listSiteRrmEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_rrm_events.md"
+  ],
+  "mistapi.api.v1.sites.rrm.listSiteCurrentRrmNeighbors": [
+    "documentation/api\\sites\\GET_sites_site_id_rrm_neighbors_band_band.md"
+  ],
+  "mistapi.api.v1.sites.rssi_zones.listSiteRssiZones": [
+    "documentation/api\\sites\\GET_sites_site_id_rssizones.md"
+  ],
+  "mistapi.api.v1.sites.rssi_zones.getSiteRssiZone": [
+    "documentation/api\\sites\\GET_sites_site_id_rssizones_rssizone_id.md"
+  ],
+  "mistapi.api.v1.sites.secintel_profiles.listSiteSecIntelProfilesDerived": [
+    "documentation/api\\sites\\GET_sites_site_id_secintelprofiles_derived.md"
+  ],
+  "mistapi.api.v1.sites.service_policies.listSiteServicePoliciesDerived": [
+    "documentation/api\\sites\\GET_sites_site_id_servicepolicies_derived.md"
+  ],
+  "mistapi.api.v1.sites.services.listSiteServicesDerived": [
+    "documentation/api\\sites\\GET_sites_site_id_services_derived.md"
+  ],
+  "mistapi.api.v1.sites.services.countSiteServicePathEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_services_events_count.md"
+  ],
+  "mistapi.api.v1.sites.services.searchSiteServicePathEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_services_events_search.md"
+  ],
+  "mistapi.api.v1.sites.setting.getSiteSetting": [
+    "documentation/api\\sites\\GET_sites_site_id_setting.md"
+  ],
+  "mistapi.api.v1.sites.setting.getSiteSettingDerived": [
+    "documentation/api\\sites\\GET_sites_site_id_setting_derived.md"
+  ],
+  "mistapi.api.v1.sites.jse.getSiteJseInfo": [
+    "documentation/api\\sites\\GET_sites_site_id_setting_jse_info.md"
+  ],
+  "mistapi.api.v1.sites.site_templates.listSiteSiteTemplatesDerived": [
+    "documentation/api\\sites\\GET_sites_site_id_sitetemplates_derived.md"
+  ],
+  "mistapi.api.v1.sites.skyatp.countSiteSkyatpEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_skyatp_events_count.md"
+  ],
+  "mistapi.api.v1.sites.skyatp.searchSiteSkyatpEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_skyatp_events_search.md"
+  ],
+  "mistapi.api.v1.sites.sles.listSiteSlesMetrics": [
+    "documentation/api\\sites\\GET_sites_site_id_sle_scope_scope_id_metrics.md"
+  ],
+  "mistapi.api.v1.sites.sles.listSiteSleMetricClassifiers": [
+    "documentation/api\\sites\\GET_sites_site_id_sle_scope_scope_id_metric_metric_classifiers.md"
+  ],
+  "mistapi.api.v1.sites.sles.getSiteSleClassifierSummaryTrend": [
+    "documentation/api\\sites\\GET_sites_site_id_sle_scope_scope_id_metric_metric_classifier_classifier_summary-trend.md"
+  ],
+  "mistapi.api.v1.sites.sles.getSiteSleClassifierDetails": [
+    "documentation/api\\sites\\GET_sites_site_id_sle_scope_scope_id_metric_metric_classifier_classifier_summary.md"
+  ],
+  "mistapi.api.v1.sites.sles.getSiteSleHistogram": [
+    "documentation/api\\sites\\GET_sites_site_id_sle_scope_scope_id_metric_metric_histogram.md"
+  ],
+  "mistapi.api.v1.sites.sles.getSiteSleImpactSummary": [
+    "documentation/api\\sites\\GET_sites_site_id_sle_scope_scope_id_metric_metric_impact-summary.md"
+  ],
+  "mistapi.api.v1.sites.sles.listSiteSleImpactedApplications": [
+    "documentation/api\\sites\\GET_sites_site_id_sle_scope_scope_id_metric_metric_impacted-applications.md"
+  ],
+  "mistapi.api.v1.sites.sles.listSiteSleImpactedAps": [
+    "documentation/api\\sites\\GET_sites_site_id_sle_scope_scope_id_metric_metric_impacted-aps.md"
+  ],
+  "mistapi.api.v1.sites.sles.listSiteSleImpactedChassis": [
+    "documentation/api\\sites\\GET_sites_site_id_sle_scope_scope_id_metric_metric_impacted-chassis.md"
+  ],
+  "mistapi.api.v1.sites.sles.listSiteSleImpactedWiredClients": [
+    "documentation/api\\sites\\GET_sites_site_id_sle_scope_scope_id_metric_metric_impacted-clients.md"
+  ],
+  "mistapi.api.v1.sites.sles.listSiteSleImpactedGateways": [
+    "documentation/api\\sites\\GET_sites_site_id_sle_scope_scope_id_metric_metric_impacted-gateways.md"
+  ],
+  "mistapi.api.v1.sites.sles.listSiteSleImpactedInterfaces": [
+    "documentation/api\\sites\\GET_sites_site_id_sle_scope_scope_id_metric_metric_impacted-interfaces.md"
+  ],
+  "mistapi.api.v1.sites.sles.listSiteSleImpactedSwitches": [
+    "documentation/api\\sites\\GET_sites_site_id_sle_scope_scope_id_metric_metric_impacted-switches.md"
+  ],
+  "mistapi.api.v1.sites.sles.listSiteSleImpactedWirelessClients": [
+    "documentation/api\\sites\\GET_sites_site_id_sle_scope_scope_id_metric_metric_impacted-users.md"
+  ],
+  "mistapi.api.v1.sites.sles.getSiteSleSummaryTrend": [
+    "documentation/api\\sites\\GET_sites_site_id_sle_scope_scope_id_metric_metric_summary-trend.md"
+  ],
+  "mistapi.api.v1.sites.sles.getSiteSleSummary": [
+    "documentation/api\\sites\\GET_sites_site_id_sle_scope_scope_id_metric_metric_summary.md"
+  ],
+  "mistapi.api.v1.sites.sles.getSiteSleThreshold": [
+    "documentation/api\\sites\\GET_sites_site_id_sle_scope_scope_id_metric_metric_threshold.md"
+  ],
+  "mistapi.api.v1.sites.stats.getSiteStats": [
+    "documentation/api\\sites\\GET_sites_site_id_stats.md"
+  ],
+  "mistapi.api.v1.sites.spectrum_analysis.listSiteSpectrumAnalysis": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_analyze_spectrum.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_apps.countSiteApps": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_apps_count.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_assets.listSiteAssetsStats": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_assets.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_assets.getSiteAssetStats": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_assets_asset_id.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_assets.countSiteAssets": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_assets_count.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_assets.searchSiteAssets": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_assets_search.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_beacons.listSiteBeaconsStats": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_beacons.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_bgp_peers.countSiteBgpStats": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_bgp_peers_count.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_bgp_peers.searchSiteBgpStats": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_bgp_peers_search.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_calls.troubleshootSiteCall": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_calls_client_client_mac_troubleshoot.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_calls.countSiteCalls": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_calls_count.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_calls.searchSiteCalls": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_calls_search.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_calls.getSiteCallsSummary": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_calls_summary.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_calls.listSiteTroubleshootCalls": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_calls_troubleshoot.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_clients_wireless.listSiteWirelessClientsStats": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_clients.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_clients_wireless.getSiteWirelessClientStats": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_clients_client_mac.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_devices.listSiteDevicesStats": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_devices.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_devices.getSiteDeviceStats": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_devices_device_id.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_devices.getSiteAllClientsStatsByDevice": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_devices_device_id_clients.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_assets.listSiteDiscoveredAssets": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_discovered_assets.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_discovered_switches.countSiteDiscoveredSwitches": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_discovered_switches_count.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_discovered_switches.listSiteDiscoveredSwitchesMetrics": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_discovered_switches_metrics.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_discovered_switches.searchSiteDiscoveredSwitches": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_discovered_switches_search.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_discovered_switches.searchSiteDiscoveredSwitchesMetrics": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_discovered_switch_metrics_search.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_assets.getSiteAssetsOfInterest": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_filtered_assets.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_devices.getSiteGatewayMetrics": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_gateways_metrics.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_clients_wireless.getSiteWirelessClientsStatsByMap": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_maps_map_id_clients.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_assets.getSiteDiscoveredAssetByMap": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_maps_map_id_discovered_assets.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_clients_sdk.getSiteSdkStatsByMap": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_maps_map_id_sdkclients.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_clients_wireless.listSiteUnconnectedClientStats": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_maps_map_id_unconnected_clients.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_mxedges.listSiteMxEdgesStats": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_mxedges.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_mxedges.getSiteMxEdgeStats": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_mxedges_mxedge_id.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_ospf.countSiteOspfStats": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_ospf_peers_count.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_ospf.searchSiteOspfStats": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_ospf_peers_search.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_ports.countSiteSwOrGwPorts": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_ports_count.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_ports.searchSiteSwOrGwPorts": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_ports_search.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_zones.listSiteRssiZonesStats": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_rssizones.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_zones.getSiteRssiZoneStats": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_rssizones_zone_id.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_clients_sdk.getSiteSdkStats": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_sdkclients_sdkclient_id.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_devices.getSiteSwitchesMetrics": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_switches_metrics.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_wxrules.getSiteWxRulesUsage": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_wxrules.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_zones.listSiteZonesStats": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_zones.md"
+  ],
+  "mistapi.api.v1.sites.stats_-_zones.getSiteZoneStats": [
+    "documentation/api\\sites\\GET_sites_site_id_stats_zones_zone_id.md"
+  ],
+  "mistapi.api.v1.sites.synthetic_tests.searchSiteSyntheticTest": [
+    "documentation/api\\sites\\GET_sites_site_id_synthetic_test_search.md"
+  ],
+  "mistapi.api.v1.sites.ui_settings.listSiteUiSettings": [
+    "documentation/api\\sites\\GET_sites_site_id_uisettings.md"
+  ],
+  "mistapi.api.v1.sites.ui_settings.listSiteUiSettingDerived": [
+    "documentation/api\\sites\\GET_sites_site_id_uisettings_derived.md"
+  ],
+  "mistapi.api.v1.sites.ui_settings.getSiteUiSetting": [
+    "documentation/api\\sites\\GET_sites_site_id_uisettings_uisetting_id.md"
+  ],
+  "mistapi.api.v1.sites.vbeacons.listSiteVBeacons": [
+    "documentation/api\\sites\\GET_sites_site_id_vbeacons.md"
+  ],
+  "mistapi.api.v1.sites.vbeacons.getSiteVBeacon": [
+    "documentation/api\\sites\\GET_sites_site_id_vbeacons_vbeacon_id.md"
+  ],
+  "mistapi.api.v1.sites.vpns.listSiteVpnsDerived": [
+    "documentation/api\\sites\\GET_sites_site_id_vpns_derived.md"
+  ],
+  "mistapi.api.v1.sites.clients_-_wan.countSiteWanClients": [
+    "documentation/api\\sites\\GET_sites_site_id_wan_clients_count.md"
+  ],
+  "mistapi.api.v1.sites.clients_-_wan.searchSiteWanClientEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_wan_clients_events_search.md"
+  ],
+  "mistapi.api.v1.sites.clients_-_wan.searchSiteWanClients": [
+    "documentation/api\\sites\\GET_sites_site_id_wan_clients_search.md"
+  ],
+  "mistapi.api.v1.sites.clients_-_wan.countSiteWanClientEvents": [
+    "documentation/api\\sites\\GET_sites_site_id_wan_client_events_count.md"
+  ],
+  "mistapi.api.v1.sites.wan_usages.countSiteWanUsage": [
+    "documentation/api\\sites\\GET_sites_site_id_wan_usages_count.md"
+  ],
+  "mistapi.api.v1.sites.wan_usages.searchSiteWanUsage": [
+    "documentation/api\\sites\\GET_sites_site_id_wan_usages_search.md"
+  ],
+  "mistapi.api.v1.sites.webhooks.listSiteWebhooks": [
+    "documentation/api\\sites\\GET_sites_site_id_webhooks.md"
+  ],
+  "mistapi.api.v1.sites.webhooks.getSiteWebhook": [
+    "documentation/api\\sites\\GET_sites_site_id_webhooks_webhook_id.md"
+  ],
+  "mistapi.api.v1.sites.webhooks.countSiteWebhooksDeliveries": [
+    "documentation/api\\sites\\GET_sites_site_id_webhooks_webhook_id_events_count.md"
+  ],
+  "mistapi.api.v1.sites.webhooks.searchSiteWebhooksDeliveries": [
+    "documentation/api\\sites\\GET_sites_site_id_webhooks_webhook_id_events_search.md"
+  ],
+  "mistapi.api.v1.sites.clients_-_wired.countSiteWiredClients": [
+    "documentation/api\\sites\\GET_sites_site_id_wired_clients_count.md"
+  ],
+  "mistapi.api.v1.sites.clients_-_wired.searchSiteWiredClients": [
+    "documentation/api\\sites\\GET_sites_site_id_wired_clients_search.md"
+  ],
+  "mistapi.api.v1.sites.wlans.listSiteWlans": [
+    "documentation/api\\sites\\GET_sites_site_id_wlans.md"
+  ],
+  "mistapi.api.v1.sites.wlans.listSiteWlansDerived": [
+    "documentation/api\\sites\\GET_sites_site_id_wlans_derived.md"
+  ],
+  "mistapi.api.v1.sites.wlans.getSiteWlan": [
+    "documentation/api\\sites\\GET_sites_site_id_wlans_wlan_id.md"
+  ],
+  "mistapi.api.v1.sites.wxrules.listSiteWxRules": [
+    "documentation/api\\sites\\GET_sites_site_id_wxrules.md"
+  ],
+  "mistapi.api.v1.sites.wxrules.ListSiteWxRulesDerived": [
+    "documentation/api\\sites\\GET_sites_site_id_wxrules_derived.md"
+  ],
+  "mistapi.api.v1.sites.wxrules.getSiteWxRule": [
+    "documentation/api\\sites\\GET_sites_site_id_wxrules_wxrule_id.md"
+  ],
+  "mistapi.api.v1.sites.wxtags.listSiteWxTags": [
+    "documentation/api\\sites\\GET_sites_site_id_wxtags.md"
+  ],
+  "mistapi.api.v1.sites.wxtags.getSiteApplicationList": [
+    "documentation/api\\sites\\GET_sites_site_id_wxtags_apps.md"
+  ],
+  "mistapi.api.v1.sites.wxtags.getSiteWxTag": [
+    "documentation/api\\sites\\GET_sites_site_id_wxtags_wxtag_id.md"
+  ],
+  "mistapi.api.v1.sites.wxtunnels.listSiteWxTunnels": [
+    "documentation/api\\sites\\GET_sites_site_id_wxtunnels.md"
+  ],
+  "mistapi.api.v1.sites.wxtunnels.getSiteWxTunnel": [
+    "documentation/api\\sites\\GET_sites_site_id_wxtunnels_wxtunnel_id.md"
+  ],
+  "mistapi.api.v1.sites.zones.listSiteZones": [
+    "documentation/api\\sites\\GET_sites_site_id_zones.md"
+  ],
+  "mistapi.api.v1.sites.zones.getSiteZone": [
+    "documentation/api\\sites\\GET_sites_site_id_zones_zone_id.md"
+  ],
+  "mistapi.api.v1.sites.zones.countSiteZoneSessions": [
+    "documentation/api\\sites\\GET_sites_site_id_zone_type_count.md"
+  ],
+  "mistapi.api.v1.sites.zones.searchSiteZoneSessions": [
+    "documentation/api\\sites\\GET_sites_site_id_zone_type_visits_search.md"
+  ],
+  "mistapi.api.v1.sites.alarms.AckSiteMultipleAlarms": [
+    "documentation/api\\sites\\POST_sites_site_id_alarms_ack.md"
+  ],
+  "mistapi.api.v1.sites.alarms.ackSiteAllAlarms": [
+    "documentation/api\\sites\\POST_sites_site_id_alarms_ack_all.md"
+  ],
+  "mistapi.api.v1.sites.alarms.ackSiteAlarm": [
+    "documentation/api\\sites\\POST_sites_site_id_alarms_alarm_id_ack.md"
+  ],
+  "mistapi.api.v1.sites.alarms.unackSiteAlarm": [
+    "documentation/api\\sites\\POST_sites_site_id_alarms_alarm_id_unack.md"
+  ],
+  "mistapi.api.v1.sites.alarms.unackSiteMultipleAlarms": [
+    "documentation/api\\sites\\POST_sites_site_id_alarms_unack.md"
+  ],
+  "mistapi.api.v1.sites.alarms.unackSiteAllAlarms": [
+    "documentation/api\\sites\\POST_sites_site_id_alarms_unack_all.md"
+  ],
+  "mistapi.api.v1.sites.spectrum_analysis.initiateSiteAnalyzeSpectrum": [
+    "documentation/api\\sites\\POST_sites_site_id_analyze_spectrum.md"
+  ],
+  "mistapi.api.v1.sites.asset_filters.createSiteAssetFilter": [
+    "documentation/api\\sites\\POST_sites_site_id_assetfilters.md"
+  ],
+  "mistapi.api.v1.sites.assets.createSiteAsset": [
+    "documentation/api\\sites\\POST_sites_site_id_assets.md"
+  ],
+  "mistapi.api.v1.sites.assets.attachSiteAssetImage": [
+    "documentation/api\\sites\\POST_sites_site_id_assets_asset_id_image.md"
+  ],
+  "mistapi.api.v1.sites.assets.importSiteAssets": [
+    "documentation/api\\sites\\POST_sites_site_id_assets_import.md"
+  ],
+  "mistapi.api.v1.sites.beacons.createSiteBeacon": [
+    "documentation/api\\sites\\POST_sites_site_id_beacons.md"
+  ],
+  "mistapi.api.v1.sites.synthetic_tests.startSiteSwitchRadiusSyntheticTest": [
+    "documentation/api\\sites\\POST_sites_site_id_devices_device_id_check_radius_server.md"
+  ],
+  "mistapi.api.v1.sites.devices_-_wan_cluster.createSiteDeviceHaCluster": [
+    "documentation/api\\sites\\POST_sites_site_id_devices_device_id_ha.md"
+  ],
+  "mistapi.api.v1.sites.devices.addSiteDeviceImage": [
+    "documentation/api\\sites\\POST_sites_site_id_devices_device_id_image_image_number.md"
+  ],
+  "mistapi.api.v1.sites.devices_-_wired_-_virtual_chassis.changeSiteSwitchVcPortMode": [
+    "documentation/api\\sites\\POST_sites_site_id_devices_device_id_set_vc_port_mode.md"
+  ],
+  "mistapi.api.v1.sites.synthetic_tests.triggerSiteDeviceSyntheticTest": [
+    "documentation/api\\sites\\POST_sites_site_id_devices_device_id_synthetic_test.md"
+  ],
+  "mistapi.api.v1.sites.devices_-_wired_-_virtual_chassis.createSiteVirtualChassis": [
+    "documentation/api\\sites\\POST_sites_site_id_devices_device_id_vc.md"
+  ],
+  "mistapi.api.v1.sites.devices_-_wired_-_virtual_chassis.convertSiteVirtualChassisToVirtualMac": [
+    "documentation/api\\sites\\POST_sites_site_id_devices_device_id_vc_convert_to_virtualmac.md"
+  ],
+  "mistapi.api.v1.sites.devices_-_wired_-_virtual_chassis.setSiteVcPort": [
+    "documentation/api\\sites\\POST_sites_site_id_devices_device_id_vc_vc_port.md"
+  ],
+  "mistapi.api.v1.sites.devices.setSiteDevicesGbpTag": [
+    "documentation/api\\sites\\POST_sites_site_id_devices_gbp_tag.md"
+  ],
+  "mistapi.api.v1.sites.devices.importSiteDevices": [
+    "documentation/api\\sites\\POST_sites_site_id_devices_import.md"
+  ],
+  "mistapi.api.v1.sites.evpn_topologies.createSiteEvpnTopology": [
+    "documentation/api\\sites\\POST_sites_site_id_evpn_topologies.md"
+  ],
+  "mistapi.api.v1.sites.location.resetSiteMlStatsByMap": [
+    "documentation/api\\sites\\POST_sites_site_id_location_ml_reset_map_map_id.md"
+  ],
+  "mistapi.api.v1.sites.maps.createSiteMap": [
+    "documentation/api\\sites\\POST_sites_site_id_maps.md"
+  ],
+  "mistapi.api.v1.sites.map_stacks.createSiteMapStack": [
+    "documentation/api\\sites\\POST_sites_site_id_mapstacks.md"
+  ],
+  "mistapi.api.v1.sites.maps.startSiteMapsAutoGeofence": [
+    "documentation/api\\sites\\POST_sites_site_id_maps_auto_geofences.md"
+  ],
+  "mistapi.api.v1.sites.maps.importSiteMaps": [
+    "documentation/api\\sites\\POST_sites_site_id_maps_import.md"
+  ],
+  "mistapi.api.v1.sites.maps.startSiteMapAutoGeofence": [
+    "documentation/api\\sites\\POST_sites_site_id_maps_map_id_auto_geofences.md"
+  ],
+  "mistapi.api.v1.sites.maps_-_auto-placement.startSiteApAutoOrientation": [
+    "documentation/api\\sites\\POST_sites_site_id_maps_map_id_auto_orient.md"
+  ],
+  "mistapi.api.v1.sites.maps_-_auto-placement.runSiteApAutoplacement": [
+    "documentation/api\\sites\\POST_sites_site_id_maps_map_id_auto_placement.md"
+  ],
+  "mistapi.api.v1.sites.maps_-_auto-zone.startSiteMapAutoZone": [
+    "documentation/api\\sites\\POST_sites_site_id_maps_map_id_auto_zones.md"
+  ],
+  "mistapi.api.v1.sites.maps_-_auto-placement.clearSiteApAutoplacement": [
+    "documentation/api\\sites\\POST_sites_site_id_maps_map_id_clear_autoplacement.md"
+  ],
+  "mistapi.api.v1.sites.maps_-_auto-placement.clearSiteApAutoOrient": [
+    "documentation/api\\sites\\POST_sites_site_id_maps_map_id_clear_auto_orient.md"
+  ],
+  "mistapi.api.v1.sites.maps.addSiteMapImage": [
+    "documentation/api\\sites\\POST_sites_site_id_maps_map_id_image.md"
+  ],
+  "mistapi.api.v1.sites.maps.replaceSiteMapImage": [
+    "documentation/api\\sites\\POST_sites_site_id_maps_map_id_replace.md"
+  ],
+  "mistapi.api.v1.sites.maps.bulkAssignSiteApsToMap": [
+    "documentation/api\\sites\\POST_sites_site_id_maps_map_id_set_map.md"
+  ],
+  "mistapi.api.v1.sites.maps_-_auto-placement.confirmSiteApLocalizationData": [
+    "documentation/api\\sites\\POST_sites_site_id_maps_map_id_use_auto_ap_values.md"
+  ],
+  "mistapi.api.v1.sites.maps.importSiteWayfindings": [
+    "documentation/api\\sites\\POST_sites_site_id_maps_map_id_wayfinding_import.md"
+  ],
+  "mistapi.api.v1.sites.mxedges.uploadSiteMxEdgeSupportFiles": [
+    "documentation/api\\sites\\POST_sites_site_id_mxedges_mxedge_id_support.md"
+  ],
+  "mistapi.api.v1.sites.psks.createSitePsk": [
+    "documentation/api\\sites\\POST_sites_site_id_psks.md"
+  ],
+  "mistapi.api.v1.sites.psks.importSitePsks": [
+    "documentation/api\\sites\\POST_sites_site_id_psks_import.md"
+  ],
+  "mistapi.api.v1.sites.rfdiags.startSiteRecording": [
+    "documentation/api\\sites\\POST_sites_site_id_rfdiags.md"
+  ],
+  "mistapi.api.v1.sites.rfdiags.stopSiteRfdiagRecording": [
+    "documentation/api\\sites\\POST_sites_site_id_rfdiags_rfdiag_id_stop.md"
+  ],
+  "mistapi.api.v1.sites.rssi_zones.createSiteRssiZone": [
+    "documentation/api\\sites\\POST_sites_site_id_rssizones.md"
+  ],
+  "mistapi.api.v1.sites.setting.createSiteWirelessClientsBlocklist": [
+    "documentation/api\\sites\\POST_sites_site_id_setting_blacklist.md"
+  ],
+  "mistapi.api.v1.sites.setting.createSiteWatchedStations": [
+    "documentation/api\\sites\\POST_sites_site_id_setting_watched_station.md"
+  ],
+  "mistapi.api.v1.sites.setting.createSiteWirelessClientsAllowlist": [
+    "documentation/api\\sites\\POST_sites_site_id_setting_whitelist.md"
+  ],
+  "mistapi.api.v1.sites.sles.replaceSiteSleThreshold": [
+    "documentation/api\\sites\\POST_sites_site_id_sle_scope_scope_id_metric_metric_threshold.md"
+  ],
+  "mistapi.api.v1.sites.alarms.SubscribeSiteAlarms": [
+    "documentation/api\\sites\\POST_sites_site_id_subscriptions.md"
+  ],
+  "mistapi.api.v1.sites.synthetic_tests.triggerSiteSyntheticTest": [
+    "documentation/api\\sites\\POST_sites_site_id_synthetic_test.md"
+  ],
+  "mistapi.api.v1.sites.ui_settings.createSiteUiSettings": [
+    "documentation/api\\sites\\POST_sites_site_id_uisettings.md"
+  ],
+  "mistapi.api.v1.sites.ui_settings.updateSiteUiSetting": [
+    "documentation/api\\sites\\POST_sites_site_id_uisettings_uisetting_id.md"
+  ],
+  "mistapi.api.v1.sites.vbeacons.createSiteVBeacon": [
+    "documentation/api\\sites\\POST_sites_site_id_vbeacons.md"
+  ],
+  "mistapi.api.v1.sites.webhooks.createSiteWebhook": [
+    "documentation/api\\sites\\POST_sites_site_id_webhooks.md"
+  ],
+  "mistapi.api.v1.sites.webhooks.pingSiteWebhook": [
+    "documentation/api\\sites\\POST_sites_site_id_webhooks_webhook_id_ping.md"
+  ],
+  "mistapi.api.v1.sites.wlans.createSiteWlan": [
+    "documentation/api\\sites\\POST_sites_site_id_wlans.md"
+  ],
+  "mistapi.api.v1.sites.wlans.uploadSiteWlanPortalImage": [
+    "documentation/api\\sites\\POST_sites_site_id_wlans_wlan_id_portal_image.md"
+  ],
+  "mistapi.api.v1.sites.wxrules.createSiteWxRule": [
+    "documentation/api\\sites\\POST_sites_site_id_wxrules.md"
+  ],
+  "mistapi.api.v1.sites.wxtags.createSiteWxTag": [
+    "documentation/api\\sites\\POST_sites_site_id_wxtags.md"
+  ],
+  "mistapi.api.v1.sites.wxtunnels.createSiteWxTunnel": [
+    "documentation/api\\sites\\POST_sites_site_id_wxtunnels.md"
+  ],
+  "mistapi.api.v1.sites.zones.createSiteZone": [
+    "documentation/api\\sites\\POST_sites_site_id_zones.md"
+  ],
+  "mistapi.api.v1.sites.sites.updateSiteInfo": [
+    "documentation/api\\sites\\PUT_sites_site_id.md"
+  ],
+  "mistapi.api.v1.sites.asset_filters.updateSiteAssetFilter": [
+    "documentation/api\\sites\\PUT_sites_site_id_assetfilters_assetfilter_id.md"
+  ],
+  "mistapi.api.v1.sites.assets.updateSiteAsset": [
+    "documentation/api\\sites\\PUT_sites_site_id_assets_asset_id.md"
+  ],
+  "mistapi.api.v1.sites.beacons.updateSiteBeacon": [
+    "documentation/api\\sites\\PUT_sites_site_id_beacons_beacon_id.md"
+  ],
+  "mistapi.api.v1.sites.devices.updateSiteDevice": [
+    "documentation/api\\sites\\PUT_sites_site_id_devices_device_id.md"
+  ],
+  "mistapi.api.v1.sites.devices_-_wireless.setSiteDeviceIotPort": [
+    "documentation/api\\sites\\PUT_sites_site_id_devices_device_id_iot.md"
+  ],
+  "mistapi.api.v1.sites.devices_-_wired.updateSiteLocalSwitchPortConfig": [
+    "documentation/api\\sites\\PUT_sites_site_id_devices_device_id_local_port_config.md"
+  ],
+  "mistapi.api.v1.sites.devices_-_wired_-_virtual_chassis.updateSiteVirtualChassisMember": [
+    "documentation/api\\sites\\PUT_sites_site_id_devices_device_id_vc.md"
+  ],
+  "mistapi.api.v1.sites.evpn_topologies.updateSiteEvpnTopology": [
+    "documentation/api\\sites\\PUT_sites_site_id_evpn_topologies_evpn_topology_id.md"
+  ],
+  "mistapi.api.v1.sites.guests.updateSiteGuestAuthorization": [
+    "documentation/api\\sites\\PUT_sites_site_id_guests_guest_mac.md"
+  ],
+  "mistapi.api.v1.sites.location.overwriteSiteMlForDevice": [
+    "documentation/api\\sites\\PUT_sites_site_id_location_ml_device_device_id.md"
+  ],
+  "mistapi.api.v1.sites.location.overwriteSiteMlForMap": [
+    "documentation/api\\sites\\PUT_sites_site_id_location_ml_map_map_id.md"
+  ],
+  "mistapi.api.v1.sites.maps.updateSiteMap": [
+    "documentation/api\\sites\\PUT_sites_site_id_maps_map_id.md"
+  ],
+  "mistapi.api.v1.sites.mxedges.updateSiteMxEdge": [
+    "documentation/api\\sites\\PUT_sites_site_id_mxedges_mxedge_id.md"
+  ],
+  "mistapi.api.v1.sites.psks.updateSiteMultiplePsks": [
+    "documentation/api\\sites\\PUT_sites_site_id_psks.md"
+  ],
+  "mistapi.api.v1.sites.psks.updateSitePsk": [
+    "documentation/api\\sites\\PUT_sites_site_id_psks_psk_id.md"
+  ],
+  "mistapi.api.v1.sites.rfdiags.updateSiteRfdiagRecording": [
+    "documentation/api\\sites\\PUT_sites_site_id_rfdiags_rfdiag_id.md"
+  ],
+  "mistapi.api.v1.sites.rssi_zones.updateSiteRssiZone": [
+    "documentation/api\\sites\\PUT_sites_site_id_rssizones_rssizone_id.md"
+  ],
+  "mistapi.api.v1.sites.setting.updateSiteSettings": [
+    "documentation/api\\sites\\PUT_sites_site_id_setting.md"
+  ],
+  "mistapi.api.v1.sites.sles.updateSiteSleThreshold": [
+    "documentation/api\\sites\\PUT_sites_site_id_sle_scope_scope_id_metric_metric_threshold.md"
+  ],
+  "mistapi.api.v1.sites.vbeacons.updateSiteVBeacon": [
+    "documentation/api\\sites\\PUT_sites_site_id_vbeacons_vbeacon_id.md"
+  ],
+  "mistapi.api.v1.sites.webhooks.updateSiteWebhook": [
+    "documentation/api\\sites\\PUT_sites_site_id_webhooks_webhook_id.md"
+  ],
+  "mistapi.api.v1.sites.wlans.updateSiteWlan": [
+    "documentation/api\\sites\\PUT_sites_site_id_wlans_wlan_id.md"
+  ],
+  "mistapi.api.v1.sites.wlans.updateSiteWlanPortalTemplate": [
+    "documentation/api\\sites\\PUT_sites_site_id_wlans_wlan_id_portal_template.md"
+  ],
+  "mistapi.api.v1.sites.wxrules.updateSiteWxRule": [
+    "documentation/api\\sites\\PUT_sites_site_id_wxrules_wxrule_id.md"
+  ],
+  "mistapi.api.v1.sites.wxtags.updateSiteWxTag": [
+    "documentation/api\\sites\\PUT_sites_site_id_wxtags_wxtag_id.md"
+  ],
+  "mistapi.api.v1.sites.wxtunnels.updateSiteWxTunnel": [
+    "documentation/api\\sites\\PUT_sites_site_id_wxtunnels_wxtunnel_id.md"
+  ],
+  "mistapi.api.v1.sites.zones.updateSiteZone": [
+    "documentation/api\\sites\\PUT_sites_site_id_zones_zone_id.md"
+  ],
+  "mistapi.api.v1.utilities.pcaps.stopOrgPacketCapture": [
+    "documentation/api\\utilities\\DELETE_orgs_org_id_pcaps_capture.md"
+  ],
+  "mistapi.api.v1.utilities.pcaps.stopSitePacketCapture": [
+    "documentation/api\\utilities\\DELETE_sites_site_id_pcaps_capture.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.listOrgDeviceUpgrades": [
+    "documentation/api\\utilities\\GET_orgs_org_id_devices_upgrade.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.getOrgDeviceUpgrade": [
+    "documentation/api\\utilities\\GET_orgs_org_id_devices_upgrade_upgrade_id.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.listOrgAvailableDeviceVersions": [
+    "documentation/api\\utilities\\GET_orgs_org_id_devices_versions.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.listOrgMxEdgeUpgrades": [
+    "documentation/api\\utilities\\GET_orgs_org_id_mxedges_upgrade.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.getOrgMxEdgeUpgrade": [
+    "documentation/api\\utilities\\GET_orgs_org_id_mxedges_upgrade_upgrade_id.md"
+  ],
+  "mistapi.api.v1.utilities.pcaps.listOrgPacketCaptures": [
+    "documentation/api\\utilities\\GET_orgs_org_id_pcaps.md"
+  ],
+  "mistapi.api.v1.utilities.pcaps.getOrgCapturingStatus": [
+    "documentation/api\\utilities\\GET_orgs_org_id_pcaps_capture.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.listOrgSsrUpgrades": [
+    "documentation/api\\utilities\\GET_orgs_org_id_ssr_upgrade.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.getOrgSsrUpgrade": [
+    "documentation/api\\utilities\\GET_orgs_org_id_ssr_upgrade_upgrade_id_cancel.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.listOrgAvailableSsrVersions": [
+    "documentation/api\\utilities\\GET_orgs_org_id_ssr_versions.md"
+  ],
+  "mistapi.api.v1.utilities.common.getSiteDeviceConfigCmd": [
+    "documentation/api\\utilities\\GET_sites_site_id_devices_device_id_config_cmd.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.listSiteDeviceUpgrades": [
+    "documentation/api\\utilities\\GET_sites_site_id_devices_upgrade.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.getSiteDeviceUpgrade": [
+    "documentation/api\\utilities\\GET_sites_site_id_devices_upgrade_upgrade_id.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.listSiteAvailableDeviceVersions": [
+    "documentation/api\\utilities\\GET_sites_site_id_devices_versions.md"
+  ],
+  "mistapi.api.v1.utilities.pcaps.listSitePacketCaptures": [
+    "documentation/api\\utilities\\GET_sites_site_id_pcaps.md"
+  ],
+  "mistapi.api.v1.utilities.pcaps.getSiteCapturingStatus": [
+    "documentation/api\\utilities\\GET_sites_site_id_pcaps_capture.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.getSiteSsrUpgrade": [
+    "documentation/api\\utilities\\GET_sites_site_id_ssr_upgrade_upgrade_id.md"
+  ],
+  "mistapi.api.v1.utilities.wi-fi.reauthOrgDot1xWirelessClient": [
+    "documentation/api\\utilities\\POST_orgs_org_id_clients_client_mac_coa.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.upgradeOrgDevices": [
+    "documentation/api\\utilities\\POST_orgs_org_id_devices_upgrade.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.cancelOrgDeviceUpgrade": [
+    "documentation/api\\utilities\\POST_orgs_org_id_devices_upgrade_upgrade_id_cancel.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.upgradeOrgJsiDevice": [
+    "documentation/api\\utilities\\POST_orgs_org_id_jsi_devices_device_mac_upgrade.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.upgradeOrgMxEdges": [
+    "documentation/api\\utilities\\POST_orgs_org_id_mxedges_upgrade.md"
+  ],
+  "mistapi.api.v1.utilities.pcaps.startOrgPacketCapture": [
+    "documentation/api\\utilities\\POST_orgs_org_id_pcaps_capture.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.upgradeOrgSsrs": [
+    "documentation/api\\utilities\\POST_orgs_org_id_ssr_upgrade.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.cancelOrgSsrUpgrade": [
+    "documentation/api\\utilities\\POST_orgs_org_id_ssr_upgrade_upgrade_id_cancel.md"
+  ],
+  "mistapi.api.v1.utilities.lan.reauthOrgDot1xWiredClient": [
+    "documentation/api\\utilities\\POST_orgs_org_id_wired_clients_client_mac_coa.md"
+  ],
+  "mistapi.api.v1.utilities.wi-fi.reauthSiteDot1xWirelessClient": [
+    "documentation/api\\utilities\\POST_sites_site_id_clients_client_mac_coa.md"
+  ],
+  "mistapi.api.v1.utilities.wi-fi.disconnectSiteWirelessClient": [
+    "documentation/api\\utilities\\POST_sites_site_id_clients_client_mac_disconnect.md"
+  ],
+  "mistapi.api.v1.utilities.wi-fi.unauthorizeSiteWirelessClient": [
+    "documentation/api\\utilities\\POST_sites_site_id_clients_client_mac_unauthorize.md"
+  ],
+  "mistapi.api.v1.utilities.wi-fi.disconnectSiteMultipleClients": [
+    "documentation/api\\utilities\\POST_sites_site_id_clients_disconnect.md"
+  ],
+  "mistapi.api.v1.utilities.wi-fi.unauthorizeSiteMultipleClients": [
+    "documentation/api\\utilities\\POST_sites_site_id_clients_unauthorize.md"
+  ],
+  "mistapi.api.v1.utilities.lan.clearSiteMultipleDevicePendingVersion": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_clear_pending_version.md"
+  ],
+  "mistapi.api.v1.utilities.common.arpFromDevice": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_arp.md"
+  ],
+  "mistapi.api.v1.utilities.common.bounceDevicePort": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_bounce_port.md"
+  ],
+  "mistapi.api.v1.utilities.lan.cableTestFromSwitch": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_cable_test.md"
+  ],
+  "mistapi.api.v1.utilities.wan.clearSiteSsrArpCache": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_clear_arp.md"
+  ],
+  "mistapi.api.v1.utilities.wan.clearSiteSsrBgpRoutes": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_clear_bgp.md"
+  ],
+  "mistapi.api.v1.utilities.lan.clearBpduErrorsFromPortsOnSwitch": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_clear_bpdu_error.md"
+  ],
+  "mistapi.api.v1.utilities.lan.clearSiteDeviceDot1xSession": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_clear_dot1x.md"
+  ],
+  "mistapi.api.v1.utilities.lan.clearAllLearnedMacsFromPortOnSwitch": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_clear_macs.md"
+  ],
+  "mistapi.api.v1.utilities.common.clearSiteDeviceMacTable": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_clear_mac_table.md"
+  ],
+  "mistapi.api.v1.utilities.lan.clearSiteDevicePendingVersion": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_clear_pending_version.md"
+  ],
+  "mistapi.api.v1.utilities.common.clearSiteDevicePolicyHitCount": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_clear_policy_hit_count.md"
+  ],
+  "mistapi.api.v1.utilities.wan.clearSiteDeviceSession": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_clear_session.md"
+  ],
+  "mistapi.api.v1.utilities.common.startSiteLocateDevice": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_locate.md"
+  ],
+  "mistapi.api.v1.utilities.common.monitorSiteDeviceTraffic": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_monitor_traffic.md"
+  ],
+  "mistapi.api.v1.utilities.common.pingFromDevice": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_ping.md"
+  ],
+  "mistapi.api.v1.utilities.lan.pollSiteSwitchStats": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_poll_stats.md"
+  ],
+  "mistapi.api.v1.utilities.common.readoptSiteOctermDevice": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_readopt.md"
+  ],
+  "mistapi.api.v1.utilities.wan.releaseSiteSsrDhcpLease": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_release_dhcp.md"
+  ],
+  "mistapi.api.v1.utilities.common.releaseSiteDeviceDhcpLease": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_release_dhcp_leases.md"
+  ],
+  "mistapi.api.v1.utilities.common.reprovisionSiteOctermDevice": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_reprovision.md"
+  ],
+  "mistapi.api.v1.utilities.common.getSiteDeviceZtpPassword": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_request_ztp_password.md"
+  ],
+  "mistapi.api.v1.utilities.wan.testSiteSsrDnsResolution": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_resolve_dns.md"
+  ],
+  "mistapi.api.v1.utilities.common.restartSiteDevice": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_restart.md"
+  ],
+  "mistapi.api.v1.utilities.lan.restoreSiteDeviceBackupVersion": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_restore_backup_version.md"
+  ],
+  "mistapi.api.v1.utilities.wan.runSiteSrxTopCommand": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_run_top.md"
+  ],
+  "mistapi.api.v1.utilities.wan.servicePingFromSsr": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_service_ping.md"
+  ],
+  "mistapi.api.v1.utilities.common.createSiteDeviceShellSession": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_shell.md"
+  ],
+  "mistapi.api.v1.utilities.common.showSiteDeviceArpTable": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_show_arp.md"
+  ],
+  "mistapi.api.v1.utilities.common.showSiteDeviceBgpSummary": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_show_bgp_summary.md"
+  ],
+  "mistapi.api.v1.utilities.common.showSiteDeviceDhcpLeases": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_show_dhcp_leases.md"
+  ],
+  "mistapi.api.v1.utilities.common.showSiteDeviceDot1xTable": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_show_dot1x.md"
+  ],
+  "mistapi.api.v1.utilities.common.showSiteDeviceEvpnDatabase": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_show_evpn_database.md"
+  ],
+  "mistapi.api.v1.utilities.common.showSiteDeviceForwardingTable": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_show_forwarding_table.md"
+  ],
+  "mistapi.api.v1.utilities.common.showSiteDeviceMacTable": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_show_mac_table.md"
+  ],
+  "mistapi.api.v1.utilities.wan.showSiteGatewayOspfDatabase": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_show_ospf_database.md"
+  ],
+  "mistapi.api.v1.utilities.wan.showSiteGatewayOspfInterfaces": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_show_ospf_interfaces.md"
+  ],
+  "mistapi.api.v1.utilities.wan.showSiteGatewayOspfNeighbors": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_show_ospf_neighbors.md"
+  ],
+  "mistapi.api.v1.utilities.wan.showSiteGatewayOspfSummary": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_show_ospf_summary.md"
+  ],
+  "mistapi.api.v1.utilities.wan.showSiteSsrAndSrxRoutes": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_show_route.md"
+  ],
+  "mistapi.api.v1.utilities.wan.showSiteSsrServicePath": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_show_service_path.md"
+  ],
+  "mistapi.api.v1.utilities.wan.showSiteSsrAndSrxSessions": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_show_session.md"
+  ],
+  "mistapi.api.v1.utilities.lan.createSiteDeviceSnapshot": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_snapshot.md"
+  ],
+  "mistapi.api.v1.utilities.common.uploadSiteDeviceSupportFile": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_support.md"
+  ],
+  "mistapi.api.v1.utilities.common.tracerouteFromDevice": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_traceroute.md"
+  ],
+  "mistapi.api.v1.utilities.common.stopSiteLocateDevice": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_unlocate.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.upgradeDevice": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_upgrade.md"
+  ],
+  "mistapi.api.v1.utilities.lan.upgradeDeviceBios": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_upgrade_bios.md"
+  ],
+  "mistapi.api.v1.utilities.lan.upgradeDeviceFPGA": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_upgrade_fpga.md"
+  ],
+  "mistapi.api.v1.utilities.lan.toogleSiteDeviceVcRoutingEnginesRole": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_device_id_vc_switch_master.md"
+  ],
+  "mistapi.api.v1.utilities.wi-fi.reprovisionSiteAllDevices": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_reprovision.md"
+  ],
+  "mistapi.api.v1.utilities.wi-fi.resetSiteAllApsToUseRrm": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_reset_radio_config.md"
+  ],
+  "mistapi.api.v1.utilities.common.restartSiteMultipleDevices": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_restart.md"
+  ],
+  "mistapi.api.v1.utilities.lan.restoreSiteMultipleDeviceBackupVersion": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_restore_backup_version.md"
+  ],
+  "mistapi.api.v1.utilities.location.sendSiteDevicesArbitraryBleBeacon": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_send_ble_beacon.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.upgradeSiteDevices": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_upgrade.md"
+  ],
+  "mistapi.api.v1.utilities.lan.upgradeSiteDevicesBios": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_upgrade_bios.md"
+  ],
+  "mistapi.api.v1.utilities.lan.upgradeSiteDevicesFpga": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_upgrade_fpga.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.cancelSiteDeviceUpgrade": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_upgrade_upgrade_id_cancel.md"
+  ],
+  "mistapi.api.v1.utilities.wi-fi.zeroizeSiteFipsAllAps": [
+    "documentation/api\\utilities\\POST_sites_site_id_devices_zeroize.md"
+  ],
+  "mistapi.api.v1.utilities.mxedge.preemptSitesMxTunnel": [
+    "documentation/api\\utilities\\POST_sites_site_id_mxtunnels_mxtunnel_id_preempt_aps.md"
+  ],
+  "mistapi.api.v1.utilities.pcaps.startSitePacketCapture": [
+    "documentation/api\\utilities\\POST_sites_site_id_pcaps_capture.md"
+  ],
+  "mistapi.api.v1.utilities.wi-fi.deauthSiteWirelessClientsConnectedToARogue": [
+    "documentation/api\\utilities\\POST_sites_site_id_rogues_rogue_bssid_deauth_clients.md"
+  ],
+  "mistapi.api.v1.utilities.wi-fi.optimizeSiteRrm": [
+    "documentation/api\\utilities\\POST_sites_site_id_rrm_optimize.md"
+  ],
+  "mistapi.api.v1.utilities.upgrade.upgradeSsr": [
+    "documentation/api\\utilities\\POST_sites_site_id_ssr_device_id_upgrade.md"
+  ],
+  "mistapi.api.v1.utilities.lan.reauthSiteDot1xWiredClient": [
+    "documentation/api\\utilities\\POST_sites_site_id_wired_clients_client_mac_coa.md"
+  ],
+  "mistapi.api.v1.utilities.wi-fi.testSiteWlanSmsGlobal": [
+    "documentation/api\\utilities\\POST_utils_test_smsglobal.md"
+  ],
+  "mistapi.api.v1.utilities.wi-fi.testSiteWlanTelstraSetup": [
+    "documentation/api\\utilities\\POST_utils_test_telstra.md"
+  ],
+  "mistapi.api.v1.utilities.wi-fi.testSiteWlanTwilioSetup": [
+    "documentation/api\\utilities\\POST_utils_test_twilio.md"
+  ],
+  "mistapi.api.v1.utilities.pcaps.updateSitePacketCapture": [
+    "documentation/api\\utilities\\PUT_sites_site_id_pcaps_pcap_id.md"
+  ]
+}

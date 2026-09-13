@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "catalog_type": "network_node_optic_hosts",
+  "planner_rule": "Exact model, port profile, software release, and supported part number are authoritative.",
+  "devices": [
+    {"vendor":"Juniper","family":"EX2300/EX3400","roles":["access"],"host_form_factors":["SFP","SFP+"],"host_speeds_gbps":[1,10],"notes":"Model dependent uplink and stacking limits."},
+    {"vendor":"Juniper","family":"EX4100","roles":["access"],"host_form_factors":["SFP+","SFP28"],"host_speeds_gbps":[10,25],"notes":"Confirm port profile and virtual-chassis role."},
+    {"vendor":"Juniper","family":"EX4400","roles":["access","aggregation"],"host_form_factors":["SFP28","QSFP28"],"host_speeds_gbps":[10,25,40,100],"notes":"Breakout depends on uplink module and release."},
+    {"vendor":"Juniper","family":"EX4650","roles":["aggregation"],"host_form_factors":["SFP28","QSFP28"],"host_speeds_gbps":[10,25,40,100],"notes":"QSFP breakout requires a supported port mode."},
+    {"vendor":"Juniper","family":"QFX5120/QFX5200","roles":["leaf","spine"],"host_form_factors":["SFP28","QSFP28"],"host_speeds_gbps":[10,25,40,100],"notes":"Confirm port group, coding, and breakout map."},
+    {"vendor":"Juniper","family":"QFX5700","roles":["leaf","spine"],"host_form_factors":["QSFP28","QSFP-DD"],"host_speeds_gbps":[100,200,400],"notes":"Exact chassis and line card control the optic list."},
+    {"vendor":"Juniper","family":"MX204","roles":["edge_router"],"host_form_factors":["SFP","SFP+","QSFP+","QSFP28"],"host_speeds_gbps":[1,10,40,100],"notes":"Use the MX204 support table for each port."},
+    {"vendor":"Juniper","family":"MX304/MX480/MX960","roles":["edge_router"],"host_form_factors":["SFP+","SFP28","QSFP+","QSFP28"],"host_speeds_gbps":[10,25,40,100],"notes":"Installed MPC or MIC controls the host cage."},
+    {"vendor":"Juniper","family":"PTX1000/PTX10000","roles":["core_router"],"host_form_factors":["QSFP28","QSFP56","QSFP-DD"],"host_speeds_gbps":[100,200,400],"notes":"Line card and PIC support control the optic list."},
+    {"vendor":"Mist","family":"EX cloud-managed switches","roles":["access","aggregation"],"host_form_factors":["SFP","SFP+","SFP28","QSFP28"],"host_speeds_gbps":[1,10,25,40,100],"notes":"Mist management does not expand the underlying EX hardware matrix."},
+    {"vendor":"Mist","family":"WAN Edge appliance","roles":["branch_gateway"],"host_form_factors":["SFP","SFP+"],"host_speeds_gbps":[1,10],"notes":"Use the appliance model data sheet and port profile."},
+    {"vendor":"HPE Aruba Networking","family":"CX 6100/6200","roles":["access"],"host_form_factors":["SFP","SFP+"],"host_speeds_gbps":[1,10],"notes":"Verify the model suffix and uplink speed."},
+    {"vendor":"HPE Aruba Networking","family":"CX 6300","roles":["access","aggregation"],"host_form_factors":["SFP28","QSFP28"],"host_speeds_gbps":[10,25,40,100],"notes":"VSF and breakout modes limit available ports."},
+    {"vendor":"HPE Aruba Networking","family":"CX 8320/8360","roles":["leaf","spine"],"host_form_factors":["SFP28","QSFP28"],"host_speeds_gbps":[10,25,40,100],"notes":"Use the Aruba transceiver guide for supported coding."},
+    {"vendor":"HPE Aruba Networking","family":"CX 9300","roles":["leaf","spine"],"host_form_factors":["QSFP28","QSFP-DD"],"host_speeds_gbps":[100,200,400],"notes":"Exact port group and release determine supported optics."}
+  ]
+}

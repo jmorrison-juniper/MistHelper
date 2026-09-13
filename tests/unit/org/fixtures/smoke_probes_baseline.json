@@ -1,0 +1,27 @@
+{
+  "zcc-tunnel_zen-custom-svc-zscalerthree-net": {
+    "aggressiveness": "auto",
+    "target": "custom-svc.zscalerthree.net:8080",
+    "type": "application"
+  },
+  "zcc-tunnel_zen-edge-zscalerthree-net": {
+    "aggressiveness": "auto",
+    "target": "https://edge.zscalerthree.net",
+    "type": "application"
+  },
+  "zcc-tunnel_zen-fra4-vpn-zscalerthree-net": {
+    "aggressiveness": "auto",
+    "target": "fra4-vpn.zscalerthree.net",
+    "type": "reachability"
+  },
+  "zcc-tunnel_zen-gateway-zscalerthree-net": {
+    "aggressiveness": "auto",
+    "target": "gateway.zscalerthree.net",
+    "type": "reachability"
+  },
+  "zcc-tunnel_zen-ike-observed-zscalerthree-net": {
+    "aggressiveness": "auto",
+    "target": "ike-observed.zscalerthree.net",
+    "type": "reachability"
+  }
+}

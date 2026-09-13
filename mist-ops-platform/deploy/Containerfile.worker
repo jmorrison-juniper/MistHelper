@@ -1,0 +1,47 @@
+# ---------------------------------------------------------------------------
+# Containerfile.worker — Celery worker service container
+# Multi-stage build for minimal production image
+# ---------------------------------------------------------------------------
+FROM python:3.13-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+# System dependencies (libpq for asyncpg)
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------------------------
+FROM base AS builder
+
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y build-essential libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml ./
+COPY docs/ ./docs/
+COPY src/ ./src/
+RUN pip install --prefix=/install .
+
+# ---------------------------------------------------------------------------
+FROM base AS runtime
+
+COPY --from=builder /install /usr/local
+
+COPY src/ ./src/
+COPY migrations/ ./migrations/
+
+RUN useradd --create-home --shell /bin/bash mistops \
+    && mkdir -p /app/data && chown mistops:mistops /app/data
+USER mistops
+
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD ["celery", "-A", "src.worker.celeryconfig", "inspect", "ping", "--timeout", "5"]
+
+ENTRYPOINT ["celery", "-A", "src.worker.celeryconfig", "worker", \
+            "--loglevel=info", "-Q", "default,sync,deploy", \
+            "--concurrency=4"]

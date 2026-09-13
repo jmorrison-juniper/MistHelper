@@ -1,0 +1,692 @@
+# createInstallerVirtualChassis
+
+> createInstallerVirtualChassis
+
+## HTTP
+
+`POST /api/v1/installer/orgs/{org_id}/devices/{fpc0_mac}/vc`
+
+## Description
+
+For models (e.g. EX3400 and up) having dedicated VC ports, it is easier to form a VC by just connecting cables with the dedicated VC ports. Cloud will detect the new VC and update the inventory.
+
+In case that the user would like to choose the dedicated switch as a VC master or for EX2300-C-12P and EX2300-C-12T which doesn't have dedicated VC ports, below are procedures to automate the VC creation:
+
+1. Power on the switch that is chosen as the VC master first. And then powering on the other member switches.
+2. Claim or adopt all these switches under the same organization’s Inventory
+3. Assign these switches into the same Site
+4. Invoke vc command on the switch chosen to be the VC master. For EX2300-C-12P, VC ports will be created automatically.
+5. Connect the cables to the VC ports for these switches
+6. Wait for the VC to be formed. The Org’s inventory will be updated for the new VC.
+
+## Authentication
+
+Requires API token authentication (`Authorization: Token {api_token}` header or `X-CSRFToken` cookie). See Mist API authentication documentation.
+
+## Parameters
+
+### Path Parameters
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| org_id | string | Yes |  |
+| fpc0_mac | string | Yes | FPC0 MAC Address |
+
+## Request Body
+
+Content-Type: `application/json`
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "locating": {
+      "type": "boolean",
+      "readOnly": true
+    },
+    "members": {
+      "type": "array",
+      "items": {
+        "title": "virtual_chassis_config_member",
+        "required": [
+          "mac",
+          "vc_role"
+        ],
+        "type": "object",
+        "properties": {
+          "locating": {
+            "type": "boolean",
+            "readOnly": true
+          },
+          "mac": {
+            "type": "string",
+            "description": "fpc0, same as the mac of device_id"
+          },
+          "member_id": {
+            "type": "integer",
+            "description": "For preprovisionned virtual chassis",
+            "contentEncoding": "int32"
+          },
+          "vc_ports": {
+            "uniqueItems": true,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": ""
+          },
+          "vc_role": {
+            "type": "string",
+            "description": "enum: `backup`, `linecard`, `master`"
+          }
+        }
+      },
+      "description": ""
+    },
+    "preprovisioned": {
+      "type": "boolean",
+      "description": "To create the Virtual Chassis in Pre-Provisioned mode",
+      "default": false
+    }
+  },
+  "description": "Request Body"
+}
+```
+
+## Response
+
+### 200
+
+Example response
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "config_type": {
+      "type": "string",
+      "readOnly": true
+    },
+    "id": {
+      "type": "string",
+      "description": "Unique ID of the object instance in the Mist Organization",
+      "contentEncoding": "uuid",
+      "readOnly": true,
+      "examples": [
+        "53f10664-3ce8-4c27-b382-0ef66432349f"
+      ]
+    },
+    "locating": {
+      "type": "boolean",
+      "readOnly": true
+    },
+    "mac": {
+      "type": "string"
+    },
+    "members": {
+      "minItems": 1,
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "title": "stats_switch_module_stat_item",
+        "type": "object",
+        "properties": {
+          "backup_version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true
+          },
+          "bios_version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true
+          },
+          "boot_partition": {
+            "type": "string"
+          },
+          "cpld_version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true
+          },
+          "cpu_stat": {
+            "title": "cpu_stat",
+            "type": "object",
+            "properties": {
+              "idle": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Percentage of CPU time that is idle",
+                "readOnly": true
+              },
+              "interrupt": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Percentage of CPU time being used by interrupts",
+                "readOnly": true
+              },
+              "load_avg": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "Load averages for the last 1, 5, and 15 minutes"
+              },
+              "system": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Percentage of CPU time being used by system processes",
+                "readOnly": true
+              },
+              "usage": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "CPU usage",
+                "readOnly": true
+              },
+              "user": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Percentage of CPU time being used by user processes",
+                "readOnly": true
+              }
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "title": "module_stat_item_errors_items",
+              "required": [
+                "since",
+                "type"
+              ],
+              "type": "object",
+              "properties": {
+                "feature": {
+                  "type": "string",
+                  "examples": [
+                    "Mist-Management"
+                  ]
+                },
+                "minimum_version": {
+                  "type": "string",
+                  "examples": [
+                    "128T-6.0.0-1"
+                  ]
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "since": {
+                  "type": "integer",
+                  "contentEncoding": "int32",
+                  "examples": [
+                    1657497600
+                  ]
+                },
+                "type": {
+                  "type": "string",
+                  "examples": [
+                    "FW_UPGRADE_REQUIRED_BY_FEATURE"
+                  ]
+                }
+              }
+            },
+            "description": "Used to report all error states the device node is running into. An error should always have `type` and `since` fields, and could have some other fields specific to that type."
+          },
+          "fans": {
+            "uniqueItems": true,
+            "type": "array",
+            "items": {
+              "title": "module_stat_item_fans_items",
+              "type": "object",
+              "properties": {
+                "airflow": {
+                  "type": "string",
+                  "examples": [
+                    "out"
+                  ]
+                },
+                "name": {
+                  "type": "string",
+                  "examples": [
+                    "Fan 0"
+                  ]
+                },
+                "rpm": {
+                  "type": "integer",
+                  "contentEncoding": "int32"
+                },
+                "status": {
+                  "type": "string",
+                  "examples": [
+                    "ok"
+                  ]
+                }
+              }
+            },
+            "description": ""
+          },
+          "fpc_idx": {
+            "type": "integer",
+            "contentEncoding": "int32",
+            "readOnly": true
+          },
+          "fpga_version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true
+          },
+          "last_seen": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Last seen timestamp",
+            "readOnly": true,
+            "examples": [
+              1470417522
+            ]
+          },
+          "locating": {
+            "type": "boolean"
+          },
+          "mac": {
+            "type": "string",
+            "examples": [
+              "fc3342123456"
+            ]
+          },
+          "memory_stat": {
+            "type": "object",
+            "properties": {
+              "usage": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "usage"
+            ],
+            "description": "Memory usage stat (for virtual chassis, memory usage of master RE)"
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true,
+            "examples": [
+              "EX4300-48P"
+            ]
+          },
+          "optics_cpld_version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true
+          },
+          "pending_version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true
+          },
+          "pics": {
+            "type": "array",
+            "items": {
+              "title": "module_stat_item_pics_item",
+              "type": "object",
+              "properties": {
+                "index": {
+                  "type": "integer",
+                  "contentEncoding": "int32"
+                },
+                "model_number": {
+                  "type": "string"
+                },
+                "port_groups": {
+                  "type": "array",
+                  "items": {
+                    "title": "module_stat_item_pics_item_port_groups_item",
+                    "type": "object",
+                    "properties": {
+                      "count": {
+                        "type": "integer",
+                        "contentEncoding": "int32"
+                      },
+                      "type": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "description": ""
+                }
+              }
+            },
+            "description": ""
+          },
+          "poe": {
+            "title": "module_stat_item_poe",
+            "type": "object",
+            "properties": {
+              "max_power": {
+                "type": "number",
+                "examples": [
+                  250
+                ]
+              },
+              "power_draw": {
+                "type": "number",
+                "examples": [
+                  120.3
+                ]
+              },
+              "status": {
+                "type": "string"
+              }
+            }
+          },
+          "poe_version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true
+          },
+          "power_cpld_version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true
+          },
+          "psus": {
+            "uniqueItems": true,
+            "type": "array",
+            "items": {
+              "title": "module_stat_item_psus_item",
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "examples": [
+                    "Power Supply 0"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "examples": [
+                    "ok"
+                  ]
+                }
+              }
+            },
+            "description": ""
+          },
+          "re_fpga_version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true
+          },
+          "recovery_version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true
+          },
+          "serial": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true,
+            "examples": [
+              "PX8716230021"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true
+          },
+          "temperatures": {
+            "uniqueItems": true,
+            "type": "array",
+            "items": {
+              "title": "module_stat_item_temperatures_item",
+              "type": "object",
+              "properties": {
+                "celsius": {
+                  "type": "number",
+                  "examples": [
+                    45
+                  ]
+                },
+                "name": {
+                  "type": "string",
+                  "examples": [
+                    "CPU"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "examples": [
+                    "ok"
+                  ]
+                }
+              }
+            },
+            "description": ""
+          },
+          "tmc_fpga_version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true
+          },
+          "type": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true
+          },
+          "uboot_version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true
+          },
+          "uptime": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "contentEncoding": "int32",
+            "readOnly": true
+          },
+          "vc_links": {
+            "uniqueItems": true,
+            "type": "array",
+            "items": {
+              "title": "module_stat_item_vc_links_item",
+              "type": "object",
+              "properties": {
+                "neighbor_module_idx": {
+                  "type": "integer",
+                  "contentEncoding": "int32",
+                  "examples": [
+                    1
+                  ]
+                },
+                "neighbor_port_id": {
+                  "type": "string",
+                  "examples": [
+                    "vcp-255/1/0"
+                  ]
+                },
+                "port_id": {
+                  "type": "string",
+                  "examples": [
+                    "vcp-255/1/0"
+                  ]
+                }
+              }
+            },
+            "description": ""
+          },
+          "vc_mode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true
+          },
+          "vc_role": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "enum: `master`, `backup`, `linecard`",
+            "readOnly": true,
+            "examples": [
+              "master"
+            ]
+          },
+          "vc_state": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true
+          },
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "readOnly": true
+          }
+        }
+      },
+      "description": ""
+    },
+    "model": {
+      "type": "string",
+      "readOnly": true
+    },
+    "num_routing_engines": {
+      "type": "integer",
+      "description": "routing-engine count",
+      "contentEncoding": "int32",
+      "examples": [
+        1
+      ]
+    },
+    "org_id": {
+      "type": "string",
+      "contentEncoding": "uuid",
+      "readOnly": true,
+      "examples": [
+        "a97c1b22-a4e9-411e-9bfd-d8695a0f9e61"
+      ]
+    },
+    "serial": {
+      "type": "string",
+      "readOnly": true
+    },
+    "site_id": {
+      "type": "string",
+      "contentEncoding": "uuid",
+      "readOnly": true,
+      "examples": [
+        "441a1214-6928-442a-8e92-e1d34b8ec6a6"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "readOnly": true
+    },
+    "type": {
+      "type": "string"
+    },
+    "vc_mac": {
+      "type": "string",
+      "readOnly": true
+    }
+  }
+}
+```
+
+## Errors
+
+| Status | Description |
+|--------|-------------|
+| 400 | Bad Syntax |
+| 401 | Unauthorized |
+| 403 | Permission Denied |
+| 404 | Not found. The API endpoint doesn’t exist or resource doesn’ t exist |
+| 429 | Too Many Request. The API Token used for the request reached the 5000 API Calls per hour threshold |
+
+## Pagination
+
+Not paginated.
+
+## Rate Limiting
+
+Standard Mist API rate limits apply.
+
+## mistapi SDK
+
+`mistapi.api.v1.installer.installer.createInstallerVirtualChassis()`
+
+## Usage Context
+
+Use this endpoint to create a virtual chassis (VC) from switches with dedicated VC ports. Common use cases:
+
+- Forming a new switch stack during field installation by connecting VC ports
+- Setting up EX3400 and higher models as a virtual chassis
+
+## Gotchas
+
+- Only works with switch models that have dedicated VC ports (EX3400 and above)
+- The `{fpc0_mac}` must be the MAC of the intended master switch
+- Member switches must be physically connected via VC ports before calling this endpoint
+- For switches without dedicated VC ports, use the pre-provisioned VC workflow instead
+
+## Related Endpoints
+
+- [GET_installer_orgs_org_id_devices_fpc0_mac_vc.md](GET_installer_orgs_org_id_devices_fpc0_mac_vc.md) -- Check VC status after creation
+- [PUT_installer_orgs_org_id_devices_fpc0_mac_vc.md](PUT_installer_orgs_org_id_devices_fpc0_mac_vc.md) -- Update VC member configuration
+- [../sites/POST_sites_site_id_devices_device_id_vc.md](../sites/POST_sites_site_id_devices_device_id_vc.md) -- Full admin VC creation endpoint
+
+## MistHelper Notes
+
+Not currently used by MistHelper. MistHelper manages VC through the full admin APIs (Menu **92-94**).

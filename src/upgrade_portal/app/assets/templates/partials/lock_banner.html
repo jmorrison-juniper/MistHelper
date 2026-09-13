@@ -1,0 +1,211 @@
+{#
+  partials/lock_banner.html - the site lock banner of the upgrade capture portal.
+
+  Why this file exists:
+    FR-072 gives one site to one operator at a time. Every page that writes to a
+    site therefore needs the same four answers: who holds the site, how long the
+    wait lasts, how to take the site, and how to give it back. A partial holds
+    those answers once, so the capture page, the options page, and the run page
+    all show one banner and no route repeats the markup.
+
+  Why the banner never blocks a read:
+    contracts/site-lock.md line 159 states that a comparison page and a history
+    page need no lock. This file is included by a page that writes, never by a
+    page that reads. A read-only page that includes it anyway still renders,
+    because every control below is a button and no control gates the content of
+    the page.
+
+  Why the banner holds no word of its own:
+    FR-079 asks a different operator to type CONFIRM before a takeover erases
+    in-flight data. FR-080 asks the same operator, returning to an abandoned
+    session, to type continue instead. The two words differ, so the server names
+    the needed word in details.needed_text on a confirmation_required refusal.
+    portal.js writes that word into data-confirm-word and repaints the label.
+    The value below is only the first guess, shown before any refusal arrives.
+
+  Why the page holds no script:
+    The content security policy is 'self' only. The policy blocks an inline
+    script and blocks the style attribute. Every behavior lives in portal.js.
+
+  The contract with portal.js:
+    The banner carries data-lock-region and data-site-id. initLockBanner reads
+    both. The take button carries data-lock-take. It posts to
+    /api/sites/<site_id>/lock. A 400 confirmation_required opens the box below
+    and writes the needed word. The submit button carries data-lock-confirm. It
+    posts the same path with the typed word in the confirm field. The release
+    button carries data-lock-release. It sends DELETE to the same path. The
+    error region takes every refusal sentence.
+
+    The heartbeat reads data-lock-token on the banner. An empty value means this
+    browser holds no lock, so the beat does not run.
+
+  Variables a route may supply:
+    site_id       - the site the banner covers. The three calls need it.
+    lock_state    - one of free, locked, held, unknown, or site_unknown. The
+                    default is unknown, which is what contracts/site-lock.md line
+                    138 asks a page to show when the lock store does not answer.
+                    site_unknown covers a page that holds no site identifier.
+    lock_holder   - the work email address of the holder. Empty when free.
+    lock_cooldown - the seconds left before a takeover becomes possible. Zero
+                    means the wait is over.
+    lock_token    - the token this browser holds. Empty when it holds none.
+    lock_confirm_word - the first guess at the word a takeover needs.
+#}
+
+{#
+  The one place that holds the first guess at the takeover word. FR-079 fixes
+  this word for a different operator, and the server replaces it with continue
+  when the same operator returns to an abandoned session.
+#}
+{% set lock_confirm_default = lock_confirm_word | default('CONFIRM', true) %}
+
+{% set lock_site_key = site_id | default('', true) %}
+{% set lock_state_name = lock_state | default('unknown', true) %}
+{% set lock_holder_name = lock_holder | default('', true) %}
+{% set lock_wait_seconds = lock_cooldown | default(0, true) %}
+{% set lock_token_value = lock_token | default('', true) %}
+
+{% set lock_is_held_here = lock_state_name == 'held' %}
+{% set lock_is_free = lock_state_name == 'free' %}
+
+<div class="status-panel lock-banner lock-banner-{{ lock_state_name }}"
+     data-testid="lock-banner"
+     data-lock-region
+     data-site-id="{{ lock_site_key }}"
+     data-lock-state="{{ lock_state_name }}"
+     data-lock-token="{{ lock_token_value }}"
+     role="status"
+     aria-live="polite">
+
+  <h2 class="status-panel-title">Site lock</h2>
+
+  {#
+    One sentence for each state. The state name also reaches the reader through
+    this text, so the banner reads without color, as WCAG 1.4.1 requires.
+  #}
+  <p class="status-message" data-testid="lock-state-message" data-lock-message>
+    {% if lock_is_held_here %}
+      You hold this site. The portal renews the hold every 60 seconds.
+    {% elif lock_is_free %}
+      This site is free. Take the site before you start a capture or an upgrade.
+    {% elif lock_state_name == 'locked' %}
+      {{ lock_holder_name }} holds this site.
+    {% elif lock_state_name == 'site_unknown' %}
+      This page names no site, so the portal cannot read a lock. Open a site
+      from the site list to work with its lock.
+    {% else %}
+      The portal cannot read the lock state right now. You can still read this
+      page. A write needs the lock, so try the take button.
+    {% endif %}
+  </p>
+
+  {#
+    contracts/http-api.md line 132 sends the cooldown with the site_locked
+    refusal of the lock acquire. That acquire is the only refusal that carries
+    the cooldown, and Appendix A of the same contract names all three refusal
+    shapes. FR-078 gives an abandoned session 5 minutes, and the operator who
+    waits needs to see the wait shrink. The region stays hidden while the site
+    is free, and portal.js opens it on the first refusal.
+  #}
+  <p class="portal-card-note"
+     data-testid="lock-cooldown"
+     data-lock-cooldown
+     {{ '' if lock_wait_seconds else 'hidden' }}>
+    A takeover becomes possible in <span data-lock-cooldown-value>{{ lock_wait_seconds }}</span> seconds.
+  </p>
+
+  <div class="confirm-box-actions">
+    {#
+      One press takes a free site. The same press on a held site answers a
+      refusal, and portal.js then opens the box below with the needed word.
+    #}
+    <button type="button"
+            class="portal-button"
+            data-testid="lock-take-button"
+            data-lock-take
+            data-site-id="{{ lock_site_key }}"
+            aria-expanded="false"
+            aria-controls="lock-confirm-box"
+            {{ 'hidden' if lock_is_held_here else '' }}>Take the site</button>
+
+    {#
+      The release gives the site back at once, so the next operator waits no
+      cooldown. It shows only while this browser holds the site.
+    #}
+    <button type="button"
+            class="portal-button portal-button-secondary"
+            data-testid="lock-release-button"
+            data-lock-release
+            data-site-id="{{ lock_site_key }}"
+            {{ '' if lock_is_held_here else 'hidden' }}>Release the site</button>
+  </div>
+
+  {#
+    The box stays hidden until a refusal names the word. The hidden attribute
+    wins over a display rule, because the vendored stylesheet sets
+    [hidden] { display: none !important; }.
+  #}
+  <div class="confirm-box-actions" id="lock-confirm-box" data-lock-confirm-box hidden>
+    <label class="form-label" for="lock-confirm-input" data-lock-confirm-label>
+      Type <span data-lock-word>{{ lock_confirm_default }}</span> to take the site
+    </label>
+
+    {#
+      Warning: a takeover erases the in-flight data of the operator that left.
+      FR-079 asks for the typed word for that reason.
+    #}
+    <p class="confirm-box-text" data-testid="lock-confirm-warning">
+      Warning: a takeover erases the capture data that the other session started
+      and did not finish.
+    </p>
+
+    {#
+      Issue #2200: a takeover moves the write of a live upgrade to this
+      operator. The count comes from the run record, and zero hides the
+      sentence, because a page with no live run names no firmware in flight.
+    #}
+    {% if (lock_upgrade_devices | default(0, true)) > 0 %}
+      <p class="confirm-box-text" data-testid="lock-confirm-upgrade-count">
+        Warning: a run is writing firmware to
+        {{ lock_upgrade_devices }} device(s) of this site now. A takeover moves
+        that run to you, and it never stops the firmware already in flight.
+      </p>
+    {% endif %}
+
+    <input type="text"
+           class="confirm-box-input"
+           id="lock-confirm-input"
+           data-testid="lock-confirm-input"
+           data-confirm-word="{{ lock_confirm_default }}"
+           data-confirm-target="lock-confirm-submit"
+           data-confirm-hint-for="lock-confirm-hint"
+           autocomplete="off"
+           autocapitalize="off"
+           spellcheck="false"
+           aria-describedby="lock-confirm-hint">
+
+    <p class="portal-card-note" id="lock-confirm-hint" aria-live="polite"></p>
+
+    {#
+      The submit button starts disabled in the markup. A browser that fails to
+      load portal.js therefore leaves the takeover locked.
+    #}
+    <button type="button"
+            class="portal-button portal-button-danger"
+            data-testid="lock-confirm-submit"
+            data-lock-confirm
+            data-site-id="{{ lock_site_key }}"
+            disabled>Take the site now</button>
+  </div>
+
+  {#
+    Every lock refusal writes one sentence here. The region is separate from the
+    shared flash region, because a lock refusal belongs beside the control that
+    caused it and must survive a clearFlash call from another part of the page.
+  #}
+  <p class="status-message lock-error"
+     data-testid="lock-error"
+     data-lock-error
+     role="alert"
+     hidden></p>
+</div>

@@ -1,0 +1,67 @@
+{# Select the upgrade scope after the organization selection. #}
+{% extends 'layout.html' %}
+
+{% set heading = page_title | default('Choose the upgrade mode', true) %}
+{% set current_mode = selected_mode | default('', true) %}
+{% set org_label = org_name | default('', true) %}
+
+{% block title %}{{ heading }}{% endblock %}
+{% block heading %}<h1>{{ heading }}</h1>{% endblock %}
+
+{% block content %}
+<div class="portal-card" data-testid="mode-picker">
+  <h2 class="portal-card-title">Select the target scope</h2>
+  <p class="portal-card-note">
+    {% if org_label %}
+      Choose how the portal upgrades sites in {{ org_label }}.
+    {% else %}
+      Choose an organization before you select an upgrade mode.
+    {% endif %}
+  </p>
+
+  {% if org_label %}
+    <form method="post" action="/select/mode">
+      <input type="hidden"
+             name="csrf_token"
+             value="{{ csrf_token() if csrf_token is defined else '' }}">
+
+      <fieldset class="bubble-group" aria-describedby="mode-help">
+        <legend class="bubble-group-legend">Upgrade mode</legend>
+
+        <span class="bubble-option">
+          <input class="bubble-option-input"
+                 type="radio"
+                 id="mode-single-site"
+                 name="mode"
+                 value="single_site"
+                 data-testid="mode-single-site"
+                 {{ 'checked' if current_mode == 'single_site' else '' }}
+                 required>
+          <label class="bubble-option-label" for="mode-single-site">Single-site</label>
+        </span>
+
+        <span class="bubble-option">
+          <input class="bubble-option-input"
+                 type="radio"
+                 id="mode-multi-site"
+                 name="mode"
+                 value="multi_site"
+                 data-testid="mode-multi-site"
+                 {{ 'checked' if current_mode == 'multi_site' else '' }}>
+          <label class="bubble-option-label" for="mode-multi-site">Multi-site</label>
+        </span>
+      </fieldset>
+
+      <p class="portal-card-note" id="mode-help">
+        Single-site keeps the current workflow. Multi-site uses one organization-level upgrade job for the selected sites.
+      </p>
+
+      <button type="submit"
+              class="portal-button portal-button-primary"
+              data-testid="mode-continue">Continue</button>
+    </form>
+  {% else %}
+    <a class="portal-button portal-button-primary" href="/select/org">Choose an organization</a>
+  {% endif %}
+</div>
+{% endblock %}

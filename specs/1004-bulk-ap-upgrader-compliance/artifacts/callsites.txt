@@ -1,0 +1,2 @@
+src/firmware/firmware_manager.py:1463:        upgrader = BulkAPFirmwareUpgrader(self.org_id, sites_to_upgrade_override, dry_run=dry_run)
+tests/unit/test_bulk_ap_upgrader.py:84:    return BulkAPFirmwareUpgrader(config)  # WHY: single-arg construction per FR-004 / Constitution I

@@ -1,0 +1,767 @@
+{% extends 'base.html' %}
+{# T-014: Comparison results page with delta review and approval workflow #}
+
+{% block title %}Upgrade Comparison - MistHelper{% endblock %}
+
+{% block extra_css %}
+<style>
+  {# Main container for comparison results dashboard #}
+  .comparison-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  {# Header section with title and run info #}
+  .comparison-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e0e0e0;
+  }
+
+  {# Title styling #}
+  .comparison-title {
+    font-size: 28px;
+    font-weight: bold;
+    color: #333;
+  }
+
+  {# Subtitle for run info #}
+  .comparison-subtitle {
+    font-size: 14px;
+    color: #666;
+    margin-top: 5px;
+  }
+
+  {# Flagged items alert section (red background) #}
+  .flagged-section {
+    background: #fee;
+    border: 2px solid #c00;
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  {# Flagged section title #}
+  .flagged-title {
+    font-size: 18px;
+    font-weight: bold;
+    color: #c00;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  {# Flagged items count badge #}
+  .flagged-count {
+    background: #c00;
+    color: white;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+  }
+
+  {# Flagged items list #}
+  .flagged-items {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  {# Individual flagged item #}
+  .flagged-item {
+    background: white;
+    border-left: 4px solid #c00;
+    padding: 12px;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  {# Flagged item description #}
+  .flagged-item-desc {
+    font-size: 14px;
+    color: #333;
+  }
+
+  {# Flagged item severity badge #}
+  .severity-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+
+  {# Critical severity #}
+  .severity-critical {
+    background: #c00;
+    color: white;
+  }
+
+  {# High severity #}
+  .severity-high {
+    background: #f60;
+    color: white;
+  }
+
+  {# Medium severity #}
+  .severity-medium {
+    background: #fc0;
+    color: #333;
+  }
+
+  {# Low severity #}
+  .severity-low {
+    background: #0c0;
+    color: white;
+  }
+
+  {# Delta summary row with counts #}
+  .delta-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f9f9f9;
+    border-radius: 4px;
+  }
+
+  {# Summary stat card #}
+  .summary-stat {
+    text-align: center;
+  }
+
+  {# Summary stat label #}
+  .summary-stat-label {
+    font-size: 12px;
+    color: #666;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+  }
+
+  {# Summary stat value #}
+  .summary-stat-value {
+    font-size: 24px;
+    font-weight: bold;
+    color: #333;
+  }
+
+  {# Delta table container with horizontal scroll #}
+  .delta-table-container {
+    overflow-x: auto;
+    margin-bottom: 20px;
+  }
+
+  {# Delta table styling #}
+  .delta-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+
+  {# Table header styling #}
+  .delta-table thead {
+    background: #f0f0f0;
+    border-bottom: 2px solid #ddd;
+  }
+
+  {# Table header cells #}
+  .delta-table th {
+    padding: 12px;
+    text-align: left;
+    font-weight: bold;
+    color: #333;
+    border-right: 1px solid #ddd;
+  }
+
+  {# Table data cells #}
+  .delta-table td {
+    padding: 12px;
+    border-right: 1px solid #ddd;
+    border-bottom: 1px solid #e0e0e0;
+    word-break: break-word;
+  }
+
+  {# Row hover effect #}
+  .delta-table tbody tr:hover {
+    background: #f9f9f9;
+  }
+
+  {# Category header row #}
+  .category-row {
+    background: #f0f0f0;
+    font-weight: bold;
+    color: #333;
+  }
+
+  {# Delta row with no change (green) #}
+  .delta-no-change {
+    background: #efe;
+    border-left: 4px solid #0c0;
+  }
+
+  {# Delta row with minor change (yellow) #}
+  .delta-minor-change {
+    background: #ffe;
+    border-left: 4px solid #fc0;
+  }
+
+  {# Delta row with major change (red) #}
+  .delta-major-change {
+    background: #fee;
+    border-left: 4px solid #c00;
+  }
+
+  {# Status icon styling #}
+  .status-icon {
+    font-size: 16px;
+    text-align: center;
+  }
+
+  {# Check mark for expected #}
+  .status-expected {
+    color: #0c0;
+  }
+
+  {# Warning icon for unexpected #}
+  .status-unexpected {
+    color: #c00;
+  }
+
+  {# Pre and post value cells (side by side) #}
+  .value-pre {
+    background: #f0f0f0;
+    padding: 8px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+  }
+
+  {# Post value styling #}
+  .value-post {
+    background: #f0f0f0;
+    padding: 8px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+  }
+
+  {# Controls section with buttons #}
+  .controls-section {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 20px;
+    background: #f9f9f9;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+  }
+
+  {# Primary button styling (Approve All) #}
+  .btn-approve {
+    background: #0c0;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+  }
+
+  {# Primary button hover #}
+  .btn-approve:hover:not(:disabled) {
+    background: #0a0;
+  }
+
+  {# Primary button disabled #}
+  .btn-approve:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  {# Secondary button (Reject & Rollback) #}
+  .btn-reject {
+    background: #c00;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+  }
+
+  {# Secondary button hover #}
+  .btn-reject:hover {
+    background: #a00;
+  }
+
+  {# Tertiary button (Download PDF) #}
+  .btn-download {
+    background: #006;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+  }
+
+  {# Tertiary button hover #}
+  .btn-download:hover {
+    background: #004;
+  }
+
+  {# Button disabled state #}
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  {# Engineer notes section #}
+  .notes-section {
+    margin-bottom: 20px;
+  }
+
+  {# Notes label #}
+  .notes-label {
+    font-weight: bold;
+    margin-bottom: 8px;
+    display: block;
+    font-size: 14px;
+  }
+
+  {# Notes textarea #}
+  .notes-input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    resize: vertical;
+    min-height: 100px;
+  }
+
+  {# Checklist section #}
+  .checklist-section {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  {# Checklist title #}
+  .checklist-title {
+    font-weight: bold;
+    font-size: 16px;
+    margin-bottom: 15px;
+    color: #333;
+  }
+
+  {# Checklist items #}
+  .checklist-items {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  {# Individual checklist item #}
+  .checklist-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+  }
+
+  {# Checklist checkbox #}
+  .checklist-item input[type="checkbox"] {
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+  }
+
+  {# Checklist item label #}
+  .checklist-item label {
+    cursor: pointer;
+    font-size: 14px;
+    color: #333;
+  }
+
+  {# Loading spinner #}
+  .spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #007bff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  {# Spinner animation #}
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+
+  {# Alert/message styling #}
+  .alert {
+    padding: 12px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+    border-left: 4px solid;
+  }
+
+  {# Alert success #}
+  .alert-success {
+    background: #efe;
+    border-color: #0c0;
+    color: #060;
+  }
+
+  {# Alert danger #}
+  .alert-danger {
+    background: #fee;
+    border-color: #c00;
+    color: #c00;
+  }
+
+  {# Alert warning #}
+  .alert-warning {
+    background: #ffe;
+    border-color: #fc0;
+    color: #b80;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="comparison-dashboard">
+  {# Header with title and run info #}
+  <div class="comparison-header">
+    <div>
+      <div class="comparison-title">Upgrade Comparison Results</div>
+      <div class="comparison-subtitle">Run ID: {{ run_id }} | Timestamp: {{ timestamp }}</div>
+    </div>
+  </div>
+
+  {# Status messages area #}
+  <div id="messages-area"></div>
+
+  {# Flagged items section (only show if there are flagged items) #}
+  {% if flagged_for_review and flagged_for_review|length > 0 %}
+  <div class="flagged-section">
+    <div class="flagged-title">
+      <span class="flagged-count">{{ flagged_for_review|length }}</span>
+      Items Flagged for Review
+    </div>
+    <div class="flagged-items">
+      {% for item in flagged_for_review %}
+      <div class="flagged-item">
+        <div class="flagged-item-desc">
+          <strong>{{ item.device_id }}:</strong> {{ item.field }} changed from
+          <code>{{ item.pre_value }}</code> to <code>{{ item.post_value }}</code>
+          <span class="severity-badge severity-{{ item.severity }}">{{ item.severity }}</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {# Delta summary with counts #}
+  <div class="delta-summary">
+    <div class="summary-stat">
+      <div class="summary-stat-label">Total Changes</div>
+      <div class="summary-stat-value">{{ summary.total_deltas or 0 }}</div>
+    </div>
+    <div class="summary-stat">
+      <div class="summary-stat-label">No Changes</div>
+      <div class="summary-stat-value" style="color: #0c0;">{{ summary.by_type.no_change or 0 }}</div>
+    </div>
+    <div class="summary-stat">
+      <div class="summary-stat-label">Minor Changes</div>
+      <div class="summary-stat-value" style="color: #fc0;">{{ summary.by_type.minor or 0 }}</div>
+    </div>
+    <div class="summary-stat">
+      <div class="summary-stat-label">Major Changes</div>
+      <div class="summary-stat-value" style="color: #c00;">{{ summary.by_type.major or 0 }}</div>
+    </div>
+  </div>
+
+  {# Delta table by category #}
+  <div class="delta-table-container">
+    <table class="delta-table">
+      <thead>
+        <tr>
+          <th style="width: 15%">Device ID</th>
+          <th style="width: 20%">Category / Field</th>
+          <th style="width: 20%">Pre-Upgrade Value</th>
+          <th style="width: 20%">Post-Upgrade Value</th>
+          <th style="width: 15%">Delta Type</th>
+          <th style="width: 10%">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set current_category = None %}
+        {% for delta in deltas %}
+          {% if current_category != delta.delta_type %}
+            {# Category header row #}
+            <tr class="category-row">
+              <td colspan="6">{{ delta.delta_type | upper }}</td>
+            </tr>
+            {% set current_category = delta.delta_type %}
+          {% endif %}
+
+          {# Determine delta styling based on severity #}
+          {% if delta.severity == 'critical' or delta.severity == 'high' %}
+            {% set row_class = 'delta-major-change' %}
+            {% set status_class = 'status-unexpected' %}
+            {% set status_icon = '⚠' %}
+          {% elif delta.severity == 'medium' %}
+            {% set row_class = 'delta-minor-change' %}
+            {% set status_class = 'status-unexpected' %}
+            {% set status_icon = '⚠' %}
+          {% else %}
+            {# Low severity or no change #}
+            {% if delta.pre_value == delta.post_value %}
+              {% set row_class = 'delta-no-change' %}
+              {% set status_class = 'status-expected' %}
+              {% set status_icon = '✓' %}
+            {% else %}
+              {% set row_class = 'delta-minor-change' %}
+              {% set status_class = 'status-unexpected' %}
+              {% set status_icon = '⚠' %}
+            {% endif %}
+          {% endif %}
+
+          {# Delta row #}
+          <tr class="{{ row_class }}">
+            <td><strong>{{ delta.device_id }}</strong></td>
+            <td><strong>{{ delta.field }}</strong></td>
+            <td><div class="value-pre">{{ delta.pre_value }}</div></td>
+            <td><div class="value-post">{{ delta.post_value }}</div></td>
+            <td><span class="severity-badge severity-{{ delta.severity }}">{{ delta.severity }}</span></td>
+            <td class="status-icon {{ status_class }}">{{ status_icon }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# Review checklist #}
+  <div class="checklist-section">
+    <div class="checklist-title">Review Checklist</div>
+    <div class="checklist-items">
+      <div class="checklist-item">
+        <input type="checkbox" id="check-inventory" name="check-inventory">
+        <label for="check-inventory">Inventory changes reviewed (devices added/removed/model changes)</label>
+      </div>
+      <div class="checklist-item">
+        <input type="checkbox" id="check-firmware" name="check-firmware">
+        <label for="check-firmware">Firmware changes verified (all devices at correct version)</label>
+      </div>
+      <div class="checklist-item">
+        <input type="checkbox" id="check-radio" name="check-radio">
+        <label for="check-radio">Radio configuration changes accepted (channel, power, band)</label>
+      </div>
+      <div class="checklist-item">
+        <input type="checkbox" id="check-policy" name="check-policy">
+        <label for="check-policy">Security policy changes approved (no unintended modifications)</label>
+      </div>
+      <div class="checklist-item">
+        <input type="checkbox" id="check-neighbors" name="check-neighbors">
+        <label for="check-neighbors">Network topology stable (LLDP neighbors consistent)</label>
+      </div>
+    </div>
+  </div>
+
+  {# Engineer notes field #}
+  <div class="notes-section">
+    <label class="notes-label" for="engineer-notes">Engineer Approval Notes</label>
+    <textarea id="engineer-notes" class="notes-input" placeholder="Enter any notes, concerns, or approval comments here..."></textarea>
+  </div>
+
+  {# Control buttons #}
+  <div class="controls-section">
+    <button class="btn btn-approve" id="btn-approve-all" onclick="approveComparison()">
+      ✓ Approve All
+    </button>
+    <button class="btn btn-reject" id="btn-reject-rollback" onclick="rejectComparison()">
+      ✕ Reject & Rollback
+    </button>
+    <button class="btn btn-download" id="btn-download-pdf" onclick="downloadPDFReport()">
+      ⬇ Download PDF Report
+    </button>
+  </div>
+</div>
+
+<script>
+  {# WHY: JavaScript for comparison results page interaction #}
+
+  {# WHY: function to approve comparison and mark run complete #}
+  function approveComparison() {
+    {# WHY: get all checked checklist items #}
+    const checklistItems = document.querySelectorAll('.checklist-item input[type="checkbox"]:checked');
+    {# WHY: get engineer notes #}
+    const engineerNotes = document.getElementById('engineer-notes').value;
+    {# WHY: get run ID from page #}
+    const runId = '{{ run_id }}';
+
+    {# WHY: validate checklist completion #}
+    if (checklistItems.length < 5) {
+      {# WHY: show warning if not all items checked #}
+      showMessage('error', 'Please complete all checklist items before approving.');
+      return;
+    }
+
+    {# WHY: disable button to prevent duplicate submissions #}
+    document.getElementById('btn-approve-all').disabled = true;
+    document.getElementById('btn-approve-all').innerHTML = '<span class="spinner"></span> Processing...';
+
+    {# WHY: prepare approval data #}
+    const approvalData = {
+      approved_items: [],
+      rejected_items: [],
+      engineer_notes: engineerNotes,
+      approve_all: true
+    };
+
+    {# WHY: send approval to backend API #}
+    fetch(`/api/runs/${runId}/comparison/approve`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-ID': '{{ user_id or "anonymous" }}'
+      },
+      body: JSON.stringify(approvalData)
+    })
+    {# WHY: handle API response #}
+    .then(response => {
+      if (!response.ok) {
+        {# WHY: throw error if response not ok #}
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      {# WHY: parse response JSON #}
+      return response.json();
+    })
+    {# WHY: handle successful approval #}
+    .then(data => {
+      {# WHY: show success message #}
+      showMessage('success', 'Comparison approved successfully! Run marked as complete.');
+      {# WHY: redirect after success #}
+      setTimeout(() => {
+        {# WHY: navigate to runs list #}
+        window.location.href = '/upgrade/runs';
+      }, 2000);
+    })
+    {# WHY: handle approval error #}
+    .catch(error => {
+      {# WHY: log error to console #}
+      console.error('Approval error:', error);
+      {# WHY: show error message #}
+      showMessage('error', `Failed to approve comparison: ${error.message}`);
+      {# WHY: re-enable button for retry #}
+      document.getElementById('btn-approve-all').disabled = false;
+      document.getElementById('btn-approve-all').innerHTML = '✓ Approve All';
+    });
+  }
+
+  {# WHY: function to reject comparison and trigger rollback #}
+  function rejectComparison() {
+    {# WHY: confirm rollback action with user #}
+    if (!confirm('Are you sure you want to reject this comparison and trigger a rollback? This cannot be undone.')) {
+      {# WHY: cancel if user doesn't confirm #}
+      return;
+    }
+
+    {# WHY: show not implemented message #}
+    showMessage('warning', 'Rollback functionality will be implemented in Phase 5.');
+  }
+
+  {# WHY: function to download PDF report #}
+  function downloadPDFReport() {
+    {# WHY: get run ID from page #}
+    const runId = '{{ run_id }}';
+
+    {# WHY: show not implemented message #}
+    showMessage('warning', 'PDF report generation will be implemented in Phase 5.');
+  }
+
+  {# WHY: function to show message in messages area #}
+  function showMessage(type, message) {
+    {# WHY: get messages area element #}
+    const messagesArea = document.getElementById('messages-area');
+    {# WHY: create message alert #}
+    const alert = document.createElement('div');
+    {# WHY: set alert class #}
+    alert.className = `alert alert-${type}`;
+    {# WHY: set alert message #}
+    alert.textContent = message;
+    {# WHY: add alert to messages area #}
+    messagesArea.appendChild(alert);
+
+    {# WHY: auto-dismiss non-error messages after 5 seconds #}
+    if (type !== 'error') {
+      {# WHY: set timeout for auto-dismiss #}
+      setTimeout(() => {
+        {# WHY: remove alert from DOM #}
+        alert.remove();
+      }, 5000);
+    }
+  }
+
+  {# WHY: initialize page on document load #}
+  document.addEventListener('DOMContentLoaded', function() {
+    {# WHY: log page initialization #}
+    console.log('Comparison results page loaded');
+    {# WHY: disable approve button until checklist complete #}
+    updateApproveButtonState();
+  });
+
+  {# WHY: function to update approve button state based on checklist #}
+  function updateApproveButtonState() {
+    {# WHY: get all checklist checkboxes #}
+    const checklistCheckboxes = document.querySelectorAll('.checklist-item input[type="checkbox"]');
+    {# WHY: count checked items #}
+    const checkedCount = document.querySelectorAll('.checklist-item input[type="checkbox"]:checked').length;
+    {# WHY: check if all items checked #}
+    const allChecked = checkedCount === checklistCheckboxes.length;
+
+    {# WHY: enable or disable approve button #}
+    document.getElementById('btn-approve-all').disabled = !allChecked;
+  }
+
+  {# WHY: add event listeners to all checklist items #}
+  document.querySelectorAll('.checklist-item input[type="checkbox"]').forEach(checkbox => {
+    {# WHY: listen for change events #}
+    checkbox.addEventListener('change', updateApproveButtonState);
+  });
+</script>
+{% endblock %}

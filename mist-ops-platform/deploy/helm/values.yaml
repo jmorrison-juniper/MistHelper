@@ -1,0 +1,86 @@
+# ──────────────────────────────────
+# Mist Ops Platform — Helm Values
+# ──────────────────────────────────
+
+replicaCount:
+  api: 2
+  worker: 2
+  beat: 1
+
+image:
+  repository: ghcr.io/jmorrison-juniper/mist-ops-platform
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: false
+  className: nginx
+  hosts:
+    - host: mist-ops.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+
+resources:
+  api:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  worker:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+
+postgresql:
+  enabled: true
+  auth:
+    database: mist_ops
+    username: mist_ops
+    existingSecret: mist-ops-db
+  primary:
+    persistence:
+      size: 20Gi
+
+redis:
+  enabled: true
+  auth:
+    existingSecret: mist-ops-redis
+  master:
+    persistence:
+      size: 2Gi
+
+minio:
+  enabled: true
+  auth:
+    existingSecret: mist-ops-minio
+  persistence:
+    size: 10Gi
+
+vault:
+  enabled: false
+  address: "http://vault.mist-ops.svc.cluster.local:8200"
+
+env:
+  MIST_API_BASE: "https://api.mist.com"
+  LOG_LEVEL: "INFO"
+  SYNC_INTERVAL_SECONDS: "300"
+  API_PAGE_LIMIT: "1000"
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 10
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

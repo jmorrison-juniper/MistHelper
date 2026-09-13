@@ -1,0 +1,48 @@
+{#
+  flash.html - the shared message region of the upgrade capture portal.
+
+  Why this file exists:
+    The portal reports a lock takeover, a partial capture, and a stop outcome
+    from two places. The server reports one through a page reload. portal.js
+    reports the other through a script, with no page change. The operator needs
+    the same look for both, so both write into this one region.
+
+  The contract with portal.js:
+    getFlashRegion finds this element by the identifier flash-message.
+    showFlash appends one child with the class "flash-item flash-<level>".
+    clearFlash sets the text content of the region to an empty string.
+
+    Every server message below therefore uses that same child shape, and the
+    region holds nothing else. A heading or a wrapper inside the region would
+    disappear on the first clear.
+
+  portal.css prepends "Note:", "Done:", "Caution:", and "Warning:" to the four
+  levels. The level therefore reads without color, as WCAG 1.4.1 requires.
+#}
+{% set flash_levels = ['info', 'success', 'warning', 'danger'] %}
+
+<div class="flash-region"
+     data-testid="flash-message"
+     role="status"
+     aria-live="polite"
+     aria-atomic="false">
+  {#
+    get_flashed_messages reads the session, so it needs a request. The guard
+    keeps the region renderable outside a request.
+
+    Flask puts the request proxy in the Jinja globals, so "request is defined"
+    is always true and tells nothing. The proxy answers false outside a request
+    instead, and a plain truth test is therefore the guard that works.
+  #}
+  {% if request %}
+    {% for category, message in get_flashed_messages(with_categories=true) %}
+      {#
+        Flask uses the category "message" by default, and a caller may pass any
+        other word. An unknown category falls back to info, which is the same
+        fallback portal.js uses.
+      #}
+      {% set level = category if category in flash_levels else 'info' %}
+      <div class="flash-item flash-{{ level }}">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+</div>

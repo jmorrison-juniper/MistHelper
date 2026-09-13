@@ -1,0 +1,1592 @@
+
+<!-- saved from url=(0040)https://api.mist.com/api/v1/docs/MSP#msp -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>MSP | API | Mist</title>
+<style>
+/* modified from https://gist.github.com/andyferra/2554919 */
+body {
+  font-family: Helvetica, arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  background-color: white;
+  padding: 30px; }
+
+body > *:first-child {
+  margin-top: 0 !important; }
+body > *:last-child {
+  margin-bottom: 0 !important; }
+
+a {
+  color: #4183C4; }
+a.absent {
+  color: #cc0000; }
+a.anchor {
+  display: block;
+  padding-left: 30px;
+  margin-left: -30px;
+  cursor: pointer;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0; }
+
+h1, h2, h3, h4, h5, h6 {
+  margin: 20px 0 10px;
+  padding: 0;
+  font-weight: bold;
+  -webkit-font-smoothing: antialiased;
+  cursor: text;
+  position: relative; }
+
+h1:hover a.anchor, h2:hover a.anchor, h3:hover a.anchor, h4:hover a.anchor, h5:hover a.anchor, h6:hover a.anchor {
+  background: url("../../images/modules/styleguide/para.png") no-repeat 10px center;
+  text-decoration: none; }
+
+h1 tt, h1 code {
+  font-size: inherit; }
+
+h2 tt, h2 code {
+  font-size: inherit; }
+
+h3 tt, h3 code {
+  font-size: inherit; }
+
+h4 tt, h4 code {
+  font-size: inherit; }
+
+h5 tt, h5 code {
+  font-size: inherit; }
+
+h6 tt, h6 code {
+  font-size: inherit; }
+
+h1 {
+  font-size: 28px;
+  color: black; }
+
+h2 {
+  font-size: 24px;
+  border-bottom: 1px solid #cccccc;
+  color: black; }
+
+h3 {
+  font-size: 18px; }
+
+h4 {
+  font-size: 16px; }
+
+h5 {
+  font-size: 14px; }
+
+h6 {
+  color: #777777;
+  font-size: 14px; }
+
+p, blockquote, ul, ol, dl, li, table, pre {
+  margin: 0; }
+
+hr {
+  background: transparent url("../../images/modules/pulls/dirty-shade.png") repeat-x 0 0;
+  border: 0 none;
+  color: #cccccc;
+  height: 4px;
+  padding: 0; }
+
+body > h2:first-child {
+  margin-top: 0;
+  padding-top: 0; }
+body > h1:first-child {
+  margin-top: 0;
+  padding-top: 0; }
+  body > h1:first-child + h2 {
+    margin-top: 0;
+    padding-top: 0; }
+body > h3:first-child, body > h4:first-child, body > h5:first-child, body > h6:first-child {
+  margin-top: 0;
+  padding-top: 0; }
+
+a:first-child h1, a:first-child h2, a:first-child h3, a:first-child h4, a:first-child h5, a:first-child h6 {
+  margin-top: 0;
+  padding-top: 0; }
+
+h1 p, h2 p, h3 p, h4 p, h5 p, h6 p {
+  margin-top: 0; }
+
+li p.first {
+  display: inline-block; }
+
+ul, ol {
+  padding-left: 30px; }
+
+ul :first-child, ol :first-child {
+  margin-top: 0; }
+
+ul :last-child, ol :last-child {
+  margin-bottom: 0; }
+
+dl {
+  padding: 0; }
+  dl dt {
+    font-size: 14px;
+    font-weight: bold;
+    font-style: italic;
+    padding: 0;
+    margin: 15px 0 5px; }
+    dl dt:first-child {
+      padding: 0; }
+    dl dt > :first-child {
+      margin-top: 0; }
+    dl dt > :last-child {
+      margin-bottom: 0; }
+  dl dd {
+    margin: 0 0 15px;
+    padding: 0 15px; }
+    dl dd > :first-child {
+      margin-top: 0; }
+    dl dd > :last-child {
+      margin-bottom: 0; }
+
+blockquote {
+  border-left: 4px solid #dddddd;
+  padding: 0 15px;
+  color: #777777; }
+  blockquote > :first-child {
+    margin-top: 0; }
+  blockquote > :last-child {
+    margin-bottom: 0; }
+
+table {
+    border-collapse: collapse;
+  padding: 0; }
+  table tr {
+    border-top: 1px solid #cccccc;
+    background-color: white;
+    margin: 0;
+    padding: 0; }
+    table tr:nth-child(2n) {
+      background-color: #f8f8f8; }
+    table tr th {
+      font-weight: bold;
+      border: 1px solid #cccccc;
+      text-align: left;
+      margin: 0;
+      padding: 6px 13px; }
+    table tr td {
+      border: 1px solid #cccccc;
+      text-align: left;
+      margin: 0;
+      padding: 6px 13px; }
+    table tr th :first-child, table tr td :first-child {
+      margin-top: 0; }
+    table tr th :last-child, table tr td :last-child {
+      margin-bottom: 0; }
+
+img {
+  max-width: 100%; }
+
+span.frame {
+  display: block;
+  overflow: hidden; }
+  span.frame > span {
+    border: 1px solid #dddddd;
+    display: block;
+    float: left;
+    overflow: hidden;
+    margin: 13px 0 0;
+    padding: 7px;
+    width: auto; }
+  span.frame span img {
+    display: block;
+    float: left; }
+  span.frame span span {
+    clear: both;
+    color: #333333;
+    display: block;
+    padding: 5px 0 0; }
+span.align-center {
+  display: block;
+  overflow: hidden;
+  clear: both; }
+  span.align-center > span {
+    display: block;
+    overflow: hidden;
+    margin: 13px auto 0;
+    text-align: center; }
+  span.align-center span img {
+    margin: 0 auto;
+    text-align: center; }
+span.align-right {
+  display: block;
+  overflow: hidden;
+  clear: both; }
+  span.align-right > span {
+    display: block;
+    overflow: hidden;
+    margin: 13px 0 0;
+    text-align: right; }
+  span.align-right span img {
+    margin: 0;
+    text-align: right; }
+span.float-left {
+  display: block;
+  margin-right: 13px;
+  overflow: hidden;
+  float: left; }
+  span.float-left span {
+    margin: 13px 0 0; }
+span.float-right {
+  display: block;
+  margin-left: 13px;
+  overflow: hidden;
+  float: right; }
+  span.float-right > span {
+    display: block;
+    overflow: hidden;
+    margin: 13px auto 0;
+    text-align: right; }
+
+code, tt {
+  margin: 0 2px;
+  padding: 0 5px;
+  white-space: nowrap;
+  border: 1px solid #eaeaea;
+  background-color: #f8f8f8;
+  border-radius: 3px; }
+
+pre code {
+  margin: 0;
+  padding: 0;
+  white-space: pre;
+  border: none;
+  background: transparent; }
+
+.highlight pre {
+  background-color: #f8f8f8;
+  border: 1px solid #cccccc;
+  font-size: 13px;
+  line-height: 19px;
+  overflow: auto;
+  padding: 6px 10px;
+  border-radius: 3px; }
+
+pre {
+  background-color: #f8f8f8;
+  border: 1px solid #cccccc;
+  font-size: 13px;
+  line-height: 19px;
+  overflow: auto;
+  padding: 6px 10px;
+  border-radius: 3px; }
+  pre code, pre tt {
+    background-color: transparent;
+    border: none; }
+</style>
+</head>
+<body>
+
+<h2 id="msp">MSP</h2>
+<p>MSP (Managed Service Provider) contains multiple Organizations.</p>
+<h1 id="msp_1">MSP</h1>
+<h2 id="create-msp">Create MSP</h2>
+<pre><code>POST /api/v1/msps
+</code></pre>
+<h3 id="request">Request</h3>
+<pre><code>{
+    "name": "MSP"
+}
+</code></pre>
+<h2 id="update-an-msp">Update an MSP</h2>
+<pre><code>PUT /api/v1/msps/:msp_id
+</code></pre>
+<h3 id="request_1">Request</h3>
+<pre><code>{
+    "name": "MSP"
+}
+</code></pre>
+<p>For advanced tier (uMSPs), custom url is also available</p>
+<pre><code>{
+    "name": "MSP",
+    "url": "https://.." 
+}
+</code></pre>
+<h2 id="get-msp-detail">Get MSP Detail</h2>
+<pre><code>GET /api/v1/msps/:msp_id
+</code></pre>
+<h3 id="response">Response</h3>
+<pre><code>{
+    "id": "9520c63a-f7b3-670c-0944-727774d5a722",
+    "name": "MSP",
+    "tier": "base"
+}
+</code></pre>
+<pre><code>{
+    "id": "9520c63a-f7b3-670c-0944-727774d5a722",
+    "name": "MSP",
+    "tier": "advanced",
+    "url": "https://..",
+    "logo_url": "https://...."
+}
+</code></pre>
+<h3 id="upload-logo-only-for-advanced-msp-tier">Upload Logo (only for advanced MSP tier)</h3>
+<pre><code>POST /api/v1/msps/:msp_id/logo
+</code></pre>
+<h3 id="delete-logo">Delete Logo</h3>
+<pre><code>DELETE /api/v1/msps/:msp_id/logo
+</code></pre>
+<h2 id="delete-msp">Delete MSP</h2>
+<p>Deleting MSP removes the MSP and OrgGroup under the MSP as well as all privileges associated with them.
+It does not remove any Org or Admins</p>
+<pre><code>DELETE /api/v1/msps/:msp_id
+</code></pre>
+<h2 id="create-an-org-under-msp">Create an Org under MSP</h2>
+<pre><code>POST /api/v1/msps/:msp_id/orgs
+</code></pre>
+<h3 id="request_2">Request</h3>
+<pre><code>{
+    "name": "Motel 6",
+    "orggroup_ids": [ "507f1bab-13ba-73e2-f291-2bcb8d1362b0" ]
+}
+</code></pre>
+<h2 id="assign-org-to-msp">Assign Org to MSP</h2>
+<pre><code>PUT /api/v1/msps/:msp_id/orgs
+</code></pre>
+<h3 id="request_3">Request</h3>
+<pre><code>{
+    "op": "assign"
+    "org_ids": [
+        "2818e386-8dec-2562-9ede-5b8a0fbbdc71"
+    ]
+}
+</code></pre>
+<h3 id="parameters">Parameters</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>op</code></td>
+<td><code>string</code></td>
+<td>operation (assign/unassign)</td>
+</tr>
+<tr>
+<td><code>org_ids</code></td>
+<td><code>list</code></td>
+<td>list of org_id</td>
+</tr>
+</tbody>
+</table>
+<h3 id="response_1">Response</h3>
+<pre><code>Status: 200 OK
+</code></pre>
+<h2 id="remove-org-from-msp">Remove Org from MSP</h2>
+<pre><code>PUT /api/v1/msps/:msp_id/orgs
+</code></pre>
+<h3 id="request_4">Request</h3>
+<pre><code>{
+    "op": "unassign"
+    "org_ids": [
+        "2818e386-8dec-2562-9ede-5b8a0fbbdc71"
+    ]
+}
+</code></pre>
+<h3 id="parameters_1">Parameters</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>op</code></td>
+<td><code>string</code></td>
+<td>operation (assign/unassign)</td>
+</tr>
+<tr>
+<td><code>org_ids</code></td>
+<td><code>list</code></td>
+<td>list of org_id</td>
+</tr>
+</tbody>
+</table>
+<h3 id="response_2">Response</h3>
+<pre><code>Status: 200 OK
+</code></pre>
+<h2 id="get-orgs-in-msp">Get Orgs in MSP</h2>
+<pre><code>GET /api/v1/msps/:msp_id/orgs
+</code></pre>
+<h1 id="org-group">Org Group</h1>
+<h2 id="org-group-schema">Org Group Schema</h2>
+<pre><code>{
+    "name": "West"
+}
+</code></pre>
+<h2 id="get-org-groups-in-a-msp">Get Org Groups in a MSP</h2>
+<pre><code>GET /api/v1/msps/:msp_id/orggroups
+</code></pre>
+<h2 id="create-org-group">Create Org Group</h2>
+<pre><code>POST /api/v1/msps/:msp_id/orggroups
+</code></pre>
+<h2 id="get-an-org-group-in-msp">Get an Org Group in MSP</h2>
+<pre><code>GET /api/v1/msps/:msp_id/orggroups/:orggroup_id
+</code></pre>
+<h2 id="update-an-org-group-in-msp">Update an Org Group in MSP</h2>
+<pre><code>PUT /api/v1/msps/:msp_id/orggroups/:orggroup_id
+</code></pre>
+<h2 id="delete-an-org-group">Delete an Org Group</h2>
+<pre><code>DELETE /api/v1/msps/:msp_id/orggroups/:orggroup_id
+</code></pre>
+<h2 id="search-org-in-msp">Search Org in MSP</h2>
+<pre><code>GET /api/v1/msps/:msp_id/orgs/search?sub_insufficient=true
+</code></pre>
+<h3 id="supported-filters">Supported Filters</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td><code>string</code></td>
+<td>org name</td>
+</tr>
+<tr>
+<td><code>org_id</code></td>
+<td><code>string</code></td>
+<td>org id</td>
+</tr>
+<tr>
+<td><code>trial_enabled</code></td>
+<td><code>boolean</code></td>
+<td>if this org is under trial period</td>
+</tr>
+<tr>
+<td><code>usage_types</code></td>
+<td><code>list</code></td>
+<td>a list of types that enabled by usage</td>
+</tr>
+<tr>
+<td><code>sub_insufficient</code></td>
+<td><code>boolean</code></td>
+<td>if this org has sufficient subscription</td>
+</tr>
+</tbody>
+</table>
+<h3 id="response_3">Response</h3>
+<pre><code>{
+    "results": [
+        {
+            "sub_ana_required": 9,
+            "sub_ast_required": 3,
+            "sub_ex12_required": 1,
+            "sub_eng_required": 3,
+            "sub_man_required": 9,
+            "sub_ast_entitled": 5,
+            "sub_vna_entitled": 1,
+            "num_unassigned_aps": 1,
+            "num_sites": 5,
+            "num_aps": 9,
+            "timestamp": 1614322563.513937,
+            "num_switches": 1,
+            "org_id": "bb1a8bf6-4064-4bbd-83dc-8053a663cf65",
+            "name": "Test Org",
+            "msp_id": "d287e62f-9689-4c05-85d8-f2b9ba0a531f",
+            "sub_insufficient": true,
+            "trial_enabled" : false,
+            "usage_types" : [
+                "sub_eng"
+            ]
+        },
+        {
+            "sub_ana_required": 1,
+            "sub_man_required": 1,
+            "sub_ana_entitled": 1,
+            "sub_man_entitled": 1,
+            "num_sites": 1,
+            "num_aps": 1,
+            "timestamp": 1614309876.500955,
+            "org_id": "0fb81690-7b74-4a56-b984-9596d1d1534f",
+            "name": "Rogue Test1",
+            "msp_id": "d287e62f-9689-4c05-85d8-f2b9ba0a531f",
+            "sub_insufficient": false
+        }
+    ],
+    "start": 1613778578.4365668,
+    "end": 1614383378.4365287,
+    "limit": 10,
+    "total": 2
+}
+</code></pre>
+<h2 id="search-for-org-in-msp">Search for Org in MSP</h2>
+<pre><code>GET /api/v1/msps/:msp_id/search?type=orgs&amp;q=stan&amp;limit=10&amp;page=2
+</code></pre>
+<h3 id="request_5">Request</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>type</code></td>
+<td><code>string</code></td>
+<td>orgs</td>
+</tr>
+<tr>
+<td><code>q</code></td>
+<td><code>string</code></td>
+<td>search string</td>
+</tr>
+</tbody>
+</table>
+<h3 id="response_4">Response</h3>
+<pre><code>{
+    "page": 1,
+    "limit": 10,
+    "total": 60,
+
+    "results": [
+        {
+            "type": "orgs",
+            "text": "Stanford",
+            "id": "37cff3c6-a361-deea-2c79-114ebb76c1f8"
+        },
+        ...
+    ]
+}
+</code></pre>
+<h1 id="license">License</h1>
+<h2 id="get-license">Get License</h2>
+<pre><code>GET /api/v1/msps/:msp_id/licenses
+</code></pre>
+<h3 id="response_5">Response</h3>
+<pre><code>{
+    "licenses": [
+        {
+            "order_id": "00000464",
+            "subscription_id": "SUB-0000144",
+            "type": "SUB-MAN",
+            "start_time": 1504828800,
+            "end_time": 1520380800,
+            "quantity": 180
+        },
+        {
+            "order_id": "00000464",
+            "subscription_id": "SUB-0000145",
+            "type": "SUB-MAN",
+            "start_time": 1504828800,
+            "end_time": 1520380800,
+            "quantity": 30
+        }
+        {
+            "order_id": "00000464",
+            "subscription_id": "SUB-0000146",
+            "type": "SUB-LOC",
+            "start_time": 1504828800,
+            "end_time": 1520380800,
+            "quantity": 120
+        }
+    ],
+    "amendments": [
+        {
+            "id": "2b9116ab-cd1e-e897-6e08-31fccd88e792",
+            "subscription_id": "SUB-0000144",
+            "type": "SUB-MAN",
+            "start_time": 1504828800,
+            "end_time": 1520380800,
+            "quantity": -30
+        },
+        {
+            "id": "4e974f27-fcbc-03cb-caa4-688e20aa539f",
+            "subscription_id": "SUB-0000146",
+            "type": "SUB-LOC",
+            "start_time": 1504828800,
+            "end_time": 1520380800,
+            "quantity": 75
+        },
+    ],
+    "entitled": {
+        "SUB-MAN": 180,
+        "SUB-LOC": 195
+    }
+}
+</code></pre>
+<h3 id="definitions">Definitions</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>licenses</code></td>
+<td><code>list</code></td>
+<td>list of licenses</td>
+</tr>
+<tr>
+<td><code>type</code></td>
+<td><code>string</code></td>
+<td>subscription type, SUB-MAN / SUB-LOC / SUB-AST / SUB-VNA / SUB-DATA</td>
+</tr>
+<tr>
+<td><code>start_time</code></td>
+<td><code>long</code></td>
+<td>start date of the license term</td>
+</tr>
+<tr>
+<td><code>end_time</code></td>
+<td><code>long</code></td>
+<td>end date of the license term</td>
+</tr>
+<tr>
+<td><code>quantity</code></td>
+<td><code>int</code></td>
+<td>number of devices entitled for this license</td>
+</tr>
+<tr>
+<td><code>entitled</code></td>
+<td><code>object</code></td>
+<td>currently entitled for each license type</td>
+</tr>
+</tbody>
+</table>
+<h2 id="claim-an-order-by-activation-code">Claim an Order by Activation Code</h2>
+<pre><code>POST /api/v1/msps/:msp_id/claim
+</code></pre>
+<h3 id="example">Example</h3>
+<pre><code>{
+    "code": "ZHT3K-H36DT-MG85D-M61AC"
+}
+</code></pre>
+<h3 id="parameters_2">Parameters</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>code</code></td>
+<td><code>string</code></td>
+<td>activation code</td>
+</tr>
+</tbody>
+</table>
+<h3 id="response-of-the-licenses-that-are-successfully-claimed-and-applied">Response of the license(s) that are successfully claimed and applied</h3>
+<pre><code>{
+    "license_added": [
+        {
+            "type": "SUB-MAN",
+            "start": 1504828800,
+            "end": 1520380800,
+            "quantity": 180
+        },
+        {
+            "type": "SUB-LOC",
+            "start": 1504828800,
+            "end": 1520380800,
+            "quantity": 120
+        }
+    ],
+    "license_duplicated": [
+        {
+            "type": "SUB-MAN",
+            "start": 1504828800,
+            "end": 1520380800,
+            "quantity": 180
+        }
+    ],
+    "license_error": [
+        {
+            "order": "00000464",
+            "reason": ""
+        }
+    ]
+}
+</code></pre>
+<h3 id="response-when-the-key-is-invalid-or-already-used">Response when the key is invalid (or already used)</h3>
+<pre><code>Status: 400 Bad Request
+</code></pre>
+<h2 id="move-license-from-msp-to-another-org-under-the-msp">Move License from MSP to another Org under the MSP</h2>
+<pre><code>PUT /api/v1/msps/:msp_id/licenses
+</code></pre>
+<h3 id="request_6">Request</h3>
+<pre><code>{
+    "op": "amend",
+    "subscription_id": "SUB-0000144",
+    "dst_org_id": "3eff35f7-c218-894e-bca2-24e5325601cc",
+    "quantity": 10
+}
+</code></pre>
+<h3 id="parameters_3">Parameters</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>op</code></td>
+<td><code>string</code></td>
+<td>operation (amend/unamend/delete/annotate)</td>
+</tr>
+<tr>
+<td><code>subscription_id</code></td>
+<td><code>string</code></td>
+<td>license id</td>
+</tr>
+<tr>
+<td><code>dst_org_id</code></td>
+<td><code>string</code></td>
+<td>destination org id</td>
+</tr>
+<tr>
+<td><code>quantity</code></td>
+<td><code>int</code></td>
+<td>quantity</td>
+</tr>
+</tbody>
+</table>
+<h2 id="undo-the-license-move">Undo the License Move</h2>
+<pre><code>PUT /api/v1/msps/:msp_id/licenses
+</code></pre>
+<h3 id="request_7">Request</h3>
+<pre><code>{
+    "op": "unamend",
+    "amendment_id": "2b9116ab-cd1e-e897-6e08-31fccd88e792",
+}
+</code></pre>
+<h2 id="delete-license">Delete License</h2>
+<pre><code>PUT /api/v1/msps/:msp_id/licenses
+</code></pre>
+<h3 id="request_8">Request</h3>
+<pre><code>{
+    "op": "delete",
+    "subscription_id": "SUB-0000144"
+}
+</code></pre>
+<h2 id="annotate-a-license">Annotate a License</h2>
+<pre><code>PUT /api/v1/msps/:msp_id/licenses
+</code></pre>
+<h3 id="request_9">Request</h3>
+<pre><code>{
+    "op": "annotate",
+    "subscription_id": "SUB-000144",
+    "notes": "customer notes"
+}
+</code></pre>
+<h1 id="audit-logs">Audit Logs</h1>
+<p>Audit logs records all administrative activities in a MSP</p>
+<h2 id="get-a-list-of-change-logs-for-the-current-msp">Get a list of change logs for the current MSP</h2>
+<pre><code>GET /api/v1/msps/:msp_id/logs?start=1431298000&amp;end=1431384000&amp;limit=100
+</code></pre>
+<h3 id="supported-filters_1">Supported Filters</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>org_id</code></td>
+<td><code>string</code></td>
+<td>org id</td>
+</tr>
+<tr>
+<td><code>admin_name</code></td>
+<td><code>string</code></td>
+<td>admin name or email</td>
+</tr>
+<tr>
+<td><code>message</code></td>
+<td><code>string</code></td>
+<td>message</td>
+</tr>
+</tbody>
+</table>
+<h3 id="response_6">Response</h3>
+<p>The logs are always sorted by time in descending order</p>
+<pre><code>{
+    "start": 1431298000,
+    "end":   1431384000,
+    "limit": 100,
+
+    "total": 135,
+    "results": [
+        {
+            "timestamp": 1431382121,
+            "org_id": "2818e386-8dec-2562-9ede-5b8a0fbbdc71",
+            "msp_id": "d287e62f-9689-4c05-85d8-f2b9ba0a531f",
+            "admin_id": "72bfa2bd-e58a-4670-9d20-a1468f7a6f58",
+            "admin_name": "test@mistsys.com",
+            "message": "TEST AUDIT",
+            "id": "c6f9347b-b0a4-4a23-b927-fa9249f2ffb2"
+        }
+    ]
+}
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>timestamp</code></td>
+<td><code>long</code></td>
+<td>start time, in epoch</td>
+</tr>
+<tr>
+<td><code>org_id</code></td>
+<td><code>string</code></td>
+<td>org id</td>
+</tr>
+<tr>
+<td><code>msp_id</code></td>
+<td><code>string</code></td>
+<td>msp id</td>
+</tr>
+<tr>
+<td><code>admin_id</code></td>
+<td><code>string</code></td>
+<td>admin id</td>
+</tr>
+<tr>
+<td><code>admin_name</code></td>
+<td><code>string</code></td>
+<td>name of the admin that performs the action</td>
+</tr>
+<tr>
+<td><code>message</code></td>
+<td><code>string</code></td>
+<td>log message</td>
+</tr>
+<tr>
+<td><code>before</code></td>
+<td><code>object</code></td>
+<td>field values prior to the change</td>
+</tr>
+<tr>
+<td><code>after</code></td>
+<td><code>object</code></td>
+<td>field values after the change</td>
+</tr>
+</tbody>
+</table>
+<h2 id="count-by-distinct-attributes-of-audit-logs">Count by Distinct Attributes of Audit Logs</h2>
+<pre><code>GET /api/v1/msps/:msp_id/logs/count?distinct=admin_name
+</code></pre>
+<h3 id="request_10">Request</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>distinct</code></td>
+<td><code>string</code></td>
+<td>admin_id / admin_name / message / org_id, default is admin_name</td>
+</tr>
+</tbody>
+</table>
+<h3 id="response_7">Response</h3>
+<pre><code>{
+    "start": 1511967600,
+    "end": 1513177200,
+    "limit": 10,
+    "distinct": "admin_name",
+
+    "total": 2,
+    "results": [
+        {
+            "admin_name": "John Smith john.smith@corp.com",
+            "count": 61
+        },
+        {
+            "admin_name": "Eric Sky eric@corp.com",
+            "count": 44
+        }
+    ]
+}
+</code></pre>
+<h1 id="msp-insights">MSP Insights</h1>
+<h2 id="get-insight-metrics">Get Insight Metrics</h2>
+<p>See <a href="https://api.mist.com/api/v1/docs/Site.md#get-available-insight-metrics">GET AVAILABLE_INSIGHT METRICS</a> for metrics description of MSP Scope</p>
+<pre><code>GET /api/v1/msps/:msp_id/insights/:metric
+</code></pre>
+<h3 id="response_8">Response</h3>
+<pre><code>{
+    "start": 1428939600,
+    "end":   1428954000,
+    "interval": 3600,
+
+    // data
+    "results": [
+        {
+            // results depends on :metric
+        },
+        ...
+    ],
+}
+</code></pre>
+<h1 id="msp-admins">MSP Admins</h1>
+<h2 id="get-msp-admins">Get MSP Admins</h2>
+<p>Get a list of people who can manage the MSP/Org(s) under the MSP</p>
+<pre><code>GET /api/v1/msps/:msp_id/admins
+</code></pre>
+<h3 id="response_9">Response</h3>
+<pre><code>[
+    {
+        "admin_id": "456b7016-a916-a4b1-78dd-72b947c152b7",
+        "first_name": "Joe",
+        "last_name": "Smith",
+        "two_factor_verified": true,
+        "privileges": [
+            { "scope":"msp", "role": "admin" },
+            { "scope":"org", "org_id": "2818e386-8dec-2562-9ede-5b8a0fbbdc71", "role": "admin" },
+            { "scope":"orggroup", "orggroup_id": "507f1bab-13ba-73e2-f291-2bcb8d1362b0", "role": "read" }
+        ]
+    }
+]
+</code></pre>
+<h3 id="response-definition">Response Definition</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>admin_id</code></td>
+<td><code>string</code></td>
+<td>admin id</td>
+</tr>
+<tr>
+<td><code>first_name</code></td>
+<td><code>string</code></td>
+<td>first name</td>
+</tr>
+<tr>
+<td><code>last_name</code></td>
+<td><code>string</code></td>
+<td>last name</td>
+</tr>
+<tr>
+<td><code>two_factor_verified</code></td>
+<td><code>boolean</code></td>
+<td>two factor status</td>
+</tr>
+<tr>
+<td><code>privileges</code></td>
+<td><code>list</code></td>
+<td>list of privileges the admin has on the MSP / Orgs / OrgGroups</td>
+</tr>
+<tr>
+<td><code>scope</code></td>
+<td><code>string</code></td>
+<td>msp / org / orggroup</td>
+</tr>
+<tr>
+<td><code>role</code></td>
+<td><code>string</code></td>
+<td>admin / write / read / helpdesk</td>
+</tr>
+</tbody>
+</table>
+<h2 id="update-msp-admins">Update MSP Admins</h2>
+<p>Update admin privileges under the Org</p>
+<pre><code>PUT /api/v1/msps/:msp_id/admins/:admin_id
+</code></pre>
+<h3 id="request_11">Request</h3>
+<pre><code>{
+    "privileges": [
+        { "scope":"msp", "role": "admin" },
+        { "scope":"org", "org_id": "2818e386-8dec-2562-9ede-5b8a0fbbdc71", "role": "admin" },
+        { "scope":"orggroup", "orggroup_id": "507f1bab-13ba-73e2-f291-2bcb8d1362b0", "role": "read" }
+    ]
+}
+</code></pre>
+<h2 id="revoke-admin">Revoke Admin</h2>
+<p>This removes all privileges this admin has against the MSP. This goes deep all the way to the sites</p>
+<pre><code>DELETE /api/v1/msps/:msp_id/admins/:admin_id
+</code></pre>
+<h2 id="invite-msp-admin">Invite MSP Admin</h2>
+<p>A MSP admin can invite other admin to manage (admin or read) the MSP and/or Org(s) under the MSP.</p>
+<pre><code>POST /api/v1/msps/:msp_id/invites
+</code></pre>
+<h3 id="request_12">Request</h3>
+<pre><code>{
+    "email": "joe@abc.com",
+    "name": "Richard",
+    "hours": 24,
+    "privileges": {
+        { "scope":"msp", "role": "admin" },
+        { "scope":"org", "org_id": "2818e386-8dec-2562-9ede-5b8a0fbbdc71", "role": "admin" },
+        { "scope":"orggroup", "orggroup_id": "507f1bab-13ba-73e2-f291-2bcb8d1362b0", "role": "read" }
+    }
+}
+</code></pre>
+<h3 id="parameters_4">Parameters</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>email</code></td>
+<td><code>string</code></td>
+<td>email - admin_id is not exposed</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td><code>string</code></td>
+<td>name, used in the invitation text</td>
+</tr>
+<tr>
+<td><code>privileges</code></td>
+<td><code>list</code></td>
+<td>list of privileges the admin has on the MSP / Orgs / OrgGroups</td>
+</tr>
+<tr>
+<td><code>scope</code></td>
+<td><code>string</code></td>
+<td>msp / org / orggroup</td>
+</tr>
+<tr>
+<td><code>role</code></td>
+<td><code>string</code></td>
+<td>admin / write / read</td>
+</tr>
+<tr>
+<td><code>hours</code></td>
+<td><code>int</code></td>
+<td>optional, how long the invite should be valid, default is 1 day, maximum is 1 week.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="response_10">Response</h3>
+<pre><code>Status: 200 OK
+</code></pre>
+<p>An email will also be sent to the user with a link to https://manage.mist.com/verify/invite?token=:token</p>
+<h2 id="verify-invitation">Verify Invitation</h2>
+<pre><code>POST /api/v1/invite/verify/:token
+</code></pre>
+<h3 id="response-if-successful">Response if successful</h3>
+<pre><code>Status: 200 OK
+</code></pre>
+<p>NOTE: another call to <code>GET /api/v1/self</code> is required to see the new set of privileges</p>
+<h2 id="un-invite-admin">Un-invite Admin</h2>
+<pre><code>DELETE /api/v1/msps/:msp_id/invites/:invite_id
+</code></pre>
+<h2 id="update-the-invite">Update the Invite</h2>
+<pre><code>PUT /api/v1/msps/:msp_id/invites/:invite_id
+</code></pre>
+<h3 id="request_13">Request</h3>
+<pre><code>{
+    "hours": 24,
+    "privileges": {
+        { "scope":"org", "org_id": "2818e386-8dec-2562-9ede-5b8a0fbbdc71", "role": "read" }
+    }
+}
+</code></pre>
+<h3 id="parameters_5">Parameters</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>hours</code></td>
+<td><code>int</code></td>
+<td>optional, how long the invite should be valid, default is 1 day, maximum is 1 week.</td>
+</tr>
+<tr>
+<td><code>privileges</code></td>
+<td><code>list</code></td>
+<td>list of privileges the admin has on the MSP / Orgs / OrgGroups</td>
+</tr>
+<tr>
+<td><code>scope</code></td>
+<td><code>string</code></td>
+<td>msp / org / orggroup</td>
+</tr>
+</tbody>
+</table>
+<h1 id="sso-saml">SSO / SAML</h1>
+<h2 id="create-sso">Create SSO</h2>
+<pre><code>POST /api/v1/msps/:msp_id/ssos
+</code></pre>
+<h3 id="request_14">Request</h3>
+<pre><code>{
+    "name": "onelogin",
+    "issuer": "https://app.onelogin.com/saml/metadata/138130"
+    "idp_cert": "-----BEGIN CERTIFICATE-----\nMIIFZjCCA06gAwIBAgIIP61/1qm/uDowDQYJKoZIhvcNAQELBQE\n-----END CERTIFICATE-----",
+    "idp_sign_algo": "sha256",
+    "idp_sso_url": "https://yourorg.onelogin.com/trust/saml2/http-post/sso/138130",
+    "nameid_format": "email",
+
+    "ignore_unmatched_roles": false,
+    "default_role": null,
+
+    // some IdP support a custom logout URL that is different from SP-initiated SLO process
+    "custom_logout_url": "https://6.4.5.7/saml/idp/SingleLogoutService.php?param1=value1"
+}
+</code></pre>
+<h3 id="definition">Definition</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td><code>string</code></td>
+<td>name</td>
+</tr>
+<tr>
+<td><code>issuer</code></td>
+<td><code>string</code></td>
+<td>IDP issuer URL</td>
+</tr>
+<tr>
+<td><code>idp_cert</code></td>
+<td><code>string</code></td>
+<td>IDP Cert (used to verify the signed response)</td>
+</tr>
+<tr>
+<td><code>idp_sso_url</code></td>
+<td><code>string</code></td>
+<td>IDP Single-Sign-On URL</td>
+</tr>
+<tr>
+<td><code>nameid_format</code></td>
+<td><code>string</code></td>
+<td>email (default) / unspecified</td>
+</tr>
+<tr>
+<td><code>ignore_unmatched_roles</code></td>
+<td><code>boolean</code></td>
+<td>ignore any unmatched roles provided in assertion. By default, an assertion is treated as invalid for any unmatched role</td>
+</tr>
+<tr>
+<td><code>default_role</code></td>
+<td><code>string</code></td>
+<td>default role to assign if there’s no match. By default, an assertion is treated as invalid when there’s no role matched</td>
+</tr>
+<tr>
+<td><code>role_attr_from</code></td>
+<td><code>string</code></td>
+<td>optional, name of the attribute in SAML Assertion to extract role from (defaults to <code>Role</code>)</td>
+</tr>
+<tr>
+<td><code>role_attr_extraction</code></td>
+<td><code>string</code></td>
+<td>optional, user defined role parsing scheme. <a href="https://api.mist.com/api/v1/docs/MSP#Supported-Role-Parsing-Schemes">See Supported Role Parsing Schemes</a></td>
+</tr>
+<tr>
+<td><code>custom_logout_url</code></td>
+<td><code>string</code></td>
+<td>optional, a URL we will redirect the user after user logout from Mist (for some IdP which supports a custom logout URL that is different from SP-initiated SLO process)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="supported-role-parsing-schemes">Supported Role Parsing Schemes</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Scheme</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cn</code></td>
+<td>- The expected role attribute format in SAML Assertion is “CN=cn,OU=ou1,OU=ou2,…”<br><br> - CN (the key) is case insensitive and exactly 1 CN is expected (or the entire entry will be ignored)<br><br> E.g. if role attribute is “CN=cn,OU=ou1,OU=ou2” then parsed role value is “cn”</td>
+</tr>
+</tbody>
+</table>
+<h2 id="get-all-sso-configured-for-the-msp">Get All SSO Configured for the MSP</h2>
+<pre><code>GET /api/v1/msps/:msp_id/ssos
+</code></pre>
+<h3 id="response_11">Response</h3>
+<pre><code>[
+    {
+        "name": "onelogin",
+        "issuer": "https://app.onelogin.com/saml/metadata/138130"
+        "idp_cert": "-----BEGIN CERTIFICATE-----\nMIIFZjCCA06gAwIBAgIIP61/1qm/uDowDQYJKoZIhvcNAQELBQE\n-----END CERTIFICATE-----",
+        "idp_sign_algo": "sha256",
+        "idp_sso_url": "https://yourorg.onelogin.com/trust/saml2/http-post/sso/138130"
+    }
+]
+</code></pre>
+<h2 id="update-sso">Update SSO</h2>
+<pre><code>PUT /api/v1/msps/:msp_id/ssos/:sso_id
+</code></pre>
+<h2 id="delete-sso">Delete SSO</h2>
+<pre><code>DELETE /api/v1/msps/:msp_id/ssos/:sso_id
+</code></pre>
+<h2 id="get-saml-metadata">Get SAML Metadata</h2>
+<pre><code>GET /api/v1/msps/:msp_id/ssos/:sso_id/metadata
+</code></pre>
+<h3 id="response_12">Response</h3>
+<pre><code>{
+    "entity_id": "https://api.mist.com/api/v1/saml/llDfa13f/login",
+    "acs_url": "https://api.mist.com/api/v1/saml/llDfa13f/login",
+    "logout_url": "https://api.mist.com/api/v1/saml/llDfa13f/logout",
+    "metadata_xml": "&lt;?xml version="1.0" encoding="UTF-8"?&gt;&lt;md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://api.mist.com/api/v1/saml/llDfa13f/login" validUntil="2027-10-12T21:59:01Z" xmlns:ds="http://www.w3.org/2000/09/xmldsig#"&gt;&lt;md:SPSSODescriptor AuthnRequestsSigned="false" WantAssertionsSigned="true" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"&gt;&lt;md:NameIDFormat&gt;urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified&lt;/md:NameIDFormat&gt;&lt;md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://api.mist.com/api/v1/saml/llDfa13f/login" index="0" isDefault="true"/&gt;&lt;/md:SPSSODescriptor&gt;&lt;/md:EntityDescriptor&gt;"
+}
+</code></pre>
+<h2 id="download-saml-metadata">Download SAML Metadata</h2>
+<pre><code>GET /api/v1/msps/:msp_id/ssos/:sso_id/metadata.xml
+</code></pre>
+<h3 id="response_13">Response</h3>
+<pre><code>&lt;?xml version="1.0" encoding="UTF-8"?&gt;&lt;md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://api.mist.com/api/v1/saml/5hdF5g/login" validUntil="2027-10-12T21:59:01Z" xmlns:ds="http://www.w3.org/2000/09/xmldsig#"&gt;
+    &lt;md:SPSSODescriptor AuthnRequestsSigned="false" WantAssertionsSigned="true" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"&gt;
+        &lt;md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://api.mist.com/api/v1/saml/5hdF5g/logout" /&gt;
+        &lt;md:NameIDFormat&gt;urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified&lt;/md:NameIDFormat&gt;
+        &lt;md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://api.mist.com/api/v1/saml/5hdF5g/login" index="0" isDefault="true"/&gt;
+        &lt;md:AttributeConsumingService index="0"&gt;
+            &lt;md:ServiceName xml:lang="en-US"&gt;Mist&lt;/md:ServiceName&gt;
+            &lt;md:RequestedAttribute Name="Role" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic" isRequired="true"/&gt;
+            &lt;md:RequestedAttribute Name="FirstName" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic" isRequired="false"/&gt;
+            &lt;md:RequestedAttribute Name="LastName" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic" isRequired="false"/&gt;
+        &lt;/md:AttributeConsumingService&gt;
+    &lt;/md:SPSSODescriptor&gt;
+&lt;/md:EntityDescriptor&gt;
+</code></pre>
+<h2 id="get-latest-sso-failures">Get Latest SSO Failures</h2>
+<pre><code>GET /api/v1/msps/:msp_id/ssos/:sso_id/failures
+</code></pre>
+<h3 id="response_14">Response</h3>
+<pre><code>{
+    "results": [
+        {
+            "timestamp": 1431382121,
+            "detail": "Role attribute missing",
+            "saml_assertion_xml": "&lt;samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:nam..."            
+        }
+    ]
+}
+</code></pre>
+<h2 id="create-sso-role">Create SSO Role</h2>
+<pre><code>POST /api/v1/msps/:msp_id/ssoroles
+</code></pre>
+<h3 id="request_15">Request</h3>
+<pre><code>{
+    "name": "NOC",
+    "privileges": [
+        { "scope":"msp", "role": "admin" },
+        { "scope":"org", "org_id": "2818e386-8dec-2562-9ede-5b8a0fbbdc71", "role": "admin" },
+        { "scope":"orggroup", "orggroup_id": "507f1bab-13ba-73e2-f291-2bcb8d1362b0", "role": "read" }
+    ]
+}
+</code></pre>
+<h3 id="definition_1">Definition</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td><code>string</code></td>
+<td>name that would match the Role from SSO Login. unique per Org, maximum length is 32</td>
+</tr>
+<tr>
+<td><code>privileges</code></td>
+<td><code>list</code></td>
+<td>list of privileges the admin has on the MSP / Orgs / OrgGroups</td>
+</tr>
+<tr>
+<td><code>scope</code></td>
+<td><code>string</code></td>
+<td>msp / org / orggroup</td>
+</tr>
+</tbody>
+</table>
+<h2 id="update-sso-role">Update SSO Role</h2>
+<pre><code>PUT /api/v1/msps/:msp_id/ssoroles/:ssorole_id
+</code></pre>
+<h3 id="request_16">Request</h3>
+<pre><code>{
+    "name": "NOC",
+    "privileges": [
+        { "scope":"msp", "role": "admin" },
+        { "scope":"org", "org_id": "2818e386-8dec-2562-9ede-5b8a0fbbdc71", "role": "admin" },
+        { "scope":"orggroup", "orggroup_id": "507f1bab-13ba-73e2-f291-2bcb8d1362b0", "role": "read" }
+    ]
+}
+</code></pre>
+<h2 id="get-all-sso-roles">Get All SSO Roles</h2>
+<pre><code>GET /api/v1/msps/:msp_id/ssoroles
+</code></pre>
+<h2 id="delete-sso-role">Delete SSO Role</h2>
+<pre><code>DELETE /api/v1/msps/:msp_id/ssoroles/:ssorole_id
+</code></pre>
+<h2 id="get-inventory-by-mac">Get Inventory by MAC</h2>
+<pre><code>GET /api/v1/msps/:msp_id/inventory/:mac
+</code></pre>
+<h3 id="response_15">Response</h3>
+<pre><code>{
+    "serial": "FXLH2015150025",
+    "model": "AP200",
+    "type": "ap",
+    "mac": "5c5b35000018",
+    "org_id": "2818e386-8dec-2562-9ede-5b8a0fbbdc71",
+    "site_id": "4ac1dcf4-9d8b-7211-65c4-057819f0862b"
+}
+</code></pre>
+<h1 id="tickets">Tickets</h1>
+<h2 id="get-tickets-of-a-msp">Get Tickets of a MSP</h2>
+<pre><code>GET /api/v1/msps/:msp_id/tickets?start=1546300800&amp;end=-1d
+</code></pre>
+<h3 id="parameters_6">Parameters</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>start</code></td>
+<td><code>string</code></td>
+<td>start datetime, can be epoch or relative time like -1d, -1w; -1d if not specified</td>
+</tr>
+<tr>
+<td><code>end</code></td>
+<td><code>string</code></td>
+<td>end datetime, can be epoch or relative time like -1d, -2h</td>
+</tr>
+<tr>
+<td><code>duration</code></td>
+<td><code>string</code></td>
+<td>duration like 7d, 2w</td>
+</tr>
+</tbody>
+</table>
+<p>NOTE: end &amp; duration if both specified, will take precedence over start time</p>
+<h3 id="response_16">Response</h3>
+<pre><code>[
+    {
+        "id": "00000000-0000-0000-0000-00000000000c",
+        "org_id": "9291176a-0000-000-0000-002e208b2d3f",
+        "created_at": 1453908369,
+        "updated_at": 1453908369,
+        "subject": "Please add me",
+        "status": "open",
+        "type": "question",
+        "requester": "John Smith"
+    }
+]
+</code></pre>
+<h3 id="definitions_1">Definitions</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td><code>string</code></td>
+<td>id of the ticket</td>
+</tr>
+<tr>
+<td><code>org_id</code></td>
+<td><code>string</code></td>
+<td>id of the Org</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td><code>int</code></td>
+<td>when the ticket was created</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td><code>int</code></td>
+<td>when the ticket was last updated</td>
+</tr>
+<tr>
+<td><code>type</code></td>
+<td><code>string</code></td>
+<td>question (default) / bug / critical</td>
+</tr>
+<tr>
+<td><code>subject</code></td>
+<td><code>string</code></td>
+<td>subject</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td><code>string</code></td>
+<td>open / pending / solved / closed</td>
+</tr>
+<tr>
+<td><code>requester</code></td>
+<td><code>string</code></td>
+<td>name of the requester</td>
+</tr>
+</tbody>
+</table>
+<p>Ticket Status</p>
+<ul>
+<li><code>open</code>: ticket is open, Mist is working on it</li>
+<li><code>pending</code>: ticket is open and Requester attention is needed (e.g. Mist is asking for some more information)</li>
+<li><code>solved</code>: ticket is marked as solved / considered by Mist (requester can update it, causing it to re-open; or rate it)</li>
+<li><code>closed</code>: ticket is archived and cannot be changed</li>
+</ul>
+<h2 id="count-tickets">Count tickets</h2>
+<pre><code>GET /api/v1/msps/:msp_id/tickets/count?distinct=status
+</code></pre>
+<h3 id="definitions_2">Definitions</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>distinct</code></td>
+<td><code>string</code></td>
+<td>status (default) / type / org_id</td>
+</tr>
+</tbody>
+</table>
+<h3 id="response_17">Response</h3>
+<pre><code>{
+    "limit": 1000,
+    "distinct": "status",
+    "total": 5,
+    "results": [
+        {
+            "status": "closed",
+            "count": 24
+        },
+        {
+            "status": "open",
+            "count": 12
+        },
+        {
+            "status": "solved",
+            "count": 15
+        },
+        {
+            "status": "pending",
+            "count": 10
+        },
+        {
+            "status": "hold",
+            "count": 3
+        }
+    ]
+}
+</code></pre>
+<h1 id="marvis-action">Marvis Action</h1>
+<h2 id="count-marvis-actions">Count Marvis actions</h2>
+<pre><code>GET /api/v1/msps/:msp_id/suggestion/count?distinct=org_id
+</code></pre>
+<h3 id="definitions_3">Definitions</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>distinct</code></td>
+<td><code>string</code></td>
+<td>org_id (default)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="response_18">Response</h3>
+<pre><code>{
+    "limit": 1000,
+    "distinct": "status",
+    "total": 3,
+    "results": [
+        {
+            "status": "002e176a-0000-000-1111-002e208b20e1",
+            "count": 24
+        },
+        {
+            "status": "2d3f176a-0000-000-2222-002e208f176a",
+            "count": 12
+        },
+        {
+            "status": "08b2176a-0000-000-3333-002e208b2d3f",
+            "count": 15
+        },
+    ]
+}
+</code></pre>
+
+
+
+</body></html>

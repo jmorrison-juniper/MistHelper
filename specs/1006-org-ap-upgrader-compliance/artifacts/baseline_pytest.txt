@@ -1,0 +1,1006 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.3, pytest-9.0.3, pluggy-1.6.0 -- C:\Users\jmorrison\AppData\Local\Programs\Python\Python313\python.exe
+cachedir: .pytest_cache
+hypothesis profile 'default'
+rootdir: C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper
+configfile: pyproject.toml
+plugins: anyio-4.13.0, hypothesis-6.151.12, asyncio-1.3.0, cov-7.1.0, timeout-2.4.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 2944 items / 29 errors / 2834 deselected / 110 selected
+
+<Package MistHelper>
+  <Package tests>
+    <Package unit>
+      <Module test_org_ap_upgrader.py>
+        Tests for src.firmware.org_ap_upgrader -- OrgLevelAPFirmwareUpgrader.
+        
+        Covers: initialization, MSP mode selection, MSP/org selection, site scope,
+        AP discovery, firmware stats, version selection, upgrade configuration,
+        scheduling/time parsing, confirmation, execution (dry-run and live),
+        results writing, and selection parsing utilities.
+        <Class TestInit>
+          Constructor and initialization tests.
+          <Function test_defaults>
+          <Function test_msp_privileges>
+          <Function test_selected_msp>
+          <Function test_dry_run_false>
+        <Class TestParseSelection>
+          Tests for _parse_selection instance method.
+          <Function test_single_number>
+          <Function test_multiple_comma>
+          <Function test_range_dash>
+          <Function test_through_keyword>
+          <Function test_out_of_range>
+          <Function test_invalid_text>
+          <Function test_mixed_input>
+          <Function test_dedup>
+          <Function test_empty_string>
+        <Class TestSiteScope>
+          Tests for _step1_select_site_scope.
+          <Function test_all_sites>
+          <Function test_specific_sites>
+          <Function test_invalid_choice>
+          <Function test_eof_exit>
+          <Function test_select_all_from_specific>
+          <Function test_cancel_site_selection>
+          <Function test_no_sites_found>
+        <Class TestAPDiscovery>
+          Tests for _step2_discover_aps.
+          <Function test_org_aps_found>
+          <Function test_no_aps_found>
+          <Function test_selected_sites_aps>
+          <Function test_api_session_none>
+        <Class TestFilterAPs>
+          Tests for _filter_ap_devices.
+          <Function test_filters_by_type>
+          <Function test_filters_by_model_prefix>
+          <Function test_empty_list>
+        <Class TestFirmwareStats>
+          Tests for _step3_fetch_firmware_stats.
+          <Function test_populates_versions>
+          <Function test_api_session_none>
+          <Function test_unknown_firmware>
+        <Class TestVersionCounting>
+          Tests for _count_versions_by_mac.
+          <Function test_counts_versions>
+          <Function test_unknown_counted>
+        <Class TestAvailableFirmware>
+          Tests for _step4_fetch_available_firmware.
+          <Function test_loads_versions>
+          <Function test_no_versions>
+          <Function test_api_session_none>
+        <Class TestVersionSelection>
+          Tests for _step5_select_firmware_versions.
+          <Function test_selects_version>
+          <Function test_skip_model>
+          <Function test_all_at_target>
+          <Function test_eof_during_selection>
+        <Class TestGetVersionsForModel>
+          Tests for _get_versions_for_model.
+          <Function test_returns_sorted>
+          <Function test_no_match>
+          <Function test_dedup>
+        <Class TestUpgradeConfig>
+          Tests for _step6_configure_upgrade.
+          <Function test_basic_config>
+          <Function test_serial_strategies>
+          <Function test_canary_config>
+          <Function test_eof_download>
+        <Class TestTimeParsingRelative>
+          Tests for _parse_relative_offset.
+          <Function test_minutes>
+          <Function test_hours>
+          <Function test_days>
+          <Function test_in_prefix>
+          <Function test_invalid>
+        <Class TestTimeParsingAbsolute>
+          Tests for _parse_time_input.
+          <Function test_now>
+          <Function test_empty>
+          <Function test_relative_input>
+          <Function test_absolute_hhmm>
+          <Function test_utc_suffix>
+          <Function test_invalid_time>
+          <Function test_site_local_mode>
+        <Class TestP2PConfig>
+          Tests for P2P configuration.
+          <Function test_p2p_enabled>
+          <Function test_p2p_disabled>
+          <Function test_p2p_defaults>
+          <Function test_p2p_invalid_values>
+        <Class TestDryRun>
+          Tests for dry-run execution.
+          <Function test_dry_run_succeeds>
+          <Function test_dry_run_records_status>
+        <Class TestLiveExecution>
+          Tests for live execution path.
+          <Function test_cancel_upgrade>
+          <Function test_upgrade_confirmed>
+          <Function test_upgrade_api_failure>
+          <Function test_eof_during_confirm>
+        <Class TestBuildUpgradeBody>
+          Tests for _build_upgrade_body.
+          <Function test_all_sites>
+          <Function test_selected_sites>
+          <Function test_canary_phases>
+          <Function test_p2p_enabled>
+          <Function test_scheduling>
+        <Class TestResultsWriting>
+          Tests for _step8_write_results.
+          <Function test_writes_results>
+          <Function test_no_results>
+          <Function test_write_error>
+        <Class TestMSPMode>
+          Tests for MSP multi-org mode.
+          <Function test_run_single_org_mode>
+          <Function test_run_msp_mode_selected>
+          <Function test_prompt_msp_mode_single>
+          <Function test_prompt_msp_mode_multi>
+          <Function test_prompt_msp_mode_default>
+          <Function test_prompt_msp_mode_eof>
+        <Class TestMSPSelection>
+          Tests for _select_msps.
+          <Function test_single_msp_auto>
+          <Function test_multi_msp_select_all>
+          <Function test_multi_msp_cancel>
+          <Function test_multi_msp_select_one>
+          <Function test_default_msp>
+        <Class TestOrgSelection>
+          Tests for _select_orgs_from_msp.
+          <Function test_selects_orgs>
+          <Function test_select_all_orgs>
+          <Function test_skip_msp>
+          <Function test_no_orgs>
+          <Function test_api_error>
+          <Function test_api_session_none>
+        <Class TestMSPSummary>
+          Tests for _print_msp_summary.
+          <Function test_summary_output>
+          <Function test_summary_dry_run>
+        <Class TestParseSelectionInput>
+          Tests for _parse_selection (range/list selection parsing).
+          <Function test_single>
+          <Function test_range>
+          <Function test_through>
+          <Function test_comma_separated>
+          <Function test_out_of_range>
+        <Class TestExecuteWorkflow>
+          Tests for the execute method.
+          <Function test_keyboard_interrupt>
+          <Function test_step1_fails>
+        <Class TestOrganizeByVersion>
+          Tests for _organize_by_version.
+          <Function test_groups_by_version>
+          <Function test_separate_versions>
+        <Class TestDisplayConfig>
+          Tests for _display_configuration.
+          <Function test_basic_display>
+          <Function test_scheduled_display>
+        <Class TestFailureThreshold>
+          Tests for _configure_failure_threshold.
+          <Function test_custom_threshold>
+          <Function test_default_threshold>
+          <Function test_invalid_threshold>
+          <Function test_out_of_range_threshold>
+
+=================================== ERRORS ====================================
+_____ ERROR collecting tests/unit/capture/test_multi_ap_scan_workflow.py ______
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\capture\test_multi_ap_scan_workflow.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\capture\test_multi_ap_scan_workflow.py:7: in <module>
+    from src.capture.multi_ap_scan_workflow import MultiApScanCaptureWorkflow
+src\capture\__init__.py:3: in <module>
+    from src.capture.packet_capture import PacketCaptureManager
+src\capture\packet_capture.py:12: in <module>
+    from src.capture.packet_capture_download import PacketCaptureDownloadManager
+src\capture\packet_capture_download.py:12: in <module>
+    import requests  # Download PCAP binaries from Mist-provided URLs.
+    ^^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+_ ERROR collecting tests/unit/capture/test_org_pcap_wait_download_workflow.py _
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\capture\test_org_pcap_wait_download_workflow.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\capture\test_org_pcap_wait_download_workflow.py:7: in <module>
+    from src.capture.org_pcap_wait_download_workflow import OrgPcapWaitDownloadWorkflow
+src\capture\__init__.py:3: in <module>
+    from src.capture.packet_capture import PacketCaptureManager
+src\capture\packet_capture.py:12: in <module>
+    from src.capture.packet_capture_download import PacketCaptureDownloadManager
+src\capture\packet_capture_download.py:12: in <module>
+    import requests  # Download PCAP binaries from Mist-provided URLs.
+    ^^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+_____ ERROR collecting tests/unit/capture/test_packet_capture_download.py _____
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\capture\test_packet_capture_download.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\capture\test_packet_capture_download.py:11: in <module>
+    from src.capture.packet_capture_download import PacketCaptureDownloadManager
+src\capture\__init__.py:3: in <module>
+    from src.capture.packet_capture import PacketCaptureManager
+src\capture\packet_capture.py:12: in <module>
+    from src.capture.packet_capture_download import PacketCaptureDownloadManager
+src\capture\packet_capture_download.py:12: in <module>
+    import requests  # Download PCAP binaries from Mist-provided URLs.
+    ^^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+_____ ERROR collecting tests/unit/capture/test_packet_capture_manager.py ______
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\capture\test_packet_capture_manager.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\capture\test_packet_capture_manager.py:9: in <module>
+    from src.capture.packet_capture import PacketCaptureManager
+src\capture\__init__.py:3: in <module>
+    from src.capture.packet_capture import PacketCaptureManager
+src\capture\packet_capture.py:12: in <module>
+    from src.capture.packet_capture_download import PacketCaptureDownloadManager
+src\capture\packet_capture_download.py:12: in <module>
+    import requests  # Download PCAP binaries from Mist-provided URLs.
+    ^^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+_ ERROR collecting tests/unit/capture/test_site_pcap_wait_download_workflow.py _
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\capture\test_site_pcap_wait_download_workflow.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\capture\test_site_pcap_wait_download_workflow.py:7: in <module>
+    from src.capture.site_pcap_wait_download_workflow import SitePcapWaitDownloadWorkflow
+src\capture\__init__.py:3: in <module>
+    from src.capture.packet_capture import PacketCaptureManager
+src\capture\packet_capture.py:12: in <module>
+    from src.capture.packet_capture_download import PacketCaptureDownloadManager
+src\capture\packet_capture_download.py:12: in <module>
+    import requests  # Download PCAP binaries from Mist-provided URLs.
+    ^^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+_____ ERROR collecting tests/unit/gateway/test_device_template_cloner.py ______
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\gateway\test_device_template_cloner.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\gateway\test_device_template_cloner.py:13: in <module>
+    from src.gateway.device_template_cloner import (
+src\gateway\device_template_cloner.py:11: in <module>
+    import mistapi.api.v1.orgs.gatewaytemplates  # Create/list org gateway templates
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
+    from mistapi.__api_session import APISession as APISession
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__api_session.py:20: in <module>
+    import hvac
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\__init__.py:1: in <module>
+    from hvac.v1 import Client
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\v1\__init__.py:6: in <module>
+    from hvac import adapters, api, exceptions, utils
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\adapters.py:7: in <module>
+    import requests
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+__ ERROR collecting tests/unit/site/address_audit/test_address_corrector.py ___
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\site\address_audit\test_address_corrector.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\site\address_audit\test_address_corrector.py:10: in <module>
+    from src.site.address_audit import address_corrector as corr_mod
+src\site\address_audit\__init__.py:14: in <module>
+    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\site\address_audit\address_corrector.py:24: in <module>
+    import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
+    ^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
+    from mistapi.__api_session import APISession as APISession
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__api_session.py:20: in <module>
+    import hvac
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\__init__.py:1: in <module>
+    from hvac.v1 import Client
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\v1\__init__.py:6: in <module>
+    from hvac import adapters, api, exceptions, utils
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\adapters.py:7: in <module>
+    import requests
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+___ ERROR collecting tests/unit/site/address_audit/test_address_resolver.py ___
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\site\address_audit\test_address_resolver.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\site\address_audit\test_address_resolver.py:5: in <module>
+    from src.site.address_audit import address_resolver as resolver_mod
+src\site\address_audit\__init__.py:14: in <module>
+    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\site\address_audit\address_corrector.py:24: in <module>
+    import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
+    ^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
+    from mistapi.__api_session import APISession as APISession
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__api_session.py:20: in <module>
+    import hvac
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\__init__.py:1: in <module>
+    from hvac.v1 import Client
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\v1\__init__.py:6: in <module>
+    from hvac import adapters, api, exceptions, utils
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\adapters.py:7: in <module>
+    import requests
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+_____ ERROR collecting tests/unit/site/address_audit/test_audit_engine.py _____
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\site\address_audit\test_audit_engine.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\site\address_audit\test_audit_engine.py:5: in <module>
+    from src.site.address_audit import audit_engine as eng_mod
+src\site\address_audit\__init__.py:14: in <module>
+    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\site\address_audit\address_corrector.py:24: in <module>
+    import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
+    ^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
+    from mistapi.__api_session import APISession as APISession
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__api_session.py:20: in <module>
+    import hvac
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\__init__.py:1: in <module>
+    from hvac.v1 import Client
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\v1\__init__.py:6: in <module>
+    from hvac import adapters, api, exceptions, utils
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\adapters.py:7: in <module>
+    import requests
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+____ ERROR collecting tests/unit/site/address_audit/test_audit_reporter.py ____
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\site\address_audit\test_audit_reporter.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\site\address_audit\test_audit_reporter.py:7: in <module>
+    from src.site.address_audit.audit_reporter import AddressAuditReporter
+src\site\address_audit\__init__.py:14: in <module>
+    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\site\address_audit\address_corrector.py:24: in <module>
+    import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
+    ^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
+    from mistapi.__api_session import APISession as APISession
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__api_session.py:20: in <module>
+    import hvac
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\__init__.py:1: in <module>
+    from hvac.v1 import Client
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\v1\__init__.py:6: in <module>
+    from hvac import adapters, api, exceptions, utils
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\adapters.py:7: in <module>
+    import requests
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+_ ERROR collecting tests/unit/site/address_audit/test_business_authority_ingester.py _
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\site\address_audit\test_business_authority_ingester.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\site\address_audit\test_business_authority_ingester.py:5: in <module>
+    from src.site.address_audit.business_authority_ingester import BusinessAuthorityIngester
+src\site\address_audit\__init__.py:14: in <module>
+    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\site\address_audit\address_corrector.py:24: in <module>
+    import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
+    ^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
+    from mistapi.__api_session import APISession as APISession
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__api_session.py:20: in <module>
+    import hvac
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\__init__.py:1: in <module>
+    from hvac.v1 import Client
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\v1\__init__.py:6: in <module>
+    from hvac import adapters, api, exceptions, utils
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\adapters.py:7: in <module>
+    import requests
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+__ ERROR collecting tests/unit/site/address_audit/test_comparison_display.py __
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\site\address_audit\test_comparison_display.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\site\address_audit\test_comparison_display.py:3: in <module>
+    from src.site.address_audit import comparison_display as display_mod
+src\site\address_audit\__init__.py:14: in <module>
+    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\site\address_audit\address_corrector.py:24: in <module>
+    import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
+    ^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
+    from mistapi.__api_session import APISession as APISession
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__api_session.py:20: in <module>
+    import hvac
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\__init__.py:1: in <module>
+    from hvac.v1 import Client
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\v1\__init__.py:6: in <module>
+    from hvac import adapters, api, exceptions, utils
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\adapters.py:7: in <module>
+    import requests
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+_____ ERROR collecting tests/unit/site/address_audit/test_csv_ingester.py _____
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\site\address_audit\test_csv_ingester.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\site\address_audit\test_csv_ingester.py:5: in <module>
+    from src.site.address_audit.csv_ingester import CSVAddressIngester
+src\site\address_audit\__init__.py:14: in <module>
+    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\site\address_audit\address_corrector.py:24: in <module>
+    import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
+    ^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
+    from mistapi.__api_session import APISession as APISession
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__api_session.py:20: in <module>
+    import hvac
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\__init__.py:1: in <module>
+    from hvac.v1 import Client
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\v1\__init__.py:6: in <module>
+    from hvac import adapters, api, exceptions, utils
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\adapters.py:7: in <module>
+    import requests
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+_________ ERROR collecting tests/unit/site/address_audit/test_perf.py _________
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\site\address_audit\test_perf.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\site\address_audit\test_perf.py:5: in <module>
+    from src.site.address_audit.perf import PhaseTimer
+src\site\address_audit\__init__.py:14: in <module>
+    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\site\address_audit\address_corrector.py:24: in <module>
+    import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
+    ^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
+    from mistapi.__api_session import APISession as APISession
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__api_session.py:20: in <module>
+    import hvac
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\__init__.py:1: in <module>
+    from hvac.v1 import Client
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\v1\__init__.py:6: in <module>
+    from hvac import adapters, api, exceptions, utils
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\adapters.py:7: in <module>
+    import requests
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+_____ ERROR collecting tests/unit/site/address_audit/test_site_matcher.py _____
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\site\address_audit\test_site_matcher.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\site\address_audit\test_site_matcher.py:3: in <module>
+    from src.site.address_audit import site_matcher as matcher_mod
+src\site\address_audit\__init__.py:14: in <module>
+    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\site\address_audit\address_corrector.py:24: in <module>
+    import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
+    ^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
+    from mistapi.__api_session import APISession as APISession
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__api_session.py:20: in <module>
+    import hvac
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\__init__.py:1: in <module>
+    from hvac.v1 import Client
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\v1\__init__.py:6: in <module>
+    from hvac import adapters, api, exceptions, utils
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\adapters.py:7: in <module>
+    import requests
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+____ ERROR collecting tests/unit/site/address_audit/test_snmp_enricher.py _____
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\site\address_audit\test_snmp_enricher.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\site\address_audit\test_snmp_enricher.py:3: in <module>
+    from src.site.address_audit.snmp_enricher import SNMPLocationEnricher
+src\site\address_audit\__init__.py:14: in <module>
+    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\site\address_audit\address_corrector.py:24: in <module>
+    import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
+    ^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
+    from mistapi.__api_session import APISession as APISession
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__api_session.py:20: in <module>
+    import hvac
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\__init__.py:1: in <module>
+    from hvac.v1 import Client
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\v1\__init__.py:6: in <module>
+    from hvac import adapters, api, exceptions, utils
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\adapters.py:7: in <module>
+    import requests
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+____ ERROR collecting tests/unit/site/address_audit/test_suite_patterns.py ____
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\site\address_audit\test_suite_patterns.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\site\address_audit\test_suite_patterns.py:5: in <module>
+    from src.site.address_audit.suite_patterns import (
+src\site\address_audit\__init__.py:14: in <module>
+    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\site\address_audit\address_corrector.py:24: in <module>
+    import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
+    ^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
+    from mistapi.__api_session import APISession as APISession
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__api_session.py:20: in <module>
+    import hvac
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\__init__.py:1: in <module>
+    from hvac.v1 import Client
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\v1\__init__.py:6: in <module>
+    from hvac import adapters, api, exceptions, utils
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\adapters.py:7: in <module>
+    import requests
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+_____ ERROR collecting tests/unit/site/address_audit/test_ui_geocoder.py ______
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\site\address_audit\test_ui_geocoder.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\site\address_audit\test_ui_geocoder.py:16: in <module>
+    from src.site.address_audit import MistUIGeocoder, ResolverResult, UIGeocoderConfig
+src\site\address_audit\__init__.py:14: in <module>
+    from src.site.address_audit.address_corrector import AddressCorrector  # Deferred write-back stub.
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\site\address_audit\address_corrector.py:24: in <module>
+    import mistapi  # Mist API SDK (sole Mist interface; hard dependency of MistHelper).
+    ^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
+    from mistapi.__api_session import APISession as APISession
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__api_session.py:20: in <module>
+    import hvac
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\__init__.py:1: in <module>
+    from hvac.v1 import Client
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\v1\__init__.py:6: in <module>
+    from hvac import adapters, api, exceptions, utils
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\adapters.py:7: in <module>
+    import requests
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+____________ ERROR collecting tests/unit/test_api_tenant_fetch.py _____________
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\test_api_tenant_fetch.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\test_api_tenant_fetch.py:7: in <module>
+    from src.api.tenant_fetch import APITenantFetchUtils  # Class under test
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\api\tenant_fetch.py:15: in <module>
+    import mistapi.api.v1.orgs.gatewaytemplates
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__init__.py:14: in <module>
+    from mistapi.__api_session import APISession as APISession
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\mistapi\__api_session.py:20: in <module>
+    import hvac
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\__init__.py:1: in <module>
+    from hvac.v1 import Client
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\v1\__init__.py:6: in <module>
+    from hvac import adapters, api, exceptions, utils
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\hvac\adapters.py:7: in <module>
+    import requests
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+_________ ERROR collecting tests/unit/test_multi_ap_scan_workflow.py __________
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\test_multi_ap_scan_workflow.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\test_multi_ap_scan_workflow.py:3: in <module>
+    from tests.unit.capture.test_multi_ap_scan_workflow import *  # noqa: F401,F403
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\capture\test_multi_ap_scan_workflow.py:7: in <module>
+    from src.capture.multi_ap_scan_workflow import MultiApScanCaptureWorkflow
+src\capture\__init__.py:3: in <module>
+    from src.capture.packet_capture import PacketCaptureManager
+src\capture\packet_capture.py:12: in <module>
+    from src.capture.packet_capture_download import PacketCaptureDownloadManager
+src\capture\packet_capture_download.py:12: in <module>
+    import requests  # Download PCAP binaries from Mist-provided URLs.
+    ^^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+_________ ERROR collecting tests/unit/test_org_pcap_wait_download.py __________
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\test_org_pcap_wait_download.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\test_org_pcap_wait_download.py:3: in <module>
+    from tests.unit.capture.test_org_pcap_wait_download_workflow import *  # noqa: F401,F403
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\capture\test_org_pcap_wait_download_workflow.py:7: in <module>
+    from src.capture.org_pcap_wait_download_workflow import OrgPcapWaitDownloadWorkflow
+src\capture\__init__.py:3: in <module>
+    from src.capture.packet_capture import PacketCaptureManager
+src\capture\packet_capture.py:12: in <module>
+    from src.capture.packet_capture_download import PacketCaptureDownloadManager
+src\capture\packet_capture_download.py:12: in <module>
+    import requests  # Download PCAP binaries from Mist-provided URLs.
+    ^^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+_____________ ERROR collecting tests/unit/test_packet_capture.py ______________
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\test_packet_capture.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\test_packet_capture.py:9: in <module>
+    from src.capture.packet_capture import PacketCaptureManager
+src\capture\__init__.py:3: in <module>
+    from src.capture.packet_capture import PacketCaptureManager
+src\capture\packet_capture.py:12: in <module>
+    from src.capture.packet_capture_download import PacketCaptureDownloadManager
+src\capture\packet_capture_download.py:12: in <module>
+    import requests  # Download PCAP binaries from Mist-provided URLs.
+    ^^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+_______ ERROR collecting tests/unit/test_prompt_network_device_utils.py _______
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\test_prompt_network_device_utils.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\test_prompt_network_device_utils.py:16: in <module>
+    from src.device.prompt_utils import PromptNetworkDeviceUtils  # Class under test
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\device\prompt_utils.py:19: in <module>
+    import mistapi.api.v1.sites.devices  # Mist Sites Devices API for listing APs/gateways/switches
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ModuleNotFoundError: No module named 'mistapi.api'; 'mistapi' is not a package
+______________ ERROR collecting tests/unit/test_routing_utils.py ______________
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\test_routing_utils.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\test_routing_utils.py:25: in <module>
+    from src.network.routing_utils import RoutingTableContext, RoutingUtils, SsrRouteContext
+src\network\routing_utils.py:25: in <module>
+    import requests
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+_________ ERROR collecting tests/unit/test_site_pcap_wait_download.py _________
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\test_site_pcap_wait_download.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\test_site_pcap_wait_download.py:3: in <module>
+    from tests.unit.capture.test_site_pcap_wait_download_workflow import *  # noqa: F401,F403
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\capture\test_site_pcap_wait_download_workflow.py:7: in <module>
+    from src.capture.site_pcap_wait_download_workflow import SitePcapWaitDownloadWorkflow
+src\capture\__init__.py:3: in <module>
+    from src.capture.packet_capture import PacketCaptureManager
+src\capture\packet_capture.py:12: in <module>
+    from src.capture.packet_capture_download import PacketCaptureDownloadManager
+src\capture\packet_capture_download.py:12: in <module>
+    import requests  # Download PCAP binaries from Mist-provided URLs.
+    ^^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+__________ ERROR collecting tests/unit/test_wan_hub_group_manager.py __________
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\test_wan_hub_group_manager.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\jmorrison\OneDrive - Juniper Networks, Inc\Code\MistHelper\tests\unit\test_wan_hub_group_manager.py:14: in <module>
+    ???
+src\wan_hub_group_manager.py:21: in <module>
+    import mistapi.api.v1.orgs.deviceprofiles
+E   ModuleNotFoundError: No module named 'mistapi.api'; 'mistapi' is not a package
+_____________ ERROR collecting tests/unit/test_wan_vpn_builder.py _____________
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\test_wan_vpn_builder.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\jmorrison\OneDrive - Juniper Networks, Inc\Code\MistHelper\tests\unit\test_wan_vpn_builder.py:15: in <module>
+    ???
+src\wan_vpn_builder.py:21: in <module>
+    import mistapi.api.v1.orgs.deviceprofiles
+E   ModuleNotFoundError: No module named 'mistapi.api'; 'mistapi' is not a package
+____ ERROR collecting tests/unit/websocket/test_service_ping_discovery.py _____
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\websocket\test_service_ping_discovery.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\websocket\test_service_ping_discovery.py:8: in <module>
+    from src.websocket.service_ping_discovery import (
+src\websocket\__init__.py:3: in <module>
+    from src.websocket.commands import MacTableCommand
+src\websocket\commands.py:9: in <module>
+    import requests  # HTTP client for Mist REST API used to trigger the show_mac_table RPC.
+    ^^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+_____ ERROR collecting tests/unit/websocket/test_service_ping_manager.py ______
+ImportError while importing test module 'C:\Users\jmorrison\OneDrive - Hewlett Packard Enterprise\Code\MistHelper\tests\unit\websocket\test_service_ping_manager.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\websocket\test_service_ping_manager.py:9: in <module>
+    from src.websocket.service_ping_manager import ServicePingManager, configure_service_ping_manager_dependencies
+src\websocket\__init__.py:3: in <module>
+    from src.websocket.commands import MacTableCommand
+src\websocket\commands.py:9: in <module>
+    import requests  # HTTP client for Mist REST API used to trigger the show_mac_table RPC.
+    ^^^^^^^^^^^^^^^
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\__init__.py:47: in <module>
+    from .exceptions import RequestsDependencyWarning
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\exceptions.py:14: in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\requests\compat.py:74: in <module>
+    from simplejson import JSONDecodeError  # type: ignore[import-not-found]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'JSONDecodeError' from 'simplejson' (unknown location)
+============================== warnings summary ===============================
+..\..\..\AppData\Local\Programs\Python\Python313\Lib\importlib\metadata\__init__.py:486
+  C:\Users\jmorrison\AppData\Local\Programs\Python\Python313\Lib\importlib\metadata\__init__.py:486: DeprecationWarning: Implicit None on return values is deprecated and will raise KeyErrors.
+    return self.metadata['Version']
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+ERROR tests/unit/capture/test_multi_ap_scan_workflow.py
+ERROR tests/unit/capture/test_org_pcap_wait_download_workflow.py
+ERROR tests/unit/capture/test_packet_capture_download.py
+ERROR tests/unit/capture/test_packet_capture_manager.py
+ERROR tests/unit/capture/test_site_pcap_wait_download_workflow.py
+ERROR tests/unit/gateway/test_device_template_cloner.py
+ERROR tests/unit/site/address_audit/test_address_corrector.py
+ERROR tests/unit/site/address_audit/test_address_resolver.py
+ERROR tests/unit/site/address_audit/test_audit_engine.py
+ERROR tests/unit/site/address_audit/test_audit_reporter.py
+ERROR tests/unit/site/address_audit/test_business_authority_ingester.py
+ERROR tests/unit/site/address_audit/test_comparison_display.py
+ERROR tests/unit/site/address_audit/test_csv_ingester.py
+ERROR tests/unit/site/address_audit/test_perf.py
+ERROR tests/unit/site/address_audit/test_site_matcher.py
+ERROR tests/unit/site/address_audit/test_snmp_enricher.py
+ERROR tests/unit/site/address_audit/test_suite_patterns.py
+ERROR tests/unit/site/address_audit/test_ui_geocoder.py
+ERROR tests/unit/test_api_tenant_fetch.py
+ERROR tests/unit/test_multi_ap_scan_workflow.py
+ERROR tests/unit/test_org_pcap_wait_download.py
+ERROR tests/unit/test_packet_capture.py
+ERROR tests/unit/test_prompt_network_device_utils.py
+ERROR tests/unit/test_routing_utils.py
+ERROR tests/unit/test_site_pcap_wait_download.py
+ERROR tests/unit/test_wan_hub_group_manager.py
+ERROR tests/unit/test_wan_vpn_builder.py
+ERROR tests/unit/websocket/test_service_ping_discovery.py
+ERROR tests/unit/websocket/test_service_ping_manager.py
+!!!!!!!!!!!!!!!!!! Interrupted: 29 errors during collection !!!!!!!!!!!!!!!!!!!
+======= 110/2944 tests collected (2834 deselected), 29 errors in 6.05s ========

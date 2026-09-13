@@ -1,0 +1,10 @@
+{
+  "workflow": "speckit",
+  "specName": "186-wan-hub-group-number",
+  "branch": "186-wan-hub-group-number",
+  "selectedAt": "2026-04-22T20:22:21.644Z",
+  "currentStep": "specify",
+  "status": "draft",
+  "stepHistory": {},
+  "transitions": []
+}

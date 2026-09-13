@@ -1,0 +1,103 @@
+src\analytics\site_inventory_health_analyzer.py
+    M 183:4 SiteInventoryHealthAnalyzer._find_sites_with_offline_infrastructure - C (13)
+    M 224:4 SiteInventoryHealthAnalyzer._display_results - C (12)
+    M 72:4 SiteInventoryHealthAnalyzer._fetch_devices - C (11)
+    M 96:4 SiteInventoryHealthAnalyzer._group_devices_by_site - C (11)
+src\auth\interactive_session.py
+    M 44:4 InteractiveSessionManager.initialize_mist_session_interactive - E (40)
+    M 234:4 InteractiveSessionManager.select_msp_and_org - D (26)
+    C 11:0 InteractiveSessionManager - C (18)
+src\bootstrap\uv_runtime.py
+    M 29:4 UVRuntimeHelper.version_satisfies - C (12)
+src\capture\multi_ap_scan_workflow.py
+    M 245:4 MultiApScanCaptureWorkflow.run - C (17)
+src\export\site_export_utils.py
+    M 92:4 SiteExportUtils._export_data - C (14)
+src\export\site_insights_exporter.py
+    M 124:4 SiteInsightsExporter.device_insights - D (25)
+    M 53:4 SiteInsightsExporter.insight_metrics - C (13)
+    C 49:0 SiteInsightsExporter - C (11)
+src\export\wifi_clients_exporter.py
+    C 12:0 WifiClientsExporter - E (31)
+    M 24:4 WifiClientsExporter.execute - D (30)
+src\gateway\gateway_export_utils.py
+    M 148:4 GatewayExportUtils.management_ips - C (13)
+    M 266:4 GatewayExportUtils.device_configs - C (11)
+src\gateway\gateway_override_analyzer.py
+    C 54:0 GatewayOverrideAnalyzer - F (42)
+    M 58:4 GatewayOverrideAnalyzer.with_wan_overrides - F (41)
+src\gateway\gateway_stats_exporter.py
+    M 87:4 GatewayStatsExporter.device_stats - C (16)
+src\gateway\wan2_migration_manager.py
+    M 606:4 WAN2MigrationManager._print_site_variable_summary - C (13)
+src\gateway\wan_probe_device_override_manager.py
+    M 268:4 WANProbeDeviceOverrideManager._find_devices_with_overrides - C (19)
+    M 492:4 WANProbeDeviceOverrideManager._generate_report - C (14)
+    M 410:4 WANProbeDeviceOverrideManager._update_single_device - C (12)
+src\inventory\org_device_inventory_msp.py
+    M 129:4 OrgDeviceInventoryMSPOrchestrator._display_combined_pivot_and_export - C (13)
+src\inventory\org_device_inventory_summary.py
+    M 188:4 OrgDeviceInventorySummaryCore._fetch_versions_per_model - D (24)
+    M 279:4 OrgDeviceInventorySummaryCore._display_pivot_and_export - C (12)
+src\maps\maps_manager.py
+    M 3432:4 MapsManager._launch_plotly_viewer - E (36)
+    M 3017:4 MapsManager._validate_ppm - C (13)
+    M 3278:4 MapsManager._add_vbeacons_to_figure - C (13)
+    M 1231:4 MapsManager.download_site_map_images - C (11)
+src\site\site_config_manager.py
+    M 269:4 SiteConfigManager._analyze_sites_for_rf_templates - C (12)
+src\ssh\ssh_runner.py
+    M 2305:4 EnhancedSSHRunner.run_application - F (64)
+    M 780:4 EnhancedSSHRunner._execute_with_shell - F (51)
+    M 1295:4 EnhancedSSHRunner._run_multiple_ssh_commands_interactive - F (42)
+    M 1158:4 EnhancedSSHRunner.load_ssh_config_from_env - E (33)
+    M 1647:4 EnhancedSSHRunner._run_multiple_ssh_commands - D (23)
+    M 2156:4 EnhancedSSHRunner.run_ssh_commands_multi_host - C (20)
+    M 1867:4 EnhancedSSHRunner._run_ssh_command - C (19)
+    M 2702:4 EnhancedSSHRunner._interactive_mode - C (19)
+    M 2056:4 EnhancedSSHRunner._run_ssh_command_on_host - C (18)
+    M 426:4 EnhancedSSHRunner.load_commands_from_csv - C (16)
+    M 573:4 EnhancedSSHRunner._connect - C (15)
+    C 56:0 EnhancedSSHRunner - C (12)
+    M 373:4 EnhancedSSHRunner._parse_command_list - C (11)
+src\ssh\ssh_runner_manager.py
+    M 252:4 SSHRunnerManager._select_gateway_template - C (18)
+    M 123:4 SSHRunnerManager._collect_missing_data - C (17)
+    M 30:4 SSHRunnerManager.interactive - C (15)
+src\troubleshooting\interactive_test_runner.py
+    M 99:4 InteractiveTestRunner.execute - C (18)
+    C 15:0 InteractiveTestRunner - C (15)
+src\troubleshooting\marvis_troubleshoot_utils.py
+    M 236:4 MarvisTroubleshootUtils.network_connectivity - D (23)
+    M 102:4 MarvisTroubleshootUtils.device_performance - C (18)
+    M 29:4 MarvisTroubleshootUtils.client_connectivity - C (13)
+src\ui\tui.py
+    M 854:4 MistHelperTUI.handle_input - F (65)
+    M 321:4 MistHelperTUI.check_keyboard_input - F (59)
+    M 1773:4 MistHelperTUI.execute_current_item - F (54)
+    M 476:4 MistHelperTUI.create_layout - F (52)
+    M 1212:4 MistHelperTUI._execute_function - E (36)
+    M 1990:4 MistHelperTUI.run - E (33)
+    M 211:4 MistHelperTUI._discover_current_level - D (26)
+    C 21:0 MistHelperTUI - D (24)
+    M 1688:4 MistHelperTUI._format_value_hierarchical - D (22)
+    M 1071:4 MistHelperTUI._start_function_execution - C (15)
+    M 1138:4 MistHelperTUI._submit_parameter - C (14)
+    M 1410:4 MistHelperTUI._create_results_grid - C (14)
+    M 1371:4 MistHelperTUI._should_show_results_grid - C (13)
+    M 129:4 MistHelperTUI._load_dotenv_only - C (12)
+src\websocket\commands.py
+    C 23:0 WebSocketCommands - D (29)
+    M 38:4 WebSocketCommands.show_mac_table - D (28)
+src\websocket\diag_commands.py
+    M 224:4 WebSocketNetworkDiagCommands.arp_device - F (61)
+    C 23:0 WebSocketNetworkDiagCommands - F (50)
+    M 31:4 WebSocketNetworkDiagCommands.ping_device - E (36)
+src\websocket\manager.py
+    M 305:4 WebSocketManager.wait_for_command_result - F (110)
+    M 799:4 WebSocketManager._on_message - E (37)
+    C 120:0 WebSocketManager - C (17)
+src\websocket\service_ping_discovery.py
+    M 286:4 ServicePingDiscoveryMixin._display_tenant_categories - E (33)
+    M 433:4 ServicePingDiscoveryMixin._display_service_categories - C (15)
+    M 139:4 ServicePingDiscoveryMixin._extract_from_device_config - C (14)

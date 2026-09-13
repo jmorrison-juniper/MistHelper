@@ -1,0 +1,220 @@
+# Quickstart Results: Upgrade Pre-Check and Post-Check Portal
+
+**Feature**: 1823-upgrade-capture-portal
+**Task**: T232
+**Date**: 2026-08-20
+**Source**: `specs/1823-upgrade-capture-portal/quickstart.md`
+
+This file records the result of every scenario in `quickstart.md`. Each scenario
+carries one result: PASS, FAIL, or BLOCKED. BLOCKED means the environment
+prevented the run. A scenario that did not run never counts as a PASS.
+
+The file holds two runs. Read the run of 2026-09-02 first, because it replaces
+every result of the earlier run that it names. The run of 2026-08-20 stays in
+the file, because it records what a workstation with no credential can prove.
+
+---
+
+## 0. The live run of 2026-09-02
+
+**Environment**: the container stack. `misthelper-app` served the portal on port
+8056, `misthelper-arangodb` held the documents, and `misthelper-redis` held the
+site lock. `GET /readyz` answered `{"database":"ok","redis":"ok","status":
+"ready"}`.
+
+**Site**: Morrison House Site, `cf36153a-97bb-4974-8f8f-e9cc25d64d83`, of the
+Morrison House organization. The site holds nine devices.
+
+| # | Scenario | Result | Evidence |
+| --- | --- | --- | --- |
+| 1 | Prerequisites | PASS | `/readyz` answers 200 with both stores ok. The sign-in page lists both services as up. |
+| 2 | Start from the container | PASS | The portal answered every page of the run on port 8056. |
+| 4 | Scenario A, the first capture | PASS | Capture `cap-94b9e2fb486c47eea7c77a0506d2d4d6-01` reached `verified` at 100 percent. It holds 9 devices, 40 wired clients, and 20 wireless clients, and it stores 18,618 bytes. The page reads `The portal read the capture back and the record matches.` |
+| 5 | Scenario B, compare two captures | PASS | The portal compared `cap-bb14061de58045e4995bb2ad8d7a77df-01` against `cap-2e740cb7ef2d49a089d285ef1dae8049-01`, which stand 42 hours apart. The client table named every added client, every missing client, and every client that stayed. The device table read `The digests matched, so the portal compared no device`, which is correct, because no firmware changed. The full CSV export answered 200 with 83 lines. |
+| 8 | Scenario E, two operators and one site | PASS | The lock control answered `You hold this site. The portal renews the hold every 60 seconds.` The release control answered `You released this site. Another operator may take it now.` |
+| 9 | Scenario F, the history view | PASS | The history page listed 8 stored captures, each with a readable UTC moment, the role, the state, the device count, the device types, the client count, and the stored size. |
+
+### The two scenarios that stay open
+
+Scenario C writes firmware to real hardware and reboots it. Scenario D stops
+that upgrade. Both need a person who decides to run them.
+
+---
+
+## 0a. The staged run of 2026-09-02, built and not started
+
+A later session built scenario C up to the confirm page and stopped there. Every
+step below writes nothing to a device. The run waits for a person.
+
+**Run**: `run-8a8db18835b347b28ea14f1392122e76`
+**Site**: Morrison House Site, `cf36153a-97bb-4974-8f8f-e9cc25d64d83`
+**Pre-check capture**: `cap-6f9c530513b641509894793bfee26050-01`, verified at 100
+percent, 18,441 bytes.
+
+| Step of scenario C | Result | Evidence |
+| --- | --- | --- |
+| 1, open the site | PASS | The inventory page listed 9 devices: 1 gateway, 1 switch, 6 access points, and 1 router that the portal does not upgrade. |
+| 2, take the lock | PASS | The banner reads `You hold this site. The portal renews the hold every 60 seconds.` |
+| 3, take a pre-check capture | PASS | The capture above reached the verified badge. |
+| 4, choose target versions | PASS | The options page offered a version list for each device type and for each device. The save moved the run to the confirm page. |
+| 5, try to start without typing | NOT RUN | The begin button carries the disabled attribute until the word arrives, so the browser gate holds. The server gate needs a post with no word, and that post is the one call that could start the write. A person makes that call. |
+| 6 to 9 | NOT RUN | Each one writes firmware. |
+
+### What the confirm page states for this run
+
+Read this table before you press the button. The run holds the defaults of the
+options page, and nobody chose them for this site.
+
+| Item | Value |
+| --- | --- |
+| Devices to upgrade | 8 |
+| Strategy | All devices at the same time |
+| Reboot after the write | Yes, for each switch and each gateway |
+| Cloud calls | 3 |
+| Write onto a device that already runs the version | No |
+| Access point takes the firmware from a neighbour | No |
+
+The page raised two plan warnings. One device already runs the version that the
+form chose, and the selection holds more than one version.
+
+Warning: the defaults upgrade all 8 devices at the same time and reboot the
+switch and the gateway. The site loses its network for several minutes. Change
+the strategy and the target of each device on the options page before you press
+the button, or cancel the run.
+
+### How to continue this run
+
+Open `/runs/run-8a8db18835b347b28ea14f1392122e76/confirm` and read the plan. To
+change a target, open the options page of the same run. To end the run with no
+write, use the cancel control of the run page. The run has not started, so the
+cancel control accepts it.
+
+Warning: no agent may start scenario C alone. The write reaches production
+hardware, and a reboot removes the network of the site for several minutes.
+
+| # | Scenario | Result | Why |
+| --- | --- | --- | --- |
+| 6 | Scenario C, upgrade with the settle gate | BLOCKED | A person must choose the window and watch the run. |
+| 7 | Scenario D, the stop control | BLOCKED | It needs the run of scenario C. |
+
+### What the run found
+
+The run found one defect. The site inventory page answered the status 500 for
+this site, because one device reports the type `router` and the portal modeled
+three types alone. Issue #2211 records the defect, and pull request #2212
+repaired it. The capture of scenario A ran after that repair.
+
+---
+
+## 1. Environment of the earlier run of 2026-08-20
+
+| Item | Value |
+| --- | --- |
+| Platform | Windows 11, `sys.platform` reports `win32` |
+| Interpreter | `.venv\Scripts\python.exe`, called by path |
+| WSGI server | Waitress, the sanctioned Windows stand-in |
+| WSGI target | `wsgi_capture:app` |
+| Bind address | `127.0.0.1:8056` |
+| `MISTHELPER_STANDALONE` | `true` |
+| `REDIS_HOST` | `127.0.0.1` |
+| `CAPTURE_PORT` | Unset, so the portal took the default of 8056 |
+| pytest flag | `-p no:playwright` on every call |
+
+Gunicorn cannot run on this platform, because `gunicorn.util` imports `fcntl`
+and Windows ships no such module. `src/upgrade_portal/runtime/server.py:52`
+selects Waitress on Windows for this reason. The choice is by design.
+
+The port was clear before each start. Waitress sets `SO_REUSEADDR`, so a stale
+listener can hide behind a new one.
+
+### The controlling blocker
+
+The file `.env` is absent from this working directory. No cloud token, no Redis
+password, and no database password are present. The task forbids reading `.env`,
+and no scenario may reach the Mist cloud or live hardware. Every scenario that
+needs a cloud session, the site lock, or the database is therefore BLOCKED.
+
+`GET /readyz` reports `database: unreachable` and `redis: unreachable`. The lock
+store logs an authentication error. Both results follow from the absent
+credentials. Neither result is a product defect.
+
+---
+
+## 2. Results of the earlier run of 2026-08-20
+
+The run of 2026-09-02 above replaces every BLOCKED result of this table except
+the two that name live hardware.
+
+| # | Scenario | Result | Evidence |
+| --- | --- | --- | --- |
+| 1 | Prerequisites (section 1) | BLOCKED | `.env` is absent, so no cloud token, no Redis password, and no database password exist. `GET /readyz` answers 503 with `database: unreachable` and `redis: unreachable`. |
+| 2 | Start from the command line (section 2) | BLOCKED | `python MistHelper.py --capture-portal` exits before it opens a port. The log reads `Credential/config preflight failed: no API token found - set MIST_APITOKEN or MIST_API_TOKEN`. See section 3 below. |
+| 3 | Start from the container (section 2) | BLOCKED | The shared container host already runs Redis, ArangoDB, and another lane's container. `podman compose up -d` would disturb work that other lanes depend on. |
+| 4 | Scenario A, the first capture (section 3) | BLOCKED | The scenario needs a signed-in operator, a cloud organization, and a database write. No token and no database credential exist. |
+| 5 | Scenario B, compare two captures (section 4) | BLOCKED | The scenario needs two stored captures. No capture can be written without the database credential. |
+| 6 | Scenario C, upgrade with the settle gate (section 5) | BLOCKED | The scenario writes firmware to real devices. The task forbids live hardware. No laboratory site and no token exist. |
+| 7 | Scenario D, the stop control (section 6) | BLOCKED | The scenario needs a running upgrade, which needs live hardware. |
+| 8 | Scenario E, two operators and one site (section 7) | BLOCKED | The site lock lives in Redis. The local Redis demands a password that lives in `.env`. The lock request answers 503 and the log names an authentication error. |
+| 9 | Scenario F, the history view (section 8) | BLOCKED | The history page reads stored captures. No capture exists without the database credential. |
+| 10 | pytest unit and contract (section 9) | PASS | `pytest tests/unit/upgrade_portal tests/contract/upgrade_portal -p no:playwright` reported 2616 passed and 0 failed. |
+| 11 | pytest browser journeys (section 9) | BLOCKED | The task requires `-p no:playwright`. That flag removes the `context` and `page` fixtures, so all 129 tests skipped with cause `('context', <SubRequest 'page' ...>)`. Playwright and its Chromium build are installed, so the browsers are not the blocker. |
+| 12 | ruff (section 9) | PASS | `ruff check src/upgrade_portal src/firmware/upgrade_service.py` exited zero with no finding. |
+| 13 | mypy (section 9) | PASS | `Success: no issues found in 40 source files`. |
+| 14 | black --check (section 9) | PASS | 40 files reported unchanged. |
+| 15 | interrogate (section 9) | PASS | Coverage reached 100.0 percent against the floor of 90.0 percent. |
+| 16 | pydoclint (section 9) | BLOCKED | `No module named pydoclint`, exit 1. The tool is absent from the virtual environment and from `pyproject.toml`. The task forbids installing it. See section 4. |
+| 17 | bandit (section 9) | PASS | `No issues identified`. |
+| 18 | Menu registration guardrail (section 10) | PASS | `test_menu_238_carries_the_destructive_registry_entry` passed in `tests/unit/upgrade_portal/test_guardrails.py`. |
+| 19 | Primary key strategy guardrail (section 10) | PASS | `test_the_portal_write_endpoint_uses_natural_pk` passed for `upgradeCaptureWrite` and `upgradeRunWrite`. Both use `natural_pk`. |
+| 20 | Theme file tracked (section 10) | PASS | `magenta.css` is tracked and no ignore rule matches it. The name holds none of the excluded brand strings. |
+| 21 | Container assets (section 10) | BLOCKED | The check needs `podman build` on the shared container host. See scenario 3. |
+| 22 | No credential appears (section 11.1) | PASS | A search of the portal log and three rendered pages against every credential value in the process environment returned 0 matches. |
+| 23 | Every asset loads from the portal (section 11.2) | PASS | The content security policy is `'self'` only. The vendored Bootstrap asset answered 200 from the portal. No outside host appears in any page. |
+| 24 | The log is ASCII only (section 11.3) | PASS | No character above the ASCII range appears in the log output. |
+| 25 | The packet-capture word never appears (section 11.4) | PASS | The word `capture` always means a record of site state. No packet sense appears. |
+| 26 | The reserved word stays reserved (section 11.5) | PASS | The word `snapshot` appears as an identifier only at `src/firmware/upgrade_service.py:66`, where it is the field name the cloud upgrade body demands for a Junos file action. Other uses are prose about statistics readings. The feature never names its own record with the reserved word. |
+
+**Totals**: 26 scenarios. 13 PASS. 0 FAIL. 13 BLOCKED.
+
+---
+
+## 3. Why the command-line launcher does not start
+
+The launcher at `python MistHelper.py --capture-portal` stops before it binds a
+port. The reason is the credential preflight.
+
+`src/refactors/main_entrypoint.py:56` establishes the Mist session. Line 58 then
+dispatches the mode. `MistHelper.py:5315` runs the token preflight inside the
+session step, so the preflight always runs first.
+
+The existing web portal sits at `MistHelper.py:5794` in the same dispatch table.
+The capture portal sits at line 5795. Both portal modes follow the same session
+step, so both need a token to start.
+
+This behavior is not new and it is not a defect of this feature. The capture
+portal inherits the entry sequence that the web portal already uses. Section 1 of
+`quickstart.md` names the cloud token as a prerequisite, and that prerequisite is
+unmet here.
+
+The portal application itself starts without a token. Waitress served
+`wsgi_capture:app` on port 8056, `GET /healthz` answered 200, and the sign-in
+page rendered. This proves the fault lies in the absent credential and not in the
+portal.
+
+---
+
+## 4. Findings for the lead
+
+1. **`pydoclint` is absent.** Section 9 of `quickstart.md` lists
+   `pydoclint --style=google src/upgrade_portal` as an automated check. The tool
+   is in neither the virtual environment nor `pyproject.toml`. The docstring gate
+   that this project actually runs is `pydocstyle`. Either add the dependency or
+   correct the quickstart command. This is a tooling gap, not a code defect.
+2. **File contents flapped during the test run.** This working directory sits on
+   a synchronized OneDrive path. Two early test runs reported different failures
+   in `src/upgrade_portal/runtime/identity.py`. A read from disk showed the file
+   held correct content, and the reported line differed from the stored line. A
+   later run of the same tests passed. Treat any lone test failure in this
+   directory as suspect and repeat the run before you record it.
+3. **No product defect appeared.** Every check that the environment allowed
+   passed. No scenario failed.
