@@ -293,6 +293,21 @@ def test_the_json_file_holds_every_row() -> None:
     assert len(payload["rows"]) == len(_csv_rows(export.export_capture(_capture(), export.FORMAT_CSV).body))
 
 
+def test_the_json_download_matches_the_public_renderer_bytes() -> None:
+    """The direct JSON path must keep the public renderer bytes unchanged."""
+    capture = _tier3_capture()  # Use all row kinds, so the byte check covers the full shape.
+    rows = export.build_rows(capture)  # Build the public row tuple that older callers still use.
+    expected = export.render_json(export.capture_heading(capture), rows)  # Render the old public path.
+    assert export.export_capture(capture, export.FORMAT_JSON).body == expected  # The new path keeps exact bytes.
+
+
+def test_the_csv_download_matches_the_public_renderer_bytes() -> None:
+    """The comma-separated path must keep the public renderer bytes unchanged."""
+    capture = _tier3_capture()  # Use formula and tier 3 coverage through the shared fixture.
+    rows = export.build_rows(capture)  # Build the public row tuple that the CSV path writes.
+    assert export.export_capture(capture, export.FORMAT_CSV).body == export.render_csv(rows)  # Keep exact CSV bytes.
+
+
 def test_the_file_name_carries_the_capture_identifier() -> None:
     """An operator downloads two captures of one run, so the names must differ."""
     result = export.export_capture(_capture(), export.FORMAT_CSV)

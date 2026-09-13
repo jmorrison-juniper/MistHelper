@@ -51,6 +51,49 @@ The `Quality exclusion drift (advisory)` job runs
 recorded count and uploads a JSON report. It reports growth and zero counts in
 the job log. It never blocks a pull request.
 
+## Ruff S rule decision
+
+Issue #1780 measured the Ruff `S` rule family on 2026-09-13. The repository
+does not select `S` in Ruff. Bandit stays the only security syntax linter.
+
+The measurement used these commands.
+
+```powershell
+.\.venv\Scripts\python.exe -m bandit -c pyproject.toml -r .
+.\.venv\Scripts\python.exe -m ruff check --select S .
+```
+
+The Bandit command matches the `bandit` job in `.github/workflows/ci.yml`. The
+Ruff command was a trial only, so `pyproject.toml` keeps `S` absent.
+
+| Measurement | Count | Rule count |
+| - | - | - |
+| Bandit findings from the CI command | 0 | None |
+| Ruff trial findings | 21,807 | S101 21,551, S102 1, S104 7, S105 107, S106 53, S107 1, S108 25, S110 10, S112 1, S113 2, S310 4, S311 1, S603 30, S605 2, S606 1, S607 8, S608 3 |
+| Active findings that both tools report | 0 | None |
+| Active findings that only Bandit reports | 0 | None |
+| Active findings that only Ruff reports | 21,807 | Same as the Ruff trial |
+
+The active Bandit count is zero because the current `# nosec` comments hide the
+accepted findings. A second measurement used `--ignore-nosec` to compare those
+accepted findings with the Ruff trial.
+
+| Suppression set | Count | Rule count |
+| - | - | - |
+| Same line and mapped rule in both tools | 83 findings on 81 lines | B101/S101 29, B104/S104 4, B105/S105 19, B110/S110 8, B112/S112 1, B310/S310 2, B311/S311 1, B603/S603 11, B605/S605 2, B606/S606 1, B607/S607 2, B608/S608 3 |
+| Only Bandit reported it | 32 | B104 3, B105 7, B107 1, B404 10, B603 3, B608 8 |
+| Only Ruff reported it | 21,724 | S101 21,522, S102 1, S104 3, S105 88, S106 53, S107 1, S108 25, S110 2, S113 2, S310 2, S603 19, S607 6 |
+
+If both tools ran, 81 existing lines would need both `# nosec` and `# noqa`
+comments. Dropping Bandit would lose measured findings and scopes. Bandit
+reported B404, B107, and B608 findings that the Ruff trial did not report on the
+same line. Bandit also scans `web_portal`, `mist-ops-platform`, and `src/maps`,
+which the gate for Ruff at the root excludes.
+
+The decision is option 2 from issue #1780. Do not select `S` in Ruff. Do not
+drop Bandit. Use `# nosec` with a Bandit rule and a reason when a false positive
+needs a suppression.
+
 ## Branch protection on main
 
 Branch protection names 14 required checks. They are the 13 gates above plus
