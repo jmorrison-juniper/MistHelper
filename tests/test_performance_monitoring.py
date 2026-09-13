@@ -340,6 +340,12 @@ class TestSettingsFromEnvironment:
         """One setting must not exhaust the process memory."""
         assert RecorderSettings.from_env({"MISTHELPER_PERF_CAPACITY": value}).capacity == expected
 
+    @pytest.mark.parametrize(("value", "expected"), [("8192", 8192), ("0", 4096), ("999999999", 67108864)])
+    def test_the_byte_bound_is_clamped(self, value: str, expected: int) -> None:
+        """One byte setting must not exhaust the process memory."""
+        settings = RecorderSettings.from_env({"MISTHELPER_PERF_MAX_BYTES": value})  # Read the byte setting.
+        assert settings.max_bytes == expected  # Prove the configured byte bound was clamped.
+
     def test_the_cpu_clock_can_be_turned_off(self) -> None:
         """The CPU clock is the costly call on some hosts, so it is optional."""
         assert RecorderSettings.from_env({"MISTHELPER_PERF_CPU": "0"}).measure_cpu is False
