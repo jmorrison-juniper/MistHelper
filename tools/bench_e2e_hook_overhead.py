@@ -14,6 +14,7 @@ import importlib  # Load project modules after the script adds the repository ro
 import logging  # Record each benchmark phase without printing inside the timed path.
 import math  # Calculate the batch size that crosses the measured CPU tick.
 import os  # Set the documented environment level for each collection.
+import random  # Build a deterministic bootstrap interval for paired differences.
 import statistics  # Compute medians and interquartile ranges.
 import sys  # Insert the repository root into the import path for file execution.
 import time  # Read the wall and CPU clocks for each measured operation.
@@ -40,6 +41,8 @@ SPAN_REPEATS = 9  # Enough repeats to report a stable median.
 CLOCK_SAMPLE_COUNT = 200_000  # Measure Windows clock ticks from data, not from assumption.
 AMPLIFIED_LOOPS = 100  # Batch real operations so one hook effect can accumulate.
 AMPLIFIED_REPEATS = 5  # Use paired batches so slow host drift is visible.
+PAIRED_PAIRS = 0  # Keep paired interval sampling opt-in, because 500 pairs can be slow.
+BOOTSTRAP_REPEATS = 1_000  # Estimate a stable median interval without a new dependency.
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +88,23 @@ class AmplifiedRow:
     composed_percent: float  # The independent composed overhead bound.
     needed_for_cpu_tick: int  # The batch size needed to cross one CPU tick.
     status: str  # The resolution verdict for this row.
+
+
+@dataclass(frozen=True, slots=True)
+class PairedRow:
+    """Hold one paired wall-clock interval row."""
+
+    size: int  # The number of clients in the offline workload.
+    pairs: int  # The number of off/base pairs in the sample.
+    median_percent: float  # The median paired wall-clock difference.
+    ci_low_percent: float  # The lower bootstrap confidence bound.
+    ci_high_percent: float  # The upper bootstrap confidence bound.
+    half_width_percent: float  # The larger distance from the median to the bound.
+    composed_percent: float  # The composed bound kept as the independent check.
+    contains_zero: bool  # True when the interval does not resolve the sign.
+    contains_composed: bool  # True when the interval contains the composed bound.
+    required_pairs: int  # Estimated pairs needed to meet the target half width.
+    status: str  # The final paired-method verdict.
 
 
 def _client_mac(index: int) -> str:
@@ -168,6 +188,16 @@ def _time_batch(function: Any, size: int, calls: int) -> int:
     if total < 0:  # Keep the accumulator observable without changing normal output.
         raise RuntimeError("The benchmark accumulator went below zero.")  # Fail on impossible data.
     return wall_elapsed  # Return the full batch so the hook effect can accumulate.
+
+
+def _time_once(function: Any, size: int) -> int:
+    """Return the wall time for one operation."""
+    wall_start = time.perf_counter_ns()  # Use the high-resolution wall clock for small effects.
+    total = function(size)  # Run exactly one operation so batching does not keep ratio noise.
+    wall_elapsed = time.perf_counter_ns() - wall_start  # Stop the clock next to the operation.
+    if total < 0:  # Keep the result observable so the interpreter cannot discard work.
+        raise RuntimeError("The benchmark accumulator went below zero.")  # Fail on impossible data.
+    return wall_elapsed  # Return one wall-clock sample.
 
 
 def _clock_resolution(clock: Any) -> dict[str, float | int | list[int]]:
@@ -376,6 +406,89 @@ def collect_amplified_rows(rows: list[Row], calls: int, repeats: int, span_ns: f
     ]
 
 
+def collect_paired_rows(rows: list[Row], pairs: int, repeats: int) -> list[PairedRow]:
+    """Collect paired wall-clock interval rows for each workload size."""
+    return [
+        _paired_interval_row(row, pairs, repeats)  # Measure off/base pairs for this workload.
+        for row in rows  # Reuse only workloads that passed output equality and span checks.
+    ]
+
+
+def _paired_interval_row(row: Row, pairs: int, repeats: int) -> PairedRow:
+    """Build one paired wall-clock interval row."""
+    differences = _paired_wall_differences(row.size, pairs)  # Collect signed paired differences.
+    median_percent = statistics.median(differences)  # Use the robust center of paired samples.
+    ci_low, ci_high = _bootstrap_median_interval(differences, repeats)  # Estimate uncertainty.
+    half_width = max(median_percent - ci_low, ci_high - median_percent)  # Report the worst side.
+    contains_zero = ci_low <= 0.0 <= ci_high  # Check whether the sign was resolved.
+    contains_composed = ci_low <= row.composed_percent <= ci_high  # Check the composed bound.
+    required_pairs = _required_pairs(pairs, half_width, max(row.composed_percent / 2.0, 0.001))  # Size.
+    status = _paired_status(contains_zero, contains_composed)  # Convert checks into a verdict.
+    return PairedRow(
+        row.size,
+        pairs,
+        median_percent,
+        ci_low,
+        ci_high,
+        half_width,
+        row.composed_percent,
+        contains_zero,
+        contains_composed,
+        required_pairs,
+        status,
+    )  # Return the paired-method result.
+
+
+def _paired_wall_differences(size: int, pairs: int) -> list[float]:
+    """Return paired wall-clock percent differences for one workload."""
+    differences: list[float] = []  # Store one signed percent value per pair.
+    for index in range(pairs):  # Collect enough pairs for the standard error to fall.
+        if index % 2 == 0:  # Alternate order so first-run bias cannot become overhead.
+            off_ns = _timed_level(LEVEL_OFF, size)  # Measure the disabled path first.
+            base_ns = _timed_level(LEVEL_BASE, size)  # Measure the enabled path second.
+        else:  # Reverse the pair order on every other pair.
+            base_ns = _timed_level(LEVEL_BASE, size)  # Measure the enabled path first.
+            off_ns = _timed_level(LEVEL_OFF, size)  # Measure the disabled path second.
+        differences.append(_percent(off_ns, base_ns))  # Normalize the paired difference.
+    return differences  # Return raw differences so the interval can use them.
+
+
+def _timed_level(level: str, size: int) -> int:
+    """Return one wall-clock operation sample at one performance level."""
+    _set_production_level(level)  # Apply the level outside the timed boundary.
+    return _time_once(operation, size)  # Measure one real comparison operation.
+
+
+def _bootstrap_median_interval(samples: list[float], repeats: int) -> tuple[float, float]:
+    """Return a deterministic 95 percent bootstrap interval for the median."""
+    generator = random.Random(0)  # Use a fixed seed so reviewers can reproduce the interval.
+    medians: list[float] = []  # Store one bootstrap median for each resample.
+    for _ in range(repeats):  # Build enough resamples for a stable displayed interval.
+        resample = [generator.choice(samples) for _ in samples]  # Sample with replacement.
+        medians.append(statistics.median(resample))  # Keep the statistic under test.
+    ordered = sorted(medians)  # Sort once so percentile selection is stable.
+    low_index = max(0, int(0.025 * len(ordered)) - 1)  # Select the lower percentile.
+    high_index = min(len(ordered) - 1, int(0.975 * len(ordered)))  # Select the upper percentile.
+    return ordered[low_index], ordered[high_index]  # Return the bootstrap confidence interval.
+
+
+def _required_pairs(current_pairs: int, half_width: float, target_half_width: float) -> int:
+    """Estimate the pair count needed for a smaller confidence interval."""
+    if half_width <= target_half_width:  # The current run already meets the target width.
+        return current_pairs  # Return the achieved pair count.
+    factor = (half_width / target_half_width) ** 2  # Standard error falls with square root of n.
+    return math.ceil(current_pairs * factor)  # Report the approximate needed sample count.
+
+
+def _paired_status(contains_zero: bool, contains_composed: bool) -> str:
+    """Return the paired interval verdict."""
+    if contains_zero:  # An interval crossing zero cannot resolve positive overhead.
+        return "not resolved: interval includes zero"  # State the remaining noise limit.
+    if not contains_composed:  # A resolved sign that misses the bound is not agreement.
+        return "not resolved: interval misses composed bound"  # State the disagreement.
+    return "resolved: interval excludes zero and contains composed bound"  # State resolution.
+
+
 def _amplified_row(row: Row, calls: int, repeats: int, span_ns: float) -> AmplifiedRow:
     """Build one amplified row for one client count."""
     operation_off, operation_base = _paired_batch_samples(
@@ -544,6 +657,29 @@ def print_amplified_table(rows: list[AmplifiedRow]) -> None:
         print("| " + " | ".join(values) + " |")  # Print the row.
 
 
+def print_paired_table(rows: list[PairedRow]) -> None:
+    """Print the paired wall-clock interval table."""
+    print("")  # Separate the paired table from the amplified table.
+    print(
+        "| clients | pairs | median % | CI low % | CI high % | half width % | "
+        "composed % | required pairs | verdict |"
+    )  # Header.
+    print("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |")  # Separator.
+    for row in rows:  # Print one paired result per workload.
+        values = (  # Build the row in parts so reviewers can scan it.
+            f"{row.size}",  # Add the workload size.
+            f"{row.pairs}",  # Add the number of off/base pairs.
+            f"{row.median_percent:.4f}",  # Add the median paired difference.
+            f"{row.ci_low_percent:.4f}",  # Add the lower interval bound.
+            f"{row.ci_high_percent:.4f}",  # Add the upper interval bound.
+            f"{row.half_width_percent:.4f}",  # Add the achieved half width.
+            f"{row.composed_percent:.4f}",  # Add the composed cross-check.
+            f"{row.required_pairs}",  # Add the estimated pair count needed.
+            row.status,  # Add the paired-method verdict.
+        )
+        print("| " + " | ".join(values) + " |")  # Print the row.
+
+
 def parse_args() -> argparse.Namespace:
     """Return parsed benchmark options."""
     parser = argparse.ArgumentParser(description="Measure the MistHelper client comparison hook overhead.")  # Parser.
@@ -553,6 +689,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sizes", type=int, nargs="+", default=list(DEFAULT_SIZES))  # Set workload sizes.
     parser.add_argument("--amplified-loops", type=int, default=AMPLIFIED_LOOPS)  # Set batch size.
     parser.add_argument("--amplified-repeats", type=int, default=AMPLIFIED_REPEATS)  # Set pairs.
+    parser.add_argument("--paired-pairs", type=int, default=PAIRED_PAIRS)  # Set paired count.
+    parser.add_argument("--bootstrap-repeats", type=int, default=BOOTSTRAP_REPEATS)  # Set interval repeats.
     return parser.parse_args()  # Return parsed values.
 
 
@@ -568,6 +706,9 @@ def main() -> int:
     print_clock_table(clock_rows)  # Print the host clock data first.
     print_table(span_ns, rows)  # Print both benchmark tables.
     print_amplified_table(amplified_rows)  # Print the resolved or unresolved amplified data.
+    if args.paired_pairs > 0:  # Run the long paired method only when the caller requests it.
+        paired_rows = collect_paired_rows(rows, args.paired_pairs, args.bootstrap_repeats)  # Pair.
+        print_paired_table(paired_rows)  # Print the paired interval verdict.
     failed = [row for row in rows if row.composed_percent > args.budget_percent]  # Find failures.
     return 1 if failed else 0  # Return non-zero when any size exceeds the budget.
 
