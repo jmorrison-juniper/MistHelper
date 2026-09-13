@@ -183,6 +183,7 @@ class Span:
             source: The file, the symbol, and the class this span measures.
             family: The event family that the level gate reads.
             monitor: The monitor name that the hook catalog defines.
+            sampled: True when the pre-sampler selected this span to keep.
         """
         self._recorder = recorder  # The owner decides whether the event may be emitted.
         self._source = source  # The file, symbol, and class this span measures.
