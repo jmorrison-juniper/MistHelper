@@ -25,33 +25,43 @@ This index records the user workflow, the browser evidence, and the validation s
 | `2447-stale-bulk-run-controls` | Stale and bulk run controls | Show stale age, reconcile state, preview a bulk action, cancel or retry selected runs, and isolate concurrent operators. | `test_run_controls/test_stale.py`, `test_run_controls/test_bulk.py`, and `test_run_controls/test_isolation.py` cover stale display, bulk preview, bulk cancel, bulk retry, reconciliation, and operator isolation. | **Partial** | The browser journeys pass. The open tasks of `tasks.md` remain. Issue #2447 tracks this work. |
 | `991-upgrade-version-defaults` | Per-type version defaults | Show separate AP, switch, and gateway defaults, remove the global default, and apply configured defaults. | `test_upgrade.py` verifies the per-type controls and the removed global control. | **Partial** | Unit tests prove environment overrides. A browser test does not start the server with each override. |
 
-## Branch divergence, measured 2026-09-12
+## Branch divergence, resolved 2026-09-13
 
-`main` holds a version of this feature that another pull request delivered. That
-version is not the version of `fix/2447-stale-bulk-run-controls`. The two
-versions grew apart, so a plain rebase conflicts.
+`main` once held a version of this feature that another pull request delivered,
+and the feature branch held a different version. A plain rebase conflicted.
 
-`main` holds work that the feature branch does not hold. It holds the
-organization upgrade flow, the browser token sign-in test, and
-`app/security.py`. A wholesale overwrite from the feature branch would remove
-that work.
+The two versions are one version now. Each file reached `main` through a
+separate pull request, and the browser suite ran after each one.
 
-The feature branch holds work that `main` does not hold:
-
-| Path | Value |
+| Pull request | Content |
 |---|---|
-| `src/upgrade_portal/api/run_controls/routes.py` | The bulk preview route and the bulk action route. |
-| `src/upgrade_portal/api/run_controls/services/` | The preview, bulk, reconciliation, and retry services. |
-| `tests/e2e/upgrade_portal/test_run_controls/conftest.py` | The site lock release. Issue #2532 records the defect. |
-| `tests/contract/upgrade_portal/test_upgrade_routes/test_bulk_preview.py` | The preview contract proof. |
-| `tests/unit/upgrade_portal/test_runs/test_preview.py` | The preview unit proof. |
-| `specs/2447-stale-bulk-run-controls/traceability.md` | The requirement to test map. |
-| `specs/2447-stale-bulk-run-controls/recovery-drill.md` | The backup and restore record. |
+| #2476 | The stale and bulk run controls. |
+| #2539 | The inline comments and the action logging of the action store. |
+| #2544 | The preview, bulk, reconciliation, and retry services, and the API route. |
+| #2555 | The browser layer of the run controls. |
+| #2559 | The delivery record and the deployment evidence. |
 
-Warning: do not force the feature branch onto `main`. A wholesale overwrite can
-cause the loss of the organization upgrade flow and the browser token sign-in
-test. Port each file above one at a time, and run the browser suite after each
-port.
+No file stays on the feature branch that `main` does not hold.
+
+## Live site upgrade, measured 2026-09-13
+
+The portal upgraded a production gateway. The operator drove the browser.
+
+| Field | Value |
+|---|---|
+| Device | `SRX-1500`, address `5800bb5ee100`, model SRX1500 |
+| Site | Morrison House Site |
+| Version before | `23.4R2-S5.5` |
+| Version after | `24.2R2-S3.3` |
+| Firmware result | `success`, progress 100, "Upgraded" |
+| Device state | `connected` after the restart |
+
+The check found one defect. Issue #2564 records it. An unattended driver renews
+the site lock every 61 seconds, so the takeover cooldown never reaches zero.
+
+Warning: an operator cannot take a site while that renewal continues, so the
+operator cannot stop a run, and an unwanted firmware write can reach production
+hardware and interrupt the network.
 
 ## Current validation evidence
 
@@ -106,3 +116,24 @@ Four conditional skips remain. Each one names a state of the run, never a defect
 5. Confirm that history never reports `complete` for an unverified capture.
 6. Remove the four conditional skips above, so each one becomes direct proof.
 7. Complete the open tasks of `specs/2447-stale-bulk-run-controls/tasks.md`.
+
+### The live check found a second defect
+
+The device upgraded successfully, but the portal wrote the run as `failed`.
+
+| UTC time | Source | Event |
+|---|---|---|
+| 07:57:26 | Portal | The run state became `failed`, because the gateways phase passed its limit. |
+| 08:11:57 | Device | `GW_UPGRADED` from `23.4R2-S5.5` to `24.2R2-S3.3`. |
+| 08:26:22 | Device | `GW_CONNECTED` on the new version. |
+
+`src/upgrade_portal/upgrade/phase_gate.py:64` holds `PHASE_DEADLINE_SECONDS`
+with the value 1800. That budget gives 30 minutes. This gateway needed about 44
+minutes. The portal gave up 14 minutes before the device reported the new
+version.
+
+Issue #2569 records this defect.
+
+Warning: an operator who reads the false `failed` result can start a second
+upgrade on a device that already holds the new firmware, and a repeated
+firmware write can interrupt the production network.
