@@ -21,12 +21,15 @@ from typing import Any
 import pytest
 
 from src.upgrade_portal.app.routes import select
+from src.upgrade_portal.runtime.identity import SessionOwner
+from src.upgrade_portal.runtime.lock import LockRecord
 
 ORG_ID = "8a1ea872-241a-4c8e-a5ca-2d85674c7229"
 SITE_ID = "cf36153a-97bb-4974-8f8f-e9cc25d64d83"
 
 HOLDER = "other.operator@example.invalid"
 SAME_PERSON = "the.same.operator@example.invalid"
+RUN_ID = "run-2564"
 
 NO_WAIT = 0  # The value the banner reads as "no cooldown to show".
 
@@ -59,6 +62,17 @@ class TestLockCooldownSeconds:
             monkeypatch: The pytest patch helper.
         """
         monkeypatch.setattr(select.lock, "read_lock", explode)
+        monkeypatch.setattr(select, "lock_client", lambda: None)
+        assert select.lock_cooldown_seconds(ORG_ID, SITE_ID) == NO_WAIT
+
+    def test_answers_zero_when_the_lock_reaches_the_run_life_bound(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A fresh heartbeat cannot keep the banner wait above zero forever.
+
+        Args:
+            monkeypatch: The pytest patch helper.
+        """
+        held = SimpleNamespace(cooldown_remaining_seconds=lambda: 0, owner=SimpleNamespace(actor_email=HOLDER))
+        monkeypatch.setattr(select.lock, "read_lock", lambda org, site, client=None: held)
         monkeypatch.setattr(select, "lock_client", lambda: None)
         assert select.lock_cooldown_seconds(ORG_ID, SITE_ID) == NO_WAIT
 
@@ -293,3 +307,41 @@ class TestInventoryFirmwareTargets:
         assert rows[1]["firmware_mismatch"] is False
         assert rows[2]["version_target"] == ""
         assert rows[2]["firmware_mismatch"] is False
+
+
+class TestLockBannerRunLink:
+    """Tests for the run link in the lock banner."""
+
+    def test_the_locked_banner_names_the_holding_run(self) -> None:
+        """A traceable lock lets the operator open the holding run."""
+        owner = SessionOwner(actor_email=HOLDER, browser_id="browser-holder-0001")  # Build a valid lock owner.
+        record = LockRecord(  # Build the lock record that the banner reads from the store.
+            owner=owner,  # The holder address reaches the banner text.
+            lock_token="token-for-test",  # The banner must never show this token.
+            run_id=RUN_ID,  # The run identifier gives the operator a stop target.
+            acquired_at="2026-09-13T07:22:40+00:00",  # Stable text keeps the test deterministic.
+            refreshed_at="2026-09-13T07:36:21+00:00",  # Stable text keeps the test deterministic.
+        )
+
+        banner = select.build_lock_banner("site-1", select.LOCK_STATE_LOCKED, HOLDER, 60, "")  # Build the context.
+        enriched = select.with_lock_holder_run(banner, record)  # Add the run link only from the lock record.
+
+        assert enriched["lock_holder_run"] == RUN_ID  # The banner context must carry the run identifier.
+        assert enriched["lock_holder_run_url"] == f"/runs/{RUN_ID}"  # The run page path opens the stop controls.
+
+    def test_the_locked_banner_omits_an_empty_holding_run(self) -> None:
+        """An untraceable lock must not show a useless run link."""
+        owner = SessionOwner(actor_email=HOLDER, browser_id="browser-holder-0001")  # Build a valid lock owner.
+        record = LockRecord(  # Build the defect shape with no run identifier.
+            owner=owner,  # The holder address remains valid.
+            lock_token="token-for-test",  # The banner must never show this token.
+            run_id="",  # Empty text cannot open a useful run page.
+            acquired_at="2026-09-13T07:22:40+00:00",  # Stable text keeps the test deterministic.
+            refreshed_at="2026-09-13T07:36:21+00:00",  # Stable text keeps the test deterministic.
+        )
+
+        banner = select.build_lock_banner("site-1", select.LOCK_STATE_LOCKED, HOLDER, 60, "")  # Build the context.
+        enriched = select.with_lock_holder_run(banner, record)  # Add no run link for an empty run identifier.
+
+        assert enriched["lock_holder_run"] == ""  # Empty run text is not useful to an operator.
+        assert enriched["lock_holder_run_url"] == ""  # Empty run text must not form a broken link.
