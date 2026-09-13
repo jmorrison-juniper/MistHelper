@@ -192,14 +192,14 @@ coverage.
 - [x] T118 Fix a feature-caused failure and rerun its gate.
 - [x] T119 Create one GitHub issue before any repair of an unrelated failure. Record the issue URL.
 - [x] T120 Run the STE linter for every Markdown file in the feature package and the amended constitution.
-- [ ] T121 Stage all feature files with `git add -A --pathspec-from-file=specs/2447-stale-bulk-run-controls/feature-files.txt`.
-- [ ] T122 Compare the manifest with the staged diff and prove that every changed feature path is staged.
+- [x] T121 Stage all feature files with `git add -A --pathspec-from-file=specs/2447-stale-bulk-run-controls/feature-files.txt`.
+- [x] T122 Compare the manifest with the staged diff and prove that every changed feature path is staged.
 
 ## Phase 12: Commit, Rebase, Pull Request, Merge, and Deployment
 
 **Goal**: Merge and deploy the exact approved revision.
 
-- [ ] T123 Commit the verified staged feature with the required UTC version title, `Closes #2447`, and co-author trailer.
+- [x] T123 Commit the verified staged feature with the required UTC version title, `Closes #2447`, and co-author trailer.
 - [ ] T124 Fetch `origin/main` and rebase `fix/2447-stale-bulk-run-controls` onto `origin/main`.
 - [ ] T125 Rerun affected local gates after the rebase.
 - [ ] T126 If conflict repair changes a feature file, rebuild the manifest, stage all feature paths, verify the staged diff, and commit the repair.
