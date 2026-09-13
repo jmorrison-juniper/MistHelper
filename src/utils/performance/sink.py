@@ -12,6 +12,7 @@ import json
 import logging
 import threading
 from collections import deque
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Final
 
@@ -130,7 +131,7 @@ class BoundedSink:
         total += _TEXT_FACTOR_BYTES * len(event.event_type)  # Charge the family text.
         return total  # Return an approximate charge, not an exact object graph size.
 
-    def _mapping_text_bytes(self, mapping: dict[str, object], entry_bytes: int) -> int:
+    def _mapping_text_bytes(self, mapping: Mapping[str, object], entry_bytes: int) -> int:
         """Return the estimated bytes for one bounded mapping."""
         total = entry_bytes * len(mapping)  # Charge dict entries without walking object graphs.
         for key, value in mapping.items():  # Add the bounded text that the event already holds.
