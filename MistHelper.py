@@ -6104,10 +6104,15 @@ def _setup_interactive_container_mode() -> bool:
 
 def _print_interactive_menu() -> None:
     """Print the sorted list of available menu options."""
+    global _SORTED_MENU_KEYS_CACHE  # Reuse the module cache while still allowing invalidation.
     echo("\nAvailable Options:")
-    sorted_menu_keys = sorted(
-        menu_actions.keys(), key=lambda x: float(x.replace("a", ".1"))
-    )  # Sort numerically (not lexically) so 10 sorts after 9.
+    menu_keys = tuple(menu_actions.keys())  # Snapshot keys so runtime registry edits invalidate the cache.
+    if _SORTED_MENU_KEYS_CACHE is None or _SORTED_MENU_KEYS_CACHE[0] != menu_keys:  # Detect new or changed keys.
+        _SORTED_MENU_KEYS_CACHE = (
+            menu_keys,
+            tuple(sorted(menu_keys, key=lambda x: float(x.replace("a", ".1")))),
+        )  # Sort numerically once for this exact key set so 10 sorts after 9.
+    sorted_menu_keys = _SORTED_MENU_KEYS_CACHE[1]  # Read the valid cached order for this redraw.
     for key in sorted_menu_keys:  # Iterate every menu key in numeric order.
         _, description = menu_actions[key]  # Unpack description from dispatch table tuple.
         echo("%s: %s", key, description)
@@ -6268,28 +6273,31 @@ def _run_metrics_gateway_mode(args: argparse.Namespace) -> None:
     sys.exit(0)
 
 
+_SORTED_MENU_KEYS_CACHE: tuple[tuple[str, ...], tuple[str, ...]] | None = None  # Cache the sorted menu key order.
+
+_MAIN_MODE_TABLE: tuple[tuple[Callable[[argparse.Namespace], bool], str], ...] = (
+    (lambda a: bool(a.test), "_run_systematic_test_mode"),
+    (lambda a: bool(a.testinteractive), "_run_interactive_test_mode"),
+    (lambda a: bool(a.tui), "_run_tui_mode_and_exit"),
+    (lambda a: bool(getattr(a, "web_portal", False)), "_run_web_portal_mode"),
+    (lambda a: bool(getattr(a, "capture_portal", False)), "_run_capture_portal_mode"),
+    (lambda a: bool(getattr(a, "metrics_snmp", False)), "_run_metrics_snmp"),
+    (
+        lambda a: any(
+            bool(getattr(a, name, False)) for name in ("mib_generate", "mib_dry_run", "mib_report", "mib_check")
+        ),
+        "_run_mib_generator_mode",
+    ),
+    (lambda a: bool(getattr(a, "metrics_gateway", False)), "_run_metrics_gateway_mode"),
+    (lambda a: _has_meaningful_cli_args(a), "_run_cli_mode"),
+)  # Cache predicate definitions while handler names keep monkeypatch and late binding behavior.
+
+
 def _dispatch_main_mode(args: argparse.Namespace) -> None:
     """Dispatch to the appropriate mode entry point based on parsed CLI flags."""
-    mode_table = (  # Ordered (predicate, handler) pairs — first match wins
-        (lambda a: bool(a.test), _run_systematic_test_mode),
-        (lambda a: bool(a.testinteractive), _run_interactive_test_mode),
-        (lambda a: bool(a.tui), _run_tui_mode_and_exit),
-        (lambda a: bool(getattr(a, "web_portal", False)), _run_web_portal_mode),
-        (lambda a: bool(getattr(a, "capture_portal", False)), _run_capture_portal_mode),
-        # The SNMP responder owns standard output, so it must match before any handler that prints.
-        (lambda a: bool(getattr(a, "metrics_snmp", False)), _run_metrics_snmp),
-        # The generator writes a file and prints a report, so it must match before the general CLI handler.
-        (
-            lambda a: any(
-                bool(getattr(a, name, False)) for name in ("mib_generate", "mib_dry_run", "mib_report", "mib_check")
-            ),
-            _run_mib_generator_mode,
-        ),
-        (lambda a: bool(getattr(a, "metrics_gateway", False)), _run_metrics_gateway_mode),
-        (_has_meaningful_cli_args, _run_cli_mode),
-    )
-    for predicate, handler in mode_table:  # Stop on first predicate that matches
+    for predicate, handler_name in _MAIN_MODE_TABLE:  # Stop on the first cached predicate that matches.
         if predicate(args):
+            handler = globals()[handler_name]  # Resolve at dispatch time so tests and late binding still work.
             handler(args)
             return  # Most handlers call sys.exit. The return is defensive for _run_cli_mode
     _run_interactive_mode(args)  # Fallback: interactive menu loop

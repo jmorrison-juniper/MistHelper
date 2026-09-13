@@ -9,11 +9,13 @@ argparse, network, or authentication code. No source edits, no live I/O.
 from __future__ import annotations  # WHY: PEP 604 unions in type hints on Python 3.10+.
 
 import argparse  # WHY: MagicMock(spec=argparse.ArgumentParser) contract typing.
+from collections.abc import Callable  # WHY: tests type handler fixtures.
 from typing import Any  # WHY: mocks dict holds both MagicMock and Namespace objects.
 from unittest.mock import MagicMock, call  # WHY: FR-008 mandates MagicMock(spec=...) + call-order verification.
 
 import pytest  # WHY: monkeypatch fixture for MistHelper attribute overrides.
 
+import MistHelper  # WHY: cache tests exercise the runtime menu and mode dispatch tables.
 from src.refactors.main_entrypoint import _MH, MainEntrypoint, _MistHelperProxy  # WHY: SUT + proxy direct imports.
 
 
@@ -139,3 +141,112 @@ class TestMainEntrypointRun:
     def test_run_uses_module_level_proxy_singleton(self) -> None:
         """The module-level `_MH` singleton is an instance of `_MistHelperProxy`."""
         assert isinstance(_MH, _MistHelperProxy)  # WHY: guard against accidental replacement with a plain module.
+
+
+class TestMistHelperMenuAndModeCaches:
+    """The CLI caches keep the same behavior and refresh when key data changes."""
+
+    def test_print_interactive_menu_refreshes_when_menu_keys_change(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A menu key change invalidates the sorted-key cache before the next redraw."""
+        lines: list[str] = []  # WHY: collect formatted menu output without writing to the terminal.
+        menu_actions = {
+            "10": (lambda: None, "ten"),
+            "2": (lambda: None, "two"),
+        }  # WHY: non-lexical order proves numeric sorting stays active.
+
+        def fake_echo(message: str, *args: object) -> None:
+            rendered = message % args if args else message  # WHY: match MistHelper.echo formatting behavior.
+            lines.append(rendered)  # WHY: keep exact text for the assertion.
+
+        monkeypatch.setattr(MistHelper, "menu_actions", menu_actions)  # WHY: use a small registry fixture.
+        monkeypatch.setattr(MistHelper, "echo", fake_echo)  # WHY: capture printed text without side effects.
+        monkeypatch.setattr(MistHelper, "_SORTED_MENU_KEYS_CACHE", None)  # WHY: start from a cold cache.
+
+        MistHelper._print_interactive_menu()  # WHY: build the initial cached order.
+        menu_actions["3"] = (lambda: None, "three")  # WHY: simulate a runtime registry extension.
+        MistHelper._print_interactive_menu()  # WHY: prove the next redraw sees the new key.
+
+        assert lines == [
+            "\nAvailable Options:",
+            "2: two",
+            "10: ten",
+            "\nAvailable Options:",
+            "2: two",
+            "3: three",
+            "10: ten",
+        ]  # WHY: the cache must not serve stale keys or alter menu text.
+
+    def test_dispatch_main_mode_keeps_handler_order_and_late_binding(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The cached mode table preserves first-match dispatch and handler rebinding."""
+        calls: list[str] = []  # WHY: record the selected handler for each synthetic mode.
+
+        def make_handler(name: str) -> Callable[[argparse.Namespace], None]:
+            def handler(_args: argparse.Namespace) -> None:
+                calls.append(name)  # WHY: identify the selected mode without running real side effects.
+
+            return handler  # WHY: hand monkeypatch a callable with the original handler shape.
+
+        handlers = {
+            "_run_systematic_test_mode": "test",
+            "_run_interactive_test_mode": "testinteractive",
+            "_run_tui_mode_and_exit": "tui",
+            "_run_web_portal_mode": "web_portal",
+            "_run_capture_portal_mode": "capture_portal",
+            "_run_metrics_snmp": "metrics_snmp",
+            "_run_mib_generator_mode": "mib_generate",
+            "_run_metrics_gateway_mode": "metrics_gateway",
+            "_run_cli_mode": "cli",
+            "_run_interactive_mode": "interactive",
+        }  # WHY: cover every dispatch branch, including the fallback.
+        for attr_name, label in handlers.items():
+            monkeypatch.setattr(MistHelper, attr_name, make_handler(label))  # WHY: avoid real dispatch side effects.
+
+        base = {
+            "test": False,
+            "testinteractive": False,
+            "tui": False,
+            "web_portal": False,
+            "capture_portal": False,
+            "metrics_snmp": False,
+            "mib_generate": False,
+            "mib_dry_run": False,
+            "mib_report": False,
+            "mib_check": False,
+            "metrics_gateway": False,
+            "menu": None,
+            "org": None,
+            "site": None,
+            "device": None,
+            "port": None,
+        }  # WHY: each synthetic namespace starts with all mode flags disabled.
+        mode_names = (
+            "test",
+            "testinteractive",
+            "tui",
+            "web_portal",
+            "capture_portal",
+            "metrics_snmp",
+            "mib_generate",
+            "metrics_gateway",
+        )  # WHY: order matches the production first-match table.
+        for mode_name in mode_names:
+            values = dict(base)  # WHY: isolate one flag per dispatch case.
+            values[mode_name] = True  # WHY: select the mode under test.
+            MistHelper._dispatch_main_mode(argparse.Namespace(**values))  # WHY: exercise the cached table.
+        cli_values = dict(base)  # WHY: build the explicit CLI dispatch case.
+        cli_values["menu"] = "1"  # WHY: a menu value is a meaningful CLI argument.
+        MistHelper._dispatch_main_mode(argparse.Namespace(**cli_values))  # WHY: exercise CLI branch.
+        MistHelper._dispatch_main_mode(argparse.Namespace(**base))  # WHY: exercise fallback branch.
+
+        assert calls == [
+            "test",
+            "testinteractive",
+            "tui",
+            "web_portal",
+            "capture_portal",
+            "metrics_snmp",
+            "mib_generate",
+            "metrics_gateway",
+            "cli",
+            "interactive",
+        ]  # WHY: cached predicates and late-bound handlers must match the original behavior.
