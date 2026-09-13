@@ -44,7 +44,7 @@ import argparse  # Import argparse for command-line argument parsing (--menu, --
 import logging  # Import logging for structured logging to script.log and console
 import os  # Import os for file path operations, environment variables, and data/ directory setup
 import re  # Import re for regex pattern matching in data parsing (SSIDs, descriptions, and so on)
-import subprocess  # nosec B404  # Injected into src/bootstrap/PackageInstaller DI seam only; all runtime calls in this module use SubprocessRunner (initiative 1016).
+import subprocess  # nosec B404  # Injected into the bootstrap installer seam only.
 import time  # Import time for rate limiting, delays, and performance monitoring
 import traceback  # Import traceback for detailed exception context in error logs
 import types  # Import types for type annotations (TracebackType)
@@ -56,6 +56,11 @@ from datetime import datetime  # Import datetime for timestamping logs and event
 from logging.handlers import RotatingFileHandler  # Rotate script.log before the data volume fills
 from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, TextIO, cast
 
+from packaging.requirements import InvalidRequirement, Requirement  # WHY: Parse requirement lines that include names.
+from packaging.specifiers import (
+    InvalidSpecifier,
+    SpecifierSet,
+)  # WHY: PEP 440 specifier checks replace hand comparisons.
 from packaging.version import InvalidVersion, Version  # WHY: PEP 440 version comparison.
 
 from src.utils.console import echo  # WHY: 1031 stdout + INFO log helper replaces legacy WARNING-channel echoes.
@@ -874,55 +879,32 @@ def _get_installed_version(package_name: str) -> str:  # Look up the installed v
         return ""  # Return empty string to signal 'not installed' to callers
 
 
-def _parse_version(version_str: str) -> Version:  # Convert a version string into a PEP 440 version
-    """Parse a version string with the PEP 440 version parser."""
-    try:  # The except below handles malformed input
-        return Version(str(version_str))  # Use packaging to compare suffixes and unequal segments correctly
-    except (InvalidVersion, TypeError):  # Malformed version string that cannot be parsed
-        logging.debug("Treating invalid version '%s' as 0", version_str)  # Leave a diagnostic breadcrumb
-        return Version("0")  # Return a low sentinel so invalid metadata does not satisfy a real constraint
-
-
-def _extract_version_constraint(spec: str) -> tuple[str, str]:  # Split a spec into operator + required version
-    """Return (operator, required_version) parsed from a spec like '>=0.59.0'.
-
-    Defaults to ('>=', '') when the spec carries no recognizable operator/version.
-    """
-    operators = [">=", "<=", "==", "!=", ">", "<"]  # Two-char operators first so '>=' matches before '>'
-    for op in operators:  # Find which operator the spec uses
-        if op in spec:  # The spec string contains this operator
-            parts = spec.split(op, 1)  # Split once into [package-or-empty, version]
-            if len(parts) == 2:  # Ensure the split produced both halves
-                return op, parts[1].strip()  # Operator plus the required version text right of it
-    return ">=", ""  # No operator found: signal 'no constraint' to the caller
-
-
-# Operator symbol -> comparison predicate. Dict dispatch keeps _version_satisfies flat.
-_VERSION_COMPARATORS: dict[str, Callable[[Version, Version], bool]] = {
-    ">=": lambda installed, required: installed >= required,  # 'at least' constraint
-    ">": lambda installed, required: installed > required,  # 'strictly newer' constraint
-    "<=": lambda installed, required: installed <= required,  # 'at most' constraint
-    "<": lambda installed, required: installed < required,  # 'strictly older' constraint
-    "==": lambda installed, required: installed == required,  # exact-match constraint
-    "!=": lambda installed, required: installed != required,  # exclusion constraint
-}
-
-
 def _version_satisfies(installed: str, spec: str) -> bool:  # Decide whether installed meets the spec constraint
-    """Check if installed version satisfies the version specification."""
+    """Return True when the installed version satisfies the version spec.
+
+    Why:
+        The bootstrap orchestrator needs a safe predicate that never raises for
+        package metadata. The packaging library gives PEP 440 ordering, and this
+        function keeps the old no-constraint behavior.
+    """
     if not installed:  # An empty installed version means the package is not present
         return False  # Treat 'not installed' as 'requirement not satisfied'
-
-    operator_symbol, required_version = _extract_version_constraint(spec)  # Parse operator + required version
-    if not required_version:  # The spec had no version constraint
-        return True  # No version requirement, any version satisfies
-
-    installed_version = _parse_version(installed)  # Parse installed with PEP 440 comparison rules
-    required = _parse_version(required_version)  # Parse required with PEP 440 comparison rules
-    comparator = _VERSION_COMPARATORS.get(operator_symbol)  # Look up the predicate for this operator
-    if comparator is None:  # Unknown operator (should not happen given the parser)
-        return True  # Be permissive and treat the requirement as satisfied
-    return comparator(installed_version, required)  # Apply the matched comparison predicate
+    try:  # Try the simple form, such as '>=1.0' or '==2.0'
+        constraint = SpecifierSet(spec)  # Parse a bare PEP 440 specifier set
+    except InvalidSpecifier:  # A requirements.txt line can include a package name
+        try:  # Fall back to the named requirement form, such as 'mistapi>=0.63.1'
+            constraint = Requirement(spec).specifier  # Extract only the version constraint from the requirement
+        except InvalidRequirement:  # Malformed text must not stop bootstrap
+            logging.debug("Ignoring invalid version spec '%s'", spec)  # Leave a diagnostic without failing startup
+            return True  # Preserve the old safe behavior for an unusable constraint
+    if not constraint:  # The requirement had no version constraint
+        return True  # Preserve the old behavior: any installed version satisfies a missing constraint
+    try:  # Convert the installed version through the PEP 440 parser
+        installed_version = Version(str(installed))  # Use packaging so pre-release order is correct
+    except (InvalidVersion, TypeError):  # Malformed package metadata must not stop bootstrap
+        logging.debug("Rejecting invalid installed version '%s'", installed)  # Record the safe rejection
+        return False  # A bad installed version must not satisfy a real constraint
+    return constraint.contains(installed_version)  # Apply packaging's PEP 440 specifier rules
 
 
 def _get_latest_pypi_version(package_name: str) -> str:  # Ask PyPI for a package's newest published version
@@ -1017,7 +999,7 @@ def _early_dependency_check() -> None:  # Public entry point. Delegates to the e
         get_installed_version_fn=_get_installed_version,  # Reuse the installed-version lookup
         version_satisfies_fn=_version_satisfies,  # Reuse the version-constraint checker
         get_latest_pypi_version_fn=_get_latest_pypi_version,  # Reuse the PyPI latest-version lookup
-        parse_version_fn=_parse_version,  # Reuse the version-tuple parser
+        parse_version_fn=Version,  # Use packaging's PEP 440 parser for latest-version checks
         installer=installer,  # Hand the orchestrator the installer built above
     )
     orchestrator.run()  # Execute the dependency check + install/upgrade workflow
