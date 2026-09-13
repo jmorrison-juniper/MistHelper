@@ -63,6 +63,25 @@ assert prepared is not None  # nosec B101 - Type narrowing only. The early retur
 
 This contract governs the comments that this feature adds. The specification states that the existing 79 suppression comments in 38 files stay valid, and that this work does not review them.
 
+### Ruff S decision
+
+Issue #1780 measured the Ruff `S` rule family against Bandit. The repository
+does not select `S` in Ruff. Bandit stays the only security syntax linter.
+
+The Bandit CI command reported zero active findings. The Ruff trial reported
+21,807 findings. If both tools ran, 81 accepted lines would need both `# nosec`
+and `# noqa` comments. Bandit also reported 32 accepted findings that the Ruff
+trial did not report on the same line.
+
+Keep this suppression form.
+
+```text
+<code>  # nosec <RULE> [<RULE> ...] - <reason>
+```
+
+Do not add `# noqa: S...` for a security finding. Ruff does not select `S`, so
+that comment would be inert.
+
 ---
 
 ## Contract 2 - The CI security gate command
