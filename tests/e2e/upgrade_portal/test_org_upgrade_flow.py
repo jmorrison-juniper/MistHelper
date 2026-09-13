@@ -19,6 +19,27 @@ UPGRADE_ID = "44444444-4444-4444-4444-444444444444"
 class TestOrganizationUpgradeBrowserFlow:
     """Drive the organization mode from site selection through cancellation."""
 
+    def test_a_refused_option_set_stays_in_the_page(self, page: Any) -> None:
+        """A refused organization request shows an error inside the page."""
+        page.goto(MODE_PATH, wait_until="domcontentloaded")
+        page.get_by_test_id("mode-multi-site").check()
+        page.get_by_test_id("mode-continue").click()
+        page.wait_for_url(re.compile(r".*/select/site$"))
+        page.get_by_test_id(f"site-select-{SITE_ID}").check()
+        page.get_by_test_id("multi-site-continue").click()
+        page.wait_for_url(re.compile(r".*/upgrade/org/options$"))
+
+        for family in ("ap", "switch", "gateway"):
+            sync_api.expect(page.get_by_test_id(f"org-upgrade-type-{family}")).to_be_checked()
+        page.get_by_test_id("org-upgrade-version").fill("")
+        page.get_by_test_id("org-upgrade-switch-version").fill("")
+        page.get_by_test_id("org-upgrade-gateway-version").fill("")
+        page.get_by_test_id("org-upgrade-review").click()
+
+        sync_api.expect(page.get_by_test_id("flash-message")).to_contain_text("device type")
+        sync_api.expect(page.get_by_test_id("org-upgrade-options")).to_be_visible()
+        assert page.url.endswith("/upgrade/org/options")
+
     def test_multisite_options_confirmation_progress_and_cancel(self, page: Any) -> None:
         """The browser completes every organization page without a live Mist call."""
         page.goto(MODE_PATH, wait_until="domcontentloaded")

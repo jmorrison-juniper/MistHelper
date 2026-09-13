@@ -21,6 +21,15 @@ ssh -p 2200 misthelper@localhost
 # Password: misthelper123!
 ```
 
+Caution: the commands above start the production local stack. If you start a
+container for a test, for a debug session, or for an end-to-end run, obey the
+policy in [Container Setup](Container-Setup#test-and-debug-containers). Start
+the container inside the compose group. Name it
+`misthelper-tmp-<issue|pr><number>-<slug>`. Publish a port in the range 9600
+through 9699. Remove the container when the test ends. A test container that
+publishes 2200 takes the port from the running SSH server, and no operator can
+then connect.
+
 ## Connection Details
 
 | Setting | Value | Notes |
