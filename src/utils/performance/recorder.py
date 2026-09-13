@@ -18,7 +18,7 @@ from typing import Any, Final, Literal
 from src.utils.performance.clock import Stopwatch
 from src.utils.performance.event import EventSource, PerformanceEvent
 from src.utils.performance.privacy import scrub_dimensions
-from src.utils.performance.sink import BoundedSink
+from src.utils.performance.sink import DEFAULT_MAX_BYTES, BoundedSink
 
 log = logging.getLogger(__name__)
 
@@ -51,6 +51,7 @@ class RecorderSettings:
     level: str = "off"  # The default keeps the whole feature disabled.
     sample_rate: float = 1.0  # The share of successful events the recorder keeps.
     capacity: int = 2048  # The queue bound the sink applies.
+    max_bytes: int = DEFAULT_MAX_BYTES  # The approximate byte bound the sink applies.
     measure_cpu: bool = True  # Read the process CPU clock as well as the wall clock.
 
     def __post_init__(self) -> None:
@@ -78,13 +79,15 @@ class RecorderSettings:
             level=_read_level(source),  # The level decides which families may emit.
             sample_rate=_read_rate(source),  # The share of successful events to keep.
             capacity=_read_capacity(source),  # The bound on the queued event count.
+            max_bytes=_read_max_bytes(source),  # The bound on the estimated queued bytes.
             measure_cpu=source.get("MISTHELPER_PERF_CPU", "1") not in {"0", "false", "False"},
         )
         log.debug(
-            "Performance monitoring level=%s sample_rate=%s capacity=%d cpu=%s",
+            "Performance monitoring level=%s sample_rate=%s capacity=%d max_bytes=%d cpu=%s",
             settings.level,
             settings.sample_rate,
             settings.capacity,
+            settings.max_bytes,
             settings.measure_cpu,
         )  # Record the resolved values, which hold no secret.
         return settings  # Give the caller one validated settings record.
@@ -117,6 +120,16 @@ def _read_capacity(source: Mapping[str, str]) -> int:
         log.warning("Invalid performance capacity, using 2048")  # Report the fallback.
         return 2048  # Use the documented default bound.
     return min(65536, max(1, capacity))  # Clamp, so one setting cannot exhaust the memory.
+
+
+def _read_max_bytes(source: Mapping[str, str]) -> int:
+    """Return the byte bound, or the default when the value cannot be read."""
+    try:  # Guard the conversion, because an operator can type any text.
+        max_bytes = int(source.get("MISTHELPER_PERF_MAX_BYTES", str(DEFAULT_MAX_BYTES)))  # Read the bound.
+    except ValueError:  # The value was not a whole number.
+        log.warning("Invalid performance max bytes, using %d", DEFAULT_MAX_BYTES)  # Report the fallback.
+        return DEFAULT_MAX_BYTES  # Use the documented default byte bound.
+    return min(64 * 1_024 * 1_024, max(4_096, max_bytes))  # Clamp the memory budget to a safe range.
 
 
 class NullSpan:
@@ -273,7 +286,10 @@ class Recorder:
         """
         self._settings = settings or RecorderSettings()  # The default level is off.
         self._families = self._settings.families  # Read the family set once, not per span.
-        self._sink = BoundedSink(capacity=self._settings.capacity)  # Bound the memory use.
+        self._sink = BoundedSink(  # Bound the memory use by count and approximate bytes.
+            capacity=self._settings.capacity,  # Apply the configured event count bound.
+            max_bytes=self._settings.max_bytes,  # Apply the configured estimated byte bound.
+        )
         self._random = random.Random(0)  # nosec B311 - The draw thins telemetry only, never security.
 
     @property
