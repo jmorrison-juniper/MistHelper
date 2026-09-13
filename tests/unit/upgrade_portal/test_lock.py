@@ -385,6 +385,33 @@ def seed_lock(store: ScriptedLockStore, owner: SessionOwner, age_seconds: float)
     return record
 
 
+def seed_unattended_lock(store: ScriptedLockStore) -> LockRecord:
+    """Put one empty-run lock into the store with a fresh heartbeat.
+
+    Why:
+        Issue #2564 showed an automated holder with no run. It renewed the
+        lock each minute, so `refreshed_at` never let the cooldown reach zero.
+
+    Args:
+        store: The lock store double.
+
+    Returns:
+        The record the store now holds.
+    """
+    acquired = (datetime.now(UTC) - timedelta(days=2)).isoformat()  # The holder started long before the limit.
+    refreshed = datetime.now(UTC).isoformat()  # The last beat is fresh, which reproduces the lockout.
+    record = LockRecord(  # This record matches the damaged production shape of issue #2564.
+        owner=FIRST_OWNER,  # The automated holder blocks the second operator.
+        lock_token=SEEDED_TOKEN,  # The takeover script compares this value.
+        run_id="",  # An empty run names no live upgrade run.
+        acquired_at=acquired,  # The total hold age must still bound the wait.
+        refreshed_at=refreshed,  # The old code measured this alone and refused takeover.
+    )
+    store.values[SITE_KEY] = record.to_json()  # Seed the exact JSON the store would hold.
+    store.expiries[SITE_KEY] = LOCK_TTL_SECONDS  # Keep the key alive, like a fresh renewal did.
+    return record  # The caller can compare the old holder to the new grant.
+
+
 def stored_record(store: ScriptedLockStore) -> LockRecord:
     """Return the record the store holds for the shared site.
 
@@ -426,6 +453,18 @@ def test_the_settings_repeat_the_contract_numbers() -> None:
     assert HEARTBEAT_SECONDS == 60
     assert TAKEOVER_CONFIRMATION_TEXT == "CONFIRM"
     assert LOCK_TTL_SECONDS > COOLDOWN_SECONDS  # A quiet holder must still hold a readable key
+
+
+def test_an_unattended_empty_run_holder_can_be_taken_after_the_bound(fake_store: ScriptedLockStore) -> None:
+    """A fresh heartbeat must not make a no-run holder keep a site for ever.
+
+    Args:
+        fake_store: The in-memory lock store.
+    """
+    held = seed_unattended_lock(fake_store)  # Reproduce the stored lock from issue #2564.
+    grant = acquire_site_lock(build_request(SECOND_OWNER, TAKEOVER_CONFIRMATION_TEXT), client=fake_store)  # Take it.
+    assert grant.state == LockState.TAKEN_OVER  # The operator reached a bounded takeover.
+    assert grant.record.lock_token != held.lock_token  # The takeover replaced the unattended holder.
 
 
 def test_a_free_site_grants_the_lock(store: ScriptedLockStore) -> None:
