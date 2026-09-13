@@ -472,29 +472,59 @@ class ActionRepository:
     @staticmethod
     def _insert_retry(collection: Any, mutation: RetryRunMutation) -> None:
         """Recheck the source and live site runs before one retry insert."""
-        source = collection.get(mutation.source_run_id)
-        if source is None:
-            raise ActionMutationRefusal("run_changed")
-        if (
-            source.get("_rev") != mutation.expected_source_revision
-            or source.get("state") != mutation.expected_source_state
-        ):
-            raise ActionMutationRefusal("run_changed")
-        for row in collection.find({"site_id": mutation.site_id}, limit=1000):
-            run_id = str(row.get("run_id") or row.get("_key") or "")
-            if run_id == mutation.source_run_id:
-                continue
-            try:
-                state = RunStateMachine.read_state(dict(row))
-            except RunTransitionError:
-                raise ActionMutationRefusal("upgrade_already_running", run_id) from None
-            if state not in RunStateMachine.TERMINAL:
-                raise ActionMutationRefusal("upgrade_already_running", run_id)
+        ActionRepository._verify_retry_source(collection, mutation)  # Preserve source revision and state checks.
+        ActionRepository._verify_no_live_retry(collection, mutation)  # Preserve live site run checks.
         if collection.get(mutation.run_id) is not None:
             raise ActionMutationRefusal("run_changed")
         document = dict(mutation.document)
         document["_key"] = mutation.run_id
         collection.insert(document, sync=True)
+
+    @staticmethod
+    def _verify_retry_source(collection: Any, mutation: RetryRunMutation) -> None:
+        """Verify the retry source run revision and state.
+
+        Args:
+            collection: The run collection in the action transaction.
+            mutation: The retry mutation request.
+        """
+        source = collection.get(mutation.source_run_id)  # Read the source run inside the transaction.
+        if source is None:  # Preserve the missing-source conflict.
+            raise ActionMutationRefusal("run_changed")
+        if (  # Preserve the revision and state match rule.
+            source.get("_rev") != mutation.expected_source_revision
+            or source.get("state") != mutation.expected_source_state
+        ):
+            raise ActionMutationRefusal("run_changed")
+
+    @staticmethod
+    def _verify_no_live_retry(collection: Any, mutation: RetryRunMutation) -> None:
+        """Verify that the site has no other live run.
+
+        Args:
+            collection: The run collection in the action transaction.
+            mutation: The retry mutation request.
+        """
+        for row in collection.find({"site_id": mutation.site_id}, limit=1000):
+            ActionRepository._refuse_live_retry_row(row, mutation)  # Preserve each live run conflict check.
+
+    @staticmethod
+    def _refuse_live_retry_row(row: Mapping[str, Any], mutation: RetryRunMutation) -> None:
+        """Refuse one row when it is a different live run.
+
+        Args:
+            row: One run row from the site.
+            mutation: The retry mutation request.
+        """
+        run_id = str(row.get("run_id") or row.get("_key") or "")  # Preserve run identifier fallback order.
+        if run_id == mutation.source_run_id:  # Preserve the source skip.
+            return
+        try:
+            state = RunStateMachine.read_state(dict(row))  # Preserve strict run state parsing.
+        except RunTransitionError:
+            raise ActionMutationRefusal("upgrade_already_running", run_id) from None
+        if state not in RunStateMachine.TERMINAL:  # Preserve live run refusal.
+            raise ActionMutationRefusal("upgrade_already_running", run_id)
 
     def _verify_action(self, expected: UpgradeRunAction) -> UpgradeRunAction:
         """Read one action back and compare every modeled field."""

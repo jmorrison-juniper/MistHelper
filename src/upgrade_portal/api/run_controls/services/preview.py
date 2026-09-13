@@ -148,24 +148,60 @@ class BulkActionPreviewService:
     ) -> Mapping[str, Any]:
         """Verify one action request and return its bound server scope."""
         payload = self._decode(token)
-        if (
+        self._validate_action_match(payload, actor_scope, action, run_ids)  # Preserve actor and action checks.
+        expires_at = self._parse_time(payload.get("expires_at"))
+        if expires_at <= self._utc_now():
+            raise PreviewError("preview_expired")
+        self._validate_action_counts(payload, run_ids)  # Preserve signed count checks.
+        self._validate_action_scope(payload)  # Preserve required server scope checks.
+        return payload
+
+    @staticmethod
+    def _validate_action_match(
+        payload: Mapping[str, Any],
+        actor_scope: str,
+        action: str,
+        run_ids: tuple[str, ...],
+    ) -> None:
+        """Validate that one payload matches an action request.
+
+        Args:
+            payload: The decoded preview payload.
+            actor_scope: The current actor scope.
+            action: The requested action.
+            run_ids: The requested run identifiers.
+        """
+        if (  # Preserve the original mismatch rule.
             payload.get("actor_scope") != actor_scope
             or payload.get("action") != action
             or payload.get("run_ids") != list(run_ids)
         ):
             raise PreviewError("preview_mismatch")
-        expires_at = self._parse_time(payload.get("expires_at"))
-        if expires_at <= self._utc_now():
-            raise PreviewError("preview_expired")
-        site_counts = payload.get("site_counts")
-        if not isinstance(site_counts, dict):
+
+    @staticmethod
+    def _validate_action_counts(payload: Mapping[str, Any], run_ids: tuple[str, ...]) -> None:
+        """Validate the signed run and site counts.
+
+        Args:
+            payload: The decoded preview payload.
+            run_ids: The requested run identifiers.
+        """
+        site_counts = payload.get("site_counts")  # Read the signed site counts once.
+        if not isinstance(site_counts, dict):  # Preserve invalid site count type handling.
             raise PreviewError("preview_invalid")
         if payload.get("run_count") != len(run_ids) or payload.get("site_count") != len(site_counts):
-            raise PreviewError("preview_mismatch")
-        required = ("preview_id", "organization_id", "history_scope")
+            raise PreviewError("preview_mismatch")  # Preserve count mismatch handling.
+
+    @staticmethod
+    def _validate_action_scope(payload: Mapping[str, Any]) -> None:
+        """Validate the signed fields that bind the server scope.
+
+        Args:
+            payload: The decoded preview payload.
+        """
+        required = ("preview_id", "organization_id", "history_scope")  # Preserve the required field set.
         if any(not isinstance(payload.get(field), str) or not payload.get(field) for field in required):
-            raise PreviewError("preview_invalid")
-        return payload
+            raise PreviewError("preview_invalid")  # Preserve invalid scope handling.
 
     def _payload(
         self,

@@ -6,7 +6,7 @@ import logging
 import uuid
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast  # Narrow checked records without runtime assertions.
 
 from src.upgrade_portal.api.run_controls.services.retry import (
     RETRYABLE_STATES,
@@ -38,6 +38,10 @@ logger = logging.getLogger(__name__)
 PRE_CLOUD_STATES = frozenset({"created", "pre_capture_running", "pre_capture_done", "awaiting_confirmation"})
 ACTION_LEASE_TIME = timedelta(minutes=5)
 LOCK_CHANGED_MESSAGE = "The site lock token changed before the write."  # Name the text without a credential term.
+RetryRunBuilder = Callable[  # Keep the retry builder signature in one local term.
+    [Mapping[str, Any], list[dict[str, Any]], Mapping[str, Any]],
+    Mapping[str, Any],
+]
 
 
 class BulkActionError(ValueError):
@@ -177,37 +181,9 @@ class BulkRunActionService:
         expected = f"RETRY {len(run_ids)} RUNS"
         if confirmation != expected:
             raise BulkActionError("confirmation_mismatch")
-        organization_id = str(preview.get("organization_id") or "")
-        history_scope = str(preview.get("history_scope") or "")
-        preview_id = str(preview.get("preview_id") or "")
-        site_count = int(preview.get("site_count") or 0)
-        records = tuple(self._run_reader(run_id) for run_id in run_ids)
-        site_ids = tuple(self._site_id(record) for record in records)
-        policy = RetryCopyPolicy(self._clock())
-        winners = policy.newest_by_site(tuple(record for record in records if record is not None))
-        identity = ActionIdentity.from_request(
-            actor,
-            idempotency_key,
-            {
-                "action": "retry",
-                "organization_id": organization_id,
-                "history_scope": history_scope,
-                "run_ids": list(run_ids),
-                "preview_id": preview_id,
-                "preview_digest": canonical_digest(preview),
-            },
-            confirmation,
-        )
-        initialization = ActionInitialization(
-            identity,
-            ActionSource.bulk(
-                preview_id,
-                canonical_digest(preview),
-                organization_id,
-                history_scope,
-            ),
-            ActionIntent("retry", run_ids, site_ids, site_count),
-        )
+        records = tuple(self._run_reader(run_id) for run_id in run_ids)  # Preserve one read per requested run.
+        winners = self._retry_winners(records)  # Select the same newest retry source for each site.
+        initialization = self._retry_initialization(actor, idempotency_key, confirmation, preview, records)
         now = self._now()
         lease = ActionLease("worker-" + uuid.uuid4().hex, self._future(now, ACTION_LEASE_TIME))
         replay = ActionReplayService(self._repository, lambda: now)
@@ -267,28 +243,17 @@ class BulkRunActionService:
         action: UpgradeRunAction,
         item: RunActionOutcome,
         winners: Mapping[str, str],
-        retry_run_builder: Callable[
-            [Mapping[str, Any], list[dict[str, Any]], Mapping[str, Any]],
-            Mapping[str, Any],
-        ],
+        retry_run_builder: RetryRunBuilder,
     ) -> RecoveryDecision:
         """Build one current retry decision after the durable claim."""
         checked_at = self._now()
         record = self._run_reader(item.identity.source_run_id)
-        if record is None:
-            return RecoveryDecision(self._retry_outcome(item, "refused", "run_not_found", "", checked_at))
-        site_id = self._site_id(record)
-        prior_state = self._state(record)
-        if site_id != item.identity.site_id:
-            return RecoveryDecision(self._retry_outcome(item, "refused", "run_changed", "", checked_at))
-        guard_reason = self._guard.refusal(action.source.organization_id, site_id)
-        if guard_reason is not None:
-            outcome = self._retry_outcome(item, "refused", guard_reason, str(record.get("state") or ""), checked_at)
-            return RecoveryDecision(outcome, site_block=(site_id, guard_reason))
-        if prior_state not in RETRYABLE_STATES:
-            return RecoveryDecision(
-                self._retry_outcome(item, "refused", "run_not_retryable", prior_state or "", checked_at)
-            )
+        refusal = self._retry_item_refusal(action, item, record, checked_at)  # Preserve all early refusal checks.
+        if refusal is not None:
+            return refusal
+        record = cast(Mapping[str, Any], record)  # Narrow the checked record after the refusal helper.
+        site_id = self._site_id(record)  # Reuse the checked site identifier for later checks.
+        prior_state = self._state(record)  # Reuse the checked source state for later outcomes.
         policy = RetryCopyPolicy(self._clock())
         try:
             policy.source_time(record)
@@ -317,23 +282,13 @@ class BulkRunActionService:
             return RecoveryDecision(
                 self._retry_outcome(item, "unknown", "retry_create_unverified", prior_state, checked_at)
             )
-        logger.info(
-            "Build one retry run from the approved source"
-        )  # Record the durable action before the builder runs.
-        created = dict(retry_run_builder(record, copied_targets, copied_options))  # Use the checked builder from retry.
+        created = self._build_retry_run(retry_run_builder, record, copied_targets, copied_options)  # Build safely.
         result_run_id = str(created.get("run_id") or "")  # Summarize the builder result without target data.
-        logger.debug("Built one retry run from the approved source with identifier %s", result_run_id)  # Confirm build.
         if not result_run_id:
             return RecoveryDecision(self._retry_outcome(item, "failed", "retry_create_failed", prior_state, checked_at))
-        created["state"] = "created"
-        created["site_id"] = site_id
-        created["org_id"] = action.source.organization_id
-        created["targets"] = copied_targets
-        created["options"] = copied_options
-        created["retry_of_run_id"] = item.identity.source_run_id
-        created.pop("_key", None)
-        created.pop("_id", None)
-        created.pop("_rev", None)
+        self._prepare_retry_document(  # Apply the durable retry fields after the builder returns an identifier.
+            created, action, item, copied_targets, copied_options
+        )
         outcome = self._retry_outcome(
             item,
             "succeeded",
@@ -352,6 +307,166 @@ class BulkRunActionService:
             created,
         )
         return RecoveryDecision(outcome, mutation)
+
+    def _retry_initialization(
+        self,
+        actor: DurableActorScope,
+        idempotency_key: str,
+        confirmation: str,
+        preview: Mapping[str, Any],
+        records: tuple[Mapping[str, Any] | None, ...],
+    ) -> ActionInitialization:
+        """Build one retry action initialization.
+
+        Args:
+            actor: The durable actor for the request.
+            idempotency_key: The client request key.
+            confirmation: The typed confirmation text.
+            preview: The verified preview payload.
+            records: The current source run records.
+
+        Returns:
+            The durable action initialization.
+        """
+        organization_id = str(preview.get("organization_id") or "")  # Preserve the signed organization value.
+        history_scope = str(preview.get("history_scope") or "")  # Preserve the signed history scope value.
+        preview_id = str(preview.get("preview_id") or "")  # Preserve the signed preview identifier.
+        site_ids = tuple(self._site_id(record) for record in records)  # Preserve prior site identifier extraction.
+        identity = ActionIdentity.from_request(  # Build the same durable identity payload.
+            actor,
+            idempotency_key,
+            self._retry_request_document(preview, organization_id, history_scope, preview_id),
+            confirmation,
+        )
+        return ActionInitialization(  # Keep the durable retry source and intent unchanged.
+            identity,
+            ActionSource.bulk(preview_id, canonical_digest(preview), organization_id, history_scope),
+            ActionIntent("retry", self._run_ids(preview), site_ids, int(preview.get("site_count") or 0)),
+        )
+
+    @staticmethod
+    def _retry_request_document(
+        preview: Mapping[str, Any],
+        organization_id: str,
+        history_scope: str,
+        preview_id: str,
+    ) -> dict[str, Any]:
+        """Return the request document for one retry action.
+
+        Args:
+            preview: The verified preview payload.
+            organization_id: The organization from the preview.
+            history_scope: The history scope from the preview.
+            preview_id: The preview identifier from the preview.
+
+        Returns:
+            The canonical retry request document.
+        """
+        return {  # Preserve the exact durable identity fields.
+            "action": "retry",
+            "organization_id": organization_id,
+            "history_scope": history_scope,
+            "run_ids": list(BulkRunActionService._run_ids(preview)),
+            "preview_id": preview_id,
+            "preview_digest": canonical_digest(preview),
+        }
+
+    def _retry_winners(self, records: tuple[Mapping[str, Any] | None, ...]) -> dict[str, str]:
+        """Return the newest retry source for each site.
+
+        Args:
+            records: The current source run records.
+
+        Returns:
+            A map from site identifier to winning run identifier.
+        """
+        policy = RetryCopyPolicy(self._clock())  # Use one clock value for the winner policy.
+        return policy.newest_by_site(tuple(record for record in records if record is not None))  # Skip absent rows.
+
+    def _retry_item_refusal(
+        self,
+        action: UpgradeRunAction,
+        item: RunActionOutcome,
+        record: Mapping[str, Any] | None,
+        checked_at: str,
+    ) -> RecoveryDecision | None:
+        """Return one early retry refusal, or null when checks pass.
+
+        Args:
+            action: The durable parent action.
+            item: The claimed action item.
+            record: The current source run record.
+            checked_at: The final check time.
+
+        Returns:
+            The refusal decision, or null when retry can continue.
+        """
+        if record is None:  # Preserve the missing-run refusal.
+            return RecoveryDecision(self._retry_outcome(item, "refused", "run_not_found", "", checked_at))
+        site_id = self._site_id(record)  # Preserve the current site identifier check.
+        prior_state = self._state(record)  # Preserve the current source state read.
+        if site_id != item.identity.site_id:  # Preserve the site mismatch refusal.
+            return RecoveryDecision(self._retry_outcome(item, "refused", "run_changed", "", checked_at))
+        guard_reason = self._guard.refusal(action.source.organization_id, site_id)  # Recheck permission and lock.
+        if guard_reason is not None:  # Preserve guard refusal handling.
+            outcome = self._retry_outcome(item, "refused", guard_reason, str(record.get("state") or ""), checked_at)
+            return RecoveryDecision(outcome, site_block=(site_id, guard_reason))
+        if prior_state not in RETRYABLE_STATES:  # Preserve retryable-state refusal.
+            return RecoveryDecision(
+                self._retry_outcome(item, "refused", "run_not_retryable", prior_state or "", checked_at)
+            )
+        return None  # Let the caller continue with retry copy checks.
+
+    @staticmethod
+    def _build_retry_run(
+        retry_run_builder: RetryRunBuilder,
+        record: Mapping[str, Any],
+        copied_targets: list[dict[str, Any]],
+        copied_options: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Build one retry run document from copied safe data.
+
+        Args:
+            retry_run_builder: The approved retry run builder.
+            record: The checked source run record.
+            copied_targets: The copied target list.
+            copied_options: The copied option map.
+
+        Returns:
+            The new retry run document.
+        """
+        logger.info("Build one retry run from the approved source")  # Record the action before the builder runs.
+        created = dict(retry_run_builder(record, copied_targets, copied_options))  # Use the checked builder from retry.
+        result_run_id = str(created.get("run_id") or "")  # Summarize the builder result without target data.
+        logger.debug("Built one retry run from the approved source with identifier %s", result_run_id)  # Confirm build.
+        return created  # Return the mutable run document for final durable fields.
+
+    @staticmethod
+    def _prepare_retry_document(
+        created: dict[str, Any],
+        action: UpgradeRunAction,
+        item: RunActionOutcome,
+        copied_targets: list[dict[str, Any]],
+        copied_options: Mapping[str, Any],
+    ) -> None:
+        """Apply durable retry fields to one created run document.
+
+        Args:
+            created: The mutable retry run document.
+            action: The durable parent action.
+            item: The claimed action item.
+            copied_targets: The copied target list.
+            copied_options: The copied option map.
+        """
+        created["state"] = "created"  # Preserve the durable retry starting state.
+        created["site_id"] = item.identity.site_id  # Preserve the checked source site.
+        created["org_id"] = action.source.organization_id  # Preserve the action source organization.
+        created["targets"] = copied_targets  # Preserve the approved copied targets.
+        created["options"] = copied_options  # Preserve the approved copied options.
+        created["retry_of_run_id"] = item.identity.source_run_id  # Preserve the source run link.
+        created.pop("_key", None)  # Remove storage identity from the builder output.
+        created.pop("_id", None)  # Remove storage identity from the builder output.
+        created.pop("_rev", None)  # Remove storage revision from the builder output.
 
     def _live_run_id(self, site_id: str, source_run_id: str) -> str:
         """Return one current nonfinal run for the site."""

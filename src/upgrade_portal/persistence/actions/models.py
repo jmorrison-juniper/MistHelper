@@ -411,14 +411,30 @@ class OutcomeCompletion:  # Own one final classification, reason, message, and s
 
     def _validate_result_claims(self) -> None:  # Validate result identifiers and final state claims.
         """Require success proof and prevent unverified final state claims."""
+        self._validate_success_claim()  # Require proof only for a success outcome.
+        self._validate_unknown_claim()  # Preserve uncertainty for unknown outcomes.
+        if self.live_run_id and (self.classification != "refused" or self.reason != "upgrade_already_running"):
+            raise ValueError("Only a live-run refusal can name a live run.")
+
+    def _validate_success_claim(self) -> None:  # Validate result identifier use for success and nonsuccess.
+        """Validate the result run claim.
+
+        Args:
+            None.
+        """
         if self.classification == "succeeded" and (not self.result_run_id or not self.state.final_state):
             raise ValueError("A succeeded outcome requires a verified result run and state.")  # Require proof.
         if self.classification != "succeeded" and self.result_run_id:
             raise ValueError("A nonsuccess outcome cannot name a result run.")  # Avoid a false mutation claim.
+
+    def _validate_unknown_claim(self) -> None:  # Validate final state use for unknown outcomes.
+        """Validate the final state claim for an unknown result.
+
+        Args:
+            None.
+        """
         if self.classification == "unknown" and self.state.final_state:
             raise ValueError("An unknown outcome cannot claim a final state.")  # Preserve uncertainty.
-        if self.live_run_id and (self.classification != "refused" or self.reason != "upgrade_already_running"):
-            raise ValueError("Only a live-run refusal can name a live run.")
 
     def document(self) -> dict[str, Any]:  # Serialize one final result.
         """Return the final result fields for storage."""

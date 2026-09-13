@@ -66,20 +66,34 @@ class RetryCopyPolicy:
         """Return the newest valid source identifier for each site."""
         winners: dict[str, tuple[datetime, str]] = {}
         for record in records:
-            if str(record.get("state") or "") not in RETRYABLE_STATES:
+            candidate = self._winner_candidate(record)  # Preserve valid retry source selection.
+            if candidate is None:
                 continue
-            site_id = str(record.get("site_id") or "")
-            run_id = str(record.get("run_id") or "")
-            if not site_id or not run_id:
-                continue
-            try:
-                updated_at = self.source_time(record)
-            except RetryPolicyError:
-                continue
-            candidate = (updated_at, run_id)
-            if site_id not in winners or candidate > winners[site_id]:
-                winners[site_id] = candidate
+            site_id, winner = candidate  # Keep the site key with its comparable winner value.
+            if site_id not in winners or winner > winners[site_id]:
+                winners[site_id] = winner
         return {site_id: candidate[1] for site_id, candidate in winners.items()}
+
+    def _winner_candidate(self, record: Mapping[str, Any]) -> tuple[str, tuple[datetime, str]] | None:
+        """Return one valid newest-source candidate.
+
+        Args:
+            record: The source run record to inspect.
+
+        Returns:
+            The site identifier and comparable source tuple, or null.
+        """
+        if str(record.get("state") or "") not in RETRYABLE_STATES:  # Preserve retryable-state filtering.
+            return None
+        site_id = str(record.get("site_id") or "")  # Preserve empty site filtering.
+        run_id = str(record.get("run_id") or "")  # Preserve empty run filtering.
+        if not site_id or not run_id:  # Preserve required source identity filtering.
+            return None
+        try:
+            updated_at = self.source_time(record)  # Preserve source time validation.
+        except RetryPolicyError:
+            return None  # Preserve silent skip for invalid source times.
+        return site_id, (updated_at, run_id)  # Preserve tuple comparison by time and run identifier.
 
     def source_time(self, source: Mapping[str, Any]) -> datetime:
         """Return one valid source update time."""

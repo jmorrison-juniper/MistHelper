@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, cast  # Narrow validated request values without runtime changes.
 
 from flask import Blueprint, current_app, jsonify, request, session
 
@@ -24,6 +24,7 @@ from src.upgrade_portal.persistence.actions import (
     ActionStateConflict,
     ActionStoreUnavailable,
     DurableActorScope,
+    UpgradeRunAction,
     canonical_digest,
 )
 from src.upgrade_portal.runtime import identity, lock
@@ -43,6 +44,8 @@ AUTHORIZATION_READER_KEY = "AUTHORIZATION_READER"
 LOCK_CLIENT_KEY = "LOCK_STORE_CLIENT"
 CLOUD_EVIDENCE_KEY = "CLOUD_EVIDENCE"
 IDEMPOTENCY_HEADER = "Idempotency-Key"
+
+BulkActionFields = tuple[str, list[Any], str, str, str]  # Keep the parsed request shape in one local term.
 
 
 def _visible(record: Mapping[str, Any], organization_id: str, history_scope: str) -> bool:
@@ -129,9 +132,6 @@ def _retry_run_builder(
     owner = identity.current_owner()
     if owner is None:
         raise RuntimeError("The retry actor is unavailable.")
-    tier = source.get("tier", 2)
-    if not isinstance(tier, int) or isinstance(tier, bool):
-        tier = 2
     spec = RunSpec(
         org_id=str(source.get("org_id") or source.get("organization_id") or ""),
         org_name=str(source.get("org_name") or source.get("org_id") or ""),
@@ -139,11 +139,26 @@ def _retry_run_builder(
         site_name=str(source.get("site_name") or source.get("site_id") or ""),
         actor_email=owner.actor_email,
         browser_id=owner.browser_id,
-        tier=tier,
+        tier=_retry_tier(source),
         targets=targets,
         options=options,
     )
     return RunRecordBuilder().build(spec)
+
+
+def _retry_tier(source: Mapping[str, Any]) -> int:
+    """Return one safe retry tier.
+
+    Args:
+        source: The stored source run record.
+
+    Returns:
+        The integer tier that the run builder accepts.
+    """
+    tier = source.get("tier", 2)  # Preserve the existing default tier.
+    if not isinstance(tier, int) or isinstance(tier, bool):  # Keep bool out of integer-only run tiers.
+        tier = 2  # Preserve the prior fallback for unsafe source data.
+    return tier  # Give the builder the exact safe tier.
 
 
 def _permission_reader(organization_id: str, site_id: str) -> bool:
@@ -202,6 +217,132 @@ def _action_error(error: Exception) -> tuple[Any, int]:
     return json_error(400, "invalid_request", "The run action request is invalid.")
 
 
+def _bulk_action_fields(body: Mapping[str, Any]) -> BulkActionFields | None:
+    """Return validated fields from one bulk action request.
+
+    Args:
+        body: The decoded JSON object from the request.
+
+    Returns:
+        The ordered request fields, or null for an invalid request.
+    """
+    action = body.get("action")  # Keep the prior request field read order.
+    raw_run_ids = body.get("run_ids")  # Keep the prior request field read order.
+    confirmation = body.get("confirmation")  # Keep the prior request field read order.
+    preview_token = body.get("preview_token")  # Keep the prior request field read order.
+    idempotency_key = request.headers.get(IDEMPOTENCY_HEADER, "")  # Preserve the existing header default.
+    if not _is_bulk_action_fields_valid(action, raw_run_ids, confirmation, preview_token):  # Keep one refusal point.
+        return None  # Tell the caller to return the existing invalid request response.
+    return (  # Preserve the tuple value order after the runtime type check.
+        cast(str, action),
+        cast(list[Any], raw_run_ids),
+        cast(str, confirmation),
+        cast(str, preview_token),
+        idempotency_key,
+    )
+
+
+def _is_bulk_action_fields_valid(
+    action: Any,
+    raw_run_ids: Any,
+    confirmation: Any,
+    preview_token: Any,
+) -> bool:
+    """Report whether one bulk action request has valid field types.
+
+    Args:
+        action: The requested action name.
+        raw_run_ids: The requested run identifiers.
+        confirmation: The typed confirmation text.
+        preview_token: The signed preview token.
+
+    Returns:
+        True when the request fields can enter preview verification.
+    """
+    return (  # Keep the prior combined request validation.
+        action in {"cancel", "retry"}
+        and isinstance(raw_run_ids, list)
+        and isinstance(confirmation, str)
+        and isinstance(preview_token, str)
+    )
+
+
+def _submit_bulk_result(actor: DurableActorScope, fields: BulkActionFields) -> Any:
+    """Run the selected durable bulk action or return a prior refusal.
+
+    Args:
+        actor: The current durable actor.
+        fields: The validated request fields.
+
+    Returns:
+        The durable action response object, or one HTTP refusal response.
+    """
+    action, raw_run_ids, confirmation, preview_token, idempotency_key = fields  # Keep field order exact.
+    preview = _preview_service().verify_action(  # Verify before any mutable state check.
+        preview_token,
+        actor_scope=actor.actor_scope,
+        action=action,
+        run_ids=tuple(raw_run_ids),
+    )
+    organization_id = str(preview["organization_id"])  # Use the signed server-bound organization.
+    selected_error = _selected_organization_error(organization_id)  # Preserve the same organization check point.
+    if selected_error is not None:  # Keep the prior early response behavior.
+        return selected_error  # Return the exact route response before a durable write.
+    reader = _run_reader()  # Reuse the configured run reader for site checks and service input.
+    service = _bulk_run_action_service(organization_id, raw_run_ids, reader)  # Build the guarded service.
+    operation = service.cancel if action == "cancel" else service.retry  # Preserve action dispatch.
+    return operation(  # Return the exact durable operation result.
+        actor=actor,
+        idempotency_key=idempotency_key,
+        confirmation=confirmation,
+        preview=preview,
+    )
+
+
+def _selected_organization_error(organization_id: str) -> tuple[Any, int] | Any | None:
+    """Return the stable response for an organization refusal.
+
+    Args:
+        organization_id: The organization from the signed request context.
+
+    Returns:
+        The HTTP refusal response, or null when the actor can continue.
+    """
+    if session.get(SELECTED_ORG_KEY) != organization_id:  # Preserve the selected organization check order.
+        return json_error(403, "organization_forbidden", "The selected organization does not match.")  # Same text.
+    refusal = identity.org_scope_refusal(organization_id)  # Preserve the organization scope refusal check.
+    if refusal is not None:  # Match the prior refusal point.
+        return refusal  # Return the exact response object from identity.
+    return None  # Let the caller proceed to guarded writes.
+
+
+def _bulk_run_action_service(
+    organization_id: str,
+    raw_run_ids: Sequence[Any],
+    reader: Any,
+) -> BulkRunActionService:
+    """Build one bulk action service with current site guards.
+
+    Args:
+        organization_id: The organization from the signed preview.
+        raw_run_ids: The requested run identifiers.
+        reader: The configured run reader.
+
+    Returns:
+        The configured bulk run action service.
+    """
+    site_ids = tuple(  # Preserve the existing site token snapshot source.
+        str(record.get("site_id") or "") if (record := reader(run_id)) is not None else "" for run_id in raw_run_ids
+    )
+    return BulkRunActionService(  # Keep all durable service seams unchanged.
+        _action_store(),
+        reader,
+        _guard(organization_id, site_ids),
+        _site_run_reader(),
+        _retry_run_builder,
+    )
+
+
 @run_controls_bp.post(PREVIEW_PATH)
 @identity.require_session
 def preview_bulk_action() -> tuple[Any, int] | Any:
@@ -241,52 +382,14 @@ def submit_bulk_action() -> tuple[Any, int] | Any:
     body = request.get_json(silent=True)
     if not isinstance(body, dict):
         return json_error(400, "invalid_request", "The run action request must be a JSON object.")
-    action = body.get("action")
-    raw_run_ids = body.get("run_ids")
-    confirmation = body.get("confirmation")
-    preview_token = body.get("preview_token")
-    idempotency_key = request.headers.get(IDEMPOTENCY_HEADER, "")
-    if (
-        action not in {"cancel", "retry"}
-        or not isinstance(raw_run_ids, list)
-        or not isinstance(confirmation, str)
-        or not isinstance(preview_token, str)
-    ):
+    fields = _bulk_action_fields(body)  # Keep request validation before actor lookup.
+    if fields is None:
         return json_error(400, "invalid_request", "The run action request is invalid.")
     actor = _actor()
     if actor is None:
         return json_error(401)
     try:
-        preview = _preview_service().verify_action(
-            preview_token,
-            actor_scope=actor.actor_scope,
-            action=action,
-            run_ids=tuple(raw_run_ids),
-        )
-        organization_id = str(preview["organization_id"])
-        if session.get(SELECTED_ORG_KEY) != organization_id:
-            return json_error(403, "organization_forbidden", "The selected organization does not match.")
-        refusal = identity.org_scope_refusal(organization_id)
-        if refusal is not None:
-            return refusal
-        reader = _run_reader()
-        site_ids = tuple(
-            str(record.get("site_id") or "") if (record := reader(run_id)) is not None else "" for run_id in raw_run_ids
-        )
-        service = BulkRunActionService(
-            _action_store(),
-            reader,
-            _guard(organization_id, site_ids),
-            _site_run_reader(),
-            _retry_run_builder,
-        )
-        operation = service.cancel if action == "cancel" else service.retry
-        result = operation(
-            actor=actor,
-            idempotency_key=idempotency_key,
-            confirmation=confirmation,
-            preview=preview,
-        )
+        result = _submit_bulk_result(actor, fields)
     except (
         BulkActionError,
         PreviewError,
@@ -296,6 +399,8 @@ def submit_bulk_action() -> tuple[Any, int] | Any:
         ActionStoreUnavailable,
     ) as error:
         return _action_error(error)
+    if not isinstance(result, UpgradeRunAction):  # Preserve organization refusal responses.
+        return result
     return jsonify(result.response()), 200
 
 
@@ -306,30 +411,95 @@ def _evidence_rows(record: Mapping[str, Any], observed_at: str) -> list[Mapping[
     if not callable(read):
         raise RuntimeError("The cloud evidence reader is unavailable.")
     raw = read("reconciliation", run_id=str(record.get("run_id") or ""))
-    supplied = raw if isinstance(raw, list) else []
-    indexed = {
+    indexed = _indexed_evidence(raw)  # Preserve supplied cloud evidence lookup rules.
+    return [  # Preserve target order while skipping unsupported target rows.
+        _target_evidence_row(target, indexed, observed_at)
+        for target in record.get("targets", ())
+        if isinstance(target, Mapping)
+    ]
+
+
+def _indexed_evidence(raw: Any) -> dict[str, Mapping[str, Any]]:
+    """Return cloud evidence rows indexed by one target identifier.
+
+    Args:
+        raw: The raw evidence value from the configured reader.
+
+    Returns:
+        The evidence rows keyed by their supported target identifier.
+    """
+    supplied = raw if isinstance(raw, list) else []  # Preserve the prior list-only evidence rule.
+    return {  # Preserve the prior target identifier preference.
         str(row.get("target_id") or row.get("device_id") or row.get("mac") or ""): row
         for row in supplied
         if isinstance(row, Mapping)
     }
-    rows: list[Mapping[str, Any]] = []
-    for target in record.get("targets", ()):
-        if not isinstance(target, Mapping):
-            continue
-        target_id = str(target.get("device_id") or target.get("mac") or target.get("id") or "")
-        current = dict(indexed.get(target_id, {}))
-        current["target_id"] = target_id
-        current.setdefault("stored_stop_result", str(target.get("stop_result") or "unknown"))
-        current.setdefault("task_id", str(target.get("cloud_task_id") or ""))
-        current.setdefault("driver_state", target.get("driver_state"))
-        current.setdefault("sources", ["stored"])
-        current.setdefault("observed_at", observed_at)
-        current.setdefault("task_state", "unknown")
-        current.setdefault("write_state", "unknown")
-        current.setdefault("is_complete", False)
-        current.setdefault("has_conflict", False)
-        rows.append(current)
-    return rows
+
+
+def _target_evidence_row(
+    target: Mapping[str, Any],
+    indexed: Mapping[str, Mapping[str, Any]],
+    observed_at: str,
+) -> Mapping[str, Any]:
+    """Return one evidence row with stored target fallbacks.
+
+    Args:
+        target: The stored target from the run record.
+        indexed: The cloud evidence rows keyed by target.
+        observed_at: The observation time for default evidence.
+
+    Returns:
+        One evidence row with the same fallback fields as before.
+    """
+    target_id = str(target.get("device_id") or target.get("mac") or target.get("id") or "")  # Preserve priority.
+    current = dict(indexed.get(target_id, {}))  # Copy supplied evidence before defaults are applied.
+    current["target_id"] = target_id  # Preserve the stored target identifier in the output.
+    current.setdefault("stored_stop_result", str(target.get("stop_result") or "unknown"))  # Keep the stored default.
+    current.setdefault("task_id", str(target.get("cloud_task_id") or ""))  # Keep the stored cloud task fallback.
+    current.setdefault("driver_state", target.get("driver_state"))  # Keep the stored driver state fallback.
+    current.setdefault("sources", ["stored"])  # Keep the stored-only source fallback.
+    current.setdefault("observed_at", observed_at)  # Keep the caller observation time fallback.
+    current.setdefault("task_state", "unknown")  # Keep the unknown task fallback.
+    current.setdefault("write_state", "unknown")  # Keep the unknown write fallback.
+    current.setdefault("is_complete", False)  # Keep the incomplete evidence fallback.
+    current.setdefault("has_conflict", False)  # Keep the no-conflict fallback.
+    return current  # Return the completed evidence row.
+
+
+def _reconcile_result(actor: DurableActorScope, run_id: str, confirmation: str) -> Any:
+    """Run one reconciliation after request and actor validation.
+
+    Args:
+        actor: The current durable actor.
+        run_id: The requested run identifier.
+        confirmation: The typed confirmation text.
+
+    Returns:
+        The durable action response object, or one HTTP refusal response.
+    """
+    reader = _run_reader()  # Preserve the run lookup before authorization checks.
+    record = reader(run_id)  # Read the requested run once for the same decision point.
+    if record is None:  # Preserve the existing not-found response before organization checks.
+        return json_error(404, "run_not_found", "The portal found no run with this identifier.")
+    organization_id = str(record.get("org_id") or record.get("organization_id") or "")  # Preserve source priority.
+    site_id = str(record.get("site_id") or "")  # Preserve the stored site identifier rule.
+    selected_error = _selected_organization_error(organization_id)  # Preserve selected and scope checks.
+    if selected_error is not None:  # Keep the prior early response behavior.
+        return selected_error  # Return the exact route response before a durable write.
+    service = StoppingRunReconciler(  # Use the same durable reconciliation seams.
+        _action_store(),
+        reader,
+        _guard(organization_id, (site_id,)),
+        _evidence_rows,
+    )
+    return service.reconcile(  # Return the exact durable reconciliation result.
+        actor=actor,
+        idempotency_key=request.headers.get(IDEMPOTENCY_HEADER, ""),
+        confirmation=confirmation,
+        run_id=run_id,
+        organization_id=organization_id,
+        site_id=site_id,
+    )
 
 
 @run_controls_bp.post(RECONCILE_PATH)
@@ -345,33 +515,11 @@ def reconcile_run(run_id: str) -> tuple[Any, int] | Any:
     if actor is None:
         return json_error(401)
     try:
-        reader = _run_reader()
-        record = reader(run_id)
-        if record is None:
-            return json_error(404, "run_not_found", "The portal found no run with this identifier.")
-        organization_id = str(record.get("org_id") or record.get("organization_id") or "")
-        site_id = str(record.get("site_id") or "")
-        if session.get(SELECTED_ORG_KEY) != organization_id:
-            return json_error(403, "organization_forbidden", "The selected organization does not match.")
-        refusal = identity.org_scope_refusal(organization_id)
-        if refusal is not None:
-            return refusal
-        service = StoppingRunReconciler(
-            _action_store(),
-            reader,
-            _guard(organization_id, (site_id,)),
-            _evidence_rows,
-        )
-        result = service.reconcile(
-            actor=actor,
-            idempotency_key=request.headers.get(IDEMPOTENCY_HEADER, ""),
-            confirmation=confirmation,
-            run_id=run_id,
-            organization_id=organization_id,
-            site_id=site_id,
-        )
+        result = _reconcile_result(actor, run_id, confirmation)
     except (ValueError, ActionRequestConflict, ActionStateConflict, ActionStoreUnavailable) as error:
         return _action_error(error)
+    if not isinstance(result, UpgradeRunAction):  # Preserve authorization and not-found responses.
+        return result
     return jsonify(result.response()), 200
 
 

@@ -7,7 +7,7 @@ import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast  # Narrow checked records without runtime assertions.
 
 from src.upgrade_portal.api.run_controls.services.bulk import (
     ACTION_LEASE_TIME,
@@ -64,41 +64,112 @@ class TargetEvidence:
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> TargetEvidence:
         """Build one validated safe target result from current evidence."""
-        target = str(value.get("target_id") or value.get("device_id") or value.get("mac") or "")
-        if not target:
-            raise ValueError("The reconciliation target identifier is empty.")
-        task_id = str(value.get("task_id") or "")
-        evidence = cls(
+        target = cls._target(value)  # Preserve the supported target identifier priority.
+        evidence = cls._build(value, target)  # Build the same immutable evidence value.
+        evidence._validate()
+        return evidence
+
+    @classmethod
+    def _build(cls, value: Mapping[str, Any], target: str) -> TargetEvidence:
+        """Build one target evidence value from primitive evidence fields.
+
+        Args:
+            value: The raw evidence mapping.
+            target: The validated target identifier.
+
+        Returns:
+            The immutable target evidence value.
+        """
+        task_id = str(value.get("task_id") or "")  # Preserve empty task identifier handling.
+        return cls(  # Preserve each field conversion from the prior constructor call.
             target_digest=canonical_digest(target),
             stored_stop_result=str(value.get("stored_stop_result") or "unknown"),
             task_digest=canonical_digest(task_id) if task_id else None,
             task_state=str(value.get("task_state") or "unknown"),
             write_state=str(value.get("write_state") or "unknown"),
-            driver_state=str(value.get("driver_state")) if value.get("driver_state") is not None else None,
+            driver_state=cls._optional_text(value, "driver_state"),
             sources=tuple(sorted({str(source) for source in value.get("sources", ())})),
-            observed_at=str(value.get("observed_at")) if value.get("observed_at") is not None else None,
+            observed_at=cls._optional_text(value, "observed_at"),
             is_complete=bool(value.get("is_complete")),
             has_conflict=bool(value.get("has_conflict")),
-            conflict_reason=(str(value.get("conflict_reason")) if value.get("conflict_reason") is not None else None),
+            conflict_reason=cls._optional_text(value, "conflict_reason"),
         )
-        evidence._validate()
-        return evidence
+
+    @staticmethod
+    def _target(value: Mapping[str, Any]) -> str:
+        """Return the supported target identifier.
+
+        Args:
+            value: The raw evidence mapping.
+
+        Returns:
+            The target identifier text.
+        """
+        target = str(value.get("target_id") or value.get("device_id") or value.get("mac") or "")  # Preserve priority.
+        if not target:  # Preserve the empty target refusal.
+            raise ValueError("The reconciliation target identifier is empty.")
+        return target  # Return the validated target identifier.
+
+    @staticmethod
+    def _optional_text(value: Mapping[str, Any], field: str) -> str | None:
+        """Return one optional field as text.
+
+        Args:
+            value: The raw evidence mapping.
+            field: The field name to read.
+
+        Returns:
+            The field text, or null when the field is absent.
+        """
+        return str(value.get(field)) if value.get(field) is not None else None  # Preserve optional text conversion.
 
     def _validate(self) -> None:
         """Validate the closed evidence values and null rules."""
-        if self.stored_stop_result not in STOP_RESULTS:
+        self._validate_states()  # Preserve closed value checks.
+        self._validate_sources()  # Preserve evidence source checks.
+        self._validate_conflict()  # Preserve conflict field checks.
+        self._validate_completion()  # Preserve complete evidence checks.
+
+    def _validate_states(self) -> None:
+        """Validate one target evidence state set.
+
+        Args:
+            None.
+        """
+        if self.stored_stop_result not in STOP_RESULTS:  # Preserve stored stop result validation.
             raise ValueError("The stored stop result is not supported.")
-        if self.task_state not in TASK_STATES or self.write_state not in WRITE_STATES:
+        if self.task_state not in TASK_STATES or self.write_state not in WRITE_STATES:  # Preserve state validation.
             raise ValueError("The current target evidence state is not supported.")
-        if self.driver_state is not None and self.driver_state not in DRIVER_STATES:
+        if self.driver_state is not None and self.driver_state not in DRIVER_STATES:  # Preserve driver validation.
             raise ValueError("The stored driver state is not supported.")
-        if not self.sources or any(source not in SOURCES for source in self.sources):
+
+    def _validate_sources(self) -> None:
+        """Validate one target evidence source list.
+
+        Args:
+            None.
+        """
+        if not self.sources or any(source not in SOURCES for source in self.sources):  # Preserve source validation.
             raise ValueError("The target evidence source list is invalid.")
-        if self.has_conflict != (self.conflict_reason is not None):
+
+    def _validate_conflict(self) -> None:
+        """Validate one target evidence conflict state.
+
+        Args:
+            None.
+        """
+        if self.has_conflict != (self.conflict_reason is not None):  # Preserve conflict field relation.
             raise ValueError("The target evidence conflict fields do not match.")
-        if self.conflict_reason is not None and self.conflict_reason not in CONFLICT_REASONS:
+        if self.conflict_reason is not None and self.conflict_reason not in CONFLICT_REASONS:  # Preserve reason set.
             raise ValueError("The target evidence conflict reason is not supported.")
-        if self.observed_at is None and self.is_complete:
+
+    def _validate_completion(self) -> None:
+        """Validate one target evidence completion state.
+
+        Args:
+            None.
+        """
+        if self.observed_at is None and self.is_complete:  # Preserve complete evidence observation requirement.
             raise ValueError("Complete target evidence requires an observation time.")
 
     def summary(self) -> dict[str, Any]:
@@ -130,22 +201,63 @@ class ReconciliationEvidence:
     def summary(self) -> dict[str, Any]:
         """Return the canonical evidence summary and its matching digest."""
         ordered = sorted(self.targets, key=lambda item: item.target_digest)
-        active_tasks = {item.task_digest for item in ordered if item.task_state == "active" and item.task_digest}
+        metrics = self._summary_metrics(ordered)  # Keep summary counts together for the digest basis.
         basis = {
             "schema_version": 1,
             "run_id": self.run_id,
             "run_revision": self.run_revision,
             "collected_at": self.collected_at,
             "targets": [item.summary() for item in ordered],
+            **metrics,
+        }
+        return {**basis, "decision_basis_digest": canonical_digest(basis)}
+
+    @staticmethod
+    def _summary_metrics(ordered: list[TargetEvidence]) -> dict[str, Any]:
+        """Return the summary counts for ordered target evidence.
+
+        Args:
+            ordered: The target evidence in digest order.
+
+        Returns:
+            The count and flag fields for the evidence summary.
+        """
+        return {  # Preserve each summary metric name and value.
             "target_count": len(ordered),
             "complete_target_count": sum(item.is_complete for item in ordered),
             "active_write_count": sum(item.write_state == "writing" for item in ordered),
-            "active_task_count": len(active_tasks),
-            "unknown_target_count": sum(not item.is_complete and not item.has_conflict for item in ordered),
+            "active_task_count": ReconciliationEvidence._active_task_count(ordered),
+            "unknown_target_count": ReconciliationEvidence._unknown_target_count(ordered),
             "has_conflict": any(item.has_conflict for item in ordered),
             "is_complete": bool(ordered) and all(item.is_complete for item in ordered),
         }
-        return {**basis, "decision_basis_digest": canonical_digest(basis)}
+
+    @staticmethod
+    def _active_task_count(ordered: list[TargetEvidence]) -> int:
+        """Return the count of unique active tasks.
+
+        Args:
+            ordered: The target evidence in digest order.
+
+        Returns:
+            The count of active task identifiers.
+        """
+        active_tasks = {  # Preserve the unique active task count rule.
+            item.task_digest for item in ordered if item.task_state == "active" and item.task_digest
+        }
+        return len(active_tasks)  # Return only the count that enters the digest basis.
+
+    @staticmethod
+    def _unknown_target_count(ordered: list[TargetEvidence]) -> int:
+        """Return the count of incomplete targets without conflict.
+
+        Args:
+            ordered: The target evidence in digest order.
+
+        Returns:
+            The count of unknown target states.
+        """
+        return sum(not item.is_complete and not item.has_conflict for item in ordered)  # Preserve unknown rule.
 
 
 class StoppingRunReconciler:
@@ -206,16 +318,10 @@ class StoppingRunReconciler:
     ) -> RecoveryDecision:
         """Build one reconciliation result after the durable claim."""
         record = self._run_reader(item.identity.source_run_id)
-        if record is None:
-            return RecoveryDecision(self._outcome(item, "refused", "run_not_found", "", "", now))
-        site_id = str(record.get("site_id") or "")
-        if site_id != item.identity.site_id:
-            return RecoveryDecision(self._outcome(item, "refused", "run_changed", "", "", now))
-        guard_reason = self._guard.refusal(action.source.organization_id, site_id)
-        if guard_reason is not None:
-            return RecoveryDecision(
-                self._outcome(item, "refused", guard_reason, str(record.get("state") or ""), "", now)
-            )
+        refusal = self._initial_refusal(action, item, record, now)  # Preserve early reconciliation refusals.
+        if refusal is not None:
+            return refusal
+        record = cast(Mapping[str, Any], record)  # Narrow the checked record after the refusal helper.
         prior_state = self._state(record)
         stale = RunStalePolicy(self._clock()).assess(record)
         if not stale.is_stale:
@@ -225,6 +331,36 @@ class StoppingRunReconciler:
         if prior_state != "stopping":
             return RecoveryDecision(self._outcome(item, "refused", "run_not_reconcilable", prior_state or "", "", now))
         return self._stopping_decision(item, record, now)
+
+    def _initial_refusal(
+        self,
+        action: UpgradeRunAction,
+        item: RunActionOutcome,
+        record: Mapping[str, Any] | None,
+        now: str,
+    ) -> RecoveryDecision | None:
+        """Return one initial reconciliation refusal, or null when checks pass.
+
+        Args:
+            action: The durable parent action.
+            item: The claimed action item.
+            record: The current source run record.
+            now: The durable action time.
+
+        Returns:
+            The refusal decision, or null when reconciliation can continue.
+        """
+        if record is None:  # Preserve the missing-run refusal.
+            return RecoveryDecision(self._outcome(item, "refused", "run_not_found", "", "", now))
+        site_id = str(record.get("site_id") or "")  # Preserve the stored site identifier rule.
+        if site_id != item.identity.site_id:  # Preserve the site mismatch refusal.
+            return RecoveryDecision(self._outcome(item, "refused", "run_changed", "", "", now))
+        guard_reason = self._guard.refusal(action.source.organization_id, site_id)  # Recheck permission and lock.
+        if guard_reason is not None:  # Preserve guard refusal handling.
+            return RecoveryDecision(
+                self._outcome(item, "refused", guard_reason, str(record.get("state") or ""), "", now)
+            )
+        return None  # Let the caller continue with stale and state checks.
 
     def _precloud_decision(
         self,
