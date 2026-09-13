@@ -27,7 +27,7 @@ python-dotenv
 PyYAML
 
 # AI analysis (Mist Ideas Analyzer)
-openai>=3.8.0
+openai>=3.13.0
 
 # Terminal emulation for SSH operations
 pyte
