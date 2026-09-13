@@ -42,6 +42,16 @@ class MainEntrypoint:  # CLI main entry-point seam
     """Class-body seam for the MistHelper CLI entrypoint."""
 
     @classmethod
+    def _needs_startup_session(cls, args: Any) -> bool:
+        """Return whether this invocation must build a Mist API session before dispatch."""
+        logging.info("Checking whether startup needs a Mist API session")  # Explain the branch decision before it runs.
+        is_offline_test = bool(getattr(args, "test", False))  # Detect the one test mode that can run local checks.
+        has_token = bool(_MH._systematic_test_has_api_token())  # Use the same token test as the test runner.
+        needs_session = not (is_offline_test and not has_token)  # Keep every token-backed path unchanged.
+        logging.debug("Startup session requirement resolved to %s", needs_session)  # Record the decision result.
+        return needs_session  # Let run() keep the startup order explicit.
+
+    @classmethod
     def run(cls) -> None:  # CLI entrypoint
         """Main entry point for MistHelper CLI application."""
         logging.debug("ENTRY: main()")  # Log application entry point.
@@ -53,6 +63,12 @@ class MainEntrypoint:  # CLI main entry-point seam
         args = parser.parse_args()  # Parse command line arguments into typed Namespace object.
         _MH._setup_runtime_flags(args)  # Apply --standalone env, register globals()["args"], set FAST_MODE_ENABLED.
         _MH._initialize_dependencies(args)  # Initialize deferred dependencies (respects --skip-deps flag).
-        _MH._establish_mist_session(args)  # Authenticate with Mist API (--login path or API token path).
+        if cls._needs_startup_session(args):  # Only offline --test without a token can run without a session.
+            _MH._establish_mist_session(args)  # Authenticate before live API modes use Mist Cloud.
+        else:  # No token and --test: run the offline subset and skip live API checks.
+            logging.info(
+                "SYSTEMATIC_TEST: No API token found; deferring Mist session for offline safe tests"
+            )  # Explain.
+            logging.debug("SYSTEMATIC_TEST: Mist session was not built for offline --test")  # Confirm no session work.
         _MH._configure_runtime_options(args)  # Set OUTPUT_FORMAT, init PROGRESS_EMITTER, apply --debug level.
         _MH._dispatch_main_mode(args)  # Choose and run the right mode (test, TUI, web portal, CLI, interactive).

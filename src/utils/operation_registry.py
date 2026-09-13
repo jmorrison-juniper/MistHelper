@@ -583,6 +583,7 @@ class OperationRegistry:
 
     # Categories that are safe for --test (fully automated, no user input)
     SAFE_CATEGORIES = frozenset({"safe"})
+    OFFLINE_SAFE_OPTIONS = frozenset({"243"})  # Menu 243 reads checked-in files and needs no Mist API token.
     # Categories that are safe for --testinteractive (need site but automatable)
     INTERACTIVE_SAFE_CATEGORIES = frozenset({"interactive_safe"})
     # Categories always skipped
@@ -625,6 +626,13 @@ class OperationRegistry:
     def is_safe(cls, option: str) -> bool:
         """True if *option* can run in ``--test`` mode."""
         return cls.get(option)["category"] in cls.SAFE_CATEGORIES
+
+    @classmethod
+    def requires_api_token(cls, option: str) -> bool:
+        """True if *option* needs a Mist API token during ``--test``."""
+        is_safe_option = cls.is_safe(option)  # Limit token checks to entries that --test could execute.
+        is_offline_option = str(option) in cls.OFFLINE_SAFE_OPTIONS  # Keep checked-in-file checks offline.
+        return is_safe_option and not is_offline_option  # API-backed safe entries need a token to run.
 
     @classmethod
     def is_interactive_safe(cls, option: str) -> bool:
