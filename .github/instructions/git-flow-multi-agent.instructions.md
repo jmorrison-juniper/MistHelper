@@ -45,10 +45,93 @@ future change adds one, update this table first.
 5. One branch answers one issue. If you find a second defect, file a second
    issue.
 6. Delete the branch after the merge. Delete the worktree in the same step.
+7. Before you close an unmerged pull request, record one preservation proof.
 
 Warning: a stacked branch creates a cascading conflict. Pull requests 12
 through 15 branched from each other instead of from `main`. Each merge then
 broke the next branch, and an engineer repaired the same conflict four times.
+
+### Preserve work before you close an unmerged pull request
+
+Before you close an unmerged pull request, record one preservation proof in the
+closing comment.
+
+Use one of these proofs.
+
+1. Name the merged replacement pull request, and verify each required file on
+   `main`.
+2. Name the surviving remote branch and its commit SHA.
+3. Create a recovery branch or a tag before you delete the branch.
+
+If you name a replacement pull request, compare the files before you close the
+old pull request.
+
+```powershell
+rtk gh pr diff <old-pr> --repo <owner>/<repo> --name-only
+rtk gh pr diff <replacement-pr> --repo <owner>/<repo> --name-only
+rtk git fetch origin main
+rtk git diff origin/main...origin/<replacement-branch> -- <required-file>
+```
+
+If the replacement pull request already merged, verify the required files on
+`main`.
+
+```powershell
+rtk git fetch origin main
+rtk git show origin/main:<required-file>
+rtk gh pr view <replacement-pr> --repo <owner>/<repo> --json state,mergedAt,files
+```
+
+If a remote branch preserves the work, record its name and commit SHA.
+
+```powershell
+rtk git ls-remote --heads origin <branch>
+rtk gh pr comment <old-pr> --repo <owner>/<repo> --body "Closing this unmerged pull request. Preservation proof: remote branch <branch> remains at <sha>."
+```
+
+If no remote branch must survive, create a recovery branch or a tag before you
+delete the branch.
+
+```powershell
+rtk git fetch origin <old-branch>
+rtk git push origin origin/<old-branch>:refs/heads/recovery/<issue>-pr<old-pr>
+rtk git tag preservation/<issue>-pr<old-pr> origin/<old-branch>
+rtk git push origin preservation/<issue>-pr<old-pr>
+```
+
+Use the recovery branch command or the tag commands. You do not need both.
+
+Warning: do not delete the branch before the replacement pull request merges,
+because an unmerged pull request can hold work that `main` does not hold.
+
+#### Pull request closure checklist
+
+Complete this checklist before you close an unmerged pull request.
+
+1. Confirm that the pull request did not merge.
+2. Choose exactly one preservation proof.
+3. If you use a replacement pull request, confirm that it merged.
+4. If you use a replacement pull request, compare the changed file lists.
+5. If the file lists differ, compare each required file by name.
+6. If the work must stay on a branch, record the remote branch and SHA.
+7. If no branch must stay, push a recovery branch or a preservation tag.
+8. Add the closing comment with the proof.
+9. Close the pull request only after the comment exists.
+10. Delete the old branch only after another copy keeps the work.
+
+Use this comment shape.
+
+```powershell
+rtk gh pr comment <old-pr> --repo <owner>/<repo> --body "Closing this unmerged pull request. Preservation proof: replacement pull request #<replacement-pr> merged. I compared <file-list> and verified <required-files> on main."
+rtk gh pr close <old-pr> --repo <owner>/<repo>
+rtk git push origin --delete <old-branch>
+```
+
+Run the delete command only after the preservation proof keeps another copy.
+
+Pull request #2502 is the worked example. It closed unmerged for pull request
+#2508, which merged for issue #2495. The closure comment named the replacement,
+the reason, the recovery branch, and the file comparison.
 
 ## Part 2. Parallel agents
 
