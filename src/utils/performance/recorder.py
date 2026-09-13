@@ -129,6 +129,7 @@ class NullSpan:
     __slots__ = ()  # No state, so one shared instance serves every disabled hook.
 
     status = "ok"  # A reader sees a valid outcome without a measurement.
+    sampled = False  # A disabled span never needs labels or counters.
 
     def label(self, key: str, value: Any) -> NullSpan:
         """Accept and discard a label, so a caller needs no branch."""
@@ -158,9 +159,19 @@ NULL_SPAN: Final = NullSpan()  # One shared instance, because the class holds no
 class Span:
     """Measure one boundary and emit one event when the level allows it."""
 
-    __slots__ = ("_recorder", "_source", "_family", "_monitor", "_watch", "_labels", "_counts", "status")
+    __slots__ = (
+        "_recorder",
+        "_source",
+        "_family",
+        "_monitor",
+        "_watch",
+        "_labels",
+        "_counts",
+        "_sampled",
+        "status",
+    )
 
-    def __init__(self, recorder: Recorder, source: EventSource, family: str, monitor: str) -> None:
+    def __init__(self, recorder: Recorder, source: EventSource, family: str, monitor: str, sampled: bool) -> None:
         """Bind one span to its recorder, its source, its family, and its monitor.
 
         Why:
@@ -180,6 +191,7 @@ class Span:
         self._watch = Stopwatch(recorder.measure_cpu)  # The clocks this level asked for.
         self._labels: dict[str, Any] = {}  # Labels the caller adds during the span.
         self._counts: dict[str, float] = {}  # Counters the caller adds during the span.
+        self._sampled = sampled  # Keep this success only when the pre-sampler selected it.
         self.status = "ok"  # The outcome, which the exit path overwrites on an error.
 
     @property
@@ -191,6 +203,11 @@ class Span:
     def monitor(self) -> str:
         """Return the monitor name from the hook catalog."""
         return self._monitor  # The recorder reads this name when it logs a refusal.
+
+    @property
+    def sampled(self) -> bool:
+        """Return True when this span will keep a successful event."""
+        return self._sampled  # The caller can skip optional labels for dropped successes.
 
     def label(self, key: str, value: Any) -> Span:
         """Add one label. The privacy policy checks it before the sink sees it."""
@@ -269,6 +286,11 @@ class Recorder:
         return self._settings.measure_cpu  # The span reads this once at its start.
 
     @property
+    def sample_rate(self) -> float:
+        """Return the configured success sample rate."""
+        return self._settings.sample_rate  # The caller can add a cheaper pre-sample gate.
+
+    @property
     def sink(self) -> BoundedSink:
         """Return the sink, so an operator can flush or inspect the drop count."""
         return self._sink  # The caller reads the queue and the counters through it.
@@ -286,13 +308,14 @@ class Recorder:
         """
         if family not in self._families:  # The selected level forbids this family.
             return NULL_SPAN  # The shared instance costs nothing to return.
-        return Span(self, source, family, monitor)  # A measuring span.
+        sampled = self._keep("ok")  # Decide successful sampling before optional labels are built.
+        return Span(self, source, family, monitor, sampled)  # A measuring span.
 
     def submit(self, span: Span) -> bool:
         """Apply the level gate and the sampling rule, then emit the event."""
         if span.family not in self._families:  # The level forbids this family.
             return False  # Drop it before any event is built, which costs almost nothing.
-        if not self._keep(span.status):  # The sampling rule refused this successful event.
+        if span.status == "ok" and not span.sampled:  # The sampling rule refused this success.
             return False  # Keep every failure and thin the successes.
         return self._emit(span)  # Build the event and hand it to the sink.
 
