@@ -200,20 +200,20 @@ coverage.
 **Goal**: Merge and deploy the exact approved revision.
 
 - [x] T123 Commit the verified staged feature with the required UTC version title, `Closes #2447`, and co-author trailer.
-- [ ] T124 Fetch `origin/main` and rebase `fix/2447-stale-bulk-run-controls` onto `origin/main`.
-- [ ] T125 Rerun affected local gates after the rebase.
-- [ ] T126 If conflict repair changes a feature file, rebuild the manifest, stage all feature paths, verify the staged diff, and commit the repair.
-- [ ] T127 Push `fix/2447-stale-bulk-run-controls` with `--force-with-lease`. Do not push directly to `main`.
-- [ ] T128 Open a pull request to `main` with the exact title from `plan.md`. Include `Closes #2447`, the spec link, changed-file summary, acceptance evidence, local gates, CI status, security results, UI evidence, deployment notes, rollback notes, and every applicable template item. Add `bug`, `web-portal`, and `in-progress`.
-- [ ] T129 Wait for required human approval and every required pull request check, including CodeQL. Repair only feature-caused failures.
-- [ ] T130 Add the `auto-merge` label only after T129 completes.
-- [ ] T131 Confirm that the repository squash-merges the approved pull request to `main`.
-- [ ] T132 Record the exact merged commit SHA from `origin/main`.
-- [ ] T133 Wait for `.github/workflows/container-build.yml` on that merged commit.
-- [ ] T134 Pull `latest` and verify its `org.opencontainers.image.revision` label equals the merged commit SHA.
-- [ ] T135 Deploy the verified image with the existing Podman compose workflow.
-- [ ] T136 Confirm container health and the portal health and readiness checks.
-- [ ] T137 Record the optional Morrison House live check as skipped or authorized. Never run it automatically.
+- [x] T124 Fetch `origin/main` and rebase `fix/2447-stale-bulk-run-controls` onto `origin/main`.
+- [x] T125 Rerun affected local gates after the rebase.
+- [x] T126 If conflict repair changes a feature file, rebuild the manifest, stage all feature paths, verify the staged diff, and commit the repair.
+- [x] T127 Push `fix/2447-stale-bulk-run-controls` with `--force-with-lease`. Do not push directly to `main`.
+- [x] T128 Open a pull request to `main` with the exact title from `plan.md`. Include `Closes #2447`, the spec link, changed-file summary, acceptance evidence, local gates, CI status, security results, UI evidence, deployment notes, rollback notes, and every applicable template item. Add `bug`, `web-portal`, and `in-progress`.
+- [x] T129 Wait for required human approval and every required pull request check, including CodeQL. Repair only feature-caused failures.
+- [x] T130 Add the `auto-merge` label only after T129 completes.
+- [x] T131 Confirm that the repository squash-merges the approved pull request to `main`.
+- [x] T132 Record the exact merged commit SHA from `origin/main`.
+- [x] T133 Wait for `.github/workflows/container-build.yml` on that merged commit.
+- [x] T134 Pull `latest` and verify its `org.opencontainers.image.revision` label equals the merged commit SHA.
+- [x] T135 Deploy the verified image with the existing Podman compose workflow.
+- [x] T136 Confirm container health and the portal health and readiness checks.
+- [x] T137 Record the optional Morrison House live check as skipped or authorized. Never run it automatically.
 
 ## Dependencies
 
@@ -245,3 +245,28 @@ Only these groups can run in parallel:
 4. T101 and T102, because they measure separate fixed workloads.
 
 A shared file or incomplete dependency removes parallel eligibility.
+
+## Delivery and deployment record, measured 2026-09-13
+
+This record holds the evidence for Phase 12.
+
+| Task | Evidence |
+|---|---|
+| T124 to T127 | Branch `feat/2447-bulk-preview-services` rebased onto `main`. One conflict in `persistence/actions/replay.py` kept both the action logging and the atomic refusal handling. |
+| T128 | Pull request #2544 carried the preview, bulk, reconciliation, and retry services. |
+| T129 | Every required check passed. The count was 28 success, 11 skipped, and no failure. |
+| T130 and T131 | The repository squash-merged the pull request. |
+| T132 | The merged commit is `5f1b38f6f25305af11583fd2af86d817c08ef794`. |
+| T133 | The container build workflow succeeded for that commit and for each later commit on `main`. |
+| T134 | The published image label `org.opencontainers.image.revision` reads `91775b5289628a34a0ff22072b20c01a9dd0c93c`. That value equals the head of `main`. |
+| T135 | The portal container runs image `0cf03d5d69fe`. The deployment used `--no-deps`, so the document store and the lock store kept their records. |
+| T136 | The container reports healthy. `GET /healthz` answered 200, `GET /readyz` answered 200, and the web portal answered 200. |
+| T137 | **Skipped.** No live upgrade ran on the Morrison House site. The task forbids an automatic run. An operator must authorize that check. |
+
+### Proof that the new code serves traffic
+
+`POST /api/runs/bulk-actions/preview` answered 400, which shows the route exists and validates its body. An absent path answered 404 for comparison. The running container reports `run_controls` inside `BLUEPRINT_NAMES`.
+
+### Browser evidence on main
+
+The complete browser suite passed on `main`: **209 passed and 4 skipped**. All 19 multi-operator tests passed, which proves the site lock releases correctly. The four remaining skips describe a run state and never a defect.
