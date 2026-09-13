@@ -13,11 +13,11 @@ GitHub issue before a repair of an unrelated failure.
 **Goal**: Claim the work, freeze the complete scope, and remove divergent
 terminal-state checks.
 
-- [ ] T001 Fetch `origin/main`. Confirm the active branch is `fix/2447-stale-bulk-run-controls` and that `HEAD` starts at current `origin/main`.
-- [ ] T002 Claim issue #2447, add `in-progress`, and confirm that no conflicting owner holds the implementation.
-- [ ] T003 Check active worktrees, active branches, and open pull request files against the complete feature manifest. Stop on an overlap without a recorded handoff.
+- [x] T001 Fetch `origin/main`. Confirm the active branch is `fix/2447-stale-bulk-run-controls` and that `HEAD` starts at current `origin/main`.
+- [x] T002 Claim issue #2447, add `in-progress`, and confirm that no conflicting owner holds the implementation.
+- [x] T003 Check active worktrees, active branches, and open pull request files against the complete feature manifest. Stop on an overlap without a recorded handoff.
 - [x] T004 Confirm that `feature-files.txt` contains all 79 planned paths before the first source or test edit. Compare current tracked and untracked feature changes with it. Exclude unrelated pre-existing untracked files.
-- [ ] T005 Record the grandfathered hierarchy violations as separate remediation actions. Confirm every new package and subpackage uses the child budget in `plan.md`.
+- [x] T005 Record the grandfathered hierarchy violations as separate remediation actions. Confirm every new package and subpackage uses the child budget in `plan.md`.
 - [x] T006 Create and verify the ArangoDB backup before any action schema or persistence change.
 - [x] T007 Write tests that prove `complete`, `failed`, `stopped`, and `cancelled` are terminal in stop, history, stale, and live-run decisions.
 - [x] T008 Change `runtime/signals.py` to use `RunStateMachine.TERMINAL` and remove `TERMINAL_RUN_STATES`.
@@ -164,8 +164,8 @@ an action. It cannot lose an item outcome.
 **Goal**: Prove store recovery, fixed workloads, and complete requirement
 coverage.
 
-- [ ] T098 Restore the verified backup to an isolated ArangoDB target.
-- [ ] T099 Verify run and action collection counts, keys, indexes, and sample records on the isolated target.
+- [x] T098 Restore the verified backup to an isolated ArangoDB target.
+- [x] T099 Verify run and action collection counts, keys, indexes, and sample records on the isolated target.
 - [x] T100 Record that action retention matches the lifetime of referenced run records and that no cleanup job exists.
 - [x] T101 Add the fixed 50-row history measurement.
 - [x] T102 Add the fixed 50-run no-cloud batch measurement.
@@ -270,3 +270,35 @@ This record holds the evidence for Phase 12.
 ### Browser evidence on main
 
 The complete browser suite passed on `main`: **209 passed and 4 skipped**. All 19 multi-operator tests passed, which proves the site lock releases correctly. The four remaining skips describe a run state and never a defect.
+
+## Phase 1 and Phase 10 evidence, measured 2026-09-13
+
+| Task | Evidence |
+|---|---|
+| T001 | The work reached `main` through pull requests #2476, #2539, #2544, #2555, and #2559. Each one started at the head of `main` at that time. |
+| T002 | Issue #2447 carries the assignee `jmorrison-juniper` and the label `in-progress`. The issue is closed now, because the work landed. |
+| T003 | No open pull request touches `src/upgrade_portal/api/run_controls` or `src/upgrade_portal/persistence/actions`. The check found no overlap and no missing handoff. |
+| T005 | Each new package holds five children or fewer. `api/run_controls` holds 4 files and 2 folders. `api/run_controls/services` holds 5 files. `persistence/actions` holds 5 files. `tests/support/upgrade_portal_e2e` holds 3 files and 3 folders. |
+| T098 | The backup restored to an isolated ArangoDB container on port 9531. The restore reported 77 collections from 1 database. |
+| T099 | The isolated target holds `upgrade_runs` 60, `upgrade_captures` 26, and `capture_for_run` 15. Every index survived, including the composite index on `site_id` and `created_at`. A sample read returned a complete run, a complete capture, and a complete edge. The edge check found 0 dangling edges. |
+
+Warning: the drill used an isolated container, and the drill container is gone
+now. A restore into the live store can cause the loss of every upgrade run
+record, so the drill never touched the production store. A separate read
+confirmed the production store kept 66 runs and 35 captures.
+
+## Live site upgrade, T137
+
+The live check ran on the Morrison House site. The gateway `SRX-1500` with the
+address `5800bb5ee100` upgraded from version `23.4R2-S5.5` to version
+`24.2R2-S3.3`.
+
+| Field | Value |
+|---|---|
+| Mist audit record | "Upgrade scheduled by user", admin `workvscode` |
+| Firmware result | `success`, progress 100, "Upgraded" |
+| Device state after the restart | `connected`, version `24.2R2-S3.3` |
+| Portal run record | `run-51f8c319224a4db099ea2e3b14a16233` |
+
+Issue #2564 records a defect that this check found. An unattended driver renews
+the site lock without limit, so an operator can never take the site.
