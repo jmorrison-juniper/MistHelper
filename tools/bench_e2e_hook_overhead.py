@@ -461,7 +461,7 @@ def _timed_level(level: str, size: int) -> int:
 
 def _bootstrap_median_interval(samples: list[float], repeats: int) -> tuple[float, float]:
     """Return a deterministic 95 percent bootstrap interval for the median."""
-    generator = random.Random(0)  # Use a fixed seed so reviewers can reproduce the interval.
+    generator = random.Random(0)  # nosec B311 - The benchmark uses this draw for repeatable sampling only.
     medians: list[float] = []  # Store one bootstrap median for each resample.
     for _ in range(repeats):  # Build enough resamples for a stable displayed interval.
         resample = [generator.choice(samples) for _ in samples]  # Sample with replacement.
