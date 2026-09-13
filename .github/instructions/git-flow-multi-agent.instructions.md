@@ -181,11 +181,36 @@ registry build an image that Podman can build here.
 
 ```powershell
 podman build -t misthelper:local .
-podman stop misthelper ; podman rm misthelper
-podman run -d --name misthelper -p 2200:2200 -p 8055:8055 `
-  -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" misthelper:local
+.\scripts\compose.ps1 up -d --no-deps misthelper
 podman ps
 ```
+
+Caution: pass `--no-deps` and name the service. Without both, compose tries to
+create `misthelper-arangodb` and `misthelper-redis` again, and it stops with
+`the container name is already in use`. Issue #2228 holds that report.
+
+### Rules for a test container or a debug container
+
+Every container that you start for a test, for a debug session, or for an
+end-to-end run obeys these four rules. `.github/copilot-instructions.md`
+§ "Test and Debug Containers" holds the full policy and the cleanup commands.
+
+1. Start the container inside the compose group. Use
+   `.\scripts\compose.ps1 run --rm`, or add the service to `compose.yml` under
+   a profile. Never start a one-off container with a bare `podman run`.
+2. Name an ephemeral container for the issue or the pull request that it
+   serves. Use the format `misthelper-tmp-<issue|pr><number>-<slug>`. Apply the
+   same name to the volume and the network.
+3. Publish a port in the range 9600 through 9699. Never publish a production
+   local port. Read `compose.yml` for the current set. Today it holds 1161/udp,
+   1514/udp, 2200, 8055, 8056, 8057, 8668, 9379, 9526, and 9529.
+4. Remove the container, its volume, and its network when the test ends. Never
+   leave a test container running.
+
+Warning: a test container that publishes 9529 or 9379 takes the port from the
+running store. The upgrade portal then writes a capture into the wrong
+database, and the operator loses the upgrade record. Issue #2059 records that
+collision.
 
 ### Spend a run only for these reasons
 

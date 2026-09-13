@@ -2830,6 +2830,48 @@
             });
     }
 
+    function orgFormBody(form) {
+        var body = {};  /* One plain object carries every control of the form. */
+        var entries = new FormData(form);  /* The browser reads the same values a native post would send. */
+        entries.forEach(function (value, key) {
+            if (key === "csrf_token") {  /* The request header carries this value, so the body omits it. */
+                return;
+            }
+            if (key === "selected_types") {  /* A device family repeats, so the body keeps an array. */
+                body[key] = (body[key] || []).concat([String(value)]);
+                return;
+            }
+            body[key] = String(value);  /* Every other control sends one text value. */
+        });
+        return body;  /* The caller sends this object as JSON. */
+    }
+
+    function sendOrgForm(form) {
+        var body = orgFormBody(form);  /* Build the JSON body from the visible controls. */
+        fetchJson(form.getAttribute("action"), { method: "POST", body: body })
+            .then(function (answer) {
+                if (answer && answer.next) {  /* The route names the next page after it accepts the request. */
+                    window.location.assign(answer.next);  /* Open the next page of the same workflow. */
+                    return;
+                }
+                window.location.reload();  /* An answer without a next page shows the current state again. */
+            })
+            .catch(function (error) {
+                console.error("The organization upgrade request failed.", error && error.code);
+                showRequestError(error);  /* Show the refusal in the page, never as a raw JSON document. */
+            });
+    }
+
+    function initOrgUpgradeForms() {
+        var forms = document.querySelectorAll('form[action^="/api/org-upgrades"]');  /* Find every org form. */
+        Array.prototype.forEach.call(forms, function (form) {
+            form.addEventListener("submit", function (event) {
+                event.preventDefault();  /* Stop the native post that would open a raw JSON document. */
+                sendOrgForm(form);  /* Send the same fields as JSON and read the answer.  */
+            });
+        });
+    }
+
     function initOrgUpgradePage() {
         var region = document.querySelector("[data-org-upgrade-region]");
         if (!region) {
@@ -3950,6 +3992,7 @@
         initRunAgeDisplay();  /* Update age text without changing the server stale decision. */
         initBulkRunPreview();  /* Replace browser selection with one authoritative server preview. */
         initRunReconciliation();  /* Reconcile one stale run from read-only evidence. */
+        initOrgUpgradeForms();  /* Issue #2523: send every organization form as JSON and show errors in the page. */
         initOrgUpgradePage();
         initStopControl();  /* Add the existing single-run stop behavior without a change. */
         initRunRetryControl();  // Issue #2202: restart an unsuccessful terminal run.

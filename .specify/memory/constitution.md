@@ -279,6 +279,14 @@ The following technology choices are binding for all MistHelper code:
   MUST be maintained for pip compatibility.
 - **Container Runtime**: Podman is the primary runtime. Docker is
   compatible but all documentation and examples MUST use Podman.
+- **Test Containers**: Every container started for a test, a debug
+  session, or an end-to-end run MUST join the compose group. A bare
+  `podman run` outside the group is prohibited. An ephemeral container
+  MUST carry the issue number or the pull request number in its name
+  (`misthelper-tmp-<issue|pr><number>-<slug>`), MUST NOT publish a
+  production local port (read `compose.yml` for the current set), and
+  MUST be removed when the test ends. See
+  `documentation/container-deployment.md` § "Test and debug containers".
 - **File Paths**: MUST use `os.path.join()` or `pathlib.Path()`. Never
   hardcode `/` or `\\` separators. Windows compatibility is required.
 - **Output Backends**: API export and data collection operations MUST support
