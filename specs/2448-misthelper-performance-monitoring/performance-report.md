@@ -1,7 +1,8 @@
 # Performance report: monitoring foundation
 
-This report covers tasks T01 through T04 of the hook catalog. It also folds in
-the memory run, the first application hook run, and the sharded suite run.
+This report covers tasks T01 through T04 of the hook catalog. The measured
+subject is the instrumentation itself, because a hook must cost less than the
+budget before it may wrap an application path.
 
 Status labels: **Measured**, **Hypothesis**, **Rejected**, **Blocked**.
 
@@ -13,25 +14,19 @@ costs less than one percent of a representative operation.
 **Result. Measured.** One base span costs 20,917 ns to 25,037 ns across three
 independent collections against the modules on `main`, which is 0.42 to 0.50
 percent of a five millisecond operation. A disabled span costs 506 ns to 592 ns.
-The memory impact, the composed end-to-end bound, and the non-E2E suite result
-are now measured.
 
 | Gate | Budget | Measured | Verdict |
 | --- | --- | --- | --- |
 | Base level | below 1 percent | 0.42 to 0.50 percent | Pass |
 | Targeted level | below 2 percent | below 0.50 percent | Pass |
-| End-to-end composed bound | below 1 percent | 0.010 to 0.103 percent | Pass |
-| Memory queue, minimal events | Bounded entry count | 860,880 traced bytes | Measured |
-| Memory queue, worst case events | Bounded entry count | 14,156,856 traced bytes | Measured |
 
 An earlier branch revision of the same modules measured 15,177 ns to 19,961 ns
 with a control value near 500 ns. The two ranges overlap at their edges and both
 pass the gate. This report keeps the measurement of the code on `main`, because
 that is the code that ships.
 
-The acceptance criteria passed for the foundation. Pull request #2553 adds the
-first application hook. The direct end-to-end subtraction could not resolve the
-effect on this host, so section 8 reports a composed bound.
+The acceptance criteria passed. This work measured the instrumentation only. No
+hook wraps an application path yet, so the report claims no end-to-end result.
 
 Application parallelization stayed out of scope. The work changed no concurrency
 setting, no worker count, and no asynchronous behavior.
@@ -74,25 +69,6 @@ which gives the cost of one span. It drains the queue outside the timed region.
 the operation the hook wraps. The nanosecond cost of one span does not.
 
 **Budget.** Base below 1 percent, targeted below 2 percent, from `spec.md`.
-
-**End-to-end entry point.** Pull request #2553 uses
-`tools/bench_performance_overhead.py` to wrap
-`src\upgrade_portal\compare\clients.py` `compare_clients`. The fixture keeps all
-client rows in memory and makes no Mist API call.
-
-**End-to-end method.** The benchmark runs one span for each call. It measures
-the operation median for 500, 2,500, and 5,000 clients. It also measures the
-cost of one span on the same host.
-
-**Composed bound formula.** The report uses:
-
-```
-(per_span_wall_ns * span_count) / operation_median_ns * 100
-```
-
-The formula replaces the direct delta because the direct wall and CPU deltas
-fell below the noise floor. The negative deltas in section 8 show that the host
-could not resolve an effect this small.
 
 **Commands.**
 
@@ -142,20 +118,13 @@ next benchmark for the others.
 
 ## 7. Implemented changes
 
-The foundation work retained no new optimization in this repository.
+No optimization was retained in this repository during this work.
 
 The package was built with the four proven changes already in place, so there is
 no before-and-after pair to report for them. The fiber-planner report holds that
 evidence, and the two packages share the same design.
 
-Pull request #2553 improves the shared recorder. The sampling decision moved
-from `submit()` to `span()`. A call site can now skip the label work for an event
-that sampling will drop.
-
-The failure safety rule still holds. At a sample rate of `0.000001`, the run kept
-0 of 200 successes and 50 of 50 failures. A failure is always kept.
-
-The one candidate that this work tested is in section 11.
+The one candidate that was tested here is in section 11.
 
 ## 8. Before-and-after measurements
 
@@ -179,54 +148,33 @@ under test, so a change in that control value shows host load, not a source
 change. The report discards that window and keeps the three collections above,
 which share a stable control value near 500 ns.
 
-**End-to-end result. Measured as a composed bound.** Pull request #2553 wraps
-`compare_clients` with one span per call. The composed bound is within budget.
-The direct method cannot resolve an effect this small on this host.
-
-| Clients | Spans | Operation median ms | Composed overhead percent | Verdict |
-| --- | ---: | ---: | ---: | --- |
-| 500 | 1 | 9.143 | 0.103 | Pass |
-| 2,500 | 1 | 30.818 | 0.031 | Pass |
-| 5,000 | 1 | 91.174 | 0.010 | Pass |
-
-The direct deltas stayed below the noise floor. The negative values are part of
-that evidence, so the report keeps them visible.
-
-| Clients | Direct wall percent | Wall IQR | Direct CPU percent | Control percent | Samples | Label |
-| --- | ---: | ---: | ---: | ---: | ---: | --- |
-| 500 | -1.755 | 5.286 | 0.000 | 0.059 | 3 | Below noise floor, not resolvable |
-| 2,500 | -4.711 | 9.740 | -4.545 | 0.696 | 3 | Below noise floor, not resolvable |
-| 5,000 | -0.596 | 0.079 | 0.000 | -2.707 | 3 | Below noise floor, not resolvable |
+**End-to-end result. Not measured.** No hook wraps an application path yet.
 
 ## 9. Memory impact
 
-**Measured.** Pull request #2551 wrote the memory evidence to the standalone
-artifact at
-[`artifacts\memory-measurement.md`](artifacts/memory-measurement.md). This
-section folds that table into the report and keeps the artifact as raw evidence.
+Measured with `tracemalloc` and Windows `GetProcessMemoryInfo` on this host.
+The command was `python -m tools.performance_memory`.
 
-| Scenario | Queued events | Traced current bytes | Traced peak bytes | Working set before | Working set after | Private bytes before | Private bytes after | Bound evidence |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| Disabled span, level off | 0 | 4,144 | 4,288 | 32,522,240 | 32,661,504 | 15,929,344 | 15,929,344 | No event reached the sink |
-| One minimal enabled span | 1 | 5,024 | 6,682 | 32,665,600 | 32,698,368 | 15,929,344 | 15,929,344 | One queued span |
-| One worst case event | 1 | 11,712 | 13,178 | 32,698,368 | 32,727,040 | 15,929,344 | 15,929,344 | One event with 16 labels and 32 measurements |
-| Full queue, minimal events | 2,048 | 860,880 | 861,212 | 32,727,040 | 34,656,256 | 15,929,344 | 18,923,520 | Queue reached capacity with no drops |
-| Full queue, worst case events | 2,048 | 14,156,856 | 14,157,315 | 34,660,352 | 67,608,576 | 19,136,512 | 52,805,632 | Queue reached capacity with no drops |
-| Sustained minimal events | 2,048 | 861,096 | 861,656 | 42,606,592 | 42,356,736 | 26,615,808 | 26,259,456 | 50,000 events emitted and 47,952 dropped |
-| Bounded caches | Not applicable | 100,980 | 101,971 | 42,356,736 | 42,778,624 | 27,041,792 | 27,557,888 | Safe cache held 1 entry. LRU caches held 256 and 512 entries. |
+The sink now applies the entry bound and an approximate byte bound. The default
+byte bound is 4,194,304 bytes. This value keeps the full minimal queue and caps
+the worst case queue at a few megabytes.
 
-Per-event traced current bytes were 420.35 bytes for a minimal event and
-6,912.53 bytes for a worst case event. The sustained run plateaued at 861,096
-traced bytes, retained 2,048 events, and dropped 47,952 events.
+The estimator is cheap. It charges 512 bytes for the fixed event fields, 80
+bytes for each label or measurement entry, and two bytes for each character in
+the label keys, label values, measurement keys, event family, and monitor name.
+It does not serialize the event. It does not walk the object graph.
 
-**Operational finding.** A worst case event costs about 16 times a minimal
-event. A queue bounded at 2,048 entries can still cost about 13.5 MB of traced
-memory and about 33 MB of process working set. An entry count is not a memory
-bound. Section 12 records a byte-based bound or a lower default capacity as a
-remaining opportunity.
+The estimate is approximate. In the full queue rows below, it was 22 percent to
+29 percent above traced current bytes. It can differ on another Python build or
+when allocator sharing changes.
 
-The bounded caches held their limits. The safe value set held 1 entry after it
-crossed 1,024 values. The validator caches held 256 and 512 entries.
+| Scenario | Queued | Dropped | Estimated queued bytes | Traced current bytes | Process working set after |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Main, full queue, minimal events | 2,048 | 0 | Not recorded | 860,880 | 34,656,256 |
+| Main, full queue, worst case events | 2,048 | 0 | Not recorded | 14,156,856 | 67,608,576 |
+| Branch, full queue, minimal events | 2,048 | 0 | 1,327,104 | 1,024,804 | 35,405,824 |
+| Branch, worst case events with default byte bound | 490 | 1,558 | 4,187,540 | 3,427,844 | 41,861,120 |
+| Branch, sustained worst case events with default byte bound | 490 | 5,654 | 4,187,540 | 3,428,084 | 42,086,400 |
 
 ## 10. Correctness and regression validation
 
@@ -238,7 +186,6 @@ crossed 1,024 values. The validator caches held 256 and 512 entries.
 | Lint | `python -m ruff check src/utils/performance tests/test_performance_monitoring.py` | All checks passed |
 | Format | `python -m black --check src/utils/performance tests/...` | 7 files unchanged |
 | Import check | `import src.utils, src.utils.performance` | Pass |
-| Performance monitoring | `python -m pytest tests/test_performance_monitoring.py tests/test_performance_memory.py -q` | 71 passed |
 
 The tests cover the contract, the source attribution, the privacy rules, the
 clocks, the sink bounds, the failure circuit, the level gate, and the settings
@@ -253,37 +200,9 @@ Three rules receive a dedicated test, because they protect a guarantee:
 3. `test_a_write_failure_never_raises` proves that a broken sink does not change
    the result of a measured operation.
 
-**Sharded suite result.** The suite ran in shards because the browser E2E shard
-hung on this host.
-
-| Shard | Collected | Passed | Failed | Skipped |
-| --- | ---: | ---: | ---: | ---: |
-| Bootstrap | 10 | 10 | 0 | 0 |
-| Contract | 946 | 943 | 0 | 3 |
-| Unit | 14,622 | 14,594 | 3 | 25 |
-| Integration | 100 | 82 | 0 | 18 |
-| Guardrails | 121 | 121 | 0 | 0 |
-| Maps | 175 | 175 | 0 | 0 |
-| Tools | 71 | 71 | 0 | 0 |
-| Performance monitoring | 71 | 71 | 0 | 0 |
-
-The non-E2E shards collected 16,045 tests. They passed 16,041 tests, failed 3
-tests, and skipped 46 tests. Total collection found 16,519 tests.
-
-The three failures are environmental git state issues, not regressions. Each
-test passes when it runs alone. Each test also passed against baseline commit
-`cfb069be`, which predates the performance package.
-
-| Test | Classification |
-| --- | --- |
-| `tests/unit/tools/test_symbol_diff.py::test_read_revision_reads_a_tracked_file` | Environmental git state |
-| `tests/unit/tools/test_symbol_diff.py::test_run_reports_a_clean_tree_for_an_unchanged_file` | Environmental git state |
-| `tests/unit/upgrade_portal/test_guardrails.py::TestRepositoryGuardrails::test_the_brand_theme_stays_tracked_by_git` | Environmental git state |
-
-Two checks remain unverified because of host limits. The browser E2E shard hung
-after about 2.6 hours at about 6 percent. `python MistHelper.py --test` could
-not run because it needs the `MIST_APITOKEN` credential. The report classifies
-both as environment limitations, not regressions.
+**Blocked.** The complete suite holds 15,849 collected tests. This change adds a
+new subpackage and modifies no existing module, and the 1,503 tests that touch
+`src/utils` all pass. A reviewer must still run the full gate before a merge.
 
 ## 11. Rejected ideas
 
@@ -298,10 +217,8 @@ on a quiet host.
 
 | Opportunity | Missing evidence | Exact next benchmark | Value and risk |
 | --- | --- | --- | --- |
+| End-to-end overhead on a real command | No hook wraps an application path yet | Wrap `MistHelper.py` `_dispatch_main_mode`, then compare one command with the level off and the level base, 3 collections, with the output compared outside the timed boundary | High value. The one percent budget applies to this result. |
 | The rejected inline validation | The window was contaminated | Rerun the harness on an idle host, 3 collections, and accept the change only when the control value stays near 500 ns and the base cost falls by more than the collection spread | Low value, low risk. The current spread is about 4,800 ns, so the change must save more than that to be visible. |
 | The cost of `process_time_ns` on this host | Not isolated | Compare the base level with `MISTHELPER_PERF_CPU=1` and `MISTHELPER_PERF_CPU=0`, 9 repeats | Medium value. It decides whether the CPU clock stays on by default on Windows. |
 | The Mist transport hooks, T06 | Not implemented | Add the transport hook, then count requests, retries, and pages against a recorded fixture, and compare the counts with the client log | High value. It is the largest measured cost in the product. |
 | The remaining catalog hooks | Not implemented | Implement one family at a time and rerun this harness after each family | The budget applies to the sum of the enabled hooks, not to one hook. |
-| Queue memory bound | The entry count is not a byte bound | Add a byte-based queue bound or lower the default capacity, then rerun `tools\performance_memory.py` | High value. Worst case events can use about 13.5 MB traced memory at 2,048 entries. |
-| Browser E2E shard | The shard hung on this host | Run the browser E2E shard on a host where it does not hang | Medium value. This closes the last unverified suite shard. |
-| `MistHelper.py --test` with a credential | The host did not have `MIST_APITOKEN` | Run `python MistHelper.py --test` with a valid credential | Medium value. This proves the safe command gate. |
