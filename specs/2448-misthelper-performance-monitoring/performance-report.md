@@ -172,6 +172,7 @@ design:
 | Lint | `python -m ruff check src/utils/performance tests/test_performance_monitoring.py` | All checks passed |
 | Format | `python -m black --check src/utils/performance tests/...` | 7 files unchanged |
 | Import check | `import src.utils, src.utils.performance` | Pass |
+| E2E browser shard | `python -m pytest tests\e2e -q -p no:cacheprovider` | 235 passed, 4 skipped, 672.86 seconds |
 
 The tests cover the contract, the source attribution, the privacy rules, the
 clocks, the sink bounds, the failure circuit, the level gate, and the settings
@@ -186,9 +187,10 @@ Three rules receive a dedicated test, because they protect a guarantee:
 3. `test_a_write_failure_never_raises` proves that a broken sink does not change
    the result of a measured operation.
 
-**Blocked.** The complete suite holds 15,849 collected tests. This change adds a
-new subpackage and modifies no existing module, and the 1,503 tests that touch
-`src/utils` all pass. A reviewer must still run the full gate before a merge.
+**Complete for E2E.** The E2E browser shard now uses a per-test timeout guard.
+The guard uses the declared `pytest-timeout` dependency. One skipped test in
+`test_capture.py` and three skipped tests in `test_upgrade.py` still do not
+verify the skipped browser paths.
 
 ## 11. Rejected ideas
 
