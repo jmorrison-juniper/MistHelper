@@ -29,7 +29,7 @@ from typing import Any
 
 from src.upgrade_portal.capture.clients import normalize_mac
 from src.upgrade_portal.compare.diff import matched_sections
-from src.utils.performance import NULL_SPAN, EventSource, Recorder, RecorderSettings, bucket_size
+from src.utils.performance import EventSource, Recorder, RecorderSettings, bucket_size
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +86,6 @@ _PERFORMANCE_SOURCE = EventSource(
     symbol="compare_clients",  # The measured function that the benchmark drives.
 )  # The event source has no organization, site, client, or device identifier.
 _SUCCESS_SAMPLE_LIMIT = 0.01  # The catalog permits at most one sampled success in one hundred.
-_SAMPLE_COUNTER = 0  # Count successes for the cheap deterministic sample gate.
 
 
 def _performance_settings() -> RecorderSettings:
@@ -106,16 +105,6 @@ _PERFORMANCE_RECORDER = Recorder(_performance_settings())  # Read the opt-in lev
 
 def _performance_span() -> object:
     """Return the measuring span or the shared null span for this call."""
-    global _SAMPLE_COUNTER  # Keep a module-local counter for this hot path.
-    if not _PERFORMANCE_RECORDER.enabled:  # Avoid all sampler work when the feature is off.
-        return NULL_SPAN  # Return the shared span that reads no clock.
-    sample_rate = _PERFORMANCE_RECORDER.sample_rate  # Read the configured sample rate once.
-    if sample_rate >= 1.0:  # Tests can force every success to emit.
-        return _PERFORMANCE_RECORDER.span(_PERFORMANCE_SOURCE, family="operation")  # Measure this call.
-    interval = max(1, round(1.0 / sample_rate))  # Convert the share to a deterministic interval.
-    _SAMPLE_COUNTER = (_SAMPLE_COUNTER + 1) % interval  # Advance the cheap sample counter.
-    if _SAMPLE_COUNTER != 0:  # Most successes should cost no clock read.
-        return NULL_SPAN  # Skip the measurement for this unsampled success.
     return _PERFORMANCE_RECORDER.span(_PERFORMANCE_SOURCE, family="operation")  # Measure the sampled call.
 
 

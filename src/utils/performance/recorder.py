@@ -286,11 +286,6 @@ class Recorder:
         return self._settings.measure_cpu  # The span reads this once at its start.
 
     @property
-    def sample_rate(self) -> float:
-        """Return the configured success sample rate."""
-        return self._settings.sample_rate  # The caller can add a cheaper pre-sample gate.
-
-    @property
     def sink(self) -> BoundedSink:
         """Return the sink, so an operator can flush or inspect the drop count."""
         return self._sink  # The caller reads the queue and the counters through it.
