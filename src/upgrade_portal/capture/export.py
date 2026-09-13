@@ -632,22 +632,55 @@ def _row_values(capture: Mapping[str, Any]) -> Iterator[dict[str, str]]:
     heading = capture_heading(capture)  # Every row names the same capture.
     for mac, entry in device_entries(capture):  # The device order comes from the stored index.
         yield _device_values(mac, entry, heading)  # A device row uses the direct cell builder.
+    yield from _client_value_rows(capture, heading)  # Client rows stay after device rows.
+    yield from _extra_value_rows(capture, heading)  # Tier 3 rows stay after base rows.
+
+
+def _client_value_rows(
+    capture: Mapping[str, Any],
+    heading: Mapping[str, str],
+) -> Iterator[dict[str, str]]:
+    """Yield the client export cells of one capture.
+
+    Args:
+        capture: The stored capture document.
+        heading: The five values that name the capture.
+
+    Yields:
+        The wired rows, then the wireless rows, then the guest rows.
+    """
     groups: Any = capture.get("clients") or {}  # A capture that read no client holds an empty map.
     if not isinstance(groups, Mapping):  # A document of a later release may hold another shape.
         logger.warning("capture export: the client section is not a map, so the file holds no client row")
-    else:
-        for group, kind in CLIENT_GROUPS:  # The group order fixes the row order.
-            records: Any = groups.get(group) or []  # A missing group has no row.
-            for record in records:  # Each mapping becomes one row.
-                if isinstance(record, Mapping):  # Non-map values are ignored like the list builder.
-                    yield _client_values(kind, record, heading)  # A client row uses the direct cell builder.
+        return  # Match `client_rows()` by leaving the client section empty.
+    for group, kind in CLIENT_GROUPS:  # The group order fixes the row order.
+        records: Any = groups.get(group) or []  # A missing group has no row.
+        for record in records:  # Each mapping becomes one row.
+            if isinstance(record, Mapping):  # Non-map values are ignored like the list builder.
+                yield _client_values(kind, record, heading)  # A client row uses the direct cell builder.
+
+
+def _extra_value_rows(
+    capture: Mapping[str, Any],
+    heading: Mapping[str, str],
+) -> Iterator[dict[str, str]]:
+    """Yield the tier 3 export cells of one capture.
+
+    Args:
+        capture: The stored capture document.
+        heading: The five values that name the capture.
+
+    Yields:
+        The switch port rows, power rows, radio rows, tunnel rows, BGP rows, and alarm rows.
+    """
     extra_map: Any = capture.get("extras")  # Absent for a tier 2 capture.
-    if isinstance(extra_map, Mapping):  # A tier 3 capture stores the section map here.
-        for section, kind, fields in TIER3_GROUPS:  # The section order fixes the row order.
-            records = extra_map.get(section) or []  # A missing section has no row.
-            for record in records:  # Each mapping becomes one row.
-                if isinstance(record, Mapping):  # Non-map values are ignored like the list builder.
-                    yield _extra_values(kind, record, heading, fields)  # A tier 3 row uses direct cells.
+    if not isinstance(extra_map, Mapping):  # A tier 2 capture never ran a tier 3 read.
+        return  # Match `extra_rows()` by leaving the tier 3 section empty.
+    for section, kind, fields in TIER3_GROUPS:  # The section order fixes the row order.
+        records = extra_map.get(section) or []  # A missing section has no row.
+        for record in records:  # Each mapping becomes one row.
+            if isinstance(record, Mapping):  # Non-map values are ignored like the list builder.
+                yield _extra_values(kind, record, heading, fields)  # A tier 3 row uses direct cells.
 
 
 # ---------------------------------------------------------------------------

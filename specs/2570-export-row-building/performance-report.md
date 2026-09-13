@@ -8,11 +8,11 @@ Measured: The retained change builds JSON row dictionaries directly during expor
 
 Measured: Application parallelization stayed out of scope.
 
-Measured: The typical capture JSON wall median changed from 356.170 ms to 265.421 ms.
+Measured: The typical capture JSON wall median changed from 236.982 ms to 178.711 ms.
 
 Measured: The typical capture JSON peak traced memory changed from 25,266,182 bytes to 18,674,014 bytes.
 
-Measured: The large capture JSON wall median changed from 1,536.204 ms to 1,046.777 ms.
+Measured: The large capture JSON wall median changed from 1,236.293 ms to 933.906 ms.
 
 Measured: The large capture JSON peak traced memory changed from 126,558,780 bytes to 93,598,612 bytes.
 
@@ -66,15 +66,15 @@ Measured: The paired baseline used the saved old module `opt3_export_capture_exp
 
 | Workload | Metric | Median | MAD | Samples | Evidence |
 | - | - | - | - | - | - |
-| small capture JSON | wall ms | 6.550 | 0.718 | 31 | `opt3_export_paired_final.json` |
-| small capture JSON | CPU ms | 0.000 | 0.000 | 31 | `opt3_export_paired_final.json` |
-| small capture JSON | peak traced bytes | 635,184 | 112 | 7 | `opt3_export_paired_final.json` |
-| typical capture JSON | wall ms | 356.170 | 39.775 | 31 | `opt3_export_paired_final.json` |
-| typical capture JSON | CPU ms | 281.250 | 15.625 | 31 | `opt3_export_paired_final.json` |
-| typical capture JSON | peak traced bytes | 25,266,182 | 112 | 7 | `opt3_export_paired_final.json` |
-| large capture JSON | wall ms | 1,536.204 | 247.450 | 9 | `opt3_export_paired_final.json` |
-| large capture JSON | CPU ms | 1,171.875 | 78.125 | 9 | `opt3_export_paired_final.json` |
-| large capture JSON | peak traced bytes | 126,558,780 | 56 | 3 | `opt3_export_paired_final.json` |
+| small capture JSON | wall ms | 9.885 | 1.270 | 31 | `opt3_export_paired_final2.json` |
+| small capture JSON | CPU ms | 15.625 | 0.000 | 31 | `opt3_export_paired_final2.json` |
+| small capture JSON | peak traced bytes | 635,184 | 112 | 7 | `opt3_export_paired_final2.json` |
+| typical capture JSON | wall ms | 236.982 | 14.681 | 31 | `opt3_export_paired_final2.json` |
+| typical capture JSON | CPU ms | 218.750 | 15.625 | 31 | `opt3_export_paired_final2.json` |
+| typical capture JSON | peak traced bytes | 25,266,182 | 112 | 7 | `opt3_export_paired_final2.json` |
+| large capture JSON | wall ms | 1,236.293 | 57.902 | 9 | `opt3_export_paired_final2.json` |
+| large capture JSON | CPU ms | 1,125.000 | 46.875 | 9 | `opt3_export_paired_final2.json` |
+| large capture JSON | peak traced bytes | 126,558,780 | 56 | 3 | `opt3_export_paired_final2.json` |
 
 Measured: The baseline targeted tests passed, with 138 tests passed.
 
@@ -102,12 +102,12 @@ Hypothesis: The next benchmark must compare complete JSON bytes and parse behavi
 | Field | Required content |
 | - | - |
 | Change ID and location | OPT3-CAPTURE-JSON, `src/upgrade_portal/capture/export.py`, capture JSON path |
-| Evidence | `opt3_export_baseline.json`, `opt3_export_candidate_final.json`, `opt3_export_paired_final.json`, `opt3_export_parity.json` |
+| Evidence | `opt3_export_baseline.json`, `opt3_export_candidate_final.json`, `opt3_export_paired_final2.json`, `opt3_export_parity.json` |
 | Root cause | The old JSON path built `ExportRow` objects, then copied them through `to_dict()` before `json.dumps()` |
 | Change | The JSON path now builds final row dictionaries in file order |
-| Before result | Typical wall 356.170 ms, MAD 39.775, n 31 |
-| After result | Typical wall 265.421 ms, MAD 29.804, n 31 |
-| Percentage change | Typical wall changed by -25.5 percent |
+| Before result | Typical wall 236.982 ms, MAD 14.681, n 31 |
+| After result | Typical wall 178.711 ms, MAD 16.673, n 31 |
+| Percentage change | Typical wall changed by -24.6 percent |
 | Memory change | Typical peak traced memory fell by 6,592,168 bytes |
 | Test coverage | Added exact byte tests for JSON and CSV downloads |
 | Risks | Private helper duplication can drift, so tests compare public renderer bytes |
@@ -118,14 +118,14 @@ Hypothesis: The next benchmark must compare complete JSON bytes and parse behavi
 
 | Workload | Metric | Before median and MAD | After median and MAD | Samples | Signed change | Decision |
 | - | - | - | - | - | - | - |
-| small capture JSON | wall ms | 6.550 +/- 0.718 | 5.114 +/- 0.605 | 31 | -21.9 percent | Retained |
-| small capture JSON | CPU ms | 0.000 +/- 0.000 | 0.000 +/- 0.000 | 31 | Not defined | Retained |
+| small capture JSON | wall ms | 9.885 +/- 1.270 | 8.306 +/- 1.024 | 31 | -16.0 percent | Retained |
+| small capture JSON | CPU ms | 15.625 +/- 0.000 | 0.000 +/- 0.000 | 31 | -100.0 percent | Retained |
 | small capture JSON | peak bytes | 635,184 +/- 112 | 471,864 +/- 112 | 7 | -25.7 percent | Retained |
-| typical capture JSON | wall ms | 356.170 +/- 39.775 | 265.421 +/- 29.804 | 31 | -25.5 percent | Retained |
-| typical capture JSON | CPU ms | 281.250 +/- 15.625 | 218.750 +/- 0.000 | 31 | -20.0 percent | Retained |
+| typical capture JSON | wall ms | 236.982 +/- 14.681 | 178.711 +/- 16.673 | 31 | -24.6 percent | Retained |
+| typical capture JSON | CPU ms | 218.750 +/- 15.625 | 156.250 +/- 15.625 | 31 | -28.6 percent | Retained |
 | typical capture JSON | peak bytes | 25,266,182 +/- 112 | 18,674,014 +/- 112 | 7 | -26.1 percent | Retained |
-| large capture JSON | wall ms | 1,536.204 +/- 247.450 | 1,046.777 +/- 127.579 | 9 | -31.9 percent | Retained |
-| large capture JSON | CPU ms | 1,171.875 +/- 78.125 | 875.000 +/- 62.500 | 9 | -25.3 percent | Retained |
+| large capture JSON | wall ms | 1,236.293 +/- 57.902 | 933.906 +/- 46.348 | 9 | -24.5 percent | Retained |
+| large capture JSON | CPU ms | 1,125.000 +/- 46.875 | 843.750 +/- 15.625 | 9 | -25.0 percent | Retained |
 | large capture JSON | peak bytes | 126,558,780 +/- 56 | 93,598,612 +/- 56 | 3 | -26.0 percent | Retained |
 
 ## 9. Memory impact
@@ -155,7 +155,7 @@ Measured: The change trades no measured wall time for memory in the retained pat
 | Idea and location | Evidence | Reason for rejection | Reverted or never implemented |
 | - | - | - | - |
 | Direct full comparison serialization | `opt3_export_candidate.json` | Large comparison wall time regressed by 120.4 percent for CSV and 28.2 percent for JSON | Reverted |
-| Direct capture CSV serialization | `opt3_export_paired_final.json` | The paired CSV change was not the objective and did not reduce memory | Not retained |
+| Direct capture CSV serialization | `opt3_export_paired_final2.json` | The paired CSV change was not the objective and did not reduce memory | Not retained |
 
 ## 12. Remaining opportunities
 
@@ -163,5 +163,3 @@ Measured: The change trades no measured wall time for memory in the retained pat
 | - | - | - | - |
 | Hypothesis: stream JSON text without the row list | Needs proof of byte-identical JSON with the same key order | Compare full bytes for all fixture sizes and malformed rows | More memory reduction, with higher maintenance risk |
 | Hypothesis: reduce `ExportRow.to_dict()` copies for public renderers | Needs a safe public behavior proof for partial `values` maps | Pair old and new public renderer calls | Smaller gain, with compatibility risk |
-
-
