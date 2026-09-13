@@ -14,6 +14,7 @@ from typing import Any  # Accept python-arango and controlled fake handles.
 from src.refactors.endpoint_primary_key_strategies import (  # Use the registered composite domain key directly.
     ENDPOINT_PRIMARY_KEY_STRATEGIES,
 )
+from src.upgrade_portal.runtime.runs import RunStateMachine, RunTransitionError
 
 from .models import (  # Import only immutable action records and safe digest helpers.
     ActionInitialization,
@@ -25,6 +26,7 @@ from .models import (  # Import only immutable action records and safe digest he
 from .transactions import (  # Import the explicit no-fallback transaction boundary.
     ArangoTransactionAdapter,
     AtomicWriteResult,
+    RetryRunMutation,
     RunMutation,
     TransactionScope,
 )
@@ -74,6 +76,16 @@ class ActionRequestConflict(ActionStoreError):
 
 class ActionStateConflict(ActionStoreError):
     """State that a compare-and-swap precondition no longer matches."""
+
+
+class ActionMutationRefusal(ActionStateConflict):
+    """Report one stable refusal found inside an atomic transaction."""
+
+    def __init__(self, code: str, live_run_id: str = "") -> None:
+        """Store the refusal code and its optional live run."""
+        super().__init__(code)
+        self.code = code
+        self.live_run_id = live_run_id
 
 
 class ActionRepository:
@@ -196,7 +208,7 @@ class ActionRepository:
         actor_scope: str,
         action_id: str,
         outcome: RunActionOutcome,
-        mutation: RunMutation,
+        mutation: RunMutation | RetryRunMutation,
     ) -> AtomicWriteResult:
         """Store one run mutation and its succeeded outcome atomically."""
         self._require_success(outcome)  # Keep outcome-only results away from the run transaction.
@@ -281,7 +293,7 @@ class ActionRepository:
         """Verify the exact required index fields and uniqueness."""
         indexes = collection.indexes() or []  # Read the durable collection metadata back.
         actual = {(tuple(item.get("fields", ())), bool(item.get("unique"))) for item in indexes}  # Normalize.
-        expected: set[tuple[tuple[str, ...], bool]] = {  # Give mypy the nested collection type.
+        expected: set[tuple[tuple[str, ...], bool]] = {  # Give mypy the concrete index signature.
             (tuple(item["fields"]), bool(item["unique"])) for item in _INDEX_DEFINITIONS  # Normalize.
         }
         if not expected.issubset(actual):  # A missing key or actor index makes the bootstrap incomplete.
@@ -413,7 +425,7 @@ class ActionRepository:
     def _commit_success_in(
         self,
         database: Any,
-        request: tuple[str, str, RunActionOutcome, RunMutation],
+        request: tuple[str, str, RunActionOutcome, RunMutation | RetryRunMutation],
     ) -> None:
         """Change one run and its successful action item in one transaction."""
         actor_scope, action_id, outcome, mutation = request  # Read the cohesive atomic write request.
@@ -427,8 +439,11 @@ class ActionRepository:
         self._replace_action(action_collection, stored, changed)  # Store success in the same transaction.
 
     @staticmethod
-    def _mutate_run(collection: Any, mutation: RunMutation) -> None:
+    def _mutate_run(collection: Any, mutation: RunMutation | RetryRunMutation) -> None:
         """Apply one revision-bound run update or one new run insert."""
+        if isinstance(mutation, RetryRunMutation):
+            ActionRepository._insert_retry(collection, mutation)
+            return
         if mutation.operation == "insert":  # A retry success creates one new run.
             logger.info("Read one retry run before insert")  # Record the duplicate check before the read.
             if collection.get(mutation.run_id) is not None:  # A repeated retry key cannot overwrite a run.
@@ -454,6 +469,63 @@ class ActionRepository:
         collection.replace(document, check_rev=True, sync=True)  # Bind the update to the stored revision.
         logger.debug("Replaced one source run inside the action transaction")  # Confirm the transaction write.
 
+    @staticmethod
+    def _insert_retry(collection: Any, mutation: RetryRunMutation) -> None:
+        """Recheck the source and live site runs before one retry insert."""
+        ActionRepository._verify_retry_source(collection, mutation)  # Preserve source revision and state checks.
+        ActionRepository._verify_no_live_retry(collection, mutation)  # Preserve live site run checks.
+        if collection.get(mutation.run_id) is not None:
+            raise ActionMutationRefusal("run_changed")
+        document = dict(mutation.document)
+        document["_key"] = mutation.run_id
+        collection.insert(document, sync=True)
+
+    @staticmethod
+    def _verify_retry_source(collection: Any, mutation: RetryRunMutation) -> None:
+        """Verify the retry source run revision and state.
+
+        Args:
+            collection: The run collection in the action transaction.
+            mutation: The retry mutation request.
+        """
+        source = collection.get(mutation.source_run_id)  # Read the source run inside the transaction.
+        if source is None:  # Preserve the missing-source conflict.
+            raise ActionMutationRefusal("run_changed")
+        if (  # Preserve the revision and state match rule.
+            source.get("_rev") != mutation.expected_source_revision
+            or source.get("state") != mutation.expected_source_state
+        ):
+            raise ActionMutationRefusal("run_changed")
+
+    @staticmethod
+    def _verify_no_live_retry(collection: Any, mutation: RetryRunMutation) -> None:
+        """Verify that the site has no other live run.
+
+        Args:
+            collection: The run collection in the action transaction.
+            mutation: The retry mutation request.
+        """
+        for row in collection.find({"site_id": mutation.site_id}, limit=1000):
+            ActionRepository._refuse_live_retry_row(row, mutation)  # Preserve each live run conflict check.
+
+    @staticmethod
+    def _refuse_live_retry_row(row: Mapping[str, Any], mutation: RetryRunMutation) -> None:
+        """Refuse one row when it is a different live run.
+
+        Args:
+            row: One run row from the site.
+            mutation: The retry mutation request.
+        """
+        run_id = str(row.get("run_id") or row.get("_key") or "")  # Preserve run identifier fallback order.
+        if run_id == mutation.source_run_id:  # Preserve the source skip.
+            return
+        try:
+            state = RunStateMachine.read_state(dict(row))  # Preserve strict run state parsing.
+        except RunTransitionError:
+            raise ActionMutationRefusal("upgrade_already_running", run_id) from None
+        if state not in RunStateMachine.TERMINAL:  # Preserve live run refusal.
+            raise ActionMutationRefusal("upgrade_already_running", run_id)
+
     def _verify_action(self, expected: UpgradeRunAction) -> UpgradeRunAction:
         """Read one action back and compare every modeled field."""
         stored = self._read_required(expected.identity.actor_scope, expected.key.action_id)  # Actor-scoped read.
@@ -475,7 +547,7 @@ class ActionRepository:
             raise ActionStoreUnavailable("The ArangoDB action outcome did not persist.")  # Refuse partial success.
         return stored  # Return the complete verified action.
 
-    def _verify_run(self, mutation: RunMutation) -> dict[str, Any]:
+    def _verify_run(self, mutation: RunMutation | RetryRunMutation) -> dict[str, Any]:
         """Read one run back and verify each field the mutation supplied."""
         logger.info("Read one run after the atomic action transaction")  # Record verification before its read.
         try:  # A read fault makes the prior write result unknown.

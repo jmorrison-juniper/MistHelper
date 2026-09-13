@@ -65,7 +65,7 @@ FAVICON_CACHE_SECONDS = 86400  # Cache the small icon for one day.
 # choose a site, capture the state, drive the upgrade, and review the difference.
 # Comparison route module added for T-014 delta analysis and approval workflow.
 # Keep the route order aligned with the operator journey.
-BLUEPRINT_NAMES = ("auth", "select", "capture", "upgrade", "org_upgrade", "review", "comparison")
+BLUEPRINT_NAMES = ("auth", "select", "capture", "upgrade", "org_upgrade", "review", "comparison", "run_controls")
 
 # Each route module publishes its blueprint under one of these names. The first
 # match wins, so a module needs no registration list of its own.
@@ -636,6 +636,8 @@ def import_route_module(name: str) -> ModuleType | None:
         The module, or None when the import failed.
     """
     try:  # The module may not exist yet.
+        if name == "run_controls":  # This feature keeps its API route beside its values and services.
+            return import_module("src.upgrade_portal.api.run_controls.routes")  # Register the planned API package.
         return import_module(f"{ROUTES_PACKAGE}.{name}")  # The late import keeps the shell startable.
     except ImportError as fault:  # A missing module is expected while the portal grows.
         logger.warning(
