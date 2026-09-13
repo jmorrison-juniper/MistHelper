@@ -73,25 +73,25 @@
 ## Manifest, Quality, and Traceability
 
 - [x] `feature-files.txt` is the explicit feature allowlist.
-- [x] The manifest lists all 79 planned paths before source implementation.
-- [x] The changed set includes branch, staged, unstaged, and untracked files.
-- [x] The workflow excludes unrelated pre-existing untracked files.
-- [x] The workflow updates the manifest before the first edit to a new path.
-- [x] The staging command uses the explicit manifest.
-- [x] The workflow proves that every changed feature file is staged.
-- [x] Each executable manifest file receives all applicable existing gates.
-- [x] Feature-caused failures stay in this feature.
-- [x] An unrelated failure gets an issue before repair.
+- [x] The manifest lists all measured feature paths.
+- [x] The changed set includes branch, staged, unstaged, and feature-owned untracked files.
+- [x] The workflow excludes unrelated pre-existing files.
+- [ ] The workflow updated the manifest before the first edit to a new path.
+- [ ] The staging command uses the explicit manifest.
+- [ ] The workflow proves that every changed feature file is staged.
+- [ ] Each executable manifest file receives all applicable existing gates.
+- [ ] Feature-caused failures stay in this feature.
+- [ ] An unrelated failure gets an issue before repair.
 - [x] The plan measures both fixed performance workloads.
 - [x] The traceability matrix covers FR-001 through FR-076.
 
 ## Deployment
 
-- [x] The issue claim occurs before implementation.
-- [x] Active worktree, branch, and pull request overlap checks occur before implementation.
-- [x] The README, operator guide, and changelog update before local gates.
-- [x] The workflow commits the verified feature before rebase.
-- [x] The workflow rebases onto `origin/main` before push.
+- [ ] The issue claim occurs before implementation. Missing: no issue claim evidence was found in this review.
+- [ ] Active worktree, branch, and pull request overlap checks occur before implementation. Missing: no overlap evidence was found in this review.
+- [ ] The README, operator guide, and changelog update before local gates.
+- [ ] The workflow commits the verified feature before rebase. Missing: no feature commit evidence was found.
+- [ ] The workflow rebases onto `origin/main` before push. Missing: no rebase evidence was found.
 - [x] The pull request title is explicit.
 - [x] The pull request requires `Closes #2447`.
 - [x] The pull request requires the specification link.
@@ -100,14 +100,14 @@
 - [x] The pull request requires deployment and rollback notes.
 - [x] The pull request requires every applicable template item.
 - [x] The pull request requires type, scope, and status labels.
-- [x] Required pull request CI must pass.
-- [x] Required human approval must exist before auto-merge.
-- [x] The `auto-merge` label is added only after all checks pass.
-- [x] The workflow uses a squash merge.
-- [x] The workflow waits for the merged `main` image build.
-- [x] The workflow verifies the exact image revision.
-- [x] Deployment occurs only after revision verification.
-- [x] Container and portal health checks follow deployment.
+- [ ] Required pull request CI must pass. Missing: no pull request CI result was found.
+- [ ] Required human approval must exist before auto-merge. Missing: no approval record was found.
+- [ ] The `auto-merge` label is added only after all checks pass. Missing: no auto-merge label evidence was found.
+- [ ] The workflow uses a squash merge. Missing: no merge evidence was found.
+- [ ] The workflow waits for the merged `main` image build. Missing: no merged image build evidence was found.
+- [ ] The workflow verifies the exact image revision. Missing: no image revision evidence was found.
+- [ ] Deployment occurs only after revision verification. Missing: no deployment evidence was found.
+- [ ] Container and portal health checks follow deployment. Missing: no deployment health evidence was found.
 - [x] The live Morrison House check remains optional.
 
 ## Readiness
@@ -116,7 +116,7 @@
 - [x] The branch starts at current `origin/main`.
 - [x] The prior clean-branch blocker is closed.
 - [x] Cross-artifact paths, states, reasons, and dependencies agree.
-- [x] The fresh traceability review found no uncovered requirement.
+- [ ] The fresh traceability review found no uncovered requirement.
 - [x] Task numbers are continuous from T001 through T137.
 - [x] `.spec-context.json` reports `ready-to-implement`.
 
@@ -124,3 +124,9 @@
 
 The internal validation completed on 2026-09-11 after all artifact gaps
 closed. Implementation can proceed without another clarification step.
+
+## Current Review Result
+
+The current review found evidence for 65 of 76 requirements.
+The traceability record lists 11 unproven requirements.
+The current manifest holds 82 measured feature paths.
