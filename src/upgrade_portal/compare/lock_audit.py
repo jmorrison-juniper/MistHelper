@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections import deque
 from collections.abc import Iterator, Mapping
 from typing import Any
 
@@ -168,7 +169,28 @@ def read_audit_rows(limit: int = DEFAULT_AUDIT_LIMIT, path: Any = None) -> list[
         One shaped row for each action, newest first.
     """
     logger.info("audit: the portal reads the site lock trail")  # Before the read.
-    rows = mark_expiries(list(read_trail_lines(path)))  # Oldest first, so each hold closes in order.
-    shaped = [audit_row(row) for row in reversed(rows)]  # The page reads the newest action first.
-    logger.debug("audit: the trail answered %s row(s)", len(shaped))
-    return shaped[:limit]
+    if not isinstance(limit, int) or limit <= 0:
+        rows = mark_expiries(list(read_trail_lines(path)))  # Oldest first, so each hold closes in order.
+        shaped = [audit_row(row) for row in reversed(rows)]  # The page reads the newest action first.
+        logger.debug("audit: the trail answered %s row(s)", len(shaped))
+        return shaped[:limit]
+
+    recent: deque[dict[str, Any]] = deque(maxlen=limit)
+    holder: dict[str, dict[str, Any]] = {}
+    total = 0
+    for row in read_trail_lines(path):  # One pass keeps expiry inference equal to a full read.
+        site = str(row.get("site_id") or "")
+        action = str(row.get("action") or LEGACY_ACTION)
+        if action == ACTION_TAKE and site in holder:
+            recent.append(expiry_row(holder[site], str(row.get("occurred_at") or "")))
+            total += 1
+        recent.append(row)
+        total += 1
+        if action in OPENING_ACTIONS:
+            holder[site] = row
+        else:
+            holder.pop(site, None)
+
+    shaped = [audit_row(row) for row in reversed(recent)]  # The page reads the newest action first.
+    logger.debug("audit: the trail answered %s row(s)", total)
+    return shaped
