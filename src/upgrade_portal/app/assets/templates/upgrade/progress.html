@@ -402,6 +402,44 @@
   </div>
 </section>
 
+{% if reconciliation_available | default(false, true) %}
+  <section class="portal-card"
+           data-run-reconciliation
+           data-run-id="{{ run_id | default('', true) }}"
+           data-testid="run-reconciliation-controls">
+    <h2 class="portal-card-title">Reconcile this stale run</h2>
+    <p class="portal-card-note">
+      This check sends no firmware, stop, or cancel request to Mist. The portal changes the run only with complete proof.
+    </p>
+    <label for="run-reconciliation-confirmation">
+      Type <strong data-run-reconciliation-phrase>RECONCILE {{ run_id | default('', true) }}</strong>
+    </label>
+    <input id="run-reconciliation-confirmation"
+           type="text"
+           autocomplete="off"
+           data-run-reconciliation-confirmation
+           data-testid="run-reconciliation-confirmation">
+    <div class="confirm-box-actions">
+      <button type="button"
+              class="portal-button portal-button-primary"
+              data-run-reconciliation-submit
+              data-testid="run-reconciliation-submit"
+              disabled>Reconcile run</button>
+    </div>
+    <p class="portal-alert"
+       role="alert"
+       tabindex="-1"
+       data-run-reconciliation-error
+       data-testid="run-reconciliation-error"
+       hidden></p>
+    <div class="portal-note"
+         data-run-reconciliation-result
+         data-testid="run-reconciliation-result"
+         aria-live="polite"
+         hidden></div>
+  </section>
+{% endif %}
+
 {% include 'upgrade/stop.html' %}
 
 {#
