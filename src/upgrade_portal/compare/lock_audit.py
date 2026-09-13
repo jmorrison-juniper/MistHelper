@@ -158,8 +158,8 @@ def audit_row(record: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def read_audit_rows(limit: int = DEFAULT_AUDIT_LIMIT, path: Any = None) -> list[dict[str, Any]]:
-    """Return one page of the audit log, newest first.
+def _read_limited_audit_rows(limit: int, path: Any = None) -> list[dict[str, Any]]:
+    """Return one positive-size page of the audit log, newest first.
 
     Args:
         limit: The largest count of rows to answer.
@@ -168,13 +168,6 @@ def read_audit_rows(limit: int = DEFAULT_AUDIT_LIMIT, path: Any = None) -> list[
     Returns:
         One shaped row for each action, newest first.
     """
-    logger.info("audit: the portal reads the site lock trail")  # Before the read.
-    if not isinstance(limit, int) or limit <= 0:
-        rows = mark_expiries(list(read_trail_lines(path)))  # Oldest first, so each hold closes in order.
-        shaped = [audit_row(row) for row in reversed(rows)]  # The page reads the newest action first.
-        logger.debug("audit: the trail answered %s row(s)", len(shaped))
-        return shaped[:limit]
-
     recent: deque[dict[str, Any]] = deque(maxlen=limit)
     holder: dict[str, dict[str, Any]] = {}
     total = 0
@@ -194,3 +187,23 @@ def read_audit_rows(limit: int = DEFAULT_AUDIT_LIMIT, path: Any = None) -> list[
     shaped = [audit_row(row) for row in reversed(recent)]  # The page reads the newest action first.
     logger.debug("audit: the trail answered %s row(s)", total)
     return shaped
+
+
+def read_audit_rows(limit: int = DEFAULT_AUDIT_LIMIT, path: Any = None) -> list[dict[str, Any]]:
+    """Return one page of the audit log, newest first.
+
+    Args:
+        limit: The largest count of rows to answer.
+        path: The trail file, or None for the real one.
+
+    Returns:
+        One shaped row for each action, newest first.
+    """
+    logger.info("audit: the portal reads the site lock trail")  # Before the read.
+    if isinstance(limit, int) and limit > 0:
+        return _read_limited_audit_rows(limit, path)
+
+    rows = mark_expiries(list(read_trail_lines(path)))  # Oldest first, so each hold closes in order.
+    shaped = [audit_row(row) for row in reversed(rows)]  # The page reads the newest action first.
+    logger.debug("audit: the trail answered %s row(s)", len(shaped))
+    return shaped[:limit]

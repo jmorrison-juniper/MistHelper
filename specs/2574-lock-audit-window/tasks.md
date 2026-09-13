@@ -6,6 +6,6 @@
 - [x] Implement one sequential optimization.
 - [x] Add tests for full expiry inference, one row, short trails, and row shape.
 - [x] Measure the candidate.
-- [ ] Run all required validation commands.
-- [ ] Push, open one pull request, and arm auto-merge.
+- [x] Run all required validation commands.
+- [x] Push, open one pull request, and arm auto-merge.
 - [ ] Wait for merge and mark the todo done.
