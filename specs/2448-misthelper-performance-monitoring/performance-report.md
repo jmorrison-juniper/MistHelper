@@ -152,15 +152,29 @@ which share a stable control value near 500 ns.
 
 ## 9. Memory impact
 
-**Not measured** with `tracemalloc`. The known memory effects are bounded by
-design:
+Measured with `tracemalloc` and Windows `GetProcessMemoryInfo` on this host.
+The command was `python -m tools.performance_memory`.
 
-- The sink queue holds at most `capacity` events, 2,048 by default. The operator
-  setting clamps to 65,536.
-- The contract bounds each event at 16 labels of at most 96 characters and 32
-  measurements.
-- The caches are bounded at 256 and 512 entries, and the safe value set clears
-  at 1,024 entries.
+The sink now applies the entry bound and an approximate byte bound. The default
+byte bound is 4,194,304 bytes. This value keeps the full minimal queue and caps
+the worst case queue at a few megabytes.
+
+The estimator is cheap. It charges 512 bytes for the fixed event fields, 80
+bytes for each label or measurement entry, and two bytes for each character in
+the label keys, label values, measurement keys, event family, and monitor name.
+It does not serialize the event. It does not walk the object graph.
+
+The estimate is approximate. In the full queue rows below, it was 22 percent to
+29 percent above traced current bytes. It can differ on another Python build or
+when allocator sharing changes.
+
+| Scenario | Queued | Dropped | Estimated queued bytes | Traced current bytes | Process working set after |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Main, full queue, minimal events | 2,048 | 0 | Not recorded | 860,880 | 34,656,256 |
+| Main, full queue, worst case events | 2,048 | 0 | Not recorded | 14,156,856 | 67,608,576 |
+| Branch, full queue, minimal events | 2,048 | 0 | 1,327,104 | 1,024,804 | 35,405,824 |
+| Branch, worst case events with default byte bound | 490 | 1,558 | 4,187,540 | 3,427,844 | 41,861,120 |
+| Branch, sustained worst case events with default byte bound | 490 | 5,654 | 4,187,540 | 3,428,084 | 42,086,400 |
 
 ## 10. Correctness and regression validation
 
