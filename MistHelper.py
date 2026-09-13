@@ -4770,16 +4770,50 @@ def _systematic_test_build_safe_list(
     safe_options.extend(
         sorted(remaining, key=lambda x: float(x.replace("a", ".1")))
     )  # Append all remaining safe options in natural numeric order.
+    if not _systematic_test_has_api_token():  # Without a token, only local safe checks may execute.
+        api_options = _systematic_test_api_options(safe_options)  # Identify safe entries that call Mist Cloud.
+        safe_options = [opt for opt in safe_options if opt not in api_options]  # Keep local safe tests only.
+        unsafe_list.extend(api_options)  # Count credential-backed checks as skipped, not failed.
+        unsafe_list = sorted(set(unsafe_list), key=lambda x: float(x.replace("a", ".1")))  # Keep output stable.
     return safe_options, unsafe_list  # Return both lists so caller can emit skips and run tests.
+
+
+def _systematic_test_has_api_token() -> bool:
+    """Return True when the environment holds a real Mist API token."""
+    logging.info("SYSTEMATIC_TEST: checking for a Mist API token")  # Log before reading credential metadata.
+    _host, tokens = _parse_api_tokens()  # Read only local environment values and never log the token.
+    has_token = any(not _looks_like_placeholder(token) for token in tokens)  # Reject blank and template values.
+    logging.debug("SYSTEMATIC_TEST: Mist API token present: %s", has_token)  # Log only the boolean result.
+    return has_token  # Tell the runner whether live API tests may execute.
+
+
+def _systematic_test_api_options(safe_options: list[str]) -> set[str]:
+    """Return the safe options that must not run without a Mist API token."""
+    logging.info("SYSTEMATIC_TEST: classifying API-backed safe options")  # Log before registry filtering.
+    api_options = {opt for opt in safe_options if OperationRegistry.requires_api_token(opt)}  # Find live API tests.
+    logging.debug("SYSTEMATIC_TEST: found %d API-backed safe options", len(api_options))  # Log the skip count.
+    return api_options  # Give the caller a set for quick membership tests.
+
+
+def _systematic_test_skip_details(opt: str, has_api_token: bool) -> tuple[str, str]:
+    """Return the skip reason and category for one systematic-test skip."""
+    if not has_api_token and OperationRegistry.requires_api_token(opt):  # No token means API-backed tests must skip.
+        reason = "Requires MIST_APITOKEN or MIST_API_TOKEN because this test calls the Mist API"  # Name variables.
+        logging.debug("SYSTEMATIC_TEST: option %s skipped because a Mist API token is absent", opt)  # Log cause.
+        return reason, "credential_required"  # Emit a precise dynamic skip category.
+    reason = OperationRegistry.skip_reason(opt)  # Read the static registry reason for non-credential skips.
+    category = OperationRegistry.skip_category(opt)  # Read the static registry category for telemetry.
+    return reason, category  # Preserve existing skip output for non-credential cases.
 
 
 def _systematic_test_emit_skips(emitter: Any, unsafe_list: list[str]) -> int:
     """Emit a skip event for each unsafe operation and print an explanation."""
-    echo(" Skipping unsafe operations:")
+    echo(" Skipping operations not run:")
+    has_api_token = _systematic_test_has_api_token()  # Use one credential check for all skip rows.
     for opt in unsafe_list:  # Iterate every unsafe option so none are silently omitted.
         if opt in menu_actions:  # Guard against stale unsafe lists that reference removed options.
             _, description = menu_actions[opt]  # Unpack action tuple to get the display description.
-            reason = OperationRegistry.skip_reason(opt)  # Retrieve structured skip reason text from registry.
+            reason, category = _systematic_test_skip_details(opt, has_api_token)  # Resolve static or token skip.
             echo(
                 "   %3s: %s... (Reason: %s)",
                 opt,
@@ -4787,7 +4821,7 @@ def _systematic_test_emit_skips(emitter: Any, unsafe_list: list[str]) -> int:
                 reason,
             )
             emitter.emit_test_skip(
-                opt, description, reason, OperationRegistry.skip_category(opt), "systematic"
+                opt, description, reason, category, "systematic"
             )  # Record skip in telemetry for coverage reporting.
     echo("")
     return len([opt for opt in unsafe_list if opt in menu_actions])  # Return actual skip count for summary reporting.
@@ -4921,7 +4955,7 @@ def _print_systematic_pre_run_counts(all_options: list[str], safe_options: list[
     """Print the total / safe / unsafe option counts before the test loop runs."""
     echo("! Found %d total menu options", len(all_options))
     echo("! %d safe options will be tested", len(safe_options))
-    echo("!  %d unsafe options will be skipped", len(unsafe_list))
+    echo("!  %d operations will be skipped", len(unsafe_list))
     echo("")
 
 
@@ -4940,6 +4974,11 @@ def _initialize_systematic_telemetry(unsafe_list: list[str]) -> tuple[TelemetryE
 def _resolve_systematic_test_context() -> bool:
     """Resolve module-level org_id and the fast-mode flag once before the test loop."""
     global org_id  # Access module-level org_id so tests inherit the resolved org context.
+    if not _systematic_test_has_api_token():  # Offline test mode cannot resolve a live organization.
+        logging.info("SYSTEMATIC_TEST: no Mist API token; skipping org_id resolution")  # Log the offline path.
+        fast_enabled = _systematic_test_resolve_fast_mode()  # Still honor --fast for any local tests.
+        logging.debug("SYSTEMATIC_TEST: offline context prepared fast=%s", fast_enabled)  # Confirm context result.
+        return fast_enabled  # Let the loop run only offline-safe operations.
     if not org_id:  # Resolve org_id once before the test loop so every option shares the same org.
         org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Prompt or use cached org identifier.
     return _systematic_test_resolve_fast_mode()  # Resolve fast-mode flag once for the loop.
@@ -4980,7 +5019,7 @@ def _print_systematic_summary(summary: TestSummary, telemetry_path: str) -> None
     echo(" Systematic Test Summary:")
     echo("   Successful operations: %d", summary.passed)
     echo("   Failed operations: %d", summary.failed)
-    echo("   Skipped unsafe operations: %d", summary.skipped)
+    echo("   Skipped operations: %d", summary.skipped)
     coverage_pct = summary.passed / summary.total * 100 if summary.total else 0.0  # Coverage as a percent.
     echo("   Total coverage: %d/%d (%.1f%%)", summary.passed, summary.total, coverage_pct)
     echo("    Total execution time: %.2f seconds", summary.elapsed)

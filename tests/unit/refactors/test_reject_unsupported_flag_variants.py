@@ -96,6 +96,7 @@ class TestMainEntrypointGuardIntegration:
             "_setup_runtime_flags": MagicMock(),
             "_initialize_dependencies": MagicMock(),
             "_establish_mist_session": MagicMock(),
+            "_systematic_test_has_api_token": MagicMock(return_value=True),
             "_configure_runtime_options": MagicMock(),
             "_dispatch_main_mode": MagicMock(),
         }
@@ -128,6 +129,7 @@ class TestMainEntrypointGuardIntegration:
             "_setup_runtime_flags": MagicMock(),
             "_initialize_dependencies": MagicMock(),
             "_establish_mist_session": MagicMock(),
+            "_systematic_test_has_api_token": MagicMock(return_value=True),
             "_configure_runtime_options": MagicMock(),
             "_dispatch_main_mode": MagicMock(),
         }
