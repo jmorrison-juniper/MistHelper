@@ -136,6 +136,9 @@
 
     <thead>
       <tr>
+        <th scope="col" data-no-sort>
+          <span class="visually-hidden">Select</span>
+        </th>
         <th scope="col">Run</th>
         <th scope="col">Site</th>
         <th scope="col">State</th>
@@ -150,6 +153,11 @@
     <tbody>
       {% for run in run_rows | default([], true) %}
         <tr data-testid="history-run-row-{{ run.run_id }}">
+          <td>
+            <input type="checkbox" data-run-selection value="{{ run.run_id }}"
+                   aria-label="Select run {{ run.run_id }}"
+                   data-testid="history-run-select-{{ run.run_id }}">
+          </td>
           <th scope="row" class="cell-mono">
             {#
               Issue #2225: this link named `/runs/<id>/progress`, which is no
@@ -200,7 +208,7 @@
         </tr>
       {% else %}
         <tr>
-          <td colspan="8" class="portal-table-empty" data-testid="history-run-empty">
+          <td colspan="9" class="portal-table-empty" data-testid="history-run-empty">
             The portal holds no upgrade run yet.
           </td>
         </tr>
@@ -208,6 +216,42 @@
     </tbody>
   </table>
 </div>
+
+<div class="confirm-box-actions" data-run-bulk-controls
+     data-organization-id="{{ run_control_org_id | default('', true) }}"
+     data-history-scope="{{ run_control_history_scope | default('all-sites', true) }}">
+  <button type="button" class="portal-button" data-bulk-preview="cancel"
+          data-testid="history-runs-cancel" disabled>Cancel selected</button>
+  <button type="button" class="portal-button" data-bulk-preview="retry"
+          data-testid="history-runs-retry" disabled>Retry selected</button>
+  <button type="button" class="portal-button portal-button-secondary" data-bulk-selection-clear
+          data-testid="history-runs-clear" disabled>Clear selection</button>
+  <span class="portal-note" data-bulk-selection-count
+        data-testid="history-runs-selection-count">0 runs selected</span>
+</div>
+
+<dialog class="portal-card bulk-preview-dialog" data-bulk-preview-dialog data-testid="history-runs-preview-dialog"
+        aria-labelledby="bulk-preview-title">
+  <h2 id="bulk-preview-title" class="portal-card-title" tabindex="-1"
+      data-testid="history-runs-preview-title">Confirm bulk action</h2>
+  <p data-bulk-preview-summary data-testid="history-runs-preview-summary"></p>
+  <p class="portal-note" data-bulk-preview-removed data-testid="history-runs-preview-removed"></p>
+  <label for="bulk-preview-confirmation">Type the exact confirmation phrase</label>
+  <p><strong data-bulk-preview-phrase data-testid="history-runs-preview-phrase"></strong></p>
+  <input id="bulk-preview-confirmation" class="bulk-preview-input" type="text" autocomplete="off"
+         data-bulk-preview-confirmation data-testid="history-runs-preview-confirmation">
+  <p class="portal-alert" role="alert" tabindex="-1" data-bulk-preview-error
+     data-testid="history-runs-preview-error" hidden></p>
+  <div class="portal-note" data-bulk-action-result data-testid="history-runs-action-result" hidden></div>
+  <div class="confirm-box-actions">
+    <button type="button" class="portal-button" data-bulk-preview-confirm
+            data-testid="history-runs-preview-confirm" disabled>Continue</button>
+    <button type="button" class="portal-button portal-button-secondary" data-bulk-preview-close
+            data-testid="history-runs-preview-close">Close</button>
+    <button type="button" class="portal-button portal-button-secondary" data-bulk-result-refresh
+            data-testid="bulk-result-refresh" hidden>Read stored result</button>
+  </div>
+</dialog>
 
 <div class="portal-card">
   <h2 class="portal-card-title">Audit log</h2>
@@ -438,4 +482,3 @@
   </div>
 </div>
 {% endblock %}
-
