@@ -5,10 +5,10 @@ merged pull requests in a row left their issue open. A person closed each one
 by hand.
 
 The repair adds a `close-linked-issues` job to `.github/workflows/auto-merge.yml`.
-The job runs after a merge and closes every issue that the pull request links.
+The job runs after a merge and on a schedule. It closes each linked issue.
 
 These tests hold the repair in place. A change that drops the job, drops the
-`closed` trigger, or drops the `issues: write` scope makes a test fail.
+`closed` trigger, drops the schedule path, or drops the issue scope fails.
 """
 
 from pathlib import Path
@@ -92,7 +92,9 @@ class TestCloseLinkedIssuesJob:
         # A missing job is the exact regression that issue #1926 describes.
         assert CLOSE_JOB_NAME in workflow["jobs"], f"Missing job: {CLOSE_JOB_NAME}"
 
-    def test_close_job_runs_only_after_a_real_merge(self, workflow: dict[str, Any]) -> None:
+    def test_close_job_accepts_only_a_real_pull_request_merge(
+        self, workflow: dict[str, Any]
+    ) -> None:
         """The close job must ignore a pull request that a person rejected."""
         # Read the condition, because it is the only guard against a wrong close.
         condition = workflow["jobs"][CLOSE_JOB_NAME]["if"]
@@ -102,6 +104,19 @@ class TestCloseLinkedIssuesJob:
 
         # The condition must also pin the event, because other events carry no merge.
         assert "'closed'" in condition, "The close job must require the closed event."
+
+    def test_close_job_allows_the_schedule_backstop(self, workflow: dict[str, Any]) -> None:
+        """The close job must let a schedule repair a missed close."""
+        # Read the condition, because the schedule path lives only in this text.
+        condition = workflow["jobs"][CLOSE_JOB_NAME]["if"]
+
+        # A push event carries no pull request, so it must not reach the close job.
+        assert "github.event_name != 'push'" in condition, "The close job must reject a push."
+
+        # The backstop cannot work if the condition requires a pull request event.
+        assert "github.event_name == 'pull_request'" not in condition, (
+            "The close job must not reject the schedule before the script runs."
+        )
 
     def test_auto_merge_job_skips_the_closed_event(self, workflow: dict[str, Any]) -> None:
         """The auto-merge job must not run on the `closed` event."""
@@ -118,6 +133,12 @@ class TestCloseLinkedIssuesJob:
 
         # This field holds the issues that the closing keyword named.
         assert "closingIssuesReferences" in script, "The job must read the linked issues."
+
+        # The schedule path reads merged pull requests, because no event carries one.
+        assert "gh pr list" in script, "The schedule path must read merged pull requests."
+
+        # The query must allow no linked issue, because that state is normal.
+        assert "[]?" in script, "The linked issue query must allow an empty list."
 
     def test_close_job_skips_an_already_closed_issue(self, workflow: dict[str, Any]) -> None:
         """The close job must not call close twice on one issue."""
