@@ -873,8 +873,8 @@ class LockRecord:
         Returns:
             The age that the takeover cooldown uses.
         """
-        if not self.run_id:  # An empty run names no live run for the portal to protect.
-            return float(COOLDOWN_SECONDS)  # The next operator may take the site with the confirmation word.
+        if not self.run_id:  # An empty run has no live run, so `acquired_at` bounds the wait.
+            return max(self.age_seconds(now), self.lifetime_seconds(now))  # A renewal cannot reset this wait.
         refreshed_age = self.age_seconds(now)  # A real quiet browser still reaches the old path.
         excess_age = self.lifetime_seconds(now) - float(lock_renewal_max_seconds())  # Bound a live heartbeat.
         return max(refreshed_age, excess_age, 0.0)  # A future clock value must not produce a negative wait.
@@ -1350,7 +1350,7 @@ def refresh_site_lock(key: str, record: LockRecord, client: Any = None) -> int:
         LockLostError: When the store holds a different token or no lock.
         LockStoreUnreachableError: When the lock store does not answer.
     """
-    if not record.run_id:  # A lock with no run has no live upgrade for the portal to protect.
+    if not record.run_id and record.lifetime_seconds() >= float(COOLDOWN_SECONDS):  # Bound a no-run renewal.
         raise LockLostError(LOCK_LOST_MESSAGE)  # Stop renewal and let a real operator take it.
     if record.lifetime_seconds() >= float(lock_renewal_max_seconds()):  # Bound the total renewable hold time.
         raise LockLostError(LOCK_LOST_MESSAGE)  # The key still expires or becomes quiet for takeover.
