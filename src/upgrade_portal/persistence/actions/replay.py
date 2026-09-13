@@ -167,19 +167,23 @@ class ActionReplayService:
 
     def _store_decision(self, action: UpgradeRunAction, decision: RecoveryDecision) -> UpgradeRunAction:
         """Store an optional site block and then one final item result."""
+        logger.info("Store one recovery decision")  # Record the decision write sequence before it starts.
         current = self._store_site_block(action, decision)  # Persist a guard loss before later site work.
         if decision.mutation is None:  # Refused, failed, and unknown results change no run.
+            logger.debug("The recovery decision has a run mutation: %s", False)  # Report the safe branch choice.
             return self.repository.write_outcome(  # Use one outcome-only compare-and-swap write.
                 current.identity.actor_scope,  # Keep the final write actor-scoped.
                 current.key.action_id,  # Name the public action.
                 decision.outcome,  # Replace only the claimed matching item.
             )
+        logger.debug("The recovery decision has a run mutation: %s", True)  # Report the safe branch choice.
         result = self.repository.commit_success(  # Join success to the authoritative run mutation.
             current.identity.actor_scope,  # Keep the atomic write actor-scoped.
             current.key.action_id,  # Name the public action.
             decision.outcome,  # Store the succeeded final outcome.
             decision.mutation,  # Store the matching run change in the same transaction.
         )
+        logger.debug("Stored one recovery decision with a run mutation")  # Confirm the atomic decision path.
         return result.action  # Carry the verified stored action to the next item.
 
     def _store_site_block(self, action: UpgradeRunAction, decision: RecoveryDecision) -> UpgradeRunAction:
@@ -213,7 +217,9 @@ class ActionReplayService:
         )
         durable_item = claimed.item(item.identity.source_run_id)  # Read the claimed copy with its owner.
         outcome = self._blocked_outcome(durable_item, now)  # Build the stable no-write result.
-        final = self.repository.write_outcome(claimed.identity.actor_scope, claimed.key.action_id, outcome)
+        logger.info("Store one blocked upgrade action outcome")  # Record the final no-write result before it starts.
+        final = self.repository.write_outcome(claimed.identity.actor_scope, claimed.key.action_id, outcome)  # Close it.
+        logger.debug("Stored one blocked upgrade action outcome")  # Confirm the final no-write result.
         logger.debug("Finalized one item after a durable site block")  # Confirm one durable unknown outcome.
         return final  # Carry the newest verified action to later items.
 
