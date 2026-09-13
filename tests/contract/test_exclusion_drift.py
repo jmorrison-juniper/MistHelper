@@ -86,3 +86,43 @@ class TestExclusionDriftReporter:
         assert result["status"] == "missing"
         assert result["current_count"] == 0
         assert result["delta"] == -3
+
+    def test_mypy_file_scan_reuses_the_manifest_revision_cache(self) -> None:
+        """Repeated mypy command builds must reuse the same file scan."""
+        calls = 0
+        exclusion = Exclusion("mypy", "scripts", "scripts", 1)
+        reporter = ExclusionDriftReporter()
+        reporter.load_exclusions()
+
+        def counted_rglob(path: Path, pattern: str):
+            nonlocal calls
+            calls += 1
+            assert pattern == "*.py"
+            return iter([path / "example.py"])
+
+        with patch.object(type(ROOT), "rglob", counted_rglob):
+            first = reporter._commands_for(exclusion)
+            second = reporter._commands_for(exclusion)
+
+        assert calls == 1
+        assert first == second
+
+    def test_duplicate_scan_path_reuses_the_tool_result(self) -> None:
+        """Matching gate and scan path must not launch the tool twice."""
+        reporter = ExclusionDriftReporter()
+        reporter.load_exclusions()
+        first = Exclusion("bandit", "tools/test_quality_analyzer/fixtures", "tools/test_quality_analyzer/fixtures", 1)
+        second = Exclusion(
+            "bandit", "tools\\test_quality_analyzer\\fixtures", "tools/test_quality_analyzer/fixtures", 1
+        )
+        with patch.object(reporter, "_commands_for", return_value=[["tool"]]):
+            with patch("scripts.check_exclusion_drift.subprocess.run") as run:
+                run.return_value.stdout = '{"results":[{"issue_text":"one"}]}'
+                run.return_value.stderr = ""
+                run.return_value.returncode = 1
+                first_result = reporter.measure(first)
+                second_result = reporter.measure(second)
+
+        assert run.call_count == 1
+        assert first_result["current_count"] == 1
+        assert second_result["current_count"] == 1
