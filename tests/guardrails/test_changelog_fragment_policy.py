@@ -19,7 +19,9 @@ Why:
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
 from datetime import date
 from pathlib import Path
 
@@ -59,6 +61,66 @@ GUIDANCE_FILES = (
 # The rule file states all three name forms, so an author can pick one without
 # opening another document.
 NAME_FORMS = ("pr-<number>", "issue-<number>", "<YYYY-MM-DD>")
+
+
+def git_output(*args: str) -> str:
+    """Return one Git command result, relative to the repository root.
+
+    Returns:
+        The command standard output, with no surrounding space.
+    """
+    result = subprocess.run(  # Run Git directly, so the guard reads the checked out pull request.
+        ("git", *args),  # Keep the command parts separate, so no shell can rewrite a path.
+        cwd=REPOSITORY_ROOT,  # Read the repository under test, not the caller directory.
+        text=True,  # Return text, so path parsing stays direct.
+        capture_output=True,  # Keep the test output small unless an assertion fails.
+        check=True,  # Fail fast when the checkout does not hold the needed Git data.
+    )
+    return result.stdout.strip()
+
+
+def pull_request_diff_arguments() -> tuple[str, str] | None:
+    """Return the two revisions that bound the pull request diff.
+
+    Returns:
+        The base revision and the head revision, or None outside a pull request.
+    """
+    if os.environ.get("GITHUB_EVENT_NAME") != "pull_request":  # Local and main runs cannot hold a pull request diff.
+        return None
+    parents = git_output("rev-list", "--parents", "-n", "1", "HEAD").split()  # Read the synthetic merge parents.
+    if len(parents) >= 3:  # A pull request checkout normally gives HEAD, base, and head.
+        return parents[1], parents[2]
+    return None
+
+
+def pull_request_changed_paths() -> set[str]:
+    """Return the files that the pull request changes.
+
+    Returns:
+        A set of repository-relative paths.
+    """
+    diff_arguments = pull_request_diff_arguments()  # Detect whether this run can compare a pull request.
+    if diff_arguments is None:  # A local run or a main push has no feature-branch rule to enforce.
+        return set()
+    return set(git_output("diff", "--name-only", *diff_arguments).splitlines())
+
+
+def pull_request_deleted_fragments() -> set[str]:
+    """Return the fragments that the pull request deletes.
+
+    Returns:
+        A set of deleted fragment paths.
+    """
+    diff_arguments = pull_request_diff_arguments()  # Reuse the same base and head as the path guard.
+    if diff_arguments is None:  # A local run or a main push has no release aggregation to inspect.
+        return set()
+    status_lines = git_output("diff", "--name-status", *diff_arguments, "--", "changelog.d").splitlines()
+    deleted_paths = set()
+    for line in status_lines:
+        status, _, path = line.partition("\t")  # Split the status from the path without a shell parser.
+        if status == "D" and path.endswith(".md"):  # Release aggregation removes fragments after it records them.
+            deleted_paths.add(path)
+    return deleted_paths
 
 
 @pytest.fixture(scope="module")
@@ -168,3 +230,16 @@ class TestPolicyStaysStated:
         """The warning is the last stop for an author who opens the shared file directly."""
         text = (REPOSITORY_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
         assert "changelog.d" in text, "CHANGELOG.md no longer points an author at changelog.d"
+
+    def test_pull_request_does_not_edit_changelog_directly(self) -> None:
+        """A feature branch that edits CHANGELOG.md directly returns the shared line."""
+        changed_paths = pull_request_changed_paths()
+        if "CHANGELOG.md" not in changed_paths:
+            return
+        head_ref = os.environ.get("GITHUB_HEAD_REF", "")
+        is_release_branch = head_ref.startswith("release/")
+        deleted_fragments = pull_request_deleted_fragments()
+        assert is_release_branch and deleted_fragments, (
+            "CHANGELOG.md changed in a pull request that is not a release aggregation. "
+            "Add one release-note fragment under changelog.d/ instead."
+        )
