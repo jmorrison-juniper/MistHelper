@@ -1800,8 +1800,28 @@ def holder_details(site_id: str) -> dict[str, Any]:
     held = lock.read_lock(org_id, site_id, client=lock_client())  # A read never raises, so a dead store answers None.
     if held is None:  # The lock expired between the refusal and this read.
         return {"actor_email": None, "cooldown_remaining": 0}  # No holder, and no wait left.
-    remaining = lock.COOLDOWN_SECONDS - held.age_seconds()  # The seconds before the holder counts as quiet.
+    remaining = lock.COOLDOWN_SECONDS - lock_takeover_age_seconds(held)  # A renewal cannot grow the wait for ever.
     return {"actor_email": held.owner.actor_email, "cooldown_remaining": max(0, int(remaining))}  # Never below zero.
+
+
+def lock_takeover_age_seconds(held: Any) -> float:
+    """Return the age that the takeover cooldown reads.
+
+    Why:
+        Tests inject small lock doubles that predate the total hold age method.
+        Production records read the bounded age, and old doubles keep the
+        quiet-age behavior.
+
+    Args:
+        held: The lock record or a small test double.
+
+    Returns:
+        The age that the cooldown uses.
+    """
+    bounded_age = getattr(held, "takeover_age_seconds", None)  # New records know the bounded takeover age.
+    if callable(bounded_age):  # Production records and updated doubles use this path.
+        return float(bounded_age())  # Convert to one numeric type for the caller.
+    return float(held.age_seconds())  # Old doubles still state the quiet age.
 
 
 def lock_failure_details(site_id: str, code: str, error: Exception) -> dict[str, Any] | None:
@@ -1980,7 +2000,7 @@ def lock_cooldown_seconds(org_id: str, site_id: str) -> int:
         return 0  # A wait the portal cannot measure reads as no wait at all.
     if held is None:  # No holder, so no operator waits for anything.
         return 0  # The banner hides the cooldown line on this value.
-    return max(0, round(lock.COOLDOWN_SECONDS - held.age_seconds()))  # The value never falls below zero.
+    return max(0, round(lock.COOLDOWN_SECONDS - lock_takeover_age_seconds(held)))  # A renewal cannot grow the wait.
 
 
 def takeover_word(holder: str) -> str:

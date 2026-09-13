@@ -37,6 +37,7 @@ from src.upgrade_portal.runtime.lock import (
     CONNECT_TIMEOUT_SECONDS,
     COOLDOWN_SECONDS,
     HEARTBEAT_SECONDS,
+    LOCK_RENEWAL_MAX_SECONDS_VARIABLE,
     LOCK_TTL_SECONDS,
     RESUME_CONFIRMATION_TEXT,
     RETRY_AFTER_SECONDS,
@@ -54,6 +55,7 @@ from src.upgrade_portal.runtime.lock import (
     acquire_site_lock,
     build_key,
     connect_lock_store,
+    lock_renewal_max_seconds,
     read_lock,
     read_site_locks,
     refresh_site_lock,
@@ -385,6 +387,59 @@ def seed_lock(store: ScriptedLockStore, owner: SessionOwner, age_seconds: float)
     return record
 
 
+def seed_unattended_lock(store: ScriptedLockStore) -> LockRecord:
+    """Put one empty-run lock into the store with a fresh heartbeat.
+
+    Why:
+        Issue #2564 showed an automated holder with no run. It renewed the
+        lock each minute, so `refreshed_at` never let the cooldown reach zero.
+
+    Args:
+        store: The lock store double.
+
+    Returns:
+        The record the store now holds.
+    """
+    acquired = (datetime.now(UTC) - timedelta(days=2)).isoformat()  # The holder started long before the limit.
+    refreshed = datetime.now(UTC).isoformat()  # The last beat is fresh, which reproduces the lockout.
+    record = LockRecord(  # This record matches the damaged production shape of issue #2564.
+        owner=FIRST_OWNER,  # The automated holder blocks the second operator.
+        lock_token=SEEDED_TOKEN,  # The takeover script compares this value.
+        run_id="",  # An empty run names no live upgrade run.
+        acquired_at=acquired,  # The total hold age must still bound the wait.
+        refreshed_at=refreshed,  # The old code measured this alone and refused takeover.
+    )
+    store.values[SITE_KEY] = record.to_json()  # Seed the exact JSON the store would hold.
+    store.expiries[SITE_KEY] = LOCK_TTL_SECONDS  # Keep the key alive, like a fresh renewal did.
+    return record  # The caller can compare the old holder to the new grant.
+
+
+def seed_over_limit_lock(store: ScriptedLockStore) -> LockRecord:
+    """Put one real-run lock into the store with a fresh heartbeat and old start.
+
+    Why:
+        A live heartbeat must not make the takeover wait grow without a limit.
+
+    Args:
+        store: The lock store double.
+
+    Returns:
+        The record the store now holds.
+    """
+    acquired = (datetime.now(UTC) - timedelta(seconds=7500)).isoformat()  # Past the configured bound plus cooldown.
+    refreshed = datetime.now(UTC).isoformat()  # A fresh renewal would defeat a cooldown that reads this alone.
+    record = LockRecord(  # This record models a real run that passed its renewal limit.
+        owner=FIRST_OWNER,  # The first operator still holds the stored value.
+        lock_token=SEEDED_TOKEN,  # The takeover script compares this value.
+        run_id=RUN_ID,  # A real run gets the configured grace and not the empty-run shortcut.
+        acquired_at=acquired,  # The first hold time gives the bounded wait.
+        refreshed_at=refreshed,  # The last beat is fresh, so the old rule would refuse.
+    )
+    store.values[SITE_KEY] = record.to_json()  # Seed the JSON that Redis stores.
+    store.expiries[SITE_KEY] = LOCK_TTL_SECONDS  # Keep the key present for the takeover path.
+    return record  # The test compares the new grant with this holder.
+
+
 def stored_record(store: ScriptedLockStore) -> LockRecord:
     """Return the record the store holds for the shared site.
 
@@ -426,6 +481,40 @@ def test_the_settings_repeat_the_contract_numbers() -> None:
     assert HEARTBEAT_SECONDS == 60
     assert TAKEOVER_CONFIRMATION_TEXT == "CONFIRM"
     assert LOCK_TTL_SECONDS > COOLDOWN_SECONDS  # A quiet holder must still hold a readable key
+    assert lock_renewal_max_seconds() >= LOCK_TTL_SECONDS  # The renewal bound must not shorten one lease.
+
+
+def test_the_lock_renewal_bound_reads_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The renewal bound must be measurable and configurable.
+
+    Args:
+        monkeypatch: The pytest patch helper.
+    """
+    monkeypatch.setenv(LOCK_RENEWAL_MAX_SECONDS_VARIABLE, "7200")  # A two-hour value is valid and measurable.
+    assert lock_renewal_max_seconds() == 7200  # The reader uses the operator value.
+
+
+def test_an_unattended_empty_run_holder_can_be_taken_after_the_bound() -> None:
+    """A fresh heartbeat must not make a no-run holder keep a site for ever."""
+    store = ScriptedLockStore()  # Use a fresh in-memory store for this reproduction.
+    held = seed_unattended_lock(store)  # Reproduce the stored lock from issue #2564.
+    grant = acquire_site_lock(build_request(SECOND_OWNER, TAKEOVER_CONFIRMATION_TEXT), client=store)  # Take it.
+    assert grant.state == LockState.TAKEN_OVER  # The operator reached a bounded takeover.
+    assert grant.record.lock_token != held.lock_token  # The takeover replaced the unattended holder.
+
+
+def test_a_real_run_holder_can_be_taken_after_the_configured_bound(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fresh heartbeat must not make a real run hold a site without a limit.
+
+    Args:
+        monkeypatch: The pytest patch helper.
+    """
+    monkeypatch.setenv(LOCK_RENEWAL_MAX_SECONDS_VARIABLE, "7200")  # Keep this case fast and explicit.
+    store = ScriptedLockStore()  # Use a fresh in-memory store for this bounded-wait case.
+    held = seed_over_limit_lock(store)  # Seed a real run past the renewal limit and cooldown.
+    grant = acquire_site_lock(build_request(SECOND_OWNER, TAKEOVER_CONFIRMATION_TEXT), client=store)  # Take it.
+    assert grant.state == LockState.TAKEN_OVER  # The operator reaches takeover after the measured bound.
+    assert grant.record.lock_token != held.lock_token  # The held lock changed hands safely.
 
 
 def test_a_free_site_grants_the_lock(store: ScriptedLockStore) -> None:
