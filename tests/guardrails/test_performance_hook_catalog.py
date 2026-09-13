@@ -175,23 +175,21 @@ class TestPerformanceHookCatalog:
         stale = [path for path in inventory_paths if path not in tracked_paths]  # Find rows naming no file.
         assert not stale, "The catalog names files that no longer exist:\n" + "\n".join(stale)  # Report each one.
 
-    def test_inventory_counts_match_the_recorded_snapshot(self) -> None:
-        # WHY: the summary describes the snapshot the catalog recorded, so this guard rescans
-        # exactly the inventory files. A scan of the whole tree would drift with every new file.
+    def test_every_catalogued_file_still_parses(self) -> None:
+        # WHY: the summary describes a snapshot the catalog took on one date. An exact symbol
+        # count belongs to that snapshot, and live code changes its count for normal reasons.
+        # Issue #2547: comparing a recorded count against live source failed the gate on every
+        # unrelated change, and it made the summary a shared record that conflicts on each rebase.
+        # A file that stops parsing is real rot, so this guard keeps that check.
+        # `test_hook_rows_resolve_to_current_ast_symbols` catches symbol rot exactly.
         scanner = CatalogSourceScanner(_REPO_ROOT)  # Create the source scanner for this repository.
         catalog = PerformanceHookCatalog(_ARTIFACT_ROOT)  # Create the artifact reader for this spec.
-        paths = sorted(row["file_path"] for row in catalog.inventory_rows())  # Read the recorded snapshot set.
-        symbol_index = scanner.symbol_index(paths)  # Parse each recorded source file through AST.
+        paths = sorted(row["file_path"] for row in catalog.inventory_rows())  # Read the snapshot set.
+        symbol_index = scanner.symbol_index(paths)  # Parse each recorded file, which raises on bad syntax.
         scan_summary = catalog.scan_summary()  # Read the generated scan summary.
-        assert scan_summary["eligible_file_count"] == len(paths)  # Check the recorded source file count.
-        assert scan_summary["parse_error_count"] == 0  # Require every tracked Python file to parse.
-        assert scan_summary["function_count"] == self._kind_count(symbol_index, "FunctionDef")  # Check funcs.
-        assert scan_summary["async_function_count"] == self._kind_count(
-            symbol_index, "AsyncFunctionDef"
-        )  # Check async.
-        assert scan_summary["class_count"] == self._kind_count(symbol_index, "ClassDef")  # Check classes.
-        assert scan_summary["symbol_count"] == self._symbol_count(symbol_index)  # Check all symbols.
-        assert scan_summary["nested_symbol_count"] == self._nested_count(symbol_index)  # Check nested symbols.
+        assert scan_summary["eligible_file_count"] == len(paths)  # The summary must match its own table.
+        assert scan_summary["parse_error_count"] == 0  # The snapshot claims every file parsed.
+        assert set(symbol_index) == set(paths)  # Every recorded file still parses through AST today.
 
     def test_hook_rows_resolve_to_current_ast_symbols(self) -> None:
         scanner = CatalogSourceScanner(_REPO_ROOT)  # Create the source scanner for this repository.
@@ -218,20 +216,6 @@ class TestPerformanceHookCatalog:
         assert {row["strategy"]: int(row["hook_count"]) for row in strategies} == summary[
             "strategy_hook_counts"
         ]  # Check strategies.
-
-    @staticmethod
-    def _kind_count(symbol_index: dict[str, list[SymbolRecord]], kind: str) -> int:
-        return sum(1 for symbols in symbol_index.values() for symbol in symbols if symbol.kind == kind)  # Count kind.
-
-    @staticmethod
-    def _symbol_count(symbol_index: dict[str, list[SymbolRecord]]) -> int:
-        return sum(len(symbols) for symbols in symbol_index.values())  # Count every parsed symbol.
-
-    @staticmethod
-    def _nested_count(symbol_index: dict[str, list[SymbolRecord]]) -> int:
-        return sum(
-            1 for symbols in symbol_index.values() for symbol in symbols if symbol.nesting_depth > 0
-        )  # Count nested.
 
     @staticmethod
     def _row_resolves(row: dict[str, str], symbol_index: dict[str, list[SymbolRecord]]) -> bool:

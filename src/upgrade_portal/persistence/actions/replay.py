@@ -20,11 +20,13 @@ from .models import (  # Import immutable action and outcome records.
     UpgradeRunAction,
 )
 from .repository import (  # Reuse actor-scoped durable operations and stable conflicts.
+    ActionMutationRefusal,
     ActionRepository,
     ActionRequestConflict,
     ActionStateConflict,
+    ActionStoreUnavailable,
 )
-from .transactions import RunMutation  # Join a resumed success to its run mutation.
+from .transactions import RetryRunMutation, RunMutation  # Join a resumed success to its run mutation.
 
 logger = logging.getLogger(__name__)  # Keep recovery logs in one named module.
 
@@ -42,7 +44,7 @@ class RecoveryDecision:
     """Hold one final outcome, optional run mutation, and optional site block."""
 
     outcome: RunActionOutcome  # Give the claimed item one final durable result.
-    mutation: RunMutation | None = None  # Join only a succeeded result to a run write.
+    mutation: RunMutation | RetryRunMutation | None = None  # Join only success to one run write.
     site_block: tuple[str, str] | None = None  # Stop later writes for one site after guard loss.
 
 
@@ -133,7 +135,9 @@ class ActionReplayService:
     ) -> UpgradeRunAction:
         """Process each pending item once and then complete the action."""
         current = action  # Carry the newest verified action through ordered items.
-        for item in action.ledger.items:  # Preserve the original request order.
+        indexed = tuple(enumerate(action.ledger.items))  # Keep request positions for stable ties.
+        ordered = sorted(indexed, key=lambda entry: (entry[1].identity.site_id, entry[0]))  # Process sites stably.
+        for _index, item in ordered:  # Keep result storage in the original request order.
             if item.claim.processing_state != "pending":  # Never repeat a claimed or final item.
                 continue  # Leave the durable prior outcome unchanged.
             if item.identity.site_id in current.ledger.block_map():  # Preserve a prior site guard loss.
@@ -167,20 +171,70 @@ class ActionReplayService:
 
     def _store_decision(self, action: UpgradeRunAction, decision: RecoveryDecision) -> UpgradeRunAction:
         """Store an optional site block and then one final item result."""
+        logger.info("Store one recovery decision")  # Record the decision write sequence before it starts.
         current = self._store_site_block(action, decision)  # Persist a guard loss before later site work.
         if decision.mutation is None:  # Refused, failed, and unknown results change no run.
+            logger.debug("The recovery decision has a run mutation: %s", False)  # Report the safe branch choice.
             return self.repository.write_outcome(  # Use one outcome-only compare-and-swap write.
                 current.identity.actor_scope,  # Keep the final write actor-scoped.
                 current.key.action_id,  # Name the public action.
                 decision.outcome,  # Replace only the claimed matching item.
             )
-        result = self.repository.commit_success(  # Join success to the authoritative run mutation.
-            current.identity.actor_scope,  # Keep the atomic write actor-scoped.
-            current.key.action_id,  # Name the public action.
-            decision.outcome,  # Store the succeeded final outcome.
-            decision.mutation,  # Store the matching run change in the same transaction.
-        )
+        logger.debug("The recovery decision has a run mutation: %s", True)  # Report the safe branch choice.
+        try:  # Each refusal below must become a safe final result, never a false success.
+            result = self.repository.commit_success(  # Join success to the authoritative run mutation.
+                current.identity.actor_scope,  # Keep the atomic write actor-scoped.
+                current.key.action_id,  # Name the public action.
+                decision.outcome,  # Store the succeeded final outcome.
+                decision.mutation,  # Store the matching run change in the same transaction.
+            )
+        except ActionMutationRefusal as error:  # The run guard refused the write, so the run did not change.
+            return self._store_atomic_refusal(  # Record the refusal against the same claimed item.
+                current,  # Keep the stored action that holds the claim.
+                decision,  # Name the item that the refusal belongs to.
+                error.code,  # Carry the exact refusal code to the reader.
+                error.live_run_id,  # Name the run that already holds the site.
+            )
+        except ActionStateConflict:  # Another writer changed the run between the read and this write.
+            return self._store_atomic_refusal(current, decision, "run_changed")  # Store no false success.
+        except ActionStoreUnavailable:  # The store did not answer, so the commit state is unknown.
+            latest = self.repository.read(current.identity.actor_scope, current.key.action_id)  # Read the truth.
+            if latest is not None:  # The store answered the read, so the stored state decides the result.
+                stored = latest.item(decision.outcome.identity.source_run_id)  # Read the one claimed item.
+                if stored.claim.processing_state == "final":  # The commit landed before the answer was lost.
+                    return latest  # A lost response can follow a complete atomic commit.
+            reason = (  # A retry insert and a run update fail for different reasons, so name each one.
+                "retry_create_failed" if isinstance(decision.mutation, RetryRunMutation) else "run_write_unverified"
+            )
+            return self._store_atomic_refusal(current, decision, reason)  # Store the unverified write safely.
+        logger.debug("Stored one recovery decision with a run mutation")  # Confirm the atomic decision path.
         return result.action  # Carry the verified stored action to the next item.
+
+    def _store_atomic_refusal(
+        self,
+        action: UpgradeRunAction,
+        decision: RecoveryDecision,
+        reason: str,
+        live_run_id: str = "",
+    ) -> UpgradeRunAction:
+        """Replace one uncommitted success claim with a safe final result."""
+        prior = decision.outcome.completion.state.prior_state
+        completed_at = decision.outcome.completion.state.completed_at
+        refusal_reasons = {"run_changed", "upgrade_already_running"}
+        classification = "refused" if reason in refusal_reasons else "failed"
+        if reason == "run_write_unverified":
+            classification = "unknown"
+        messages = {
+            "run_changed": "The run changed before the transaction.",
+            "upgrade_already_running": "The site already has a live upgrade run.",
+            "retry_create_failed": "The portal could not create the retry run.",
+            "run_write_unverified": "The portal cannot verify the run write.",
+        }
+        state = OutcomeState(prior, "", completed_at, completed_at)
+        completion = OutcomeCompletion(classification, reason, messages[reason], "", state, live_run_id)
+        item = action.item(decision.outcome.identity.source_run_id)
+        outcome = item.finalized(completion, decision.outcome.evidence_summary)
+        return self.repository.write_outcome(action.identity.actor_scope, action.key.action_id, outcome)
 
     def _store_site_block(self, action: UpgradeRunAction, decision: RecoveryDecision) -> UpgradeRunAction:
         """Store a matching optional site block before the final item result."""
@@ -213,7 +267,9 @@ class ActionReplayService:
         )
         durable_item = claimed.item(item.identity.source_run_id)  # Read the claimed copy with its owner.
         outcome = self._blocked_outcome(durable_item, now)  # Build the stable no-write result.
-        final = self.repository.write_outcome(claimed.identity.actor_scope, claimed.key.action_id, outcome)
+        logger.info("Store one blocked upgrade action outcome")  # Record the final no-write result before it starts.
+        final = self.repository.write_outcome(claimed.identity.actor_scope, claimed.key.action_id, outcome)  # Close it.
+        logger.debug("Stored one blocked upgrade action outcome")  # Confirm the final no-write result.
         logger.debug("Finalized one item after a durable site block")  # Confirm one durable unknown outcome.
         return final  # Carry the newest verified action to later items.
 

@@ -14,6 +14,7 @@ from typing import Any  # Accept python-arango and controlled fake handles.
 from src.refactors.endpoint_primary_key_strategies import (  # Use the registered composite domain key directly.
     ENDPOINT_PRIMARY_KEY_STRATEGIES,
 )
+from src.upgrade_portal.runtime.runs import RunStateMachine, RunTransitionError
 
 from .models import (  # Import only immutable action records and safe digest helpers.
     ActionInitialization,
@@ -25,6 +26,7 @@ from .models import (  # Import only immutable action records and safe digest he
 from .transactions import (  # Import the explicit no-fallback transaction boundary.
     ArangoTransactionAdapter,
     AtomicWriteResult,
+    RetryRunMutation,
     RunMutation,
     TransactionScope,
 )
@@ -76,6 +78,16 @@ class ActionStateConflict(ActionStoreError):
     """State that a compare-and-swap precondition no longer matches."""
 
 
+class ActionMutationRefusal(ActionStateConflict):
+    """Report one stable refusal found inside an atomic transaction."""
+
+    def __init__(self, code: str, live_run_id: str = "") -> None:
+        """Store the refusal code and its optional live run."""
+        super().__init__(code)
+        self.code = code
+        self.live_run_id = live_run_id
+
+
 class ActionRepository:
     """Own ArangoDB action bootstrap, reads, compare-and-swap, and transactions."""
 
@@ -98,7 +110,7 @@ class ActionRepository:
             self._verify_indexes(collection)  # Read the index definitions back before success.
         except Exception as error:  # Convert every driver fault to the stable fail-closed error.
             logger.exception("The upgrade action store bootstrap failed")  # Record full safe fault context.
-            raise ActionStoreUnavailable("The ArangoDB action store is unavailable.") from error
+            raise ActionStoreUnavailable("The ArangoDB action store is unavailable.") from error  # Fail closed.
         logger.debug("Created the upgrade action collection with three indexes")  # Confirm safe schema counts.
         return True  # Report success only after index read-back.
 
@@ -112,7 +124,7 @@ class ActionRepository:
             action = UpgradeRunAction.from_document(stored) if stored is not None else None  # Validate a found row.
         except Exception as error:  # Convert driver and corrupt-record faults to one store error.
             logger.exception("The actor-scoped upgrade action read failed")  # Record full safe fault context.
-            raise ActionStoreUnavailable("The ArangoDB action store is unavailable.") from error
+            raise ActionStoreUnavailable("The ArangoDB action store is unavailable.") from error  # Fail closed.
         logger.debug("The actor-scoped action read found a record: %s", action is not None)  # Report no identity.
         return action  # Return None for an absent or differently owned action.
 
@@ -123,11 +135,11 @@ class ActionRepository:
         key = UpgradeRunAction.document_key(actor_scope, idempotency_key_digest)  # Rebuild the ArangoDB key.
         try:  # A read fault must not look like an unused request key.
             stored = self.database.collection(ACTION_COLLECTION).get(key)  # Use the composite digest directly.
-            owned = stored if stored is not None and stored.get("actor_scope") == actor_scope else None
+            owned = stored if stored is not None and stored.get("actor_scope") == actor_scope else None  # Hide actors.
             action = UpgradeRunAction.from_document(owned) if owned is not None else None  # Validate a found row.
         except Exception as error:  # Convert driver and corrupt-record faults to one store error.
             logger.exception("The durable request key read failed")  # Record full safe fault context.
-            raise ActionStoreUnavailable("The ArangoDB action store is unavailable.") from error
+            raise ActionStoreUnavailable("The ArangoDB action store is unavailable.") from error  # Fail closed.
         logger.debug("The durable request key read found a record: %s", action is not None)  # Report no key value.
         return action  # Return only the action of the supplied durable actor.
 
@@ -196,7 +208,7 @@ class ActionRepository:
         actor_scope: str,
         action_id: str,
         outcome: RunActionOutcome,
-        mutation: RunMutation,
+        mutation: RunMutation | RetryRunMutation,
     ) -> AtomicWriteResult:
         """Store one run mutation and its succeeded outcome atomically."""
         self._require_success(outcome)  # Keep outcome-only results away from the run transaction.
@@ -211,7 +223,7 @@ class ActionRepository:
             raise  # Let the caller choose the correct durable refusal.
         except Exception as error:  # Convert all database faults to the fail-closed error.
             logger.exception("The atomic run and action write failed")  # Record full safe fault context.
-            raise ActionStoreUnavailable("The ArangoDB action store is unavailable.") from error
+            raise ActionStoreUnavailable("The ArangoDB action store is unavailable.") from error  # Fail closed.
         action = self._verify_outcome(self._read_required(actor_scope, action_id), outcome)  # Verify the item.
         run = self._verify_run(mutation)  # Verify the authoritative run write.
         logger.debug("Stored and verified one atomic run and action outcome")  # Confirm both durable records.
@@ -281,7 +293,7 @@ class ActionRepository:
         """Verify the exact required index fields and uniqueness."""
         indexes = collection.indexes() or []  # Read the durable collection metadata back.
         actual = {(tuple(item.get("fields", ())), bool(item.get("unique"))) for item in indexes}  # Normalize.
-        expected: set[tuple[tuple[str, ...], bool]] = {  # Give mypy the nested collection type.
+        expected: set[tuple[tuple[str, ...], bool]] = {  # Give mypy the concrete index signature.
             (tuple(item["fields"]), bool(item["unique"])) for item in _INDEX_DEFINITIONS  # Normalize.
         }
         if not expected.issubset(actual):  # A missing key or actor index makes the bootstrap incomplete.
@@ -294,9 +306,9 @@ class ActionRepository:
             raise RuntimeError("The upgrade action primary-key strategy is not composite.")  # Fail closed.
         if _DOMAIN_KEY_FIELDS != ("actor_scope", "idempotency_key_digest"):  # Preserve the approved field order.
             raise RuntimeError("The upgrade action primary-key fields do not match.")  # Refuse schema drift.
-        if tuple(_ACTION_STRATEGY.get("indexes", ())) != ("action_id", "actor_scope", "created_at"):
+        if tuple(_ACTION_STRATEGY.get("indexes", ())) != ("action_id", "actor_scope", "created_at"):  # Preserve reads.
             raise RuntimeError("The upgrade action index fields do not match.")  # Refuse read index drift.
-        if tuple(_ACTION_STRATEGY.get("unique_constraints", ())) != ("action_id",):
+        if tuple(_ACTION_STRATEGY.get("unique_constraints", ())) != ("action_id",):  # Preserve public keys.
             raise RuntimeError("The upgrade action unique constraint does not match.")  # Refuse key drift.
 
     @staticmethod
@@ -309,10 +321,14 @@ class ActionRepository:
     def _initialize_in(database: Any, candidate: UpgradeRunAction) -> UpgradeRunAction:
         """Insert one candidate or resolve the existing composite key."""
         collection = database.collection(ACTION_COLLECTION)  # Use the transaction collection handle.
+        logger.info("Read one existing upgrade action during initialization")  # Record the conflict check first.
         stored = collection.get(candidate.key.document_key)  # Read the composite domain key.
+        logger.debug("The initialization conflict check found a record: %s", stored is not None)  # Report a safe flag.
         if stored is not None:  # A prior request already owns this durable key.
             return ActionRepository._matching_request(stored, candidate)  # Return only the same request.
+        logger.info("Insert one initialized upgrade action")  # Record the placeholder write before it starts.
         collection.insert(candidate.document(), sync=True)  # Create all ordered placeholders in one write.
+        logger.debug("Inserted one initialized upgrade action")  # Confirm the placeholder write completed.
         return candidate  # The caller performs the required read-back after commit.
 
     @staticmethod
@@ -326,7 +342,10 @@ class ActionRepository:
     def _resolve_initialize_fault(self, candidate: UpgradeRunAction, error: Exception) -> UpgradeRunAction:
         """Resolve a possible concurrent insert or raise an unavailable-store error."""
         try:  # Another worker can commit the same key before this transaction.
-            stored = self.find_request(candidate.identity.actor_scope, candidate.identity.idempotency_key_digest)
+            stored = self.find_request(  # Use the same actor key to recover safely.
+                candidate.identity.actor_scope,  # Keep the read scoped to the durable actor.
+                candidate.identity.idempotency_key_digest,  # Use only the safe request key digest.
+            )
         except ActionStoreUnavailable:  # The read-back also failed, so persistence is unknown.
             stored = None  # Keep the original transaction fault as the cause.
         if stored is not None:  # A concurrent durable record can resolve this insert fault.
@@ -340,13 +359,13 @@ class ActionRepository:
         try:  # A revision mismatch or database fault must commit no change.
             return self.transactions.run(  # Execute one action-only atomic write.
                 TransactionScope((), (ACTION_COLLECTION,)),  # Change only the action journal.
-                lambda database: self._change_action_in(database, actor_scope, action_id, change),
+                lambda database: self._change_action_in(database, actor_scope, action_id, change),  # Use one write.
             )
         except (ActionStateConflict, ValueError):  # Keep stable validation and compare conflicts.
             raise  # Let the caller store the correct durable refusal.
         except Exception as error:  # Convert driver faults to the stable fail-closed error.
             logger.exception("The upgrade action compare-and-swap write failed")  # Record full safe context.
-            raise ActionStoreUnavailable("The ArangoDB action store is unavailable.") from error
+            raise ActionStoreUnavailable("The ArangoDB action store is unavailable.") from error  # Fail closed.
 
     def _change_action_in(self, database: Any, actor_scope: str, action_id: str, change: Any) -> UpgradeRunAction:
         """Apply one action transformation inside a transaction."""
@@ -364,7 +383,7 @@ class ActionRepository:
         """Replace one action only when its stored revision still matches."""
         revision = str(stored.get("_rev", ""))  # Read the ArangoDB compare-and-swap value.
         if not revision:  # A missing revision cannot protect against a second worker.
-            raise ActionStateConflict("The upgrade action has no revision for compare-and-swap.")
+            raise ActionStateConflict("The upgrade action has no revision for compare-and-swap.")  # Refuse unsafe.
         document = changed.document()  # Build the complete validated replacement record.
         document["_rev"] = revision  # Ask ArangoDB to reject a stale action version.
         try:  # A revision conflict is a stable state conflict, not store unavailability.
@@ -372,8 +391,8 @@ class ActionRepository:
         except Exception as error:  # Keep driver details out of the stable error message.
             error_name = type(error).__name__.casefold()  # Read only the safe exception class name.
             error_text = str(error).casefold()  # Inspect the driver reason without logging record content.
-            if "revision" in error_name or "conflict" in error_name or "revision" in error_text:
-                raise ActionStateConflict("The upgrade action changed before this write.") from error
+            if "revision" in error_name or "conflict" in error_name or "revision" in error_text:  # Detect stale writes.
+                raise ActionStateConflict("The upgrade action changed before this write.") from error  # Stable.
             raise  # Let the caller report store unavailability for every other driver fault.
 
     @staticmethod
@@ -390,7 +409,7 @@ class ActionRepository:
             raise ValueError("The supplied action outcome has different identity fields.")  # Preserve order.
         changed = action.with_item(outcome)  # Replace exactly one ordered durable item.
         if outcome.evidence_summary is not None:  # Store the matching parent digest in the same write.
-            changed = changed.with_evidence_digest(evidence_summary_digest(outcome.evidence_summary))
+            changed = changed.with_evidence_digest(evidence_summary_digest(outcome.evidence_summary))  # Bind evidence.
         return changed  # Give the transaction one complete action replacement.
 
     @staticmethod
@@ -406,7 +425,7 @@ class ActionRepository:
     def _commit_success_in(
         self,
         database: Any,
-        request: tuple[str, str, RunActionOutcome, RunMutation],
+        request: tuple[str, str, RunActionOutcome, RunMutation | RetryRunMutation],
     ) -> None:
         """Change one run and its successful action item in one transaction."""
         actor_scope, action_id, outcome, mutation = request  # Read the cohesive atomic write request.
@@ -420,23 +439,92 @@ class ActionRepository:
         self._replace_action(action_collection, stored, changed)  # Store success in the same transaction.
 
     @staticmethod
-    def _mutate_run(collection: Any, mutation: RunMutation) -> None:
+    def _mutate_run(collection: Any, mutation: RunMutation | RetryRunMutation) -> None:
         """Apply one revision-bound run update or one new run insert."""
+        if isinstance(mutation, RetryRunMutation):
+            ActionRepository._insert_retry(collection, mutation)
+            return
         if mutation.operation == "insert":  # A retry success creates one new run.
+            logger.info("Read one retry run before insert")  # Record the duplicate check before the read.
             if collection.get(mutation.run_id) is not None:  # A repeated retry key cannot overwrite a run.
+                logger.debug("The retry run duplicate check found a record: %s", True)  # Report a safe flag.
                 raise ActionStateConflict("The retry run already exists.")  # Prevent duplicate creation.
+            logger.debug("The retry run duplicate check found a record: %s", False)  # Report a safe flag.
             document = dict(mutation.document)  # Stop the caller from changing the inserted run.
             document["_key"] = mutation.run_id  # Use the requested natural run key.
+            logger.info("Insert one retry run inside the action transaction")  # Record the run write before it starts.
             collection.insert(document, sync=True)  # Insert the new run in the action transaction.
+            logger.debug("Inserted one retry run inside the action transaction")  # Confirm the transaction write.
             return  # The insert path needs no prior revision check.
+        logger.info("Read one source run before update")  # Record the revision check before the read.
         stored = collection.get(mutation.run_id)  # Read the authoritative run inside the transaction.
+        logger.debug("The source run revision check found a record: %s", stored is not None)  # Report a safe flag.
         if stored is None:  # An absent source cannot receive a successful mutation.
             raise ActionStateConflict("The source run does not exist.")  # Refuse a false success.
-        if stored.get("_rev") != mutation.expected_revision or stored.get("state") != mutation.expected_state:
+        if stored.get("_rev") != mutation.expected_revision or stored.get("state") != mutation.expected_state:  # Guard.
             raise ActionStateConflict("The source run changed before the transaction.")  # Refuse stale evidence.
         document = dict(stored)  # Preserve all run fields that this mutation does not change.
         document.update(mutation.document)  # Apply only the approved changed fields.
+        logger.info("Replace one source run inside the action transaction")  # Record the run write before it starts.
         collection.replace(document, check_rev=True, sync=True)  # Bind the update to the stored revision.
+        logger.debug("Replaced one source run inside the action transaction")  # Confirm the transaction write.
+
+    @staticmethod
+    def _insert_retry(collection: Any, mutation: RetryRunMutation) -> None:
+        """Recheck the source and live site runs before one retry insert."""
+        ActionRepository._verify_retry_source(collection, mutation)  # Preserve source revision and state checks.
+        ActionRepository._verify_no_live_retry(collection, mutation)  # Preserve live site run checks.
+        if collection.get(mutation.run_id) is not None:
+            raise ActionMutationRefusal("run_changed")
+        document = dict(mutation.document)
+        document["_key"] = mutation.run_id
+        collection.insert(document, sync=True)
+
+    @staticmethod
+    def _verify_retry_source(collection: Any, mutation: RetryRunMutation) -> None:
+        """Verify the retry source run revision and state.
+
+        Args:
+            collection: The run collection in the action transaction.
+            mutation: The retry mutation request.
+        """
+        source = collection.get(mutation.source_run_id)  # Read the source run inside the transaction.
+        if source is None:  # Preserve the missing-source conflict.
+            raise ActionMutationRefusal("run_changed")
+        if (  # Preserve the revision and state match rule.
+            source.get("_rev") != mutation.expected_source_revision
+            or source.get("state") != mutation.expected_source_state
+        ):
+            raise ActionMutationRefusal("run_changed")
+
+    @staticmethod
+    def _verify_no_live_retry(collection: Any, mutation: RetryRunMutation) -> None:
+        """Verify that the site has no other live run.
+
+        Args:
+            collection: The run collection in the action transaction.
+            mutation: The retry mutation request.
+        """
+        for row in collection.find({"site_id": mutation.site_id}, limit=1000):
+            ActionRepository._refuse_live_retry_row(row, mutation)  # Preserve each live run conflict check.
+
+    @staticmethod
+    def _refuse_live_retry_row(row: Mapping[str, Any], mutation: RetryRunMutation) -> None:
+        """Refuse one row when it is a different live run.
+
+        Args:
+            row: One run row from the site.
+            mutation: The retry mutation request.
+        """
+        run_id = str(row.get("run_id") or row.get("_key") or "")  # Preserve run identifier fallback order.
+        if run_id == mutation.source_run_id:  # Preserve the source skip.
+            return
+        try:
+            state = RunStateMachine.read_state(dict(row))  # Preserve strict run state parsing.
+        except RunTransitionError:
+            raise ActionMutationRefusal("upgrade_already_running", run_id) from None
+        if state not in RunStateMachine.TERMINAL:  # Preserve live run refusal.
+            raise ActionMutationRefusal("upgrade_already_running", run_id)
 
     def _verify_action(self, expected: UpgradeRunAction) -> UpgradeRunAction:
         """Read one action back and compare every modeled field."""
@@ -455,19 +543,19 @@ class ActionRepository:
     def _verify_outcome(self, expected: UpgradeRunAction, outcome: RunActionOutcome) -> UpgradeRunAction:
         """Read one final item back and compare its complete durable shape."""
         stored = self._verify_action(expected)  # Compare every parent action field first.
-        if stored.item(outcome.identity.source_run_id).document() != outcome.document():
+        if stored.item(outcome.identity.source_run_id).document() != outcome.document():  # Guard partial writes.
             raise ActionStoreUnavailable("The ArangoDB action outcome did not persist.")  # Refuse partial success.
         return stored  # Return the complete verified action.
 
-    def _verify_run(self, mutation: RunMutation) -> dict[str, Any]:
+    def _verify_run(self, mutation: RunMutation | RetryRunMutation) -> dict[str, Any]:
         """Read one run back and verify each field the mutation supplied."""
         logger.info("Read one run after the atomic action transaction")  # Record verification before its read.
         try:  # A read fault makes the prior write result unknown.
             stored = self.database.collection(RUN_COLLECTION).get(mutation.run_id)  # Read the natural run key.
         except Exception as error:  # Convert a failed verification read to store unavailability.
             logger.exception("The atomic run read-back failed")  # Record full safe fault context.
-            raise ActionStoreUnavailable("The ArangoDB run write is not verified.") from error
-        if stored is None or any(stored.get(key) != value for key, value in mutation.document.items()):
+            raise ActionStoreUnavailable("The ArangoDB run write is not verified.") from error  # Fail closed.
+        if stored is None or any(stored.get(key) != value for key, value in mutation.document.items()):  # Verify.
             raise ActionStoreUnavailable("The ArangoDB run write is not verified.")  # Refuse a mismatch.
         logger.debug("Verified one run after the atomic action transaction")  # Confirm no run content.
         return dict(stored)  # Give the caller an isolated verified run record.

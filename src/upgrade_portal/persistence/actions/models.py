@@ -399,6 +399,7 @@ class OutcomeCompletion:  # Own one final classification, reason, message, and s
     message: str  # Give safe operator text.
     result_run_id: str  # Name the changed or created run, or use empty text.
     state: OutcomeState  # Keep the run states and times together.
+    live_run_id: str = ""  # Name the current live run for one retry refusal.
 
     def __post_init__(self) -> None:  # Enforce one supported and explained final result.
         """Validate one final result."""
@@ -410,10 +411,28 @@ class OutcomeCompletion:  # Own one final classification, reason, message, and s
 
     def _validate_result_claims(self) -> None:  # Validate result identifiers and final state claims.
         """Require success proof and prevent unverified final state claims."""
+        self._validate_success_claim()  # Require proof only for a success outcome.
+        self._validate_unknown_claim()  # Preserve uncertainty for unknown outcomes.
+        if self.live_run_id and (self.classification != "refused" or self.reason != "upgrade_already_running"):
+            raise ValueError("Only a live-run refusal can name a live run.")
+
+    def _validate_success_claim(self) -> None:  # Validate result identifier use for success and nonsuccess.
+        """Validate the result run claim.
+
+        Args:
+            None.
+        """
         if self.classification == "succeeded" and (not self.result_run_id or not self.state.final_state):
             raise ValueError("A succeeded outcome requires a verified result run and state.")  # Require proof.
         if self.classification != "succeeded" and self.result_run_id:
             raise ValueError("A nonsuccess outcome cannot name a result run.")  # Avoid a false mutation claim.
+
+    def _validate_unknown_claim(self) -> None:  # Validate final state use for unknown outcomes.
+        """Validate the final state claim for an unknown result.
+
+        Args:
+            None.
+        """
         if self.classification == "unknown" and self.state.final_state:
             raise ValueError("An unknown outcome cannot claim a final state.")  # Preserve uncertainty.
 
@@ -424,6 +443,7 @@ class OutcomeCompletion:  # Own one final classification, reason, message, and s
             "reason": self.reason,  # Preserve the stable machine reason.
             "message": self.message,  # Preserve safe operator text.
             "result_run_id": self.result_run_id,  # Preserve the verified result identifier.
+            "live_run_id": self.live_run_id,  # Preserve the safe live-run navigation target.
         }
         result.update(self.state.document())  # Add the four final state fields.
         return result  # Give the repository one complete result map.
@@ -587,6 +607,10 @@ class RunActionOutcome:  # Own one immutable item across pending, claimed, and f
         document.pop("claim_expires_at")  # Keep the internal item lease out of the result.
         document.pop("checked_at")  # Keep the response aligned with the current HTTP contract.
         document.pop("completed_at")  # Keep the response aligned with the current HTTP contract.
+        if self.identity.action == "retry" and self.completion.classification == "succeeded":
+            document["precheck_url"] = (
+                f"/captures/new?site_id={self.identity.site_id}" f"&run_id={self.completion.result_run_id}&role=pre"
+            )
         return document  # Expose no actor, request key, or raw evidence identifier.
 
     @classmethod
@@ -622,6 +646,7 @@ class RunActionOutcome:  # Own one immutable item across pending, claimed, and f
             str(document.get("message", "")),  # Restore safe operator text.
             str(document.get("result_run_id", "")),  # Restore the verified result identifier.
             state,  # Keep state fields grouped in memory.
+            str(document.get("live_run_id", "")),  # Restore optional live-run navigation.
         )
         return completion  # Give the outcome constructor one cohesive final result.
 
