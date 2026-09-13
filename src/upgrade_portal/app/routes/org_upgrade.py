@@ -324,11 +324,34 @@ def options_view(options: Mapping[str, Any]) -> dict[str, Any]:
     first = _first_version(options.get("versions"))  # Read the legacy AP version record.
     return {  # Return the existing template field names.
         "version": options.get("version_ap", first.get("version", "")),
+        "version_ap": str(options.get("version_ap", first.get("version", ""))),  # Keep the AP target visible.
+        "version_switch": str(options.get("version_switch", "")),  # Keep the switch target visible.
+        "version_gateway": str(options.get("version_gateway", "")),  # Keep the gateway target visible.
         "strategy": options.get("strategy", "canary"),
         "canary_phases": _phase_text(options.get("canary_phases")),
         "max_failure_percentage": options.get("max_failure_percentage", 5),
         "start_time": _start_text(options.get("start_time")),
     }
+
+
+FAMILY_LABELS = (("version_ap", "Access points"), ("version_switch", "Switches"), ("version_gateway", "Gateways"))
+
+
+def firmware_summary(view: Mapping[str, Any], families: Sequence[str]) -> str:
+    """Return the target version of each selected device family.
+
+    Why:
+        An operator must read every target version before the typed
+        confirmation. One empty line would hide the exact change.
+    """
+    logger.info("Build the firmware summary for %s device families", len(families))  # Log before the build.
+    parts = [  # Name one version for each family that this operation upgrades.
+        f"{label} {view[field]}"
+        for field, label in FAMILY_LABELS
+        if view.get(field) and (not families or field.removeprefix("version_") in families)
+    ]
+    logger.debug("The firmware summary names %s device families", len(parts))  # Log after the build.
+    return ", ".join(parts) if parts else str(view.get("version") or "Not selected")  # Keep the AP fallback.
 
 
 def _first_version(value: object) -> Mapping[str, Any]:
@@ -580,13 +603,15 @@ def confirm_page() -> str | tuple[Response, int]:
     if not rows:  # Do not show an operation for missing or foreign sites.
         return json_error(NOT_FOUND_STATUS, SITES_REQUIRED, SITES_REQUIRED_MESSAGE)
     target_count, families = _confirmation_targets(options)  # Read only the durable aggregate child summary.
+    view = options_view(options)  # Build the display values one time.
     return render_page(  # Render the existing typed confirmation page.
         CONFIRM_TEMPLATE,  # Keep the existing template.
         org_name=org_display_name(org_id),  # Show the selected organization.
         site_count=len(rows),  # Show the selected site count.
         device_count=target_count or _site_device_count(rows),  # Keep the AP-only count fallback.
         device_families=families,  # Show each planned family.
-        options=options_view(options),  # Show the confirmed choices.
+        options=view,  # Show the confirmed choices.
+        firmware_summary=firmware_summary(view, families),  # Name the target version of each family.
         writes_enabled=writes_enabled(),  # Keep the deployment write gate visible.
     )
 
