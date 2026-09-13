@@ -35,7 +35,7 @@ import io  # The writer needs a text buffer, because the route answers with text
 import json  # The machine form of the file.
 import logging  # The portal logs with the standard library only.
 import re  # Cleans the capture identifier before it reaches a response header.
-from collections.abc import Iterable, Mapping, Sequence  # The read-only types of every argument below.
+from collections.abc import Iterable, Iterator, Mapping, Sequence  # The read-only types of every argument below.
 from dataclasses import dataclass, field  # The two small records of this module.
 from typing import Any  # A stored capture document is free-form.
 
@@ -393,6 +393,25 @@ def _blank_values(heading: Mapping[str, str]) -> dict[str, str]:
     return values
 
 
+def _device_values(mac: str, entry: Mapping[str, Any], heading: Mapping[str, str]) -> dict[str, str]:
+    """Return the export cells of one device.
+
+    Args:
+        mac: The address of the device, which is the index key.
+        entry: One device index entry.
+        heading: The five values that name the capture.
+
+    Returns:
+        The cells of that device.
+    """
+    readable = _readable(entry)  # No credential field reaches a cell.
+    values = _blank_values(heading)  # Every client column stays empty on a device row.
+    values.update({name: _as_text(readable.get(name)) for name in DEVICE_FIELDS})  # The nine device columns.
+    values["kind"] = KIND_DEVICE  # A reader filters the file on this column.
+    values["mac"] = mac  # The index key names the member, so a chassis member keeps its own row.
+    return values  # The caller decides whether it needs a row object.
+
+
 def _device_row(mac: str, entry: Mapping[str, Any], heading: Mapping[str, str]) -> ExportRow:
     """Return the export row of one device.
 
@@ -404,12 +423,28 @@ def _device_row(mac: str, entry: Mapping[str, Any], heading: Mapping[str, str]) 
     Returns:
         The row of that device.
     """
-    readable = _readable(entry)  # No credential field reaches a cell.
-    values = _blank_values(heading)  # Every client column stays empty on a device row.
-    values.update({name: _as_text(readable.get(name)) for name in DEVICE_FIELDS})  # The nine device columns.
-    values["kind"] = KIND_DEVICE  # A reader filters the file on this column.
-    values["mac"] = mac  # The index key names the member, so a chassis member keeps its own row.
+    values = _device_values(mac, entry, heading)  # Reuse the direct export path cells.
     return ExportRow(kind=KIND_DEVICE, mac=mac, values=values)
+
+
+def _client_values(kind: str, record: Mapping[str, Any], heading: Mapping[str, str]) -> dict[str, str]:
+    """Return the export cells of one client.
+
+    Args:
+        kind: The row kind of the client group.
+        record: One client record.
+        heading: The five values that name the capture.
+
+    Returns:
+        The cells of that client.
+    """
+    readable = _readable(record)  # No credential field reaches a cell.
+    values = _blank_values(heading)  # Every device column stays empty on a client row.
+    values.update({name: _as_text(readable.get(name)) for name in CLIENT_FIELDS})  # The six client columns.
+    values.update({name: _as_text(readable.get(source)) for name, source in CLIENT_PARENT_FIELDS})  # The parent.
+    values["kind"] = kind  # A reader filters the wired rows apart from the wireless rows.
+    values["mac"] = _as_text(readable.get("mac"))  # The match key of the client.
+    return values  # The caller decides whether it needs a row object.
 
 
 def _client_row(kind: str, record: Mapping[str, Any], heading: Mapping[str, str]) -> ExportRow:
@@ -423,12 +458,7 @@ def _client_row(kind: str, record: Mapping[str, Any], heading: Mapping[str, str]
     Returns:
         The row of that client.
     """
-    readable = _readable(record)  # No credential field reaches a cell.
-    values = _blank_values(heading)  # Every device column stays empty on a client row.
-    values.update({name: _as_text(readable.get(name)) for name in CLIENT_FIELDS})  # The six client columns.
-    values.update({name: _as_text(readable.get(source)) for name, source in CLIENT_PARENT_FIELDS})  # The parent.
-    values["kind"] = kind  # A reader filters the wired rows apart from the wireless rows.
-    values["mac"] = _as_text(readable.get("mac"))  # The match key of the client.
+    values = _client_values(kind, record, heading)  # Reuse the direct export path cells.
     return ExportRow(kind=kind, mac=values["mac"], values=values)
 
 
@@ -493,6 +523,31 @@ def client_rows(capture: Mapping[str, Any]) -> list[ExportRow]:
     return rows
 
 
+def _extra_values(
+    kind: str,
+    record: Mapping[str, Any],
+    heading: Mapping[str, str],
+    fields: tuple[str, ...],
+) -> dict[str, str]:
+    """Return the export cells of one tier 3 record.
+
+    Args:
+        kind: The row kind of the tier 3 section.
+        record: One stored tier 3 record.
+        heading: The five values that name the capture.
+        fields: The columns that this section reads.
+
+    Returns:
+        The cells of that record.
+    """
+    readable = _readable(record)  # No credential field reaches a cell.
+    values = _blank_values(heading)  # Every device column and every client column stays empty on this row.
+    values.update({name: _as_text(readable.get(name)) for name in fields})  # The columns of this section.
+    values["kind"] = kind  # A reader filters one tier 3 section apart from the others.
+    values["mac"] = _as_text(readable.get("mac"))  # Absent for an alarm record, and blank reads as no match key.
+    return values  # The caller decides whether it needs a row object.
+
+
 def _extra_row(kind: str, record: Mapping[str, Any], heading: Mapping[str, str], fields: tuple[str, ...]) -> ExportRow:
     """Return the export row of one tier 3 record.
 
@@ -505,11 +560,7 @@ def _extra_row(kind: str, record: Mapping[str, Any], heading: Mapping[str, str],
     Returns:
         The row of that record.
     """
-    readable = _readable(record)  # No credential field reaches a cell.
-    values = _blank_values(heading)  # Every device column and every client column stays empty on this row.
-    values.update({name: _as_text(readable.get(name)) for name in fields})  # The columns of this section.
-    values["kind"] = kind  # A reader filters one tier 3 section apart from the others.
-    values["mac"] = _as_text(readable.get("mac"))  # Absent for an alarm record, and blank reads as no match key.
+    values = _extra_values(kind, record, heading, fields)  # Reuse the direct export path cells.
     return ExportRow(kind=kind, mac=values["mac"], values=values)
 
 
@@ -557,9 +608,46 @@ def build_rows(capture: Mapping[str, Any]) -> tuple[ExportRow, ...]:
         The device rows first, then the client rows, then the tier 3 rows.
     """
     logger.info("capture export: build the rows of the capture %s", _as_text(capture.get("capture_id")) or "unnamed")
-    rows = tuple(device_rows(capture) + client_rows(capture) + extra_rows(capture))  # The page order, then tier 3.
-    logger.debug("capture export: built %s rows", len(rows))  # The count proves that no row was dropped.
-    return rows
+    rows = [*device_rows(capture)]  # Keep the page order without building one concatenated list.
+    rows.extend(client_rows(capture))  # Client rows still follow device rows.
+    rows.extend(extra_rows(capture))  # Tier 3 rows still follow the base capture rows.
+    rows_tuple = tuple(rows)  # The public return type remains unchanged.
+    logger.debug("capture export: built %s rows", len(rows_tuple))  # The count proves that no row was dropped.
+    return rows_tuple
+
+
+def _row_values(capture: Mapping[str, Any]) -> Iterator[dict[str, str]]:
+    """Yield the export cells of one capture in file order.
+
+    Why:
+        The download path writes each row once. It does not need the
+        ``ExportRow`` objects that ``build_rows()`` returns for callers.
+
+    Args:
+        capture: The stored capture document.
+
+    Yields:
+        The device rows, then the client rows, then the tier 3 rows.
+    """
+    heading = capture_heading(capture)  # Every row names the same capture.
+    for mac, entry in device_entries(capture):  # The device order comes from the stored index.
+        yield _device_values(mac, entry, heading)  # A device row uses the direct cell builder.
+    groups: Any = capture.get("clients") or {}  # A capture that read no client holds an empty map.
+    if not isinstance(groups, Mapping):  # A document of a later release may hold another shape.
+        logger.warning("capture export: the client section is not a map, so the file holds no client row")
+    else:
+        for group, kind in CLIENT_GROUPS:  # The group order fixes the row order.
+            records: Any = groups.get(group) or []  # A missing group has no row.
+            for record in records:  # Each mapping becomes one row.
+                if isinstance(record, Mapping):  # Non-map values are ignored like the list builder.
+                    yield _client_values(kind, record, heading)  # A client row uses the direct cell builder.
+    extra_map: Any = capture.get("extras")  # Absent for a tier 2 capture.
+    if isinstance(extra_map, Mapping):  # A tier 3 capture stores the section map here.
+        for section, kind, fields in TIER3_GROUPS:  # The section order fixes the row order.
+            records = extra_map.get(section) or []  # A missing section has no row.
+            for record in records:  # Each mapping becomes one row.
+                if isinstance(record, Mapping):  # Non-map values are ignored like the list builder.
+                    yield _extra_values(kind, record, heading, fields)  # A tier 3 row uses direct cells.
 
 
 # ---------------------------------------------------------------------------
@@ -731,11 +819,15 @@ def export_capture(capture: Mapping[str, Any], export_format: object) -> ExportR
         # bar and could carry a line break that fakes a log line.
         logger.warning("capture export: the portal refused a download, because the format is not known")
         return ExportResult(error=ERROR_BAD_FORMAT)  # The route answers 400 with this code.
-    rows = build_rows(capture)  # Every device row and every client row. Each one names the capture.
     if chosen == FORMAT_CSV:  # The spreadsheet form.
+        rows = build_rows(capture)  # Keep the proven faster CSV path for large captures.
         return ExportResult(render_csv(rows), MEDIA_TYPE_CSV, download_name(capture, FORMAT_CSV))
+    logger.info("capture export: build the rows of the capture %s", _as_text(capture.get("capture_id")) or "unnamed")
     heading = capture_heading(capture)  # The machine form repeats the five values in one object.
-    return ExportResult(render_json(heading, rows), MEDIA_TYPE_JSON, download_name(capture, FORMAT_JSON))
+    row_values = list(_row_values(capture))  # Build the dictionaries that `json.dumps` must hold at once.
+    logger.debug("capture export: built %s rows", len(row_values))  # Keep the public row builder log contract.
+    payload = {"capture": dict(heading), "rows": row_values}  # Keep JSON keys and row order unchanged.
+    return ExportResult(json.dumps(payload, indent=_JSON_INDENT), MEDIA_TYPE_JSON, download_name(capture, FORMAT_JSON))
 
 
 def column_names() -> Sequence[str]:
