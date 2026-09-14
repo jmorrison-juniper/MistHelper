@@ -611,6 +611,23 @@ jobs:
           fi
           echo "The menu reference matches the generator output."
 
+  speckit_task_audit:
+    name: "SpecKit task audit (advisory)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      # Issue #1741: task records can drift after delivery.
+      # This advisory report names the open boxes without blocking day one.
+      - name: Report unchecked SpecKit tasks
+        run: python tools/speckit_task_audit.py
+
   exclusion_drift:
     name: "Quality exclusion drift (advisory)"
     runs-on: ubuntu-latest
