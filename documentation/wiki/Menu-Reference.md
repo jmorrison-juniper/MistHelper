@@ -303,5 +303,29 @@ never runs in an automated test pass.
 | 267 | Run any MSP detail endpoint with identifier prompts (10 operations, issue #1807) | Interactive safe | `EndpointFamilyExporter.msp_detail_endpoints` |
 | 268 | Run any remaining endpoint with identifier prompts (6 operations, issue #1807) | Interactive safe | `EndpointFamilyExporter.other_endpoints` |
 
+### Endpoint family sub-menus (259-268)
+
+Each of these ten entries opens a numbered sub-menu. One row states the Mist
+operationId, a plain description, and a safety word:
+
+```text
+  [1] getSiteWlan - Get site WLAN [safe interactive]
+```
+
+`src/export/endpoint_catalog.py` holds the description and the safety word for
+all 286 operations. The description comes from the Mist API documentation
+name that the installed `mistapi` docstring carries. The safety word uses the
+vocabulary of `OperationRegistry`.
+
+| Safety word in the menu | Registry category | Operations | Meaning |
+|---|---|---:|---|
+| `safe` | `safe` | 29 | The read needs no operator identifier. Only menu 259 carries it. |
+| `safe interactive` | `interactive_safe` | 257 | The read needs a site, an org, an MSP, or another identifier. |
+| `not safe` | `destructive` | 0 | The call changes the Mist cloud. No endpoint family holds one. |
+
+Warning: do not add a `destructive` operation to an endpoint family.
+`tests/guardrails/test_endpoint_catalog.py` fails when one enters, because a
+family menu offers reads only.
+
 This page should be regenerated whenever `menu_actions` or the operation registry
 changes, so the wiki stays aligned with the code.
