@@ -34,6 +34,7 @@ from src.refactors import is_debug_mode as idm
 from src.refactors import mist_site_exclude_prefix as msep
 from src.refactors import mist_wan_target_ports as mwtp
 from src.refactors import package_import_map as pim
+from src.refactors.main_entrypoint import ApplicationBootstrap  # WHY: bootstrap now publishes env-only constants.
 
 # WHY: env vars that our importlib.reload() tests mutate. Kept in sync with _ENV_MUTATED_MODULES below
 # so the teardown fixture can strip them from os.environ before reloading each module to defaults.
@@ -43,7 +44,7 @@ _ENV_VARS_TO_CLEAR: tuple[str, ...] = (
     "FAST_MODE_USE_CONNECTION_AWARE_THREADING",  # WHY: read by fast_mode_constants at module import.
     "FAST_MODE_DEVICES_PER_THREAD",  # WHY: read by fast_mode_devices_per_thread at class-body eval.
     "FAST_MODE_SEQUENTIAL_MAX_RETRIES",  # WHY: read by fast_mode_sequential_max_retries at class-body eval.
-    "MIST_SITE_EXCLUDE_PREFIX",  # WHY: read by mist_site_exclude_prefix at module import.
+    "MIST_SITE_EXCLUDE_PREFIX",  # WHY: read by bootstrap after module import.
     "MIST_WAN_TARGET_PORTS",  # WHY: read by mist_wan_target_ports at class-body eval.
 )
 
@@ -68,9 +69,20 @@ def _restore_env_module_state() -> object:
         os.environ.pop(var, None)  # WHY: no-op if unset; guarantees clean env for reload.
     for mod in _ENV_MUTATED_MODULES:  # WHY: re-run each module body under clean env to reset constants.
         importlib.reload(mod)  # WHY: restore original defaults for downstream test files.
+    for module_name in _SITE_PREFIX_CONSUMER_NAMES:  # WHY: bootstrap updates these copied constants during tests.
+        module = sys.modules.get(module_name)  # WHY: update only modules that this process already imported.
+        if module is not None:  # WHY: no import should happen during cleanup.
+            module.MIST_SITE_EXCLUDE_PREFIX = ""  # WHY: reset the copied default for later test files.
     logging.debug(
         "_restore_env_module_state: teardown done, reloaded %d modules", len(_ENV_MUTATED_MODULES)
     )  # WHY: AFTER teardown action log.
+
+
+_SITE_PREFIX_CONSUMER_NAMES: tuple[str, ...] = (  # WHY: modules that copy the prefix value during import.
+    "src.refactors.wan_probe_device_override_manager",
+    "src.refactors.wan2_migration_launcher",
+    "src.refactors.wanprobe_config_manager",
+)
 
 
 class TestFastModeBackoffMultiplier:
@@ -262,10 +274,11 @@ class TestMistSiteExcludePrefix:
         )  # WHY: AFTER action log.
 
     def test_override_propagates_verbatim(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Env override should be stored verbatim (string)."""  # WHY: override contract.
+        """The bootstrap should store the env override verbatim."""  # WHY: override contract.
         logging.info("test_override_propagates_verbatim: begin")  # WHY: BEFORE action log.
         monkeypatch.setenv("MIST_SITE_EXCLUDE_PREFIX", "VRE")  # WHY: apply override.
         reloaded = importlib.reload(msep)  # WHY: re-import module.
+        ApplicationBootstrap(parse_cli=False)._publish_request_configuration()  # WHY: publish after import.
         assert reloaded.MIST_SITE_EXCLUDE_PREFIX == "VRE"  # WHY: verbatim value preservation.
         assert isinstance(reloaded.MIST_SITE_EXCLUDE_PREFIX, str)  # WHY: type preservation.
         logging.debug("test_override_propagates_verbatim: passed")  # WHY: AFTER action log.
