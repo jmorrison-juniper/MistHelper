@@ -25,12 +25,12 @@
 # these pins do not change any gate result.
 
 # Lint and format
-ruff==0.16.6
+ruff==0.16.7
 black==26.5.1
 
 # Type checking
 mypy==2.3.1
-types-requests==2.33.0.20260712
+types-requests==2.33.0.20260906
 types-paramiko==5.0.0.20260724
 types-tqdm==4.70.0.20260906
 
@@ -38,7 +38,7 @@ types-tqdm==4.70.0.20260906
 pytest==9.1.1
 pytest-cov==7.1.0
 pytest-timeout==2.4.0
-hypothesis==6.167.1
+hypothesis==6.168.0
 
 # Browser tests
 #

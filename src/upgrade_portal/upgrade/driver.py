@@ -46,6 +46,7 @@ from src.upgrade_portal.runtime.lock import (
     ReleaseOutcome,
     SiteLockError,
     build_key,
+    max_lock_life_seconds,
     refresh_site_lock,
     release_site_lock,
 )
@@ -58,7 +59,9 @@ __all__ = [
     "DATA_DIRECTORY_NAME",
     "DEFAULT_POST_CHECK_MODE",
     "LOCK_FIELD",
+    "LOCK_EMPTY_RUN_REASON",
     "LOCK_LOST_REASON",
+    "LOCK_RENEWAL_BOUND_REASON",
     "LOCK_RETRY_WINDOW_SECONDS",
     "LOCK_STATE_LOST",
     "LOCK_STORE_QUIET_REASON",
@@ -228,6 +231,12 @@ LOCK_LOST_REASON: Final[str] = (
 LOCK_STORE_QUIET_REASON: Final[str] = (
     "The portal cannot reach the lock store, so this run no longer holds the site lock. "
     "The upgrade continues in the cloud, and the devices still reboot."
+)
+LOCK_EMPTY_RUN_REASON: Final[str] = (
+    "The site lock names no run, so the portal stopped renewing it. Another operator can take the site."
+)
+LOCK_RENEWAL_BOUND_REASON: Final[str] = (
+    "The site lock reached the renewal limit of %s seconds. Another operator can take the site after the cooldown."
 )
 
 
@@ -470,6 +479,7 @@ class LockHeartbeatPlan:
         progress: The reporter that held the seat of the settle gate before
             the heartbeat took it. None when the gate reports nowhere else.
         release: The compare-and-delete call that a final run state makes.
+        max_age_seconds: The maximum age that a driver can renew this lock.
     """
 
     key: str
@@ -479,6 +489,7 @@ class LockHeartbeatPlan:
     interval: int = HEARTBEAT_SECONDS
     progress: ProgressSink | None = None
     release: LockReleaser = release_site_lock
+    max_age_seconds: int = field(default_factory=max_lock_life_seconds)
 
 
 class LockHeartbeat:
@@ -516,6 +527,7 @@ class LockHeartbeat:
             plan: The key, the lock record, and the calls one beat makes.
         """
         self._plan = plan
+        self._started_at = plan.ticker()  # The renewal bound starts with this heartbeat object.
         self._due = plan.ticker() + float(plan.interval)  # The first beat waits one whole interval
         self._quiet_since: float | None = None  # Set while the lock store does not answer
         self._stopped = False  # True after a final run state, and after the lock changed hands
@@ -627,6 +639,10 @@ class LockHeartbeat:
         Returns:
             True while the portal still holds the lock.
         """
+        if not self._plan.record.run_id:  # A lock with no run has no live upgrade for the driver to protect.
+            return self._lost(LOCK_EMPTY_RUN_REASON)  # Stop the unattended holder before it moves `refreshed_at`.
+        if self._plan.ticker() - self._started_at >= float(self._plan.max_age_seconds):  # Enforce the run limit.
+            return self._lost(LOCK_RENEWAL_BOUND_REASON % self._plan.max_age_seconds)  # Bound the operator wait.
         try:
             left = self._plan.refresh(self._plan.key, self._plan.record)
         except LockStoreUnreachableError:

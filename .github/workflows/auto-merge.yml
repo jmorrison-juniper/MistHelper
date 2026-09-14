@@ -351,16 +351,16 @@ jobs:
           if [ -n "${PR_NUMBER}" ]; then
             echo "Reading linked issues for pull request ${PR_NUMBER}."
             linked=$(gh pr view "${PR_NUMBER}" \
-              --json number,closingIssuesReferences \
-              --jq '. as $pr | .closingIssuesReferences[]? | "\($pr.number)\t\(.number)"')
+              --json number,mergedAt,closingIssuesReferences \
+              --jq '. as $pr | .closingIssuesReferences[]? | "\($pr.number)\t\($pr.mergedAt)\t\(.number)"')
           else
             echo "Reading linked issues for recently merged pull requests."
             linked=$(gh pr list \
               --state merged \
               --base main \
               --limit 50 \
-              --json number,closingIssuesReferences \
-              --jq '.[] | . as $pr | .closingIssuesReferences[]? | "\($pr.number)\t\(.number)"')
+              --json number,mergedAt,closingIssuesReferences \
+              --jq '.[] | . as $pr | .closingIssuesReferences[]? | "\($pr.number)\t\($pr.mergedAt)\t\(.number)"')
           fi
 
           # An empty list is normal, because a pull request may close no issue.
@@ -372,8 +372,27 @@ jobs:
           # Track a failure so one bad issue does not hide the rest of the work.
           failed=0
 
-          while IFS=$'\t' read -r pull_request issue; do
-            if [ -z "${pull_request}" ] || [ -z "${issue}" ]; then
+          # A person can reopen an issue when the merged repair is incomplete.
+          # The schedule must not reverse that decision.
+          issue_reopened_after_merge() {
+            issue="$1"
+            merged_at="$2"
+            # Read each issue timeline page, because the state alone hides the reopen.
+            if ! reopened="$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              --paginate \
+              "repos/${GH_REPO}/issues/${issue}/timeline?per_page=100" \
+              --jq '.[] | select(.event == "reopened" and .created_at > "'"${merged_at}"'" and .actor.type == "User") | .created_at' \
+              | tail -n 1)"; then
+              echo "::error::The timeline of issue ${issue} did not load."
+              return 2
+            fi
+            # A non-empty result means a person reopened the issue after merge.
+            [ -n "${reopened}" ]
+          }
+
+          while IFS=$'\t' read -r pull_request merged_at issue; do
+            if [ -z "${pull_request}" ] || [ -z "${merged_at}" ] || [ -z "${issue}" ]; then
               continue
             fi
 
@@ -382,6 +401,24 @@ jobs:
 
             if [ "${state}" = "CLOSED" ]; then
               echo "Issue ${issue} is already closed. Skipping."
+              continue
+            fi
+
+            # Disable exit-on-error for this call, because a reopen is not a fault.
+            set +e
+            issue_reopened_after_merge "${issue}" "${merged_at}"
+            reopen_status="$?"
+            set -e
+
+            # Status zero means the maintainer decision must keep the issue open.
+            if [ "${reopen_status}" -eq 0 ]; then
+              echo "Issue ${issue} was reopened after pull request ${pull_request} merged. Skipping."
+              continue
+            fi
+
+            # Status two means the timeline query failed, so no close is safe.
+            if [ "${reopen_status}" -eq 2 ]; then
+              failed=1
               continue
             fi
 
