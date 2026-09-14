@@ -86,6 +86,7 @@ __all__ = [
     "COOLDOWN_SECONDS",
     "HEARTBEAT_SECONDS",
     "KEY_TEMPLATE",
+    "LOCK_RENEWAL_MAX_SECONDS_VARIABLE",
     "LOCK_TTL_SECONDS",
     "MAX_LOCK_LIFE_SECONDS",
     "RESUME_CONFIRMATION_TEXT",
@@ -106,6 +107,7 @@ __all__ = [
     "acquire_site_lock",
     "build_key",
     "connect_lock_store",
+    "max_lock_life_seconds",
     "read_lock",
     "read_site_locks",
     "refresh_site_lock",
@@ -128,11 +130,45 @@ KEY_TEMPLATE: Final[str] = "misthelper:lock:site:{org_id}:{site_id}"
 #      missed beats before the lock dies.
 LOCK_TTL_SECONDS: Final[int] = 3600
 
-# WHAT: how long one run may renew a site lock.
+# WHAT: the environment variable that bounds one site lock hold.
+# WHY: issue #2564 showed that a live heartbeat can move a site lock for ever.
+#      This value lets an operator tune the maximum hold time without a code change.
+LOCK_RENEWAL_MAX_SECONDS_VARIABLE: Final[str] = "CAPTURE_LOCK_RENEWAL_MAX_SECONDS"
+
+# WHAT: how long one run may renew a site lock by default.
 # WHY: a full production cascade can last more than four hours, so this bound
 #      gives that proven window three times over. A renewal still stops the
 #      next morning, so an unattended driver cannot starve operators forever.
 MAX_LOCK_LIFE_SECONDS: Final[int] = 12 * 60 * 60  # Three four-hour token windows bound one run safely.
+
+
+def max_lock_life_seconds() -> int:
+    """Return the configured maximum life of one site lock.
+
+    Why:
+        The default protects long production upgrades. The environment value
+        lets an operator tune the bound without a code change.
+
+    Returns:
+        The maximum lock life, in seconds.
+    """
+    raw = os.environ.get(LOCK_RENEWAL_MAX_SECONDS_VARIABLE, "").strip()  # Empty text keeps the safe default.
+    if not raw:  # The operator did not configure a value.
+        return MAX_LOCK_LIFE_SECONDS  # Use the conservative production default.
+    try:  # The environment holds text and can hold a mistake.
+        seconds = int(raw)  # Parse the operator value before the safety check.
+    except ValueError:  # Bad text must not stop the portal.
+        _LOGGER.warning("lock: %s must be a number", LOCK_RENEWAL_MAX_SECONDS_VARIABLE)  # Name the bad setting.
+        return MAX_LOCK_LIFE_SECONDS  # Keep the default when the setting is bad.
+    if seconds >= LOCK_TTL_SECONDS:  # The bound must not shorten one normal lease.
+        return seconds  # Use the operator value after the safety check.
+    _LOGGER.warning(
+        "lock: %s must be at least %s",
+        LOCK_RENEWAL_MAX_SECONDS_VARIABLE,
+        LOCK_TTL_SECONDS,
+    )  # Explain the rejected value without logging secrets.
+    return MAX_LOCK_LIFE_SECONDS  # A too-small value can drop a live upgrade.
+
 
 # WHAT: how long a quiet holder keeps the site before another operator may take it.
 # WHY: contracts/site-lock.md line 113 calls this the full 300-second cooldown.
@@ -812,7 +848,7 @@ class LockRecord:
         try:
             acquired = datetime.fromisoformat(self.acquired_at)  # Parse the stable first take time.
         except ValueError:  # A damaged first time cannot prove room for another renewal.
-            return float(MAX_LOCK_LIFE_SECONDS)  # Treat the lock as at the bound, which stops starvation.
+            return float(max_lock_life_seconds())  # Treat the lock as at the bound, which stops starvation.
         if acquired.tzinfo is None:  # A stored time without a zone follows the older UTC rule.
             acquired = acquired.replace(tzinfo=UTC)  # Keep records from older code comparable.
         return (moment - acquired).total_seconds()  # The total life is independent from heartbeats.
@@ -831,7 +867,7 @@ class LockRecord:
             The whole seconds left before a typed takeover may start.
         """
         quiet_wait = COOLDOWN_SECONDS - self.age_seconds(now)  # A quiet holder still gets the normal grace time.
-        life_wait = MAX_LOCK_LIFE_SECONDS - self.lifetime_seconds(now)  # The total life gives a fixed end.
+        life_wait = max_lock_life_seconds() - self.lifetime_seconds(now)  # The total life gives a fixed end.
         return max(0, round(min(quiet_wait, life_wait)))  # The operator sees the first deadline that arrives.
 
     def renewal_life_seconds(self, now: datetime | None = None) -> int:
@@ -847,7 +883,7 @@ class LockRecord:
         Returns:
             The seconds to write as the store lease.
         """
-        remaining = MAX_LOCK_LIFE_SECONDS - self.lifetime_seconds(now)  # Only the first take bounds the run life.
+        remaining = max_lock_life_seconds() - self.lifetime_seconds(now)  # Only the first take bounds the run life.
         if remaining <= 0:  # No safe lease remains after the run life bound.
             return 0  # The caller refuses the renewal and leaves the key to expire.
         limited = min(LOCK_TTL_SECONDS, remaining)  # The lock may not exceed either bound.

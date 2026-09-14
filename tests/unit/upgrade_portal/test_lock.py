@@ -37,6 +37,7 @@ from src.upgrade_portal.runtime.lock import (
     CONNECT_TIMEOUT_SECONDS,
     COOLDOWN_SECONDS,
     HEARTBEAT_SECONDS,
+    LOCK_RENEWAL_MAX_SECONDS_VARIABLE,
     LOCK_TTL_SECONDS,
     MAX_LOCK_LIFE_SECONDS,
     RESUME_CONFIRMATION_TEXT,
@@ -55,6 +56,7 @@ from src.upgrade_portal.runtime.lock import (
     acquire_site_lock,
     build_key,
     connect_lock_store,
+    max_lock_life_seconds,
     read_lock,
     read_site_locks,
     refresh_site_lock,
@@ -427,6 +429,26 @@ def test_the_settings_repeat_the_contract_numbers() -> None:
     assert HEARTBEAT_SECONDS == 60
     assert TAKEOVER_CONFIRMATION_TEXT == "CONFIRM"
     assert LOCK_TTL_SECONDS > COOLDOWN_SECONDS  # A quiet holder must still hold a readable key
+
+
+def test_the_lock_life_bound_reads_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The run life bound must be configurable.
+
+    Args:
+        monkeypatch: The pytest patch helper.
+    """
+    monkeypatch.setenv(LOCK_RENEWAL_MAX_SECONDS_VARIABLE, "7200")  # Use a valid operator value.
+    assert max_lock_life_seconds() == 7200  # The reader applies the configured bound.
+
+
+def test_the_lock_life_bound_rejects_a_short_lease(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A too-small run life bound must not shorten one lease.
+
+    Args:
+        monkeypatch: The pytest patch helper.
+    """
+    monkeypatch.setenv(LOCK_RENEWAL_MAX_SECONDS_VARIABLE, str(LOCK_TTL_SECONDS - 1))  # Undercut a full lease.
+    assert max_lock_life_seconds() == MAX_LOCK_LIFE_SECONDS  # The safe default prevents early expiry.
 
 
 def test_a_free_site_grants_the_lock(store: ScriptedLockStore) -> None:
