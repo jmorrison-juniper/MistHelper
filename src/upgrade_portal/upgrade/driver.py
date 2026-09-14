@@ -46,7 +46,7 @@ from src.upgrade_portal.runtime.lock import (
     ReleaseOutcome,
     SiteLockError,
     build_key,
-    lock_renewal_max_seconds,
+    max_lock_life_seconds,
     refresh_site_lock,
     release_site_lock,
 )
@@ -487,7 +487,7 @@ class LockHeartbeatPlan:
     interval: int = HEARTBEAT_SECONDS
     progress: ProgressSink | None = None
     release: LockReleaser = release_site_lock
-    max_age_seconds: int = field(default_factory=lock_renewal_max_seconds)
+    max_age_seconds: int = field(default_factory=max_lock_life_seconds)
 
 
 class LockHeartbeat:

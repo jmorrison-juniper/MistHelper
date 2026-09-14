@@ -44,7 +44,7 @@ from dataclasses import dataclass  # Builds the frozen view model of the organiz
 from importlib import import_module  # Imports a later module late, never at load.
 from types import ModuleType  # The return type of a late import.
 from typing import Any  # A cloud payload and an injected seam are both free-form.
-from urllib.parse import urlencode  # Escapes the filter text inside a paging link.
+from urllib.parse import quote, urlencode  # Escapes values inside links and paging links.
 
 from flask import Blueprint, Response, current_app, jsonify, render_template, request, session  # The framework.
 from jinja2 import TemplateNotFound  # Marks a template that a later module still builds.
@@ -1800,28 +1800,8 @@ def holder_details(site_id: str) -> dict[str, Any]:
     held = lock.read_lock(org_id, site_id, client=lock_client())  # A read never raises, so a dead store answers None.
     if held is None:  # The lock expired between the refusal and this read.
         return {"actor_email": None, "cooldown_remaining": 0}  # No holder, and no wait left.
-    remaining = lock.COOLDOWN_SECONDS - lock_takeover_age_seconds(held)  # A renewal cannot grow the wait for ever.
+    remaining = held.cooldown_remaining_seconds()  # The first safe deadline wins over a moving heartbeat.
     return {"actor_email": held.owner.actor_email, "cooldown_remaining": max(0, int(remaining))}  # Never below zero.
-
-
-def lock_takeover_age_seconds(held: Any) -> float:
-    """Return the age that the takeover cooldown reads.
-
-    Why:
-        Tests inject small lock doubles that predate the total hold age method.
-        Production records read the bounded age, and old doubles keep the
-        quiet-age behavior.
-
-    Args:
-        held: The lock record or a small test double.
-
-    Returns:
-        The age that the cooldown uses.
-    """
-    bounded_age = getattr(held, "takeover_age_seconds", None)  # New records know the bounded takeover age.
-    if callable(bounded_age):  # Production records and updated doubles use this path.
-        return float(bounded_age())  # Convert to one numeric type for the caller.
-    return float(held.age_seconds())  # Old doubles still state the quiet age.
 
 
 def lock_failure_details(site_id: str, code: str, error: Exception) -> dict[str, Any] | None:
@@ -2000,7 +1980,9 @@ def lock_cooldown_seconds(org_id: str, site_id: str) -> int:
         return 0  # A wait the portal cannot measure reads as no wait at all.
     if held is None:  # No holder, so no operator waits for anything.
         return 0  # The banner hides the cooldown line on this value.
-    return max(0, round(lock.COOLDOWN_SECONDS - lock_takeover_age_seconds(held)))  # A renewal cannot grow the wait.
+    if hasattr(held, "cooldown_remaining_seconds"):  # New records include the total life bound in the wait.
+        return max(0, int(held.cooldown_remaining_seconds()))  # The value never falls below zero.
+    return max(0, round(lock.COOLDOWN_SECONDS - held.age_seconds()))  # Test doubles without the new method still work.
 
 
 def takeover_word(holder: str) -> str:
@@ -2070,7 +2052,8 @@ def lock_banner_context(org_id: str, site_id: str) -> dict[str, Any]:
     held = session_lock_record(site_id)  # None means this browser stored no lock for the site.
     if held is not None and held.lock_token:  # A stored token is the one proof that this browser holds the site.
         holder = held.owner.actor_email  # The banner may show this address, and no log line may hold it.
-        return build_lock_banner(site_id, LOCK_STATE_HELD, holder, 0, held.lock_token)  # No wait for the holder.
+        banner = build_lock_banner(site_id, LOCK_STATE_HELD, holder, 0, held.lock_token)  # No wait for the holder.
+        return with_lock_holder_run(banner, held)  # A traceable lock lets the holder open the run too.
     try:  # `read_site_locks` absorbs a dead store, and the seam lookup itself may still fail.
         locks = read_site_locks(org_id, [site_id]) if org_id else {}  # No organization means no readable key.
     except Exception:  # A page render must survive every fault of the lock seam.
@@ -2079,7 +2062,50 @@ def lock_banner_context(org_id: str, site_id: str) -> dict[str, Any]:
     state = site_lock_state(site_id, locks)  # One of `free`, `locked`, or `unknown`.
     holder = str(locks.get(site_id) or "")  # Empty for a free site and for a site the portal cannot read.
     wait = lock_cooldown_seconds(org_id, site_id) if state == LOCK_STATE_LOCKED else 0  # Only a holder makes a wait.
-    return build_lock_banner(site_id, state, holder, wait, "")  # This browser holds no token on this path.
+    banner = build_lock_banner(site_id, state, holder, wait, "")  # This browser holds no token on this path.
+    if state == LOCK_STATE_LOCKED:  # A lock held elsewhere may still name a run to stop.
+        return with_lock_holder_run(banner, read_banner_lock_record(org_id, site_id))  # Add the run link if safe.
+    return banner  # Free and unknown states have no usable holding run.
+
+
+def read_banner_lock_record(org_id: str, site_id: str) -> lock.LockRecord | None:
+    """Return the lock record that can enrich one banner.
+
+    Args:
+        org_id: The organization that owns the site.
+        site_id: The site the page acts on.
+
+    Returns:
+        The lock record, or None when the portal cannot read one.
+    """
+    try:  # A banner render must survive a store fault.
+        return lock.read_lock(org_id, site_id, client=lock_client())  # The full record names the holding run.
+    except Exception:  # A broken read must not hide the page.
+        logger.warning("select: the lock store did not answer the run of site %s", site_id)  # No token, no address.
+        return None  # The banner then omits the run link.
+
+
+def with_lock_holder_run(banner: dict[str, Any], record: lock.LockRecord | None) -> dict[str, Any]:
+    """Add the holding run link to one lock banner.
+
+    Args:
+        banner: The banner context that the template reads.
+        record: The lock record that may name a holding run.
+
+    Returns:
+        The banner context with run fields set.
+    """
+    enriched = dict(banner)  # Do not mutate a caller-owned dictionary from a test or another builder.
+    run_id = record.run_id.strip() if record is not None else ""  # Empty text cannot open a useful run page.
+    if not run_id:  # Only a usable run identifier may reach the template.
+        enriched["lock_holder_run"] = ""  # The template hides the link when this field is empty.
+        enriched["lock_holder_run_url"] = ""  # A blank URL avoids a broken link.
+        return enriched  # The caller gets the normal banner without a run link.
+    logger.info("select: add the holding run %s to the lock banner", run_id)  # Log before the context change.
+    enriched["lock_holder_run"] = run_id  # The operator needs the run identifier to find the stop control.
+    enriched["lock_holder_run_url"] = "/runs/" + quote(run_id, safe="")  # Escape path text before it reaches markup.
+    logger.debug("select: the lock banner links to the holding run %s", run_id)  # Report the safe result.
+    return enriched  # The template now has the link fields.
 
 
 def build_lock_banner(
@@ -2120,6 +2146,8 @@ def build_lock_banner(
         "lock_cooldown": cooldown,  # Zero hides the cooldown line of the banner.
         "lock_token": token,  # An empty value stops the heartbeat before it starts.
         "lock_confirm_word": takeover_word(holder),  # The first guess, which a refusal may replace.
+        "lock_holder_run": "",  # A later enrichment writes a run only after it reads the full lock record.
+        "lock_holder_run_url": "",  # A blank URL keeps the template from building a broken link.
         # Issue #2200: the takeover warning names this count. Zero hides the sentence.
         "lock_upgrade_devices": upgrade_devices,
         # Issue #2200: a control that writes to the site is off when another

@@ -88,6 +88,7 @@ __all__ = [
     "KEY_TEMPLATE",
     "LOCK_RENEWAL_MAX_SECONDS_VARIABLE",
     "LOCK_TTL_SECONDS",
+    "MAX_LOCK_LIFE_SECONDS",
     "RESUME_CONFIRMATION_TEXT",
     "RETRY_AFTER_SECONDS",
     "TAKEOVER_CONFIRMATION_TEXT",
@@ -106,7 +107,7 @@ __all__ = [
     "acquire_site_lock",
     "build_key",
     "connect_lock_store",
-    "lock_renewal_max_seconds",
+    "max_lock_life_seconds",
     "read_lock",
     "read_site_locks",
     "refresh_site_lock",
@@ -129,6 +130,46 @@ KEY_TEMPLATE: Final[str] = "misthelper:lock:site:{org_id}:{site_id}"
 #      missed beats before the lock dies.
 LOCK_TTL_SECONDS: Final[int] = 3600
 
+# WHAT: the environment variable that bounds one site lock hold.
+# WHY: issue #2564 showed that a live heartbeat can move a site lock for ever.
+#      This value lets an operator tune the maximum hold time without a code change.
+LOCK_RENEWAL_MAX_SECONDS_VARIABLE: Final[str] = "CAPTURE_LOCK_RENEWAL_MAX_SECONDS"
+
+# WHAT: how long one run may renew a site lock by default.
+# WHY: a full production cascade can last more than four hours, so this bound
+#      gives that proven window three times over. A renewal still stops the
+#      next morning, so an unattended driver cannot starve operators forever.
+MAX_LOCK_LIFE_SECONDS: Final[int] = 12 * 60 * 60  # Three four-hour token windows bound one run safely.
+
+
+def max_lock_life_seconds() -> int:
+    """Return the configured maximum life of one site lock.
+
+    Why:
+        The default protects long production upgrades. The environment value
+        lets an operator tune the bound without a code change.
+
+    Returns:
+        The maximum lock life, in seconds.
+    """
+    raw = os.environ.get(LOCK_RENEWAL_MAX_SECONDS_VARIABLE, "").strip()  # Empty text keeps the safe default.
+    if not raw:  # The operator did not configure a value.
+        return MAX_LOCK_LIFE_SECONDS  # Use the conservative production default.
+    try:  # The environment holds text and can hold a mistake.
+        seconds = int(raw)  # Parse the operator value before the safety check.
+    except ValueError:  # Bad text must not stop the portal.
+        _LOGGER.warning("lock: %s must be a number", LOCK_RENEWAL_MAX_SECONDS_VARIABLE)  # Name the bad setting.
+        return MAX_LOCK_LIFE_SECONDS  # Keep the default when the setting is bad.
+    if seconds >= LOCK_TTL_SECONDS:  # The bound must not shorten one normal lease.
+        return seconds  # Use the operator value after the safety check.
+    _LOGGER.warning(
+        "lock: %s must be at least %s",
+        LOCK_RENEWAL_MAX_SECONDS_VARIABLE,
+        LOCK_TTL_SECONDS,
+    )  # Explain the rejected value without logging secrets.
+    return MAX_LOCK_LIFE_SECONDS  # A too-small value can drop a live upgrade.
+
+
 # WHAT: how long a quiet holder keeps the site before another operator may take it.
 # WHY: contracts/site-lock.md line 113 calls this the full 300-second cooldown.
 #      The value stays under the lock life, so a quiet holder still holds a key
@@ -139,16 +180,6 @@ COOLDOWN_SECONDS: Final[int] = 300
 # WHY: contracts/site-lock.md line 92 sets 60 seconds for the browser and for
 #      the run driver thread, so a closed browser does not drop a live upgrade.
 HEARTBEAT_SECONDS: Final[int] = 60
-
-# WHAT: the environment variable that bounds one lock hold.
-# WHY: issue #2564 showed a driver that renewed a site lock for ever. This
-#      value lets an operator measure and tune the maximum hold time.
-LOCK_RENEWAL_MAX_SECONDS_VARIABLE: Final[str] = "CAPTURE_LOCK_RENEWAL_MAX_SECONDS"
-
-# WHAT: how long one run may keep renewing a site lock by default.
-# WHY: four 30-minute settle phases fit inside two hours. Eight hours gives a
-#      large production margin and still gives the next operator a finite wait.
-DEFAULT_LOCK_RENEWAL_MAX_SECONDS: Final[int] = 28800
 
 # WHAT: the exact text that takes a quiet site from another operator.
 # WHY: contracts/site-lock.md line 114 names this word and this letter case.
@@ -203,6 +234,7 @@ SITE_LOCKED_MESSAGE: Final[str] = "Another operator holds this site. Wait for th
 TAKEOVER_MESSAGE: Final[str] = "The operator who holds this site went quiet. Type CONFIRM to take the site."
 RESUME_MESSAGE: Final[str] = "Your earlier session on this site went quiet. Type continue to take it back."
 LOCK_LOST_MESSAGE: Final[str] = "The portal no longer holds the lock on this site."
+MAX_LIFE_RENEWAL_MESSAGE: Final[str] = "The site lock reached its maximum run life."  # Names the bounded stop.
 SITE_BUSY_MESSAGE: Final[str] = "The lock on this site changed hands during the request. Try again."
 AUDIT_SINK_MESSAGE: Final[str] = (
     "The portal cannot record the takeover of this site, so it did not take the site. Tell an administrator."
@@ -254,42 +286,6 @@ return 1
 
 _REDIS_HANDLE: Any = None  # The shared client, opened once for each worker process
 _LAST_FAILURE_AT: float | None = None  # When the last shared open failed, on the monotonic clock
-
-
-def lock_renewal_max_seconds() -> int:
-    """Return the configured maximum age of one renewable site lock.
-
-    Why:
-        Issue #2564 showed that a live heartbeat can move `refreshed_at` for
-        ever. The bound must come from the environment, so an operator can tune
-        it without a code change.
-
-    Returns:
-        The maximum lock age, in seconds.
-    """
-    raw = os.environ.get(LOCK_RENEWAL_MAX_SECONDS_VARIABLE, "").strip()  # Empty means the documented default.
-    if not raw:  # The operator set no override.
-        return DEFAULT_LOCK_RENEWAL_MAX_SECONDS  # The default covers normal upgrade runs.
-    try:  # The environment holds text and can hold a mistake.
-        if "_" in raw:  # Keep the same strict number rule as the portal config.
-            raise ValueError("A digit separator is not a number.")  # Treat this as bad text.
-        seconds = int(raw)  # Parse the operator value only after the shape check.
-    except ValueError:  # A bad value must not stop the portal.
-        _LOGGER.warning(
-            "lock: %s must be a number, so the portal uses %s",
-            LOCK_RENEWAL_MAX_SECONDS_VARIABLE,
-            DEFAULT_LOCK_RENEWAL_MAX_SECONDS,
-        )
-        return DEFAULT_LOCK_RENEWAL_MAX_SECONDS  # Continue with the safe default.
-    if seconds >= LOCK_TTL_SECONDS:  # The bound must not undercut one lease.
-        return seconds  # The operator value is measurable and safe.
-    _LOGGER.warning(
-        "lock: %s must be at least %s, so the portal uses %s",
-        LOCK_RENEWAL_MAX_SECONDS_VARIABLE,
-        LOCK_TTL_SECONDS,
-        DEFAULT_LOCK_RENEWAL_MAX_SECONDS,
-    )
-    return DEFAULT_LOCK_RENEWAL_MAX_SECONDS  # A too-small bound can drop a live upgrade.
 
 
 class SiteLockError(Exception):
@@ -835,49 +831,63 @@ class LockRecord:
         return (moment - refreshed).total_seconds()
 
     def lifetime_seconds(self, now: datetime | None = None) -> float:
-        """Return how long the same holder has held this lock.
+        """Return how long this run has held the lock.
 
         Why:
-            A heartbeat moves `refreshed_at`, so quiet age alone can stay near
-            zero for ever. The first hold time gives the portal a second clock
-            that a renewal cannot move.
+            A renewal moves the heartbeat time, so the first take time is the
+            only value that can bound the total life of one run.
 
         Args:
             now: The moment to measure from. The method reads the clock when
                 the caller passes nothing.
 
         Returns:
-            The seconds since acquisition. A damaged time reads as over the
-            configured bound.
+            The seconds since the first take time.
         """
-        moment = now if now is not None else datetime.now(UTC)  # Tests can pass a fixed clock.
-        try:  # An old or edited record can hold bad text.
-            acquired = datetime.fromisoformat(self.acquired_at)  # Parse the first hold time.
-        except ValueError:  # A bad first hold time must not make a permanent lock.
-            return float(lock_renewal_max_seconds() + COOLDOWN_SECONDS)  # Let a takeover become available.
-        if acquired.tzinfo is None:  # A stored time without a zone counts as UTC.
-            acquired = acquired.replace(tzinfo=UTC)  # Keep comparisons between aware values.
-        return (moment - acquired).total_seconds()  # The lifetime can pass the renewal bound.
+        moment = now if now is not None else datetime.now(UTC)  # Use one clock for this whole measurement.
+        try:
+            acquired = datetime.fromisoformat(self.acquired_at)  # Parse the stable first take time.
+        except ValueError:  # A damaged first time cannot prove room for another renewal.
+            return float(max_lock_life_seconds())  # Treat the lock as at the bound, which stops starvation.
+        if acquired.tzinfo is None:  # A stored time without a zone follows the older UTC rule.
+            acquired = acquired.replace(tzinfo=UTC)  # Keep records from older code comparable.
+        return (moment - acquired).total_seconds()  # The total life is independent from heartbeats.
 
-    def takeover_age_seconds(self, now: datetime | None = None) -> float:
-        """Return the age that controls the takeover cooldown.
+    def cooldown_remaining_seconds(self, now: datetime | None = None) -> int:
+        """Return the wait before a takeover can start.
 
         Why:
-            Issue #2564 showed a holder that renewed forever. The cooldown must
-            read the quiet time and the total hold age, so a renewal cannot move
-            the wait away from an operator.
+            The wait depends on the last heartbeat and on the total lock life.
+            A driver can move the heartbeat, but it cannot move the first take.
 
         Args:
             now: The moment to measure from.
 
         Returns:
-            The age that the takeover cooldown uses.
+            The whole seconds left before a typed takeover may start.
         """
-        if not self.run_id:  # An empty run has no live run, so `acquired_at` bounds the wait.
-            return max(self.age_seconds(now), self.lifetime_seconds(now))  # A renewal cannot reset this wait.
-        refreshed_age = self.age_seconds(now)  # A real quiet browser still reaches the old path.
-        excess_age = self.lifetime_seconds(now) - float(lock_renewal_max_seconds())  # Bound a live heartbeat.
-        return max(refreshed_age, excess_age, 0.0)  # A future clock value must not produce a negative wait.
+        quiet_wait = COOLDOWN_SECONDS - self.age_seconds(now)  # A quiet holder still gets the normal grace time.
+        life_wait = max_lock_life_seconds() - self.lifetime_seconds(now)  # The total life gives a fixed end.
+        return max(0, round(min(quiet_wait, life_wait)))  # The operator sees the first deadline that arrives.
+
+    def renewal_life_seconds(self, now: datetime | None = None) -> int:
+        """Return the lease that a renewal may safely grant.
+
+        Why:
+            A renewal must never extend the Redis key past the total life of
+            one run, but it may keep the normal one-hour lease before that.
+
+        Args:
+            now: The moment to measure from.
+
+        Returns:
+            The seconds to write as the store lease.
+        """
+        remaining = max_lock_life_seconds() - self.lifetime_seconds(now)  # Only the first take bounds the run life.
+        if remaining <= 0:  # No safe lease remains after the run life bound.
+            return 0  # The caller refuses the renewal and leaves the key to expire.
+        limited = min(LOCK_TTL_SECONDS, remaining)  # The lock may not exceed either bound.
+        return max(1, int(limited))  # A positive subsecond remainder still gets one final second.
 
     def is_quiet(self, now: datetime | None = None) -> bool:
         """Report whether the holder passed the full cooldown without a heartbeat.
@@ -888,7 +898,7 @@ class LockRecord:
         Returns:
             True when the age reaches or passes the cooldown.
         """
-        return self.takeover_age_seconds(now) >= COOLDOWN_SECONDS  # The contract says at or over
+        return self.cooldown_remaining_seconds(now) <= 0  # The typed word opens at the first safe deadline.
 
     def renewed(self) -> LockRecord:
         """Return the same record with a fresh heartbeat time.
@@ -1350,19 +1360,22 @@ def refresh_site_lock(key: str, record: LockRecord, client: Any = None) -> int:
         LockLostError: When the store holds a different token or no lock.
         LockStoreUnreachableError: When the lock store does not answer.
     """
-    if not record.run_id and record.lifetime_seconds() >= float(COOLDOWN_SECONDS):  # Bound a no-run renewal.
-        raise LockLostError(LOCK_LOST_MESSAGE)  # Stop renewal and let a real operator take it.
-    if record.lifetime_seconds() >= float(lock_renewal_max_seconds()):  # Bound the total renewable hold time.
-        raise LockLostError(LOCK_LOST_MESSAGE)  # The key still expires or becomes quiet for takeover.
     handle = _require_client(client)
-    renewed = record.renewed()  # A beat moves refreshed_at and leaves acquired_at alone
+    lease = record.renewal_life_seconds()  # Clamp the store life to the remaining life of one run.
+    if lease <= 0:  # The lock already reached the total life bound for this run.
+        _LOGGER.info("lock: the portal refuses to renew run %s after the run life bound", record.run_id)  # Action.
+        _LOGGER.debug("lock: the run %s reached the site lock life bound", record.run_id)  # Result summary.
+        raise LockLostError(MAX_LIFE_RENEWAL_MESSAGE)  # The caller stops extending the stored key.
+    renewed = record.renewed()  # A beat moves refreshed_at and leaves acquired_at alone.
+    _LOGGER.info("lock: renew the site lock of run %s for at most %s seconds", record.run_id, lease)  # Before write.
     held = _run_command(
         "refresh",
-        lambda: handle.eval(_REFRESH_SCRIPT, 1, key, record.lock_token, renewed.to_json(), LOCK_TTL_SECONDS),
+        lambda: handle.eval(_REFRESH_SCRIPT, 1, key, record.lock_token, renewed.to_json(), lease),
     )
     if int(held) != _SCRIPT_HELD:  # The lock expired, or a takeover moved it
         raise LockLostError(LOCK_LOST_MESSAGE)
-    return LOCK_TTL_SECONDS
+    _LOGGER.debug("lock: run %s renewed the site lock for %s seconds", record.run_id, lease)  # Safe result summary.
+    return lease
 
 
 def key_scope(key: str) -> tuple[str, str]:
