@@ -66,6 +66,7 @@ __all__ = [
     "LOCK_STATE_LOST",
     "LOCK_STORE_QUIET_REASON",
     "POST_CHECK_AUTOMATIC",
+    "POST_CHECK_DEFERRED_REASON",
     "POST_CHECK_MANUAL",
     "POST_CHECK_ORDINAL",
     "POST_CHECK_ROLE",
@@ -166,6 +167,7 @@ PORTAL_PACKAGE: Final[str] = "src.upgrade_portal."
 # WHY: A fault of this package names its own step in plain words. The driver
 # reads that text to pick the stage, and it reads no other message.
 POST_CHECK_MARK: Final[str] = "post-check"
+POST_CHECK_DEFERRED_REASON: Final[str] = "The scheduled reboot has not arrived yet."
 
 # WHY: A run that counted no wireless client must end failed, because the site
 # never reported the clients. The sentence carries no "post-check" text, so
@@ -739,6 +741,15 @@ def lock_heartbeat(record: Mapping[str, Any], lock: LockRecord, progress: Progre
     """
     key = build_key(str(record.get("org_id", "")), str(record.get("site_id", "")))
     return LockHeartbeat(LockHeartbeatPlan(key=key, record=lock, progress=progress))
+
+
+def _post_check_moment(value: Any) -> float | None:
+    """Return one schedule moment as epoch seconds."""
+    try:
+        return float(value) if value is not None and str(value).strip() else None  # Empty text carries no schedule.
+    except (TypeError, ValueError):  # A malformed stored value must not stop a run at the capture step.
+        logger.warning("Run driver dropped a malformed upgrade schedule moment")  # The value is not a secret.
+        return None  # Bad stored data cannot prove that a capture is stale.
 
 
 @dataclass(frozen=True, slots=True)
@@ -1684,6 +1695,9 @@ class RunDriver:
         if self._deps.post_check_mode == POST_CHECK_MANUAL:
             self._hold_post_check(record, run_id)
             return  # The operator starts this capture, so the driver starts none
+        if self._scheduled_post_check_pending(record):  # A capture before the scheduled reboot would be stale.
+            self._hold_scheduled_post_check(record, run_id)  # The page can start the capture after the device settles.
+            return  # No pre-reboot capture is stored as an upgrade result.
         record["post_capture_pending"] = False  # No reader then finds a stale mark from an earlier run
         request = post_check_request(run_id)
         logger.info("Run %s starts the post-check capture with ordinal %s", run_id, POST_CHECK_ORDINAL)
@@ -1694,6 +1708,29 @@ class RunDriver:
         self._save(record)
         if not capture_id:
             raise RunDriverError("The portal could not start the post-check capture.")
+
+    def _scheduled_post_check_pending(self, record: Mapping[str, Any]) -> bool:
+        """Report whether the post-check must wait for a scheduled reboot."""
+        moment = self._post_check_schedule_moment(record)  # The latest schedule controls the safe capture moment.
+        return moment is not None and time.time() < moment  # A future schedule means the site may still be old.
+
+    def _post_check_schedule_moment(self, record: Mapping[str, Any]) -> float | None:
+        """Return the latest scheduled moment that can make a capture stale."""
+        options = record.get("options")  # The run stores the operator schedule under this key.
+        if not isinstance(options, Mapping):  # Older records can hold no option block.
+            return None  # No schedule means the capture can start now.
+        moments = [_post_check_moment(options.get("start_time"))]  # A delayed start shifts all upgrade results.
+        if bool(options.get("reboot")):  # A reboot time matters only when the cloud reboots devices.
+            moments.append(_post_check_moment(options.get("reboot_at")))  # The post-check must follow this moment.
+        planned = [moment for moment in moments if moment is not None]  # Missing values never delay the capture.
+        return max(planned) if planned else None  # The latest moment is the safe capture anchor.
+
+    def _hold_scheduled_post_check(self, record: MutableMapping[str, Any], run_id: str) -> None:
+        """Mark a post-check capture that must wait for the schedule."""
+        record["post_capture_pending"] = True  # A later page reads this mark and offers the manual capture.
+        record["post_capture_deferred_reason"] = POST_CHECK_DEFERRED_REASON  # The reason stops a stale comparison.
+        self._save(record)  # Persist the mark before the final run state is written.
+        logger.info("Run %s holds the post-check capture until the scheduled reboot arrives", run_id)
 
     def _hold_post_check(self, record: MutableMapping[str, Any], run_id: str) -> None:
         """Mark the run record for a post-check capture that an operator starts.

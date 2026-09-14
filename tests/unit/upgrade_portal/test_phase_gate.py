@@ -24,6 +24,7 @@ from typing import Any
 
 import pytest
 
+from src.upgrade_portal.app import wiring
 from src.upgrade_portal.runtime.runs import PhaseState
 from src.upgrade_portal.upgrade import gate, phase_gate
 from src.upgrade_portal.upgrade.driver import PhaseOutcome
@@ -216,6 +217,21 @@ class FakeStatisticsReader:
         return gate.FleetRead(readings=dict(self._readings), partial_reasons=list(self._partial_reasons))
 
 
+class SequencedStatisticsReader(FakeStatisticsReader):
+    """Answer the statistics poll from a fixed schedule."""
+
+    def __init__(self, schedule: Sequence[Mapping[str, gate.GateReading]]) -> None:
+        """Build one scheduled statistics reader."""
+        super().__init__()  # The base class owns the call counter.
+        self._schedule = [dict(item) for item in schedule]  # Each round gets an independent reading map.
+
+    def read(self) -> gate.FleetRead:
+        """Return the fleet reading of this round."""
+        self.calls += 1  # Count the round before the schedule lookup.
+        index = min(self.calls - 1, len(self._schedule) - 1)  # Repeat the last item for long waits.
+        return gate.FleetRead(readings=dict(self._schedule[index]), partial_reasons=[])  # Return a complete read.
+
+
 class RecordingReporter:
     """Keep every progress record that the adapter sent."""
 
@@ -295,6 +311,7 @@ class Harness:
         settle_gate: phase_gate.DeviceGate | None = None,
         deadline_seconds: int = phase_gate.PHASE_DEADLINE_SECONDS,
         stop_requested: Any = None,
+        schedule_anchor: float | None = None,
     ) -> None:
         """Build one harness.
 
@@ -309,6 +326,7 @@ class Harness:
         self.events = events
         self.statistics = statistics
         self.stop_requested = stop_requested or (lambda _run_id: False)
+        self.schedule_anchor = schedule_anchor
         self.adapter = self._build(settle_gate, deadline_seconds)
 
     @property
@@ -337,6 +355,7 @@ class Harness:
             progress=self.reporter,
             sleep=self.sleeper,
             stop_requested=self.stop_requested,
+            schedule_anchor=self.schedule_anchor,
         )
         return phase_gate.PhaseSettleGate(deps, deadline_seconds)
 
@@ -514,6 +533,60 @@ def test_a_future_reboot_time_extends_the_gateway_deadline() -> None:
     outcome = harness.adapter.settle(RUN_ID, "gateways", [target])  # WHY: The phase must wait to the moved limit.
     assert outcome.state == PhaseState.FAILED.value  # WHY: The test proves delay, not false success.
     assert harness.clock() == reboot_at + float(phase_gate.PHASE_DEADLINE_SECONDS)  # WHY: Failure waited past reboot.
+
+
+def test_a_scheduled_reboot_does_not_fail_at_the_old_deadline() -> None:
+    """A future reboot starts the phase allowance at the scheduled moment."""
+    stale = {SWITCH_MAC: gate.GateReading(mac=SWITCH_MAC, version=VERSION_BEFORE, uptime=UPTIME_BEFORE)}  # Old image.
+    readings = SequencedStatisticsReader([stale, stale, stale, rebooted_readings(SWITCH_MAC)])  # Reboot at anchor.
+    events = FakeReconnectReader([[], [], [], [SWITCH_MAC]])  # Reconnect event appears at the same anchor.
+    harness = Harness(
+        events, readings, deadline_seconds=80, schedule_anchor=START_TIME + 60.0
+    )  # Old code failed at 80.
+    outcome = harness.adapter.settle(RUN_ID, "switches", [target_entry(SWITCH_MAC)])  # Run only the fake gate loop.
+    assert outcome.state == PhaseState.SETTLED.value  # The phase succeeds after the scheduled reboot.
+    assert outcome.not_returned == ()  # No target receives a false not-returned mark.
+    assert harness.clock() > START_TIME + 80.0  # The loop passed the old absolute deadline.
+
+
+def test_a_scheduled_reboot_timeout_marks_the_post_reboot_failure() -> None:
+    """A device still fails after its scheduled settle window ends."""
+    stale = {SWITCH_MAC: gate.GateReading(mac=SWITCH_MAC, version=VERSION_BEFORE, uptime=UPTIME_BEFORE)}  # No reboot.
+    events = FakeReconnectReader([[], [], [], [SWITCH_MAC]])  # The cloud reports reconnect but no new firmware.
+    harness = Harness(
+        events,
+        FakeStatisticsReader(stale),
+        deadline_seconds=80,
+        schedule_anchor=START_TIME + 60.0,
+    )  # Bound.
+    outcome = harness.adapter.settle(RUN_ID, "switches", [target_entry(SWITCH_MAC)])  # Run until the window ends.
+    assert outcome.state == PhaseState.FAILED.value  # The real post-reboot timeout still fails.
+    assert outcome.not_returned == (SWITCH_MAC,)  # After the schedule, the target can be marked not returned.
+    assert outcome.note == phase_gate.NOTE_SCHEDULED_RETURN_FAILED  # The message names a post-reboot failure.
+
+
+def test_a_scheduled_reboot_before_the_ceiling_is_not_a_return_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A device is not marked not returned before the scheduled reboot."""
+    monkeypatch.setattr(phase_gate, "SCHEDULE_ANCHOR_CEILING_SECONDS", 40)  # Keep the ceiling test fast.
+    harness = Harness(
+        FakeReconnectReader(),
+        FakeStatisticsReader(),
+        deadline_seconds=80,
+        schedule_anchor=START_TIME + 200.0,
+    )  # Future.
+    outcome = harness.adapter.settle(
+        RUN_ID, "switches", [target_entry(SWITCH_MAC)]
+    )  # Stop before the scheduled reboot.
+    assert outcome.state == PhaseState.FAILED.value  # The finite overall ceiling still stops the wait.
+    assert outcome.not_returned == ()  # The target did not miss a reboot that has not arrived.
+    assert outcome.note == phase_gate.NOTE_SCHEDULE_NOT_ARRIVED  # The message names the future schedule.
+    assert outcome.note != phase_gate.NOTE_SCHEDULED_RETURN_FAILED  # The two failure messages differ.
+
+
+def test_a_delayed_start_time_builds_the_same_phase_anchor() -> None:
+    """A delayed download start also delays the phase settle limit."""
+    record = {"options": {"start_time": START_TIME + 120.0, "reboot": False}}  # The cloud starts the job later.
+    assert wiring._phase_schedule_anchor(record) == START_TIME + 120.0  # The phase gate reads the start schedule.
 
 
 def test_a_timeout_success_status_records_settled_outcome() -> None:

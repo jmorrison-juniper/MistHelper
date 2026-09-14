@@ -1669,6 +1669,20 @@ class TestPostCheckModeSeam:
         assert final["post_capture_pending"] is False
         assert final["post_capture_id"] == "cap-abc-02"
 
+    def test_a_future_reboot_holds_the_post_check_capture(
+        self,
+        parts: dict[str, Any],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The driver stores no stale post-check before a scheduled reboot."""
+        monkeypatch.setattr(driver.time, "time", lambda: 1000.0)  # Fix the epoch clock before the reboot.
+        record = make_record()  # Build a normal run record.
+        record["options"] = {"reboot": True, "reboot_at": 2000.0}  # Schedule the device reboot in the future.
+        final = parts["driver"].run(record)  # Run the driver without a real cloud call.
+        assert parts["capture"].requests == []  # No stale capture can become the upgrade result.
+        assert final["post_capture_pending"] is True  # A later page can ask for the post-check capture.
+        assert final["post_capture_deferred_reason"] == driver.POST_CHECK_DEFERRED_REASON  # The record names why.
+
     def test_the_manual_mode_starts_no_capture(self, parts: dict[str, Any]) -> None:
         """The manual mode marks the record and calls no capture starter.
 

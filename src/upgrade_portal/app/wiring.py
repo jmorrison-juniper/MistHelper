@@ -770,6 +770,7 @@ def build_gate_deps(phase_gate: ModuleType, session: Any, record: Mapping[str, A
     if events is None:  # No catalogue means the gate can read no reconnect signal.
         return None  # The caller names the gap and the run sends nothing.
     org_id = str(record.get("org_id", ""))  # Both readers narrow to this organization.
+    schedule_anchor = _phase_schedule_anchor(record)  # The settle gate must wait for delayed cloud work.
     reader = phase_gate.CloudReconnectReader(session, org_id, events.EventCatalogue(), time.time)
     counter = phase_gate.CloudStatisticsReader(session, org_id, str(record.get("site_id", "")))
 
@@ -779,13 +780,40 @@ def build_gate_deps(phase_gate: ModuleType, session: Any, record: Mapping[str, A
         return isinstance(stored, Mapping) and stored.get("stop_request") is not None
 
     if heartbeat is None:  # No lock means no beat, so the gate keeps its own log reporter.
-        return phase_gate.PhaseGateDeps(event_reader=reader, statistics_reader=counter, stop_requested=stop_requested)
+        return phase_gate.PhaseGateDeps(
+            event_reader=reader,
+            statistics_reader=counter,
+            stop_requested=stop_requested,
+            schedule_anchor=schedule_anchor,
+        )
     return phase_gate.PhaseGateDeps(
         event_reader=reader,
         statistics_reader=counter,
         progress=heartbeat,
         stop_requested=stop_requested,
+        schedule_anchor=schedule_anchor,
     )
+
+
+def _phase_schedule_anchor(record: Mapping[str, Any]) -> float | None:
+    """Return the latest scheduled moment that can delay the settle gate."""
+    options = record.get("options")  # The run stores the cloud schedule under this key.
+    if not isinstance(options, Mapping):  # A legacy record may hold no option block.
+        return None  # No schedule means the settle gate starts its allowance now.
+    moments = [_schedule_moment(options.get("start_time"))]  # A delayed start shifts the whole operation.
+    if bool(options.get("reboot")):  # A reboot schedule matters only when the cloud will reboot devices.
+        moments.append(_schedule_moment(options.get("reboot_at")))  # A delayed reboot shifts the return window.
+    planned = [moment for moment in moments if moment is not None]  # Missing controls must not invent a delay.
+    return max(planned) if planned else None  # The later planned moment is the safe phase anchor.
+
+
+def _schedule_moment(value: Any) -> float | None:
+    """Return one schedule moment as epoch seconds."""
+    try:
+        return float(value) if value is not None and str(value).strip() else None  # Empty text carries no schedule.
+    except (TypeError, ValueError):  # A malformed stored value must not break a run that already started.
+        logger.warning("wiring: dropped a malformed upgrade schedule moment")  # The malformed value is not a secret.
+        return None  # Bad stored data cannot prove that a phase must wait.
 
 
 def build_phase_gate(record: Mapping[str, Any], session: Any, heartbeat: Any, store: Any) -> Any:
