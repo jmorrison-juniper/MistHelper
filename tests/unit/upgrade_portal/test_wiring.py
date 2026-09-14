@@ -406,6 +406,94 @@ def _boom() -> Any:
     raise RuntimeError("The store did not answer.")  # The wiring must hold this fault.
 
 
+class _BindableLock:
+    """A lock record stand-in that records the run it takes.
+
+    Why:
+        Issue #2648 binds the run into the site lock before the heartbeat
+        starts. This double proves the bind without a Redis server and without
+        the real frozen record.
+    """
+
+    def __init__(self, run_id: str = "") -> None:
+        """Hold the run that this stand-in names.
+
+        Args:
+            run_id: The run the record names at the start of a test.
+        """
+        self.run_id = run_id  # The field that the heartbeat reads before it renews.
+
+    def bound_to_run(self, run_id: str) -> "_BindableLock":
+        """Return a copy that names one run.
+
+        Args:
+            run_id: The run that now holds the site.
+
+        Returns:
+            A new stand-in that names the run.
+        """
+        return _BindableLock(run_id)  # The real record is frozen, so this answers a copy as well.
+
+
+class _UnbindableLock:
+    """A lock record stand-in from an older build, with no bind call."""
+
+    def __init__(self, run_id: str = "") -> None:
+        """Hold the run that this stand-in names.
+
+        Args:
+            run_id: The run the record names.
+        """
+        self.run_id = run_id  # The only field the heartbeat reads.
+
+
+def test_the_site_lock_takes_the_run_of_the_record() -> None:
+    """Issue #2648: the wiring names the run inside the site lock.
+
+    Why:
+        The operator takes the site before any run exists, so the stored lock
+        names no run. The heartbeat refuses to renew a lock that names no run,
+        so the lock expired one minute into every run and a second operator
+        could take the site during a firmware write.
+    """
+    bound = wiring.bind_lock_to_run(_BindableLock(""), RUN_ID)  # The empty lock of the capture page.
+    assert bound.run_id == RUN_ID  # The heartbeat now finds the run that it protects.
+
+
+def test_a_lock_that_already_names_the_run_stays_as_it_is() -> None:
+    """Issue #2648: a second bind writes nothing.
+
+    Why:
+        A run that reaches the wiring twice must not mint a second record. The
+        same object returns, so the beat compares the same token.
+    """
+    held = _BindableLock(RUN_ID)  # The lock already names this run.
+    assert wiring.bind_lock_to_run(held, RUN_ID) is held  # The same object returns, with no copy.
+
+
+def test_a_lock_takes_no_empty_run_name() -> None:
+    """Issue #2648: a run record with no key leaves the lock alone.
+
+    Why:
+        An empty run name would write the same empty value that the defect
+        reported. The record then returns unchanged, and the heartbeat reports
+        the empty run as it does today.
+    """
+    held = _BindableLock("")  # The lock of the capture page.
+    assert wiring.bind_lock_to_run(held, "") is held  # No write, because there is no run to name.
+
+
+def test_a_lock_with_no_bind_call_still_starts_the_run() -> None:
+    """Issue #2648: an older record shape must never end a run.
+
+    Why:
+        A stand-in of an older test offers no bind call. Every other gap of this
+        module lets the run start, so this gap does the same.
+    """
+    held = _UnbindableLock("")  # A record shape that Issue #2648 did not reach.
+    assert wiring.bind_lock_to_run(held, RUN_ID) is held  # The run still starts with the record it had.
+
+
 def _no_store_module(monkeypatch: pytest.MonkeyPatch) -> None:
     """Make every store lookup of the wiring module answer None.
 
