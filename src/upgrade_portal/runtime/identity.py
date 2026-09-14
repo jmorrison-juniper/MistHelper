@@ -104,6 +104,15 @@ _FORBIDDEN_STATUS: Final[int] = 403  # The status that `contracts/http-api.md` f
 _MAX_EMAIL_LENGTH: Final[int] = 254  # The longest address a mail server accepts
 _BROWSER_ID_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_-]{16,128}$")  # The URL-safe shape
 _TOKEN_NAME_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+RESERVED_DOMAIN_SUFFIXES: Final[tuple[str, ...]] = (  # RFC names these special-use top-level domains.
+    ".invalid",  # This domain cannot resolve to a real mailbox.
+    ".test",  # This domain is for tests and cannot name an operator.
+    ".example",  # This domain is for examples and cannot name an operator.
+    ".localhost",  # This domain resolves locally and cannot name a mailbox.
+)
+RESERVED_SECOND_LEVEL_DOMAINS: Final[frozenset[str]] = frozenset(  # RFC 2606 reserves these full domains.
+    {"example.com", "example.net", "example.org"}  # These names are for documentation and no accountable mailbox.
+)
 
 # The guard below needs a generic signature. It declares the two type variables
 # here, in the form of `typing`, and not in the form of PEP 695.
@@ -197,6 +206,33 @@ def normalize_email(raw_email: str) -> str:  # Runs before any identity reaches 
     if not _has_valid_email_shape(candidate):  # A value with no domain part cannot name a work mailbox
         raise ValueError("The work email address has no domain part.")  # No part of the value in the text
     return candidate  # The one spelling that every later comparison uses
+
+
+def email_domain(actor_email: str) -> str:
+    """Return the normalized domain part of one operator address.
+
+    Args:
+        actor_email: The address that the operator typed.
+
+    Returns:
+        The normalized domain part.
+    """
+    return normalize_email(actor_email).rsplit("@", 1)[1]  # Reuse the sign-in shape check before reading the domain.
+
+
+def address_uses_reserved_domain(actor_email: str) -> bool:
+    """Report whether one operator address uses a reserved domain.
+
+    Args:
+        actor_email: The address that the operator typed.
+
+    Returns:
+        True when the address domain is reserved for tests, examples, or local use.
+    """
+    domain = email_domain(actor_email)  # One normalized value feeds both reserved-domain checks.
+    if domain in RESERVED_SECOND_LEVEL_DOMAINS:  # RFC 2606 reserves these exact second-level names.
+        return True  # A reserved example domain cannot name an accountable operator.
+    return any(domain.endswith(suffix) for suffix in RESERVED_DOMAIN_SUFFIXES)  # RFC 2606 and RFC 6761 reserve these.
 
 
 def environment_token_present() -> bool:  # A presence check, and never a read of the value

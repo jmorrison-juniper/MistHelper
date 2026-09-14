@@ -40,8 +40,9 @@ class TestOrganizationUpgradeBrowserFlow:
         sync_api.expect(page.get_by_test_id("org-upgrade-options")).to_be_visible()
         assert page.url.endswith("/upgrade/org/options")
 
-    def test_multisite_options_confirmation_progress_and_cancel(self, page: Any) -> None:
+    def test_multisite_options_confirmation_progress_and_cancel(self, firmware_operator_page: Any) -> None:
         """The browser completes every organization page without a live Mist call."""
+        page = firmware_operator_page  # This path starts firmware, so it needs a reachable operator address.
         page.goto(MODE_PATH, wait_until="domcontentloaded")
         page.get_by_test_id("mode-multi-site").check()
         page.get_by_test_id("mode-continue").click()

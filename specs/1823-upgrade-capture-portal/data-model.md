@@ -246,6 +246,7 @@ post-check together.
 | `site_id`, `site_name` | string | yes | |
 | `actor_email` | string | yes | The operator who owns the run. |
 | `browser_id` | string | yes | Identifies the browser that holds the lock. |
+| `cloud_account` | string | yes | The Mist account read before firmware starts. Empty when absent. |
 | `created_at` | string | yes | ISO 8601 in UTC. |
 | `updated_at` | string | yes | Written on every state change. |
 | `state` | string | yes | See section 4.1. |

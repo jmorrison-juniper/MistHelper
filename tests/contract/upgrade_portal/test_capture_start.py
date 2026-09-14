@@ -384,6 +384,30 @@ def test_a_start_answers_accepted(
     assert answer.status_code == ACCEPTED_STATUS
 
 
+def test_a_capture_from_a_reserved_domain_still_starts(
+    start_client: FlaskClient,
+    owner: identity.SessionOwner,
+    fake_org_id: str,
+    fake_site_id: str,
+    capture_runner: RecordingRunner,
+) -> None:
+    """A capture still starts when the operator address uses a reserved domain.
+
+    Args:
+        start_client: The test browser.
+        owner: The signed-in operator with the reserved address.
+        fake_org_id: The chosen organization.
+        fake_site_id: The site of that organization.
+        capture_runner: The stand-in that received the job.
+    """
+    sign_in_client(start_client, owner, fake_org_id)  # Sign-in must stay open for read-only journeys.
+    body = {"tier": TIER_STANDARD}  # A capture reads the site and writes no firmware.
+    answer = start_capture(start_client, fake_site_id, body)  # The reserved domain must not block this route.
+    assert answer.status_code == ACCEPTED_STATUS  # The firmware-only guard must not block this route.
+    assert capture_runner.started.wait(WORKER_WAIT_SECONDS)  # The worker start proves the route accepted the job.
+    assert capture_runner.jobs[0]["actor_email"] == PROBE_EMAIL  # The read-only audit still names the typed address.
+
+
 def test_the_start_answer_names_the_capture(
     start_client: FlaskClient, owner: identity.SessionOwner, fake_org_id: str, fake_site_id: str
 ) -> None:

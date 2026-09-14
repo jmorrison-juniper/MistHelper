@@ -42,6 +42,7 @@ from src.upgrade_portal.runtime.identity import (
     OperatorSession,
     SessionOwner,
     SessionRegistry,
+    address_uses_reserved_domain,
     attach_browser_id,
     build_owner,
     current_owner,
@@ -102,6 +103,16 @@ MALFORMED_BROWSER_IDS = (
     "has+plus+characters+here",  # A plus sign is not URL-safe here
     "has/slash/characters/here",  # A slash is not URL-safe here
     "has.dot.characters.here",  # A dot is not URL-safe here
+)
+
+RESERVED_OPERATOR_ADDRESSES = (  # The exact reserved domain set that the firmware gate refuses.
+    "someone@example.invalid",  # RFC 2606 reserves the invalid top-level domain.
+    "someone@host.test",  # RFC 2606 reserves the test top-level domain.
+    "someone@name.example",  # RFC 2606 reserves the example top-level domain.
+    "someone@host.localhost",  # RFC 6761 reserves the localhost top-level domain.
+    "someone@example.com",  # RFC 2606 reserves this second-level domain.
+    "someone@example.net",  # RFC 2606 reserves this second-level domain.
+    "someone@example.org",  # RFC 2606 reserves this second-level domain.
 )
 
 
@@ -296,6 +307,21 @@ def test_normalize_email_is_idempotent() -> None:
     """
     once = normalize_email(OPERATOR_EMAIL)
     assert normalize_email(once) == once
+
+
+@pytest.mark.parametrize("raw_email", RESERVED_OPERATOR_ADDRESSES)
+def test_reserved_domains_are_marked_unreachable(raw_email: str) -> None:
+    """Prove that every RFC reserved domain is marked unreachable.
+
+    Args:
+        raw_email: The reserved address under test.
+    """
+    assert address_uses_reserved_domain(raw_email)  # Firmware start refuses these domains only.
+
+
+def test_normal_corporate_domain_is_reachable() -> None:
+    """Prove that a normal corporate address is not a reserved domain."""
+    assert not address_uses_reserved_domain("someone@juniper.net")  # Corporate mail must always pass.
 
 
 def test_two_spellings_of_one_address_give_one_digest() -> None:

@@ -5,7 +5,7 @@ Why:
     first write, because this feature deletes no record. A missing field or an
     illegal state move leaves a record that no operator can read months later.
 
-    These tests hold their own copy of the twenty field names and of the state
+    These tests hold their own copy of the twenty-one field names and of the state
     chain. Both copies come from ``specs/1823-upgrade-capture-portal/
     data-model.md`` section 4. A test that only repeated the module constants
     would still pass after a wrong edit of those constants, so the second copy
@@ -50,7 +50,7 @@ from src.upgrade_portal.runtime.runs import (
     RunTransitionError,
 )
 
-# WHY: The twenty required fields of data-model.md section 4, lines 219 to 236.
+# WHY: The twenty-one required fields of data-model.md section 4.
 # The test carries its own copy, so a field dropped from the module fails here.
 DATA_MODEL_FIELDS: Final[frozenset[str]] = frozenset(
     {
@@ -63,6 +63,7 @@ DATA_MODEL_FIELDS: Final[frozenset[str]] = frozenset(
         "site_name",
         "actor_email",
         "browser_id",
+        "cloud_account",  # The start route fills this before firmware moves.
         "created_at",
         "updated_at",
         "state",
@@ -180,6 +181,7 @@ OPERATOR_VALUES: Final[tuple[tuple[str, Any], ...]] = (
     ("site_name", "Example Site"),
     ("actor_email", "operator@example.com"),
     ("browser_id", "browser-0001"),
+    ("cloud_account", ""),  # A new run has no Mist self label until start.
     ("tier", 2),
 )
 
@@ -331,7 +333,7 @@ def _parsed_time(value: str) -> datetime:
 
 
 def test_build_writes_every_data_model_field() -> None:
-    """The new record holds the twenty data model fields, and no other field.
+    """The new record holds the twenty-one data model fields, and no other field.
 
     Why:
         A field written at a later stage would leave every older record
@@ -339,7 +341,7 @@ def test_build_writes_every_data_model_field() -> None:
     """
     record = _record()
     assert set(record) == DATA_MODEL_FIELDS
-    assert len(record) == 20
+    assert len(record) == 21
 
 
 def test_the_required_field_list_matches_the_data_model() -> None:

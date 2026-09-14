@@ -180,6 +180,8 @@ BROWSER_TOKEN_EVIDENCE_PATH = ARTIFACT_DIRECTORY / "browser-token-evidence.jsonl
 SECOND_EMAIL = "e2e.second.operator@example.invalid"  # A second address, already normalized.
 SECOND_BROWSER_ID = "e2eBrowserIdentity0002"  # A second browser, so the pair differs in both halves.
 RENEWED_BROWSER_ID = "e2eBrowserIdentity0003"  # A renewed session keeps the actor and changes the browser.
+FIRMWARE_EMAIL = "e2e.operator@juniper.net"  # A reachable stand-in lets firmware-write browser tests pass the gate.
+FIRMWARE_BROWSER_ID = "e2eBrowserIdentity0004"  # A separate browser identity keeps lock ownership unambiguous.
 
 # WHY: The organization picker reads the privilege list of the cloud session,
 # and the site picker reads two cloud lists. Fixed records fill all three, so a
@@ -1393,6 +1395,22 @@ def second_operator_cookies() -> list[dict[str, str]]:
     return operator_session_cookies(SECOND_EMAIL, SECOND_BROWSER_ID)
 
 
+def firmware_operator_cookies() -> list[dict[str, str]]:
+    """Build the two cookies of the firmware-write stand-in operator.
+
+    Why:
+        Issue #2615 refuses reserved domains before firmware moves. Most
+        browser tests use a reserved address to prove that read-only pages do
+        not need a real mailbox. A browser flow that starts firmware needs this
+        reachable stand-in, so it tests the confirmed write path and not the
+        refusal path.
+
+    Returns:
+        One record for each cookie, in the shape that `add_cookies` takes.
+    """
+    return operator_session_cookies(FIRMWARE_EMAIL, FIRMWARE_BROWSER_ID)  # The write gate accepts this address.
+
+
 @pytest.fixture
 def browser_token_value() -> str:
     """Return the fake browser token that the server stand-in accepts.
@@ -1722,6 +1740,7 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
     _register_operator(STAND_IN_EMAIL, STAND_IN_BROWSER_ID)  # The operator that every test drives.
     _register_operator(SECOND_EMAIL, SECOND_BROWSER_ID)  # The operator that meets the lock refusal.
     _register_operator(STAND_IN_EMAIL, RENEWED_BROWSER_ID)  # The renewed session keeps the durable actor.
+    _register_operator(FIRMWARE_EMAIL, FIRMWARE_BROWSER_ID)  # The operator that may start firmware writes.
     _seed_fixture_runs(built, upgrade)  # Browser-only states that no safe page journey can create.
     return built  # Waitress and Gunicorn both load this object by name.
 
@@ -1845,6 +1864,33 @@ def second_operator_page(browser: Any, capture_portal_server: str) -> Iterator[A
     yield opened
     opened.close()
     context.close()  # The context holds a profile directory until it closes.
+
+
+@pytest.fixture
+def firmware_operator_page(context: Any, capture_portal_server: str) -> Iterator[Any]:
+    """Open a browser page that can start a firmware write.
+
+    Why:
+        Issue #2615 intentionally refuses the default reserved E2E address for
+        firmware writes. This fixture keeps the default reserved session for
+        read-only paths and gives write-path tests one registered reachable
+        address.
+
+    Args:
+        context: The browser context that `pytest-playwright` built.
+        capture_portal_server: The address of the running portal.
+
+    Yields:
+        The browser page, with the firmware-write session cookies in place.
+    """
+    del capture_portal_server  # Requested for its start-up work alone. `base_url` carries the address.
+    context.add_cookies(firmware_operator_cookies())  # Both cookies, against the portal address.
+    opened = context.new_page()  # The page then carries the session on its first request.
+    isolation_response = opened.goto("/healthz")  # Reject a wrong server before one workflow assertion.
+    assert isolation_response is not None and isolation_response.ok  # Prove the test reaches the isolated app.
+    _assert_isolated_headers(isolation_response.headers)  # Refuse a shared or live server.
+    yield opened  # The test uses the reachable operator only where it starts firmware.
+    opened.close()  # A page left open would hold a browser target for the whole run.
 
 
 @pytest.fixture

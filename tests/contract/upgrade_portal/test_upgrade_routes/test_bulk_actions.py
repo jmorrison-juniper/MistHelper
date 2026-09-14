@@ -39,7 +39,7 @@ LOCK_READER_KEY = "SITE_LOCK_READER"  # The seam that reads the site lock, named
 LAUNCHER_KEY = "RUN_LAUNCHER"  # The seam that hands one prepared record to the run driver.
 VERSIONS_KEY = "UPGRADE_VERSIONS"  # The seam that answers the version list of each device model.
 
-PROBE_EMAIL = "probe.operator@example.invalid"  # A reserved domain, so no real address appears.
+PROBE_EMAIL = "probe.operator@juniper.net"  # A normal corporate address must pass the firmware start gate.
 OTHER_EMAIL = "second.operator@example.invalid"  # The operator that holds the lock in the refusal tests.
 ORG_ID = "00000000-0000-0000-0000-0000000000aa"  # Matches the shared organization of the other tests.
 SITE_ID = "00000000-0000-0000-0000-0000000000bb"  # Matches the shared site of the other tests.
