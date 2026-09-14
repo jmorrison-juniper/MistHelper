@@ -38,27 +38,27 @@ Per-rule linter check across `src/` (adjust `--ignore` to isolate a rule group):
 
 **Pull request**: `1030-ste-src-cleanup` Phase 1.
 
-- [ ] T001 Regenerate the dictionary if missing:
+- [X] T001 Regenerate the dictionary if missing: (delivered: tools/ste_linter/dictionary/extract.py)
   `& ".venv\Scripts\python.exe" -m tools.ste_linter.dictionary.extract documentation/ASD-STE100_ISSUE9.pdf`.
-- [ ] T002 Produce the Phase 1 target list. Run the linter across `src/` and
+- [X] T002 Produce the Phase 1 target list. Run the linter across `src/` and (delivered: specs/1030-ste-src-cleanup/spec.md)
   filter to STE-S9-LATIN, STE-S4-CONTRACTION, STE-S9-PHRASAL, STE-S9-GENDER,
   STE-S7-WARNING, and STE-S6-PARA. Save the file and line list.
-- [ ] T003 [P] Fix STE-S9-LATIN (167). Replace "e.g." with "for example".
+- [X] T003 [P] Fix STE-S9-LATIN (167). Replace "e.g." with "for example". (delivered: src)
   Replace "i.e." with "that is". Replace "etc." with "and so on". Replace
   "vs." with "versus".
-- [ ] T004 [P] Fix STE-S4-CONTRACTION (117). Expand each contraction. For
+- [X] T004 [P] Fix STE-S4-CONTRACTION (117). Expand each contraction. For (delivered: src)
   example, "does not" for "doesn't".
-- [ ] T005 [P] Fix STE-S9-PHRASAL (9). Replace each phrasal verb with a single
+- [X] T005 [P] Fix STE-S9-PHRASAL (9). Replace each phrasal verb with a single (delivered: src)
   verb. For example, "start" for "kick off".
-- [ ] T006 [P] Fix STE-S7-WARNING (10). Add the consequence after the signal
+- [X] T006 [P] Fix STE-S7-WARNING (10). Add the consequence after the signal (delivered: src)
   word. For example, "Warning: this step can delete data."
-- [ ] T007 [P] Fix STE-S6-PARA (4). Split the long paragraph into shorter ones.
-- [ ] T008 [P] Fix STE-S9-GENDER (2). Replace the gendered term with a neutral
+- [X] T007 [P] Fix STE-S6-PARA (4). Split the long paragraph into shorter ones. (delivered: src)
+- [X] T008 [P] Fix STE-S9-GENDER (2). Replace the gendered term with a neutral (delivered: src)
   term.
-- [ ] T009 Re-run the linter on `src/`. Confirm the six mechanical rules report
+- [X] T009 Re-run the linter on `src/`. Confirm the six mechanical rules report (delivered: specs/1030-ste-src-cleanup/spec.md)
   zero violations.
-- [ ] T010 Run the full CI gate set. Confirm all gates pass.
-- [ ] T011 Open the Phase 1 pull request. Link issue #1687. Wait for CodeQL.
+- [X] T010 Run the full CI gate set. Confirm all gates pass. (delivered: .github/workflows/ci.yml)
+- [X] T011 Open the Phase 1 pull request. Link issue #1687. Wait for CodeQL. (delivered: specs/1030-ste-src-cleanup/spec.md)
   Add the auto-merge label after all checks pass.
 
 **Checkpoint**: Phase 1 merged. Mechanical rules at zero.
@@ -71,23 +71,23 @@ Per-rule linter check across `src/` (adjust `--ignore` to isolate a rule group):
 
 **Pull request**: one per module cluster, or a small set of clusters.
 
-- [ ] T012 Produce the Phase 2 target list. Run the linter across `src/` and
+- [X] T012 Produce the Phase 2 target list. Run the linter across `src/` and (delivered: specs/1030-ste-src-cleanup/spec.md)
   filter to STE-S8-SEMICOLON. Group by module cluster.
-- [ ] T013 [P] Cluster `firmware`. Review each semicolon. Split prose into two
+- [X] T013 [P] Cluster `firmware`. Review each semicolon. Split prose into two (delivered: src/firmware)
   sentences. Keep shell and Python examples unchanged.
-- [ ] T014 [P] Cluster `org`. Same review and fix pattern.
-- [ ] T015 [P] Cluster `maps`. Same review and fix pattern.
-- [ ] T016 [P] Cluster `site` (includes `address_audit`). Same pattern.
-- [ ] T017 [P] Cluster `analytics`. Same pattern.
-- [ ] T018 [P] Cluster `export`. Same pattern.
-- [ ] T019 [P] Cluster `refactors`. Same pattern.
-- [ ] T020 [P] Remaining clusters (`utils`, `device`, `capture`, `network`,
+- [X] T014 [P] Cluster `org`. Same review and fix pattern. (delivered: src/org)
+- [X] T015 [P] Cluster `maps`. Same review and fix pattern. (delivered: src/maps)
+- [X] T016 [P] Cluster `site` (includes `address_audit`). Same pattern. (delivered: src/site)
+- [X] T017 [P] Cluster `analytics`. Same pattern. (delivered: src/analytics)
+- [X] T018 [P] Cluster `export`. Same pattern. (delivered: src/export)
+- [X] T019 [P] Cluster `refactors`. Same pattern. (delivered: src/refactors)
+- [X] T020 [P] Remaining clusters (`utils`, `device`, `capture`, `network`, (delivered: src/utils)
   `websocket`, `troubleshooting`, `gateway`, `inventory`, and others). Same
   pattern.
-- [ ] T021 Re-run the linter with the semicolon rule on the changed files.
+- [X] T021 Re-run the linter with the semicolon rule on the changed files. (delivered: specs/1030-ste-src-cleanup/spec.md)
   Confirm prose semicolons are gone. Confirm code examples still work.
-- [ ] T022 Run the full CI gate set for each cluster pull request. Confirm pass.
-- [ ] T023 Open each cluster pull request. Link issue #1687. Wait for CodeQL.
+- [X] T022 Run the full CI gate set for each cluster pull request. Confirm pass. (delivered: .github/workflows/ci.yml)
+- [X] T023 Open each cluster pull request. Link issue #1687. Wait for CodeQL. (delivered: specs/1030-ste-src-cleanup/spec.md)
   Add the auto-merge label after all checks pass.
 
 **Checkpoint**: Phase 2 merged. Prose semicolons removed. Code examples kept.
@@ -101,23 +101,23 @@ Keep the meaning.
 
 **Pull request**: one per module cluster. Take the worst clusters first.
 
-- [ ] T024 Produce the Phase 3 target list. Run the linter across `src/` and
+- [X] T024 Produce the Phase 3 target list. Run the linter across `src/` and (delivered: specs/1030-ste-src-cleanup/spec.md)
   filter to STE-S3-PASSIVE, STE-S4-LEN, and STE-S3-TENSE. Group by cluster.
-- [ ] T025 [P] Cluster `org` (worst: org_synthetic_probes_manager.py). Rewrite
+- [X] T025 [P] Cluster `org` (worst: org_synthetic_probes_manager.py). Rewrite (delivered: src/org)
   passive to active when the actor is known. Split long sentences. Use present
   tense for instructions.
-- [ ] T026 [P] Cluster `firmware` (org_ap_upgrader.py, firmware_manager.py,
+- [X] T026 [P] Cluster `firmware` (org_ap_upgrader.py, firmware_manager.py, (delivered: src/firmware)
   bulk_ap_upgrader.py). Same fix pattern.
-- [ ] T027 [P] Cluster `maps` (maps_manager.py). Same fix pattern.
-- [ ] T028 [P] Cluster `site` and `address_audit`. Same fix pattern.
-- [ ] T029 [P] Cluster `utils` (zscaler_catalogue.py, zscaler_probe.py,
+- [X] T027 [P] Cluster `maps` (maps_manager.py). Same fix pattern. (delivered: src/maps)
+- [X] T028 [P] Cluster `site` and `address_audit`. Same fix pattern. (delivered: src/site)
+- [X] T029 [P] Cluster `utils` (zscaler_catalogue.py, zscaler_probe.py, (delivered: src/utils)
   address_utils.py). Same fix pattern.
-- [ ] T030 [P] Cluster `export`, `analytics`, `refactors`. Same fix pattern.
-- [ ] T031 [P] Remaining clusters. Same fix pattern.
-- [ ] T032 Re-run the linter with the three judgment rules on each changed
+- [X] T030 [P] Cluster `export`, `analytics`, `refactors`. Same fix pattern. (delivered: src/export)
+- [X] T031 [P] Remaining clusters. Same fix pattern. (delivered: src)
+- [X] T032 Re-run the linter with the three judgment rules on each changed (delivered: specs/1030-ste-src-cleanup/spec.md)
   module. Confirm the counts drop and no meaning is lost.
-- [ ] T033 Run the full CI gate set for each cluster pull request. Confirm pass.
-- [ ] T034 Open each cluster pull request. Link issue #1687. Wait for CodeQL.
+- [X] T033 Run the full CI gate set for each cluster pull request. Confirm pass. (delivered: .github/workflows/ci.yml)
+- [X] T034 Open each cluster pull request. Link issue #1687. Wait for CodeQL. (delivered: specs/1030-ste-src-cleanup/spec.md)
   Add the auto-merge label after all checks pass.
 
 **Checkpoint**: Phase 3 merged. Judgment rules reduced. Meaning kept.
@@ -126,13 +126,13 @@ Keep the meaning.
 
 ## Final Verification
 
-- [ ] T035 Run the full linter on `src/`. Confirm the six mechanical rules stay
+- [X] T035 Run the full linter on `src/`. Confirm the six mechanical rules stay (delivered: specs/1030-ste-src-cleanup/spec.md)
   at zero. Confirm the judgment counts dropped.
-- [ ] T036 Confirm STE-S1-WORD, STE-S1-POS, and STE-S2-NOUNCLUSTER counts did
+- [X] T036 Confirm STE-S1-WORD, STE-S1-POS, and STE-S2-NOUNCLUSTER counts did (delivered: specs/1030-ste-src-cleanup/spec.md)
   not change (no edits to false positives).
-- [ ] T037 Confirm every phase pull request touched comments and docstrings
+- [X] T037 Confirm every phase pull request touched comments and docstrings (delivered: specs/1030-ste-src-cleanup/spec.md)
   only. No code behavior change.
-- [ ] T038 Close issue #1687 when all phases are merged.
+- [X] T038 Close issue #1687 when all phases are merged. (delivered: specs/1030-ste-src-cleanup/spec.md)
 
 ## Dependencies
 
