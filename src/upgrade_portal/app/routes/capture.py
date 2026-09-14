@@ -782,6 +782,9 @@ def renew_own_lock(org_id: str, site_id: str) -> bool:
     record = session_lock_record(site_id)  # None means this browser took no lock on that site.
     if record is None:  # No stored record, so there is nothing to extend.
         return False  # The caller asks the store for a fresh lock.
+    if not record.run_id:  # A standalone capture can hold the lock but must not renew it for ever.
+        logger.info("capture: the start keeps the no-run lock on site %s without a renewal", site_id)  # Before.
+        return True  # The same browser may continue, but the lock age still reaches the takeover rule.
     logger.info("capture: the start extends the lock that this session holds on site %s", site_id)  # Before.
     try:  # The lock store sits on a network and may not answer.
         lock.refresh_site_lock(lock.build_key(org_id, site_id), record, client=lock_client())
