@@ -58,6 +58,7 @@ from flask import Blueprint, Response, current_app, jsonify, render_template, re
 from jinja2 import TemplateNotFound
 
 from ...api.run_controls.views import RunStalePolicy  # Use one stale decision for both portal pages.
+from ...capture import store  # Issue #2625: the store names the projected device count field.
 from ...compare import clients as client_compare
 from ...compare import diff as device_compare
 from ...compare import download as compare_download
@@ -1353,12 +1354,22 @@ def run_end_moment(record: Mapping[str, Any], state: str) -> str:  # Select an e
 def run_device_count(record: Mapping[str, Any]) -> int:
     """Return how many devices one run acts on.
 
+    Why:
+        Issue #2625. The history page reads a projected run row, and that
+        projection carries no target list. The store now returns the length of
+        the list under `device_count`, so this reader prefers that number. The
+        run detail page reads the whole document, so the target count stays as
+        the fallback for a record that holds no projected number.
+
     Args:
-        record: The stored run record.
+        record: The stored run record, or one projected row of the run list.
 
     Returns:
         The count of targets. A run that reached no options holds none.
     """
+    counted: Any = record.get(store.RUN_DEVICE_COUNT_FIELD)  # The store projects this for a list row.
+    if isinstance(counted, int) and not isinstance(counted, bool):  # A true would read as the number 1.
+        return counted if counted >= 0 else 0  # A negative count has no meaning, so the page shows none.
     targets: Any = record.get("targets") or []  # A run that reached no options holds no target.
     return len(targets) if isinstance(targets, (list, tuple)) else 0
 
