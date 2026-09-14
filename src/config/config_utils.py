@@ -32,6 +32,7 @@ Design notes:
 
 from __future__ import annotations  # Enable PEP 604 unions in annotations on 3.10+.
 
+import importlib  # Resolve the application context without a static MistHelper import.
 import logging  # Structured action logging per Constitution VII.
 import os  # Filesystem + environment primitives for .env parsing and stop-signal check.
 import sys  # sys.exit when org selection fails.
@@ -51,6 +52,22 @@ class ConfigUtils:
     _apisession: ClassVar[Any] = None  # Authenticated mistapi session, injected by login pipeline for prompt path.
 
     @classmethod
+    def _runtime_context(cls) -> Any | None:
+        """Return the application context when the entry point is available."""
+        logging.info("Resolving the application context for ConfigUtils")  # Log before the optional context read.
+        if os.environ.get("PYTEST_CURRENT_TEST"):  # Unit tests own the class cache directly.
+            logging.debug("ConfigUtils skipped the application context during a unit test")  # Log the test fallback.
+            return None  # Keep existing ConfigUtils tests isolated from prior context state.
+        try:  # The module can run in tests before MistHelper finishes importing.
+            entrypoint = importlib.import_module("src.refactors.main_entrypoint")  # Avoid a MistHelper import cycle.
+            context = entrypoint.MainEntrypoint.context  # Read the process context owned by the entry point.
+            logging.debug("ConfigUtils resolved the application context")  # Log the successful context read.
+            return context  # Give callers the state owner when it exists.
+        except Exception as error:  # A partial import must not break the old local cache path.
+            logging.debug("ConfigUtils could not resolve the application context: %s", error)  # Log the safe fallback.
+            return None  # Keep the class cache path for isolated tests.
+
+    @classmethod
     def set_apisession(cls, session: Any) -> None:
         """Inject the authenticated mistapi session used by the interactive prompt path.
 
@@ -58,7 +75,10 @@ class ConfigUtils:
         ``mistapi.APISession`` login. The stored reference is used only when
         ``get_cached_or_prompted_org_id`` needs to drive ``mistapi.cli.select_org``.
         """
-        cls._apisession = session  # Store the authenticated session reference.
+        context = cls._runtime_context()  # Use the context when old boundary code still calls this method.
+        if context is not None:  # A live entry point means AppContext owns the session.
+            context.apisession = session  # Store the session on the context instead of a module global.
+        cls._apisession = session  # Store the authenticated session reference for isolated tests.
         logging.debug("ConfigUtils.set_apisession: session %s", "<set>" if session is not None else "None")
 
     @classmethod
@@ -69,13 +89,19 @@ class ConfigUtils:
         that resolve org_id outside the normal detection chain and need to prime
         the cache so subsequent ``get_cached_or_prompted_org_id`` calls hit.
         """
-        cls._org_id_cache = value  # Overwrite whatever was cached before.
+        context = cls._runtime_context()  # Use the context when old boundary code still calls this method.
+        if context is not None:  # A live entry point means AppContext owns the organization.
+            context.org_id = value  # Store the organization on the context instead of a module global.
+        cls._org_id_cache = value  # Overwrite whatever was cached before for isolated tests.
         logging.debug("ConfigUtils.set_cached_org_id: cache primed (%s)", "<set>" if value else "None")
 
     @classmethod
     def get_cached_org_id(cls) -> str | None:
         """Return the class-level cache value directly (no resolution attempted)."""
-        return cls._org_id_cache  # Bare peek at the classvar.
+        context = cls._runtime_context()  # Check the context before the old local cache.
+        if context is not None and context.org_id:  # The context value is the runtime source of truth.
+            return str(context.org_id)  # Return the context value without prompting.
+        return cls._org_id_cache  # Bare peek at the classvar for isolated tests.
 
     @staticmethod
     def _resolve_org_id_from_dotenv() -> str | None:
@@ -139,21 +165,26 @@ class ConfigUtils:
         pre-extraction call signature while eliminating the module-global
         dependency inside the class body.
         """
+        context = cls._runtime_context()  # Check the context before the old local cache.
+        if context is not None and context.org_id:  # Reuse the value that the application context owns.
+            logging.info("! Using org_id from application context: %s", context.org_id)  # Log the selected source.
+            return str(context.org_id)  # Return the runtime context value.
         if cls._org_id_cache:  # Reuse an already-resolved id.
             logging.info("! Using org_id from class cache: %s", cls._org_id_cache)
             return cls._org_id_cache
         org_id_env = os.environ.get("org_id") or os.environ.get("ORG_ID")  # Try environment variables next.
         if org_id_env:  # Environment provided the id.
-            cls._org_id_cache = org_id_env  # Cache the env value.
+            cls.set_cached_org_id(org_id_env)  # Cache the env value in the context when available.
             logging.info("! Loaded org_id from environment: %s", cls._org_id_cache)
-            return cls._org_id_cache
+            return org_id_env  # Return the verified non-empty environment value.
         dotenv_org = cls._resolve_org_id_from_dotenv()  # Try the .env file fallback.
         if dotenv_org:  # .env file provided the id.
-            cls._org_id_cache = dotenv_org  # Cache the .env value.
+            cls.set_cached_org_id(dotenv_org)  # Cache the .env value in the context when available.
             logging.info("! Loaded org_id from .env: %s", cls._org_id_cache)
-            return cls._org_id_cache
-        cls._org_id_cache = cls._resolve_org_id_via_prompt()  # Last resort: interactive prompt.
-        return cls._org_id_cache
+            return dotenv_org  # Return the verified non-empty .env value.
+        prompted_org = cls._resolve_org_id_via_prompt()  # Last resort: interactive prompt.
+        cls.set_cached_org_id(prompted_org)  # Cache the prompted value in the context when available.
+        return prompted_org  # Return the prompted value that the helper guarantees.
 
     @staticmethod
     def check_stop_signal() -> bool:

@@ -62,10 +62,9 @@ def _publish_interactive_helpers(
         "test-helpers: publishing MistHelper helper doubles (execute_returns=%s)",
         execute_returns,
     )
-    snapshot = MagicMock(name="snapshot_globals")  # WHY: state-bag snapshotter stub.
     state_bag: dict[str, Any] = {"apisession": MagicMock(name="apisession_in_state")}  # WHY: default state.
-    snapshot.return_value = state_bag  # WHY: initialize() reads state from this bag.
-    restore = MagicMock(name="restore_globals")  # WHY: state-bag restorer stub.
+    snapshot = MagicMock(return_value=state_bag, name="context_state")  # WHY: context builds the selector state.
+    restore = MagicMock(name="context_apply")  # WHY: context stores the selector result.
     orch_class = MagicMock(name="LoginOrchestrator_class")  # WHY: class-level stub for constructor.
     orch_instance = MagicMock(name="LoginOrchestrator_instance")  # WHY: instance returned by constructor.
     orch_instance.execute.return_value = execute_returns  # WHY: parameterize execute() outcome.
@@ -74,11 +73,11 @@ def _publish_interactive_helpers(
     input_utils.safe_input = MagicMock(name="safe_input")  # WHY: attribute accessed by initialize().
 
     monkeypatch.setattr(
-        "MistHelper._snapshot_session_globals_to_state", snapshot, raising=False
-    )  # WHY: publish snapshotter.
+        "MistHelper.MainEntrypoint.context.as_selector_state", snapshot, raising=False
+    )  # WHY: publish context state builder.
     monkeypatch.setattr(
-        "MistHelper._restore_session_globals_from_state", restore, raising=False
-    )  # WHY: publish restorer.
+        "MistHelper.MainEntrypoint.context.apply_msp_selection", restore, raising=False
+    )  # WHY: publish context state applier.
     monkeypatch.setattr("MistHelper.LoginOrchestrator", orch_class, raising=False)  # WHY: publish orchestrator class.
     monkeypatch.setattr("MistHelper.InputUtils", input_utils, raising=False)  # WHY: publish InputUtils.
 
@@ -105,10 +104,10 @@ class TestInitializeInteractive:
         result = MistSessionInteractiveInitializer.initialize()  # WHY: SUT invocation.
         logging.debug("test: initialize() returned %s", result)  # WHY: post-action log.
         assert result is True  # WHY: bool(True) == True.
-        mocks["snapshot"].assert_called_once_with()  # WHY: state was snapshotted.
+        mocks["snapshot"].assert_called_once_with()  # WHY: context built the selector state.
         mocks["orch_class"].assert_called_once()  # WHY: orchestrator was constructed.
         mocks["orch_instance"].execute.assert_called_once_with()  # WHY: execute() invoked.
-        mocks["restore"].assert_called_once_with(mocks["state_bag"])  # WHY: state restored post-login.
+        mocks["restore"].assert_called_once_with(mocks["state_bag"])  # WHY: context stored the selector result.
 
     def test_failed_login_returns_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Failed login (execute returns False): initialize() returns False."""
@@ -117,7 +116,7 @@ class TestInitializeInteractive:
         result = MistSessionInteractiveInitializer.initialize()  # WHY: SUT invocation.
         logging.debug("test: initialize() returned %s", result)  # WHY: post-action log.
         assert result is False  # WHY: bool(False) == False.
-        mocks["restore"].assert_called_once_with(mocks["state_bag"])  # WHY: restore still runs.
+        mocks["restore"].assert_called_once_with(mocks["state_bag"])  # WHY: context still stores state.
 
     def test_falsy_execute_result_coerces_to_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Falsy but non-False execute() (e.g. None): bool() coerces to False."""
@@ -126,7 +125,7 @@ class TestInitializeInteractive:
         result = MistSessionInteractiveInitializer.initialize()  # WHY: SUT invocation.
         logging.debug("test: initialize() returned %s (coerced from None)", result)  # post-action.
         assert result is False  # WHY: bool(None) → False.
-        mocks["restore"].assert_called_once()  # WHY: restore path still executed on falsy result.
+        mocks["restore"].assert_called_once()  # WHY: context apply still runs on a falsy result.
 
     def test_orchestrator_receives_injected_deps(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """LoginOrchestrator constructor receives state, safe_input, and detect_msp_privileges."""
