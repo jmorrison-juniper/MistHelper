@@ -57,6 +57,7 @@ __all__ = [
     "CLIENT_PHASE",
     "DATA_DIRECTORY_NAME",
     "DEFAULT_POST_CHECK_MODE",
+    "KNOWN_TIERS",
     "LOCK_FIELD",
     "LOCK_LOST_REASON",
     "LOCK_RETRY_WINDOW_SECONDS",
@@ -67,6 +68,8 @@ __all__ = [
     "POST_CHECK_ORDINAL",
     "POST_CHECK_ROLE",
     "TARGET_STATE_NOT_RETURNED",
+    "TIER_EXTRA",
+    "TIER_STANDARD",
     "TRACKER_FILENAME",
     "CaptureStarter",
     "Clock",
@@ -90,6 +93,7 @@ __all__ = [
     "phase_partly_settled",
     "phase_targets",
     "post_check_request",
+    "run_tier",
     "settling_state",
     "tracker_path",
     "write_tracker",
@@ -102,6 +106,14 @@ logger = logging.getLogger(__name__)
 # values, so a reader of the request never has to derive one from the other.
 POST_CHECK_ORDINAL: Final[int] = 2
 POST_CHECK_ROLE: Final[str] = "post"
+
+# WHY: Issue #2624. The run record names one tier for both captures, and the
+# post-check request must carry it. A post-check that fell back to the standard
+# tier read no radio row and no alarm row, so the comparison of a tier 3 run
+# could not show an access point that returned with a radio down.
+TIER_STANDARD: Final[int] = 2
+TIER_EXTRA: Final[int] = 3
+KNOWN_TIERS: Final[tuple[int, ...]] = (TIER_STANDARD, TIER_EXTRA)
 
 # WHY: The customer chose the automatic capture for today and asked for a manual
 # switch under the hood. These two names are that switch. The default stays
@@ -1111,7 +1123,31 @@ def client_gate_open(phases: Sequence[Mapping[str, Any]]) -> bool:
     return False
 
 
-def post_check_request(run_id: str) -> dict[str, Any]:
+def run_tier(record: Mapping[str, Any]) -> int:
+    """Return the capture tier that one run record names.
+
+    Why:
+        Issue #2624. The run record documents `tier` as the tier of both
+        captures, so the post-check capture must read the same number as the
+        pre-check capture. A record written by an older portal, or a record
+        that lost the field, must still start a capture, so an unknown value
+        falls back to the standard tier instead of raising.
+
+    Args:
+        record: The run record.
+
+    Returns:
+        The tier of the run when it names a known tier, or the standard tier.
+    """
+    raw: Any = record.get("tier", TIER_STANDARD)  # An absent field means the standard tier.
+    try:  # A stored record may hold text after a hand edit of the document.
+        number = int(raw)  # The capture job compares a number, so the text form converts here.
+    except (TypeError, ValueError):  # A value of another shape is a defect of the writer, not a fault.
+        return TIER_STANDARD  # The standard tier is the safe default of the contract.
+    return number if number in KNOWN_TIERS else TIER_STANDARD  # An unknown number falls back the same way.
+
+
+def post_check_request(run_id: str, tier: int) -> dict[str, Any]:
     """Return the identity of the post-check capture of one run.
 
     Why:
@@ -1120,13 +1156,20 @@ def post_check_request(run_id: str) -> dict[str, Any]:
         always 2 and the role is always post, so the comparison finds the pair
         without a search.
 
+        Issue #2624 adds the tier. The capture collector reads `tier` from the
+        job and falls back to the standard tier when the name is absent, so a
+        request without it skipped every tier 3 section of the post-check
+        capture. The comparison of a tier 3 run then held no radio row and no
+        alarm row.
+
     Args:
         run_id: The run key.
+        tier: The capture tier of the run. Read it with `run_tier`.
 
     Returns:
-        The run key, the ordinal 2, and the role post.
+        The run key, the ordinal 2, the role post, and the tier of the run.
     """
-    return {"run_id": run_id, "ordinal": POST_CHECK_ORDINAL, "role": POST_CHECK_ROLE}
+    return {"run_id": run_id, "ordinal": POST_CHECK_ORDINAL, "role": POST_CHECK_ROLE, "tier": tier}
 
 
 def portal_wrote(error: BaseException) -> bool:
@@ -1610,8 +1653,9 @@ class RunDriver:
             self._hold_post_check(record, run_id)
             return  # The operator starts this capture, so the driver starts none
         record["post_capture_pending"] = False  # No reader then finds a stale mark from an earlier run
-        request = post_check_request(run_id)
-        logger.info("Run %s starts the post-check capture with ordinal %s", run_id, POST_CHECK_ORDINAL)
+        tier = run_tier(record)  # Issue #2624: the post-check capture reads the tier of the run.
+        request = post_check_request(run_id, tier)
+        logger.info("Run %s starts the post-check capture with ordinal %s at tier %s", run_id, POST_CHECK_ORDINAL, tier)
         self._beat()  # The capture reads the whole site, so the lock beats before the read starts
         capture_id = self._deps.capture.start(request)
         self._beat()  # The capture held this thread for minutes, so the lock beats as it ends

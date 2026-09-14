@@ -555,8 +555,40 @@ class TestAutomaticPostCheck:
         assert final["state"] == RunState.COMPLETE.value
 
     def test_post_check_request_names_the_run(self) -> None:
-        """The request helper returns the run key, the ordinal, and the role."""
-        assert driver.post_check_request("run-x") == {"run_id": "run-x", "ordinal": 2, "role": "post"}
+        """The request helper returns the run key, the ordinal, the role, and the tier."""
+        assert driver.post_check_request("run-x", 2) == {
+            "run_id": "run-x",
+            "ordinal": 2,
+            "role": "post",
+            "tier": 2,
+        }
+
+    def test_post_check_request_carries_the_extra_tier(self) -> None:
+        """Issue #2624: a tier 3 run asks for a tier 3 post-check capture."""
+        assert driver.post_check_request("run-x", 3)["tier"] == 3
+
+    def test_run_tier_reads_the_record(self) -> None:
+        """Issue #2624: the helper returns the tier that the run record names."""
+        assert driver.run_tier({"tier": 3}) == 3
+        assert driver.run_tier({"tier": 2}) == 2
+
+    def test_run_tier_falls_back_for_an_unknown_value(self) -> None:
+        """Issue #2624: an absent or unusable tier reads as the standard tier."""
+        assert driver.run_tier({}) == 2
+        assert driver.run_tier({"tier": "3"}) == 3
+        assert driver.run_tier({"tier": "purple"}) == 2
+        assert driver.run_tier({"tier": 9}) == 2
+
+    def test_the_post_check_capture_reads_the_run_tier(self, parts: dict[str, Any]) -> None:
+        """Issue #2624: the driver starts the post-check capture at the tier of the run.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        record = make_record()
+        record["tier"] = 3
+        parts["driver"].run(record)
+        assert parts["capture"].requests[-1]["tier"] == 3
 
     def test_a_capture_that_never_starts_fails_the_run(self, parts: dict[str, Any]) -> None:
         """A missing capture key moves the run to failed with a reason.
