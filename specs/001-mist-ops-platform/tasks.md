@@ -19,12 +19,12 @@
 
 **Purpose**: Project scaffold, dependencies, tooling, container definitions
 
-- [ ] T001 Create project directory structure per plan.md (src/api/, src/worker/, src/shared/, tests/, migrations/, deploy/, docs/)
-- [ ] T002 Create pyproject.toml with all 21 runtime and 7 dev dependencies from research.md R-11
-- [ ] T003 [P] Configure ruff linter and mypy type checker in pyproject.toml (enforce max 25 lines per function, max 5 params)
-- [ ] T004 [P] Create deploy/Containerfile.api for the FastAPI service container
-- [ ] T005 [P] Create deploy/Containerfile.worker for the Celery worker container
-- [ ] T006 [P] Create deploy/compose.yml for local dev (PostgreSQL 16, Redis 7, MinIO, Vault)
+- [X] T001 Create project directory structure per plan.md (src/api/, src/worker/, src/shared/, tests/, migrations/, deploy/, docs/) - Delivered: `mist-ops-platform\src\api\main.py:30`, `mist-ops-platform\src\worker\celeryconfig.py:16`, `mist-ops-platform\src\shared\db.py:13`, `mist-ops-platform\migrations\env.py:44`, `mist-ops-platform\deploy\compose.yml:1`, and `mist-ops-platform\docs\architecture.md:1`.
+- [X] T002 Create pyproject.toml with all 21 runtime and 7 dev dependencies from research.md R-11 - Delivered: `mist-ops-platform\pyproject.toml:14` defines runtime dependencies, and `mist-ops-platform\pyproject.toml:35` defines dev dependencies.
+- [X] T003 [P] Configure ruff linter and mypy type checker in pyproject.toml (enforce max 25 lines per function, max 5 params) - Delivered: `mist-ops-platform\pyproject.toml:48` configures Ruff, and `mist-ops-platform\pyproject.toml:83` configures mypy.
+- [X] T004 [P] Create deploy/Containerfile.api for the FastAPI service container - Delivered: `mist-ops-platform\deploy\Containerfile.api:1`.
+- [X] T005 [P] Create deploy/Containerfile.worker for the Celery worker container - Delivered: `mist-ops-platform\deploy\Containerfile.worker:1`.
+- [X] T006 [P] Create deploy/compose.yml for local dev (PostgreSQL 16, Redis 7, MinIO, Vault) - Delivered: `mist-ops-platform\deploy\compose.yml:1`.
 
 ---
 
@@ -36,47 +36,47 @@
 
 ### Database & Configuration
 
-- [ ] T007 Create SQLAlchemy DeclarativeBase, TimestampMixin, and UUIDPKMixin in src/shared/models/base.py
-- [ ] T008 [P] Create pydantic-settings AppSettings class in src/shared/config/settings.py (env vars from quickstart.md)
-- [ ] T009 [P] Create constants and enums in src/shared/config/constants.py (EntityType, DeviceType, JobStatus, AlertType per data-model.md)
-- [ ] T010 Create async engine factory and session dependency in src/shared/db.py (asyncpg, partition-aware)
-- [ ] T011 Create Organization, Site, Device models (E-00, E-01, E-02, E-03) in src/shared/models/inventory.py (includes MSP entity)
-- [ ] T012 Create SyncLedgerEntry model (E-19) in src/shared/models/inventory.py and WebhookEnvelope model (E-20) in src/shared/models/config.py
-- [ ] T013 Create Alembic env.py with async migration support in migrations/env.py
-- [ ] T014 Create initial migration for inventory tables with hash partitioning (16 partitions for org_id) in migrations/versions/
+- [X] T007 Create SQLAlchemy DeclarativeBase, TimestampMixin, and UUIDPKMixin in src/shared/models/base.py - Delivered: `mist-ops-platform\src\shared\models\base.py:13`, `mist-ops-platform\src\shared\models\base.py:17`, and `mist-ops-platform\src\shared\models\base.py:28`.
+- [X] T008 [P] Create pydantic-settings AppSettings class in src/shared/config/settings.py (env vars from quickstart.md) - Delivered: `mist-ops-platform\src\shared\config\settings.py:78`.
+- [X] T009 [P] Create constants and enums in src/shared/config/constants.py (EntityType, DeviceType, JobStatus, AlertType per data-model.md) - Delivered: `mist-ops-platform\src\shared\config\constants.py:30`, `mist-ops-platform\src\shared\config\constants.py:84`, and `mist-ops-platform\src\shared\config\constants.py:111`.
+- [X] T010 Create async engine factory and session dependency in src/shared/db.py (asyncpg, partition-aware) - Delivered: `mist-ops-platform\src\shared\db.py:13`.
+- [X] T011 Create Organization, Site, Device models (E-00, E-01, E-02, E-03) in src/shared/models/inventory.py (includes MSP entity) - Delivered: `mist-ops-platform\src\shared\models\inventory.py:27`, `mist-ops-platform\src\shared\models\inventory.py:56`, `mist-ops-platform\src\shared\models\inventory.py:96`, and `mist-ops-platform\src\shared\models\inventory.py:134`.
+- [X] T012 Create SyncLedgerEntry model (E-19) in src/shared/models/inventory.py and WebhookEnvelope model (E-20) in src/shared/models/config.py - Delivered: `mist-ops-platform\src\shared\models\inventory.py:196` and `mist-ops-platform\src\shared\models\config.py:203`.
+- [X] T013 Create Alembic env.py with async migration support in migrations/env.py - Delivered: `mist-ops-platform\migrations\env.py:44`.
+- [X] T014 Create initial migration for inventory tables with hash partitioning (16 partitions for org_id) in migrations/versions/ - Delivered: `mist-ops-platform\migrations\versions\0001_initial.py:65` and `mist-ops-platform\migrations\versions\0001_initial.py:79`.
 
 ### Mist API Integration Layer
 
-- [ ] T015 [P] Create Mist entity type mappings and ENTITY_ENDPOINT_MAP in src/shared/mist/types.py (R-05 table)
-- [ ] T016 [P] Create per-org Redis rate limiter (sliding window) in src/shared/mist/rate_limit.py (R-06)
-- [ ] T017 Create APISession factory with Vault token retrieval and caching in src/shared/mist/session.py (R-07)
-- [ ] T018 Create MistEndpointService class with read/write methods in src/shared/mist/endpoints.py (R-05 mapping)
+- [X] T015 [P] Create Mist entity type mappings and ENTITY_ENDPOINT_MAP in src/shared/mist/types.py (R-05 table) - Delivered: `mist-ops-platform\src\shared\mist\types.py:28`.
+- [X] T016 [P] Create per-org Redis rate limiter (sliding window) in src/shared/mist/rate_limit.py (R-06) - Delivered: `mist-ops-platform\src\shared\mist\rate_limit.py:1`.
+- [X] T017 Create APISession factory with Vault token retrieval and caching in src/shared/mist/session.py (R-07) - Delivered: `mist-ops-platform\src\shared\mist\session.py:1`.
+- [X] T018 Create MistEndpointService class with read/write methods in src/shared/mist/endpoints.py (R-05 mapping) - Delivered: `mist-ops-platform\src\shared\mist\endpoints.py:62`.
 
 ### FastAPI Scaffold
 
-- [ ] T019 Create FastAPI app factory with router mounting and lifespan in src/api/main.py
-- [ ] T020 [P] Create auth middleware (Bearer token + session cookie, Mist privilege cache, scope enforcement per FR-025: filter query results to user's MSP/org/site privileges) in src/api/middleware/auth.py (R-07)
-- [ ] T021 [P] Create request/response structured logging middleware in src/api/middleware/logging.py
-- [ ] T022 [P] Create per-org rate-limit middleware in src/api/middleware/rate_limit.py
-- [ ] T023 Create common Pydantic schemas (ResponseEnvelope, ErrorDetail, PaginationMeta, ConfirmBody) in src/api/schemas/common.py
-- [ ] T024 Create dependency injection providers (get_db_session, get_current_user, get_mist_session) in src/api/deps.py
-- [ ] T025 Create health and readiness endpoints (/healthz, /readyz, /metrics) in src/api/routes/health.py
+- [X] T019 Create FastAPI app factory with router mounting and lifespan in src/api/main.py - Delivered: `mist-ops-platform\src\api\main.py:30`.
+- [X] T020 [P] Create auth middleware (Bearer token + session cookie, Mist privilege cache, scope enforcement per FR-025: filter query results to user's MSP/org/site privileges) in src/api/middleware/auth.py (R-07) - Delivered: `mist-ops-platform\src\api\middleware\auth.py:15`.
+- [X] T021 [P] Create request/response structured logging middleware in src/api/middleware/logging.py - Delivered: `mist-ops-platform\src\api\middleware\logging.py:16`.
+- [X] T022 [P] Create per-org rate-limit middleware in src/api/middleware/rate_limit.py - Delivered: `mist-ops-platform\src\api\middleware\rate_limit.py:31`.
+- [X] T023 Create common Pydantic schemas (ResponseEnvelope, ErrorDetail, PaginationMeta, ConfirmBody) in src/api/schemas/common.py - Delivered: `mist-ops-platform\src\api\schemas\common.py:17`, `mist-ops-platform\src\api\schemas\common.py:25`, `mist-ops-platform\src\api\schemas\common.py:34`, and `mist-ops-platform\src\api\schemas\common.py:43`.
+- [X] T024 Create dependency injection providers (get_db_session, get_current_user, get_mist_session) in src/api/deps.py - Delivered: `mist-ops-platform\src\api\deps.py:26`.
+- [X] T025 Create health and readiness endpoints (/healthz, /readyz, /metrics) in src/api/routes/health.py - Delivered: `mist-ops-platform\src\api\routes\health.py:32`, `mist-ops-platform\src\api\routes\health.py:39`, and `mist-ops-platform\src\api\routes\health.py:47`.
 
 ### Celery Scaffold
 
-- [ ] T026 Create Celery app, broker config, and Beat schedule in src/worker/celeryconfig.py (R-09)
-- [ ] T027 [P] Create notification dispatch service (EmailAdapter, WebhookAdapter) in src/shared/services/notification.py (R-12)
-- [ ] T028 [P] Create notify_tasks (send_notification Celery task) in src/worker/tasks/notify_tasks.py
+- [X] T026 Create Celery app, broker config, and Beat schedule in src/worker/celeryconfig.py (R-09) - Delivered: `mist-ops-platform\src\worker\celeryconfig.py:16` and `mist-ops-platform\src\worker\celeryconfig.py:51`.
+- [X] T027 [P] Create notification dispatch service (EmailAdapter, WebhookAdapter) in src/shared/services/notification.py (R-12) - Delivered: `mist-ops-platform\src\shared\services\notification.py:55` and `mist-ops-platform\src\shared\services\notification.py:93`.
+- [X] T028 [P] Create notify_tasks (send_notification Celery task) in src/worker/tasks/notify_tasks.py - Delivered: `mist-ops-platform\src\worker\tasks\notify_tasks.py:18`.
 
 ### Inventory Sync (Foundation for All Stories)
 
-- [ ] T029 Create inventory sync logic (orgs, sites, devices from Mist API) in src/worker/sync/inventory.py
-- [ ] T030 Create sync_tasks (periodic inventory sync Celery task, Beat every 5 min) in src/worker/tasks/sync_tasks.py
-- [ ] T031 Create auth service (Mist session mgmt, privilege cache in Redis) in src/shared/services/auth.py
-- [ ] T032 Create inventory and sync-status Pydantic schemas in src/api/schemas/sync.py (inventory + sync status only)
-- [ ] T033 Create sync route with GET /sync/status, POST /sync/trigger, GET /inventory/* in src/api/routes/sync.py
-- [ ] T034 Create NotificationChannel model (E-18) in src/shared/models/operations.py
-- [ ] T035 Create notification channel CRUD endpoints in src/api/routes/health.py (notification channels are a system-level concern, co-located with health endpoints per api-overview.md)
+- [X] T029 Create inventory sync logic (orgs, sites, devices from Mist API) in src/worker/sync/inventory.py - Delivered: `mist-ops-platform\src\worker\sync\inventory.py:38`.
+- [X] T030 Create sync_tasks (periodic inventory sync Celery task, Beat every 5 min) in src/worker/tasks/sync_tasks.py - Delivered: `mist-ops-platform\src\worker\tasks\sync_tasks.py:3` and `mist-ops-platform\src\worker\celeryconfig.py:51`.
+- [X] T031 Create auth service (Mist session mgmt, privilege cache in Redis) in src/shared/services/auth.py - Delivered: `mist-ops-platform\src\shared\services\auth.py:67`.
+- [X] T032 Create inventory and sync-status Pydantic schemas in src/api/schemas/sync.py (inventory + sync status only) - Delivered: `mist-ops-platform\src\api\schemas\sync.py:25` and `mist-ops-platform\src\api\schemas\sync.py:47`.
+- [X] T033 Create sync route with GET /sync/status, POST /sync/trigger, GET /inventory/* in src/api/routes/sync.py - Delivered: `mist-ops-platform\src\api\routes\sync.py:139`, `mist-ops-platform\src\api\routes\sync.py:153`, and `mist-ops-platform\src\api\routes\sync.py:169`.
+- [X] T034 Create NotificationChannel model (E-18) in src/shared/models/operations.py - Delivered: `mist-ops-platform\src\shared\models\operations.py:266`.
+- [X] T035 Create notification channel CRUD endpoints in src/api/routes/health.py (notification channels are a system-level concern, co-located with health endpoints per api-overview.md) - Delivered: `mist-ops-platform\src\api\routes\health.py:110`.
 
 **Checkpoint**: Foundation ready — inventory syncing from Mist, API serving health + inventory, Celery processing tasks
 
@@ -135,10 +135,10 @@
 
 ### Implementation for User Story 3
 
-- [ ] T055 [P] [US3] Create ScheduledJob model (E-07) with state machine in src/shared/models/operations.py
-- [ ] T056 [P] [US3] Create JobCheckpoint model (E-08) for safe resumption in src/shared/models/operations.py
-- [ ] T057 [US3] Create migration for scheduled_jobs and job_checkpoints tables in migrations/versions/
-- [ ] T058 [US3] Create pre-check implementations (reachability, version compat) in src/worker/checks/pre_checks.py
+- [X] T055 [P] [US3] Create ScheduledJob model (E-07) with state machine in src/shared/models/operations.py - Delivered: `mist-ops-platform\src\shared\models\operations.py:31`.
+- [X] T056 [P] [US3] Create JobCheckpoint model (E-08) for safe resumption in src/shared/models/operations.py - Delivered: `mist-ops-platform\src\shared\models\operations.py:101`.
+- [X] T057 [US3] Create migration for scheduled_jobs and job_checkpoints tables in migrations/versions/ - Delivered: `mist-ops-platform\migrations\versions\0003_align_schema_with_orm.py:312` and `mist-ops-platform\migrations\versions\0003_align_schema_with_orm.py:365`.
+- [X] T058 [US3] Create pre-check implementations (reachability, version compat) in src/worker/checks/pre_checks.py - Delivered: `mist-ops-platform\src\worker\checks\pre_checks.py:48` implements reachability, and `mist-ops-platform\src\worker\checks\pre_checks.py:157` implements version compatibility.
 - [X] T059 [US3] Create post-check implementations (service health, client connectivity) in src/worker/checks/post_checks.py
 - [X] T060 [US3] Create check_tasks Celery tasks (run_pre_checks, run_post_checks) in src/worker/tasks/check_tasks.py
 - [X] T061 [US3] Extend deploy_tasks with scheduled job execution (poll for due jobs, execute with pre/post checks, auto-rollback) in src/worker/tasks/deploy_tasks.py

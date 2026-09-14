@@ -13,11 +13,13 @@ from __future__ import annotations
 
 import logging
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
-import pytest
-
 from src.worker.checks.pre_checks import PreCheckService
+
+if TYPE_CHECKING:
+    import pytest
 
 EXPECTED_INVENTORY_FETCHES_PER_RUN = 1  # WHY: name the proof value instead of a bare 1.
 SMALL_FLEET_SIZE = 5  # WHY: a small fleet must still cause one fetch.
@@ -134,48 +136,54 @@ class TestInventoryFetchFailureFailsEveryTarget:
 # ---------------------------------------------------------------------------
 
 
-class TestVersionCompatDoesNotReportAnUnverifiedPass:
-    """Prove that version_compat results are not trivially passing.
+class TestVersionCompatUsesConfiguredMinimum:
+    """Prove that version_compat compares the configured minimum version."""
 
-    The bug: _check_version_compat returned passed=True for every device
-    without reading any data. A caller would record a verified deployment
-    even when no comparison ran.
-    """
-
-    def test_version_compat_result_is_not_unconditionally_passing(self) -> None:
-        # WHY: supply a connected device so the reachability check passes.
-        mist = MagicMock()
+    def test_version_compat_passes_when_device_meets_the_floor(self) -> None:
+        mist = MagicMock()  # WHY: stand in for the real Mist client.
         mist.list_all_entities.return_value = SimpleNamespace(
             status_code=200,
-            data=[{"id": "dev-a", "status": "connected"}],
-        )
+            data=[{"id": "dev-a", "status": "connected", "firmware_version": "1.2.0"}],
+        )  # WHY: supply the version data that the check must compare.
         service = PreCheckService(MagicMock(), mist)  # WHY: DB session unused here.
+        check_defs = [{"type": "version_compat", "min_version": "1.1.0"}]  # WHY: set a gate.
 
-        results = service.run_all("org-1", ["dev-a"])  # WHY: exercise the full pipeline.
+        results = service.run_all("org-1", ["dev-a"], check_defs)  # WHY: exercise the pipeline.
 
         by_name = {r.name: r for r in results}  # WHY: index for a readable assertion.
-        compat_result = by_name.get("version_compat:dev-a")
-        assert compat_result is not None, "Expected a version_compat result for dev-a."
-        # WHY: the bug was that passed=True with no evidence. The fix must set
-        # passed=False (or another non-passing value) when no comparison ran.
-        assert compat_result.passed is not True, (
-            "version_compat returned True without comparing any version data. "
-            "The check must not record an unverified pass."
-        )
+        compat_result = by_name["version_compat:dev-a"]  # WHY: read the exact check result.
+        assert compat_result.passed is True  # WHY: 1.2.0 is compatible with the 1.1.0 floor.
 
-    def test_version_compat_logs_the_missing_input(self, caplog: pytest.LogCaptureFixture) -> None:
-        # WHY: the fix must name the missing input so an operator can act.
-        mist = MagicMock()
+    def test_version_compat_fails_when_device_is_below_the_floor(self) -> None:
+        mist = MagicMock()  # WHY: stand in for the real Mist client.
         mist.list_all_entities.return_value = SimpleNamespace(
             status_code=200,
-            data=[{"id": "dev-b", "status": "connected"}],
-        )
+            data=[{"id": "dev-b", "status": "connected", "version": "1.0.0"}],
+        )  # WHY: use the Mist field name for coverage.
+        service = PreCheckService(MagicMock(), mist)  # WHY: DB session unused here.
+        check_defs = [{"type": "version_compat", "min_version": "1.1.0"}]  # WHY: set a gate.
+
+        results = service.run_all("org-1", ["dev-b"], check_defs)  # WHY: exercise the pipeline.
+
+        by_name = {r.name: r for r in results}  # WHY: index for a readable assertion.
+        compat_result = by_name["version_compat:dev-b"]  # WHY: read the exact check result.
+        assert compat_result.passed is False  # WHY: 1.0.0 is below the 1.1.0 floor.
+        assert "below" in compat_result.message  # WHY: the operator needs the failure cause.
+
+    def test_version_compat_is_absent_when_no_gate_is_configured(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        mist = MagicMock()  # WHY: stand in for the real Mist client.
+        mist.list_all_entities.return_value = SimpleNamespace(
+            status_code=200,
+            data=[{"id": "dev-c", "status": "connected", "version": "1.0.0"}],
+        )  # WHY: supply a connected device so reachability passes.
         service = PreCheckService(MagicMock(), mist)  # WHY: DB session unused here.
 
         with caplog.at_level(logging.WARNING, logger="src.worker.checks.pre_checks"):
-            service.run_all("org-1", ["dev-b"])  # WHY: run the pipeline to trigger the log.
+            results = service.run_all("org-1", ["dev-c"])  # WHY: run without a version gate.
 
-        # WHY: a silent placeholder is the bug. The fix must warn that no real check ran.
-        assert any(
-            r.levelno >= logging.WARNING for r in caplog.records
-        ), "Expected a WARNING from the version compatibility check, but none was emitted."
+        by_name = {r.name: r for r in results}  # WHY: index for a readable assertion.
+        assert "version_compat:dev-c" not in by_name  # WHY: absent gates must not block a job.
+        assert any(r.levelno >= logging.WARNING for r in caplog.records)  # WHY: log the skip.

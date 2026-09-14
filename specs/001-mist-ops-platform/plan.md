@@ -18,6 +18,19 @@ handle all Mist API interactions (sync polling, config push, health checks) with
 per-org rate-limit budgeting in Redis. KEDA provides event-driven autoscaling.
 All components are free, open-source, and Kubernetes-ready.
 
+## Issue #996 Completion Plan
+
+The reconciliation work checked the 39 open tasks in `tasks.md` against the tree.
+It found 38 tasks already delivered. The only real backlog item was T058.
+
+This pull request completes T058 with two changes. First, `PreCheckService` uses
+the configured `min_version` when it runs the version compatibility gate. Second,
+the check task reads the job row and writes checkpoint rows that match the ORM
+model.
+
+No new database migration is needed. The scheduled job and checkpoint tables
+already match the ORM in `0003_align_schema_with_orm.py`.
+
 ## Technical Context
 
 **Language/Version**: Python 3.13+ (per constitution constraint)
