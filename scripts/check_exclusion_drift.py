@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
@@ -15,6 +16,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST_PATH = ROOT / "quality_gate_exclusions.json"
 ERROR_MARKER = re.compile(r": error:")
+MYPY_COMMAND_LENGTH_BUDGET = 30000
 
 
 @dataclass(frozen=True)
@@ -31,11 +33,19 @@ class ExclusionDriftReporter:
     """Measure exclusion counts without changing the blocking quality gates."""
 
     def __init__(self, manifest_path: Path = MANIFEST_PATH) -> None:
+        """Set the manifest path and per-manifest caches."""
         self.manifest_path = manifest_path
+        self._manifest_key = ""
+        self._mypy_file_cache: dict[tuple[str, tuple[str, ...]], list[str]] = {}
+        self._completed_run_cache: dict[tuple[str, str, tuple[str, ...]], list[subprocess.CompletedProcess[str]]] = {}
 
     def load_exclusions(self) -> list[Exclusion]:
         """Load and validate the machine-readable exclusion manifest."""
-        payload = json.loads(self.manifest_path.read_text(encoding="utf-8"))
+        manifest_text = self.manifest_path.read_text(encoding="utf-8")
+        self._manifest_key = hashlib.sha256(manifest_text.encode("utf-8")).hexdigest()
+        self._mypy_file_cache.clear()
+        self._completed_run_cache.clear()
+        payload = json.loads(manifest_text)
         entries = payload.get("entries", [])
         if not isinstance(entries, list):
             raise ValueError("The exclusion manifest entries value must be a list.")
@@ -54,10 +64,7 @@ class ExclusionDriftReporter:
                 "tool_exit_code": 0,
                 "measured_at": date.today().isoformat(),
             }
-        completed_runs = [
-            subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
-            for command in self._commands_for(exclusion)
-        ]
+        completed_runs = self._completed_runs_for(exclusion)
         output = "\n".join(run.stdout + run.stderr for run in completed_runs)
         if "No module named" in output:
             return {
@@ -86,6 +93,17 @@ class ExclusionDriftReporter:
         """Measure every documented exclusion in manifest order."""
         return [self.measure(exclusion) for exclusion in self.load_exclusions()]
 
+    def _completed_runs_for(self, exclusion: Exclusion) -> list[subprocess.CompletedProcess[str]]:
+        """Return tool results, reusing identical scan commands."""
+        targets = self._targets_for(exclusion.scan_path)
+        cache_key = (self._manifest_key, exclusion.gate, tuple(targets))
+        if cache_key not in self._completed_run_cache:
+            self._completed_run_cache[cache_key] = [
+                subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
+                for command in self._commands_for(exclusion)
+            ]
+        return self._completed_run_cache[cache_key]
+
     @staticmethod
     def _command_for(exclusion: Exclusion) -> list[str]:
         """Build a command that scans the excluded path directly."""
@@ -112,19 +130,49 @@ class ExclusionDriftReporter:
             ]
         raise ValueError(f"Unsupported quality gate: {exclusion.gate}")
 
-    @staticmethod
-    def _commands_for(exclusion: Exclusion) -> list[list[str]]:
+    def _commands_for(self, exclusion: Exclusion) -> list[list[str]]:
         """Build bounded commands for tools with large file sets."""
         if exclusion.gate != "mypy":
             return [ExclusionDriftReporter._command_for(exclusion)]
         targets = exclusion.scan_path if isinstance(exclusion.scan_path, list) else [exclusion.scan_path]
-        files = [str(path) for target in targets for path in (ROOT / target).rglob("*.py")]
-        if not files:
-            files = targets
-        return [
-            [sys.executable, "-m", "mypy", *files[index : index + 40], "--config-file", "pyproject.toml"]
-            for index in range(0, len(files), 40)
-        ]
+        files = self._mypy_files_for(targets)
+        return self._mypy_commands_for(files)
+
+    def _mypy_files_for(self, targets: list[str]) -> list[str]:
+        """Return cached Python files for one manifest revision and target set."""
+        cache_key = (self._manifest_key, tuple(targets))
+        if cache_key not in self._mypy_file_cache:
+            files = [str(path) for target in targets for path in (ROOT / target).rglob("*.py")]
+            self._mypy_file_cache[cache_key] = files or targets
+        return self._mypy_file_cache[cache_key]
+
+    @staticmethod
+    def _mypy_commands_for(files: list[str]) -> list[list[str]]:
+        """Build mypy commands that stay under a conservative shell limit."""
+        commands: list[list[str]] = []
+        batch: list[str] = []
+        prefix = [sys.executable, "-m", "mypy"]
+        suffix = ["--config-file", "pyproject.toml"]
+        for file_path in files:
+            candidate = [*prefix, *batch, file_path, *suffix]
+            if batch and ExclusionDriftReporter._command_length(candidate) > MYPY_COMMAND_LENGTH_BUDGET:
+                commands.append([*prefix, *batch, *suffix])
+                batch = [file_path]
+            else:
+                batch.append(file_path)
+        if batch:
+            commands.append([*prefix, *batch, *suffix])
+        return commands
+
+    @staticmethod
+    def _command_length(command: list[str]) -> int:
+        """Estimate the Windows command line length for bounded batches."""
+        return sum(len(part) for part in command) + max(len(command) - 1, 0)
+
+    @staticmethod
+    def _targets_for(scan_path: str | list[str]) -> list[str]:
+        """Normalize one or more scan paths for cache keys and commands."""
+        return scan_path if isinstance(scan_path, list) else [scan_path]
 
     @staticmethod
     def _count_findings(gate: str, output: str) -> int:
