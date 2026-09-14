@@ -313,15 +313,15 @@ operationId, a plain description, and a safety word:
 ```
 
 `src/export/endpoint_catalog.py` holds the description and the safety word for
-all 286 operations. The description comes from the Mist API documentation name
-that the installed `mistapi` docstring carries. The safety word uses the
+all 286 operations. The description comes from the Mist API documentation
+name that the installed `mistapi` docstring carries. The safety word uses the
 vocabulary of `OperationRegistry`.
 
-| Safety word in the menu | Registry category | Meaning |
-| - | - | - |
-| `safe` | `safe` | The read needs no operator identifier. Only the 29 rows of menu 259 carry it. |
-| `safe interactive` | `interactive_safe` | The read needs a site, an org, an MSP, or another identifier. The other 257 rows carry it. |
-| `not safe` | `destructive` | The call changes the Mist cloud. No endpoint family holds one. |
+| Safety word in the menu | Registry category | Operations | Meaning |
+|---|---|---:|---|
+| `safe` | `safe` | 29 | The read needs no operator identifier. Only menu 259 carries it. |
+| `safe interactive` | `interactive_safe` | 257 | The read needs a site, an org, an MSP, or another identifier. |
+| `not safe` | `destructive` | 0 | The call changes the Mist cloud. No endpoint family holds one. |
 
 Warning: do not add a `destructive` operation to an endpoint family.
 `tests/guardrails/test_endpoint_catalog.py` fails when one enters, because a
