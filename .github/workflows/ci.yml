@@ -621,7 +621,7 @@ jobs:
       - name: Measure excluded findings
         run: python scripts/check_exclusion_drift.py --format github --output exclusion-drift.json
       - name: Upload the machine-readable report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: quality-exclusion-drift
           path: exclusion-drift.json
