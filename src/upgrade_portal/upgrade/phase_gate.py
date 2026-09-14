@@ -75,6 +75,12 @@ CALLS_PER_ROUND: Final[int] = 2
 NOTE_EVENT_READ_FAILED: Final[str] = "The portal could not read the device events."
 NOTE_STATISTICS_READ_FAILED: Final[str] = "The portal could not read the device statistics."
 NOTE_STATISTICS_PARTIAL: Final[str] = "The portal read part of the device statistics."
+NOTE_SCHEDULE_NOT_ARRIVED: Final[str] = "The scheduled reboot has not arrived yet."
+NOTE_SCHEDULED_RETURN_FAILED: Final[str] = "The scheduled reboot window ended, and the device did not return."
+
+# WHY: A saved schedule can sit far ahead. The run thread must not wait without
+# a bound, so the phase gate waits at most one day plus the phase allowance.
+SCHEDULE_ANCHOR_CEILING_SECONDS: Final[int] = 24 * 60 * 60
 
 
 class PhaseGateError(RuntimeError):
@@ -339,6 +345,8 @@ class PhaseGateDeps:
         progress: The sink of the progress report.
         sleep: The wait between two poll rounds. A test passes a callable that
             moves a fake clock and waits no real seconds.
+        schedule_anchor: The scheduled moment before the settle allowance can
+            start.
     """
 
     event_reader: ReconnectReader
@@ -347,6 +355,7 @@ class PhaseGateDeps:
     progress: ProgressReporter = field(default_factory=LogProgressReporter)
     sleep: Callable[[float], None] = time.sleep
     stop_requested: Callable[[str], bool] = field(default=lambda _run_id: False)
+    schedule_anchor: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -363,14 +372,18 @@ class _PhaseWatch:
         run_id: The run key that the progress report names.
         phase: The phase name that the outcome carries.
         targets: One gate target for each device of the phase.
+        anchor: The scheduled moment that can delay the phase wait.
         deadline: The clock reading at which the wait stops.
+        round_limit: The maximum poll count of the bounded wait.
         progress: The signals of each device so far, keyed by the address.
     """
 
     run_id: str
     phase: str
     targets: tuple[gate.GateTarget, ...]
+    anchor: float | None
     deadline: float
+    round_limit: int
     progress: dict[str, gate.GateProgress]
     failures: dict[str, str] = field(default_factory=dict)
 
@@ -574,7 +587,7 @@ class PhaseSettleGate:
         """
         self._deps = deps
         self._deadline_seconds = deadline_seconds
-        self._ceiling = polls_per_phase(deadline_seconds)
+        polls_per_phase(deadline_seconds)  # Validate the configured limit at construction time.
 
     def settle(self, run_id: str, phase: str, targets: Sequence[Mapping[str, Any]]) -> PhaseOutcome:
         """Wait for one phase to settle and report the result.
@@ -637,8 +650,30 @@ class PhaseSettleGate:
         """
         family = phase_family(entries)
         logger.info("Run %s waits for %s %s device(s) of phase %s", run_id, len(entries), family, phase)
-        deadline = self._deps.settle_gate.now() + float(self._deadline_seconds)
-        return _PhaseWatch(run_id, phase, entries, deadline, {target.mac: gate.GateProgress() for target in entries})
+        now = self._deps.settle_gate.now()  # One clock anchors the schedule and the settle wait.
+        anchor = self._deps.schedule_anchor  # The stored start or reboot moment can delay the phase limit.
+        delay = self._schedule_delay(now, anchor)  # Bound a scheduled wait before it reaches the round counter.
+        deadline = now + delay + float(self._deadline_seconds)  # Start the normal allowance at the later anchor.
+        round_limit = polls_per_phase(int(delay) + self._deadline_seconds)  # Keep the loop bounded by the same delay.
+        logger.debug("Run %s phase %s uses a settle deadline at %s", run_id, phase, deadline)
+        return _PhaseWatch(
+            run_id,
+            phase,
+            entries,
+            anchor,
+            deadline,
+            round_limit,
+            {target.mac: gate.GateProgress() for target in entries},
+        )
+
+    @staticmethod
+    def _schedule_delay(now: float, anchor: float | None) -> float:
+        """Return the bounded delay before the phase allowance starts."""
+        if anchor is None or anchor <= now:  # A past or missing schedule cannot delay this phase.
+            return 0.0  # The normal phase allowance starts now.
+        delay = min(anchor - now, float(SCHEDULE_ANCHOR_CEILING_SECONDS))  # The run thread always keeps a ceiling.
+        logger.info("A scheduled reboot delays the phase settle limit by %s second(s)", int(delay))
+        return delay
 
     def _wait(self, watch: _PhaseWatch) -> PhaseOutcome:
         """Poll until the phase settles or the wait reaches its limit.
@@ -661,7 +696,8 @@ class PhaseSettleGate:
             The outcome of the phase.
         """
         note = ""
-        for _ in range(self._ceiling):
+        logger.info("Run %s phase %s starts the settle wait", watch.run_id, watch.phase)
+        for _ in range(watch.round_limit):
             if self._deps.stop_requested(watch.run_id):
                 logger.info("Run %s phase %s stopped waiting after an operator request", watch.run_id, watch.phase)
                 return PhaseOutcome(
@@ -687,6 +723,7 @@ class PhaseSettleGate:
             self._deps.sleep(float(gate.POLL_INTERVAL_SECONDS))
             if self._deps.settle_gate.now() >= watch.deadline:
                 break
+        logger.debug("Run %s phase %s ended the settle wait without completion", watch.run_id, watch.phase)
         return self._timeout(watch, note)
 
     def _round(self, watch: _PhaseWatch) -> str:
@@ -879,7 +916,8 @@ class PhaseSettleGate:
         Returns:
             The outcome of the phase.
         """
-        missing = tuple(sorted((*watch.missing, *watch.failures)))
+        missing = self._timeout_missing(watch)  # A future schedule is not a device return failure.
+        note = self._timeout_note(watch, note)  # The operator sees which side of the schedule failed.
         logger.warning(
             "Run %s phase %s stopped waiting at its limit with %s device(s) still out: %s",
             watch.run_id,
@@ -888,6 +926,24 @@ class PhaseSettleGate:
             ", ".join(missing),
         )
         return self._outcome(watch, PhaseState.FAILED, missing, note)  # FR-047: the driver marks each named device
+
+    def _timeout_missing(self, watch: _PhaseWatch) -> tuple[str, ...]:
+        """Return the devices that can be marked as not returned."""
+        if self._schedule_pending(watch):  # No scheduled reboot means no device missed a reboot yet.
+            return ()  # The driver must not mark a device that has not reached its reboot time.
+        return tuple(sorted((*watch.missing, *watch.failures)))  # After the schedule, a missing device is a failure.
+
+    def _timeout_note(self, watch: _PhaseWatch, note: str) -> str:
+        """Return the message that explains which wait limit fired."""
+        if self._schedule_pending(watch):  # The overall ceiling fired before the scheduled moment arrived.
+            return NOTE_SCHEDULE_NOT_ARRIVED  # The message differs from a post-reboot return failure.
+        if watch.anchor is not None and not note:  # The schedule arrived and the normal settle window elapsed.
+            return NOTE_SCHEDULED_RETURN_FAILED  # The message names a missed return after the reboot window.
+        return note  # Existing unscheduled and source-fault messages stay unchanged.
+
+    def _schedule_pending(self, watch: _PhaseWatch) -> bool:
+        """Report whether the scheduled moment is still in the future."""
+        return watch.anchor is not None and self._deps.settle_gate.now() < watch.anchor
 
 
 def as_phase_gate(adapter: PhaseSettleGate) -> PhaseGate:
@@ -911,9 +967,12 @@ def as_phase_gate(adapter: PhaseSettleGate) -> PhaseGate:
 __all__ = [
     "CALLS_PER_ROUND",
     "NOTE_EVENT_READ_FAILED",
+    "NOTE_SCHEDULE_NOT_ARRIVED",
+    "NOTE_SCHEDULED_RETURN_FAILED",
     "NOTE_STATISTICS_PARTIAL",
     "NOTE_STATISTICS_READ_FAILED",
     "PHASE_DEADLINE_SECONDS",
+    "SCHEDULE_ANCHOR_CEILING_SECONDS",
     "CloudReconnectReader",
     "CloudStatisticsReader",
     "DeviceGate",
