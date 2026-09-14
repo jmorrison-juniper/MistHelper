@@ -70,7 +70,7 @@ def _get_tuning_data_file_path() -> str:  # WHY: build absolute tuning-data path
     return os.path.join(data_dir, _TUNING_FILENAME)  # WHY: preferred data/ path when writable.
 
 
-tuning_data_file = _get_tuning_data_file_path()  # WHY: module-level singleton path resolved at import.
+tuning_data_file = os.path.join(_DATA_DIR, _TUNING_FILENAME)  # WHY: bootstrap creates data before a write occurs.
 
 
 @dataclass(frozen=True, slots=True)
