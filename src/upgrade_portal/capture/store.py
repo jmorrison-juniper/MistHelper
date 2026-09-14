@@ -1841,6 +1841,12 @@ RUN_LIST_FIELDS: tuple[str, ...] = (
 # these names, so a narrowed page reads an index and never the whole collection.
 _RUN_QUERY_FIELDS: tuple[str, ...] = ("site_id", "org_id", "actor_email")
 
+# WHY: Issue #2625. The projection above names no `targets`, so a projected run
+# row carried no target list and the history page counted zero devices for every
+# run. The page reads 25 runs at a time and a target list holds one entry for
+# each device, so the query returns the length instead of the list.
+RUN_DEVICE_COUNT_FIELD: str = "device_count"
+
 # WHY: The sort follows `created_at`, because the run history index of
 # data-model.md line 396 is `site_id` and `created_at`. A sort on any other
 # field would read every run of the site and then sort it in memory.
@@ -1848,7 +1854,12 @@ _RUN_LIST_HEAD = "FOR doc IN " + RUN_COLLECTION + "\n"
 _RUN_LIST_TAIL = (
     "  SORT doc.created_at DESC\n"
     "  LIMIT @offset, @limit\n"
-    "  RETURN {" + ",".join(name + ":doc." + name for name in RUN_LIST_FIELDS) + "}\n"
+    "  RETURN {"
+    + ",".join(name + ":doc." + name for name in RUN_LIST_FIELDS)
+    + ","
+    + RUN_DEVICE_COUNT_FIELD
+    + ":LENGTH(doc.targets)"
+    + "}\n"
 )
 
 

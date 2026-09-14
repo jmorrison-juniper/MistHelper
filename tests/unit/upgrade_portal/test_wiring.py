@@ -340,7 +340,7 @@ def test_the_capture_bridge_calls_the_runner_on_this_thread() -> None:
     """
     runner = StubRunner()  # Records the job that the bridge sends.
     bridge = wiring.CaptureBridge(runner, {"org_id": ORG_ID, "site_id": SITE_ID})  # The shared job fields.
-    answer = bridge.start(driver.post_check_request(RUN_ID))  # The second capture of the run.
+    answer = bridge.start(driver.post_check_request(RUN_ID, 2))  # The second capture of the run.
     assert answer == wiring.build_capture_key(RUN_ID, 2)  # The one true form of the capture key.
     assert runner.jobs[0]["ordinal"] == 2  # The post-check is always the second capture.
     assert runner.jobs[0]["role"] == "post"  # The role that the comparison reads.
@@ -354,7 +354,7 @@ def test_the_capture_bridge_holds_a_fault_of_the_runner() -> None:
         thread with no state change, so the run would look frozen forever.
     """
     bridge = wiring.CaptureBridge(RefusingRunner(), {})  # The runner raises on every call.
-    assert bridge.start(driver.post_check_request(RUN_ID)) is None  # The driver then fails the run.
+    assert bridge.start(driver.post_check_request(RUN_ID, 2)) is None  # The driver then fails the run.
 
 
 def test_the_capture_bridge_names_the_gap_when_no_runner_bound() -> None:
@@ -365,7 +365,7 @@ def test_the_capture_bridge_names_the_gap_when_no_runner_bound() -> None:
         word about the loss, so the comparison page would never open.
     """
     bridge = wiring.CaptureBridge(None, {})  # No runner reached the bindings.
-    assert bridge.start(driver.post_check_request(RUN_ID)) is None  # Never a key for a capture that did not run.
+    assert bridge.start(driver.post_check_request(RUN_ID, 2)) is None  # Never a key for a capture that did not run.
 
 
 def test_the_document_store_answers_none_when_no_database_opens(monkeypatch: pytest.MonkeyPatch) -> None:
