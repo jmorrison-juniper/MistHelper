@@ -116,7 +116,6 @@ class LogRotationSettings:
 if TYPE_CHECKING:  # These imports only used by static type checkers (Pylance, mypy), not at runtime
     from types import ModuleType  # ModuleType annotation for optional-module fallback typing
 
-    import requests  # Type stub for requests (HTTP library used by mistapi)
     from prettytable import PrettyTable  # Type stub for prettytable (ASCII table formatting)
 
     import websocket  # Type stub for websocket (WebSocket client for device diagnostics)
@@ -748,90 +747,6 @@ from src.websocket.diagnostics import (
 from src.websocket.manager import WebSocketManager  # Import WebSocket connection manager for long-running diagnostics
 
 # ============================================================================
-# EARLY LOGGING SETUP
-# ============================================================================
-# Configure logging IMMEDIATELY after imports to prevent Python from creating
-# a default handler that writes script.log to the root directory.
-# GlobalImportManager._setup_logging() enhances this configuration later
-# with additional handlers and formatting, but this ensures all early logging
-# calls go to the correct location.
-_early_log_dir = "data"  # Define data directory for logs (same as runtime output directory)
-os.makedirs(_early_log_dir, exist_ok=True)  # Create data/ directory if it does not exist (no error if already present)
-_early_log_path = os.path.join(
-    _early_log_dir, "script.log"
-)  # Define full path to script.log using os.path.join for cross-platform compatibility
-
-
-# ============================================================================
-# DATA DIRECTORY PERMISSION CHECKER
-# ============================================================================
-# Critical for container deployments - runs as non-root 'misthelper' user
-
-
-# Run data directory check immediately (NO WRAPPER - direct class instantiation)
-DataDirectoryChecker(
-    _early_log_dir
-).check()  # Instantiate checker and validate data/ directory write permissions (exits if not writable)
-
-# Get log levels from environment (same as GlobalImportManager._setup_logging)
-_early_console_level = int(
-    os.environ.get("CONSOLE_LOG_LEVEL", logging.INFO)
-)  # Read console log level from env (default: INFO=20)
-_early_file_level = int(
-    os.environ.get("LOGGING_LOG_LEVEL", logging.INFO)
-)  # Read file log level from env (default: INFO=20)
-
-# Make stdout/stderr resilient to non-cp1252 characters in real data (for example the Hawaiian
-# 'okina in addresses like "Maka'ala Street"). Without this, printing the comparison table
-# or logging such strings raises UnicodeEncodeError under the default Windows console codec.
-for _std_stream in (sys.stdout, sys.stderr):  # Harden both standard streams (best-effort).
-    _reconfigure = getattr(_std_stream, "reconfigure", None)  # TextIOWrapper has this. Plain TextIO does not.
-    if callable(_reconfigure):  # Only proceed when the stream supports reconfiguration.
-        try:
-            _reconfigure(encoding="utf-8", errors="backslashreplace")  # UTF-8 + never-crash fallback
-        except ValueError:  # Stream already closed or codec rejected -> skip safely
-            pass  # Degradation is acceptable: worst case is the original behavior, no new failure introduced
-
-# Create handlers with appropriate levels
-_early_console_handler = logging.StreamHandler()  # Create handler for console output (stdout/stderr)
-_early_console_handler.setLevel(
-    _early_console_level
-)  # Set console handler to respect CONSOLE_LOG_LEVEL environment variable
-_early_rotation_settings = LogRotationSettings.from_environment()  # Read bounded rotation settings before setup
-_early_file_handler = _early_rotation_settings.build_handler(
-    _early_log_path
-)  # Build the bounded script.log handler for early startup records
-_early_file_handler.setLevel(_early_file_level)  # Set file handler to respect LOGGING_LOG_LEVEL environment variable
-
-logging.basicConfig(  # Configure root logger with handlers and format
-    level=logging.DEBUG,  # Root logger captures all levels. Handlers filter based on their individual levels
-    format="%(asctime)s - %(levelname)s - %(message)s",  # Define log message format with timestamp, level, and message
-    handlers=[_early_file_handler, _early_console_handler],  # Register both file and console handlers
-    force=True,  # Force reconfiguration even if logging was already configured (needed for module init)
-)
-
-# Attach LogSanitizer to redact sensitive fields (API tokens, passwords, MACs) from logs
-try:  # Try to import LogSanitizer from mistapi library
-    from mistapi.__logger import LogSanitizer  # Import mistapi log sanitizer (redacts secrets from output)
-
-    logging.getLogger().addFilter(LogSanitizer())  # Register sanitizer filter on root logger to redact all log records
-except ImportError:  # If LogSanitizer not available, skip (mistapi pre-0.59.3 does not have it)
-    pass  # mistapi pre-0.59.3 does not have LogSanitizer. Safe to skip
-
-# Log Python version warning if below minimum requirement
-if sys.version_info < MINIMUM_PYTHON_VERSION:  # Check if Python is below minimum version
-    version_str = (
-        f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"  # Format current Python version
-    )
-    required_str = f"{MINIMUM_PYTHON_VERSION[0]}.{MINIMUM_PYTHON_VERSION[1]}"  # Format minimum required version
-    logging.warning(  # Log warning (this text goes to script.log after handler setup)
-        "Python %s detected. MistHelper requires Python %s+. Some features may not work correctly.",
-        version_str,
-        required_str,
-    )
-
-
-# ============================================================================
 # CONFIGURATION DATACLASSES (5-Item Rule Compliance)
 # ============================================================================
 # These dataclasses group related parameters to comply with the 5-parameter limit
@@ -843,30 +758,6 @@ if sys.version_info < MINIMUM_PYTHON_VERSION:  # Check if Python is below minimu
 # ============================================================================
 # This section attempts to auto-install critical dependencies BEFORE any imports
 # that might fail. This enables running the script directly without pre-setup.
-
-# Load .env BEFORE dependency check so DISABLE_AUTO_INSTALL and
-# AUTO_UPGRADE_TO_LATEST are honoured when set in .env.
-try:  # Try to load environment variables from a .env file before any dependency checks
-    from dotenv import (
-        load_dotenv as _early_load_dotenv,
-    )  # Import python-dotenv's loader (aliased to mark it as early-stage)
-
-    _early_load_dotenv()  # Read .env and populate os.environ so config flags are available during startup
-except Exception:  # If python-dotenv is not installed yet, fall back to a manual parser
-    # Inline fallback: read .env manually so env vars are available
-    try:  # Try a best-effort manual parse of the .env file
-        with open(".env", encoding="utf-8") as _ef:  # Open .env in the current working directory
-            for _line in _ef:  # Process the file one line at a time
-                _line = _line.strip()  # Remove surrounding whitespace and the trailing newline
-                if (
-                    _line and not _line.startswith("#") and "=" in _line
-                ):  # Skip blanks, comment lines, and malformed entries
-                    _k, _v = _line.split("=", 1)  # Split on the first '=' into key and value (values may contain '=')
-                    os.environ.setdefault(
-                        _k.strip(), _v.strip()
-                    )  # Set the var only if not already defined (do not override real env)
-    except (FileNotFoundError, PermissionError, OSError) as _dotenv_exc:  # .env absent, unreadable, or IO error.
-        logging.debug("Skipping .env fallback parse: %s", _dotenv_exc)  # Diagnostic-only. The .env file is optional.
 
 
 def _get_installed_version(package_name: str) -> str:  # Look up the installed version string for a package
@@ -998,33 +889,6 @@ def _early_dependency_check() -> None:  # Public entry point. Delegates to the e
     orchestrator.run()  # Execute the dependency check + install/upgrade workflow
 
 
-def _is_help_invocation(argv: list[str]) -> bool:
-    """Return True when *argv* requests help output (``--help`` or ``-h``).
-
-    Why:
-        ``--help`` must be side-effect-free (issue #1641). The argparse module
-        renders usage and exits at once. Work that starts dependency
-        installation or eager import initialization before that point is
-        wasted, and on a fresh box it is harmful. This helper is the single
-        source of truth used by both the dependency-check guard and the
-        deferred-imports conditional below.
-
-    Args:
-        argv: The full argument vector (typically ``sys.argv``). The program
-            name at position 0 is ignored. Only the flag tail is inspected.
-
-    Returns:
-        True if ``--help`` or ``-h`` appears as a full token in the tail.
-        False otherwise. Substring matches (for example ``--helpme``) do not count.
-    """
-    return any(token in ("--help", "-h") for token in argv[1:])
-
-
-# Run early dependency check (will be skipped if DISABLE_AUTO_INSTALL=true
-# or if the user asks for --help/-h, which must be side-effect-free per #1641).
-if not _is_help_invocation(sys.argv):
-    _early_dependency_check()  # Run the bootstrap immediately at import time
-
 # Additional standard library imports
 import concurrent.futures  # High-level parallelism primitives for batched API calls
 import inspect  # Introspect functions/classes at runtime (signatures, source lookup)
@@ -1066,9 +930,13 @@ try:  # SequenceMatcher is optional (used for fuzzy string comparisons)
 except ImportError:  # Extremely unlikely for a stdlib module, but guard anyway
     SequenceMatcher = None  # None lets callers detect absence
 
-# Import mistapi later through GlobalImportManager for better dependency management
-# Using Any type since GlobalImportManager loads mistapi dynamically but it is available before use
-mistapi: Any = None  # Placeholder. The real mistapi module is loaded later by GlobalImportManager
+mistapi: Any = None  # Preserve the historical module global for tests and menu factories.
+try:  # Import the SDK without starting a session or touching the network.
+    import mistapi as _mistapi_impl  # Bind the SDK for import-time menu factories and tests.
+
+    mistapi = _mistapi_impl  # Preserve the historical module global without a bootstrap session.
+except ImportError:  # The bootstrap dependency check reports the missing SDK before runtime modes start.
+    pass  # Keep the public name available for environments that install dependencies later.
 
 
 # tqdm wrapper: canonical home is src/utils/tqdm_wrapper.py (1015 T-14, Cat E).
@@ -1076,19 +944,11 @@ mistapi: Any = None  # Placeholder. The real mistapi module is loaded later by G
 # Re-exported here so ``MistHelper.tqdm`` / ``mh.tqdm`` callers keep working unchanged.
 from src.utils.tqdm_wrapper import tqdm  # Cat E canonical (1015 T-14) -- re-export.
 
-try:  # The tool needs requests for all HTTP calls
-    import requests  # HTTP library fail-fast install guard (also used via function-local imports)
-except ImportError as _req_err:  # Required dependency is not installed
-    raise ImportError(
-        "requests is required but not installed. Run: pip install requests"
-    ) from _req_err  # Fail fast with install guidance
+if "requests" not in globals():  # Keep the requests name without importing the HTTP stack during module import.
+    requests: Any = None  # Bootstrap and deferred imports publish requests after dependency checks run.
 
-try:  # urllib3 is optional (used to suppress noisy SSL warnings)
-    import urllib3 as _urllib3_impl  # Low-level HTTP library underlying requests
-
-    urllib3: ModuleType | None = _urllib3_impl  # Union type lets guards detect absence
-except ImportError:  # urllib3 not installed
-    urllib3 = None  # None lets guards detect absence
+if "urllib3" not in globals():  # Keep the urllib3 name without importing the HTTP stack during module import.
+    urllib3: ModuleType | None = None  # Deferred imports publish urllib3 after bootstrap avoids socket creation.
 
 try:  # pyte is optional (terminal emulation for parsing WebSocket output)
     import pyte as _pyte_impl  # In-memory terminal emulator to render device CLI screens
@@ -1144,21 +1004,11 @@ except ImportError:  # rapidfuzz not installed
 # variable MIST_PAGE_LIMIT (clamped to 1..1000). All new/updated listOrgSites /
 # getOrgInventory calls should pass limit=DEFAULT_API_PAGE_LIMIT or use the
 # helper wrappers below to ensure consistency and simpler tuning.
-try:  # Read the configured API page size from the environment
-    _raw_page_limit_env = os.environ.get("MIST_PAGE_LIMIT", "1000").strip()  # Raw env value, default '1000', trimmed
-    _parsed_limit = int(_raw_page_limit_env)  # Convert to int (raises if non-numeric)
-except Exception:  # Missing or non-numeric value
-    _parsed_limit = 1000  # Fall back to a sensible default page size
-
-DEFAULT_API_PAGE_LIMIT = max(1, min(_parsed_limit, 1000))  # Clamp to the 1..1000 range the Mist API accepts
-if _parsed_limit != DEFAULT_API_PAGE_LIMIT:  # The code clamped a value that was out of range
-    logging.warning(
-        "MIST_PAGE_LIMIT value %s adjusted to %s (valid range 1..1000)", _parsed_limit, DEFAULT_API_PAGE_LIMIT
-    )  # Warn about the adjustment
-
-logging.debug(
-    "API Page Size Configuration Active: DEFAULT_API_PAGE_LIMIT=%s", DEFAULT_API_PAGE_LIMIT
-)  # Record the effective page size for debugging
+if "_raw_page_limit_env" not in globals():  # Keep the helper name without reading the environment during import.
+    _raw_page_limit_env = "1000"  # Bootstrap reads MIST_PAGE_LIMIT after import.
+if "_parsed_limit" not in globals():  # Keep the parsed helper name without reading the environment during import.
+    _parsed_limit = 1000  # Preserve the historical default without an import-time environment read.
+DEFAULT_API_PAGE_LIMIT = 1000  # Bootstrap clamps and publishes the configured page limit.
 
 
 def _apply_dotenv_line(line: str) -> None:  # Set one KEY=VALUE pair from a .env line into the environment
@@ -1183,17 +1033,10 @@ def _fallback_load_dotenv() -> None:  # Minimal .env parser used when python-dot
         logging.debug("Error loading .env file: %s", parse_error)  # Log the reason without crashing startup
 
 
-try:  # Prefer the full-featured python-dotenv loader when available
-    from dotenv import load_dotenv as _load_dotenv_impl  # Robust .env parser from python-dotenv
-
-    load_dotenv: Callable[..., object] = _load_dotenv_impl  # Common signature: no-arg call, ignored return
-    DOTENV_AVAILABLE = True  # Flag that the real loader is in use
-    load_dotenv()  # Load .env now so config is available to the import manager
-except ImportError:  # python-dotenv not installed
-    DOTENV_AVAILABLE = False  # Flag that we use the minimal fallback
-    # Use fallback loader and create an alias for later calls
-    load_dotenv = _fallback_load_dotenv  # Alias so later load_dotenv() calls still work
-    _fallback_load_dotenv()  # Load .env now using the fallback parser
+if "load_dotenv" not in globals():  # Keep the loader name without reading .env during module import.
+    load_dotenv: Callable[..., object] = _fallback_load_dotenv  # Bootstrap replaces this when dotenv is present.
+if "DOTENV_AVAILABLE" not in globals():  # Keep the availability flag without importing dotenv during module import.
+    DOTENV_AVAILABLE = False  # Bootstrap updates this flag after the explicit environment load step.
 
 
 class GlobalImportManager:
@@ -1255,12 +1098,13 @@ class GlobalImportManager:
         "matplotlib": "matplotlib>=3.5.0",  # Static plotting for analytics
     }
 
-    def __init__(self) -> None:  # Read config from env and prepare dependency-tracking state
+    def __init__(self, setup_logging: bool = True) -> None:  # Read config from env and prepare dependency state
         """Initialize the import manager with configuration from environment variables."""
         self._load_upgrade_configuration()  # Read env-driven upgrade/UV/CSV freshness settings
         self._initialize_dependency_tracking()  # Prepare package-tracking lists and import/UV caches
         self._initialize_import_mappings()  # Build package->import name maps and special import handlers
-        self._setup_logging()  # Configure handlers/levels before other init runs
+        if setup_logging:  # Allow ApplicationBootstrap to keep logging setup to one explicit call.
+            self._setup_logging()  # Configure handlers and levels when no bootstrap owns logging.
         self._detect_virtual_environment()  # Log whether we are in a venv (affects installs)
         self._define_package_requirements()  # Populate the required/optional package dicts
 
@@ -1332,16 +1176,7 @@ class GlobalImportManager:
 
     def _setup_logging(self) -> None:  # Build console+file handlers with env-driven levels
         """Setup basic logging configuration with environment-specific levels."""
-        console_log_level = int(os.environ.get("CONSOLE_LOG_LEVEL", logging.INFO))  # Console verbosity (default INFO)
-        file_log_level = int(os.environ.get("LOGGING_LOG_LEVEL", logging.INFO))  # Log-file verbosity (default INFO)
-        console_handler = self._build_console_log_handler(console_log_level)  # Build the console handler at env level
-        file_handler = self._build_file_log_handler(file_log_level)  # Build the file handler (creates data/ if missing)
-        logging.basicConfig(  # Wire up the root logger with both handlers
-            level=logging.DEBUG,  # Root captures everything. Handlers filter by their own levels
-            format="%(asctime)s - %(levelname)s - %(message)s",  # Default format (handlers override with their own)
-            handlers=[file_handler, console_handler],  # Register both the file and console handlers
-            force=True,  # Replace the earlier module-import basicConfig
-        )
+        return  # ApplicationBootstrap owns the only logging.basicConfig call.
 
     def _build_console_log_handler(self, level: int) -> logging.StreamHandler[TextIO]:  # Console handler factory
         """Build a stdout/stderr console log handler at the requested level."""
@@ -2290,7 +2125,7 @@ def _get_tuning_data_file_path() -> str:
     return os.path.join(data_dir, "tuning_data.json")  # Normal case: store tuning data inside data/
 
 
-tuning_data_file = _get_tuning_data_file_path()  # Resolve the tuning-data path once at import time
+tuning_data_file = os.path.join("data", "tuning_data.json")  # Bootstrap creates data before code writes tuning data.
 
 # API usage tracking cache
 _api_usage_cache = {  # Module-level cache for Mist API rate-limit accounting
@@ -2305,75 +2140,52 @@ _api_usage_cache = {  # Module-level cache for Mist API rate-limit accounting
 # ============================================================================
 # GLOBAL IMPORT MANAGER INITIALIZATION
 # ============================================================================
+# Preserve private module names while moving their work into ApplicationBootstrap.
+_early_log_dir = "data"  # Keep the old log directory name without creating it during import.
+_early_log_path = os.path.join(_early_log_dir, "script.log")  # Keep the old log path without opening the file.
+_early_console_level = logging.INFO  # Bootstrap reads the configured level during explicit startup.
+_early_file_level = logging.INFO  # Bootstrap reads the configured level during explicit startup.
+_early_console_handler = logging.NullHandler()  # Keep the old name without attaching a handler at import.
+_early_rotation_settings = None  # Bootstrap reads rotation settings during explicit startup.
+_early_file_handler = logging.NullHandler()  # Keep the old name without opening script.log at import.
+_UNSUPPORTED_FLAG_VARIANTS: dict[str, str] = {}  # Argparse now owns unsupported flag errors.
 
-# Create global import manager instance
-import_manager = GlobalImportManager()  # Single shared manager for all dependency imports
 
-# Initialize imports immediately (unless deferred by CLI flags)
-# Test mode and skip-deps both defer initialization to main() for better control
-_initialize_imports_now = True  # Default: resolve all imports eagerly at module load
+def _is_help_invocation(argv: list[str]) -> bool:
+    """Return True when argv requests help output."""
+    return any(token in ("--help", "-h") for token in argv[1:])  # Preserve the private name for symbol stability.
 
-# Check for test mode, skip-deps, or help invocation from command line
-if (
-    "--test" in sys.argv
-    or "--testinteractive" in sys.argv
-    or "--skip-deps" in sys.argv
-    or _is_help_invocation(sys.argv)
-):  # Any flag that defers import setup
-    _initialize_imports_now = False  # Defer initialization to main() for finer control
-    if (
-        "--test" in sys.argv or "--testinteractive" in sys.argv
-    ) and "--skip-deps" not in sys.argv:  # Test mode without skip-deps
-        logging.info(
-            "Deferring import initialization for test mode (dependencies will still be checked)"
-        )  # Explain the deferral
-    elif "--skip-deps" in sys.argv:  # The caller explicitly asked to skip dependency handling
-        logging.info("Deferring import initialization due to --skip-deps flag")  # Explain the deferral
-    elif _is_help_invocation(sys.argv):  # Help invocation must be side-effect-free (#1641)
-        logging.info("Deferring import initialization for --help invocation")  # Explain the deferral
-    else:  # Some other deferring flag combination
-        logging.info("Deferring import initialization due to CLI flags")  # Generic deferral notice
 
-if _initialize_imports_now:  # Eager path: prepare all imports now
-    # Initialize all imports upfront for faster runtime performance
-    success, global_assignments = (
-        import_manager.initialize_all_imports()
-    )  # Import everything and collect global bindings
+def _reject_unsupported_flag_variants(argv: list[str]) -> None:
+    """Let argparse own unsupported flag errors."""
+    _ = argv  # Keep the private name while removing the pre-parse variant guard.
 
-    # Apply global assignments to module namespace
-    if global_assignments:  # The manager produced name->object bindings to publish
-        for var_name, var_value in global_assignments.items():  # Apply each binding to module globals
-            globals()[var_name] = var_value  # Make the imported object available at module scope
-            # Special handling for tqdm to ensure it overrides the fallback
-            if var_name == "tqdm" and var_value is not None:  # Real tqdm must replace any earlier fallback
-                logging.info(
-                    "Successfully imported real tqdm: %s", type(var_value)
-                )  # Confirm the real progress bar is active
-        logging.debug(
-            "Applied %s global variable assignments", len(global_assignments)
-        )  # Report how many bindings were applied
 
-        # Verify the import loaded tqdm properly
-        if "tqdm" in global_assignments:  # tqdm binding is present
-            logging.info(
-                "tqdm is available in global namespace: %s", type(globals().get("tqdm"))
-            )  # Confirm availability and type
-        else:  # tqdm binding is absent
-            echo(
-                "tqdm was not found in global assignments - progress bars will not be functional"
-            )  # Warn progress bars are off
+def _exit_on_unsupported_flag(head: str, supported: str) -> NoReturn:
+    """Raise the standard argparse usage exit for obsolete direct callers."""
+    raise SystemExit(2)  # Preserve the private name without adding a new compatibility path.
 
-    if not success:  # One or more required imports failed
-        echo("Some required imports failed - functionality may be limited")  # Warn the user features may be degraded
-else:  # Deferred path: imports happen later in main()
-    # Deferred initialization - main() does this
-    success, global_assignments = False, {}  # Placeholder values until main() runs initialization
+
+try:  # Import the sanitizer class without configuring logging during module import.
+    from mistapi.__logger import LogSanitizer  # Keep the old exported name available for callers.
+except ImportError:  # Older mistapi versions may not publish the sanitizer.
+    LogSanitizer = None  # Keep the exported name stable when mistapi lacks the class.
+
+
+# The explicit bootstrap creates this manager before application startup work runs.
+import_manager = cast(GlobalImportManager, None)  # Preserve the public name without running startup side effects.
+_initialize_imports_now = False  # Keep import passive. The bootstrap decides when dependencies initialize.
+if _initialize_imports_now:  # This branch stays false so import never initializes dependencies.
+    pass  # Bootstrap owns all import-manager execution.
+else:  # Preserve the original deferred shape without reading command-line arguments.
+    success = False  # Bootstrap fills this value after the command-line parse.
+    global_assignments: dict[str, Any] = {}  # Bootstrap fills these values after the command-line parse.
 
 # ============================================================================
 # TEST MODE GLOBALS & TIME UTILITIES CLASS
 # ============================================================================
 # Central flag for test mode (available early so helper functions outside main can use it)
-IS_TEST_MODE = "--test" in sys.argv or "--testinteractive" in sys.argv
+IS_TEST_MODE = False  # Bootstrap updates this flag from the stored parsed arguments.
 # Last selected interactive site ID (used to keep testinteractive site context consistent)
 LAST_SELECTED_SITE_ID: str | None = None
 
@@ -2390,34 +2202,37 @@ from src.utils.input_utils import InputUtils  # Cat E canonical (1015 T-09) -- r
 # ============================================================================
 
 # Configuration variables from .env (with defaults) - now managed by import manager
-config = import_manager.get_configuration()  # Pull resolved settings from the import manager
-CSV_FRESHNESS_MINUTES: int = config["csv_freshness_minutes"]  # Minutes a cached CSV stays "fresh" before refetch
-AUTO_UPGRADE_UV: bool = config["auto_upgrade_uv"]  # Whether UV self-upgrades automatically
-AUTO_UPGRADE_DEPENDENCIES: bool = config["auto_upgrade_dependencies"]  # Whether Python deps auto-upgrade on import
-UPGRADE_CHECK_TIMEOUT: int = config["upgrade_check_timeout"]  # Seconds before an install/upgrade subprocess times out
+config: dict[str, Any] = {  # Bootstrap replaces this dictionary after it creates the import manager.
+    "csv_freshness_minutes": 15,  # Preserve the historical default without reading the environment at import.
+    "auto_upgrade_uv": True,  # Preserve the historical default without reading the environment at import.
+    "auto_upgrade_dependencies": True,  # Preserve the historical default without reading the environment at import.
+    "upgrade_check_timeout": 30,  # Preserve the historical default without reading the environment at import.
+}
+CSV_FRESHNESS_MINUTES: int = 15  # Bootstrap updates this value from startup configuration.
+AUTO_UPGRADE_UV: bool = True  # Bootstrap updates this value from startup configuration.
+AUTO_UPGRADE_DEPENDENCIES: bool = True  # Bootstrap updates this value from startup configuration.
+UPGRADE_CHECK_TIMEOUT: int = 30  # Bootstrap updates this value from startup configuration.
 
 # API Request Timeout (seconds) - prevents indefinite hangs on slow/dropped connections
 # Default 120s is generous. Most Mist API calls return within 30s
-API_REQUEST_TIMEOUT = int(os.getenv("API_REQUEST_TIMEOUT", "120"))  # Hard cap on a single API request
-API_REQUEST_MAX_RETRIES = int(os.getenv("API_REQUEST_MAX_RETRIES", "3"))  # How many times to retry a failed API request
-API_REQUEST_RETRY_DELAY = float(os.getenv("API_REQUEST_RETRY_DELAY", "5.0"))  # Seconds to wait between API retries
+API_REQUEST_TIMEOUT = 120  # Bootstrap updates this value from the environment.
+API_REQUEST_MAX_RETRIES = 3  # Bootstrap updates this value from the environment.
+API_REQUEST_RETRY_DELAY = 5.0  # Bootstrap updates this value from the environment.
 
 # Fast Mode Configuration from .env
-FAST_MODE_MAX_RETRIES = int(os.getenv("FAST_MODE_MAX_RETRIES", "3"))  # Retry ceiling when --fast is active
-FAST_MODE_RETRY_DELAY = float(os.getenv("FAST_MODE_RETRY_DELAY", "0.5"))  # Shorter retry delay for fast mode
+FAST_MODE_MAX_RETRIES = 3  # Bootstrap updates this value from the environment.
+FAST_MODE_RETRY_DELAY = 0.5  # Bootstrap updates this value from the environment.
 
 FAST_MODE_ENABLED: bool = False  # Set to True via --fast CLI flag at startup
 
 org_id: str | None = None  # Active organization ID, populated after the user selects an org
 
 
-FAST_MODE_RETRY_THREADS = int(os.getenv("FAST_MODE_RETRY_THREADS", "4"))  # Thread count for the retry pass
-FAST_MODE_RETRY_MAX_RETRIES = int(os.getenv("FAST_MODE_RETRY_MAX_RETRIES", "2"))  # Retry ceiling within the retry pass
-FAST_MODE_FALLBACK_THREADS = int(os.getenv("FAST_MODE_FALLBACK_THREADS", "8"))  # Thread count for the fallback pass
+FAST_MODE_RETRY_THREADS = 4  # Bootstrap updates this value from the environment.
+FAST_MODE_RETRY_MAX_RETRIES = 2  # Bootstrap updates this value from the environment.
+FAST_MODE_FALLBACK_THREADS = 8  # Bootstrap updates this value from the environment.
 
-from src.refactors.mist_site_exclude_prefix import (
-    MIST_SITE_EXCLUDE_PREFIX,
-)
+MIST_SITE_EXCLUDE_PREFIX = ""  # Bootstrap reads the optional site filter after import.
 
 # Global configuration for output format (CSV or Redis/SQLite)
 # Default to CSV for general use, can be overridden by CLI flag
@@ -5567,61 +5382,6 @@ def _add_auth_and_backend_flags(parser: argparse.ArgumentParser) -> None:
     )
 
 
-# Mapping of unsupported flag spellings -> the supported canonical spelling.
-# Why: users naturally type hyphenated variants (for example `--test-interactive`) but argparse
-# treats a hyphen as a token boundary, so it cannot prefix-match to `--testinteractive`.
-# Left unchecked, argparse rejects the invocation with a generic "unrecognized
-# arguments" message and (worse) the interactive-test module-import sniff at the top of
-# this file — which literally checks `"--testinteractive" in sys.argv` — silently
-# proceeds as if no test flag were present, misrouting the user into normal interactive
-# mode. Issue #1640 requires an actionable rejection instead.
-_UNSUPPORTED_FLAG_VARIANTS: dict[str, str] = {
-    "--test-interactive": "--testinteractive",
-}
-
-
-def _reject_unsupported_flag_variants(argv: list[str]) -> None:
-    """Exit with actionable guidance when *argv* contains a known unsupported flag spelling.
-
-    Why:
-        argparse cannot prefix-match `--test-interactive` to `--testinteractive`, because the
-        hyphen breaks matching. The module-import-time argv sniff for `--testinteractive`
-        (see top of this file) would then proceed as if the test flag were absent.
-        Issue #1640 requires that the unsupported spelling produce an actionable error.
-        The error must name the correct canonical flag and NEVER silently reroute the user.
-
-    Args:
-        argv: The raw argument list (typically `sys.argv[1:]`) to scan. Tokens are also
-            split on `=` so `--flag=value` variants are caught.
-
-    Raises:
-        SystemExit: With exit code 2 (argparse convention) when a token matches a key
-            in `_UNSUPPORTED_FLAG_VARIANTS`. The stderr message names both the offending
-            spelling and the supported canonical spelling.
-    """
-    for token in argv:  # Scan every raw token in argv. Order-independent match.
-        head = token.split("=", 1)[0]  # Strip any `=value` suffix so `--flag=1` is comparable.
-        if head in _UNSUPPORTED_FLAG_VARIANTS:  # Only gate the explicitly-listed bad spellings.
-            _exit_on_unsupported_flag(head, _UNSUPPORTED_FLAG_VARIANTS[head])  # Names the canonical flag.
-
-
-def _exit_on_unsupported_flag(head: str, supported: str) -> NoReturn:
-    """Report an unsupported flag spelling and exit with the argparse usage code.
-
-    Why:
-        Split from the scan loop so the caller stays inside the length budget.
-        The message must never reroute the user silently, per issue #1640.
-    """
-    message = (
-        f"error: unsupported flag '{head}'. "
-        f"Did you mean '{supported}'? "
-        "This CLI uses collapsed flag names without internal hyphens."
-    )
-    logging.error("Rejecting unsupported flag variant %r; suggest %r", head, supported)
-    print(message, file=sys.stderr)  # Surface guidance directly to the user.
-    sys.exit(2)  # argparse convention for CLI usage errors.
-
-
 def _build_argument_parser() -> argparse.ArgumentParser:
     """Build and return the CLI argument parser for MistHelper with all supported flags."""
     logging.debug("_build_argument_parser: building argument parser")  # Log before parser creation
@@ -5666,13 +5426,17 @@ def _announce_fast_mode_scope() -> None:
 
 def _setup_runtime_flags(args: argparse.Namespace) -> None:
     """Apply standalone env flag, register args globally, and configure FAST_MODE_ENABLED."""
+    global FAST_MODE_ENABLED, IS_TEST_MODE  # Update module flags from the one stored argument parse.
     logging.debug("_setup_runtime_flags: applying standalone and fast mode flags")  # Log entry
     if args.standalone:  # --standalone flag disables ArangoDB/Redis connections org-wide
         os.environ["MISTHELPER_STANDALONE"] = "true"  # Write env var so all components detect standalone mode
         logging.info("Standalone mode enabled via --standalone flag: ArangoDB/Redis disabled")  # Log env write
     globals()["args"] = args  # Register parsed args globally so menu functions can read CLI flags
     logging.debug("CLI args registered in globals()['args'] for menu function access")  # Log global assignment
-    global FAST_MODE_ENABLED  # Declare intent to modify module-level flag used by test harness
+    IS_TEST_MODE = bool(  # Keep the old global behavior from stored CLI arguments.
+        getattr(args, "test", False) or getattr(args, "testinteractive", False)
+    )
+    logging.debug("IS_TEST_MODE set to %s", IS_TEST_MODE)  # Log the parsed test-mode state.
     try:
         FAST_MODE_ENABLED = bool(args.fast)  # Derive flag from --fast CLI argument (bool is safe cast)
     except Exception:
@@ -5807,7 +5571,6 @@ def _apply_debug_log_level() -> None:
         elif isinstance(handler, logging.StreamHandler):  # Console stays at INFO to avoid noise
             handler.setLevel(logging.INFO)
     logging.debug("Debug logging enabled via --debug flag")  # Confirm debug mode active in log file
-    logging.debug("Command line arguments: %s", " ".join(sys.argv))  # Log full command line for diagnostics
     logging.debug("Performance monitoring will trigger circuit breakers for infinite loops")  # Remind about CBs
 
 

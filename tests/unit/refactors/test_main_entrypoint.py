@@ -16,7 +16,12 @@ from unittest.mock import MagicMock, call  # WHY: FR-008 mandates MagicMock(spec
 import pytest  # WHY: monkeypatch fixture for MistHelper attribute overrides.
 
 import MistHelper  # WHY: cache tests exercise the runtime menu and mode dispatch tables.
-from src.refactors.main_entrypoint import _MH, MainEntrypoint, _MistHelperProxy  # WHY: SUT + proxy direct imports.
+from src.refactors.main_entrypoint import (  # WHY: SUT + proxy direct imports.
+    _MH,
+    ApplicationBootstrap,
+    MainEntrypoint,
+    _MistHelperProxy,
+)
 
 
 @pytest.fixture
@@ -46,10 +51,13 @@ def wired_misthelper(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         "_configure_runtime_options": MagicMock(name="_configure_runtime_options"),
         "_dispatch_main_mode": MagicMock(name="_dispatch_main_mode"),
     }
+    bootstrap_startup_mock = MagicMock(name="_run_common_startup")  # WHY: avoid real file and dependency startup.
+    monkeypatch.setattr(ApplicationBootstrap, "_run_common_startup", bootstrap_startup_mock)  # WHY: isolate run().
     for attr_name, mock_obj in mocks.items():  # WHY: publish each mock as a MistHelper module attribute.
         monkeypatch.setattr(f"MistHelper.{attr_name}", mock_obj, raising=False)  # WHY: proxy resolves at call time.
     mocks["_parser"] = parser_mock  # WHY: expose the parser mock for direct assertions.
     mocks["_parsed_args"] = parsed_args  # WHY: expose the namespace instance for identity assertions.
+    mocks["_run_common_startup"] = bootstrap_startup_mock  # WHY: expose the bootstrap boundary assertion.
     return mocks  # WHY: hand the wiring back to the test for call-order + arg assertions.
 
 
@@ -82,16 +90,16 @@ class TestMainEntrypointRun:
         MainEntrypoint.run()  # WHY: exercise the full CLI entrypoint under mocked dependencies.
 
         # Assert each step was called exactly once (existence + arity are covered by argument checks below).
-        assert wired_misthelper["_initialize_deferred_imports"].call_count == 1  # WHY: step 1 (imports).
-        assert wired_misthelper["InputUtils"].ensure_tqdm_available.call_count == 1  # WHY: step 2 (tqdm setup).
-        assert wired_misthelper["_build_argument_parser"].call_count == 1  # WHY: step 3 (argparse construction).
-        assert wired_misthelper["_parser"].parse_args.call_count == 1  # WHY: step 4 (argument parsing).
-        assert wired_misthelper["_setup_runtime_flags"].call_count == 1  # WHY: step 5 (flag propagation).
-        assert wired_misthelper["_initialize_dependencies"].call_count == 1  # WHY: step 6 (deferred deps).
-        assert wired_misthelper["_establish_mist_session"].call_count == 1  # WHY: step 7 (Mist auth).
-        assert wired_misthelper["_systematic_test_has_api_token"].call_count == 1  # WHY: step 7 guard check.
-        assert wired_misthelper["_configure_runtime_options"].call_count == 1  # WHY: step 8a (runtime opts).
-        assert wired_misthelper["_dispatch_main_mode"].call_count == 1  # WHY: step 8b (mode dispatch).
+        assert wired_misthelper["_build_argument_parser"].call_count == 1  # WHY: step 1 builds the parser.
+        assert wired_misthelper["_parser"].parse_args.call_count == 1  # WHY: step 2 parses exactly once.
+        assert wired_misthelper["_run_common_startup"].call_count == 1  # WHY: step 3 runs explicit bootstrap work.
+        assert wired_misthelper["InputUtils"].ensure_tqdm_available.call_count == 1  # WHY: step 4 sets tqdm.
+        assert wired_misthelper["_setup_runtime_flags"].call_count == 1  # WHY: step 5 propagates flags.
+        assert wired_misthelper["_initialize_dependencies"].call_count == 1  # WHY: step 6 initializes deps.
+        assert wired_misthelper["_establish_mist_session"].call_count == 1  # WHY: step 7 authenticates.
+        assert wired_misthelper["_systematic_test_has_api_token"].call_count == 1  # WHY: step 7 checks token state.
+        assert wired_misthelper["_configure_runtime_options"].call_count == 1  # WHY: step 8 applies runtime options.
+        assert wired_misthelper["_dispatch_main_mode"].call_count == 1  # WHY: step 9 dispatches the mode.
 
     def test_run_forwards_parsed_args_to_downstream_steps(self, wired_misthelper: dict[str, Any]) -> None:
         """Steps 5-8 all receive the exact Namespace returned by parser.parse_args()."""

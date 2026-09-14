@@ -1,143 +1,118 @@
-"""Regression tests for issue #1640: reject `--test-interactive` hyphenated variant.
+"""Regression tests for command-line parsing in the explicit bootstrap."""
 
-Verifies that the guard `MistHelper._reject_unsupported_flag_variants` rejects
-the natural hyphenated spelling `--test-interactive` (and its `=value` form)
-with an actionable error naming the supported spelling `--testinteractive`,
-exits with status code 2, and does NOT silently proceed as if the test flag
-had been omitted. Also verifies that supported spellings (empty argv, plain
-`--testinteractive`, unrelated flags) are passthrough no-ops.
+from __future__ import annotations  # WHY: Keep annotations lazy for the test module.
 
-The guard is invoked from `src/refactors/main_entrypoint.py` before
-`parser.parse_args()`, so this test also patches the entrypoint pipeline to
-prove the guard runs before argparse would otherwise misroute the invocation.
-"""
+import argparse  # WHY: Build the parser double used by the parse-once regression test.
+import json  # WHY: Decode the fresh-interpreter side-effect report.
+import subprocess  # WHY: Start a fresh interpreter so import state cannot leak from conftest.
+import sys  # WHY: Reuse the active test interpreter for subprocess checks.
+from pathlib import Path  # WHY: Build repository paths without hardcoded separators.
+from typing import Any  # WHY: Type the mixed parser arguments in the test double.
 
-from __future__ import annotations  # WHY: PEP 604 unions in type hints on Python 3.10+.
+import pytest  # WHY: Use pytest fixtures and SystemExit assertions.
 
-import argparse  # WHY: MagicMock(spec=argparse.ArgumentParser) contract typing.
-import importlib  # WHY: resolve the live MistHelper module for the guard function.
-from typing import Any  # WHY: mocks dict holds mixed MagicMock and Namespace objects.
-from unittest.mock import MagicMock  # WHY: mock pipeline steps around the guard call.
+from src.refactors.main_entrypoint import ApplicationBootstrap  # WHY: Exercise the new bootstrap seam directly.
 
-import pytest  # WHY: monkeypatch + capsys fixtures.
-
-from src.refactors.main_entrypoint import MainEntrypoint  # WHY: exercise full pipeline in one test.
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[3]  # WHY: Locate the worktree root from this nested test file.
 
 
-def _guard() -> Any:
-    """Return the live `_reject_unsupported_flag_variants` callable from MistHelper.
+def test_import_misthelper_has_no_startup_side_effects() -> None:
+    """Importing `MistHelper` must not run the bootstrap side effects."""
+    script = """
+import json
+import logging
+import os
+import socket
+import subprocess
 
-    Why:
-        Resolved lazily so tests fail with a clear ImportError message if the guard
-        was accidentally removed or renamed, rather than a stale top-level ImportError
-        that would mask the actual regression.
+events = []
+watched_env = {
+    "CONSOLE_LOG_LEVEL",
+    "LOGGING_LOG_LEVEL",
+    "DISABLE_AUTO_INSTALL",
+    "DISABLE_UV_CHECK",
+    "MIST_SITE_EXCLUDE_PREFIX",
+}
+real_getenv = os.getenv
+real_environ_get = os.environ.get
 
-    Returns:
-        The bound callable `MistHelper._reject_unsupported_flag_variants`.
-    """
-    module = importlib.import_module("MistHelper")  # Live import; MistHelper is a top-level script module.
-    return module._reject_unsupported_flag_variants  # Access the guard as a module attribute.
+def record(event, value):
+    events.append([event, str(value)])
+
+def guarded_getenv(key, default=None):
+    if key in watched_env:
+        record("getenv", key)
+    return real_getenv(key, default)
+
+def guarded_environ_get(key, default=None):
+    if key in watched_env:
+        record("environ.get", key)
+    return real_environ_get(key, default)
+
+def guarded_basic_config(*args, **kwargs):
+    record("basicConfig", len(args) + len(kwargs))
+
+def guarded_makedirs(path, *args, **kwargs):
+    record("makedirs", path)
+
+def guarded_create_connection(*args, **kwargs):
+    record("socket.create_connection", len(args) + len(kwargs))
+    raise AssertionError("network connection during import")
+
+def guarded_run(*args, **kwargs):
+    record("subprocess.run", len(args) + len(kwargs))
+    raise AssertionError("subprocess during import")
+
+os.getenv = guarded_getenv
+os.environ.get = guarded_environ_get
+os.makedirs = guarded_makedirs
+logging.basicConfig = guarded_basic_config
+socket.create_connection = guarded_create_connection
+subprocess.run = guarded_run
+import MistHelper
+print(json.dumps(events))
+"""  # WHY: Patch the listed side-effect APIs before a fresh import.
+    result = subprocess.run(  # WHY: Run in a fresh process so previous imports do not hide side effects.
+        [sys.executable, "-c", script],  # WHY: Use the active venv interpreter and inline probe script.
+        cwd=_REPOSITORY_ROOT,  # WHY: Match normal project-root import behavior.
+        check=True,  # WHY: Surface import failures as test failures.
+        capture_output=True,  # WHY: Read the JSON event report without polluting pytest output.
+        text=True,  # WHY: Decode stdout as text for json.loads.
+    )
+    events = json.loads(result.stdout.strip())  # WHY: Convert the probe report into a Python list.
+    assert events == []  # WHY: Import must not run startup side effects.
 
 
-class TestRejectUnsupportedFlagVariants:
-    """`_reject_unsupported_flag_variants` gates raw argv before argparse."""
+class CountingParser(argparse.ArgumentParser):
+    """Parser double that records how many times startup parses arguments."""
 
-    def test_hyphenated_variant_exits_with_actionable_message(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """`--test-interactive` triggers SystemExit(2) with both the bad and good spellings in stderr."""
-        with pytest.raises(SystemExit) as excinfo:  # WHY: guard MUST terminate the process, not silently return.
-            _guard()(["--test-interactive"])  # WHY: bare hyphenated variant is the primary defect case.
-        assert excinfo.value.code == 2  # WHY: argparse convention for usage errors is exit-code 2.
-        captured = capsys.readouterr()  # WHY: capture the stderr message for content assertions.
-        assert "--test-interactive" in captured.err  # WHY: user must see which spelling was rejected.
-        assert "--testinteractive" in captured.err  # WHY: user must see the supported spelling suggestion.
+    def __init__(self, parsed_args: argparse.Namespace) -> None:
+        super().__init__(description="Counting parser")  # WHY: Keep normal argparse behavior available if needed.
+        self.parsed_args = parsed_args  # WHY: Return one stable Namespace to prove bootstrap stores it.
+        self.parse_count = 0  # WHY: Count parser calls for the regression assertion.
 
-    def test_hyphenated_variant_with_equals_value_is_rejected(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """`--test-interactive=1` (with an `=value` suffix) is also rejected."""
-        with pytest.raises(SystemExit) as excinfo:  # WHY: `--flag=value` form must not slip past by string mismatch.
-            _guard()(["--test-interactive=1"])  # WHY: argparse tokenises `=` so guard must split on it too.
-        assert excinfo.value.code == 2  # WHY: same exit convention as bare variant.
-        assert "--testinteractive" in capsys.readouterr().err  # WHY: suggestion still surfaced.
-
-    def test_supported_spelling_is_passthrough(self) -> None:
-        """The supported spelling `--testinteractive` is a no-op that returns None."""
-        assert _guard()(["--testinteractive"]) is None  # WHY: correct spelling must not raise.
-
-    def test_empty_argv_is_passthrough(self) -> None:
-        """An empty argument list is a no-op."""
-        assert _guard()([]) is None  # WHY: guard must not trigger on baseline no-arg invocation.
-
-    def test_unrelated_flags_are_passthrough(self) -> None:
-        """Flags that are not in the rejection table are not affected."""
-        assert _guard()(["--menu", "1", "--org", "abc"]) is None  # WHY: only the specific bad spelling is gated.
-
-    def test_hyphenated_variant_mixed_with_other_flags_is_rejected(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """The guard finds `--test-interactive` even when other flags precede/follow it."""
-        with pytest.raises(SystemExit) as excinfo:  # WHY: prove the guard scans all tokens, not just argv[0].
-            _guard()(["--debug", "--test-interactive", "--menu", "1"])  # WHY: realistic mixed-flag invocation.
-        assert excinfo.value.code == 2  # WHY: same exit convention.
-        assert "--testinteractive" in capsys.readouterr().err  # WHY: suggestion still surfaced.
+    def parse_args(self, args: Any = None, namespace: Any = None) -> argparse.Namespace:
+        self.parse_count += 1  # WHY: Detect any second parse inside the bootstrap path.
+        return self.parsed_args  # WHY: Let the test compare object identity after parsing.
 
 
-class TestMainEntrypointGuardIntegration:
-    """`MainEntrypoint.run` invokes the guard before `parser.parse_args()`."""
+def test_application_bootstrap_parses_command_line_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The bootstrap must store the only parsed command-line namespace."""
+    parsed_args = argparse.Namespace(skip_deps=True, test=False, testinteractive=False)  # WHY: Minimal stored result.
+    parser = CountingParser(parsed_args)  # WHY: Count parse calls without running real argparse behavior.
+    monkeypatch.setattr(  # WHY: Route bootstrap to the parser double.
+        "MistHelper._build_argument_parser", lambda: parser
+    )
+    bootstrap = ApplicationBootstrap(argv=["--skip-deps"])  # WHY: Constructing bootstrap is the only parse location.
+    assert parser.parse_count == 1  # WHY: The command line must be parsed exactly one time.
+    assert bootstrap.parsed_args is parsed_args  # WHY: Later startup must reuse the stored Namespace object.
 
-    def test_run_rejects_hyphenated_variant_before_parse(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        """When `sys.argv` contains `--test-interactive`, `MainEntrypoint.run` exits before dispatch."""
-        parser_mock = MagicMock(spec=argparse.ArgumentParser)  # WHY: assert parse_args is NOT reached.
-        parser_mock.parse_args.return_value = argparse.Namespace(  # WHY: safety net if guard fails to fire.
-            standalone=False, debug=False, login=False, test=False, testinteractive=False
-        )
-        mocks: dict[str, Any] = {  # WHY: wire only the pre-guard steps the pipeline touches first.
-            "_initialize_deferred_imports": MagicMock(),
-            "InputUtils": MagicMock(),
-            "_build_argument_parser": MagicMock(return_value=parser_mock),
-            "_setup_runtime_flags": MagicMock(),
-            "_initialize_dependencies": MagicMock(),
-            "_establish_mist_session": MagicMock(),
-            "_systematic_test_has_api_token": MagicMock(return_value=True),
-            "_configure_runtime_options": MagicMock(),
-            "_dispatch_main_mode": MagicMock(),
-        }
-        for attr_name, mock_obj in mocks.items():  # WHY: publish each mock as a MistHelper module attribute.
-            monkeypatch.setattr(f"MistHelper.{attr_name}", mock_obj, raising=False)
-        monkeypatch.setattr("sys.argv", ["MistHelper.py", "--test-interactive"])  # WHY: seed the guard input.
 
-        with pytest.raises(SystemExit) as excinfo:  # WHY: the entrypoint must exit early via the guard.
-            MainEntrypoint.run()
-
-        assert excinfo.value.code == 2  # WHY: guard propagates exit code 2.
-        captured = capsys.readouterr()  # WHY: verify stderr guidance surfaced through the pipeline.
-        assert "--testinteractive" in captured.err  # WHY: supported spelling must be surfaced.
-        # Critical: the pipeline must NOT have reached parse_args or any downstream step.
-        parser_mock.parse_args.assert_not_called()  # WHY: guard runs BEFORE parse_args.
-        mocks["_dispatch_main_mode"].assert_not_called()  # WHY: never silently proceed as if flag was omitted.
-        mocks["_setup_runtime_flags"].assert_not_called()  # WHY: no downstream side effects on rejection.
-
-    def test_run_allows_supported_spelling_through_pipeline(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """The supported `--testinteractive` spelling still reaches `_dispatch_main_mode`."""
-        parser_mock = MagicMock(spec=argparse.ArgumentParser)  # WHY: standard parser mock contract.
-        parsed_args = argparse.Namespace(  # WHY: post-parse namespace fed to downstream steps.
-            standalone=False, debug=False, login=False, test=False, testinteractive=True
-        )
-        parser_mock.parse_args.return_value = parsed_args  # WHY: entrypoint reads parse_args() result.
-        mocks: dict[str, Any] = {  # WHY: same wiring as reject-test to prove positive path is untouched.
-            "_initialize_deferred_imports": MagicMock(),
-            "InputUtils": MagicMock(),
-            "_build_argument_parser": MagicMock(return_value=parser_mock),
-            "_setup_runtime_flags": MagicMock(),
-            "_initialize_dependencies": MagicMock(),
-            "_establish_mist_session": MagicMock(),
-            "_systematic_test_has_api_token": MagicMock(return_value=True),
-            "_configure_runtime_options": MagicMock(),
-            "_dispatch_main_mode": MagicMock(),
-        }
-        for attr_name, mock_obj in mocks.items():  # WHY: publish each mock as a MistHelper module attribute.
-            monkeypatch.setattr(f"MistHelper.{attr_name}", mock_obj, raising=False)
-        monkeypatch.setattr("sys.argv", ["MistHelper.py", "--testinteractive"])  # WHY: seed the supported spelling.
-
-        MainEntrypoint.run()  # WHY: must NOT raise; guard is a no-op for supported spellings.
-
-        parser_mock.parse_args.assert_called_once()  # WHY: pipeline proceeded past the guard.
-        mocks["_dispatch_main_mode"].assert_called_once_with(parsed_args)  # WHY: dispatch received parsed args.
+def test_hyphenated_test_flag_uses_standard_argparse_error(capsys: pytest.CaptureFixture[str]) -> None:
+    """A misspelled flag must fail through argparse with status code 2."""
+    with pytest.raises(SystemExit) as excinfo:  # WHY: argparse exits on an unsupported option.
+        ApplicationBootstrap(argv=["--test-interactive"])  # WHY: The removed raw variant guard no longer runs.
+    captured = capsys.readouterr()  # WHY: Inspect the user-facing parser error.
+    assert excinfo.value.code == 2  # WHY: argparse uses exit code 2 for usage errors.
+    assert "unrecognized arguments" in captured.err  # WHY: The standard parser error must own this failure.
+    assert "Did you mean" not in captured.err  # WHY: The removed compatibility guard must not run.
