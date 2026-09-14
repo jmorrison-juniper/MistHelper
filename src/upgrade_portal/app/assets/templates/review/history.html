@@ -332,10 +332,15 @@
   page and never the rows of a later page. The note states that limit, because
   an operator who sorted a paged table and read the first row as the smallest
   value of the whole list would read a false answer.
+
+  Issue #2595 corrects the second sentence. The note named a filter, and this
+  page holds no filter control. It holds the next page control and the previous
+  page control, which carry the test identifiers history-page-next and
+  history-page-previous. An operator who looked for a filter found nothing.
 #}
 <p class="portal-card-note" data-testid="history-sort-scope">
-  A sort orders the rows of this page. Use the filter to reach a row that sits
-  on a later page.
+  A sort orders the rows of this page. Open the next page or the previous page
+  to reach a row that this page does not hold.
 </p>
 
 <div class="portal-table-scroll">

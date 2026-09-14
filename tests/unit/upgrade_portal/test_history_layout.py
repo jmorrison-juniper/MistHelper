@@ -346,6 +346,27 @@ def test_the_page_keeps_every_history_identifier(environment: Environment) -> No
         assert f'data-testid="{identifier}"' in page
 
 
+def test_the_sort_note_names_a_control_that_the_page_holds(environment: Environment) -> None:
+    """Prove the sort note names the page controls and never a filter.
+
+    Why:
+        Issue #2595 reports that the note told the operator to use a filter.
+        This page holds no filter control. An operator who looked for one found
+        nothing. The note must name the next page control and the previous page
+        control, because those two controls reach a row on a later page.
+
+    Args:
+        environment: The Jinja environment.
+    """
+    view = render.build_history_view(_StorePage((_capture_row(),), total=1))  # Build one page of history.
+    page = _squash(_render_page(environment, history_view=view))  # Render the real template.
+    note_start = page.index('data-testid="history-sort-scope"')  # Find the note under test.
+    note_text = page[note_start : note_start + 200]  # Read only the note, never the whole page.
+    assert "next page" in note_text  # The note must name the next page control.
+    assert "previous page" in note_text  # The note must name the previous page control.
+    assert "filter" not in note_text  # The page holds no filter, so the note must not name one.
+
+
 def test_the_page_adds_no_style_attribute() -> None:
     """Prove the page carries no inline style attribute.
 
