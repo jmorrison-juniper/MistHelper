@@ -37,7 +37,9 @@ from src.upgrade_portal.runtime.lock import (
     CONNECT_TIMEOUT_SECONDS,
     COOLDOWN_SECONDS,
     HEARTBEAT_SECONDS,
+    LOCK_RENEWAL_MAX_SECONDS_VARIABLE,
     LOCK_TTL_SECONDS,
+    MAX_LOCK_LIFE_SECONDS,
     RESUME_CONFIRMATION_TEXT,
     RETRY_AFTER_SECONDS,
     TAKEOVER_CONFIRMATION_TEXT,
@@ -54,6 +56,7 @@ from src.upgrade_portal.runtime.lock import (
     acquire_site_lock,
     build_key,
     connect_lock_store,
+    max_lock_life_seconds,
     read_lock,
     read_site_locks,
     refresh_site_lock,
@@ -426,6 +429,26 @@ def test_the_settings_repeat_the_contract_numbers() -> None:
     assert HEARTBEAT_SECONDS == 60
     assert TAKEOVER_CONFIRMATION_TEXT == "CONFIRM"
     assert LOCK_TTL_SECONDS > COOLDOWN_SECONDS  # A quiet holder must still hold a readable key
+
+
+def test_the_lock_life_bound_reads_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The run life bound must be configurable.
+
+    Args:
+        monkeypatch: The pytest patch helper.
+    """
+    monkeypatch.setenv(LOCK_RENEWAL_MAX_SECONDS_VARIABLE, "7200")  # Use a valid operator value.
+    assert max_lock_life_seconds() == 7200  # The reader applies the configured bound.
+
+
+def test_the_lock_life_bound_rejects_a_short_lease(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A too-small run life bound must not shorten one lease.
+
+    Args:
+        monkeypatch: The pytest patch helper.
+    """
+    monkeypatch.setenv(LOCK_RENEWAL_MAX_SECONDS_VARIABLE, str(LOCK_TTL_SECONDS - 1))  # Undercut a full lease.
+    assert max_lock_life_seconds() == MAX_LOCK_LIFE_SECONDS  # The safe default prevents early expiry.
 
 
 def test_a_free_site_grants_the_lock(store: ScriptedLockStore) -> None:
@@ -1009,6 +1032,92 @@ def test_a_heartbeat_extends_the_lock_the_caller_holds(store: ScriptedLockStore)
     assert remaining == LOCK_TTL_SECONDS
     assert held.acquired_at == grant.record.acquired_at
     assert held.refreshed_at >= grant.record.refreshed_at
+
+
+def test_a_heartbeat_stops_extending_at_the_run_life_bound(store: ScriptedLockStore) -> None:
+    """A beat shortens the lease when the lock nears its run life bound.
+
+    Why:
+        A driver that renews forever can starve every operator. The lock may
+        renew only inside one bounded run life.
+
+    Args:
+        store: The lock store double.
+    """
+    age = MAX_LOCK_LIFE_SECONDS - 120  # Leave less than the normal lease, so the clamp must show.
+    record = seed_lock(store, FIRST_OWNER, 0)  # Seed a fresh heartbeat time, so quiet age does not expire it.
+    acquired = (datetime.now(UTC) - timedelta(seconds=age)).isoformat()  # Put the first take near the bound.
+    bounded = LockRecord(  # Build a record whose total life is almost spent.
+        owner=record.owner,  # Keep the same holder so the token remains valid.
+        lock_token=record.lock_token,  # Keep the token that the store compares.
+        run_id=record.run_id,  # Keep the run identifier to test the life bound alone.
+        acquired_at=acquired,  # Move only the first take time toward the bound.
+        refreshed_at=record.refreshed_at,  # Keep the heartbeat fresh, so the old rule would extend for an hour.
+    )
+    store.values[SITE_KEY] = bounded.to_json()  # Replace the seeded record with the bounded life record.
+
+    remaining = refresh_site_lock(SITE_KEY, bounded, client=store)  # Renew through the real refresh function.
+
+    assert remaining <= 120  # The refresh must not grant a full hour near the bound.
+    assert store.expiries[SITE_KEY] == remaining  # The store lease must match the clamped answer.
+
+
+def test_a_heartbeat_renews_a_lock_that_names_no_run(store: ScriptedLockStore) -> None:
+    """A beat renews a lock that an operator took before any run exists.
+
+    Why:
+        `select.RUN_FIELD` states that an empty run identifier means the
+        operator took the site before the run. That order is the normal
+        journey, because the operator takes the site, then captures the state,
+        and only then creates the run. A refusal here would drop the site lock
+        of an operator who did nothing wrong. The life bound of issue #2564
+        stops a starving renewal instead, and it needs no run identifier.
+
+    Args:
+        store: The lock store double.
+    """
+    record = seed_lock(store, FIRST_OWNER, 0)  # Build a valid lock before removing the run identifier.
+    empty = LockRecord(  # Build the shape of an operator who holds the site before a run.
+        owner=record.owner,  # Keep the holder valid so only the run field differs.
+        lock_token=record.lock_token,  # Keep the token valid so the compare passes.
+        run_id="",  # Model the operator who took the site before the run.
+        acquired_at=record.acquired_at,  # Keep the take time valid so the life bound allows a renewal.
+        refreshed_at=record.refreshed_at,  # Keep the beat time valid so the compare passes.
+    )
+    store.values[SITE_KEY] = empty.to_json()  # Store the lock that the operator holds without a run.
+
+    left = refresh_site_lock(SITE_KEY, empty, client=store)  # The beat must extend this lock.
+
+    assert left > 0, "An operator who holds a site before a run must keep the site."
+    assert stored_record(store).run_id == ""  # The renewal keeps the empty run field unchanged.
+
+
+def test_the_takeover_cooldown_reaches_zero_at_the_run_life_bound(store: ScriptedLockStore) -> None:
+    """A fresh heartbeat cannot push the wait past the run life bound.
+
+    Why:
+        The operator must always reach a takeover in bounded time, even when a
+        driver refreshes the lock each minute.
+
+    Args:
+        store: The lock store double.
+    """
+    record = seed_lock(store, FIRST_OWNER, 0)  # Seed a record with a fresh heartbeat.
+    acquired = (datetime.now(UTC) - timedelta(seconds=MAX_LOCK_LIFE_SECONDS + 1)).isoformat()  # Cross the bound.
+    refreshed = datetime.now(UTC).isoformat()  # Keep the heartbeat fresh, as the production defect did.
+    bounded = LockRecord(  # Build the starved state that issue 2564 measured.
+        owner=record.owner,  # Keep a valid holder for the conflict path.
+        lock_token=record.lock_token,  # Keep a valid token for the takeover compare.
+        run_id=record.run_id,  # Keep a traceable run identifier for this rule.
+        acquired_at=acquired,  # Make the total lock life reach the bound.
+        refreshed_at=refreshed,  # Make the old cooldown rule still show a wait.
+    )
+    store.values[SITE_KEY] = bounded.to_json()  # Store the bounded record.
+
+    grant = acquire_site_lock(build_request(SECOND_OWNER, TAKEOVER_CONFIRMATION_TEXT), client=store)  # Try takeover.
+
+    assert grant.state is LockState.TAKEN_OVER  # The bounded life must make the takeover possible.
+    assert stored_record(store).owner == SECOND_OWNER  # The store must move only after the typed word.
 
 
 def test_a_heartbeat_after_a_takeover_reports_the_lock_lost(store: ScriptedLockStore) -> None:
