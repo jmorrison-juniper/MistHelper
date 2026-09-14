@@ -204,6 +204,74 @@ def test_both_capture_links_of_a_run_row_name_a_route(portal_app: Flask, url_ada
     assert unresolved(url_adapter, ["/captures/cap-1", "/captures/cap-2"]) == []
 
 
+def test_the_run_row_links_the_comparison_of_its_two_captures(portal_app: Flask, url_adapter: MapAdapter) -> None:
+    """Issue #2649: a finished run row reaches its own comparison.
+
+    Why:
+        No page linked to the comparison, so an operator reached the one view
+        that proves an upgrade worked only by typing the address. The row names
+        both captures already, so the link needs no search.
+
+    Args:
+        portal_app: The real application from the shared fixture.
+        url_adapter: The bound URL map.
+    """
+    with portal_app.test_request_context("/history"):
+        markup = render_template("review/history.html", run_rows=[RUN_ROW])
+    assert 'href="/compare?before=cap-1&amp;after=cap-2"' in markup  # The pair of this run, in order.
+    assert unresolved(url_adapter, ["/compare"]) == []  # The comparison page holds a route.
+
+
+def test_a_run_row_with_one_capture_links_no_comparison(portal_app: Flask) -> None:
+    """Issue #2649: a comparison needs a pair, so one capture writes no link.
+
+    Why:
+        A run that holds a pre-check alone cannot compare anything. A link there
+        would open the page with a missing half and report an error.
+
+    Args:
+        portal_app: The real application from the shared fixture.
+    """
+    half = {**RUN_ROW, "post_capture_id": ""}  # The run has not saved its post-check capture yet.
+    with portal_app.test_request_context("/history"):
+        markup = render_template("review/history.html", run_rows=[half])
+    assert "/compare?before=" not in markup  # No half pair reaches the comparison page.
+
+
+def test_the_navigation_links_the_comparison_page(portal_app: Flask, url_adapter: MapAdapter) -> None:
+    """Issue #2649: every signed-in page reaches the comparison in one press.
+
+    Why:
+        The navigation held the site list and the history alone. A junior
+        engineer who does not know the address could not reach the comparison
+        at all.
+
+    Args:
+        portal_app: The real application from the shared fixture.
+        url_adapter: The bound URL map.
+    """
+    with portal_app.test_request_context("/history"):
+        markup = render_template("partials/nav.html", signed_in=True)
+    assert 'data-testid="nav-compare"' in markup  # The stable hook that a browser test reads.
+    assert 'href="/compare"' in markup  # The picker page of the contract.
+    assert unresolved(url_adapter, ["/compare"]) == []  # The path names a real route.
+
+
+def test_the_sign_in_page_shows_no_comparison_link(portal_app: Flask) -> None:
+    """Issue #2649: the new link stays behind the session, as the others do.
+
+    Why:
+        The comparison reads stored captures of one organization. A link on the
+        sign-in page would offer a page that refuses every unsigned request.
+
+    Args:
+        portal_app: The real application from the shared fixture.
+    """
+    with portal_app.test_request_context("/auth/signin"):
+        markup = render_template("partials/nav.html", signed_in=False)
+    assert 'data-testid="nav-compare"' not in markup  # No signed-out page offers the comparison.
+
+
 @pytest.mark.parametrize("template", template_files(), ids=lambda path: path.name)
 def test_every_link_of_every_template_names_a_route(template: Path, url_adapter: MapAdapter) -> None:
     """Issue #2225: no page of the portal may write a path that no route holds.

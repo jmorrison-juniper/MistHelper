@@ -299,6 +299,22 @@
     </dd>
   </dl>
 
+  {#
+    Issue #2649: the run named both captures as text alone, and no page linked
+    to the comparison. An operator had to copy both keys and pick them again
+    from two lists that hold every capture of the organization. The link appears
+    only when the run holds both keys, because the comparison needs a pair.
+  #}
+  {% if pre_key and post_key %}
+    <p class="mt-3 mb-0">
+      <a class="portal-button portal-button-primary"
+         data-testid="run-compare-link"
+         href="/compare?before={{ pre_key | urlencode }}&amp;after={{ post_key | urlencode }}">
+        Compare the two captures of this run
+      </a>
+    </p>
+  {% endif %}
+
   <div class="portal-table-scroll">
     <table class="portal-table" data-testid="upgrade-run-table"
                  data-sortable>

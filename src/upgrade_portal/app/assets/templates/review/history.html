@@ -205,6 +205,15 @@
               <a href="/captures/{{ run.post_capture_id }}"
                  data-testid="history-run-post-{{ run.run_id }}">After</a>
             {% endif %}
+            {#
+              Issue #2649: the row linked each capture and never the comparison,
+              so the operator read two captures and compared them by eye. The
+              link appears only when the run holds both keys.
+            #}
+            {% if run.pre_capture_id and run.post_capture_id %}
+              <a href="/compare?before={{ run.pre_capture_id | urlencode }}&amp;after={{ run.post_capture_id | urlencode }}"
+                 data-testid="history-run-compare-{{ run.run_id }}">Compare</a>
+            {% endif %}
             {% if not run.pre_capture_id and not run.post_capture_id %}
               <span class="portal-note">No capture yet</span>
             {% endif %}

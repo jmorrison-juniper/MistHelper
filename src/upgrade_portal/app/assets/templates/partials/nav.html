@@ -55,6 +55,15 @@
            data-testid="nav-history"
            class="{{ 'is-active' if current_path.startswith('/history') else '' }}"
            {% if current_path.startswith('/history') %}aria-current="page"{% endif %}>History</a>
+
+        {#
+          Issue #2649: no page linked to the comparison, so an operator reached
+          the one view that proves an upgrade worked only by typing the address.
+        #}
+        <a href="/compare"
+           data-testid="nav-compare"
+           class="{{ 'is-active' if current_path.startswith('/compare') else '' }}"
+           {% if current_path.startswith('/compare') %}aria-current="page"{% endif %}>Compare</a>
       {% endif %}
     </nav>
 
