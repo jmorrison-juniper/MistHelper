@@ -22,6 +22,7 @@ import pytest  # WHY: monkeypatch fixture.
 
 from src.refactors.initialize_mist_session import (  # WHY: SUT + proxy direct imports.
     _MH,
+    MistSessionConfigurator,
     MistSessionInitializer,
     _mh_module,
     _MistHelperProxy,
@@ -167,23 +168,21 @@ class TestInitializeHappyPath:
             "positional_all_args",
             ["variant_ok"],
         )  # WHY: (session, method, tried).
-        helpers["_validate_initialized_session"].return_value = True  # WHY: validation succeeds.
+        configure_once = MagicMock(return_value=True, name="configure_once")  # WHY: isolate the new seam.
+        monkeypatch.setattr(MistSessionConfigurator, "configure_once", configure_once)  # WHY: verify seam use.
 
         result = MistSessionInitializer.initialize()  # WHY: exercise full happy path.
 
-        assert result is True  # WHY: validated session → True.
-        assert helpers["_configure_session_timeout"].call_count == 1  # WHY: timeout applied.
-        assert helpers["_configure_session_timeout"].call_args.args == (new_session,)  # WHY: correct session threaded.
-        assert helpers["_validate_initialized_session"].call_count == 1  # WHY: validation invoked.
-        assert helpers["_validate_initialized_session"].call_args.args == (
+        assert result is True  # WHY: configured session returns True.
+        configure_once.assert_called_once()  # WHY: the explicit seam configures the session.
+        assert configure_once.call_args.args[1:] == (
             new_session,
             "positional_all_args",
-        )  # WHY: session + method threaded to validator.
-        # WHY: assert that global mirror writes actually happened.
-        import MistHelper as mh  # WHY: read back the mutated global to confirm assignment mirroring.
+        )  # WHY: session + method reach the seam.
+        import MistHelper as mh  # WHY: read the context view through the legacy module attribute.
 
-        assert mh.apisession is new_session  # WHY: mh_module.apisession = new_apisession happened.
-        assert mh.mistapi is loaded_mistapi  # WHY: mh_module.mistapi = loaded_mistapi happened.
+        assert mh.apisession is new_session  # WHY: the context owns the new session.
+        assert mh.MainEntrypoint.context.mistapi is loaded_mistapi  # WHY: the context owns the SDK module.
 
     def test_validate_returns_falsy_bool_converts_to_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When _validate_initialized_session returns falsy (e.g., None), bool() → False."""
@@ -205,6 +204,7 @@ class TestInitializeHappyPath:
             "positional_all_args",
             ["variant_ok"],
         )  # WHY: session built successfully.
-        helpers["_validate_initialized_session"].return_value = None  # WHY: falsy → bool() → False.
+        configure_once = MagicMock(return_value=None, name="configure_once")  # WHY: falsy seam result drives False.
+        monkeypatch.setattr(MistSessionConfigurator, "configure_once", configure_once)  # WHY: isolate the seam result.
 
-        assert MistSessionInitializer.initialize() is False  # WHY: bool(None) == False.
+        assert MistSessionInitializer.initialize() is False  # WHY: bool(None) is False.

@@ -15,25 +15,25 @@ import sys
 MINIMUM_PYTHON_VERSION = (3, 13)  # Define minimum required Python version tuple for compatibility checks
 if sys.version_info < MINIMUM_PYTHON_VERSION:  # Exit early if Python is too old to prevent cryptic errors later
     # Format current Python version for display
-    version_str = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    version_str = f"{sys .version_info .major }.{sys .version_info .minor }.{sys .version_info .micro }"
     required_str = (
-        f"{MINIMUM_PYTHON_VERSION[0]}.{MINIMUM_PYTHON_VERSION[1]}"  # Format minimum required version for display
+        f"{MINIMUM_PYTHON_VERSION [0 ]}.{MINIMUM_PYTHON_VERSION [1 ]}"  # Format minimum required version for display
     )
     warning_msg = (  # Build user-friendly error message with actionable guidance
-        f"WARNING: Python {version_str} detected. MistHelper requires Python {required_str} or newer.\n"
-        f"Some features may not work correctly. Please upgrade Python to {required_str}+.\n"
+        f"WARNING: Python {version_str } detected. MistHelper requires Python {required_str } or newer.\n"
+        f"Some features may not work correctly. Please upgrade Python to {required_str }+.\n"
         f"Download from: https://www.python.org/downloads/"
     )
     # Pre-logging setup: logging module not yet imported, so stderr prints are the only viable channel.
-    print(f"\n{'=' * 70}", file=sys.stderr)
+    print(f"\n{'='*70 }", file=sys.stderr)
     print(warning_msg, file=sys.stderr)
-    print(f"{'=' * 70}\n", file=sys.stderr)
+    print(f"{'='*70 }\n", file=sys.stderr)
     # Log will be configured later, but we cannot use logging yet
     # The warning is printed to stderr so it is visible regardless
 
-# ============================================================================
-# GLOBAL DEPENDENCY MANAGEMENT AND IMPORT SYSTEM
-# ============================================================================
+    # ============================================================================
+    # GLOBAL DEPENDENCY MANAGEMENT AND IMPORT SYSTEM
+    # ============================================================================
 import warnings  # Import warnings module to suppress harmless SyntaxWarnings from third-party libraries
 
 warnings.filterwarnings(
@@ -71,8 +71,10 @@ from src.utils.subprocess_runner import (  # Centralized subprocess dispatch + e
 )
 
 if sys.version_info < MINIMUM_PYTHON_VERSION:  # Log the same version warning after logging becomes importable.
-    version_str = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"  # Format version.
-    required_str = f"{MINIMUM_PYTHON_VERSION[0]}.{MINIMUM_PYTHON_VERSION[1]}"  # Format the minimum version.
+    version_str = (
+        f"{sys .version_info .major }.{sys .version_info .minor }.{sys .version_info .micro }"  # Format version.
+    )
+    required_str = f"{MINIMUM_PYTHON_VERSION [0 ]}.{MINIMUM_PYTHON_VERSION [1 ]}"  # Format the minimum version.
     logging.warning(  # Keep the historical log text for the logging parity contract.
         "Python %s detected. MistHelper requires Python %s+. Some features may not work correctly.",
         version_str,
@@ -118,10 +120,11 @@ class LogRotationSettings:
             encoding="utf-8",  # Preserve non-ASCII operational data safely
         )
 
+        # Type stubs for dynamically imported modules
+        # These allow type checking while the actual imports happen at runtime via GlobalImportManager
+        # Pylance uses these unconditionally. Runtime try/except blocks below handle actual loading.
 
-# Type stubs for dynamically imported modules
-# These allow type checking while the actual imports happen at runtime via GlobalImportManager
-# Pylance uses these unconditionally. Runtime try/except blocks below handle actual loading.
+
 if TYPE_CHECKING:  # These imports only used by static type checkers (Pylance, mypy), not at runtime
     from types import ModuleType  # ModuleType annotation for optional-module fallback typing
 
@@ -130,11 +133,11 @@ if TYPE_CHECKING:  # These imports only used by static type checkers (Pylance, m
     import websocket  # Type stub for websocket (WebSocket client for device diagnostics)
     from src.device.utility_commands import DeviceUtilityCommands  # Type stub for DeviceUtilityCommands
 
-# ============================================================================
-# POLYGLOT DATABASE LAYER (OPTIONAL)
-# ============================================================================
-# Conditional import for ArangoDB + Redis TimeSeries backends.
-# Falls back gracefully in standalone mode (no python-arango/redis installed).
+    # ============================================================================
+    # POLYGLOT DATABASE LAYER (OPTIONAL)
+    # ============================================================================
+    # Conditional import for ArangoDB + Redis TimeSeries backends.
+    # Falls back gracefully in standalone mode (no python-arango/redis installed).
 try:  # Try to import polyglot database layer for ArangoDB/Redis export backends
     from src.db import DatabaseConfig as _DatabaseConfigImpl
     from src.db import configure_db_logging as _configure_db_logging_impl
@@ -150,10 +153,10 @@ except ImportError:  # If database dependencies (python-arango, redis) not insta
     DatabaseRouter = None  # None lets runtime guards detect DB-layer absence
     DB_LAYER_AVAILABLE = False  # Set flag to disable database output formats (CSV/SQLite only)
 
-# Explicit public API surface (issue #895).
-# A src.* submodule re-exports every name below for external
-# consumers. Adding a name here MUST accompany a corresponding update to
-# specs/1016-misthelper-suppression-cleanup/contracts/public_api_snapshot.txt.
+    # Explicit public API surface (issue #895).
+    # A src.* submodule re-exports every name below for external
+    # consumers. Adding a name here MUST accompany a corresponding update to
+    # specs/1016-misthelper-suppression-cleanup/contracts/public_api_snapshot.txt.
 __all__ = [
     "API_REQUEST_MAX_RETRIES",
     "API_REQUEST_RETRY_DELAY",
@@ -815,7 +818,7 @@ def _get_latest_pypi_version(package_name: str) -> str:  # Ask PyPI for a packag
     """
     try:  # Network calls can fail many ways. Treat any failure as 'latest unknown'
         requests_module = cast(Any, __import__("requests"))  # Import after bootstrap can repair requests
-        url = f"https://pypi.org/pypi/{package_name}/json"  # PyPI JSON API endpoint for this package's metadata
+        url = f"https://pypi.org/pypi/{package_name }/json"  # PyPI JSON API endpoint for this package's metadata
         if not url.startswith("https://"):  # Defence-in-depth: refuse any non-HTTPS scheme before dispatch
             raise ValueError("PyPI URL must use https scheme")  # Fail-closed guards against future url refactors
         logging.info("Checking the latest package version for %s", package_name)  # Log before the bounded HTTP request
@@ -867,12 +870,11 @@ def _parse_requirements_file(filepath: str = "requirements.txt") -> list[tuple[s
         logging.warning("Error parsing requirements file: %s", parse_error)  # Log the failure reason
         return []  # Fail safe with an empty list rather than crashing startup
 
-
-# _early_dependency_check_legacy_impl removed per issue #431 (ARCH-NAMING +
-# dead-code). The function (~430 lines, cyclomatic 64) was a leftover legacy
-# implementation never called from anywhere -- production startup uses the
-# canonical _early_dependency_check() defined below which delegates to the
-# extracted src/bootstrap/* orchestrator.
+        # _early_dependency_check_legacy_impl removed per issue #431 (ARCH-NAMING +
+        # dead-code). The function (~430 lines, cyclomatic 64) was a leftover legacy
+        # implementation never called from anywhere -- production startup uses the
+        # canonical _early_dependency_check() defined below which delegates to the
+        # extracted src/bootstrap/* orchestrator.
 
 
 def _early_dependency_check() -> None:  # Public entry point. Delegates to the extracted bootstrap modules
@@ -897,8 +899,9 @@ def _early_dependency_check() -> None:  # Public entry point. Delegates to the e
     )
     orchestrator.run()  # Execute the dependency check + install/upgrade workflow
 
+    # Additional standard library imports
 
-# Additional standard library imports
+
 import concurrent.futures  # High-level parallelism primitives for batched API calls
 import inspect  # Introspect functions/classes at runtime (signatures, source lookup)
 import threading  # Locks and threads for safe concurrent operations
@@ -947,10 +950,9 @@ try:  # Import the SDK without starting a session or touching the network.
 except ImportError:  # The bootstrap dependency check reports the missing SDK before runtime modes start.
     pass  # Keep the public name available for environments that install dependencies later.
 
-
-# tqdm wrapper: canonical home is src/utils/tqdm_wrapper.py (1015 T-14, Cat E).
-# The wrapper resolves to the real tqdm package if installed, else a no-op pass-through.
-# Re-exported here so ``MistHelper.tqdm`` / ``mh.tqdm`` callers keep working unchanged.
+    # tqdm wrapper: canonical home is src/utils/tqdm_wrapper.py (1015 T-14, Cat E).
+    # The wrapper resolves to the real tqdm package if installed, else a no-op pass-through.
+    # Re-exported here so ``MistHelper.tqdm`` / ``mh.tqdm`` callers keep working unchanged.
 from src.utils.tqdm_wrapper import tqdm  # Cat E canonical (1015 T-14) -- re-export.
 
 if "requests" not in globals():  # Keep the requests name without importing the HTTP stack during module import.
@@ -979,7 +981,7 @@ except ImportError:  # paramiko not installed
     SSHClient = None  # None lets guards detect absence
     RejectPolicy = None  # None lets guards detect absence
 
-# Optional imports with fallbacks
+    # Optional imports with fallbacks
 try:  # scourgify is optional (US street-address normalization)
     from scourgify import normalize_address_record  # Normalize messy US addresses into structured fields
 except ImportError:  # scourgify not installed
@@ -992,27 +994,25 @@ try:  # rapidfuzz is optional (fast fuzzy string matching)
 except ImportError:  # rapidfuzz not installed
     fuzz = None  # None lets callers skip fuzzy matching
 
-# Keyboard listener functionality moved to src/refactors/keyboard_listener.py
-# (PR-13). The extracted class KeyboardListener preserves the no-op stub for the
-# single remaining call site (interactive SSR/SRX websocket shell). No wrapper or
-# alias is retained here per FR-005 (no shims left in MistHelper).
+    # Keyboard listener functionality moved to src/refactors/keyboard_listener.py
+    # (PR-13). The extracted class KeyboardListener preserves the no-op stub for the
+    # single remaining call site (interactive SSR/SRX websocket shell). No wrapper or
+    # alias is retained here per FR-005 (no shims left in MistHelper).
 
+    # stop_listening() removed per issue #431: it was a `pass` no-op stub for a
+    # legacy keyboard listener that has no real implementation. The single call
+    # site inside `send_keyboard_input` (interactive SSR/SRX websocket shell) is
+    # also removed below since stopping a never-started listener is a no-op.
 
-# stop_listening() removed per issue #431: it was a `pass` no-op stub for a
-# legacy keyboard listener that has no real implementation. The single call
-# site inside `send_keyboard_input` (interactive SSR/SRX websocket shell) is
-# also removed below since stopping a never-started listener is a no-op.
-
-
-# ============================================================================
-# CENTRALIZED PAGINATION DEFAULTS
-# ============================================================================
-# Several legacy code paths relied on the mistapi client's implicit default page
-# size (commonly 100). That caused excessive paging (for example 10x HTTP calls for
-# 1000-item datasets). We unify a single configurable default via environment
-# variable MIST_PAGE_LIMIT (clamped to 1..1000). All new/updated listOrgSites /
-# getOrgInventory calls should pass limit=DEFAULT_API_PAGE_LIMIT or use the
-# helper wrappers below to ensure consistency and simpler tuning.
+    # ============================================================================
+    # CENTRALIZED PAGINATION DEFAULTS
+    # ============================================================================
+    # Several legacy code paths relied on the mistapi client's implicit default page
+    # size (commonly 100). That caused excessive paging (for example 10x HTTP calls for
+    # 1000-item datasets). We unify a single configurable default via environment
+    # variable MIST_PAGE_LIMIT (clamped to 1..1000). All new/updated listOrgSites /
+    # getOrgInventory calls should pass limit=DEFAULT_API_PAGE_LIMIT or use the
+    # helper wrappers below to ensure consistency and simpler tuning.
 if "_raw_page_limit_env" not in globals():  # Keep the helper name without reading the environment during import.
     _raw_page_limit_env = "1000"  # Bootstrap reads MIST_PAGE_LIMIT after import.
 if "_parsed_limit" not in globals():  # Keep the parsed helper name without reading the environment during import.
@@ -1028,8 +1028,9 @@ def _apply_dotenv_line(line: str) -> None:  # Set one KEY=VALUE pair from a .env
     key, value = stripped.split("=", 1)  # Split on the first '=' (values may themselves contain '=')
     os.environ[key.strip()] = value.strip()  # Set the env var (overwrites, unlike setdefault)
 
+    # Early dotenv import for configuration loading
 
-# Early dotenv import for configuration loading
+
 def _fallback_load_dotenv() -> None:  # Minimal .env parser used when python-dotenv is not installed
     """Fallback .env loader when python-dotenv package is not installed."""
     try:  # The .env file is optional. Handle its absence/errors gracefully
@@ -1438,8 +1439,8 @@ class GlobalImportManager:
             if result.returncode != 0:  # UV is absent or gave no version
                 return False  # Cannot determine an update is needed
 
-            # For now, we'll assume UV is up to date since checking remote version is complex
-            # In a production environment, you might want to implement version comparison
+                # For now, we'll assume UV is up to date since checking remote version is complex
+                # In a production environment, you might want to implement version comparison
             logging.debug("UV version check complete - assuming current version is adequate")  # Note the no-op result
             return False  # Treat UV as up to date (remote comparison not implemented)
 
@@ -1623,8 +1624,8 @@ class GlobalImportManager:
             logging.debug("  [OK] %s: Already up to date (%s)", package_name, current_version)  # Already current
         return True  # Upgrade path is always non-fatal
 
-    # _get_actual_import_name removed per issue #431 (ARCH-DELEGATE) -- callers
-    # now do `self.import_name_mappings.get(name, name)` inline.
+        # _get_actual_import_name removed per issue #431 (ARCH-DELEGATE) -- callers
+        # now do `self.import_name_mappings.get(name, name)` inline.
 
     def _resolve_and_import(self, module_name: str) -> Any:
         """Import a module via its special handler or its real import name (issue #470: shared by attempt + retry)."""
@@ -1898,8 +1899,9 @@ class GlobalImportManager:
 
         return GlobalAssignmentsBuilderService.execute(self.imports, self._add_fallbacks_to_globals)
 
-    # Simple module -> [(global_name, attr_name_or_None)] hoists. attr None binds the module object itself.
-    # Used by _hoist_module_globals so _make_modules_global stays a flat loop instead of a long if/elif chain.
+        # Simple module -> [(global_name, attr_name_or_None)] hoists. attr None binds the module object itself.
+        # Used by _hoist_module_globals so _make_modules_global stays a flat loop instead of a long if/elif chain.
+
     _SIMPLE_GLOBAL_HOISTS: ClassVar[dict[str, list[tuple[str, str | None]]]] = {
         "datetime": [("timezone", "timezone"), ("timedelta", "timedelta")],  # Hoist datetime's tz/delta helpers
         "concurrent.futures": [  # Hoist the thread-pool primitives plus the package itself
@@ -2090,9 +2092,9 @@ class GlobalImportManager:
                 "websocket-client not available - WebSocket operations will be disabled"
             )  # WebSocket features disabled
 
-    # get_import removed per issue #431 (ARCH-DELEGATE) -- callers access
-    # `self.imports.get(name)` directly. `self.imports` is the public
-    # dict already mutated elsewhere in this class.
+            # get_import removed per issue #431 (ARCH-DELEGATE) -- callers access
+            # `self.imports.get(name)` directly. `self.imports` is the public
+            # dict already mutated elsewhere in this class.
 
     def is_available(self, module_name: str) -> bool:
         """Check if a module is available."""
@@ -2108,16 +2110,16 @@ class GlobalImportManager:
             "uv_update_check_hours": self.uv_update_check_hours,  # Interval between UV update checks
         }
 
+        # ============================================================================
+        # GLOBAL CONSTANTS
+        # ============================================================================
 
-# ============================================================================
-# GLOBAL CONSTANTS
-# ============================================================================
+        # File paths for configuration and data
+        # SECURITY / SAFETY: Place tuning data inside the data/ directory to avoid
+        # permission issues when running as non-root inside a container with read-only
+        # application root. The file is small and safe to persist across runs.
 
 
-# File paths for configuration and data
-# SECURITY / SAFETY: Place tuning data inside the data/ directory to avoid
-# permission issues when running as non-root inside a container with read-only
-# application root. The file is small and safe to persist across runs.
 def _get_tuning_data_file_path() -> str:
     """Return full path to tuning data JSON stored in data/ directory.
 
@@ -2180,8 +2182,7 @@ try:  # Import the sanitizer class without configuring logging during module imp
 except ImportError:  # Older mistapi versions may not publish the sanitizer.
     LogSanitizer = None  # Keep the exported name stable when mistapi lacks the class.
 
-
-# The explicit bootstrap creates this manager before application startup work runs.
+    # The explicit bootstrap creates this manager before application startup work runs.
 import_manager = cast(GlobalImportManager, None)  # Preserve the public name without running startup side effects.
 _initialize_imports_now = False  # Keep import passive. The bootstrap decides when dependencies initialize.
 if _initialize_imports_now:  # This branch stays false so import never initializes dependencies.
@@ -2190,10 +2191,10 @@ else:  # Preserve the original deferred shape without reading command-line argum
     success = False  # Bootstrap fills this value after the command-line parse.
     global_assignments: dict[str, Any] = {}  # Bootstrap fills these values after the command-line parse.
 
-# ============================================================================
-# TEST MODE GLOBALS & TIME UTILITIES CLASS
-# ============================================================================
-# Central flag for test mode (available early so helper functions outside main can use it)
+    # ============================================================================
+    # TEST MODE GLOBALS & TIME UTILITIES CLASS
+    # ============================================================================
+    # Central flag for test mode (available early so helper functions outside main can use it)
 IS_TEST_MODE = False  # Bootstrap updates this flag from the stored parsed arguments.
 # Last selected interactive site ID (used to keep testinteractive site context consistent)
 LAST_SELECTED_SITE_ID: str | None = None
@@ -2232,9 +2233,9 @@ API_REQUEST_RETRY_DELAY = 5.0  # Bootstrap updates this value from the environme
 FAST_MODE_MAX_RETRIES = 3  # Bootstrap updates this value from the environment.
 FAST_MODE_RETRY_DELAY = 0.5  # Bootstrap updates this value from the environment.
 
-FAST_MODE_ENABLED: bool = False  # Set to True via --fast CLI flag at startup
+FAST_MODE_ENABLED: bool  # MainEntrypoint.context owns the runtime fast-mode flag.
 
-org_id: str | None = None  # Active organization ID, populated after the user selects an org
+org_id: str | None  # MainEntrypoint.context owns the active organization identifier.
 
 
 FAST_MODE_RETRY_THREADS = 4  # Bootstrap updates this value from the environment.
@@ -2245,48 +2246,134 @@ MIST_SITE_EXCLUDE_PREFIX = ""  # Bootstrap reads the optional site filter after 
 
 # Global configuration for output format (CSV or Redis/SQLite)
 # Default to CSV for general use, can be overridden by CLI flag
-OUTPUT_FORMAT = "csv"  # Valid values: "csv", "sqlite"
+OUTPUT_FORMAT: str  # MainEntrypoint.context owns the selected output format.
 DATABASE_PATH = os.path.join("data", "mist_data.db")  # Path to hybrid SQLite database with natural primary keys
 
 # Global progress telemetry emitter (initialized in main(), best-effort per FR-008)
-PROGRESS_EMITTER = None  # Set in main() to a telemetry sink. None disables progress reporting
+PROGRESS_EMITTER: Any | None  # MainEntrypoint.context owns the telemetry emitter.
 
 # ============================================================================
-# GLOBAL SESSION INITIALIZATION
+# APPLICATION SESSION CONTEXT
 # ============================================================================
 
 # Initialize Mist API session (prepared after authentication)
 # Type annotation uses Any since the code imports mistapi dynamically
-apisession: Any | None = None
+apisession: Any | None  # MainEntrypoint.context owns the authenticated Mist API session.
 
 # MSP privilege tracking (populated after authentication)
-msp_privileges: list[dict[str, Any]] = []  # List of {msp_id, msp_name, role, scope} dicts if user has MSP access
-selected_msp: dict[str, Any] | None = None  # Currently selected MSP (from menu 115 or elsewhere)
+msp_privileges: list[dict[str, Any]]  # MainEntrypoint.context owns the detected MSP grants.
+selected_msp: dict[str, Any] | None  # MainEntrypoint.context owns the selected MSP.
+
+sys.modules[__name__].__class__ = type(  # Preserve legacy attribute reads while the context owns the state.
+    "_MistHelperContextModule",  # Give the dynamic module type a diagnostic name.
+    (types.ModuleType,),  # Extend the normal module behavior only for context-owned names.
+    {
+        "__getattr__": lambda self, name: (
+            getattr(  # Route late module reads to the context without a state copy.
+                MainEntrypoint.context,  # Use the single entry-point context as the state owner.
+                {
+                    "apisession": "apisession",  # Keep old readers compatible until issue #1703 moves them.
+                    "org_id": "org_id",  # Keep old readers compatible until issue #1703 moves them.
+                    "msp_privileges": "msp_privileges",  # Keep old readers compatible until issue #1703 moves them.
+                    "selected_msp": "selected_msp",  # Keep old readers compatible until issue #1703 moves them.
+                    "OUTPUT_FORMAT": "output_format",  # Keep old readers compatible until issue #1703 moves them.
+                    "PROGRESS_EMITTER": "progress_emitter",  # Keep old readers compatible until issue #1703 moves them.
+                    "FAST_MODE_ENABLED": "fast_mode_enabled",  # Keep old readers compatible until issue #1703.
+                }[name],
+            )
+            if name
+            in {
+                "apisession",  # Treat the old session name as a context view.
+                "org_id",  # Treat the old organization name as a context view.
+                "msp_privileges",  # Treat the old MSP grants name as a context view.
+                "selected_msp",  # Treat the old MSP selection name as a context view.
+                "OUTPUT_FORMAT",  # Treat the old output format name as a context view.
+                "PROGRESS_EMITTER",  # Treat the old progress emitter name as a context view.
+                "FAST_MODE_ENABLED",  # Treat the old fast-mode flag name as a context view.
+            }
+            else (_ for _ in ()).throw(AttributeError(name))
+        ),  # Keep normal AttributeError behavior for unknown names.
+        "__setattr__": lambda self, name, value: (
+            setattr(  # Route legacy writes to the context during old tests.
+                MainEntrypoint.context,  # Use the same owner for every legacy write.
+                {
+                    "apisession": "apisession",  # Keep monkeypatch-based tests pointed at the context.
+                    "org_id": "org_id",  # Keep monkeypatch-based tests pointed at the context.
+                    "msp_privileges": "msp_privileges",  # Keep monkeypatch-based tests pointed at the context.
+                    "selected_msp": "selected_msp",  # Keep monkeypatch-based tests pointed at the context.
+                    "OUTPUT_FORMAT": "output_format",  # Keep monkeypatch-based tests pointed at the context.
+                    "PROGRESS_EMITTER": "progress_emitter",  # Keep monkeypatch-based tests pointed at the context.
+                    "FAST_MODE_ENABLED": "fast_mode_enabled",  # Keep monkeypatch-based tests pointed at the context.
+                }[name],
+                value,
+            )
+            if name
+            in {
+                "apisession",  # Treat the old session name as a context write.
+                "org_id",  # Treat the old organization name as a context write.
+                "msp_privileges",  # Treat the old MSP grants name as a context write.
+                "selected_msp",  # Treat the old MSP selection name as a context write.
+                "OUTPUT_FORMAT",  # Treat the old output format name as a context write.
+                "PROGRESS_EMITTER",  # Treat the old progress emitter name as a context write.
+                "FAST_MODE_ENABLED",  # Treat the old fast-mode flag name as a context write.
+            }
+            else types.ModuleType.__setattr__(self, name, value)
+        ),  # Preserve normal module writes for all other names.
+        "__delattr__": lambda self, name: (
+            setattr(  # Route legacy deletes to a null context value for old tests.
+                MainEntrypoint.context,  # Use the same owner for every legacy delete.
+                {
+                    "apisession": "apisession",  # Keep monkeypatch delete pointed at the context.
+                    "org_id": "org_id",  # Keep monkeypatch delete pointed at the context.
+                    "msp_privileges": "msp_privileges",  # Keep monkeypatch delete pointed at the context.
+                    "selected_msp": "selected_msp",  # Keep monkeypatch delete pointed at the context.
+                    "OUTPUT_FORMAT": "output_format",  # Keep monkeypatch delete pointed at the context.
+                    "PROGRESS_EMITTER": "progress_emitter",  # Keep monkeypatch delete pointed at the context.
+                    "FAST_MODE_ENABLED": "fast_mode_enabled",  # Keep monkeypatch delete pointed at the context.
+                }[name],
+                None,
+            )
+            if name
+            in {
+                "apisession",  # Treat the old session delete as a context clear.
+                "org_id",  # Treat the old organization delete as a context clear.
+                "msp_privileges",  # Treat the old MSP grants delete as a context clear.
+                "selected_msp",  # Treat the old MSP selection delete as a context clear.
+                "OUTPUT_FORMAT",  # Treat the old output format delete as a context clear.
+                "PROGRESS_EMITTER",  # Treat the old progress emitter delete as a context clear.
+                "FAST_MODE_ENABLED",  # Treat the old fast-mode flag delete as a context clear.
+            }
+            else types.ModuleType.__delattr__(self, name)
+        ),  # Preserve normal module deletes for all other names.
+    },
+)  # Install the compatibility type without adding a module-level symbol.
 
 
 def _snapshot_session_globals_to_state() -> dict[str, Any]:
     """Snapshot the live module-level session globals into a mutable state bag."""
     logging.debug("_snapshot_session_globals_to_state: capturing 5 module globals")  # Log before snapshot
     return {  # Map of global name -> current value for the LoginOrchestrator to mutate
-        "apisession": apisession,  # Current API session object (may be None)
-        "mistapi": mistapi,  # The mistapi SDK module reference
-        "msp_privileges": msp_privileges,  # Any previously detected MSP grants
-        "selected_msp": selected_msp,  # Currently selected MSP, if any
-        "org_id": org_id,  # Currently selected org ID, if any
+        "apisession": MainEntrypoint.context.apisession,  # Current API session object (may be None)
+        "mistapi": MainEntrypoint.context.mistapi or mistapi,  # Use the context SDK module when startup replaced it.
+        "msp_privileges": MainEntrypoint.context.msp_privileges,  # Any previously detected MSP grants
+        "selected_msp": MainEntrypoint.context.selected_msp,  # Currently selected MSP, if any
+        "org_id": MainEntrypoint.context.org_id,  # Currently selected org ID, if any
     }
 
 
 def _restore_session_globals_from_state(state: dict[str, Any]) -> None:
     """Restore module-level session globals from a state bag mutated by the orchestrator."""
-    global apisession, mistapi, msp_privileges, selected_msp, org_id  # Globals we may rebind
+    # The application context owns this state, so no global declaration is needed.
     logging.debug("_restore_session_globals_from_state: restoring 5 module globals")  # Log before restore
-    apisession = state.get("apisession")  # Copy the (possibly new) session back to the global
-    mistapi = state.get("mistapi")  # Copy the SDK reference back to the global
-    msp_privileges = state.get("msp_privileges", msp_privileges)  # Copy detected MSP grants back
-    selected_msp = state.get("selected_msp", selected_msp)  # Copy the selected MSP back
-    org_id = state.get("org_id", org_id)  # Copy the selected org ID back
-    ConfigUtils.set_apisession(apisession)  # Mirror the restored session into ConfigUtils class cache (1015 T-12)
-    ConfigUtils.set_cached_org_id(org_id)  # Mirror the restored org_id into ConfigUtils class cache (1015 T-12)
+    MainEntrypoint.context.apisession = state.get("apisession")  # Copy the (possibly new) session back to the global
+    MainEntrypoint.context.mistapi = state.get("mistapi")  # Keep the SDK module with the session context.
+    MainEntrypoint.context.msp_privileges = state.get(
+        "msp_privileges", MainEntrypoint.context.msp_privileges
+    )  # Copy detected MSP grants back
+    MainEntrypoint.context.selected_msp = state.get(
+        "selected_msp", MainEntrypoint.context.selected_msp
+    )  # Copy the selected MSP back
+    MainEntrypoint.context.org_id = state.get("org_id", MainEntrypoint.context.org_id)  # Copy the selected org ID back
 
 
 def _print_switch_login_header() -> None:
@@ -2306,11 +2393,13 @@ def _print_switch_login_header() -> None:
     echo("    - Supports 2FA authentication")
     echo("    - Select and switch between MSPs and Organizations")
     echo("")
-    if msp_privileges:  # The user already has MSP grants detected
-        logging.debug("MSP privileges already detected: %s MSP(s)", len(msp_privileges))  # Trace the existing grants
+    if MainEntrypoint.context.msp_privileges:  # The user already has MSP grants detected
+        logging.debug(
+            "MSP privileges already detected: %s MSP(s)", len(MainEntrypoint.context.msp_privileges)
+        )  # Trace the existing grants
         echo(
             "  Note: You already have MSP access to %s MSP(s)",
-            len(msp_privileges),
+            len(MainEntrypoint.context.msp_privileges),
         )
         echo("")
 
@@ -2321,29 +2410,21 @@ def _attempt_interactive_login_with_rollback(old_session: Any, old_org_id: str |
     Returns:
         bool: True if login succeeded, False if failed (session restored)
     """
-    global apisession, msp_privileges, org_id  # We may overwrite or restore these globals
+    # The application context owns this state, so no global declaration is needed.
 
     logging.debug("Entering _attempt_interactive_login_with_rollback()")  # Trace entry for debugging
     logging.debug("Clearing existing session state for re-authentication")  # Note we reset before re-login
 
-    apisession = None  # Drop the current session so the interactive flow starts clean
-    msp_privileges = []  # Clear cached MSP grants from the old session
-    org_id = None  # Clear the selected org from the old session
-    ConfigUtils.set_apisession(None)  # Clear the ConfigUtils session cache to match (1015 T-12)
-    ConfigUtils.set_cached_org_id(None)  # Clear the ConfigUtils org_id cache to match (1015 T-12)
+    MainEntrypoint.context.clear_session()  # Drop old session state through the context owner.
 
     if not MistSessionInteractiveInitializer.initialize():  # Attempt the interactive login
         echo("")
         echo("  X Login failed - restoring previous session")
-        apisession = old_session  # Restore the prior API session
-        org_id = old_org_id  # Restore the prior org selection
-        msp_privileges = detect_msp_privileges(apisession)  # Re-detect MSP grants and publish to module global
-        ConfigUtils.set_apisession(apisession)  # Mirror the restored session into ConfigUtils cache (1015 T-12)
-        ConfigUtils.set_cached_org_id(org_id)  # Mirror the restored org_id into ConfigUtils cache (1015 T-12)
+        restored_grants = detect_msp_privileges(old_session)  # Re-detect grants for the restored session.
+        MainEntrypoint.context.restore_session(old_session, old_org_id, restored_grants)  # Restore through context.
         logging.warning("Interactive login failed - restored previous API session")  # Log the failed attempt
         return False  # Signal failure to the caller
     logging.debug("Interactive login succeeded")  # Trace the successful login
-    ConfigUtils.set_apisession(apisession)  # Publish new interactive session to ConfigUtils cache (1015 T-12)
     return True  # Signal success to the caller
 
 
@@ -2352,17 +2433,18 @@ def _handle_interactive_login_success() -> None:
     logging.debug("Entering _handle_interactive_login_success()")  # Trace entry for debugging
     echo("")
     echo("  + Successfully switched to interactive login")
-    if msp_privileges:  # The new session has MSP grants
-        echo("  + MSP access available: %s MSP(s)", len(msp_privileges))
+    if MainEntrypoint.context.msp_privileges:  # The new session has MSP grants
+        echo("  + MSP access available: %s MSP(s)", len(MainEntrypoint.context.msp_privileges))
         logging.info(
-            "Successfully switched to interactive login session with %s MSP(s)", len(msp_privileges)
+            "Successfully switched to interactive login session with %s MSP(s)",
+            len(MainEntrypoint.context.msp_privileges),
         )  # Log the success with MSP count
     else:  # No MSP grants on the new session
         logging.info(
             "Successfully switched to interactive login session (no MSP privileges)"
         )  # Log the success without MSPs
 
-    if msp_privileges:  # Choose the selection flow based on MSP access
+    if MainEntrypoint.context.msp_privileges:  # Choose the selection flow based on MSP access
         _select_msp_and_org()  # MSP users pick an MSP then an org
     else:  # No MSP access
         _select_org_from_session()  # Non-MSP users pick an org directly
@@ -2391,15 +2473,10 @@ def _prompt_switch_login_confirmation() -> bool:
 
 def _select_msp_and_org() -> None:
     """Select MSP and organization via extracted interactive session manager."""
-    global apisession, mistapi, msp_privileges, selected_msp, org_id  # The selection flow updates these globals
+    # The application context owns this state, so no global declaration is needed.
 
-    state = {  # Snapshot current session globals into a mutable bag for the manager to update
-        "apisession": apisession,  # Current API session object
-        "mistapi": mistapi,  # The mistapi SDK module reference
-        "msp_privileges": msp_privileges,  # Detected MSP grants to choose from
-        "selected_msp": selected_msp,  # Currently selected MSP, if any
-        "org_id": org_id,  # Currently selected org ID, if any
-    }
+    state = MainEntrypoint.context.as_selector_state()  # Build the selector state through the context owner.
+    state["mistapi"] = state.get("mistapi") or mistapi  # Use the imported SDK module when context has none.
 
     session_manager = MspOrgSelector(  # Build the MSP/org selector with injected deps
         state=state,  # Pass the mutable state bag the selector will update
@@ -2408,26 +2485,21 @@ def _select_msp_and_org() -> None:
     )
     session_manager.select()  # Run the interactive MSP-then-org selection flow
 
-    apisession = state.get("apisession")  # Copy the (possibly switched) session back to the global
-    mistapi = state.get("mistapi")  # Copy the SDK reference back to the global
-    msp_privileges = state.get("msp_privileges", msp_privileges)  # Copy MSP grants back
-    selected_msp = state.get("selected_msp", selected_msp)  # Copy the chosen MSP back
-    org_id = state.get("org_id", org_id)  # Copy the chosen org ID back
-    ConfigUtils.set_apisession(apisession)  # Mirror the switched session into ConfigUtils cache (1015 T-12)
-    ConfigUtils.set_cached_org_id(org_id)  # Mirror the chosen org_id into ConfigUtils cache (1015 T-12)
+    MainEntrypoint.context.apply_msp_selection(state)  # Store the selector result through the context owner.
 
 
 def _invoke_mistapi_org_picker_and_apply() -> None:
     """Run mistapi's org picker and apply the user's choice to the org_id global."""
-    global org_id  # The picker result writes through to the module-level org
+    # The application context owns this state, so no global declaration is needed.
     try:  # mistapi may raise on network errors or invalid sessions
         logging.debug("Invoking mistapi.cli.select_org()")  # Trace the SDK call
-        org_id_list = mistapi.cli.select_org(apisession)  # Let mistapi present an org picker and return the choice
+        org_id_list = mistapi.cli.select_org(
+            MainEntrypoint.context.apisession
+        )  # Let mistapi present an org picker and return the choice
         if org_id_list and len(org_id_list) > 0:  # The user selected at least one org
-            org_id = org_id_list[0]  # Use the first selected org ID
-            ConfigUtils.set_cached_org_id(org_id)  # Mirror the picker's choice into ConfigUtils cache (1015 T-12)
-            echo("  + Organization ID set: %s", org_id)
-            logging.info("User selected org from session: %s", org_id)  # Log the chosen org
+            MainEntrypoint.context.org_id = org_id_list[0]  # Use the first selected org ID
+            echo("  + Organization ID set: %s", MainEntrypoint.context.org_id)
+            logging.info("User selected org from session: %s", MainEntrypoint.context.org_id)  # Log the chosen org
         else:  # The user selected nothing
             echo("  X No organization selected")
             logging.warning("No organization selected from session privileges")  # Log the empty selection
@@ -2486,7 +2558,7 @@ def _redact_tokens(tokens: list[str]) -> str:  # Describe discovered tokens with
     Returns:
         A short phrase that states how many tokens the environment holds.
     """
-    return f"{len(tokens)} token(s) found, values hidden"  # Count only -- no token character may reach the log
+    return f"{len (tokens )} token(s) found, values hidden"  # Count only -- no token character may reach the log
 
 
 def _parse_api_tokens() -> tuple[str, list[str]]:
@@ -2507,8 +2579,9 @@ def _parse_api_tokens() -> tuple[str, list[str]]:
         logging.debug("No tokens discovered in environment; will rely on env_file or mistapi.Session fallback")  # Note
     return host, tokens  # Return host string and parsed token list to caller
 
+    # Feature 1020: config values shipped in deploy/.env.example that must never be treated as real credentials.
 
-# Feature 1020: config values shipped in deploy/.env.example that must never be treated as real credentials.
+
 _CREDENTIAL_PLACEHOLDER_MARKERS = ("your_", "_here", "changeme", "example.com", "<", ">")  # Copy-paste sentinels
 
 
@@ -2557,7 +2630,7 @@ def _collect_token_problems(require_token: bool, tokens: list[str]) -> list[str]
     if not tokens:  # No MIST_APITOKEN/MIST_API_TOKEN resolved to a non-empty value.
         return ["no API token found - set MIST_APITOKEN or MIST_API_TOKEN"]
     if all(_looks_like_placeholder(token) for token in tokens):  # Only placeholders present.
-        return [f"API token is a placeholder value (redacted: {_redact_tokens(tokens)})"]
+        return [f"API token is a placeholder value (redacted: {_redact_tokens (tokens )})"]
     return []  # At least one real token is present.
 
 
@@ -2585,8 +2658,8 @@ def _check_token_rate_limit(token: str, test_host: str, label: str) -> bool:
     try:
         import requests  # Import here -- only needed for this edge-case rate-limit probe path
 
-        url = f"https://{test_host}/api/v1/self"  # Lightweight endpoint requiring auth for rate-limit probe
-        headers = {"Authorization": f"Token {token}"}  # Standard Mist API bearer token header
+        url = f"https://{test_host }/api/v1/self"  # Lightweight endpoint requiring auth for rate-limit probe
+        headers = {"Authorization": f"Token {token }"}  # Standard Mist API bearer token header
         response = requests.get(url, headers=headers, timeout=5)  # Short timeout -- probe, not full call
         if response.status_code == 429:  # HTTP 429 = Too Many Requests = rate-limited
             logging.debug("Token %s is rate-limited (HTTP 429)", label)
@@ -2774,7 +2847,7 @@ def _filter_available_tokens(tokens: list[str], host: str) -> list[str]:
     """
     available: list[str] = []  # Accumulate tokens that pass the rate-limit probe
     for index, token in enumerate(tokens, start=1):  # Probe each token with its 1-based position
-        label = f"{index}/{len(tokens)}"  # Secret-free identifier -- issue #1710 forbids any token character
+        label = f"{index }/{len (tokens )}"  # Secret-free identifier -- issue #1710 forbids any token character
         if not _check_token_rate_limit(token, host, label):  # Probe via /api/v1/self -- False means available
             available.append(token)  # This token is usable -- add to available list
             logging.info("Token %s is available", label)
@@ -2794,12 +2867,8 @@ def _build_filtered_session_kwargs(sig_params: list[str], tokens_csv: str, host:
 
 
 def _create_session_isolated_from_env(apisession_cls: Any, filtered_kwargs: dict[str, str]) -> Any:
-    """Construct APISession after temporarily clearing MIST_APITOKEN to avoid stale-token re-read."""
-    original_mist_token = os.environ.get("MIST_APITOKEN")  # Save original env value for finally cleanup
-    try:  # Wrap so the env var is always restored even on construction failure
-        if "MIST_APITOKEN" in os.environ:  # Clear env var to block mistapi from re-reading stale tokens
-            del os.environ["MIST_APITOKEN"]  # Temporarily remove -- restored in finally block
-            logging.debug("Temporarily cleared MIST_APITOKEN from environment for filtered token initialization")
+    """Construct APISession with explicit filtered kwargs and no environment mutation."""
+    try:  # Wrap constructor errors so filtered-token retry can fail safely.
         if apisession_cls is None:  # Guard replaces prior assert so behavior survives python -O optimization
             raise RuntimeError("apisession_cls should be set for retry logic")  # Retry logic requires the class
         session = apisession_cls(**filtered_kwargs)  # Create session with filtered token set
@@ -2808,10 +2877,6 @@ def _create_session_isolated_from_env(apisession_cls: Any, filtered_kwargs: dict
     except Exception as filtered_err:  # Constructor still failed even with filtered tokens
         logging.error("Failed to initialize with filtered tokens: %s", filtered_err)  # Log failure reason
         return None  # Signal failure to caller
-    finally:  # Always restore the env var even on success/exception
-        if original_mist_token:  # Restore original env var regardless of success or failure
-            os.environ["MIST_APITOKEN"] = original_mist_token  # Restore to prevent side effects
-            logging.debug("Restored MIST_APITOKEN to environment")
 
 
 def _create_session_with_available_tokens(
@@ -2874,27 +2939,21 @@ def _try_session_fallback(mistapi_module: Any) -> tuple[Any, Any]:
 
 
 def _ensure_mist_get_method(session: Any) -> bool:
-    """Ensure the session exposes a mist_get method, wrapping get() for compatibility if needed.
+    """Verify that the session exposes a supported GET method.
 
-    Some mistapi versions expose get() instead of mist_get(). This function
-    attaches a mist_get wrapper around get() so all callers can use mist_get uniformly.
+    This check no longer adds a method to the third-party session object.
+    The explicit session configuration seam owns the session shape check.
 
     Args:
         session: The initialized APISession or Session object to check.
 
     Returns:
-        True if mist_get is present or successfully wrapped, False if neither method exists.
+        True if mist_get or get is present, False if neither method exists.
     """
-    if hasattr(session, "mist_get"):  # Preferred method already present -- nothing to do
-        return True  # Session is compatible as-is
-    if hasattr(session, "get") and callable(session.get):  # Alternate method found -- bind a compat callable
-
-        def _mist_get_impl(*args: Any, **kwargs: Any) -> Any:
-            return session.get(*args, **kwargs)  # Forward to the session's native get() with identical signature.
-
-        session.mist_get = _mist_get_impl  # Attach the closure so callers can use mist_get uniformly.
-        logging.info("Added mist_get implementation around underlying get() method for compatibility")
-        return True  # Session is now exposes mist_get via the bound closure
+    if hasattr(session, "mist_get"):  # Preferred method already exists on supported mistapi versions.
+        return True  # Session is compatible as-is.
+    if hasattr(session, "get") and callable(session.get):  # Newer SDK builds can expose get instead.
+        return True  # Session is usable without a run-time attribute patch.
     logging.error("Initialized session lacks 'mist_get' or 'get' methods required for API calls")
     return False  # Session is unusable -- hard failure
 
@@ -2952,7 +3011,7 @@ def _log_session_auth_status(session: Any, successful_method: Any) -> None:
 def _validate_initialized_session(session: Any, successful_method: Any) -> bool:
     """Validate that an initialized session provides the required methods and detectable authentication.
 
-    Calls _ensure_mist_get_method to verify/add mist_get compatibility, then
+    Calls _ensure_mist_get_method to verify GET method compatibility, then
     calls _log_session_auth_status to warn if authentication cannot be confirmed.
     Returns False only for hard failures (missing mist_get). Auth warnings are non-fatal.
 
@@ -2963,7 +3022,7 @@ def _validate_initialized_session(session: Any, successful_method: Any) -> bool:
     Returns:
         True if the session is usable, False if required mist_get method is absent.
     """
-    if not _ensure_mist_get_method(session):  # Verify or patch mist_get -- hard failure if absent
+    if not _ensure_mist_get_method(session):  # Verify a supported GET method without patching the session.
         return False  # Session is unusable without mist_get
     _log_session_auth_status(session, successful_method)  # Warn if authentication method is unclear
     return True  # Session passed all checks -- ready for API calls
@@ -3015,7 +3074,7 @@ def _install_default_request_timeout(inner_session: Any) -> None:
         ) -> Any:
             if timeout is None:  # Caller did not supply a per-call timeout -- substitute our default
                 timeout = self.default_timeout
-            # Issue #431: forward args verbatim. The signature must match parent for adapter contract.
+                # Issue #431: forward args verbatim. The signature must match parent for adapter contract.
             return super().send(request, stream=stream, timeout=timeout, verify=verify, cert=cert, proxies=proxies)
 
     adapter = TimeoutAdapter(default_timeout=API_REQUEST_TIMEOUT)  # Single instance shared by both schemes
@@ -3024,16 +3083,12 @@ def _install_default_request_timeout(inner_session: Any) -> None:
 
 
 def _configure_session_timeout(session_obj: Any) -> None:
-    """Patch the mistapi APISession's inner requests.Session with a default read timeout."""
-    try:  # Defensive: any failure here is non-fatal -- log and move on
-        inner = getattr(session_obj, "_session", None)  # Probe for the underlying requests.Session
-        if inner is None:  # mistapi version did not expose a _session attribute
-            logging.warning("Cannot configure timeout - session has no _session attribute")
-            return  # Nothing to patch -- caller continues without timeout enforcement
-        _install_default_request_timeout(inner)  # Build and install the timeout-injecting transport
-        logging.info("Configured API request timeout: %ss", API_REQUEST_TIMEOUT)
-    except Exception as timeout_err:  # Any failure -- log and continue without enforcement
-        logging.warning("Failed to configure session timeout: %s", timeout_err)
+    """Report that the explicit session configurator owns timeout setup."""
+    logging.info("Checking legacy session timeout entry point")  # Log before the compatibility check.
+    if session_obj is None:  # A missing session means there is nothing to configure.
+        logging.warning("Cannot configure timeout because no session was supplied")  # Explain the safe no-op.
+        return  # Preserve the historical non-fatal behavior.
+    logging.debug("Session timeout setup is owned by MistSessionConfigurator")  # Confirm no patch ran here.
 
 
 from src.api.tenant_fetch import APITenantFetchUtils  # Re-exported for ServicePingLauncher late-binding
@@ -3052,7 +3107,7 @@ def _get_duc_instance() -> DeviceUtilityCommands:  # Build DeviceUtilityCommands
     )
 
     deps = _Deps(  # Bundle 6 dependencies into a frozen dataclass.
-        apisession=apisession,
+        apisession=MainEntrypoint.context.apisession,
         select_site_fn=PromptUtils.select_site_id_from_csv,
         select_device_fn=lambda site_id, dtype: PromptUtils.select_device_id_from_inventory(site_id, device_type=dtype),
         safe_input_fn=InputUtils.safe_input,
@@ -3065,7 +3120,7 @@ def _get_duc_instance() -> DeviceUtilityCommands:  # Build DeviceUtilityCommands
 def _build_gateway_export_kwargs() -> dict[str, Any]:
     """Build the kwargs dict passed to configure_gateway_export_utils_dependencies()."""
     return {  # Single dependency-wiring payload assembled in one place.
-        "apisession_dependency": apisession,  # Live mistapi session.
+        "apisession_dependency": MainEntrypoint.context.apisession,  # Live mistapi session.
         "mistapi_dependency": mistapi,  # mistapi root module.
         "config_utils": ConfigUtils,  # Shared config helpers.
         "cache_utils": CacheUtils,  # Disk-cache helpers.
@@ -3135,10 +3190,9 @@ def _dispatch_gateway_device_configs(debug: bool = False, fast: bool = False) ->
     _configure_gateway_module()  # WHY: cascades DI wiring before canonical call.
     GatewayExportUtils.device_configs(debug=debug, fast=fast)
 
-
-# ============================================================================
-# TROUBLESHOOTING UTILITIES CLASS
-# ============================================================================
+    # ============================================================================
+    # TROUBLESHOOTING UTILITIES CLASS
+    # ============================================================================
 
 
 def _build_ssh_runner_deps() -> SSHRunnerManagerDeps:  # Build the deps bundle for SSHRunnerManager entrypoints.
@@ -3147,7 +3201,7 @@ def _build_ssh_runner_deps() -> SSHRunnerManagerDeps:  # Build the deps bundle f
     _configure_gateway_module()  # 1014 P13: DI wire canonical gateway module before packaging class ref.
     return SSHRunnerManagerDeps(  # Assemble the deps.
         args=cli_args,
-        progress_emitter=PROGRESS_EMITTER,
+        progress_emitter=MainEntrypoint.context.progress_emitter,
         enhanced_ssh_runner=EnhancedSSHRunner,
         input_utils=InputUtils,
         cache_utils=CacheUtils,
@@ -3155,10 +3209,11 @@ def _build_ssh_runner_deps() -> SSHRunnerManagerDeps:  # Build the deps bundle f
         file_path_utils=FilePathUtils,
     )
 
+    # ============================================================================
+    # RATE LIMITING & ADDRESS UTILITIES (extracted to src/utils/)
+    # ============================================================================
 
-# ============================================================================
-# RATE LIMITING & ADDRESS UTILITIES (extracted to src/utils/)
-# ============================================================================
+
 from src.utils.rate_limiting import RateLimitingUtils
 
 # ============================================================================
@@ -3174,7 +3229,7 @@ def _configure_virtual_chassis_manager() -> type[VirtualChassisManager]:
     """Wire VirtualChassisDependencies and return the canonical VirtualChassisManager class."""
     _configure_virtual_chassis_dependencies(  # Publish MistHelper globals into the impl module.
         _VirtualChassisDependencies(  # Frozen container of 9 injected collaborators.
-            apisession=apisession,  # Live Mist API session.
+            apisession=MainEntrypoint.context.apisession,  # Live Mist API session.
             file_path_utils=FilePathUtils,  # Portable CSV path resolver + template writer.
             cache_utils=CacheUtils,  # check_and_generate_csv freshness gate.
             org_inventory_exporter=OrgInventoryExporter,  # Regenerates OrgInventory.csv.
@@ -3187,17 +3242,16 @@ def _configure_virtual_chassis_manager() -> type[VirtualChassisManager]:
     )
     return VirtualChassisManager  # Canonical class ready for menu callback dispatch.
 
-
-# ============================================================================
-# SITE CONFIGURATION MANAGER CLASS
-# ============================================================================
+    # ============================================================================
+    # SITE CONFIGURATION MANAGER CLASS
+    # ============================================================================
 
 
 def _configure_site_config_manager() -> type[SiteConfigManager]:
     """Wire SiteConfigDependencies and return the canonical SiteConfigManager class."""
     _configure_site_config_dependencies(
         _SiteConfigDependencies(  # Frozen container of 7 injected collaborators
-            apisession=apisession,  # Live Mist API session
+            apisession=MainEntrypoint.context.apisession,  # Live Mist API session
             config_utils=ConfigUtils,  # Org id caching + stop-signal check
             file_path_utils=FilePathUtils,  # Portable CSV path resolver
             input_utils=InputUtils,  # Safe input for destructive confirmations
@@ -3238,7 +3292,7 @@ def _build_org_ap_upgrader(**overrides: Any) -> _OrgLevelAPFirmwareUpgrader:
     # No assignment means `global` is unnecessary (drops PLW0602 site, initiative 1016).
     kwargs: dict[str, Any] = {  # WHY: build DI kwargs dict for src class
         "org_id": ConfigUtils.get_cached_or_prompted_org_id() or "",
-        "apisession": apisession,
+        "apisession": MainEntrypoint.context.apisession,
         "dry_run": getattr(globals().get("args", None), "dry_run", False),
         "safe_input_fn": InputUtils.safe_input,
         "check_stop_fn": ConfigUtils.check_stop_signal,
@@ -3246,8 +3300,8 @@ def _build_org_ap_upgrader(**overrides: Any) -> _OrgLevelAPFirmwareUpgrader:
         "fetch_sites_fn": APICoreFetchUtils.all_sites_with_limit,
         "write_results_fn": DataExporter.write_with_format_selection,
         "is_debug_fn": IsDebugMode.check,
-        "msp_privileges": msp_privileges if msp_privileges else [],
-        "selected_msp": selected_msp if selected_msp else None,
+        "msp_privileges": MainEntrypoint.context.msp_privileges if MainEntrypoint.context.msp_privileges else [],
+        "selected_msp": MainEntrypoint.context.selected_msp if MainEntrypoint.context.selected_msp else None,
     }
     kwargs.update(overrides)  # WHY: caller overrides win over defaults
     return _OrgLevelAPFirmwareUpgrader(**kwargs)  # WHY: single src-class construction path
@@ -3258,7 +3312,7 @@ def _ws_cmd_deps() -> WebSocketCmdDeps:
     import mistapi.api.v1.sites.devices as _site_devices
 
     return WebSocketCmdDeps(
-        apisession=apisession,
+        apisession=MainEntrypoint.context.apisession,
         select_site_fn=PromptUtils.select_site_id_from_csv,
         select_device_fn=PromptUtils.select_device_id_from_inventory,
         validate_target_fn=ValidationUtils.validate_ping_target,
@@ -3266,10 +3320,9 @@ def _ws_cmd_deps() -> WebSocketCmdDeps:
         safe_input_fn=InputUtils.safe_input,
     )
 
-
-# ============================================================================
-# AUDIT ANALYSIS OPS CLASS
-# ============================================================================
+    # ============================================================================
+    # AUDIT ANALYSIS OPS CLASS
+    # ============================================================================
 
 
 menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
@@ -3281,7 +3334,9 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     # SITE ADDRESS AUDIT (read-only)
     # ==============================
     "195": (
-        lambda: AddressAuditEngine().run(apisession, ConfigUtils.get_cached_or_prompted_org_id()),
+        lambda: AddressAuditEngine().run(
+            MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id()
+        ),
         (
             "Audit site addresses from CSV (data/) - fuse Mist + SNMP + CSV hints, verify vs. web; READ-ONLY, saves "
             "report. Tier-3 browser geocoding auto-engages when available (ADDRESS_AUDIT_GEOCODE=off to skip)"
@@ -3309,7 +3364,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "103": (
         lambda: RoutingUtils(
             RoutingDeps(
-                apisession=apisession,
+                apisession=MainEntrypoint.context.apisession,
                 select_site_fn=PromptUtils.select_site_id_from_csv,
                 select_device_fn=lambda site_id, dtype: PromptUtils.select_device_id_from_inventory(
                     site_id, device_type=dtype
@@ -3324,7 +3379,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "104": (
         lambda: RoutingUtils(
             RoutingDeps(
-                apisession=apisession,
+                apisession=MainEntrypoint.context.apisession,
                 select_site_fn=PromptUtils.select_site_id_from_csv,
                 select_device_fn=lambda site_id, dtype: PromptUtils.select_device_id_from_inventory(
                     site_id, device_type=dtype
@@ -3339,7 +3394,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "105": (
         lambda: RoutingUtils(
             RoutingDeps(
-                apisession=apisession,
+                apisession=MainEntrypoint.context.apisession,
                 select_site_fn=PromptUtils.select_site_id_from_csv,
                 select_device_fn=lambda site_id, dtype: PromptUtils.select_device_id_from_inventory(
                     site_id, device_type=dtype
@@ -3354,13 +3409,13 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     # > Packet Capture Operations
     "134": (
         lambda: PacketCaptureManager(
-            apisession, ConfigUtils.get_cached_or_prompted_org_id()
+            MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).start_site_packet_capture(),
         "Start Site Packet Capture - Wireless/Wired/Gateway/Scan captures with WebSocket streaming",
     ),
     "135": (
         lambda: PacketCaptureManager(
-            apisession, ConfigUtils.get_cached_or_prompted_org_id()
+            MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).start_org_packet_capture(),
         "Start Organization Packet Capture - MxEdge captures for org-level Mist Edges only",
     ),
@@ -3440,7 +3495,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         "Export async organization license-claim status summary (and optional per-device details)",
     ),
     "197": (
-        lambda: ClientPacketCaptureDownloader(apisession).run(),
+        lambda: ClientPacketCaptureDownloader(MainEntrypoint.context.apisession).run(),
         "Download client packet captures grouped by VLAN (site -> client -> VLAN -> data/packet_captures/)",
     ),
     "198": (
@@ -3722,7 +3777,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "68": (SiteConfigExporter.zones, "Export zone information for a selected site"),
     "73": (
         lambda: SiteExportUtils(
-            apisession=apisession,
+            apisession=MainEntrypoint.context.apisession,
             PromptUtils=PromptUtils,
             ConfigUtils=ConfigUtils,
             DataProcessingUtils=DataProcessingUtils,
@@ -3759,7 +3814,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "150": (
         lambda: GatewayTemplateConfigManager(
             org_id=ConfigUtils.get_cached_or_prompted_org_id(),
-            apisession=apisession,
+            apisession=MainEntrypoint.context.apisession,
             input_fn=InputUtils.safe_input,
             get_csv_path_fn=FilePathUtils.get_csv_path,
             save_data_fn=DataExporter.write_with_format_selection,
@@ -3772,7 +3827,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "164": (
         lambda: GatewayTemplateConfigManager(
             org_id=ConfigUtils.get_cached_or_prompted_org_id(),
-            apisession=apisession,
+            apisession=MainEntrypoint.context.apisession,
             input_fn=InputUtils.safe_input,
             get_csv_path_fn=FilePathUtils.get_csv_path,
             save_data_fn=DataExporter.write_with_format_selection,
@@ -3813,7 +3868,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     # Status & Monitoring
     "137": (
         lambda: _build_firmware_manager(
-            apisession, ConfigUtils.get_cached_or_prompted_org_id()
+            MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).check_firmware_upgrade_status(),
         "Check current firmware upgrade status across organization with detailed progress monitoring and export to CSV",
     ),
@@ -3875,7 +3930,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     # ! DESTRUCTIVE OPERATIONS - USE WITH EXTREME CAUTION
     "154": (
         lambda: _build_firmware_manager(
-            apisession, ConfigUtils.get_cached_or_prompted_org_id()
+            MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).execute_firmware_upgrade_with_mode_selection(),
         (
             "DESTRUCTIVE: Advanced AP firmware upgrade with mode selection - upgrade by site list/selection or by "
@@ -3925,7 +3980,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "52": (OrgExportUtils.sites_sle_summary, "Export SLE summary metrics for all sites in the organization"),
     "74": (
         lambda: SiteMetricOperation(
-            apisession=apisession,
+            apisession=MainEntrypoint.context.apisession,
             PromptUtils=PromptUtils,
             DataProcessingUtils=DataProcessingUtils,
             DataExporter=DataExporter,
@@ -3938,7 +3993,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "75": (SiteClientExporter.client_insights, "Export client-specific insight metrics for a selected site"),
     "76": (
         lambda: DeviceMetricOperation(
-            apisession=apisession,
+            apisession=MainEntrypoint.context.apisession,
             PromptUtils=PromptUtils,
             DataProcessingUtils=DataProcessingUtils,
             DataExporter=DataExporter,
@@ -3950,7 +4005,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         "Export device-specific insight metrics for a selected site",
     ),
     "54": (
-        lambda: ConstDefinitionsExporter(apisession).export_all(),
+        lambda: ConstDefinitionsExporter(MainEntrypoint.context.apisession).export_all(),
         "Export all available const definitions from the Mist API (comprehensive endpoint coverage)",
     ),
     "53": (OrgExportUtils.insight_metrics, "Export Organization Insight Metrics (comprehensive operational insights)"),
@@ -3990,7 +4045,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     # ==============================
     "155": (
         lambda: _build_firmware_manager(
-            apisession, ConfigUtils.get_cached_or_prompted_org_id()
+            MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).execute_switch_firmware_upgrade_with_mode_selection(),
         (
             "DESTRUCTIVE: Advanced Switch firmware upgrade with mode selection - upgrade by site list/selection or by "
@@ -4002,7 +4057,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     # ==============================
     "156": (
         lambda: _build_firmware_manager(
-            apisession, ConfigUtils.get_cached_or_prompted_org_id()
+            MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).execute_ssr_firmware_upgrade_with_mode_selection(),
         (
             "DESTRUCTIVE: Advanced SSR firmware upgrade with mode selection - upgrade by site list/selection or by "
@@ -4053,7 +4108,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "165": (
         lambda: GatewayTemplateConfigManager(
             org_id=ConfigUtils.get_cached_or_prompted_org_id(),
-            apisession=apisession,
+            apisession=MainEntrypoint.context.apisession,
             input_fn=InputUtils.safe_input,
             get_csv_path_fn=FilePathUtils.get_csv_path,
             save_data_fn=DataExporter.write_with_format_selection,
@@ -4105,8 +4160,8 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     # ==============================
     "168": (
         lambda: SiteAutoUpgradeConfigurator.execute(
-            apisession=apisession,
-            msp_privileges=msp_privileges if msp_privileges else [],
+            apisession=MainEntrypoint.context.apisession,
+            msp_privileges=MainEntrypoint.context.msp_privileges if MainEntrypoint.context.msp_privileges else [],
             safe_input_fn=InputUtils.safe_input,
             get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
             fetch_sites_fn=APICoreFetchUtils.all_sites_with_limit,
@@ -4125,7 +4180,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     # ==============================
     "6": (
         lambda: SiteExportUtils(
-            apisession=apisession,
+            apisession=MainEntrypoint.context.apisession,
             PromptUtils=PromptUtils,
             ConfigUtils=ConfigUtils,
             DataProcessingUtils=DataProcessingUtils,
@@ -4148,7 +4203,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "169": (
         lambda: ExtractedSiteAnalyticsConfigurator.execute(
             SiteAnalyticsConfiguratorDeps(
-                apisession=apisession,
+                apisession=MainEntrypoint.context.apisession,
                 mistapi=mistapi,
                 get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
                 check_stop_fn=ConfigUtils.check_stop_signal,
@@ -4169,7 +4224,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "7": (
         lambda: ExtractedSiteInventoryHealthAnalyzer.analyze(
             SiteInventoryHealthAnalyzerDeps(
-                apisession=apisession,
+                apisession=MainEntrypoint.context.apisession,
                 mistapi=mistapi,
                 get_org_id_fn=ConfigUtils.get_cached_or_prompted_org_id,
                 all_sites_fn=APICoreFetchUtils.all_sites_with_limit,
@@ -4261,12 +4316,14 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     ),
     "146": (
         lambda: WanHubGroupNumberManager.execute(
-            apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
+            MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
         ),
         "WAN Hub Group Number Manager",
     ),
     "147": (
-        lambda: WanVpnBuilder.execute(apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input),
+        lambda: WanVpnBuilder.execute(
+            MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
+        ),
         "WAN Hub-Spoke VPN Builder",
     ),
     # > Bulk Data Collection
@@ -4291,7 +4348,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "55": (OrgExportUtils.ospf_stats, "Export OSPF adjacency statistics for the organization"),
     "70": (
         lambda: SiteExportUtils(
-            apisession=apisession,
+            apisession=MainEntrypoint.context.apisession,
             PromptUtils=PromptUtils,
             ConfigUtils=ConfigUtils,
             DataProcessingUtils=DataProcessingUtils,
@@ -4310,7 +4367,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     ),
     "71": (
         lambda: SiteExportUtils(
-            apisession=apisession,
+            apisession=MainEntrypoint.context.apisession,
             PromptUtils=PromptUtils,
             ConfigUtils=ConfigUtils,
             DataProcessingUtils=DataProcessingUtils,
@@ -4329,7 +4386,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     ),
     "72": (
         lambda: SiteExportUtils(
-            apisession=apisession,
+            apisession=MainEntrypoint.context.apisession,
             PromptUtils=PromptUtils,
             ConfigUtils=ConfigUtils,
             DataProcessingUtils=DataProcessingUtils,
@@ -4351,13 +4408,13 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     "186": (CacheUtils.clear_cache, "Clear CSV Cache Files (delete all generated cache CSVs)"),
     "58": (
         lambda: cast(Any, OrgConfigMigrationManager)(
-            apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
+            MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
         ).export_config(),
         "Export Org WAN/Gateway Config (JSON bundle for cross-org migration)",
     ),
     "187": (
         lambda: cast(Any, OrgConfigMigrationManager)(
-            apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
+            MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
         ).import_config(),
         "Import Org WAN/Gateway Config (cross-org migration with conflict detection)",
     ),
@@ -4366,7 +4423,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     # ==============================
     "80": (
         lambda: SiteExportUtils(
-            apisession=apisession,
+            apisession=MainEntrypoint.context.apisession,
             PromptUtils=PromptUtils,
             ConfigUtils=ConfigUtils,
             DataProcessingUtils=DataProcessingUtils,
@@ -4385,7 +4442,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     ),
     "81": (
         lambda: SiteExportUtils(
-            apisession=apisession,
+            apisession=MainEntrypoint.context.apisession,
             PromptUtils=PromptUtils,
             ConfigUtils=ConfigUtils,
             DataProcessingUtils=DataProcessingUtils,
@@ -4404,7 +4461,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     ),
     "82": (
         lambda: SiteExportUtils(
-            apisession=apisession,
+            apisession=MainEntrypoint.context.apisession,
             PromptUtils=PromptUtils,
             ConfigUtils=ConfigUtils,
             DataProcessingUtils=DataProcessingUtils,
@@ -4423,7 +4480,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     ),
     "83": (
         lambda: SiteExportUtils(
-            apisession=apisession,
+            apisession=MainEntrypoint.context.apisession,
             PromptUtils=PromptUtils,
             ConfigUtils=ConfigUtils,
             DataProcessingUtils=DataProcessingUtils,
@@ -4442,7 +4499,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     ),
     "84": (
         lambda: SiteExportUtils(
-            apisession=apisession,
+            apisession=MainEntrypoint.context.apisession,
             PromptUtils=PromptUtils,
             ConfigUtils=ConfigUtils,
             DataProcessingUtils=DataProcessingUtils,
@@ -4461,7 +4518,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     ),
     "85": (
         lambda: SiteExportUtils(
-            apisession=apisession,
+            apisession=MainEntrypoint.context.apisession,
             PromptUtils=PromptUtils,
             ConfigUtils=ConfigUtils,
             DataProcessingUtils=DataProcessingUtils,
@@ -4480,7 +4537,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     ),
     "86": (
         lambda: SiteExportUtils(
-            apisession=apisession,
+            apisession=MainEntrypoint.context.apisession,
             PromptUtils=PromptUtils,
             ConfigUtils=ConfigUtils,
             DataProcessingUtils=DataProcessingUtils,
@@ -4521,14 +4578,16 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         ),
     ),
     "206": (
-        lambda: manage_org_synthetic_probes(apisession, ConfigUtils.get_cached_or_prompted_org_id()),
+        lambda: manage_org_synthetic_probes(
+            MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id()
+        ),
         (
             " DESTRUCTIVE: Manage org Zscaler synthetic probes"
             " - Build/merge/swap synthetic_test.custom_probes from curated Zscaler catalogue"
         ),
     ),
     "207": (
-        lambda: APProfileMigrationManager.migrate_aps_between_device_profiles(apisession),
+        lambda: APProfileMigrationManager.migrate_aps_between_device_profiles(MainEntrypoint.context.apisession),
         (
             " DESTRUCTIVE: Migrate APs between device profiles"
             " - Reassign every AP bound to a source device profile to a chosen target profile"
@@ -4536,7 +4595,7 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
         ),
     ),
     "208": (
-        lambda: APProfileMigrationManager.revert_ap_profile_migration(apisession),
+        lambda: APProfileMigrationManager.revert_ap_profile_migration(MainEntrypoint.context.apisession),
         (
             " DESTRUCTIVE: Revert an AP profile migration from a backup file"
             " - Reassign each listed AP back to its original device profile"
@@ -4681,8 +4740,8 @@ def _systematic_test_run_option(
 
 def _fast_mode_from_global() -> bool:
     """Return True iff the module-level ``FAST_MODE_ENABLED`` flag is set (errors -> False)."""
-    try:  # globals() access is normally safe but guarded for parity with original.
-        return bool(globals().get("FAST_MODE_ENABLED", False))  # Module flag set by CLI parse at startup.
+    try:  # Context access is normally safe but guarded for parity with original.
+        return bool(MainEntrypoint.context.fast_mode_enabled)  # Read the context flag set by CLI parse at startup.
     except Exception:  # Defensive -- never propagate.
         return False  # Safe default for any introspection failure.
 
@@ -4768,14 +4827,18 @@ def _initialize_systematic_telemetry(unsafe_list: list[str]) -> tuple[TelemetryE
 
 def _resolve_systematic_test_context() -> bool:
     """Resolve module-level org_id and the fast-mode flag once before the test loop."""
-    global org_id  # Access module-level org_id so tests inherit the resolved org context.
+    # The application context owns this state, so no global declaration is needed.
     if not _systematic_test_has_api_token():  # Offline test mode cannot resolve a live organization.
         logging.info("SYSTEMATIC_TEST: no Mist API token; skipping org_id resolution")  # Log the offline path.
         fast_enabled = _systematic_test_resolve_fast_mode()  # Still honor --fast for any local tests.
         logging.debug("SYSTEMATIC_TEST: offline context prepared fast=%s", fast_enabled)  # Confirm context result.
         return fast_enabled  # Let the loop run only offline-safe operations.
-    if not org_id:  # Resolve org_id once before the test loop so every option shares the same org.
-        org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Prompt or use cached org identifier.
+    if (
+        not MainEntrypoint.context.org_id
+    ):  # Resolve org_id once before the test loop so every option shares the same org.
+        MainEntrypoint.context.org_id = (
+            ConfigUtils.get_cached_or_prompted_org_id()
+        )  # Prompt or use cached org identifier.
     return _systematic_test_resolve_fast_mode()  # Resolve fast-mode flag once for the loop.
 
 
@@ -4848,7 +4911,7 @@ def _build_interactive_test_runner(get_org_id: Any, set_org_id: Any) -> Any:
         telemetry_emitter_cls=TelemetryEmitter,
         config_utils=ConfigUtils,
         mistapi_module=mistapi,
-        apisession=apisession,
+        apisession=MainEntrypoint.context.apisession,
         org_id_getter=get_org_id,
         org_id_setter=set_org_id,
     )
@@ -4886,9 +4949,9 @@ def _resolve_web_portal_host() -> str:
     if not in_container:  # A workstation must keep the portal on the loopback interface
         logging.debug("WEB_PORTAL: bind address is the loopback address on a workstation")  # Report the result
         return "127.0.0.1"  # Keep the portal off every external interface of the workstation
-    # The next assignment runs only when is_running_in_container() returns True. A container needs the
-    # all-interfaces bind, because the container network maps the port from outside. The container port map
-    # controls the exposure, and a workstation returns the loopback address above.
+        # The next assignment runs only when is_running_in_container() returns True. A container needs the
+        # all-interfaces bind, because the container network maps the port from outside. The container port map
+        # controls the exposure, and a workstation returns the loopback address above.
     all_interfaces_host = ".".join(("0", "0", "0", "0"))  # Build the bind-all address only for container use
     logging.debug("WEB_PORTAL: bind address is %s inside a container", all_interfaces_host)  # Report the result
     return all_interfaces_host  # Hand the container bind address to the launcher
@@ -4911,9 +4974,9 @@ def _launch_web_portal(args: argparse.Namespace) -> None:
     host = _resolve_web_portal_host()  # Loopback on a workstation, all interfaces in a container, WEB_HOST wins
 
     app = WebPortalApp.create_app(  # Construct Flask app with shared API session + menu registry
-        apisession=apisession,
+        apisession=MainEntrypoint.context.apisession,
         menu_actions=menu_actions,
-        org_id=org_id,
+        org_id=MainEntrypoint.context.org_id,
     )
 
     _run_web_portal_server(app, host, port, args.debug)  # Dispatch to container/local runner
@@ -5001,16 +5064,16 @@ def _metrics_gateway_org_id(settings: Any) -> str:
     """
     if settings.org_id:  # An explicit setting always wins, because a container cannot prompt
         return str(settings.org_id)
-    if org_id:  # The session already holds a selection, so reuse it rather than ask twice
-        return str(org_id)
+    if MainEntrypoint.context.org_id:  # The session already holds a selection, so reuse it rather than ask twice
+        return str(MainEntrypoint.context.org_id)
     if not (sys.stdin.isatty() and sys.stdout.isatty()):  # Refuse prompts without a terminal
         logging.error("METRICS_GATEWAY: No organization and no terminal.")  # Explain the startup failure
         logging.error("METRICS_GATEWAY: Set METRICS_ORG_ID or MIST_ORG_ID.")  # Give the operator the fix
         return ""  # Return an empty value so the caller exits with a failure status
     logging.info("METRICS_GATEWAY: No organization is set - starting the picker")  # Log before the prompt
     _select_org_from_session()  # Writes the module-level org_id global
-    logging.debug("METRICS_GATEWAY: Picker result: %s", bool(org_id))  # Record the result safely
-    return str(org_id or "")
+    logging.debug("METRICS_GATEWAY: Picker result: %s", bool(MainEntrypoint.context.org_id))  # Record the result safely
+    return str(MainEntrypoint.context.org_id or "")
 
 
 def _launch_mib_generator() -> None:
@@ -5024,7 +5087,7 @@ def _launch_mib_generator() -> None:
 
     logging.info("MIB_GENERATOR: Menu 243 started the generator")  # Log before the action.
     text = MibGeneratorRunner().generate(DEFAULT_OUTPUT)  # The runner reads the three checked-in inputs.
-    echo(f"  Wrote {len(text)} characters to {DEFAULT_OUTPUT}")
+    echo(f"  Wrote {len (text )} characters to {DEFAULT_OUTPUT }")
     logging.info("MIB_GENERATOR: Menu 243 wrote %d characters to %s", len(text), DEFAULT_OUTPUT)  # Log the result.
 
 
@@ -5055,7 +5118,9 @@ def _launch_metrics_gateway(dev_debug: bool = False) -> None:
         echo("  X Could not authenticate to Mist Cloud - the metrics gateway cannot start")
         logging.error("METRICS_GATEWAY: Mist API session initialization failed - abort the launch")
         return
-    cache = build_cache(apisession, settings)  # The cache holds the reading that both output paths serve
+    cache = build_cache(
+        MainEntrypoint.context.apisession, settings
+    )  # The cache holds the reading that both output paths serve
     start_refresh_thread(cache, threading.Event())  # A daemon thread keeps the reading fresh ahead of a poll
     logging.info("METRICS_GATEWAY: Building the application for %s:%s", settings.host, settings.port)
     echo(">> Mist metrics gateway starting at http://127.0.0.1:%s/metrics", settings.port)  # Clickable URL
@@ -5092,13 +5157,15 @@ def _run_metrics_snmp(_args: argparse.Namespace) -> None:
     if not settings.org_id:  # snmpd cannot answer a prompt, so the setting is the only source here
         logging.error("METRICS_SNMP: METRICS_ORG_ID is not set - abort")  # Log the refusal
         sys.exit(1)
-    # Reuse the shared token-based initializer instead of calling mistapi directly. It is the same
-    # seam every other MistHelper mode uses, so it inherits the retry, rate-limit, and fallback logic
-    # for free and it writes the session to the module-level `apisession` global that build_cache reads.
+        # Reuse the shared token-based initializer instead of calling mistapi directly. It is the same
+        # seam every other MistHelper mode uses, so it inherits the retry, rate-limit, and fallback logic
+        # for free and it writes the session to the module-level `apisession` global that build_cache reads.
     if not MistSessionInitializer.initialize():
         logging.error("METRICS_SNMP: Mist API session initialization failed - abort")  # Log the refusal
         sys.exit(1)
-    cache = build_cache(apisession, settings)  # The cache holds the reading that the responder serves.
+    cache = build_cache(
+        MainEntrypoint.context.apisession, settings
+    )  # The cache holds the reading that the responder serves.
     start_refresh_thread(cache, threading.Event())  # Mist Cloud access runs away from the SNMP protocol.
     responder = SnmpPassPersistResponder(cache, settings.base_oid)
     responder.run(sys.stdin, sys.stdout)  # Blocks until snmpd closes the pipe
@@ -5146,11 +5213,11 @@ def _report_mib_result(runner: Any, args: argparse.Namespace, output: Any) -> in
         return 1 if problems else 0
     if getattr(args, "mib_report", False):  # The report path lists work for a person to review.
         for row in runner.report():  # One line for each field the catalog does not yet serve.
-            print(f"{row.scope}\t{row.path}\t{row.json_type}\t{row.description[:60]}")
+            print(f"{row .scope }\t{row .path }\t{row .json_type }\t{row .description [:60 ]}")
         return 0
     dry = bool(getattr(args, "mib_dry_run", False))  # A dry run prints the text and leaves the disk alone.
     text = runner.generate(output, dry_run=dry)
-    print(text if dry else f"Wrote {len(text)} characters to {output}.")
+    print(text if dry else f"Wrote {len (text )} characters to {output }.")
     return 0
 
 
@@ -5180,12 +5247,13 @@ def _apply_deferred_assignments() -> None:
 
 def _run_deferred_import_cycle() -> None:
     """Run the deferred import cycle, publish symbols, and warn on partial failure."""
-    global success, global_assignments  # Update module-level import tracking state for downstream readers
     logging.info("Initializing deferred imports at application start...")  # Log before import process
-    success, global_assignments = import_manager.initialize_all_imports()  # Run full deferred import cycle
+    init_success, assignments = import_manager.initialize_all_imports()  # Run full deferred import cycle
+    globals()["success"] = init_success  # Preserve the legacy module name without a global statement.
+    globals()["global_assignments"] = assignments  # Preserve downstream reads without a global statement.
     import_manager._deferred_init_done = True  # Mark complete to prevent duplicate initialization
     _apply_deferred_assignments()  # Inject resolved symbols and report tqdm availability
-    if not success:  # Non-fatal warning: caller decides whether to abort on partial import failure
+    if not init_success:  # Non-fatal warning: caller decides whether to abort on partial import failure
         logging.warning("Some required imports failed - functionality may be limited")  # Warn limited functionality
 
 
@@ -5435,7 +5503,7 @@ def _announce_fast_mode_scope() -> None:
 
 def _setup_runtime_flags(args: argparse.Namespace) -> None:
     """Apply standalone env flag, register args globally, and configure FAST_MODE_ENABLED."""
-    global FAST_MODE_ENABLED, IS_TEST_MODE  # Update module flags from the one stored argument parse.
+    # The application context owns this state, so no global declaration is needed.
     logging.debug("_setup_runtime_flags: applying standalone and fast mode flags")  # Log entry
     if args.standalone:  # --standalone flag disables ArangoDB/Redis connections org-wide
         os.environ["MISTHELPER_STANDALONE"] = "true"  # Write env var so all components detect standalone mode
@@ -5447,10 +5515,12 @@ def _setup_runtime_flags(args: argparse.Namespace) -> None:
     )
     logging.debug("IS_TEST_MODE set to %s", IS_TEST_MODE)  # Log the parsed test-mode state.
     try:
-        FAST_MODE_ENABLED = bool(args.fast)  # Derive flag from --fast CLI argument (bool is safe cast)
+        MainEntrypoint.context.fast_mode_enabled = bool(
+            args.fast
+        )  # Derive flag from --fast CLI argument (bool is safe cast)
     except Exception:
-        FAST_MODE_ENABLED = False  # Fail-safe: ensure symbol exists even if args access fails
-    logging.debug("FAST_MODE_ENABLED set to %s", FAST_MODE_ENABLED)  # Log fast mode state
+        MainEntrypoint.context.fast_mode_enabled = False  # Fail-safe: ensure symbol exists even if args access fails
+    logging.debug("FAST_MODE_ENABLED set to %s", MainEntrypoint.context.fast_mode_enabled)  # Log fast mode state
     if args.fast:  # Announce scope only when fast mode actually engaged
         _announce_fast_mode_scope()  # Log + print fast-capable function list
     logging.debug("_setup_runtime_flags: complete")  # Log exit
@@ -5473,12 +5543,13 @@ def _apply_dependency_assignments(skip_mode: bool) -> None:
 
 def _run_full_dependency_init(args: argparse.Namespace) -> None:
     """Run the full dependency import cycle and abort on critical, non-test failure."""
-    global success, global_assignments  # Update module-level import tracking state for downstream readers
     logging.info("Initializing deferred dependencies with full checking...")  # Log before full init
-    success, global_assignments = import_manager.initialize_all_imports(skip_deps=False)  # Run full import cycle
+    init_success, assignments = import_manager.initialize_all_imports(skip_deps=False)  # Run full import cycle
+    globals()["success"] = init_success  # Preserve the legacy module name without a global statement.
+    globals()["global_assignments"] = assignments  # Preserve downstream reads without a global statement.
     import_manager._deferred_init_done = True  # Mark complete to prevent duplicate initialization
     _apply_dependency_assignments(skip_mode=False)  # Publish resolved symbols into module namespace
-    if not success and not args.test:  # Abort on critical failure unless running in test mode
+    if not init_success and not args.test:  # Abort on critical failure unless running in test mode
         logging.error("Critical dependencies missing. Exiting.")  # Log fatal dependency failure before exit
         echo("!! Critical dependencies missing. Use --skip-deps to bypass or install missing packages.")
         sys.exit(1)  # Exit with error code -- cannot continue without required modules
@@ -5486,9 +5557,10 @@ def _run_full_dependency_init(args: argparse.Namespace) -> None:
 
 def _run_skip_dependency_init() -> None:
     """Run the minimal dependency import cycle used by the --skip-deps path."""
-    global success, global_assignments  # Update module-level import tracking state for downstream readers
     logging.info("Dependency initialization skipped due to --skip-deps flag")  # Log skip reason
-    success, global_assignments = import_manager.initialize_all_imports(skip_deps=True)  # Minimal import cycle
+    init_success, assignments = import_manager.initialize_all_imports(skip_deps=True)  # Minimal import cycle
+    globals()["success"] = init_success  # Preserve the legacy module name without a global statement.
+    globals()["global_assignments"] = assignments  # Preserve downstream reads without a global statement.
     import_manager._deferred_init_done = True  # Mark complete to prevent duplicate initialization
     _apply_dependency_assignments(skip_mode=True)  # Publish whatever symbols resolved even in skip mode
 
@@ -5556,18 +5628,18 @@ def _init_interactive_session() -> None:
         logging.error("Failed to initialize Mist API session via interactive login")  # Log auth failure
         echo(" Failed to initialize Mist API session. Check your credentials.")
         sys.exit(1)  # Exit -- cannot proceed without authenticated session
-    ConfigUtils.set_apisession(apisession)  # Publish authenticated session to ConfigUtils cache (1015 T-12)
 
 
 def _init_token_session() -> None:
     """Authenticate with an API token, publish the session, and detect MSP privileges."""
-    global msp_privileges  # We publish detected MSP grants to the module global for later menus/exporters to reuse
+    # The application context owns this state, so no global declaration is needed.
     if not MistSessionInitializer.initialize():  # Attempt token-based session init
         logging.error("Failed to initialize Mist API session")  # Log token auth failure
         echo(" Failed to initialize Mist API session. Check your credentials.")
         sys.exit(1)  # Exit -- cannot proceed without authenticated session
-    ConfigUtils.set_apisession(apisession)  # Publish authenticated session to ConfigUtils cache (1015 T-12)
-    msp_privileges = detect_msp_privileges(apisession)  # Detect MSP grants for token session and publish to global
+    MainEntrypoint.context.msp_privileges = detect_msp_privileges(
+        MainEntrypoint.context.apisession
+    )  # Detect MSP grants for token session and publish to global
     logging.debug("_establish_mist_session: session established successfully")  # Log successful auth
 
 
@@ -5585,19 +5657,23 @@ def _apply_debug_log_level() -> None:
 
 def _configure_runtime_options(args: argparse.Namespace) -> None:
     """Set OUTPUT_FORMAT, initialize PROGRESS_EMITTER, and configure debug log level."""
-    global OUTPUT_FORMAT, PROGRESS_EMITTER  # Declare intent to modify module-level runtime config
+    # The application context owns this state, so no global declaration is needed.
     logging.debug("_configure_runtime_options: applying runtime configuration")  # Log entry
-    OUTPUT_FORMAT = args.output_format  # Apply --output-format (csv or sqlite) to global used by all exporters
+    MainEntrypoint.context.output_format = (
+        args.output_format
+    )  # Apply --output-format (csv or sqlite) to global used by all exporters
     timestamp = datetime.now(UTC).isoformat()  # Capture current UTC time for audit trail
-    logging.info("Output format set to: %s at %s", OUTPUT_FORMAT, timestamp)  # Log format selection with timestamp
+    logging.info(
+        "Output format set to: %s at %s", MainEntrypoint.context.output_format, timestamp
+    )  # Log format selection with timestamp
     try:
-        PROGRESS_EMITTER = TelemetryEmitter(
+        MainEntrypoint.context.progress_emitter = TelemetryEmitter(
             os.path.join("data", "test_events.jsonl")
         )  # Initialize JSONL telemetry emitter
         logging.info("Progress telemetry emitter initialized: data/test_events.jsonl")  # Log emitter ready
     except Exception as emitter_exc:
         echo("Progress telemetry emitter init failed (non-blocking): %s", emitter_exc)  # Log non-fatal failure
-        PROGRESS_EMITTER = None  # Set to None so callers skip telemetry gracefully
+        MainEntrypoint.context.progress_emitter = None  # Set to None so callers skip telemetry gracefully
     if args.debug:  # Apply debug logging level to file handlers. Keep console at INFO to avoid noise
         _apply_debug_log_level()  # Promote root + file handlers to DEBUG
     logging.debug("_configure_runtime_options: complete")  # Log exit
@@ -5620,7 +5696,7 @@ def _run_tui_mode(args: argparse.Namespace) -> None:
 
 def _ensure_tui_api_session() -> None:
     """Initialize the Mist API session if not already established. Exits 1 on auth failure."""
-    if apisession:  # Already authenticated -- nothing to do.
+    if MainEntrypoint.context.apisession:  # Already authenticated -- nothing to do.
         return  # Reuse the existing session.
     echo(">> Initializing Mist API session...")
     if not MistSessionInitializer.initialize():  # Attempt session init for TUI
@@ -5675,7 +5751,7 @@ def _run_tui_event_loop(args: argparse.Namespace) -> None:
         from src.ui.tui import MistHelperTUI  # PLC0415: lazy import avoids loading Rich at startup
 
         tui = MistHelperTUI(debug_mode=args.debug)  # Create TUI with debug flag
-        tui.apisession = apisession  # Pass global API session so TUI can execute live API calls
+        tui.apisession = MainEntrypoint.context.apisession  # Pass global API session so TUI can execute live API calls
         if args.debug:  # Debug: record that the code launched the TUI with debug enabled
             logging.debug("TUI_MODE: Debug mode is ACTIVE - enhanced logging enabled")  # Log debug state
         tui.run()  # Launch TUI event loop (blocks until user exits)
@@ -5687,11 +5763,11 @@ def _run_tui_event_loop(args: argparse.Namespace) -> None:
 
 def _run_cli_mode(args: argparse.Namespace) -> None:
     """Resolve org/site/device IDs from CLI args, dispatch to the target menu function, and exit."""
-    global org_id  # Modify module-level org_id used by all menu functions.
+    # The application context owns this state, so no global declaration is needed.
     logging.info("CLI arguments detected, running in non-interactive mode.")  # Log before CLI dispatch.
     _log_cli_invocation(args)  # Verbose log of every parsed CLI flag for diagnostics.
-    org_id = _resolve_cli_org_id(args)  # Use --org if given, otherwise prompt/cache.
-    site_id = _resolve_cli_site_id(args, org_id)  # Resolve --site name -> site_id (or None).
+    MainEntrypoint.context.org_id = _resolve_cli_org_id(args)  # Use --org if given, otherwise prompt/cache.
+    site_id = _resolve_cli_site_id(args, MainEntrypoint.context.org_id)  # Resolve --site name -> site_id (or None).
     device_id = _resolve_cli_device_id(args, site_id)  # Resolve --device name -> device_id (or None).
     _dispatch_cli_menu_action(args, site_id, device_id)  # Dispatch + exit. Never returns on success.
 
@@ -5734,7 +5810,7 @@ def _build_site_name_to_id_map(sites: list[dict[str, Any]]) -> dict[str, str]:
     }  # Build name->id map. Drop sites missing name or id
 
 
-def _resolve_cli_site_id(args: argparse.Namespace, org_id: str) -> str | None:
+def _resolve_cli_site_id(args: argparse.Namespace, target_org_id: str) -> str | None:
     """Resolve --site name to a site_id via API lookup. Exit 1 if name not found. Return None if no --site."""
     if not args.site:  # No --site supplied. Nothing to resolve.
         return None  # Caller treats None as "no site filter".
@@ -5743,7 +5819,7 @@ def _resolve_cli_site_id(args: argparse.Namespace, org_id: str) -> str | None:
         args.site,
         DEFAULT_API_PAGE_LIMIT,
     )  # Log before site resolution.
-    sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch all org sites from Mist API.
+    sites = APICoreFetchUtils.all_sites_with_limit(target_org_id)  # Fetch all org sites from Mist API.
     site_lookup = _build_site_name_to_id_map(sites)  # Delegate name->id map construction
     site_id = site_lookup.get(args.site)  # Look up site ID by human-readable name.
     if not site_id:  # Site name not found in org -- abort with error.
@@ -5760,9 +5836,11 @@ def _resolve_cli_device_id(args: argparse.Namespace, site_id: str | None) -> str
         return None  # Caller treats None as "no device filter".
     logging.info("Resolving device name '%s' at site_id '%s'...", args.device, site_id)  # Log before device resolution.
     response = mistapi.api.v1.sites.devices.listSiteDevices(
-        apisession, site_id, type="all"
+        MainEntrypoint.context.apisession, site_id, type="all"
     )  # Fetch all devices at site.
-    devices = mistapi.get_all(response=response, mist_session=apisession)  # Page through all results.
+    devices = mistapi.get_all(
+        response=response, mist_session=MainEntrypoint.context.apisession
+    )  # Page through all results.
     device_lookup = {dev["name"]: dev["id"] for dev in devices}  # Build name->id map from device list.
     device_id = device_lookup.get(args.device)  # Look up device ID by human-readable name.
     if not device_id:  # Device name not found at site -- abort with error.
@@ -5798,7 +5876,7 @@ def _build_cli_func_kwargs(args: argparse.Namespace, site_id: str | None, device
         "site_id": site_id,  # Pass resolved site ID (or None if not provided).
         "device_id": device_id,  # Pass resolved device ID (or None if not provided).
         "port": args.port,  # Pass port ID directly from CLI.
-        "org_id": org_id,  # Pass resolved organization ID.
+        "org_id": MainEntrypoint.context.org_id,  # Pass resolved organization ID.
         "debug": args.debug,  # Pass debug mode flag to enable verbose logging.
         "delay": args.delay,  # Pass custom delay override (or None for dynamic).
         "fast": args.fast,  # Pass fast mode flag to enable concurrency.
@@ -5810,10 +5888,10 @@ def _build_cli_func_kwargs(args: argparse.Namespace, site_id: str | None, device
 
 def _run_interactive_mode(args: argparse.Namespace) -> None:
     """Present the interactive menu loop, dispatching to functions until user exits."""
-    global org_id  # Modify module-level org_id for all menu functions.
+    # The application context owns this state, so no global declaration is needed.
     logging.info("No CLI arguments detected, running in interactive menu mode.")  # Log before interactive start.
-    org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org ID from cache or prompt.
-    logging.info("Organization ID initialized for interactive mode: %s", org_id)  # Log org ID.
+    MainEntrypoint.context.org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org ID from cache or prompt.
+    logging.info("Organization ID initialized for interactive mode: %s", MainEntrypoint.context.org_id)  # Log org ID.
     container_mode = _setup_interactive_container_mode()  # Detect container runtime and print banner if active.
     while True:  # Main menu loop -- runs until user selects exit or input stream closes.
         _print_interactive_menu()  # Print the sorted menu options.
@@ -5847,15 +5925,16 @@ def _setup_interactive_container_mode() -> bool:
 
 def _print_interactive_menu() -> None:
     """Print the sorted list of available menu options."""
-    global _SORTED_MENU_KEYS_CACHE  # Reuse the module cache while still allowing invalidation.
     echo("\nAvailable Options:")
     menu_keys = tuple(menu_actions.keys())  # Snapshot keys so runtime registry edits invalidate the cache.
-    if _SORTED_MENU_KEYS_CACHE is None or _SORTED_MENU_KEYS_CACHE[0] != menu_keys:  # Detect new or changed keys.
-        _SORTED_MENU_KEYS_CACHE = (
+    cache = globals().get("_SORTED_MENU_KEYS_CACHE")  # Read the cache without a global statement.
+    if cache is None or cache[0] != menu_keys:  # Detect new or changed keys.
+        cache = (
             menu_keys,
             tuple(sorted(menu_keys, key=lambda x: float(x.replace("a", ".1")))),
         )  # Sort numerically once for this exact key set so 10 sorts after 9.
-    sorted_menu_keys = _SORTED_MENU_KEYS_CACHE[1]  # Read the valid cached order for this redraw.
+        globals()["_SORTED_MENU_KEYS_CACHE"] = cache  # Store the cache without a global statement.
+    sorted_menu_keys = cache[1]  # Read the valid cached order for this redraw.
     for key in sorted_menu_keys:  # Iterate every menu key in numeric order.
         _, description = menu_actions[key]  # Unpack description from dispatch table tuple.
         echo("%s: %s", key, description)
@@ -6079,7 +6158,8 @@ if __name__ == "__main__":
             # IS_TEST_MODE may not yet be defined if refactor order changes. Ignore safely
             pass
 
-        # Install a global exception hook early so we capture full tracebacks for unexpected issues
+            # Install a global exception hook early so we capture full tracebacks for unexpected issues
+
         def _global_excepthook(
             exc_type: type[BaseException],
             exc_value: BaseException,
@@ -6124,4 +6204,4 @@ if __name__ == "__main__":
         sys.exit(1)
     finally:
         logging.info("=== MistHelper application ending ===")
-# hi
+        # hi

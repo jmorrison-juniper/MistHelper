@@ -26,6 +26,7 @@ import logging  # Reproduce the original entry-point trace log
 import os  # Load the optional environment file during the explicit bootstrap step
 import sys  # Provide argv for the one command-line parse and the script module alias
 from collections.abc import Sequence  # Type argv without accepting a mutable list only
+from dataclasses import dataclass, field  # Build the explicit application context without shared mutable defaults
 from pathlib import Path  # Build repository paths without hardcoded separators
 from typing import Any, cast  # Loose typing for late-bound MistHelper attributes
 
@@ -47,6 +48,69 @@ class _MistHelperProxy:  # Attribute forwarder to MistHelper module attributes
 _MH = _MistHelperProxy()  # Sole module-level proxy handle used inside the class body
 
 
+@dataclass
+class AppContext:
+    """Own the live application state for one MistHelper process.
+
+    Why:
+        The state must travel as one object, so tests can prove that two
+        application contexts never share a Mist API session.
+    """
+
+    parsed_args: argparse.Namespace | None = None  # Keep the parsed arguments with the state that uses them.
+    mistapi: Any | None = None  # Store the SDK module chosen during startup.
+    apisession: Any | None = None  # Store the authenticated Mist API session without a module global.
+    org_id: str | None = None  # Store the selected organization with the session that selected it.
+    msp_privileges: list[dict[str, Any]] = field(default_factory=list)  # Avoid sharing grants across contexts.
+    selected_msp: dict[str, Any] | None = None  # Store the selected MSP with the related organization.
+    output_format: str = "csv"  # Keep output choice in the application state.
+    progress_emitter: Any | None = None  # Keep telemetry wiring in the application state.
+    fast_mode_enabled: bool = False  # Keep the runtime speed choice in the application state.
+    session_configured: bool = False  # Guard session configuration so it runs only once.
+
+    def clear_session(self) -> None:
+        """Clear the active session state before a new login starts."""
+        logging.info("Clearing the active Mist session context")  # Log before changing session state.
+        self.apisession = None  # Drop the old session so a new login cannot reuse it.
+        self.org_id = None  # Drop the old organization because it belongs to the old session.
+        self.msp_privileges = []  # Drop old MSP grants because they belong to the old session.
+        self.selected_msp = None  # Drop the old MSP selection because it belongs to the old session.
+        self.session_configured = False  # Allow the next session to receive one configuration pass.
+        logging.debug("The active Mist session context is clear")  # Log after the context reset.
+
+    def restore_session(self, session: Any, organization_id: str | None, grants: list[dict[str, Any]]) -> None:
+        """Restore a prior session after an interactive login failure."""
+        logging.info("Restoring the prior Mist session context")  # Log before putting the prior state back.
+        self.apisession = session  # Restore the prior session so the menu can continue.
+        self.org_id = organization_id  # Restore the prior organization with the prior session.
+        self.msp_privileges = grants  # Restore the grants that match the prior session.
+        self.session_configured = bool(session)  # Mark an existing session as already configured.
+        logging.debug("The prior Mist session context was restored: %s", bool(session))  # Log without secrets.
+
+    def apply_msp_selection(self, state: dict[str, Any]) -> None:
+        """Apply a selector state bag to this context."""
+        logging.info("Applying the selected MSP and organization to the context")  # Log before state transfer.
+        self.apisession = state.get("apisession")  # Preserve a selector-driven session change.
+        self.mistapi = state.get("mistapi")  # Preserve the SDK module that served the selector.
+        self.msp_privileges = state.get("msp_privileges", self.msp_privileges)  # Preserve detected grants.
+        self.selected_msp = state.get("selected_msp", self.selected_msp)  # Preserve the selected MSP.
+        self.org_id = state.get("org_id", self.org_id)  # Preserve the selected organization.
+        logging.debug("The MSP selector applied an organization: %s", bool(self.org_id))  # Log the safe result.
+
+    def as_selector_state(self) -> dict[str, Any]:
+        """Return the mutable state bag used by the current selector seam."""
+        logging.info("Building the MSP selector state from the context")  # Log before creating the seam payload.
+        state = {
+            "apisession": self.apisession,  # Give the selector the current session reference.
+            "mistapi": self.mistapi,  # Give the selector the SDK module reference.
+            "msp_privileges": self.msp_privileges,  # Give the selector the current MSP grants.
+            "selected_msp": self.selected_msp,  # Give the selector the current MSP selection.
+            "org_id": self.org_id,  # Give the selector the current organization.
+        }
+        logging.debug("The MSP selector state has an organization: %s", bool(state["org_id"]))  # Log no secret data.
+        return state  # The selector mutates this short-lived dictionary.
+
+
 class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
     """Start MistHelper side effects after import.
 
@@ -59,9 +123,11 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
         """Store the startup mode and parse command-line input when the CLI host asks for it."""
         self.parse_cli = parse_cli  # Store the mode so web bootstrap never reads process argv.
         self.argv = tuple(sys.argv[1:] if argv is None else argv)  # Snapshot argv so the parse input stays stable.
+        self.context = MainEntrypoint.context  # Use the single process context that the entry point owns.
         self.parsed_args = (  # Keep one stored Namespace for every later startup decision.
             self._parse_arguments() if parse_cli else self._build_web_args()
         )
+        self.context.parsed_args = self.parsed_args  # Store parsed arguments with the runtime state.
 
     def _parse_arguments(self) -> argparse.Namespace:
         """Parse the command line exactly one time."""
@@ -251,6 +317,8 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
 
 class MainEntrypoint:  # CLI main entry-point seam
     """Class-body seam for the MistHelper CLI entrypoint."""
+
+    context = AppContext()  # Own the live process state without module-level session globals.
 
     @classmethod
     def _needs_startup_session(cls, args: Any) -> bool:

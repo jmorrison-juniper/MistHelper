@@ -22,6 +22,7 @@ def test_import_misthelper_has_no_startup_side_effects() -> None:
 import json
 import logging
 import os
+import platform
 import socket
 import subprocess
 
@@ -35,6 +36,7 @@ watched_env = {
 }
 real_getenv = os.getenv
 real_environ_get = os.environ.get
+platform.uname()
 
 def record(event, value):
     events.append([event, str(value)])
