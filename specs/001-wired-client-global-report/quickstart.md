@@ -74,7 +74,7 @@ After implementation, follow the project's mandatory full deployment pipeline (c
 
 ## Implementation Notes
 
-- **Menu number**: 161
+- **Menu number**: 90
 - **OperationRegistry category**: `interactive_safe`
 - **Classes added**: `FilterOperatorEngine`, `GlobalWiredClientReportGenerator`
-- **web_portal/menu_registry.py**: No change required (menu 161 > 80 threshold)
+- **web_portal/menu_registry.py**: No change required (menu 90 > 80 threshold)

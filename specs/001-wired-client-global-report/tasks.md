@@ -102,7 +102,7 @@
 - [x] T030 Validate syntax with `python -m py_compile MistHelper.py` and resolve any issues in `MistHelper.py`
 - [x] T031 Run broad safety regression with `python MistHelper.py --test` and resolve any operation classification/test-harness issues in `MistHelper.py`
 - [x] T032 Execute manual semantic verification matrix for all operators and record outcomes in `specs/001-wired-client-global-report/quickstart.md`
-- [ ] T033 Execute mandatory deployment workflow steps (commit/push/CI watch/image pull/container restart/verify) in repository root with resulting runtime verification notes in `README.md`
+- [x] T033 Execute mandatory deployment workflow steps (commit/push/CI watch/image pull/container restart/verify) in repository root with resulting runtime verification notes in `README.md`
 
 ---
 
