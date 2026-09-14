@@ -36,22 +36,24 @@ The same measurement after reconciliation found 2,552 unchecked task boxes and
 
 ## Evidence basis
 
-Each tick in the four task files has an evidence note. The notes cite the
-shipped tool files, test files, workflow files, specification files, or source
-folders that prove the task exists.
+Each tick in the four task files has an evidence note. Each note cites one
+proof path. The paths name shipped tools, tests, workflows, specs, or source
+folders.
 
-The strongest evidence paths are:
+These paths give the strongest evidence:
 
-- `tools/ste_linter/` for the STE linter package.
-- `tests/unit/ste_linter/` for the STE linter tests.
-- `tools/ste_linter/dictionary/extract.py` for the dictionary extractor.
-- `tools/ste_linter/dictionary/quality.py` for the extractor quality harness.
-- `tests/unit/ste_linter/test_dictionary_extract.py` for extractor tests.
-- `MistHelper.py` for the delivered root-file STE cleanup.
-- `src/` for the delivered source-tree STE cleanup.
-- `.github/workflows/ste-lint.yml` for the STE writing gate.
-- `.pre-commit-config.yaml` for the STE pre-commit hook.
-- `pyproject.toml` for the STE linter configuration and allow list.
+```text
+tools/ste_linter/ - STE linter package
+tests/unit/ste_linter/ - STE linter tests
+tools/ste_linter/dictionary/extract.py - dictionary extractor
+tools/ste_linter/dictionary/quality.py - extractor quality harness
+tests/unit/ste_linter/test_dictionary_extract.py - extractor tests
+MistHelper.py - root-file STE cleanup
+src/ - source-tree STE cleanup
+.github/workflows/ste-lint.yml - STE writing gate
+.pre-commit-config.yaml - STE pre-commit hook
+pyproject.toml - STE linter configuration and allow list
+```
 
 ## Unproved tasks
 
@@ -73,9 +75,9 @@ These files need follow-up reconciliation after the active edits finish.
 
 ## Guard evidence
 
-The guard tool is `tools/speckit_task_audit.py`. It walks the spec directories,
-counts checked and unchecked task boxes, ignores fenced code blocks, accepts an
-allow-list file, and exits nonzero for unchecked tasks in complete specs.
+The guard tool is `tools/speckit_task_audit.py`. It walks the spec directories.
+It counts checked and unchecked task boxes. It ignores fenced code blocks.
+It accepts an allow-list file. It exits nonzero for unchecked tasks in complete specs.
 
 The tests in `tests/unit/tools/test_speckit_task_audit.py` cover:
 

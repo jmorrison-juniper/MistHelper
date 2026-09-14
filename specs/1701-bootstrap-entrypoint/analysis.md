@@ -22,15 +22,20 @@
 
 ## Local Quality Gates
 
-- `rtk python -m py_compile MistHelper.py`: pass.
-- `rtk python -m ruff check .`: pass.
-- `rtk python -m black --check .`: pass.
-- `rtk python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml`: pass.
-- `rtk python -m pytest tests/unit/refactors/test_reject_unsupported_flag_variants.py -q`: pass.
-- `rtk python -m pytest tests/ -x -q`: started and passed the first 1 percent. The local Windows run was too slow to finish promptly. The pull request checks must finish the full suite before merge.
-- `rtk python -m bandit -r MistHelper.py`: pass with zero findings and zero skipped lines.
-- `rtk python -m tools.symbol_diff --base main MistHelper.py`: pass with no module-level name change.
-- `rtk python -c "import MistHelper"`: pass.
-- `rtk python MistHelper.py --help`: pass.
-- `rtk python -c "import wsgi"`: pass.
-- `rtk python -m radon cc MistHelper.py src/refactors/main_entrypoint.py wsgi.py -n C`: pass with no block above B.
+```text
+rtk python -m py_compile MistHelper.py: pass
+rtk python -m ruff check .: pass
+rtk python -m black --check .: pass
+rtk python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml: pass
+rtk python -m pytest tests/unit/refactors/test_reject_unsupported_flag_variants.py -q: pass
+rtk python -m pytest tests/ -x -q: started
+The command passed the first 1 percent.
+The local Windows run was too slow to finish promptly.
+The pull request checks must finish the full suite before merge.
+rtk python -m bandit -r MistHelper.py: pass with zero findings and zero skipped lines
+rtk python -m tools.symbol_diff --base main MistHelper.py: pass with no module-level name change
+rtk python -c "import MistHelper": pass
+rtk python MistHelper.py --help: pass
+rtk python -c "import wsgi": pass
+rtk python -m radon cc MistHelper.py src/refactors/main_entrypoint.py wsgi.py -n C: pass with no block above B
+```
