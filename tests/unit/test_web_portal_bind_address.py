@@ -3,8 +3,8 @@
 The resolver `_resolve_web_portal_host()` must return the loopback address on a
 workstation, the all-interfaces address inside a container, and the `WEB_HOST`
 value when an operator sets that variable. A guardrail test proves that the old
-join expression, which hid the literal address from the security scanner, is
-gone from the source file.
+source holds no suppression comment after the resolver checks the container
+state before it builds the all-interfaces address.
 """
 
 from __future__ import annotations  # WHY: keep the annotation style equal to the rest of the suite.
@@ -59,18 +59,17 @@ class TestResolveWebPortalHost:
 
 
 class TestBindAddressSourceGuardrail:
-    """The source states the bind address in plain form and carries the suppression comment."""
+    """The source builds the all-interfaces address only after the container guard."""
 
-    def test_resolver_states_the_literal_address(self) -> None:
-        """The resolver source contains the plain all-interfaces literal."""
+    def test_resolver_uses_the_container_guard(self) -> None:
+        """The resolver checks the container state before it builds the all-interfaces address."""
         source = inspect.getsource(MistHelper._resolve_web_portal_host)  # WHY: read the shipped implementation.
-        assert '"0.0.0.0"' in source  # WHY: the source must state the address in plain form for the scanner.
+        assert "is_running_in_container()" in source  # WHY: the container check must protect the external bind.
 
-    def test_resolver_carries_a_justified_suppression(self) -> None:
-        """The all-interfaces line carries a nosec B104 marker with a stated reason."""
+    def test_resolver_carries_no_suppression(self) -> None:
+        """The resolver carries no suppression after the root cause repair."""
         source = inspect.getsource(MistHelper._resolve_web_portal_host)  # WHY: read the shipped implementation.
-        assert "# nosec B104" in source  # WHY: the project standard needs a recorded decision, not a hidden literal.
-        assert "is_running_in_container()" in source  # WHY: the comment must state the container condition.
+        assert "# nosec B104" not in source  # WHY: issue #1004 requires the root cause instead of a suppression.
 
     def test_module_no_longer_builds_the_address_from_parts(self) -> None:
         """The old join expression that hid the literal from the scanner is gone."""

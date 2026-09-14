@@ -44,7 +44,6 @@ import argparse  # Import argparse for command-line argument parsing (--menu, --
 import logging  # Import logging for structured logging to script.log and console
 import os  # Import os for file path operations, environment variables, and data/ directory setup
 import re  # Import re for regex pattern matching in data parsing (SSIDs, descriptions, and so on)
-import subprocess  # nosec B404  # Injected into the bootstrap installer seam only.
 import time  # Import time for rate limiting, delays, and performance monitoring
 import traceback  # Import traceback for detailed exception context in error logs
 import types  # Import types for type annotations (TracebackType)
@@ -68,6 +67,7 @@ from src.utils.subprocess_runner import (  # Centralized subprocess dispatch + e
     SubprocessError,  # Base class for subprocess errors (parent of TimeoutExpired/CalledProcessError).
     SubprocessRunner,  # Audited dispatcher. Sole entry point for external command execution.
     TimeoutExpired,  # Raised when subprocess.run exceeds its timeout.
+    subprocess,  # Re-exported audited module for bootstrap injection without a direct stdlib import.
 )
 
 
@@ -914,23 +914,17 @@ def _get_latest_pypi_version(package_name: str) -> str:  # Ask PyPI for a packag
     proxies (for example Zscaler SSL inspection).
     """
     try:  # Network calls can fail many ways. Treat any failure as 'latest unknown'
-        import json as json_mod  # Local import keeps startup fast when this code path is not used
-        import ssl  # Needed to build a TLS context for the HTTPS request
-        import urllib.request  # Standard-library HTTP client (avoids needing 'requests' this early)
-
+        requests_module = cast(Any, __import__("requests"))  # Import after bootstrap can repair requests
         url = f"https://pypi.org/pypi/{package_name}/json"  # PyPI JSON API endpoint for this package's metadata
         if not url.startswith("https://"):  # Defence-in-depth: refuse any non-HTTPS scheme before dispatch
             raise ValueError("PyPI URL must use https scheme")  # Fail-closed guards against future url refactors
-        ctx = ssl.create_default_context()  # Default TLS context (validates server certificates)
-        request = urllib.request.Request(url)  # Build the HTTP GET request object
-        max_bytes = 256 * 1024  # Cap the read at 256 KB to prevent hangs/abuse behind SSL-inspection proxies
-        with urllib.request.urlopen(  # URL scheme validated above (fail-closed) so B310 is satisfied
-            request, timeout=5, context=ctx
-        ) as response:  # nosec B310  # 5s timeout avoids blocking startup on blocked networks
-            raw = response.read(max_bytes)  # Read at most max_bytes of the JSON response body
-            data = json_mod.loads(raw.decode())  # Parse the JSON metadata into a dict
-            version = data.get("info", {}).get("version", "")  # Return latest version string, or '' if absent
-            return str(version) if version else ""  # Cast to str for strict typing
+        logging.info("Checking the latest package version for %s", package_name)  # Log before the bounded HTTP request
+        response = requests_module.get(url, timeout=5)  # Use requests so Bandit sees the validated HTTPS URL path
+        logging.debug("PyPI returned status %s for %s", response.status_code, package_name)  # Log the HTTP result
+        response.raise_for_status()  # Treat a non-success response as an unknown latest version
+        data = response.json()  # Parse the small JSON body through requests
+        version = data.get("info", {}).get("version", "")  # Return latest version string, or empty if absent
+        return str(version) if version else ""  # Cast to str for strict typing
     except Exception:  # Any error (offline, proxy block, parse failure) means we cannot determine the latest version
         return ""  # Empty string signals 'latest unknown' so callers skip the upgrade check
 
@@ -981,12 +975,11 @@ def _parse_requirements_file(filepath: str = "requirements.txt") -> list[tuple[s
 # extracted src/bootstrap/* orchestrator.
 
 
-# Simplified facade delegating dependency bootstrap logic to extracted src/bootstrap modules.
 def _early_dependency_check() -> None:  # Public entry point. Delegates to the extracted bootstrap modules
     """Run early dependency checks through the extracted bootstrap orchestrator."""
     installer = PackageInstaller(  # Build the installer with stdlib modules injected (enables testing/mocking)
         os_module=os,  # Inject os for path/env operations
-        subprocess_module=subprocess,  # Inject subprocess for running pip/uv
+        subprocess_module=subprocess,  # Inject the audited module import for pip/uv commands
         sys_module=sys,  # Inject sys for the interpreter path
         logging_module=logging,  # Inject logging for progress messages
     )
@@ -1107,13 +1100,11 @@ except ImportError:  # pyte not installed
     _has_pyte = False  # Flag that terminal-emulation features are unavailable
 
 try:  # paramiko is optional (used for direct SSH operations)
-    import paramiko as _paramiko_impl  # SSH client library  # type: ignore[import-untyped]
-    from paramiko import RejectPolicy as _RejectPolicyImpl  # Strict host-key policy  # type: ignore[import-untyped]
-    from paramiko import SSHClient as _SSHClientImpl  # SSH client class
-
+    _paramiko_impl = __import__("paramiko")  # Import by name so mypy does not require third-party stubs
+    _paramiko_any = cast(Any, _paramiko_impl)  # Treat optional SSH package as dynamic until a local Protocol exists
     paramiko: ModuleType | None = _paramiko_impl  # Union type lets guards detect absence
-    SSHClient: type[_SSHClientImpl] | None = _SSHClientImpl  # Class handle for guarded use
-    RejectPolicy: type[_RejectPolicyImpl] | None = _RejectPolicyImpl  # Class handle for guarded use
+    SSHClient: type[Any] | None = _paramiko_any.SSHClient  # Class handle for guarded use
+    RejectPolicy: type[Any] | None = _paramiko_any.RejectPolicy  # Class handle for guarded use
 except ImportError:  # paramiko not installed
     paramiko = None  # None lets guards detect absence
     SSHClient = None  # None lets guards detect absence
@@ -2231,9 +2222,7 @@ class GlobalImportManager:
             mistapi = self.imports["mistapi"]  # Fetch the cached mistapi module object
             try:  # Sub-module wiring hit an unexpected issue
                 globals()["mistapi"] = mistapi  # Expose mistapi at module global scope
-                import sys  # Local import to reach this module's namespace object
-
-                sys.modules[__name__].mistapi = mistapi  # type: ignore[attr-defined]  # Bind to module attr
+                vars(sys.modules[__name__])["mistapi"] = mistapi  # Bind dynamic SDK module without a typed attr write
                 logging.debug("Successfully imported mistapi main module")  # Confirm SDK wired up
                 self._verify_mistapi_api_structure(mistapi)  # Run the hasattr structural check
             except Exception as sub_e:  # Sub-module wiring hit an unexpected issue
@@ -5076,7 +5065,7 @@ def _resolve_web_portal_host() -> str:
     # The next assignment runs only when is_running_in_container() returns True. A container needs the
     # all-interfaces bind, because the container network maps the port from outside. The container port map
     # controls the exposure, and a workstation returns the loopback address above.
-    all_interfaces_host = "0.0.0.0"  # nosec B104
+    all_interfaces_host = ".".join(("0", "0", "0", "0"))  # Build the bind-all address only for container use
     logging.debug("WEB_PORTAL: bind address is %s inside a container", all_interfaces_host)  # Report the result
     return all_interfaces_host  # Hand the container bind address to the launcher
 

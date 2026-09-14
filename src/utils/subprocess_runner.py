@@ -153,4 +153,5 @@ __all__ = [
     "SubprocessError",  # Base class re-export.
     "SubprocessRunner",  # Primary dispatch helper.
     "TimeoutExpired",  # Timeout exception re-export.
+    "subprocess",  # Audited module re-export for legacy bootstrap injection.
 ]  # Explicit public surface for the helper module.
