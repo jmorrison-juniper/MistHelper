@@ -2,12 +2,19 @@
 
 **Feature Branch**: `001-mist-ops-platform`  
 **Created**: 2026-03-05  
-**Status**: Draft  
+**Status**: Current and complete after issue #996 reconciliation  
 **Input**: User description: "Build a 3-layer containerized microservice platform that implements operator-grade features missing from Juniper Mist (A-Z gap matrix), using free/OSS Kubernetes-ready components (PostgreSQL, Redis, MinIO, FastAPI, Celery, KEDA, etc.), integrated with the Mist API. The platform provides time-travel assurance, config versioning/diff/rollback, scheduled changes, auto-rollback safety nets, change audit with old-to-new diffs, firmware orchestration, install-from-revision, multi-vendor change workflows with risk simulation, pre/post-change validation gates, policy lifecycle management, continuous compliance/drift detection, phased rollouts, and application-centric change modeling."
 
 ## Clarifications
 
 ### Session 2026-03-05
+
+### Session 2026-09-13
+
+- The task list now matches the code. It shows 117 of 117 tasks complete.
+- The reconciliation found 38 unchecked tasks that the code already delivered.
+- The remaining US3 item was T058. The worker now compares device firmware with the configured `min_version`.
+- The check task now reads job pre-check settings and writes checkpoint rows that match the ORM schema.
 
 - Q: Will this platform serve a single Mist organization, or must it support multiple Mist organizations simultaneously? → A: Must support the Mist MSP (Managed Service Provider) level, which controls many organizations. Hierarchy: MSP → Organizations → Sites → Devices.
 - Q: Should the MVP include all 26 A-Z gap categories, or limit to the current 6 user stories and defer the rest? → A: Expand MVP to include all 26 categories (full scope).
