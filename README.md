@@ -328,6 +328,7 @@ machine.
 | [Quality gates](documentation/quality-gates.md) | The 14 checks that every pull request runs |
 | [Development setup](documentation/development-setup.md) | Run the code from a source checkout |
 | [Contributing](documentation/contributing.md) | The branch workflow, the labels, and the review rules |
+| [Contributor map for `MistHelper.py`](documentation/CONTRIBUTING-MistHelper.md) | The stable symbols and the packages that guide entry-point changes |
 | [Stranded branch review](documentation/stranded-branch-review.md) | Why a cleanup never deletes a branch that has no pull request |
 | [Writing guide](documentation/ASD-STE100_writing-guide.md) | The Simplified Technical English rules for every document |
 | [NOC runbooks](documentation/noc-runbooks) | Task guides for the operations center |
