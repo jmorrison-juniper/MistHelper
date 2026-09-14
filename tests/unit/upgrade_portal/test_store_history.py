@@ -341,6 +341,37 @@ def test_list_runs_returns_the_rows_and_the_total() -> None:
     assert [row["run_id"] for row in page.runs] == ["run-0001", "run-0002"]
 
 
+def test_the_run_page_query_projects_the_device_count() -> None:
+    """Issue #2625: the run list query returns the length of the target list.
+
+    Why:
+        The history page reads a projected row, and the projection names no
+        `targets`. The page counted zero devices for every run. The query now
+        returns the length, so the page reads a real number without carrying
+        one entry for each device of every run on the page.
+    """
+    database = _FakeDatabase()
+    database.aql.answers = [[0], []]
+    store.list_runs(store.RunQuery(site_id=_SITE), database)
+    page_query, _ = database.aql.calls[1]
+    assert store.RUN_DEVICE_COUNT_FIELD == "device_count"
+    assert "device_count:LENGTH(doc.targets)" in page_query
+    assert "targets:doc.targets" not in page_query
+
+
+def test_the_review_page_reads_the_projected_count_name() -> None:
+    """Issue #2625: the page and the store name one field.
+
+    Why:
+        The review route holds its own copy of this name, because an import of
+        the store package would pull the database layer into every page import.
+        This test is the link that stops the two names from drifting apart.
+    """
+    from src.upgrade_portal.app.routes import review
+
+    assert review.RUN_DEVICE_COUNT_FIELD == store.RUN_DEVICE_COUNT_FIELD
+
+
 def test_list_runs_sends_every_narrowing_value_as_a_bind() -> None:
     """A narrowing value travels as a bind parameter and never as query text.
 

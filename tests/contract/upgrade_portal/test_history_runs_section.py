@@ -106,6 +106,39 @@ def test_a_run_row_counts_its_devices() -> None:
     assert review.run_history_row(STORED_RUNS[2])["device_count"] == 3
 
 
+def test_a_projected_run_row_reads_the_stored_device_count() -> None:
+    """Issue #2625: a row from the run list reads the projected count.
+
+    Why:
+        The history page reads a projected row that carries no target list. The
+        page printed 0 for every run. The store now projects the length under
+        `device_count`, and the row must read that number.
+    """
+    projected = {"run_id": "run-0001", "state": "complete", "device_count": 6}
+    assert review.run_history_row(projected)["device_count"] == 6
+
+
+def test_a_run_row_counts_targets_when_no_count_is_projected() -> None:
+    """Issue #2625: a whole run document still counts its target list.
+
+    Why:
+        The run detail page reads the whole document, which holds `targets` and
+        no projected count. That path must keep working.
+    """
+    assert review.run_history_row({"run_id": "run-x", "targets": [{}, {}]})["device_count"] == 2
+
+
+def test_a_run_row_ignores_a_boolean_device_count() -> None:
+    """Issue #2625: a true must never read as the device count 1.
+
+    Why:
+        Python counts a bool as an int. A stored true would then print one
+        device for a run that acts on none.
+    """
+    row = review.run_history_row({"run_id": "run-x", "device_count": True, "targets": [{}, {}]})
+    assert row["device_count"] == 2
+
+
 def test_a_run_row_carries_both_capture_keys() -> None:
     """Each row links to the capture from before and the capture from after."""
     row = review.run_history_row(STORED_RUNS[2])
