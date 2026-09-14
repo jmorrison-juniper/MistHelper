@@ -496,6 +496,50 @@ def test_an_adoption_holds_a_store_fault(monkeypatch: pytest.MonkeyPatch) -> Non
     assert wiring.StandalonePrecheckAdopter().newest_precheck(SITE_ID) == ""
 
 
+def test_the_precheck_pair_names_the_tier_of_the_capture(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Issue #2640: the pair reader returns the tier beside the key.
+
+    Why:
+        The run takes the tier of the capture it adopts. A reader that named
+        the key alone left the run at tier 2, and the post-check capture then
+        read no radio row and no alarm row.
+
+    Args:
+        monkeypatch: The patcher of this test.
+    """
+    from src.upgrade_portal.capture import store  # Late, to match the import rule of the wiring module.
+
+    row = {"capture_id": "cap-abc-01", "tier": 3}  # One stored standalone pre-check at tier 3.
+    monkeypatch.setattr(store, "latest_standalone_precheck", lambda *args, **kwargs: row)
+    assert wiring.StandalonePrecheckAdopter().newest_precheck_tier(SITE_ID) == ("cap-abc-01", 3)
+
+
+def test_the_precheck_pair_falls_back_with_no_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Issue #2640: no store names no key and the standard tier.
+
+    Args:
+        monkeypatch: The patcher of this test.
+    """
+    _no_store_module(monkeypatch)
+    assert wiring.StandalonePrecheckAdopter().newest_precheck_tier(SITE_ID) == ("", wiring.DEFAULT_TIER)
+
+
+def test_a_stored_tier_of_another_shape_reads_as_the_standard_tier() -> None:
+    """Issue #2640: only a known tier reaches the run record.
+
+    Why:
+        A damaged row must never write an unknown tier onto a run. The record
+        layer accepts the number 2 and the number 3 alone, so any other value
+        would refuse the whole run.
+    """
+    assert wiring.precheck_tier_number(3) == 3  # The extra tier passes through.
+    assert wiring.precheck_tier_number("3") == 3  # A stored text form converts.
+    assert wiring.precheck_tier_number(None) == wiring.DEFAULT_TIER  # An absent field falls back.
+    assert wiring.precheck_tier_number("purple") == wiring.DEFAULT_TIER  # A word falls back.
+    assert wiring.precheck_tier_number(9) == wiring.DEFAULT_TIER  # An unknown number falls back.
+    assert wiring.precheck_tier_number(True) == wiring.DEFAULT_TIER  # A boolean never reads as tier 1.
+
+
 def test_an_edge_write_with_no_store_module_raises_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
     """A missing edge must never end the create call.
 
