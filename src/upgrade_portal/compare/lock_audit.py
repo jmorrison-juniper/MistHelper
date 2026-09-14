@@ -158,52 +158,94 @@ def audit_row(record: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _read_limited_audit_rows(limit: int, path: Any = None) -> list[dict[str, Any]]:
+def _row_in_scope(record: Mapping[str, Any], site_id: str) -> bool:
+    """Report whether one record belongs to the requested site.
+
+    Why:
+        Issue #2596 narrows the audit log to the site that the page names. An
+        empty request reads every site, because the history page serves both
+        the one-site view and the whole-organization view.
+
+    Args:
+        record: One record of the trail, or one inferred expiry record.
+        site_id: The site the caller asked for. An empty value reads every site.
+
+    Returns:
+        True when the page must show the record.
+    """
+    if not site_id:  # An empty request reads every site, which is the old behavior.
+        return True
+    return str(record.get("site_id") or "") == site_id  # Compare the stored site with the request.
+
+
+def _keep_in_scope(recent: deque[dict[str, Any]], record: dict[str, Any], site_id: str) -> None:
+    """Add one record to the page when the record belongs to the requested site.
+
+    Why:
+        The caller reads every record of the trail, because the expiry
+        inference needs every site. Only the page output narrows to one site.
+
+    Args:
+        recent: The bounded page buffer. The buffer keeps the newest records.
+        record: One record of the trail, or one inferred expiry record.
+        site_id: The site the caller asked for. An empty value reads every site.
+    """
+    if not _row_in_scope(record, site_id):  # A record of another site never reaches the page.
+        return
+    recent.append(record)  # Keep the record for the page.
+
+
+def _read_limited_audit_rows(limit: int, path: Any = None, site_id: str = "") -> list[dict[str, Any]]:
     """Return one positive-size page of the audit log, newest first.
+
+    Warning: the expiry inference reads every site, and only the page output
+    narrows to one site. A filter applied before the inference would lose the
+    take that closes a hold on another site, and the page would then show a
+    hold that never ended.
 
     Args:
         limit: The largest count of rows to answer.
         path: The trail file, or None for the real one.
+        site_id: The site to narrow to. An empty value reads every site.
 
     Returns:
         One shaped row for each action, newest first.
     """
     recent: deque[dict[str, Any]] = deque(maxlen=limit)
     holder: dict[str, dict[str, Any]] = {}
-    total = 0
     for row in read_trail_lines(path):  # One pass keeps expiry inference equal to a full read.
-        site = str(row.get("site_id") or "")
-        action = str(row.get("action") or LEGACY_ACTION)
-        if action == ACTION_TAKE and site in holder:
-            recent.append(expiry_row(holder[site], str(row.get("occurred_at") or "")))
-            total += 1
-        recent.append(row)
-        total += 1
-        if action in OPENING_ACTIONS:
-            holder[site] = row
-        else:
-            holder.pop(site, None)
+        site = str(row.get("site_id") or "")  # Read the site that this record names.
+        action = str(row.get("action") or LEGACY_ACTION)  # A record before issue #2221 holds no action.
+        if action == ACTION_TAKE and site in holder:  # A take over an open hold means the hold expired.
+            _keep_in_scope(recent, expiry_row(holder[site], str(row.get("occurred_at") or "")), site_id)
+        _keep_in_scope(recent, row, site_id)  # Keep this record when it names the requested site.
+        if action in OPENING_ACTIONS:  # A take and a takeover both open a hold.
+            holder[site] = row  # Track the open hold, for every site, so the inference stays correct.
+        else:  # A release and an expiry both close the hold.
+            holder.pop(site, None)  # Drop the open hold, for every site, so the inference stays correct.
 
     shaped = [audit_row(row) for row in reversed(recent)]  # The page reads the newest action first.
-    logger.debug("audit: the trail answered %s row(s)", total)
+    logger.debug("audit: the trail answered %s row(s) for site %s", len(shaped), site_id or "every site")
     return shaped
 
 
-def read_audit_rows(limit: int = DEFAULT_AUDIT_LIMIT, path: Any = None) -> list[dict[str, Any]]:
+def read_audit_rows(limit: int = DEFAULT_AUDIT_LIMIT, path: Any = None, site_id: str = "") -> list[dict[str, Any]]:
     """Return one page of the audit log, newest first.
 
     Args:
         limit: The largest count of rows to answer.
         path: The trail file, or None for the real one.
+        site_id: The site to narrow to. An empty value reads every site.
 
     Returns:
         One shaped row for each action, newest first.
     """
-    logger.info("audit: the portal reads the site lock trail")  # Before the read.
+    logger.info("audit: the portal reads the site lock trail for %s", site_id or "every site")  # Before the read.
     if isinstance(limit, int) and limit > 0:
-        return _read_limited_audit_rows(limit, path)
+        return _read_limited_audit_rows(limit, path, site_id)
 
     rows = mark_expiries(list(read_trail_lines(path)))  # Oldest first, so each hold closes in order.
-    shaped = [audit_row(row) for row in reversed(rows)]  # The page reads the newest action first.
-    logger.debug("audit: the trail answered %s row(s)", len(shaped))
+    scoped = [row for row in rows if _row_in_scope(row, site_id)]  # Narrow after the inference, never before.
+    shaped = [audit_row(row) for row in reversed(scoped)]  # The page reads the newest action first.
+    logger.debug("audit: the trail answered %s row(s) for site %s", len(shaped), site_id or "every site")
     return shaped[:limit]
