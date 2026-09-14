@@ -45,6 +45,7 @@ Why:
 from __future__ import annotations
 
 import logging
+import math  # WHY: A scheduled reboot can end between two poll ticks.
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -62,6 +63,12 @@ logger = logging.getLogger(__name__)
 # gate.POLL_INTERVAL_SECONDS, so the round count of a phase that reaches the
 # limit holds the pair of poll streams at gate.MAX_CALLS_PER_HOUR exactly.
 PHASE_DEADLINE_SECONDS: Final[int] = 1800
+
+# WHY: Only wired infrastructure phases use the delayed reboot option today.
+SCHEDULED_REBOOT_TYPES: Final[frozenset[str]] = frozenset({"gateway", "switch"})
+
+# WHY: Mist reports this token only after the firmware job completed.
+FWUPDATE_SUCCESS: Final[str] = "success"
 
 # WHY: One event read and one statistics read. A reader who adds a third call
 # to the round breaks the budget, and this constant makes a test say so.
@@ -371,8 +378,10 @@ class _PhaseWatch:
     phase: str
     targets: tuple[gate.GateTarget, ...]
     deadline: float
+    round_limit: int
     progress: dict[str, gate.GateProgress]
     failures: dict[str, str] = field(default_factory=dict)
+    last_readings: dict[str, gate.GateReading] = field(default_factory=dict)
 
     @property
     def family(self) -> str:
@@ -526,8 +535,67 @@ def _build_target(entry: Mapping[str, Any]) -> gate.GateTarget | None:
         device_type=str(entry.get("device_type", "")).strip().lower(),
         version_before=str(entry.get("version_before", "")),
         uptime_before=_uptime_before(mac, entry.get("uptime_before")),
+        version_target=str(entry.get("version_target", "")),  # WHY: Reconciliation must prove the requested version.
+        reboot_at=_read_reboot_at(entry.get("reboot_at")),  # WHY: Future reboots move the phase deadline.
         last_seen_before=gate.reading_last_seen(entry.get("last_seen_before")),  # The absolute anchor.
     )
+
+
+def _read_reboot_at(value: Any) -> float | None:
+    """Return one scheduled reboot time as epoch seconds.
+
+    Args:
+        value: The raw ``reboot_at`` value from the run record.
+
+    Returns:
+        The epoch seconds, or None when the value is absent or unreadable.
+    """
+    try:
+        when = float(value)  # WHY: The options layer stores epoch seconds as a number.
+    except (TypeError, ValueError):
+        return None  # WHY: An unreadable schedule must not extend a production wait.
+    return when if when > 0 else None  # WHY: Zero and negative sentinels are not future schedules.
+
+
+def _scheduled_deadline(now: float, entries: Sequence[gate.GateTarget], deadline_seconds: int) -> float:
+    """Return the deadline that honors a future scheduled reboot.
+
+    Args:
+        now: The current epoch seconds.
+        entries: The gate targets of one phase.
+        deadline_seconds: The settle window after the controlling moment.
+
+    Returns:
+        The deadline in epoch seconds.
+    """
+    base = now + float(deadline_seconds)  # WHY: Unscheduled runs keep the documented thirty-minute window.
+    schedules = [
+        target.reboot_at for target in entries if target.device_type in SCHEDULED_REBOOT_TYPES
+    ]  # WHY: APs do not use this option.
+    future = [
+        moment for moment in schedules if moment is not None and moment > now
+    ]  # WHY: Past schedules must not add delay.
+    if not future:
+        return base  # WHY: No future reboot means the legacy deadline is correct.
+    scheduled = max(future) + float(deadline_seconds)  # WHY: The slowest scheduled device controls the phase.
+    logger.info("Upgrade phase gate honors a scheduled reboot until %s", scheduled)
+    result = max(base, scheduled)  # WHY: The wait must never shrink below the normal settle window.
+    logger.debug("Upgrade phase gate chose deadline %s from base %s and schedule %s", result, base, scheduled)
+    return result
+
+
+def _round_limit(now: float, deadline: float) -> int:
+    """Return the number of poll rounds that can reach one deadline.
+
+    Args:
+        now: The current epoch seconds.
+        deadline: The deadline in epoch seconds.
+
+    Returns:
+        The number of rounds to run.
+    """
+    seconds = max(deadline - now, float(gate.POLL_INTERVAL_SECONDS))  # WHY: Each non-empty phase gets one look.
+    return max(1, math.ceil(seconds / float(gate.POLL_INTERVAL_SECONDS)))  # WHY: A partial tick still needs a poll.
 
 
 def build_targets(targets: Sequence[Mapping[str, Any]]) -> tuple[gate.GateTarget, ...]:
@@ -637,8 +705,11 @@ class PhaseSettleGate:
         """
         family = phase_family(entries)
         logger.info("Run %s waits for %s %s device(s) of phase %s", run_id, len(entries), family, phase)
-        deadline = self._deps.settle_gate.now() + float(self._deadline_seconds)
-        return _PhaseWatch(run_id, phase, entries, deadline, {target.mac: gate.GateProgress() for target in entries})
+        now = self._deps.settle_gate.now()  # WHY: One clock anchors both the deadline and the round limit.
+        deadline = _scheduled_deadline(now, entries, self._deadline_seconds)  # WHY: Delayed reboots move the window.
+        limit = _round_limit(now, deadline)  # WHY: A clock that stops must still end the loop.
+        progress = {target.mac: gate.GateProgress() for target in entries}  # WHY: Each device starts with no signal.
+        return _PhaseWatch(run_id, phase, entries, deadline, limit, progress)
 
     def _wait(self, watch: _PhaseWatch) -> PhaseOutcome:
         """Poll until the phase settles or the wait reaches its limit.
@@ -661,7 +732,7 @@ class PhaseSettleGate:
             The outcome of the phase.
         """
         note = ""
-        for _ in range(self._ceiling):
+        for _ in range(watch.round_limit):
             if self._deps.stop_requested(watch.run_id):
                 logger.info("Run %s phase %s stopped waiting after an operator request", watch.run_id, watch.phase)
                 return PhaseOutcome(
@@ -708,6 +779,8 @@ class PhaseSettleGate:
         reconnected, event_note = self._read_reconnects(watch.family)
         self._apply_event_failures(watch)
         readings, statistics_note = self._read_statistics()
+        watch.last_readings.clear()  # WHY: Reconciliation may use only the most recent cloud truth.
+        watch.last_readings.update(readings)  # WHY: The failure decision follows this read.
         for target in watch.targets:
             if target.mac in watch.failures:
                 continue
@@ -849,6 +922,13 @@ class PhaseSettleGate:
                 if gate.is_settled(progress) and mac not in watch.failures
             )
         )
+        settled_details = tuple(  # WHY: The driver must write the proof timestamps onto each target.
+            sorted(
+                (mac, progress.version_after, progress.reboot_at, progress.settled_at)
+                for mac, progress in watch.progress.items()
+                if gate.is_settled(progress) and mac not in watch.failures
+            )
+        )
         failure_note = " ".join(f"{mac}: {reason}" for mac, reason in failures)
         detail = " ".join(part for part in (failure_note, note) if part)
         return PhaseOutcome(
@@ -860,6 +940,7 @@ class PhaseSettleGate:
             detail,
             failures,
             settled_targets,
+            settled_details,
         )
 
     def _timeout(self, watch: _PhaseWatch, note: str = "") -> PhaseOutcome:
@@ -879,7 +960,10 @@ class PhaseSettleGate:
         Returns:
             The outcome of the phase.
         """
+        self._reconcile_successes(watch)  # WHY: A timeout alone must never become a false failure.
         missing = tuple(sorted((*watch.missing, *watch.failures)))
+        if not missing:
+            return self._outcome(watch, PhaseState.SETTLED, note=note)  # WHY: Cloud evidence proved every device.
         logger.warning(
             "Run %s phase %s stopped waiting at its limit with %s device(s) still out: %s",
             watch.run_id,
@@ -888,6 +972,46 @@ class PhaseSettleGate:
             ", ".join(missing),
         )
         return self._outcome(watch, PhaseState.FAILED, missing, note)  # FR-047: the driver marks each named device
+
+    def _reconcile_successes(self, watch: _PhaseWatch) -> None:
+        """Accept devices that the cloud proves successful before failure.
+
+        Args:
+            watch: The moving state of the wait.
+        """
+        logger.info(
+            "Run %s phase %s reconciles timed-out devices with cloud firmware status", watch.run_id, watch.phase
+        )
+        changed = 0  # WHY: The debug line must summarize the safe repair.
+        for target in watch.targets:
+            reading = watch.last_readings.get(target.mac)  # WHY: Only the latest cloud read can prove the result.
+            if not self._cloud_proves_success(target, reading):
+                continue  # WHY: Missing or negative evidence keeps the device in the failure path.
+            watch.progress[target.mac] = gate.GateProgress(  # WHY: The driver records success from this progress.
+                reconnected=True,
+                reboot_at=self._deps.settle_gate.now(),
+                settled_at=self._deps.settle_gate.now(),
+                version_after=reading.version if reading is not None else None,
+            )
+            changed += 1  # WHY: The summary reports how many false failures were avoided.
+        logger.debug("Run %s phase %s reconciled %s timed-out device(s)", watch.run_id, watch.phase, changed)
+
+    @staticmethod
+    def _cloud_proves_success(target: gate.GateTarget, reading: gate.GateReading | None) -> bool:
+        """Report whether one cloud reading proves firmware success.
+
+        Args:
+            target: The device and requested firmware from the run record.
+            reading: The latest cloud firmware status for that device.
+
+        Returns:
+            True only when the firmware job succeeded and the version matches.
+        """
+        if reading is None:
+            return False  # WHY: Absence is not positive cloud evidence.
+        if reading.fwupdate_status != FWUPDATE_SUCCESS:
+            return False  # WHY: Any non-success token can still be a real failure.
+        return gate.version_matches(target.version_target, reading.version)  # WHY: Success needs the requested version.
 
 
 def as_phase_gate(adapter: PhaseSettleGate) -> PhaseGate:
@@ -914,6 +1038,8 @@ __all__ = [
     "NOTE_STATISTICS_PARTIAL",
     "NOTE_STATISTICS_READ_FAILED",
     "PHASE_DEADLINE_SECONDS",
+    "FWUPDATE_SUCCESS",
+    "SCHEDULED_REBOOT_TYPES",
     "CloudReconnectReader",
     "CloudStatisticsReader",
     "DeviceGate",

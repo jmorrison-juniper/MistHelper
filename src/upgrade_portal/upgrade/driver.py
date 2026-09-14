@@ -307,6 +307,7 @@ class PhaseOutcome:
         failures: Each device address and the failure reason reported by the
             Mist device event log.
         settled_targets: Each successful device address and its reported version.
+        settled_details: Each successful device and its version, reboot time, and settle time.
     """
 
     name: str
@@ -317,6 +318,7 @@ class PhaseOutcome:
     note: str = ""  # Empty by default, so a phase that never met a fault names no cause
     failures: tuple[tuple[str, str], ...] = ()
     settled_targets: tuple[tuple[str, str | None], ...] = ()
+    settled_details: tuple[tuple[str, str | None, float | None, float | None], ...] = field(default=(), compare=False)
 
 
 class PhaseGate(Protocol):
@@ -1013,7 +1015,45 @@ def phase_targets(record: Mapping[str, Any], phase: str) -> tuple[Mapping[str, A
     if wanted is None:
         return ()
     entries = record.get("targets", [])
-    return tuple(entry for entry in entries if str(entry.get("device_type", "")) == wanted)
+    matched = tuple(
+        entry for entry in entries if str(entry.get("device_type", "")) == wanted
+    )  # WHY: One phase holds one family.
+    return _copy_phase_reboot(record, matched)  # WHY: The gate needs the scheduled reboot stored with run options.
+
+
+def _copy_phase_reboot(
+    record: Mapping[str, Any],
+    entries: Sequence[Mapping[str, Any]],
+) -> tuple[Mapping[str, Any], ...]:
+    """Copy the run reboot schedule onto phase targets.
+
+    Args:
+        record: The run record that carries the upgrade options.
+        entries: The target entries of one phase.
+
+    Returns:
+        The target entries with the delayed reboot time attached.
+    """
+    options = record.get("options", {})  # WHY: The run stores reboot settings outside target rows.
+    if not isinstance(options, Mapping) or not options.get("reboot"):
+        return tuple(entries)  # WHY: A disabled reboot must not extend a wait.
+    reboot_at = options.get("reboot_at")  # WHY: The phase gate reads the schedule from each target.
+    return tuple(_copy_target_reboot(entry, reboot_at) for entry in entries)  # WHY: The run record stays unchanged.
+
+
+def _copy_target_reboot(entry: Mapping[str, Any], reboot_at: Any) -> Mapping[str, Any]:
+    """Return one target with a delayed reboot time.
+
+    Args:
+        entry: One target entry from the run record.
+        reboot_at: The delayed reboot epoch seconds from the run options.
+
+    Returns:
+        A copy of the target with ``reboot_at`` when it was absent.
+    """
+    copied = dict(entry)  # WHY: The phase gate may read this value, but the store owns the source row.
+    copied.setdefault("reboot_at", reboot_at)  # WHY: A target-specific value should keep priority.
+    return copied
 
 
 def _phase_count(entry: Mapping[str, Any], key: str) -> int:
@@ -1097,6 +1137,20 @@ def mark_not_returned(record: MutableMapping[str, Any], addresses: Sequence[str]
             target["state"] = TARGET_STATE_NOT_RETURNED  # FR-047: this device did not come back
             marked += 1  # One more device the operator must chase by hand
     return marked
+
+
+def _epoch_text(value: float | None) -> str | None:
+    """Return an epoch second value as UTC ISO text.
+
+    Args:
+        value: The epoch seconds, or None when the gate reported no moment.
+
+    Returns:
+        The UTC ISO text, or None when no moment was available.
+    """
+    if value is None:
+        return None  # WHY: Missing proof must stay missing in the run record.
+    return datetime.fromtimestamp(value, tz=UTC).isoformat()  # WHY: Target times use the same format as phase times.
 
 
 def client_gate_open(phases: Sequence[Mapping[str, Any]]) -> bool:
@@ -1542,6 +1596,7 @@ class RunDriver:
     def _record_settled(record: MutableMapping[str, Any], outcome: PhaseOutcome) -> None:
         """Store each successful device result for later failed-only retries."""
         settled = dict(outcome.settled_targets)
+        details = {item[0]: item[1:] for item in outcome.settled_details}  # WHY: New gates can report exact moments.
         for target in record.get("targets", []):
             mac = str(target.get("mac", "")).strip().lower()
             if mac not in settled:
@@ -1549,6 +1604,10 @@ class RunDriver:
             target["state"] = PhaseState.SETTLED.value
             if settled[mac] is not None:
                 target["version_after"] = settled[mac]
+            if mac in details:
+                _version, reboot_at, settled_at = details[mac]  # WHY: The tuple order stays local to this method.
+                target["reboot_seen_at"] = _epoch_text(reboot_at)  # WHY: The history page reads ISO text.
+                target["settled_at"] = _epoch_text(settled_at)  # WHY: A repaired success must carry its proof time.
 
     def _record_missing(self, record: MutableMapping[str, Any], outcome: PhaseOutcome) -> None:
         """Mark the devices of one phase that never came back.
