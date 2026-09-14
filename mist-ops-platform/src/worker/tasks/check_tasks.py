@@ -62,7 +62,12 @@ def _execute_pre_checks(
     service = PreCheckService(db, mist)  # WHY: the service owns the safety logic.
     results = service.run_all(org_id, target_ids, check_defs)  # WHY: pass the gates.
 
-    all_passed = all(result.passed for result in results)  # WHY: one failed check stops.
+    if not target_ids:  # WHY: a scheduled safety gate with no target devices is unsafe.
+        logger.warning("Pre-check job %s has zero targets", job_id)  # WHY: alert operators.
+    check_count = len(results)  # WHY: a bare all call would pass an empty result list.
+    all_passed = check_count > 0 and all(
+        getattr(result, "passed", False) for result in results
+    )  # WHY: one failed, missing, or absent check stops the deployment.
     checkpoint_data = [_checkpoint_payload(r) for r in results]  # WHY: store one shape.
 
     _save_checkpoints(db, job_id, "pre_check", checkpoint_data)  # WHY: persist evidence.
@@ -88,7 +93,12 @@ def _execute_post_checks(
     service = PostCheckService(db, mist)  # WHY: the service owns the health logic.
     results = service.run_all(org_id, target_ids)  # WHY: run all post-checks.
 
-    all_passed = all(result.passed for result in results)  # WHY: one failed check stops.
+    if not target_ids:  # WHY: a job with no target devices cannot prove post-check health.
+        logger.warning("Post-check job %s has zero targets", job_id)  # WHY: alert operators.
+    check_count = len(results)  # WHY: a bare all call would pass an empty result list.
+    all_passed = check_count > 0 and all(
+        getattr(result, "passed", False) for result in results
+    )  # WHY: one failed, missing, or absent check stops a pass report.
     checkpoint_data = [_checkpoint_payload(r) for r in results]  # WHY: store one shape.
 
     _save_checkpoints(db, job_id, "post_check", checkpoint_data)  # WHY: persist evidence.
