@@ -377,7 +377,7 @@ jobs:
           issue_reopened_after_merge() {
             issue="$1"
             merged_at="$2"
-            # Read the issue timeline, because the state alone hides the reopen.
+            # Read each issue timeline page, because the state alone hides the reopen.
             if ! reopened="$(gh api \
               -H "Accept: application/vnd.github+json" \
               --paginate \
