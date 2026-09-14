@@ -374,6 +374,27 @@ def rebooted_readings(*macs: str) -> dict[str, gate.GateReading]:
     return {mac: gate.GateReading(mac=mac, version=VERSION_AFTER, uptime=UPTIME_AFTER_FAST_REBOOT) for mac in macs}
 
 
+def successful_firmware_readings(*macs: str, version: str = VERSION_AFTER) -> dict[str, gate.GateReading]:
+    """Build readings that prove a cloud firmware success.
+
+    Args:
+        macs: The addresses that the cloud reports as successful.
+        version: The firmware version that the device reports.
+
+    Returns:
+        One reading for each address.
+    """
+    return {  # WHY: Reconciliation needs status and version evidence together.
+        mac: gate.GateReading(
+            mac=mac,
+            version=version,
+            uptime=UPTIME_BEFORE,
+            fwupdate_status=phase_gate.FWUPDATE_SUCCESS,
+        )
+        for mac in macs
+    }
+
+
 def switch_harness(**kwargs: Any) -> Harness:
     """Build a harness whose one switch reconnects from the first round.
 
@@ -482,6 +503,38 @@ def test_a_phase_that_hits_the_deadline_names_each_device_that_stayed_out() -> N
     outcome = harness.adapter.settle(RUN_ID, "switches", targets)
     assert outcome.not_returned == (SECOND_SWITCH_MAC,)
     assert harness.clock() == START_TIME + float(phase_gate.PHASE_DEADLINE_SECONDS)
+
+
+def test_a_future_reboot_time_extends_the_gateway_deadline() -> None:
+    """A gateway with a future reboot schedule cannot fail before that time."""
+    reboot_at = START_TIME + float(phase_gate.PHASE_DEADLINE_SECONDS * 2)  # WHY: The schedule sits after the old limit.
+    target = target_entry(SWITCH_MAC, "gateway")  # WHY: Gateways use the delayed reboot option.
+    target["reboot_at"] = reboot_at  # WHY: The run record stores the schedule on the target.
+    harness = Harness(FakeReconnectReader(), FakeStatisticsReader())  # WHY: No cloud signal arrives in this case.
+    outcome = harness.adapter.settle(RUN_ID, "gateways", [target])  # WHY: The phase must wait to the moved limit.
+    assert outcome.state == PhaseState.FAILED.value  # WHY: The test proves delay, not false success.
+    assert harness.clock() == reboot_at + float(phase_gate.PHASE_DEADLINE_SECONDS)  # WHY: Failure waited past reboot.
+
+
+def test_a_timeout_success_status_records_settled_outcome() -> None:
+    """A timed-out device succeeds only with cloud success and target version."""
+    statistics = FakeStatisticsReader(successful_firmware_readings(SWITCH_MAC))  # WHY: This is positive cloud evidence.
+    harness = Harness(FakeReconnectReader(), statistics)  # WHY: The reconnect event never arrives.
+    outcome = harness.adapter.settle(RUN_ID, "switches", [target_entry(SWITCH_MAC)])  # WHY: Reconcile runs at timeout.
+    assert outcome.state == PhaseState.SETTLED.value  # WHY: Cloud success with target version prevents a false failure.
+    assert outcome.not_returned == ()  # WHY: The device must not be marked as failed.
+    assert outcome.settled_targets == ((SWITCH_MAC, VERSION_AFTER),)  # WHY: The driver needs the reported version.
+    assert outcome.settled_details[0][2] == START_TIME + float(phase_gate.PHASE_DEADLINE_SECONDS)  # WHY: Time is known.
+
+
+def test_a_timeout_without_success_status_still_records_failure() -> None:
+    """A timed-out device still fails without a cloud success status."""
+    reading = gate.GateReading(SWITCH_MAC, VERSION_AFTER, UPTIME_BEFORE, fwupdate_status="failed")  # WHY: Not success.
+    statistics = FakeStatisticsReader({SWITCH_MAC: reading})  # WHY: The cloud answers with negative evidence.
+    harness = Harness(FakeReconnectReader(), statistics)  # WHY: The device never meets normal settle signals.
+    outcome = harness.adapter.settle(RUN_ID, "switches", [target_entry(SWITCH_MAC)])  # WHY: Timeout must stay strict.
+    assert outcome.state == PhaseState.FAILED.value  # WHY: A false success is worse than a false failure.
+    assert outcome.not_returned == (SWITCH_MAC,)  # WHY: The driver must mark the missing device.
 
 
 def test_an_empty_phase_settles_at_once() -> None:
