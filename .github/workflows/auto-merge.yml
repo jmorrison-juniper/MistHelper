@@ -321,13 +321,14 @@ jobs:
 
   close-linked-issues:
     name: "Close the linked issues"
-    # Run only after a real merge, because a rejected pull request must close
-    # nothing. The event_name test stops the schedule run, which carries no
-    # pull request.
+    # Two paths reach this job. A closed pull request repairs a human merge in
+    # seconds. A schedule repairs a merge that GITHUB_TOKEN made, because
+    # GitHub starts no closed-event run from that merge.
     if: >-
-      github.event_name == 'pull_request'
-      && github.event.action == 'closed'
-      && github.event.pull_request.merged == true
+      github.event_name != 'push'
+      && (github.event_name != 'pull_request'
+      || (github.event.action == 'closed'
+      && github.event.pull_request.merged == true))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -343,46 +344,97 @@ jobs:
           # The gh CLI reads the token and the repository from the environment.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
         run: |
           set -euo pipefail
 
-          # Read the issues that GitHub parsed from the closing keyword in the body.
-          linked=$(gh pr view "$PR_NUMBER" \
-            --json closingIssuesReferences \
-            --jq '.closingIssuesReferences[].number')
+          if [ -n "${PR_NUMBER}" ]; then
+            echo "Reading linked issues for pull request ${PR_NUMBER}."
+            linked=$(gh pr view "${PR_NUMBER}" \
+              --json number,mergedAt,closingIssuesReferences \
+              --jq '. as $pr | .closingIssuesReferences[]? | "\($pr.number)\t\($pr.mergedAt)\t\(.number)"')
+          else
+            echo "Reading linked issues for recently merged pull requests."
+            linked=$(gh pr list \
+              --state merged \
+              --base main \
+              --limit 50 \
+              --json number,mergedAt,closingIssuesReferences \
+              --jq '.[] | . as $pr | .closingIssuesReferences[]? | "\($pr.number)\t\($pr.mergedAt)\t\(.number)"')
+          fi
 
           # An empty list is normal, because a pull request may close no issue.
-          if [ -z "$linked" ]; then
-            echo "Pull request $PR_NUMBER links no issue. Nothing to close."
+          if [ -z "${linked}" ]; then
+            echo "No merged pull request links an issue. Nothing to close."
             exit 0
           fi
 
           # Track a failure so one bad issue does not hide the rest of the work.
           failed=0
 
-          for issue in $linked; do
-            # Read the state first, because a second close call reports an error.
-            state=$(gh issue view "$issue" --json state --jq '.state')
+          # A person can reopen an issue when the merged repair is incomplete.
+          # The schedule must not reverse that decision.
+          issue_reopened_after_merge() {
+            issue="$1"
+            merged_at="$2"
+            # Read the issue timeline, because the state alone hides the reopen.
+            if ! reopened="$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              --paginate \
+              "repos/${GH_REPO}/issues/${issue}/timeline?per_page=100" \
+              --jq '.[] | select(.event == "reopened" and .created_at > "'"${merged_at}"'" and .actor.type == "User") | .created_at' \
+              | tail -n 1)"; then
+              echo "::error::The timeline of issue ${issue} did not load."
+              return 2
+            fi
+            # A non-empty result means a person reopened the issue after merge.
+            [ -n "${reopened}" ]
+          }
 
-            if [ "$state" = "CLOSED" ]; then
-              echo "Issue $issue is already closed. Skipping."
+          while IFS=$'\t' read -r pull_request merged_at issue; do
+            if [ -z "${pull_request}" ] || [ -z "${merged_at}" ] || [ -z "${issue}" ]; then
               continue
             fi
 
-            echo "Closing issue $issue for merged pull request $PR_NUMBER."
+            # Read the state first, because a second close call reports an error.
+            state=$(gh issue view "${issue}" --json state --jq '.state')
+
+            if [ "${state}" = "CLOSED" ]; then
+              echo "Issue ${issue} is already closed. Skipping."
+              continue
+            fi
+
+            # Disable exit-on-error for this call, because a reopen is not a fault.
+            set +e
+            issue_reopened_after_merge "${issue}" "${merged_at}"
+            reopen_status="$?"
+            set -e
+
+            # Status zero means the maintainer decision must keep the issue open.
+            if [ "${reopen_status}" -eq 0 ]; then
+              echo "Issue ${issue} was reopened after pull request ${pull_request} merged. Skipping."
+              continue
+            fi
+
+            # Status two means the timeline query failed, so no close is safe.
+            if [ "${reopen_status}" -eq 2 ]; then
+              failed=1
+              continue
+            fi
+
+            echo "Closing issue ${issue} for merged pull request ${pull_request}."
 
             # Leave a comment, because the reader needs the reason for the close.
-            if gh issue close "$issue" \
+            if gh issue close "${issue}" \
               --reason completed \
-              --comment "Closed by the merge of pull request #${PR_NUMBER}."; then
-              echo "Closed issue $issue."
+              --comment "Closed by the merge of pull request #${pull_request}."; then
+              echo "Closed issue ${issue}."
             else
               # Report the failure instead of hiding it, so the miss stays visible.
-              echo "::error::Failed to close issue $issue for pull request $PR_NUMBER."
+              echo "::error::Failed to close issue ${issue} for pull request ${pull_request}."
               failed=1
             fi
-          done
+          done <<< "${linked}"
 
           # A non-zero exit makes the missed close visible in the checks list.
-          exit "$failed"
+          exit "${failed}"
