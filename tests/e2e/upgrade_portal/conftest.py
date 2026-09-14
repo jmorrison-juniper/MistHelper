@@ -167,6 +167,10 @@ SESSION_COOKIE_NAME = "session"  # Flask's default name. `factory.create_app` se
 # WHY: `identity.SessionOwner` checks both halves of the pair. The address is
 # already in its normalized form, and the reserved `.invalid` domain can reach
 # no mail host. The browser identifier holds 22 characters of the allowed set.
+# Caution: issue #2615 refuses a firmware write from this reserved domain, so a
+# browser test cannot complete an upgrade start. Issue #2623 records that gap.
+# A reachable address here makes the whole browser suite hang, because the suite
+# cannot finish a real start journey.
 STAND_IN_EMAIL = "e2e.operator@example.invalid"  # Lower case, so `normalize_email` leaves it unchanged.
 STAND_IN_BROWSER_ID = "e2eBrowserIdentity0001"  # Matches the browser cookie pattern that identity fixes.
 BROWSER_TOKEN_VALUE = "fake-browser-token-for-playwright-only"  # The browser submits this obvious stand-in only.
@@ -182,6 +186,7 @@ SECOND_BROWSER_ID = "e2eBrowserIdentity0002"  # A second browser, so the pair di
 RENEWED_BROWSER_ID = "e2eBrowserIdentity0003"  # A renewed session keeps the actor and changes the browser.
 FIRMWARE_EMAIL = "e2e.operator@juniper.net"  # A reachable stand-in lets firmware-write browser tests pass the gate.
 FIRMWARE_BROWSER_ID = "e2eBrowserIdentity0004"  # A separate browser identity keeps lock ownership unambiguous.
+
 
 # WHY: The organization picker reads the privilege list of the cloud session,
 # and the site picker reads two cloud lists. Fixed records fill all three, so a
@@ -1722,6 +1727,12 @@ def build_stand_in_app() -> Any:  # Build one fully isolated browser test applic
     overrides = _build_factory_overrides()  # Build every required process-owned dependency before routes.
     built = create_app(overrides)  # Validate and install overrides before blueprint registration.
     from src.upgrade_portal.app.routes import org_upgrade
+    from src.upgrade_portal.app.routes import upgrade as upgrade_routes
+
+    # WHY: Issue #2615 reads the Mist account before a firmware write. The
+    # browser suite must open no socket at all, so this seam answers a fixed
+    # label. Without it the route would call the real software development kit.
+    built.config[upgrade_routes.SELF_READER_KEY] = lambda _session: {"email": STAND_IN_EMAIL}
 
     built.config[org_upgrade.SERVICE_CONFIG_KEY] = E2EOrgUpgradeService
     built.config[org_upgrade.OPTIONS_VIEW_CONFIG_KEY] = stand_in_options_view
