@@ -575,6 +575,50 @@ class TestLostLock:
         assert parts["beat"].stopped is True
 
 
+class TestBoundedHeartbeat:
+    """A driver heartbeat cannot renew one site lock without a limit."""
+
+    def test_an_empty_run_lock_does_not_reach_the_lock_store(self) -> None:
+        """A lock with no run has no live upgrade for the driver to protect."""
+        ticker = FakeTicker()  # The test controls time without a sleep.
+        refresher = RecordingRefresher(ticker)  # The call count proves whether a renewal left the driver.
+        empty_lock = lock.LockRecord(  # The issue record held an empty run identifier.
+            owner=SessionOwner(actor_email=ACTOR_EMAIL, browser_id=BROWSER_ID),  # The owner shape stays valid.
+            lock_token=LOCK_TOKEN,  # A token would be valid if a run existed.
+            run_id="",  # The driver must treat this as no live run.
+            acquired_at="2026-08-19T11:00:00+00:00",  # The first hold time is not enough to name a run.
+            refreshed_at="2026-08-19T11:00:00+00:00",  # The last beat time is not enough to name a run.
+        )
+        plan = driver.LockHeartbeatPlan(  # The plan uses the same shape as production.
+            key=lock.build_key("org-1", "site-1"),  # The key identifies the site under test.
+            record=empty_lock,  # The no-run lock is the defect shape.
+            refresh=refresher,  # The double records a forbidden renewal.
+            ticker=ticker,  # The fake clock triggers the beat.
+        )
+        beat = driver.LockHeartbeat(plan)  # The heartbeat under test owns the no-run guard.
+        ticker.advance(float(lock.HEARTBEAT_SECONDS))  # The first beat is now due.
+        assert beat.beat() is False  # The heartbeat stops instead of renewing a no-run lock.
+        assert refresher.times == []  # No renewal reached the lock store.
+
+    def test_the_heartbeat_stops_after_the_configured_bound(self) -> None:
+        """The driver must not push `refreshed_at` forward without a bound."""
+        ticker = FakeTicker()  # The test moves past the bound at no cost.
+        refresher = RecordingRefresher(ticker)  # A later call would show an over-bound renewal.
+        plan = driver.LockHeartbeatPlan(  # The plan carries the measurable renewal limit.
+            key=lock.build_key("org-1", "site-1"),  # The key matches the run site.
+            record=make_lock(),  # A real run may renew until the bound.
+            refresh=refresher,  # The double records each accepted renewal.
+            ticker=ticker,  # The fake clock supplies the elapsed age.
+            max_age_seconds=120,  # A small limit keeps the test focused.
+        )
+        beat = driver.LockHeartbeat(plan)  # The heartbeat starts its age counter now.
+        ticker.advance(float(lock.HEARTBEAT_SECONDS))  # The first renewal remains inside the bound.
+        assert beat.beat() is True  # A real run still keeps the lock while it is inside the bound.
+        ticker.advance(float(lock.HEARTBEAT_SECONDS))  # The next due beat lands on the configured limit.
+        assert beat.beat() is False  # The heartbeat stops at the bound.
+        assert refresher.times == [float(lock.HEARTBEAT_SECONDS)]  # Only the in-bound renewal reached the store.
+
+
 class TestALostLockIsNeverAFailedRun:
     """A lost lock reports a lost lock, and it never reports a failed upgrade.
 
