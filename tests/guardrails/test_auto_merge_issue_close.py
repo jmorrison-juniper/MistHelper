@@ -160,6 +160,9 @@ class TestCloseLinkedIssuesJob:
         # The timeline has the reopen event that protects a maintainer decision.
         assert "timeline?per_page=100" in script, "The job must read the issue timeline."
 
+        # Busy issues can put a recent reopen on a later page.
+        assert "--paginate" in script, "The timeline call must read every page."
+
         # The event type names the exact decision that the schedule must honor.
         assert '.event == "reopened"' in script, "The job must read a reopen event."
 
