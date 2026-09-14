@@ -1181,6 +1181,16 @@ def target_states(record: dict[str, Any]) -> dict[str, Any]:
     return {str(item["mac"]): item.get("state") for item in record["targets"]}
 
 
+def test_phase_targets_copy_the_run_reboot_schedule() -> None:
+    """The settle gate receives the delayed reboot from run options."""
+    record = make_record(
+        [{"mac": "aa0000000001", "device_type": "gateway", "name": "gw1"}]
+    )  # WHY: One gateway is enough.
+    record["options"] = {"reboot": True, "reboot_at": 1789291623}  # WHY: The incident stored the schedule here.
+    targets = driver.phase_targets(record, "gateways")  # WHY: The driver adapts run records for the phase gate.
+    assert targets[0]["reboot_at"] == 1789291623  # WHY: The gate must not fail before the scheduled reboot.
+
+
 class TestPartlySettledPhase:
     """A phase that lost one device is not a phase that lost every device."""
 
@@ -1254,6 +1264,26 @@ class TestTimeLimitOnOneAccessPoint:
         returned = next(target for target in final["targets"] if target["mac"] == "aa0000000003")
         assert returned["state"] == PhaseState.SETTLED.value
         assert returned["version_after"] == "0.15.34994"
+
+    def test_the_returned_access_point_keeps_success_times(self, timeout_parts: dict[str, Any]) -> None:
+        """The run record preserves version and settle proof times."""
+        outcome = ap_outcome(1, 2, ("aa0000000004",))  # WHY: One access point returns and one stays out.
+        timeout_parts["gate"].outcomes["aps"] = driver.PhaseOutcome(  # WHY: The driver reads details from the gate.
+            outcome.name,
+            outcome.state,
+            outcome.settled,
+            outcome.total,
+            outcome.not_returned,
+            settled_targets=outcome.settled_targets,
+            settled_details=(("aa0000000003", "0.15.34994", 1789291623.0, 1789293423.0),),
+        )
+        final = timeout_parts["driver"].run(make_record(make_two_ap_targets()))  # WHY: The driver writes target fields.
+        returned = next(  # WHY: The exact target row must carry the success proof.
+            target for target in final["targets"] if target["mac"] == "aa0000000003"
+        )
+        assert returned["version_after"] == "0.15.34994"  # WHY: The success version must be durable.
+        assert returned["reboot_seen_at"] == "2026-09-13T09:27:03+00:00"  # WHY: The reboot proof must be durable.
+        assert returned["settled_at"] == "2026-09-13T09:57:03+00:00"  # WHY: The settle proof must be durable.
 
     def test_the_phase_entry_keeps_the_two_counts(self, timeout_parts: dict[str, Any]) -> None:
         """A later reader tells one loss of two from a phase that lost every device.

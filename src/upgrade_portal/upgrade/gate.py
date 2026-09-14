@@ -85,7 +85,9 @@ STATISTICS_TYPE = "all"
 # value therefore holds the four fields that the gate reads, which keeps the
 # answer at its base size and asks for no large extra section. The SDK sends
 # the value as text, so a caller passes text and never a Python list.
-STATISTICS_FIELDS = "mac,version,uptime,last_seen"
+STATISTICS_FIELDS = (
+    "mac,version,uptime,last_seen,fwupdate"  # WHY: Timeout reconciliation needs firmware result evidence.
+)
 
 # One poll of the whole fleet every 20 seconds is 180 calls each hour. The
 # event poll of the run adds a second stream of the same rate, so the pair
@@ -153,6 +155,8 @@ class GateTarget:
         version_before: The firmware version read before the upgrade.
         uptime_before: The uptime in seconds read before the upgrade. None
             when the pre-check read no uptime for this device.
+        version_target: The firmware version that the operator requested.
+        reboot_at: The delayed reboot epoch seconds, when the operator set one.
         last_seen_before: The moment that the cloud last heard from the device
             before the upgrade, in epoch seconds of the cloud. None when the
             pre-check read no moment for this device.
@@ -162,6 +166,8 @@ class GateTarget:
     device_type: str
     version_before: str
     uptime_before: int | None
+    version_target: str = ""  # WHY: Timeout reconciliation must compare against the requested firmware.
+    reboot_at: float | None = None  # WHY: The phase deadline must honor a scheduled reboot.
     last_seen_before: int | None = None
 
 
@@ -184,14 +190,15 @@ class GateReading:
         mac: The device address in lower case with no separator.
         version: The firmware version. Empty when the cloud reported none.
         uptime: The uptime in seconds. None when the cloud reported null.
-        last_seen: The moment that the cloud last heard from the device, in
-            epoch seconds of the cloud. None when the record carried no value.
+        last_seen: The moment the cloud last heard from the device.
+        fwupdate_status: The firmware job status that the cloud reports.
     """
 
     mac: str
     version: str
     uptime: int | None
     last_seen: int | None = None
+    fwupdate_status: str = ""  # WHY: A timed-out device needs positive cloud success evidence.
 
 
 @dataclass(frozen=True, slots=True)
@@ -570,7 +577,16 @@ def reading_from_record(record: Mapping[str, Any]) -> GateReading | None:
     text = "" if version is None else str(version)
     uptime = reading_uptime(record.get("uptime"))  # A null stays a null, because zero would look like a fresh boot.
     last_seen = reading_last_seen(record.get("last_seen"))  # The moment that dates this record on the cloud clock.
-    return GateReading(mac=mac, version=text, uptime=uptime, last_seen=last_seen)  # One reading for the gate rules.
+    fwupdate = record.get("fwupdate")  # WHY: The cloud nests firmware status under the statistics record.
+    status = fwupdate.get("status") if isinstance(fwupdate, Mapping) else ""  # WHY: A missing map is no evidence.
+    status_text = "" if status is None else str(status).strip().lower()  # WHY: Case must not hide a success token.
+    return GateReading(  # WHY: The settle gate and timeout reconciliation share one cloud reading shape.
+        mac=mac,
+        version=text,
+        uptime=uptime,
+        last_seen=last_seen,
+        fwupdate_status=status_text,
+    )
 
 
 def _screen_reading(progress: GateProgress, reading: GateReading | None) -> tuple[GateProgress, GateReading | None]:
