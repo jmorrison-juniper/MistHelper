@@ -5,12 +5,13 @@ merged pull requests in a row left their issue open. A person closed each one
 by hand.
 
 The repair adds a `close-linked-issues` job to `.github/workflows/auto-merge.yml`.
-The job runs after a merge and closes every issue that the pull request links.
+The job runs after a merge and on a schedule. It closes each linked issue.
 
 These tests hold the repair in place. A change that drops the job, drops the
-`closed` trigger, or drops the `issues: write` scope makes a test fail.
+`closed` trigger, drops the schedule path, or drops the issue scope fails.
 """
 
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,19 @@ TRIGGER_KEY = True
 
 # Name the job once, because a rename must fail one test and not many.
 CLOSE_JOB_NAME = "close-linked-issues"
+
+
+def should_close_linked_issue(issue_state: str, merged_at: datetime, reopened_events: tuple[datetime, ...]) -> bool:
+    """Return whether the schedule may close the linked issue."""
+    # A closed issue needs no action, and a second close call reports an error.
+    if issue_state == "CLOSED":
+        return False
+
+    # A person can reopen the issue after the merge when the repair was incomplete.
+    reopened_after_merge = any(reopened_at > merged_at for reopened_at in reopened_events)
+
+    # The schedule must not reverse a reopen that happened after the merge.
+    return not reopened_after_merge
 
 
 @pytest.fixture(scope="module")
@@ -92,7 +106,7 @@ class TestCloseLinkedIssuesJob:
         # A missing job is the exact regression that issue #1926 describes.
         assert CLOSE_JOB_NAME in workflow["jobs"], f"Missing job: {CLOSE_JOB_NAME}"
 
-    def test_close_job_runs_only_after_a_real_merge(self, workflow: dict[str, Any]) -> None:
+    def test_close_job_accepts_only_a_real_pull_request_merge(self, workflow: dict[str, Any]) -> None:
         """The close job must ignore a pull request that a person rejected."""
         # Read the condition, because it is the only guard against a wrong close.
         condition = workflow["jobs"][CLOSE_JOB_NAME]["if"]
@@ -102,6 +116,19 @@ class TestCloseLinkedIssuesJob:
 
         # The condition must also pin the event, because other events carry no merge.
         assert "'closed'" in condition, "The close job must require the closed event."
+
+    def test_close_job_allows_the_schedule_backstop(self, workflow: dict[str, Any]) -> None:
+        """The close job must let a schedule repair a missed close."""
+        # Read the condition, because the schedule path lives only in this text.
+        condition = workflow["jobs"][CLOSE_JOB_NAME]["if"]
+
+        # A push event carries no pull request, so it must not reach the close job.
+        assert "github.event_name != 'push'" in condition, "The close job must reject a push."
+
+        # The backstop cannot work if the condition requires a pull request event.
+        assert (
+            "github.event_name == 'pull_request'" not in condition
+        ), "The close job must not reject the schedule before the script runs."
 
     def test_auto_merge_job_skips_the_closed_event(self, workflow: dict[str, Any]) -> None:
         """The auto-merge job must not run on the `closed` event."""
@@ -118,6 +145,29 @@ class TestCloseLinkedIssuesJob:
 
         # This field holds the issues that the closing keyword named.
         assert "closingIssuesReferences" in script, "The job must read the linked issues."
+
+        # The schedule path reads merged pull requests, because no event carries one.
+        assert "gh pr list" in script, "The schedule path must read merged pull requests."
+
+        # The query must allow no linked issue, because that state is normal.
+        assert "[]?" in script, "The linked issue query must allow an empty list."
+
+    def test_close_job_reads_the_issue_timeline(self, workflow: dict[str, Any]) -> None:
+        """The close job must read the issue timeline before it closes an issue."""
+        # Join the step scripts, because the check reads the shell body as text.
+        script = self._job_script(workflow)
+
+        # The timeline has the reopen event that protects a maintainer decision.
+        assert "timeline?per_page=100" in script, "The job must read the issue timeline."
+
+        # The event type names the exact decision that the schedule must honor.
+        assert '.event == "reopened"' in script, "The job must read a reopen event."
+
+        # The actor filter keeps the automation from reversing a human decision.
+        assert '.actor.type == "User"' in script, "The job must honor a human reopen."
+
+        # The time comparison lets an old reopen still receive the merged fix.
+        assert ".created_at >" in script, "The job must compare the reopen time."
 
     def test_close_job_skips_an_already_closed_issue(self, workflow: dict[str, Any]) -> None:
         """The close job must not call close twice on one issue."""
@@ -154,3 +204,45 @@ class TestCloseLinkedIssuesJob:
 
         # Join the scripts, so a caller can search the whole job body at once.
         return "\n".join(scripts)
+
+
+class TestCloseLinkedIssuesDecisionRule:
+    """Check the rule that protects a reopened issue."""
+
+    def test_open_issue_closes_when_no_reopen_exists(self) -> None:
+        """An open issue can close when no person reopened it after the merge."""
+        # Set the merge time, because the decision compares all reopen times to it.
+        merged_at = datetime(2026, 9, 13, 22, 41, 17, tzinfo=UTC)
+
+        # No reopen event exists, so the schedule can close the issue.
+        assert should_close_linked_issue("OPEN", merged_at, ())
+
+    def test_closed_issue_stays_unchanged(self) -> None:
+        """A closed issue must stay unchanged, because a second close can fail."""
+        # Set the merge time, because the helper needs a complete input.
+        merged_at = datetime(2026, 9, 13, 22, 41, 17, tzinfo=UTC)
+
+        # The issue is already closed, so no further action is correct.
+        assert not should_close_linked_issue("CLOSED", merged_at, ())
+
+    def test_reopen_after_merge_keeps_issue_open(self) -> None:
+        """A person can reopen an issue after the merge and keep it open."""
+        # Set the merge time, because the next reopen must be later.
+        merged_at = datetime(2026, 9, 13, 22, 41, 17, tzinfo=UTC)
+
+        # The reopen happened after the merge, so the schedule must skip it.
+        reopened_at = datetime(2026, 9, 13, 22, 50, 0, tzinfo=UTC)
+
+        # The rule protects the maintainer decision from the schedule.
+        assert not should_close_linked_issue("OPEN", merged_at, (reopened_at,))
+
+    def test_reopen_before_merge_still_allows_close(self) -> None:
+        """An old reopen does not stop the close for the later merge."""
+        # Set the merge time, because an earlier reopen belongs to old work.
+        merged_at = datetime(2026, 9, 13, 22, 41, 17, tzinfo=UTC)
+
+        # The reopen happened before the merge, so the merge can still close the issue.
+        reopened_at = datetime(2026, 9, 13, 22, 30, 0, tzinfo=UTC)
+
+        # The rule lets the schedule close the issue for the later merge.
+        assert should_close_linked_issue("OPEN", merged_at, (reopened_at,))
