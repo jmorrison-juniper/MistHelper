@@ -240,6 +240,77 @@ def test_create_adopts_the_newest_precheck_and_sets_the_field(
     assert run_store.runs[run_id][PRE_CAPTURE_FIELD] == ADOPTED_CAPTURE_ID  # The field names the pre-check.
 
 
+def test_create_takes_the_tier_of_the_adopted_precheck(
+    portal_app: Flask,
+    run_store: RecordingRunStore,
+    registered_owner: identity.SessionOwner,
+) -> None:
+    """Issue #2640: the run takes the tier of the pre-check it adopts.
+
+    Why:
+        The upgrade button sends no tier, so the run took the standard tier of
+        the request body. A run that adopted a tier 3 pre-check then started a
+        tier 2 post-check capture, and the comparison held no radio row and no
+        alarm row. Both captures of one run must read one tier.
+
+    Args:
+        portal_app: The portal application.
+        run_store: The stand-in run record store.
+        registered_owner: The identity pair of the registered operator.
+    """
+
+    class TierAdopter(RecordingAdopter):
+        """Answer the pre-check key beside the tier 3 of that capture."""
+
+        def newest_precheck_tier(self, site_id: str) -> tuple[str, int]:
+            """Return the fixed pre-check key and the tier 3.
+
+            Args:
+                site_id: The site the run belongs to.
+
+            Returns:
+                The fixed pre-check key and the tier of that capture.
+            """
+            logger.info("test adopter reads the pre-check pair of site %s", site_id)  # ASCII, %s style, no secret.
+            return self.capture_id, 3  # The stored capture of this test holds tier 3.
+
+    portal_app.config[RUN_STORE_KEY] = run_store  # No ArangoDB server runs in a contract test.
+    portal_app.config[ADOPTER_KEY] = TierAdopter(ADOPTED_CAPTURE_ID)  # The seam offers the pair reader.
+    portal_app.config[LOCK_READER_KEY] = lambda org_id, site_ids: dict.fromkeys(site_ids)  # No lock is held.
+    portal_app.config["WTF_CSRF_ENABLED"] = False  # A contract test drives the route without a token.
+    with portal_app.test_client() as client:  # The context manager holds the session across requests.
+        client.set_cookie(identity.BROWSER_ID_COOKIE, registered_owner.browser_id)  # Half of the guard.
+        with client.session_transaction() as browser_session:  # The other half of the guard.
+            browser_session[identity.SESSION_OWNER_KEY] = registered_owner.key  # Names the registered owner.
+            browser_session[SELECTED_ORG_SESSION_KEY] = ORG_ID  # The scope of every later read.
+            browser_session[SELECTED_SITE_SESSION_KEY] = SITE_ID  # The site the run belongs to.
+        answer = client.post(CREATE_PATH, json={})  # The browser sends no tier of its own.
+    assert answer.status_code == CREATED_STATUS  # The create call still answers 201.
+    run_id = str(answer.get_json()["run_id"])  # The key the record store now holds.
+    assert run_store.runs[run_id]["tier"] == 3  # The run reads the tier of the adopted capture.
+
+
+def test_create_keeps_the_request_tier_with_an_older_adopter(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+) -> None:
+    """Issue #2640: an adopter with no pair reader leaves the tier alone.
+
+    Why:
+        A bound seam from an older build offers the key reader alone. The route
+        must still create the run, and the run must keep the tier that the
+        request named.
+
+    Args:
+        upgrade_client: The signed-in client.
+        run_store: The stand-in run record store.
+    """
+    answer = upgrade_client.post(CREATE_PATH, json={})  # The stand-in adopter offers no pair reader.
+    assert answer.status_code == CREATED_STATUS  # The create call still answers 201.
+    run_id = str(answer.get_json()["run_id"])  # The key the record store now holds.
+    assert run_store.runs[run_id]["tier"] == 2  # The run keeps the standard tier of the request.
+
+
 def test_create_writes_the_pre_edge_to_the_new_run(
     upgrade_client: FlaskClient,
     run_store: RecordingRunStore,
