@@ -97,6 +97,8 @@ POST_CHECK_ORDINAL = 2  # The second capture of a run. `driver.post_check_reques
 _STORAGE_PREPARED = False
 POST_CHECK_ROLE = "post"  # The role of that second capture.
 DEFAULT_TIER = 2  # The standard data tier, which the run record carries.
+EXTRA_TIER = 3  # The tier that also reads the ports, the radios, and the alarms.
+KNOWN_TIERS = (DEFAULT_TIER, EXTRA_TIER)  # Issue #2640: every tier a stored capture may name.
 SITE_SCAN_LIMIT = 200  # The largest number of runs that one site scan reads back.
 RUN_FAILED_STAGE = "upgrade"  # The stage name that `upgrade/driver.STAGE_UPGRADE` writes for the same step.
 
@@ -321,6 +323,33 @@ class DocumentRunStore:
         return rows or mirrored_site_runs(site_id)  # An empty answer may mean a database with nothing in it.
 
 
+def precheck_tier_number(raw: Any) -> int:
+    """Return one stored capture tier as a whole number.
+
+    Why:
+        Issue #2640. The run takes the tier of the pre-check capture it adopts.
+        A stored row can hold the tier as text after a hand edit, and a damaged
+        row can hold any shape. A capture must still start, so an unusable
+        value reads as the standard tier instead of raising.
+
+        A `True` counts as the number 1 in Python, so the boolean test comes
+        first. Without it a stored `true` would read as an unknown tier.
+
+    Args:
+        raw: The tier field of one stored capture row.
+
+    Returns:
+        The tier when the row names a known tier, or the standard tier.
+    """
+    if isinstance(raw, bool):  # A boolean must never read as the tier number 1.
+        return DEFAULT_TIER  # The standard tier is the safe answer for a damaged row.
+    try:  # A stored row may hold the tier as text.
+        number = int(raw)  # The run record holds a number, so the text form converts here.
+    except (TypeError, ValueError):  # A value of another shape is a defect of the writer, not a fault.
+        return DEFAULT_TIER  # The run then keeps the standard tier.
+    return number if number in KNOWN_TIERS else DEFAULT_TIER  # An unknown number falls back the same way.
+
+
 class StandalonePrecheckAdopter:
     """Read the newest standalone pre-check of a site and link it to a run.
 
@@ -341,15 +370,36 @@ class StandalonePrecheckAdopter:
         Returns:
             The pre-check key, or an empty string when the site holds none.
         """
+        return self.newest_precheck_tier(site_id)[0]  # The pair reader owns the one store call.
+
+    def newest_precheck_tier(self, site_id: str) -> tuple[str, int]:
+        """Return the key and the tier of the newest standalone pre-check.
+
+        Why:
+            Issue #2640. The run took the tier of the request body, and the
+            upgrade button sends no tier. A run that adopted a tier 3 pre-check
+            therefore kept tier 2, and the post-check capture then read no
+            radio row and no alarm row. The comparison could not name a radio
+            that stayed down after a firmware write.
+
+        Args:
+            site_id: The site the new run belongs to.
+
+        Returns:
+            The pre-check key and its tier. The key is an empty string and the
+            tier is the standard tier when the site holds no pre-check.
+        """
         store = load_module(STORE_MODULE)  # Late, so the import of this module opens no socket.
         if store is None:  # The store module is absent, so no site holds a pre-check to adopt.
-            return ""  # The route then creates a run with no adopted pre-check.
+            return "", DEFAULT_TIER  # The route then creates a run with no adopted pre-check.
         try:  # The store sits on a network and may not answer.
             found: Any = store.latest_standalone_precheck(site_id)  # None when the site holds none.
         except Exception as fault:  # A create call must survive an unreachable store.
             logger.warning("wiring: the pre-check read of site %s failed with %s", site_id, type(fault).__name__)
-            return ""  # The run still stands, and the operator saves a pre-check on the run itself.
-        return str(found.get("capture_id", "")) if isinstance(found, Mapping) else ""  # A damaged row reads as none.
+            return "", DEFAULT_TIER  # The run still stands, and the operator saves a pre-check later.
+        if not isinstance(found, Mapping):  # A damaged row reads as no pre-check at all.
+            return "", DEFAULT_TIER  # The run then keeps the tier that the request named.
+        return str(found.get("capture_id", "")), precheck_tier_number(found.get("tier"))
 
     def write_capture_edge(self, run_id: str, capture_id: str, role: str) -> None:
         """Write one edge from a run to its adopted pre-check.

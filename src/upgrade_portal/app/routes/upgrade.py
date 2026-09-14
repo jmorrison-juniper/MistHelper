@@ -947,6 +947,12 @@ def adopt_precheck(record: dict[str, Any], site_id: str) -> str:
         standalone pre-check of the site. The field lands before the save, so
         the stored run names the pre-check at once (FR-103).
 
+        Issue #2640 adds the tier. The upgrade button sends no tier, so the run
+        took the standard tier from the request body. A run that adopted a
+        tier 3 pre-check then started a tier 2 post-check capture, and the
+        comparison held no radio row and no alarm row. The run now takes the
+        tier of the capture it adopts, so both captures hold one section set.
+
     Args:
         record: The new run record, before the save.
         site_id: The site the run belongs to.
@@ -955,10 +961,38 @@ def adopt_precheck(record: dict[str, Any], site_id: str) -> str:
         The adopted capture key, or an empty string when the site holds none.
     """
     adopter = precheck_adopter()  # The seam that reads the newest standalone pre-check.
-    capture_id = str(adopter.newest_precheck(site_id)) if adopter is not None else ""  # "" means no adoption.
+    if adopter is None:  # No wiring means no adoption, and the run keeps the tier of the request.
+        return ""  # The operator saves a pre-check on the run itself.
+    capture_id, tier = read_precheck_pair(adopter, site_id)  # The key and the tier of that capture.
     if capture_id:  # The site holds a standalone pre-check for this run to adopt.
         record[PRE_CAPTURE_FIELD] = capture_id  # The saved run then names the pre-check for the later start.
+        record[TIER_FIELD] = tier  # Issue #2640: both captures of the run then read one tier.
     return capture_id  # The caller writes the edge after the save proves the run.
+
+
+def read_precheck_pair(adopter: Any, site_id: str) -> tuple[str, int]:
+    """Return the key and the tier of the newest standalone pre-check.
+
+    Why:
+        Issue #2640. The adopter seam grew a pair reader, and a test double or
+        an older binding may still offer the key reader alone. This function
+        prefers the pair reader and falls back, so no caller has to know which
+        shape the bound seam carries.
+
+    Args:
+        adopter: The bound pre-check adopter seam.
+        site_id: The site the new run belongs to.
+
+    Returns:
+        The pre-check key and its tier. The tier is the standard tier when the
+        seam offers the key reader alone.
+    """
+    pair_reader = getattr(adopter, "newest_precheck_tier", None)  # The reader that Issue #2640 added.
+    if callable(pair_reader):  # The bound seam knows the tier of the capture.
+        found: Any = pair_reader(site_id)  # A pair of the key and the tier.
+        if isinstance(found, tuple) and len(found) == 2:  # A damaged answer must never unpack wrong.
+            return str(found[0]), int(found[1])  # The route writes both values onto the run record.
+    return str(adopter.newest_precheck(site_id)), TIER_STANDARD  # The older seam names no tier.
 
 
 def link_adopted_precheck(run_id: str, capture_id: str) -> None:
