@@ -275,3 +275,76 @@ def test_every_action_name_survives_the_read(tmp_path: Path, action: str) -> Non
     """
     path = write_trail(tmp_path, [line(action, FIRST_EMAIL, "t1")])
     assert lock_audit.read_audit_rows(path=path)[0]["action"] == action
+
+
+def test_a_site_read_answers_only_that_site(tmp_path: Path) -> None:
+    """A site read drops every row of another site.
+
+    Why:
+        Issue #2596 reports that the history page narrowed the run list and the
+        capture list to one site, and the audit log still showed another site.
+
+    Args:
+        tmp_path: The temporary folder of this test.
+    """
+    records = [
+        line("take", FIRST_EMAIL, "t1", SITE_ID),
+        line("take", SECOND_EMAIL, "t2", OTHER_SITE),
+        line("release", FIRST_EMAIL, "t3", SITE_ID),
+    ]
+    path = write_trail(tmp_path, records)
+    rows = lock_audit.read_audit_rows(path=path, site_id=SITE_ID)
+    assert [row["site_id"] for row in rows] == [SITE_ID, SITE_ID]
+
+
+def test_an_empty_site_read_answers_every_site(tmp_path: Path) -> None:
+    """An empty site keeps the read that the portal used before issue #2596.
+
+    Args:
+        tmp_path: The temporary folder of this test.
+    """
+    records = [line("take", FIRST_EMAIL, "t1", SITE_ID), line("take", SECOND_EMAIL, "t2", OTHER_SITE)]
+    path = write_trail(tmp_path, records)
+    assert lock_audit.read_audit_rows(path=path, site_id="") == lock_audit.read_audit_rows(path=path)
+
+
+def test_a_site_read_keeps_the_expiry_that_the_full_read_infers(tmp_path: Path) -> None:
+    """A site read infers each expiry from the whole trail, never from one site.
+
+    Why:
+        The expiry inference reads the order of every site. A filter applied
+        before the inference would lose the take that closes a hold, and the
+        page would then show a hold that never ended.
+
+    Args:
+        tmp_path: The temporary folder of this test.
+    """
+    records = [
+        line("take", FIRST_EMAIL, "t1", SITE_ID),
+        line("take", SECOND_EMAIL, "t2", OTHER_SITE),
+        line("take", SECOND_EMAIL, "t3", SITE_ID),
+    ]
+    path = write_trail(tmp_path, records)
+    full = [row for row in lock_audit.read_audit_rows(path=path) if row["site_id"] == SITE_ID]
+    assert lock_audit.read_audit_rows(path=path, site_id=SITE_ID) == full
+    assert [row["inferred"] for row in full] == [False, True, False]
+
+
+def test_a_capped_site_read_matches_the_capped_full_read(tmp_path: Path) -> None:
+    """A capped site read answers the newest rows of that site only.
+
+    Why:
+        The cap counts the rows that the page shows. A cap that counted every
+        site would answer fewer rows than the operator asked for.
+
+    Args:
+        tmp_path: The temporary folder of this test.
+    """
+    records = []
+    for index in range(10):
+        records.append(line("take", FIRST_EMAIL, f"a{index}", OTHER_SITE))
+        records.append(line("take", SECOND_EMAIL, f"b{index}", SITE_ID))
+    path = write_trail(tmp_path, records)
+    rows = lock_audit.read_audit_rows(limit=4, path=path, site_id=SITE_ID)
+    assert len(rows) == 4
+    assert {row["site_id"] for row in rows} == {SITE_ID}
