@@ -1826,6 +1826,7 @@ RUN_LIST_FIELDS: tuple[str, ...] = (
     "site_id",
     "site_name",
     "actor_email",
+    "cloud_account",  # Show the Mist self identity beside the typed operator address.
     "created_at",
     "updated_at",
     "state",

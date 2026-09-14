@@ -66,7 +66,7 @@ CONFLICT_STATUS = 409  # The run exists and its state refuses the call.
 PRE_CAPTURE_MISSING_CODE = "pre_capture_missing"  # FR-035 refuses a start with no saved pre-check.
 PRE_CHECK_LOCKED_CODE = "pre_check_locked"  # A run that sent firmware keeps the reading it holds.
 
-PROBE_EMAIL = "probe.operator@example.invalid"  # A reserved domain, so no real address appears.
+PROBE_EMAIL = "probe.operator@juniper.net"  # A normal corporate address must pass the firmware start gate.
 UNKNOWN_RUN_ID = "run-00000000000000000000000000000000"  # A well-shaped key that no store holds.
 WORKER_WAIT_SECONDS = 5.0  # A generous wait, so a slow machine does not fail the test.
 

@@ -148,6 +148,7 @@ class RunSpec:
         site_name: The site name shown in the interface.
         actor_email: The signed-in operator who owns the run.
         browser_id: The browser that holds the site lock.
+        cloud_account: The Mist account label read before firmware starts.
         tier: The capture tier for both captures. 2 or 3.
         targets: One entry for each device the run upgrades. Empty at
             creation, because the operator picks the versions later.
@@ -160,6 +161,7 @@ class RunSpec:
     site_name: str
     actor_email: str
     browser_id: str
+    cloud_account: str = ""  # The field is empty until the start route reads the Mist account.
     tier: int = 2
     targets: Sequence[Mapping[str, Any]] = ()
     options: Mapping[str, Any] = field(default_factory=dict)
@@ -188,6 +190,7 @@ class RunRecordBuilder:
         "site_name",
         "actor_email",
         "browser_id",
+        "cloud_account",  # The run page and history page show the cloud identity when known.
         "created_at",
         "updated_at",
         "state",
@@ -300,6 +303,7 @@ class RunRecordBuilder:
             "site_name": spec.site_name,
             "actor_email": spec.actor_email,
             "browser_id": spec.browser_id,
+            "cloud_account": spec.cloud_account,  # Store the Mist account label beside the typed address.
             "tier": int(spec.tier),
         }
 

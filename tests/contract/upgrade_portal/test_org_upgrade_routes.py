@@ -28,7 +28,8 @@ ORG_CONFIRM_PAGE = "/upgrade/org/confirm"
 ORG_SUBMIT_API = "/api/org-upgrades"
 UPGRADE_ID = "33333333-3333-3333-3333-333333333333"
 SITE_UPGRADE_ID = "44444444-4444-4444-4444-444444444444"
-PROBE_EMAIL = "org-upgrade.operator@example.invalid"
+PROBE_EMAIL = "org-upgrade.operator@juniper.net"  # Issue #2615: a firmware write needs a reachable address.
+RESERVED_EMAIL = "org-upgrade.operator@example.invalid"  # The reserved address that a firmware write must refuse.
 
 
 class OrgUpgradeServiceStandIn:
@@ -711,3 +712,38 @@ def test_aggregate_submission_context_requires_exact_durable_plan(field: str, va
     }  # Build the matching durable identity.
     operation[field] = value  # Drift one protected value.
     assert org_upgrade._operation_matches_context(operation, context) is False  # Refuse before any claim.
+
+
+def test_a_reserved_operator_address_cannot_start_a_multi_site_upgrade(
+    org_upgrade_client: FlaskClient,
+    org_service: OrgUpgradeServiceStandIn,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A reserved operator address refuses the multi-site firmware write.
+
+    Why:
+        Issue #2615. A multi-site upgrade writes firmware to every selected
+        site, so it reaches far more devices than a single-site run. A reserved
+        domain such as `.invalid` reaches no mailbox, so no person can answer
+        for that write. The portal must refuse the write before any cloud call.
+
+    Args:
+        org_upgrade_client: The signed multi-site client.
+        org_service: The stand-in that records every submitted job.
+        monkeypatch: The fixture that replaces the owner reader.
+    """
+    save_valid_options(org_upgrade_client)  # Reach the confirmed state that the submit route needs.
+    reserved_owner = identity.build_owner(RESERVED_EMAIL, identity.issue_browser_id())  # An unreachable operator.
+    monkeypatch.setattr(org_upgrade.identity, "current_owner", lambda: reserved_owner)  # Change only the address.
+    before = len(org_service.calls)  # Record the call count, so the refusal can prove it sent nothing.
+
+    answer = org_upgrade_client.post(  # Send the confirmed multi-site write.
+        ORG_SUBMIT_API,
+        json={"confirmation": "CONFIRM"},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+
+    assert answer.status_code == 400, "A reserved operator address must refuse the multi-site firmware write."
+    body = answer.get_json() or {}  # Read the refusal envelope that the contract fixes.
+    assert body.get("error", {}).get("code") == "unreachable_operator_address"  # Name the exact refusal code.
+    assert len(org_service.calls) == before, "The refusal must reach no cloud service at all."
