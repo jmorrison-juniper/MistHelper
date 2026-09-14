@@ -1863,7 +1863,7 @@ def run_history(site_id: str) -> tuple[Response, int]:
     return jsonify({RUNS_FIELD: rows, TOTAL_FIELD: total}), OK_STATUS
 
 
-def audit_history_rows() -> list[dict[str, Any]]:
+def audit_history_rows(site_id: str = "") -> list[dict[str, Any]]:
     """Return the audit log rows that the history page paints.
 
     Why:
@@ -1875,6 +1875,13 @@ def audit_history_rows() -> list[dict[str, Any]]:
         Every moment reads as UTC, which is the rule that the runs section
         already follows.
 
+        Issue #2596 narrows the rows to the site that the page names. The run
+        list and the capture list already obey that site, so an audit log that
+        showed another site made the operator read the wrong record.
+
+    Args:
+        site_id: The site to narrow to. An empty value reads every site.
+
     Returns:
         One row for each action, newest first. An empty list when the reader is
         absent or the trail holds nothing.
@@ -1884,7 +1891,8 @@ def audit_history_rows() -> list[dict[str, Any]]:
     if reader is None:  # A missing reader draws an empty section, never a fault page.
         logger.info("review: the portal offers no lock audit reader, so the audit log is empty")
         return []
-    rows: Any = reader()
+    logger.info("review: the portal reads the lock audit for %s", site_id or "every site")  # Before the read.
+    rows: Any = reader(site_id=site_id)  # Narrow the read to the site that the page names.
     shaped = [dict(row, moment_text=short_moment(row.get("occurred_at"))) for row in rows]
     logger.debug("review: the audit log holds %s row(s)", len(shaped))
     return shaped
@@ -1923,5 +1931,6 @@ def history_page() -> str:
         run_control_org_id=str(session.get("selected_org_id") or ""),
         run_control_history_scope=f"site:{site_id}" if site_id else "all-sites",
         # Issue #2221 adds the audit log of every site lock action.
-        audit_rows=audit_history_rows(),
+        # Issue #2596 narrows that log to the site that this page names.
+        audit_rows=audit_history_rows(site_id),
     )
