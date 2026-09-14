@@ -4740,8 +4740,8 @@ def _systematic_test_run_option(
 
 def _fast_mode_from_global() -> bool:
     """Return True iff the module-level ``FAST_MODE_ENABLED`` flag is set (errors -> False)."""
-    try:  # globals() access is normally safe but guarded for parity with original.
-        return bool(globals().get("FAST_MODE_ENABLED", False))  # Module flag set by CLI parse at startup.
+    try:  # Context access is normally safe but guarded for parity with original.
+        return bool(MainEntrypoint.context.fast_mode_enabled)  # Read the context flag set by CLI parse at startup.
     except Exception:  # Defensive -- never propagate.
         return False  # Safe default for any introspection failure.
 
@@ -5062,8 +5062,8 @@ def _metrics_gateway_org_id(settings: Any) -> str:
     Returns:
         The organization identifier, or an empty string when none was chosen.
     """
-    if settings.MainEntrypoint.context.org_id:  # An explicit setting always wins, because a container cannot prompt
-        return str(settings.MainEntrypoint.context.org_id)
+    if settings.org_id:  # An explicit setting always wins, because a container cannot prompt
+        return str(settings.org_id)
     if MainEntrypoint.context.org_id:  # The session already holds a selection, so reuse it rather than ask twice
         return str(MainEntrypoint.context.org_id)
     if not (sys.stdin.isatty() and sys.stdout.isatty()):  # Refuse prompts without a terminal

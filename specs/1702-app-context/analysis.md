@@ -41,7 +41,7 @@ These modules still reach into `MistHelper` through an import and must move next
 - `rtk python -m ruff check .`: pass.
 - `rtk python -m black --check .`: pass.
 - `rtk python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml`: pass.
-- `rtk python -m pytest tests/unit/refactors tests/unit/test_config_utils.py tests/unit/test_config_utils_org_id_preflight.py -x -q`: pass, 510 passed.
+- `rtk python -m pytest tests/unit/refactors tests/unit/test_config_utils.py tests/unit/test_config_utils_org_id_preflight.py tests/unit/test_fast_mode_flag.py tests/unit/test_metrics_gateway_org_selection.py -x -q`: pass, 517 passed.
 - `rtk python -m pytest tests/ -x -q`: local Windows run was stopped after prolonged progress below 2 percent. The pull request coverage gate must finish this check before merge.
 - `rtk python -m bandit -r MistHelper.py`: pass with zero findings and zero skipped lines.
 - `rtk python -m tools.symbol_diff --base main MistHelper.py`: pass with no module-level name change.
@@ -51,3 +51,4 @@ These modules still reach into `MistHelper` through an import and must move next
 - `rtk pylint src/ --fail-under=9.5 --score=y`: pass, 9.51/10.
 - `rtk radon cc src/ MistHelper.py wsgi.py starlink_dashboard.py scripts/analyze_marvis_pcap.py scripts/probe_zscaler_endpoints.py tests/unit/utils/test_zscaler_catalogue.py -a -nb`: pass with no block above B.
 - `rg "type: ignore|noqa|nosec|pylint: disable" MistHelper.py`: pass, no matches.
+
