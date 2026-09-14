@@ -218,6 +218,7 @@ class WikiMenuReferenceGenerator:
             description = self.escape(entry.description)
             handler = self.escape(entry.handler)
             lines.append(f"| {entry.menu_id} | {description} | {entry.safety} | `{handler}` |")
+        lines.extend(self.family_section())
         lines.extend(
             [
                 "",
@@ -226,6 +227,66 @@ class WikiMenuReferenceGenerator:
             ]
         )
         return "\n".join(lines) + "\n"
+
+    def family_section(self) -> list[str]:
+        """Return the lines that describe the endpoint family sub-menus.
+
+        Why:
+            Menus 259 through 268 hold one row each, but each row opens a
+            sub-menu of many read operations. The counts come from the catalog,
+            so this section cannot drift from the code.
+
+        Returns:
+            The Markdown lines of the section.
+        """
+        sys.path.insert(0, str(self.repo_root))  # Import the catalog from the repository under test.
+        from src.export.endpoint_catalog import (
+            DESTRUCTIVE,
+            ENDPOINT_CATALOG,
+            INTERACTIVE_SAFE,
+            SAFE,
+            SAFETY_LABELS,
+        )
+
+        counts: defaultdict[str, int] = defaultdict(int)
+        for info in ENDPOINT_CATALOG.values():
+            counts[info.safety] += 1
+        rows = [
+            (SAFE, "The read needs no operator identifier. Only menu 259 carries it."),
+            (INTERACTIVE_SAFE, "The read needs a site, an org, an MSP, or another identifier."),
+            (DESTRUCTIVE, "The call changes the Mist cloud. No endpoint family holds one."),
+        ]
+        lines = [
+            "",
+            "### Endpoint family sub-menus (259-268)",
+            "",
+            "Each of these ten entries opens a numbered sub-menu. One row states the Mist",
+            "operationId, a plain description, and a safety word:",
+            "",
+            "```text",
+            "  [1] getSiteWlan - Get site WLAN [safe interactive]",
+            "```",
+            "",
+            "`src/export/endpoint_catalog.py` holds the description and the safety word for",
+            f"all {len(ENDPOINT_CATALOG)} operations. The description comes from the Mist API documentation",
+            "name that the installed `mistapi` docstring carries. The safety word uses the",
+            "vocabulary of `OperationRegistry`.",
+            "",
+            "| Safety word in the menu | Registry category | Operations | Meaning |",
+            "|---|---|---:|---|",
+        ]
+        for category, meaning in rows:
+            label = SAFETY_LABELS[category]
+            lines.append(f"| `{label}` | `{category}` | {counts[category]} | {meaning} |")
+        lines.extend(
+            [
+                "",
+                "Warning: do not add a `destructive` operation to an endpoint family.",
+                "`tests/guardrails/test_endpoint_catalog.py` fails when one enters, because a",
+                "family menu offers reads only.",
+            ]
+        )
+        return lines
 
     def escape(self, text: str) -> str:
         return text.replace("|", "\\|")

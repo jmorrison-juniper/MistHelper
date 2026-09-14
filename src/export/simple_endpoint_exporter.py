@@ -18,6 +18,7 @@ import mistapi  # WHY: the SDK supplies the endpoint call and pagination helper.
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: shared flatten and escape logic keeps exports consistent.
+from src.export.endpoint_catalog import menu_text  # WHY: one source for the description and the safety flag.
 from src.utils.input_utils import InputUtils  # WHY: MSP selection must use the EOF-safe prompt.
 
 
@@ -220,7 +221,7 @@ class SimpleEndpointExporter:
         mh = importlib.import_module("MistHelper")  # Load MistHelper lazily to avoid an import cycle.
         logging.info("Offering %d %s simple endpoint operations", len(operations), scope_label)  # Log the prompt.
         for index, operation in enumerate(operations, start=1):
-            print(f"  [{index}] {operation.operation}")  # Show one operator choice per table row.
+            print(f"  [{index}] {menu_text(operation.operation)}")  # Show the name, the description, and the flag.
         answer = str(
             mh.InputUtils.safe_input(
                 f"Select a {scope_label} endpoint operation (1-{len(operations)}): ",
