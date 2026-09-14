@@ -6,7 +6,7 @@ from collections.abc import Callable  # WHY: Type hint for injected pure-functio
 from dataclasses import dataclass  # WHY: Bundle wide constructor + install-context state
 from typing import Any  # WHY: Injected stdlib modules are Any-typed for testability
 
-from packaging.version import Version  # WHY: PEP 440 comparisons replace tuple version ordering.
+from packaging.version import InvalidVersion, Version  # WHY: PEP 440 comparisons replace tuple version ordering.
 
 from src.bootstrap.package_installer import PackageInstaller  # WHY: UV/pip installer collaborator
 
@@ -198,11 +198,20 @@ class DependencyCheckOrchestrator:  # WHY: Public entry-point object called from
             outdated.append((name, spec, installed))  # WHY: Queue newer-available bump
 
     def _newer_available(self, name: str, installed: str) -> bool:  # WHY: PyPI latest comparator
-        """Return True when PyPI has a newer version than installed."""
+        """Return True when PyPI has a newer version than installed.
+
+        Why:
+            PyPI or package metadata can carry unexpected text. The dependency
+            check must stay safe and continue startup when parsing fails.
+        """
         latest = self.get_latest_pypi_version_fn(name)  # WHY: Query PyPI once per package
         if not latest:  # WHY: No latest info means no upgrade signal
             return False  # WHY: Fail closed - no signal, no upgrade
-        return self.parse_version_fn(latest) > self.parse_version_fn(installed)  # WHY: Compare PEP 440 versions.
+        try:  # WHY: Package metadata can be malformed in local or remote records.
+            return self.parse_version_fn(latest) > self.parse_version_fn(installed)  # WHY: Compare PEP 440 versions.
+        except (InvalidVersion, TypeError):  # WHY: A bad version string must not stop startup.
+            self.logging_module.debug("Skipping invalid latest-version data for %s", name)  # WHY: Keep an audit clue.
+            return False  # WHY: Without a valid comparison, do not mark the package outdated.
 
     def _prepare_installer(self) -> _InstallContext:  # WHY: Builds one _InstallContext for both loops
         """Resolve preferred installer and bootstrap UV when needed."""
