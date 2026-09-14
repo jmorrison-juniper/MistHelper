@@ -135,6 +135,9 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: false
+          # Issue #1899: the changelog guard reads the merge commit parents.
+          # A depth of one hides those parents and makes the guard fail early.
+          fetch-depth: 2
       - name: Fetch submodules if present
         run: |
           if [ -f .gitmodules ]; then
@@ -253,6 +256,10 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install -r requirements-dev.txt  # pinned pytest stack (issue #1779)
+      - name: Run changelog fragment guard
+        # Issue #1899: run the shared-record guard before the large suite.
+        # A direct CHANGELOG.md edit then fails fast, with its own message.
+        run: pytest tests/guardrails/test_changelog_fragment_policy.py -q
       - name: Run dependency import smoke tests
         # Issue #1948: the coverage scope excludes scripts/, so name the import
         # test directly and fail when a dependency removes an imported symbol.
