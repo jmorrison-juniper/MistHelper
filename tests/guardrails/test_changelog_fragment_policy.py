@@ -19,7 +19,9 @@ Why:
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
 from datetime import date
 from pathlib import Path
 
@@ -59,6 +61,59 @@ GUIDANCE_FILES = (
 # The rule file states all three name forms, so an author can pick one without
 # opening another document.
 NAME_FORMS = ("pr-<number>", "issue-<number>", "<YYYY-MM-DD>")
+
+
+def changelog_edit_is_allowed(changed_paths: set[str], head_ref: str) -> bool:
+    """Return whether a pull request can change CHANGELOG.md.
+
+    Returns:
+        True when the diff keeps the fragment rule.
+    """
+    if "CHANGELOG.md" not in changed_paths:  # A branch that leaves the shared file alone cannot collide there.
+        return True
+    return head_ref.startswith("release/")  # The release branch assembles merged fragments into CHANGELOG.md.
+
+
+def git_output(*args: str) -> str:
+    """Return one Git command result, relative to the repository root.
+
+    Returns:
+        The command standard output, with no surrounding space.
+    """
+    result = subprocess.run(  # Run Git directly, so the guard reads the checked out pull request.
+        ("git", *args),  # Keep the command parts separate, so no shell can rewrite a path.
+        cwd=REPOSITORY_ROOT,  # Read the repository under test, not the caller directory.
+        text=True,  # Return text, so path parsing stays direct.
+        capture_output=True,  # Keep the test output small unless an assertion fails.
+        check=True,  # Fail fast when the checkout does not hold the needed Git data.
+    )
+    return result.stdout.strip()
+
+
+def pull_request_diff_arguments() -> tuple[str, str]:
+    """Return the two revisions that bound the pull request diff.
+
+    Returns:
+        The base revision and the head revision.
+    """
+    parents = git_output("rev-list", "--parents", "-n", "1", "HEAD").split()  # Read the synthetic merge parents.
+    if len(parents) >= 3:  # A merge checkout gives HEAD, the base commit, and the head commit.
+        return parents[1], parents[2]
+    base_ref = os.environ.get("GITHUB_BASE_REF", "")  # A head checkout must fetch the base branch separately.
+    assert base_ref, (
+        "The changelog guard cannot read the pull request diff. " "The pull request event did not give GITHUB_BASE_REF."
+    )
+    git_output("fetch", "--no-tags", "--depth=1", "origin", f"+refs/heads/{base_ref}:refs/remotes/origin/{base_ref}")
+    return f"origin/{base_ref}", "HEAD"
+
+
+def pull_request_changed_paths(diff_arguments: tuple[str, str]) -> set[str]:
+    """Return the files that the pull request changes.
+
+    Returns:
+        A set of repository-relative paths.
+    """
+    return set(git_output("diff", "--name-only", *diff_arguments).splitlines())
 
 
 @pytest.fixture(scope="module")
@@ -147,6 +202,30 @@ class TestFragmentContent:
                 assert not stamp.match(line.strip()), f"{path.name} carries the version heading {line.strip()!r}"
 
 
+class TestChangelogEditDecision:
+    """The direct decision blocks a shared record on each feature branch."""
+
+    def test_feature_branch_that_edits_changelog_fails(self) -> None:
+        """A feature branch that edits CHANGELOG.md brings the collision back."""
+        changed_paths = {"CHANGELOG.md"}
+        assert not changelog_edit_is_allowed(changed_paths, "fix/1899-direct-changelog")
+
+    def test_release_branch_that_edits_changelog_passes(self) -> None:
+        """A release branch can assemble the merged fragments into CHANGELOG.md."""
+        changed_paths = {"CHANGELOG.md"}
+        assert changelog_edit_is_allowed(changed_paths, "release/26.09.13")
+
+    def test_feature_branch_that_edits_no_changelog_passes(self) -> None:
+        """A feature branch that leaves CHANGELOG.md alone cannot collide there."""
+        changed_paths = {"changelog.d/issue-1899-proof.md"}
+        assert changelog_edit_is_allowed(changed_paths, "fix/1899-fragment")
+
+    def test_feature_branch_with_changelog_and_fragment_fails(self) -> None:
+        """A fragment does not make a direct CHANGELOG.md edit safe."""
+        changed_paths = {"CHANGELOG.md", "changelog.d/issue-1899-proof.md"}
+        assert not changelog_edit_is_allowed(changed_paths, "fix/1899-mixed-record")
+
+
 class TestPolicyStaysStated:
     """A rewrite of an instruction file cannot drop the rule in silence."""
 
@@ -168,3 +247,15 @@ class TestPolicyStaysStated:
         """The warning is the last stop for an author who opens the shared file directly."""
         text = (REPOSITORY_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
         assert "changelog.d" in text, "CHANGELOG.md no longer points an author at changelog.d"
+
+    def test_pull_request_does_not_edit_changelog_directly(self) -> None:
+        """A feature branch that edits CHANGELOG.md directly returns the shared line."""
+        if os.environ.get("GITHUB_EVENT_NAME") != "pull_request":
+            pytest.skip("The changelog diff guard runs only during a pull request event.")
+        diff_arguments = pull_request_diff_arguments()
+        changed_paths = pull_request_changed_paths(diff_arguments)
+        head_ref = os.environ.get("GITHUB_HEAD_REF", "")
+        assert changelog_edit_is_allowed(changed_paths, head_ref), (
+            "CHANGELOG.md changed in a pull request that is not a release aggregation. "
+            "Add one release-note fragment under changelog.d/ instead."
+        )
