@@ -1,4 +1,4 @@
-"""Test bounded rotation for both MistHelper logging setup paths."""
+"""Test bounded rotation for the explicit MistHelper logging setup path."""
 
 from __future__ import annotations
 
@@ -21,11 +21,9 @@ class TestLogRotationSettings:
         assert settings.max_bytes == 10 * 1024 * 1024
         assert settings.backup_count == 5
 
-    def test_early_setup_uses_a_rotating_handler(self):
-        """The import-time setup path uses a bounded rotating handler."""
-        assert isinstance(_early_file_handler, RotatingFileHandler)
-        assert _early_file_handler.maxBytes > 0
-        assert _early_file_handler.backupCount >= 0
+    def test_import_keeps_early_handler_passive(self):
+        """The import path must not open `data/script.log`."""
+        assert isinstance(_early_file_handler, logging.NullHandler)
 
     def test_invalid_values_use_safe_defaults(self, monkeypatch):
         """Malformed or unsafe values cannot disable rotation."""

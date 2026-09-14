@@ -16,12 +16,10 @@ from typing import Any
 # Ensure project root is on sys.path so MistHelper imports resolve
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from src.refactors.main_entrypoint import ApplicationBootstrap  # Explicit bootstrap keeps MistHelper import passive.
 from web_portal.app import WebPortalApp
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+ApplicationBootstrap(parse_cli=False).bootstrap_for_web()  # Run web startup without reading command-line arguments.
 
 
 def _bootstrap_api_session() -> tuple[Any, str]:

@@ -74,11 +74,11 @@ class TestIsHelpInvocation:
 
 
 class TestHelpInvocationGuardWiring:
-    """The MistHelper source guards both bootstrap steps with `_is_help_invocation`."""
+    """The bootstrap source lets argparse handle help before side effects."""
 
     @staticmethod
     def _mist_helper_source() -> str:
-        """Return the MistHelper.py source text.
+        """Return the entrypoint source text.
 
         Why:
             The regression asserted here is about *module-load-time* behaviour
@@ -89,21 +89,20 @@ class TestHelpInvocationGuardWiring:
         Returns:
             UTF-8 source text of the currently imported MistHelper module.
         """
-        module = importlib.import_module("MistHelper")  # Live module resolution.
+        module = importlib.import_module("src.refactors.main_entrypoint")  # Live module resolution.
         assert module.__file__ is not None  # WHY: script modules always have __file__ set on disk.
         return Path(module.__file__).read_text(encoding="utf-8")  # Read once; small enough for in-memory search.
 
     def test_early_dependency_check_is_guarded(self) -> None:
-        """The `_early_dependency_check()` call is wrapped by `_is_help_invocation`."""
+        """The dependency check runs only after argparse gets the first chance to exit."""
         source = self._mist_helper_source()
-        assert "if not _is_help_invocation(sys.argv):" in source  # WHY: the exact guard expression.
-        assert "_early_dependency_check()" in source  # WHY: the call still exists (was not accidentally deleted).
+        assert "parser.parse_args(list(self.argv))" in source  # WHY: argparse owns help before startup work.
+        assert "self._run_dependency_check_if_needed()" in source  # WHY: dependency work moved behind bootstrap.
 
     def test_deferred_imports_conditional_includes_help(self) -> None:
-        """The deferred-imports conditional also branches on `_is_help_invocation(sys.argv)`."""
+        """The entrypoint reads process arguments in the bootstrap class only."""
         source = self._mist_helper_source()
-        # WHY: ensure eager imports are skipped for --help too, matching the dep-check guard behaviour.
-        assert "or _is_help_invocation(sys.argv)" in source
+        assert "self.argv = tuple(sys.argv[1:] if argv is None else argv)" in source  # WHY: one read site.
 
 
 class TestHelpSubprocessInvocation:
