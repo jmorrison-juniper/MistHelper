@@ -19,6 +19,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+HTTP_OK = 200  # WHY: name the lower bound for a successful API response.
+HTTP_MULTIPLE_CHOICES = 300  # WHY: name the upper bound for a successful API response.
+HTTP_FORBIDDEN = 403  # WHY: name the permission failure status that needs a clear message.
+
 
 @dataclass(frozen=True)
 class CheckResult:
@@ -57,6 +61,23 @@ class PreCheckService:
             org_id,
             len(target_ids),
         )  # WHY: log before the check run starts.
+        if not target_ids:  # WHY: a safety gate cannot pass when it evaluates no device.
+            logger.warning(
+                "Pre-checks for org %s received zero targets",
+                org_id,
+            )  # WHY: a missing target set is an operator signal.
+            result = CheckResult(
+                name="target_selection",
+                passed=False,
+                message="No target devices were supplied for the pre-check",
+                details={"target_count": 0},
+            )  # WHY: return explicit evidence instead of an empty success.
+            logger.debug(
+                "Pre-checks for org %s stopped with %s",
+                org_id,
+                result.message,
+            )  # WHY: summarize the fail-closed result.
+            return [result]  # WHY: the caller must store one failed checkpoint.
         # WHY: one shared fetch for every check.
         device_index, fetch_error = self._fetch_device_index(org_id, target_ids)
         results: list[CheckResult] = []  # WHY: collect results from every check kind.
@@ -92,6 +113,9 @@ class PreCheckService:
                 "org_device_list",
                 ids={"org_id": org_id},
             )  # WHY: exactly one call regardless of target device count. Fixes #1886.
+            status_error = self._read_status_error(org_id, api_result)  # WHY: verify success.
+            if status_error is not None:  # WHY: failed API status cannot prove safety.
+                return {}, status_error  # WHY: carry the status error to every target result.
             # WHY: guard a non-list payload.
             data_list = api_result.data if isinstance(api_result.data, list) else []
             index: dict[str, dict[str, Any]] = {}  # WHY: key rows for O(1) lookup.
@@ -110,6 +134,26 @@ class PreCheckService:
             logger.exception("Device inventory fetch failed for org %s", org_id)
             return {}, str(exc)
 
+    @staticmethod
+    def _read_status_error(org_id: str, api_result: object) -> str | None:
+        """Return an inventory status error, if the API call failed."""
+        raw_status = getattr(api_result, "status_code", HTTP_OK)  # WHY: old tests omit status.
+        status_code = int(raw_status)  # WHY: compare status values as numbers.
+        if status_code == HTTP_FORBIDDEN:  # WHY: a permission failure is not a missing device.
+            logger.warning(
+                "Device inventory fetch for org %s returned permission denied",
+                org_id,
+            )  # WHY: tell the operator that access blocked the safety gate.
+            return "Permission denied while fetching device inventory"  # WHY: fail closed.
+        if not HTTP_OK <= status_code < HTTP_MULTIPLE_CHOICES:  # WHY: success proves safety.
+            logger.warning(
+                "Device inventory fetch for org %s returned status %s",
+                org_id,
+                status_code,
+            )  # WHY: tell the operator that the API call did not succeed.
+            return f"Inventory fetch returned status {status_code}"  # WHY: fail closed.
+        return None  # WHY: success status permits inventory evaluation.
+
     def _check_reachability(
         self,
         target_ids: list[str],
@@ -120,9 +164,43 @@ class PreCheckService:
         results: list[CheckResult] = []  # WHY: one result per target device.
         for device_id in target_ids:  # WHY: no per-device API call, only a dict lookup.
             # WHY: evaluate against the shared index.
-            result = self._ping_device(device_id, device_index, fetch_error)
+            result = self._safe_ping_device(device_id, device_index, fetch_error)
             results.append(result)  # WHY: preserve per-device isolation in the result list.
         return results
+
+    def _safe_ping_device(
+        self,
+        device_id: str,
+        device_index: dict[str, dict[str, Any]],
+        fetch_error: str | None,
+    ) -> CheckResult:
+        """Return one reachability result, even when a target check fails."""
+        logger.info("Checking reachability for device %s", device_id)  # WHY: log before work.
+        try:
+            result = self._ping_device(device_id, device_index, fetch_error)  # WHY: run gate.
+        except Exception as exc:
+            logger.exception(
+                "Reachability check failed for device %s",
+                device_id,
+            )  # WHY: keep the traceback for the failed target.
+            return CheckResult(
+                name=f"reachability:{device_id}",
+                passed=False,
+                message=f"Reachability check failed: {exc}",
+            )  # WHY: a raised target check must fail closed.
+        if result is None:  # WHY: a missing verdict cannot prove that the device is safe.
+            logger.warning("Reachability check returned no result for device %s", device_id)
+            return CheckResult(
+                name=f"reachability:{device_id}",
+                passed=False,
+                message="Reachability check returned no result",
+            )  # WHY: an absent verdict must fail closed.
+        logger.debug(
+            "Reachability check for device %s returned passed=%s",
+            device_id,
+            result.passed,
+        )  # WHY: summarize the per-device verdict.
+        return result  # WHY: give the caller the checked verdict.
 
     @staticmethod
     def _ping_device(

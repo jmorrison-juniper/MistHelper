@@ -16,7 +16,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
-from src.worker.checks.pre_checks import PreCheckService
+from src.worker.checks.pre_checks import CheckResult, PreCheckService
 
 if TYPE_CHECKING:
     import pytest
@@ -129,6 +129,70 @@ class TestInventoryFetchFailureFailsEveryTarget:
         assert "Mist API unreachable" in by_name["reachability:dev-a"].message
         # WHY: the failure must still cost exactly one fetch attempt, not two.
         assert mist.list_all_entities.call_count == EXPECTED_INVENTORY_FETCHES_PER_RUN
+
+
+class TestReachabilityFailuresFailClosed:
+    """Verify unusual target results fail closed."""
+
+    def test_target_check_exception_returns_failed_result(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        mist = MagicMock()  # WHY: stand in for the real Mist client.
+        mist.list_all_entities.return_value = _mock_inventory(["dev-a"])  # WHY: let fetch pass.
+        service = PreCheckService(MagicMock(), mist)  # WHY: the DB session is unused here.
+
+        def _raise_for_target(
+            _device_id: str,
+            _device_index: dict[str, dict[str, object]],
+            _fetch_error: str | None,
+        ) -> CheckResult:
+            raise RuntimeError("target check failed")  # WHY: prove a bad target cannot crash.
+
+        monkeypatch.setattr(service, "_ping_device", _raise_for_target)  # WHY: simulate failure.
+
+        results = service.run_all("org-1", ["dev-a"])  # WHY: exercise the guarded path.
+
+        by_name = {r.name: r for r in results}  # WHY: index results for a readable assertion.
+        assert by_name["reachability:dev-a"].passed is False  # WHY: exceptions fail closed.
+        assert "target check failed" in by_name["reachability:dev-a"].message  # WHY: show cause.
+
+    def test_target_check_none_returns_failed_result(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        mist = MagicMock()  # WHY: stand in for the real Mist client.
+        mist.list_all_entities.return_value = _mock_inventory(["dev-a"])  # WHY: let fetch pass.
+        service = PreCheckService(MagicMock(), mist)  # WHY: the DB session is unused here.
+        monkeypatch.setattr(
+            service,
+            "_ping_device",
+            lambda _device_id, _device_index, _fetch_error: None,
+        )  # WHY: simulate a broken target check that returns no verdict.
+
+        results = service.run_all("org-1", ["dev-a"])  # WHY: exercise the guarded path.
+
+        by_name = {r.name: r for r in results}  # WHY: index results for a readable assertion.
+        assert by_name["reachability:dev-a"].passed is False  # WHY: no verdict fails closed.
+        assert "no result" in by_name["reachability:dev-a"].message  # WHY: show cause.
+
+
+class TestInventoryPermissionFailure:
+    """Verify API status errors do not look like absent devices."""
+
+    def test_permission_failure_reports_permission_error(self) -> None:
+        mist = MagicMock()  # WHY: stand in for the real Mist client.
+        mist.list_all_entities.return_value = SimpleNamespace(
+            status_code=403,
+            data=[],
+        )  # WHY: simulate an authenticated account without inventory permission.
+        service = PreCheckService(MagicMock(), mist)  # WHY: the DB session is unused here.
+
+        results = service.run_all("org-1", ["dev-a"])  # WHY: exercise the fetch status check.
+
+        by_name = {r.name: r for r in results}  # WHY: index results for a readable assertion.
+        assert by_name["reachability:dev-a"].passed is False  # WHY: permission blocks proof.
+        assert "Permission denied" in by_name["reachability:dev-a"].message  # WHY: show cause.
 
 
 # ---------------------------------------------------------------------------
