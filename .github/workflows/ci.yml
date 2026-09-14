@@ -626,7 +626,7 @@ jobs:
       # Issue #1741: task records can drift after delivery.
       # This advisory report names the open boxes without blocking day one.
       - name: Report unchecked SpecKit tasks
-        run: python tools/speckit_task_audit.py
+        run: python tools/speckit_task_audit.py || true
 
   exclusion_drift:
     name: "Quality exclusion drift (advisory)"
