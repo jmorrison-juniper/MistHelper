@@ -795,7 +795,45 @@ def build_heartbeat(driver: ModuleType, record: Mapping[str, Any], lock_record: 
     if lock_record is None:  # A run with no lock still runs, and the browser renews the lock alone.
         logger.warning("wiring: the run %s holds no site lock, so it renews none", record.get("run_id", ""))
         return None  # Both seats then read None, which both callers accept.
-    return driver.lock_heartbeat(record, lock_record)  # The key comes from the organization and the site.
+    bound = bind_lock_to_run(lock_record, str(record.get("run_id", "")))  # Issue #2648: name the run in the lock.
+    return driver.lock_heartbeat(record, bound)  # The key comes from the organization and the site.
+
+
+def bind_lock_to_run(lock_record: Any, run_id: str) -> Any:
+    """Return the site lock record with the run that it protects named.
+
+    Why:
+        Issue #2648. The operator takes the site on the capture page, before any
+        run exists, so the stored record names no run. The heartbeat refuses to
+        renew a lock that names no run, so the lock expired about one minute
+        into every run and a second operator could take the site while the first
+        run still wrote firmware.
+
+        The bind happens here, at the one place that builds the heartbeat, so
+        the driver seat and the settle gate seat share one bound record.
+
+    Args:
+        lock_record: The decoded site lock of the session.
+        run_id: The run that now holds the site.
+
+    Returns:
+        The record that names the run. The same record returns unchanged when
+        it already names this run, when the run key is empty, or when the record
+        offers no bind call, because a run must never fail on a lock detail.
+    """
+    if not run_id:  # A record with no run key to write stays as it is.
+        logger.warning("wiring: the run record names no run, so the site lock keeps its own name")
+        return lock_record  # The heartbeat then reports the empty run, as it does today.
+    if getattr(lock_record, "run_id", "") == run_id:  # The lock already names this run.
+        return lock_record  # No copy is needed, and the beat compares the same token.
+    binder = getattr(lock_record, "bound_to_run", None)  # The call that Issue #2648 added.
+    if not callable(binder):  # A stand-in record of an older test offers no bind call.
+        logger.warning("wiring: the site lock record takes no run name, so the run %s renews none", run_id)
+        return lock_record  # The run still starts, which matches every other gap of this module.
+    logger.info("wiring: bind the site lock to the run %s", run_id)  # BEFORE the bind. No token reaches this line.
+    bound = binder(run_id)  # The record is frozen, so this answers a copy.
+    logger.debug("wiring: the site lock of the run %s now names its run", run_id)  # AFTER the bind.
+    return bound
 
 
 def build_gate_deps(phase_gate: ModuleType, session: Any, record: Mapping[str, Any], heartbeat: Any, store: Any) -> Any:

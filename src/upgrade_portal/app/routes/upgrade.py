@@ -88,6 +88,8 @@ from .select import (  # The sibling module owns these rules, so no copy of them
     read_site_locks,
     render_page,
     resolve_org,
+    session_lock_record,
+    store_lock_record,
 )
 
 logger = logging.getLogger(__name__)  # One logger for each module keeps the source visible in the log.
@@ -1633,11 +1635,43 @@ def launch_run(record: dict[str, Any]) -> None:
     Args:
         record: The run record, already in the state `upgrade_submitting`.
     """
+    bind_session_lock_to_run(record)  # Issue #2648: the browser beat must name the run as well.
     launcher = run_launcher()  # None while the driver wiring is not in place.
     if launcher is None:  # The portal must still answer, and the operator must still learn the truth.
         logger.error("upgrade: %s so the run %s sent nothing", NO_LAUNCHER_MESSAGE, record["run_id"])  # The gap.
         return  # The poll then shows the run held at `upgrade_submitting`.
     launcher(record)  # The driver owns every phase from this moment.
+
+
+def bind_session_lock_to_run(record: Mapping[str, Any]) -> None:
+    """Name the run inside the site lock record that this browser session holds.
+
+    Why:
+        Issue #2648. The operator takes the site on the capture page, before any
+        run exists, so the stored lock names no run. The browser beat sends the
+        session copy back on every renewal, and that copy would write the empty
+        run name over the name that the driver wrote. The site list and the lock
+        banner then show no holding run for a site under a live upgrade.
+
+        A failure here costs the run nothing. The driver holds its own bound
+        record, so the lock still renews for the whole run.
+
+    Args:
+        record: The run record, which names the run and the site.
+    """
+    run_id = str(record.get("run_id", ""))  # The run that now holds the site.
+    site_id = str(record.get("site_id", ""))  # The site half of the lock key.
+    if not run_id or not site_id:  # A record without both names points at no lock.
+        return  # The driver still binds its own copy, so the renewal holds.
+    try:  # A session read and a session write must never end a start that already passed every rule.
+        held = session_lock_record(site_id)  # The record this browser stored when it took the site.
+        if held is None or held.run_id == run_id:  # No stored lock, or the lock already names this run.
+            return  # Nothing to write, so the session stays as it is.
+        logger.info("upgrade: bind the session site lock of site %s to the run %s", site_id, run_id)  # BEFORE.
+        store_lock_record(site_id, held.bound_to_run(run_id))  # The frozen record answers a bound copy.
+        logger.debug("upgrade: the session site lock of site %s now names its run", site_id)  # AFTER. No token.
+    except Exception:  # A damaged session field must not stop a run that the operator already confirmed.
+        logger.warning("upgrade: the session site lock of site %s took no run name", site_id)  # Name the gap.
 
 
 @upgrade_bp.post(START_PATH)

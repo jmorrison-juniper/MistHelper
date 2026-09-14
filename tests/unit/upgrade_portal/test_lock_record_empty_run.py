@@ -97,6 +97,67 @@ def test_a_request_maps_the_none_text_to_an_empty_run() -> None:
     assert request.run_id == EMPTY_RUN  # The request maps the forbidden word to the allowed value.
 
 
+def test_a_record_binds_itself_to_a_run() -> None:
+    """Issue #2648: a record that names no run takes the run of a start.
+
+    Why:
+        The operator takes the site on the capture page, before any run exists,
+        so the stored record names no run. The heartbeat refuses to renew a lock
+        that names no run, so the lock expired one minute into every run. The
+        run binds itself to the lock when it starts.
+    """
+    record = lock.LockRecord(
+        owner=_probe_owner(),  # The identity pair of the holder.
+        lock_token=TOKEN_TEXT,  # The token of this acquisition.
+        run_id=EMPTY_RUN,  # The capture page took the site before any run existed.
+        acquired_at=TIME_TEXT,  # The first hold time.
+        refreshed_at=TIME_TEXT,  # The last beat time.
+    )
+    bound = record.bound_to_run(REAL_RUN)  # The run names itself in the lock that protects it.
+    assert bound.run_id == REAL_RUN  # The new record names the run, so the heartbeat renews.
+    assert record.run_id == EMPTY_RUN  # The record is frozen, so the original never changed.
+
+
+def test_a_bound_record_keeps_the_token_and_both_times() -> None:
+    """Issue #2648: the bind changes the run name and nothing else.
+
+    Why:
+        A beat compares the token against the stored lock. A bind that minted a
+        new token, or that moved `acquired_at`, would break the compare and the
+        cooldown that the next operator reads.
+    """
+    record = lock.LockRecord(
+        owner=_probe_owner(),  # The identity pair of the holder.
+        lock_token=TOKEN_TEXT,  # The token that every later beat compares.
+        run_id=EMPTY_RUN,  # No run named the lock yet.
+        acquired_at=TIME_TEXT,  # The first hold time.
+        refreshed_at=TIME_TEXT,  # The last beat time.
+    )
+    bound = record.bound_to_run(REAL_RUN)  # The one call under test.
+    assert bound.lock_token == TOKEN_TEXT  # The compare inside a beat still matches the stored lock.
+    assert bound.acquired_at == TIME_TEXT  # The page still shows when the operator took the site.
+    assert bound.refreshed_at == TIME_TEXT  # A bind is not a beat, so this time stays as it is.
+    assert bound.owner == record.owner  # The bind moves no lock to another operator.
+
+
+def test_a_bound_record_maps_the_none_text_to_an_empty_run() -> None:
+    """Issue #2648: the bind obeys the FR-112 cleaning rule.
+
+    Why:
+        A caller that wraps a missing run with `str` writes the word `None`.
+        FR-112 forbids that word in a stored record, and the bind writes a
+        stored record, so the same rule must hold here.
+    """
+    record = lock.LockRecord(
+        owner=_probe_owner(),  # The identity pair of the holder.
+        lock_token=TOKEN_TEXT,  # The token of this acquisition.
+        run_id=REAL_RUN,  # The lock already names a run.
+        acquired_at=TIME_TEXT,  # The first hold time.
+        refreshed_at=TIME_TEXT,  # The last beat time.
+    )
+    assert record.bound_to_run(NONE_TEXT).run_id == EMPTY_RUN  # The forbidden word never reaches the store.
+
+
 def test_a_stored_null_reads_back_as_an_empty_run() -> None:
     """A record read from a stored JSON null holds an empty run.
 

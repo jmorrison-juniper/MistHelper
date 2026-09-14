@@ -912,6 +912,31 @@ class LockRecord:
         """
         return replace(self, refreshed_at=_utc_now_text())
 
+    def bound_to_run(self, run_id: str) -> LockRecord:
+        """Return the same record with the run that it protects named.
+
+        Why:
+            Issue #2648. An operator takes the site on the capture page, before
+            any run exists, so the stored record names no run. The heartbeat of
+            the driver refuses to renew a lock that names no run, because such a
+            lock has no live upgrade to protect. The site lock therefore expired
+            about one minute into every run, and a second operator could take
+            the site while the first run still wrote firmware.
+
+            The run binds itself to the lock when it starts. `refresh_site_lock`
+            writes the whole record back, so the first beat also stores the run
+            name for the site list and for the banner of the next operator.
+
+        Args:
+            run_id: The run that now holds this site.
+
+        Returns:
+            A new record that names the run. The value is frozen, so nothing
+            changes in place. The token and both times stay as they are, so the
+            compare inside a beat still matches the stored lock.
+        """
+        return replace(self, run_id=run_id)
+
     def __repr__(self) -> str:  # Replaces the dataclass form, which would print the token and the address
         """Return a text form that holds no token and no work email address.
 
