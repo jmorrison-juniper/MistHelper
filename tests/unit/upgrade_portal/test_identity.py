@@ -323,6 +323,7 @@ def test_normal_corporate_domain_is_reachable() -> None:
     """Prove that a normal corporate address is not a reserved domain."""
     assert not address_uses_reserved_domain("someone@juniper.net")  # Corporate mail must always pass.
 
+
 def test_two_spellings_of_one_address_give_one_digest() -> None:
     """Prove that case and whitespace never split one person into two.
 
