@@ -148,6 +148,18 @@ podman exec misthelper-app python MistHelper.py -M 11
 suits a scheduled job. Read [the command line
 reference](documentation/cli-reference.md) for every flag.
 
+### Run the global wired client report
+
+Menu 90 builds the global wired client report. It asks for optional MAC and
+manufacturer filters. It writes the same matched records to the normal export
+path and to `data\GlobalWiredClientReport_summary.json`.
+
+Deployment verification for issue #993 ran on 2026-09-14 UTC. The operator
+pulled `ghcr.io/jmorrison-juniper/misthelper:latest`, restarted
+`misthelper-app` with `.\scripts\compose.ps1 up -d --no-deps misthelper`, and
+checked the web readiness endpoint. `podman ps` reported `misthelper-app` as
+running from the latest image. `http://127.0.0.1:8055/ready` returned 200.
+
 ### Reach the tool over SSH
 
 The container runs an SSH server on port 2200. A connection opens the menu at
