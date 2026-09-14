@@ -50,6 +50,8 @@
                     means the wait is over.
     lock_token    - the token this browser holds. Empty when it holds none.
     lock_confirm_word - the first guess at the word a takeover needs.
+    lock_holder_run - the run that holds the site. Empty when no usable run exists.
+    lock_holder_run_url - the page of the run that holds the site.
 #}
 
 {#
@@ -64,6 +66,8 @@
 {% set lock_holder_name = lock_holder | default('', true) %}
 {% set lock_wait_seconds = lock_cooldown | default(0, true) %}
 {% set lock_token_value = lock_token | default('', true) %}
+{% set lock_run_id = lock_holder_run | default('', true) %}
+{% set lock_run_url = lock_holder_run_url | default('', true) %}
 
 {% set lock_is_held_here = lock_state_name == 'held' %}
 {% set lock_is_free = lock_state_name == 'free' %}
@@ -98,6 +102,12 @@
       page. A write needs the lock, so try the take button.
     {% endif %}
   </p>
+
+  {% if lock_run_id and lock_run_url %}
+    <p class="portal-card-note" data-testid="lock-holder-run">
+      The holding run is <a href="{{ lock_run_url }}">{{ lock_run_id }}</a>.
+    </p>
+  {% endif %}
 
   {#
     contracts/http-api.md line 132 sends the cooldown with the site_locked

@@ -213,6 +213,58 @@ def test_the_read_holds_a_row_cap(tmp_path: Path) -> None:
     assert len(lock_audit.read_audit_rows(limit=5, path=path)) == 5
 
 
+def test_the_capped_read_matches_the_full_expiry_inference(tmp_path: Path) -> None:
+    """A page read infers expiry rows from the full trail before it clips rows.
+
+    Args:
+        tmp_path: The temporary folder of this test.
+    """
+    records = [
+        line("take", FIRST_EMAIL, "t1", SITE_ID),
+        line("take", SECOND_EMAIL, "t2", SITE_ID),
+        line("take", FIRST_EMAIL, "t3", OTHER_SITE),
+        line("release", SECOND_EMAIL, "t4", SITE_ID),
+        line("take", SECOND_EMAIL, "t5", OTHER_SITE),
+        line("takeover", FIRST_EMAIL, "t6", SITE_ID, SECOND_EMAIL),
+    ]
+    path = write_trail(tmp_path, records)
+    full_rows = lock_audit.mark_expiries(records)
+    expected = [lock_audit.audit_row(row) for row in reversed(full_rows)][:4]
+    assert lock_audit.read_audit_rows(limit=4, path=path) == expected
+
+
+def test_a_one_row_trail_keeps_the_row_shape(tmp_path: Path) -> None:
+    """A short trail keeps the same row fields and types.
+
+    Args:
+        tmp_path: The temporary folder of this test.
+    """
+    path = write_trail(tmp_path, [line("take", FIRST_EMAIL, "t1")])
+    rows = lock_audit.read_audit_rows(path=path)
+    assert rows == [lock_audit.audit_row(line("take", FIRST_EMAIL, "t1"))]
+    assert {field: type(value) for field, value in rows[0].items()} == {
+        "action": str,
+        "site_id": str,
+        "org_id": str,
+        "occurred_at": str,
+        "actor_digest": str,
+        "previous_digest": str,
+        "inferred": bool,
+    }
+
+
+def test_a_trail_shorter_than_the_window_returns_every_row(tmp_path: Path) -> None:
+    """A page larger than the trail returns the whole trail.
+
+    Args:
+        tmp_path: The temporary folder of this test.
+    """
+    records = [line("take", FIRST_EMAIL, "t1"), line("release", FIRST_EMAIL, "t2")]
+    path = write_trail(tmp_path, records)
+    expected = [lock_audit.audit_row(row) for row in reversed(records)]
+    assert lock_audit.read_audit_rows(limit=10, path=path) == expected
+
+
 @pytest.mark.parametrize("action", ["take", "release", "takeover", "expire"])
 def test_every_action_name_survives_the_read(tmp_path: Path, action: str) -> None:
     """The four actions that the issue names all reach the page.
