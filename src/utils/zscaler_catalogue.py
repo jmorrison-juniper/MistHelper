@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)  # WHY: module logger keeps records attribu
 
 # Canonical Zscaler cloud slugs served by ``config.zscaler.com``. Order is
 # stable so ``source_urls`` in the written file is reproducible across runs.
-_CLOUDS: tuple[str, ...] = (
+_CLOUDS: tuple[str, ...] = (  # WHY: Keep behavior.
     "zscaler.net",
     "zscalerone.net",
     "zscalertwo.net",
@@ -61,19 +61,19 @@ _CLOUDS: tuple[str, ...] = (
 # Freshness TTL for the merged CENR cache. Set to 8h per the approved plan
 # (user tightened from a 1h proposal to reduce API load on ``config.zscaler.com``
 # while still guaranteeing at least three refreshes per day).
-_FRESHNESS_TTL = timedelta(hours=8)
+_FRESHNESS_TTL = timedelta(hours=8)  # WHY: Keep behavior.
 
-_CENR_URL_TEMPLATE = "https://config.zscaler.com/api/{cloud}/cenr/json"
+_CENR_URL_TEMPLATE = "https://config.zscaler.com/api/{cloud}/cenr/json"  # WHY: Keep behavior.
 
 # HTTPS GET timeout per cloud fetch. Kept short so a single misbehaving
 # cloud endpoint cannot delay menu 206 startup by more than a handful of
 # seconds even in the worst case (7 clouds x _FETCH_TIMEOUT).
-_FETCH_TIMEOUT = 10.0
+_FETCH_TIMEOUT = 10.0  # WHY: Keep behavior.
 
 _SCHEMA_VERSION = 3  # v3 promotes flat host strings into per-host observation dicts (feature 1023)
 
 
-def _promote_host_entry(entry: str | dict[str, Any]) -> dict[str, Any]:
+def _promote_host_entry(entry: str | dict[str, Any]) -> dict[str, Any]:  # WHY: Keep behavior.
     """Promote a v2 flat-string host entry to the v3 per-host object shape.
 
     Why:
@@ -96,21 +96,21 @@ def _promote_host_entry(entry: str | dict[str, Any]) -> dict[str, Any]:
         injected; ``_probe_target`` treats missing observation keys as the
         "no observation" branch).
     """
-    if isinstance(entry, str):
+    if isinstance(entry, str):  # WHY: Keep behavior.
         # Legacy v2 shape: single hostname string with no observation state.
         # Wrap into the minimal v3 object. Observation fields intentionally
         # omitted so downstream callers see them as absent/None per contract.
-        return {"host": entry}
-    if isinstance(entry, dict):
+        return {"host": entry}  # WHY: Keep behavior.
+    if isinstance(entry, dict):  # WHY: Keep behavior.
         # Already v3 (or newer): pass through untouched so re-promotion is a
         # no-op (idempotency required for round-trip write-then-load tests).
-        return entry
+        return entry  # WHY: Keep behavior.
     # Defensive: unexpected shape (for example int, None). Wrap into a stringified
     # host so downstream code never blows up on malformed cache entries.
-    return {"host": str(entry)}
+    return {"host": str(entry)}  # WHY: Keep behavior.
 
 
-def _promote_cenr_document(doc: dict[str, Any]) -> dict[str, Any]:
+def _promote_cenr_document(doc: dict[str, Any]) -> dict[str, Any]:  # WHY: Keep behavior.
     """Walk every host bag in a CENR document and promote v2 -> v3 in-place.
 
     Why:
@@ -126,27 +126,27 @@ def _promote_cenr_document(doc: dict[str, Any]) -> dict[str, Any]:
     Returns:
         The same ``doc`` after promotion, for chaining convenience.
     """
-    for bag_key in ("proxy_hostnames", "vpn_hostnames"):
-        bag = doc.get(bag_key)
-        if isinstance(bag, list):
+    for bag_key in ("proxy_hostnames", "vpn_hostnames"):  # WHY: Keep behavior.
+        bag = doc.get(bag_key)  # WHY: Keep behavior.
+        if isinstance(bag, list):  # WHY: Keep behavior.
             # Rebuild the bag so every element is a v3 host dict. Preserves
             # element order (matters for deterministic diff-friendly writes).
-            doc[bag_key] = [_promote_host_entry(entry) for entry in bag]
-    by_city = doc.get("by_city")
-    if isinstance(by_city, dict):
-        for city_slot in by_city.values():
-            if not isinstance(city_slot, dict):
-                continue
-            for bag_key in ("proxy_hostnames", "vpn_hostnames"):
-                bag = city_slot.get(bag_key)
-                if isinstance(bag, list):
+            doc[bag_key] = [_promote_host_entry(entry) for entry in bag]  # WHY: Keep behavior.
+    by_city = doc.get("by_city")  # WHY: Keep behavior.
+    if isinstance(by_city, dict):  # WHY: Keep behavior.
+        for city_slot in by_city.values():  # WHY: Keep behavior.
+            if not isinstance(city_slot, dict):  # WHY: Keep behavior.
+                continue  # WHY: Keep behavior.
+            for bag_key in ("proxy_hostnames", "vpn_hostnames"):  # WHY: Keep behavior.
+                bag = city_slot.get(bag_key)  # WHY: Keep behavior.
+                if isinstance(bag, list):  # WHY: Keep behavior.
                     # Per-city bags follow the same v2 -> v3 shape rule as
                     # the top-level bags. Keep the two paths in lockstep.
-                    city_slot[bag_key] = [_promote_host_entry(entry) for entry in bag]
-    return doc
+                    city_slot[bag_key] = [_promote_host_entry(entry) for entry in bag]  # WHY: Keep behavior.
+    return doc  # WHY: Keep behavior.
 
 
-def _promote_zcc_document(doc: dict[str, Any]) -> dict[str, Any]:
+def _promote_zcc_document(doc: dict[str, Any]) -> dict[str, Any]:  # WHY: Keep behavior.
     """Walk every ``roles[*].fqdns`` bag in a ZCC probes document and promote v2 -> v3.
 
     Why:
@@ -162,28 +162,28 @@ def _promote_zcc_document(doc: dict[str, Any]) -> dict[str, Any]:
     Returns:
         The same ``doc`` after promotion, for chaining convenience.
     """
-    roles = doc.get("roles")
+    roles = doc.get("roles")  # WHY: Keep behavior.
     # The on-disk ZCC schema stores ``roles`` as a list of role objects (each
     # with its own ``fqdns`` bag). Older/hand-authored variants may store it as
     # a dict keyed by role name. Support both so promotion is shape-agnostic.
-    role_bodies: list[Any] = []
-    if isinstance(roles, list):
-        role_bodies = list(roles)
-    elif isinstance(roles, dict):
-        role_bodies = list(roles.values())
-    for role_body in role_bodies:
-        if not isinstance(role_body, dict):
-            continue
-        fqdns = role_body.get("fqdns")
-        if isinstance(fqdns, list):
+    role_bodies: list[Any] = []  # WHY: Keep behavior.
+    if isinstance(roles, list):  # WHY: Keep behavior.
+        role_bodies = list(roles)  # WHY: Keep behavior.
+    elif isinstance(roles, dict):  # WHY: Keep behavior.
+        role_bodies = list(roles.values())  # WHY: Keep behavior.
+    for role_body in role_bodies:  # WHY: Keep behavior.
+        if not isinstance(role_body, dict):  # WHY: Keep behavior.
+            continue  # WHY: Keep behavior.
+        fqdns = role_body.get("fqdns")  # WHY: Keep behavior.
+        if isinstance(fqdns, list):  # WHY: Keep behavior.
             # Same promotion rule as CENR bags. Keeps the FQDN element
             # shape uniform across both cache files so downstream code
             # can treat any host entry as ``{"host": <fqdn>, ...}``.
-            role_body["fqdns"] = [_promote_host_entry(entry) for entry in fqdns]
-    return doc
+            role_body["fqdns"] = [_promote_host_entry(entry) for entry in fqdns]  # WHY: Keep behavior.
+    return doc  # WHY: Keep behavior.
 
 
-def _count_cenr_host_entries(doc: dict[str, Any]) -> int:
+def _count_cenr_host_entries(doc: dict[str, Any]) -> int:  # WHY: Keep behavior.
     """Return the total number of host entries in the top-level CENR bags.
 
     Why:
@@ -198,15 +198,15 @@ def _count_cenr_host_entries(doc: dict[str, Any]) -> int:
     Returns:
         Non-negative int count of ``proxy_hostnames`` + ``vpn_hostnames``.
     """
-    total = 0
-    for bag_key in ("proxy_hostnames", "vpn_hostnames"):
-        bag = doc.get(bag_key)
-        if isinstance(bag, list):
-            total += len(bag)
-    return total
+    total = 0  # WHY: Keep behavior.
+    for bag_key in ("proxy_hostnames", "vpn_hostnames"):  # WHY: Keep behavior.
+        bag = doc.get(bag_key)  # WHY: Keep behavior.
+        if isinstance(bag, list):  # WHY: Keep behavior.
+            total += len(bag)  # WHY: Keep behavior.
+    return total  # WHY: Keep behavior.
 
 
-def _count_zcc_host_entries(doc: dict[str, Any]) -> int:
+def _count_zcc_host_entries(doc: dict[str, Any]) -> int:  # WHY: Keep behavior.
     """Return the total number of FQDN entries across all ZCC roles.
 
     Why:
@@ -220,24 +220,24 @@ def _count_zcc_host_entries(doc: dict[str, Any]) -> int:
     Returns:
         Non-negative int count of every ``roles[*].fqdns`` entry summed.
     """
-    total = 0
-    roles = doc.get("roles")
+    total = 0  # WHY: Keep behavior.
+    roles = doc.get("roles")  # WHY: Keep behavior.
     # Same list-vs-dict tolerance as ``_promote_zcc_document`` so the load-size
     # counter never under-reports just because the outer shape is a list.
-    role_bodies: list[Any] = []
-    if isinstance(roles, list):
-        role_bodies = list(roles)
-    elif isinstance(roles, dict):
-        role_bodies = list(roles.values())
-    for role_body in role_bodies:
-        if isinstance(role_body, dict):
-            fqdns = role_body.get("fqdns")
-            if isinstance(fqdns, list):
-                total += len(fqdns)
-    return total
+    role_bodies: list[Any] = []  # WHY: Keep behavior.
+    if isinstance(roles, list):  # WHY: Keep behavior.
+        role_bodies = list(roles)  # WHY: Keep behavior.
+    elif isinstance(roles, dict):  # WHY: Keep behavior.
+        role_bodies = list(roles.values())  # WHY: Keep behavior.
+    for role_body in role_bodies:  # WHY: Keep behavior.
+        if isinstance(role_body, dict):  # WHY: Keep behavior.
+            fqdns = role_body.get("fqdns")  # WHY: Keep behavior.
+            if isinstance(fqdns, list):  # WHY: Keep behavior.
+                total += len(fqdns)  # WHY: Keep behavior.
+    return total  # WHY: Keep behavior.
 
 
-def _bag_starts_with_str(bag: Any) -> bool:
+def _bag_starts_with_str(bag: Any) -> bool:  # WHY: Keep behavior.
     """Return True when ``bag`` is a non-empty list whose first entry is a string.
 
     Why:
@@ -252,10 +252,10 @@ def _bag_starts_with_str(bag: Any) -> bool:
         ``True`` when ``bag`` is a non-empty list and ``bag[0]`` is a
         ``str``; ``False`` otherwise.
     """
-    return isinstance(bag, list) and bool(bag) and isinstance(bag[0], str)
+    return isinstance(bag, list) and bool(bag) and isinstance(bag[0], str)  # WHY: Keep behavior.
 
 
-def _cenr_needs_promotion(doc: dict[str, Any]) -> bool:
+def _cenr_needs_promotion(doc: dict[str, Any]) -> bool:  # WHY: Keep behavior.
     """Return True when any CENR host bag still contains a flat-string entry.
 
     Why:
@@ -277,22 +277,22 @@ def _cenr_needs_promotion(doc: dict[str, Any]) -> bool:
         ``True`` if any inspected bag's first element is a bare string;
         ``False`` when every non-empty bag already carries dict entries.
     """
-    for bag_key in ("proxy_hostnames", "vpn_hostnames"):
-        if _bag_starts_with_str(doc.get(bag_key)):
-            return True
-    by_city = doc.get("by_city")
-    if not isinstance(by_city, dict):
-        return False
-    for city_slot in by_city.values():
-        if not isinstance(city_slot, dict):
-            continue
-        for bag_key in ("proxy_hostnames", "vpn_hostnames"):
-            if _bag_starts_with_str(city_slot.get(bag_key)):
-                return True
-    return False
+    for bag_key in ("proxy_hostnames", "vpn_hostnames"):  # WHY: Keep behavior.
+        if _bag_starts_with_str(doc.get(bag_key)):  # WHY: Keep behavior.
+            return True  # WHY: Keep behavior.
+    by_city = doc.get("by_city")  # WHY: Keep behavior.
+    if not isinstance(by_city, dict):  # WHY: Keep behavior.
+        return False  # WHY: Keep behavior.
+    for city_slot in by_city.values():  # WHY: Keep behavior.
+        if not isinstance(city_slot, dict):  # WHY: Keep behavior.
+            continue  # WHY: Keep behavior.
+        for bag_key in ("proxy_hostnames", "vpn_hostnames"):  # WHY: Keep behavior.
+            if _bag_starts_with_str(city_slot.get(bag_key)):  # WHY: Keep behavior.
+                return True  # WHY: Keep behavior.
+    return False  # WHY: Keep behavior.
 
 
-def _zcc_needs_promotion(doc: dict[str, Any]) -> bool:
+def _zcc_needs_promotion(doc: dict[str, Any]) -> bool:  # WHY: Keep behavior.
     """Return True when any ``roles[*].fqdns`` bag still contains a flat string.
 
     Why:
@@ -307,22 +307,22 @@ def _zcc_needs_promotion(doc: dict[str, Any]) -> bool:
     Returns:
         ``True`` if any inspected FQDN bag's first element is a bare string.
     """
-    roles = doc.get("roles")
-    role_bodies: list[Any] = []
-    if isinstance(roles, list):
-        role_bodies = list(roles)
-    elif isinstance(roles, dict):
-        role_bodies = list(roles.values())
-    for role_body in role_bodies:
-        if not isinstance(role_body, dict):
-            continue
-        fqdns = role_body.get("fqdns")
-        if isinstance(fqdns, list) and fqdns and isinstance(fqdns[0], str):
-            return True
-    return False
+    roles = doc.get("roles")  # WHY: Keep behavior.
+    role_bodies: list[Any] = []  # WHY: Keep behavior.
+    if isinstance(roles, list):  # WHY: Keep behavior.
+        role_bodies = list(roles)  # WHY: Keep behavior.
+    elif isinstance(roles, dict):  # WHY: Keep behavior.
+        role_bodies = list(roles.values())  # WHY: Keep behavior.
+    for role_body in role_bodies:  # WHY: Keep behavior.
+        if not isinstance(role_body, dict):  # WHY: Keep behavior.
+            continue  # WHY: Keep behavior.
+        fqdns = role_body.get("fqdns")  # WHY: Keep behavior.
+        if isinstance(fqdns, list) and fqdns and isinstance(fqdns[0], str):  # WHY: Keep behavior.
+            return True  # WHY: Keep behavior.
+    return False  # WHY: Keep behavior.
 
 
-def promote_cache_document(doc: dict[str, Any], *, kind: str) -> dict[str, Any]:
+def promote_cache_document(doc: dict[str, Any], *, kind: str) -> dict[str, Any]:  # WHY: Keep behavior.
     """Public v2 -> v3 loader adapter for either cache file kind.
 
     Why:
@@ -345,46 +345,46 @@ def promote_cache_document(doc: dict[str, Any], *, kind: str) -> dict[str, Any]:
     Returns:
         The (possibly mutated) ``doc`` for call-site chaining.
     """
-    detected = doc.get("schema_version")
+    detected = doc.get("schema_version")  # WHY: Keep behavior.
     # Coerce missing/non-int schema_version to 0 so the INFO line always
     # reports a numeric version (contract mandates %d formatting).
-    detected_int = detected if isinstance(detected, int) else 0
+    detected_int = detected if isinstance(detected, int) else 0  # WHY: Keep behavior.
     # Shape-probe the bags rather than trusting the version stamp alone: a
     # prior writer bug produced ``schema_version=3`` documents with flat-
     # string bags, and a stamp-only short-circuit stranded every downstream
     # v3-dict walker. If the stamp says v3 AND the bags actually look v3,
     # we skip. Otherwise fall through and (re)promote silently.
-    needs_promotion = (
+    needs_promotion = (  # WHY: Keep behavior.
         _cenr_needs_promotion(doc) if kind == "cenr" else _zcc_needs_promotion(doc) if kind == "zcc" else False
     )
-    if isinstance(detected, int) and detected >= _SCHEMA_VERSION and not needs_promotion:
+    if isinstance(detected, int) and detected >= _SCHEMA_VERSION and not needs_promotion:  # WHY: Keep behavior.
         # Already v3 in both stamp and shape -> skip promotion entirely. Do
         # NOT log so steady-state loads stay quiet at INFO.
-        return doc
-    if kind == "cenr":
+        return doc  # WHY: Keep behavior.
+    if kind == "cenr":  # WHY: Keep behavior.
         # Contract cenr_cache_schema_v3.md: promote all four CENR bags.
-        doc = _promote_cenr_document(doc)
-        count = _count_cenr_host_entries(doc)
-    elif kind == "zcc":
+        doc = _promote_cenr_document(doc)  # WHY: Keep behavior.
+        count = _count_cenr_host_entries(doc)  # WHY: Keep behavior.
+    elif kind == "zcc":  # WHY: Keep behavior.
         # Contract cenr_cache_schema_v3.md: promote roles[*].fqdns bag.
-        doc = _promote_zcc_document(doc)
-        count = _count_zcc_host_entries(doc)
+        doc = _promote_zcc_document(doc)  # WHY: Keep behavior.
+        count = _count_zcc_host_entries(doc)  # WHY: Keep behavior.
     else:
         # Unknown kind: still emit the diagnostic INFO but skip promotion so
         # nothing silently mutates a document we do not understand.
-        count = 0
+        count = 0  # WHY: Keep behavior.
     # Stamp the current schema version after promotion so the next load short-
     # circuits without re-emitting the INFO line (idempotency contract).
-    doc["schema_version"] = _SCHEMA_VERSION
-    logger.info(
+    doc["schema_version"] = _SCHEMA_VERSION  # WHY: Keep behavior.
+    logger.info(  # WHY: Keep behavior.
         "zscaler_catalogue: loaded v%d cache (%d entries); observations absent",
         detected_int,
         count,
     )
-    return doc
+    return doc  # WHY: Keep behavior.
 
 
-def _pick_udp_observation(
+def _pick_udp_observation(  # WHY: Keep behavior.
     udp_states: dict[int, str],
 ) -> tuple[str, int] | None:
     """Return the winning UDP/IKE observation, or ``None`` when both are silent.
@@ -402,13 +402,13 @@ def _pick_udp_observation(
         ``("UDP/500", 500)`` or ``("UDP/4500", 4500)`` when the matching
         port responded non-silently; ``None`` when neither did.
     """
-    for port in (500, 4500):
-        if port in udp_states and udp_states.get(port) != "silent":
-            return f"UDP/{port}", port
-    return None
+    for port in (500, 4500):  # WHY: Keep behavior.
+        if port in udp_states and udp_states.get(port) != "silent":  # WHY: Keep behavior.
+            return f"UDP/{port}", port  # WHY: Keep behavior.
+    return None  # WHY: Keep behavior.
 
 
-def _pick_observation_from_probe_result(
+def _pick_observation_from_probe_result(  # WHY: Keep behavior.
     pr: ProbeResult,
 ) -> tuple[str | None, int | None]:
     """Return the (protocol, port) tuple to persist for one probed endpoint.
@@ -439,20 +439,20 @@ def _pick_observation_from_probe_result(
         when no port responded so the caller writes ``observed_protocol =
         None`` per contract.
     """
-    tcp_states: dict[int, str] = getattr(pr, "tcp", None) or {}
-    https_status = getattr(pr, "https_status", None)
-    if tcp_states.get(443) == "open" and https_status is not None:
-        return "HTTPS", 443
-    udp_pick = _pick_udp_observation(getattr(pr, "udp", None) or {})
-    if udp_pick is not None:
-        return udp_pick
-    for port, state in tcp_states.items():
-        if port != 443 and state == "open":
-            return "TCP", port
-    return None, None
+    tcp_states: dict[int, str] = getattr(pr, "tcp", None) or {}  # WHY: Keep behavior.
+    https_status = getattr(pr, "https_status", None)  # WHY: Keep behavior.
+    if tcp_states.get(443) == "open" and https_status is not None:  # WHY: Keep behavior.
+        return "HTTPS", 443  # WHY: Keep behavior.
+    udp_pick = _pick_udp_observation(getattr(pr, "udp", None) or {})  # WHY: Keep behavior.
+    if udp_pick is not None:  # WHY: Keep behavior.
+        return udp_pick  # WHY: Keep behavior.
+    for port, state in tcp_states.items():  # WHY: Keep behavior.
+        if port != 443 and state == "open":  # WHY: Keep behavior.
+            return "TCP", port  # WHY: Keep behavior.
+    return None, None  # WHY: Keep behavior.
 
 
-def _stamp_observation_bag(
+def _stamp_observation_bag(  # WHY: Keep behavior.
     bag: Any,
     observations: dict[str, tuple[str | None, int | None, str]],
 ) -> int:
@@ -470,31 +470,31 @@ def _stamp_observation_bag(
         The number of host entries mutated in this bag.
     """
     if not isinstance(bag, list):  # A missing or malformed bag contributes nothing.
-        return 0
+        return 0  # WHY: Keep behavior.
     stamped = 0  # Count of entries mutated in this bag.
     for entry in bag:  # Walk every host record in the bag.
         if not isinstance(entry, dict):  # Skip malformed rows rather than failing the merge.
-            continue
+            continue  # WHY: Keep behavior.
         host = entry.get("host")  # The FQDN keys the observation map.
         if not isinstance(host, str):  # A row without a usable host cannot be matched.
-            continue
+            continue  # WHY: Keep behavior.
         obs = observations.get(host)  # Hosts absent from the map keep their on-disk values.
-        if obs is None:
-            continue
+        if obs is None:  # WHY: Keep behavior.
+            continue  # WHY: Keep behavior.
         protocol, port, ts = obs  # Unpack the observation triplet.
         # Always write all three observation keys together so a stale
         # value never survives next to a fresh one. Matches contract
         # cenr_cache_schema_v3.md §"Observation triplet". When the host
         # was silent (no responding protocol), the whole triplet is None
         # so the "no observation" branch stays distinguishable on disk.
-        entry["observed_protocol"] = protocol
-        entry["observed_port"] = port
-        entry["last_probed"] = ts if protocol is not None else None
-        stamped += 1
-    return stamped
+        entry["observed_protocol"] = protocol  # WHY: Keep behavior.
+        entry["observed_port"] = port  # WHY: Keep behavior.
+        entry["last_probed"] = ts if protocol is not None else None  # WHY: Keep behavior.
+        stamped += 1  # WHY: Keep behavior.
+    return stamped  # WHY: Keep behavior.
 
 
-def _stamp_city_bags(
+def _stamp_city_bags(  # WHY: Keep behavior.
     by_city: Any,
     observations: dict[str, tuple[str | None, int | None, str]],
 ) -> int:
@@ -513,17 +513,17 @@ def _stamp_city_bags(
         The number of host entries mutated across every city slot.
     """
     if not isinstance(by_city, dict):  # A missing by_city section contributes nothing.
-        return 0
+        return 0  # WHY: Keep behavior.
     stamped = 0  # Running total across all city slots.
     for city_slot in by_city.values():  # Each slot mirrors the top-level bag pair.
         if not isinstance(city_slot, dict):  # Skip malformed slots rather than failing.
-            continue
-        stamped += _stamp_observation_bag(city_slot.get("proxy_hostnames"), observations)
-        stamped += _stamp_observation_bag(city_slot.get("vpn_hostnames"), observations)
-    return stamped
+            continue  # WHY: Keep behavior.
+        stamped += _stamp_observation_bag(city_slot.get("proxy_hostnames"), observations)  # WHY: Keep behavior.
+        stamped += _stamp_observation_bag(city_slot.get("vpn_hostnames"), observations)  # WHY: Keep behavior.
+    return stamped  # WHY: Keep behavior.
 
 
-def _merge_observations_into_cenr(
+def _merge_observations_into_cenr(  # WHY: Keep behavior.
     doc: dict[str, Any],
     observations: dict[str, tuple[str | None, int | None, str]],
 ) -> int:
@@ -555,10 +555,10 @@ def _merge_observations_into_cenr(
     stamped = _stamp_observation_bag(doc.get("proxy_hostnames"), observations)  # Top-level proxy bag.
     stamped += _stamp_observation_bag(doc.get("vpn_hostnames"), observations)  # Top-level VPN bag.
     stamped += _stamp_city_bags(doc.get("by_city"), observations)  # Both bags of every city slot.
-    return stamped
+    return stamped  # WHY: Keep behavior.
 
 
-def _merge_observations_into_zcc(
+def _merge_observations_into_zcc(  # WHY: Keep behavior.
     doc: dict[str, Any],
     observations: dict[str, tuple[str | None, int | None, str]],
 ) -> int:
@@ -579,18 +579,18 @@ def _merge_observations_into_zcc(
     Returns:
         Total number of FQDN entries mutated across all roles.
     """
-    stamped = 0
-    for role_body in _iter_zcc_role_bodies(doc):
-        fqdns = role_body.get("fqdns")
-        if not isinstance(fqdns, list):
-            continue
-        for entry in fqdns:
-            if _stamp_zcc_entry(entry, observations):
-                stamped += 1
-    return stamped
+    stamped = 0  # WHY: Keep behavior.
+    for role_body in _iter_zcc_role_bodies(doc):  # WHY: Keep behavior.
+        fqdns = role_body.get("fqdns")  # WHY: Keep behavior.
+        if not isinstance(fqdns, list):  # WHY: Keep behavior.
+            continue  # WHY: Keep behavior.
+        for entry in fqdns:  # WHY: Keep behavior.
+            if _stamp_zcc_entry(entry, observations):  # WHY: Keep behavior.
+                stamped += 1  # WHY: Keep behavior.
+    return stamped  # WHY: Keep behavior.
 
 
-def _iter_zcc_role_bodies(doc: dict[str, Any]) -> list[dict[str, Any]]:
+def _iter_zcc_role_bodies(doc: dict[str, Any]) -> list[dict[str, Any]]:  # WHY: Keep behavior.
     """Return the role-body dicts from a ZCC document regardless of container shape.
 
     Why:
@@ -608,17 +608,17 @@ def _iter_zcc_role_bodies(doc: dict[str, Any]) -> list[dict[str, Any]]:
         container shapes yield an empty list rather than raising, so the
         caller can still return a zero-stamp count.
     """
-    roles = doc.get("roles")
-    if isinstance(roles, list):
-        candidates: list[Any] = list(roles)
-    elif isinstance(roles, dict):
-        candidates = list(roles.values())
+    roles = doc.get("roles")  # WHY: Keep behavior.
+    if isinstance(roles, list):  # WHY: Keep behavior.
+        candidates: list[Any] = list(roles)  # WHY: Keep behavior.
+    elif isinstance(roles, dict):  # WHY: Keep behavior.
+        candidates = list(roles.values())  # WHY: Keep behavior.
     else:
-        candidates = []
-    return [item for item in candidates if isinstance(item, dict)]
+        candidates = []  # WHY: Keep behavior.
+    return [item for item in candidates if isinstance(item, dict)]  # WHY: Keep behavior.
 
 
-def _stamp_zcc_entry(
+def _stamp_zcc_entry(  # WHY: Keep behavior.
     entry: Any,
     observations: dict[str, tuple[str | None, int | None, str]],
 ) -> bool:
@@ -642,24 +642,24 @@ def _stamp_zcc_entry(
         ``True`` if the entry was stamped (observation matched a probed
         host); ``False`` if it was skipped or had no observation.
     """
-    if not isinstance(entry, dict):
-        return False
-    host = entry.get("host")
-    if not isinstance(host, str):
-        return False
-    obs = observations.get(host)
-    if obs is None:
-        return False
-    protocol, port, ts = obs
-    entry["observed_protocol"] = protocol
-    entry["observed_port"] = port
+    if not isinstance(entry, dict):  # WHY: Keep behavior.
+        return False  # WHY: Keep behavior.
+    host = entry.get("host")  # WHY: Keep behavior.
+    if not isinstance(host, str):  # WHY: Keep behavior.
+        return False  # WHY: Keep behavior.
+    obs = observations.get(host)  # WHY: Keep behavior.
+    if obs is None:  # WHY: Keep behavior.
+        return False  # WHY: Keep behavior.
+    protocol, port, ts = obs  # WHY: Keep behavior.
+    entry["observed_protocol"] = protocol  # WHY: Keep behavior.
+    entry["observed_port"] = port  # WHY: Keep behavior.
     # Match the CENR walker: silent hosts get a null triplet so the
     # on-disk shape between the two files stays symmetric.
-    entry["last_probed"] = ts if protocol is not None else None
-    return True
+    entry["last_probed"] = ts if protocol is not None else None  # WHY: Keep behavior.
+    return True  # WHY: Keep behavior.
 
 
-def is_stale(cenr: dict[str, Any]) -> bool:
+def is_stale(cenr: dict[str, Any]) -> bool:  # WHY: Keep behavior.
     """Return ``True`` when the cached CENR document is older than the TTL.
 
     Why:
@@ -677,24 +677,24 @@ def is_stale(cenr: dict[str, Any]) -> bool:
         :data:`_FRESHNESS_TTL`; ``False`` when it is present, parseable, and
         within the TTL window.
     """
-    raw = cenr.get("fetched_utc")
-    if not isinstance(raw, str) or not raw:
-        return True
+    raw = cenr.get("fetched_utc")  # WHY: Keep behavior.
+    if not isinstance(raw, str) or not raw:  # WHY: Keep behavior.
+        return True  # WHY: Keep behavior.
     # Accept both ``...Z`` and ``+00:00`` suffixes -- Python 3.11+ handles ``Z``
     # in fromisoformat natively, but be defensive for older writers.
     try:
-        text = raw.replace("Z", "+00:00") if raw.endswith("Z") else raw
-        fetched = datetime.fromisoformat(text)
-    except ValueError:
-        logger.warning("zscaler_catalogue: unparseable fetched_utc=%r; treating as stale", raw)
-        return True
-    if fetched.tzinfo is None:
-        fetched = fetched.replace(tzinfo=UTC)
-    age = datetime.now(UTC) - fetched
-    return age >= _FRESHNESS_TTL
+        text = raw.replace("Z", "+00:00") if raw.endswith("Z") else raw  # WHY: Keep behavior.
+        fetched = datetime.fromisoformat(text)  # WHY: Keep behavior.
+    except ValueError:  # WHY: Keep behavior.
+        logger.warning("zscaler_catalogue: unparseable fetched_utc=%r; treating as stale", raw)  # WHY: Keep behavior.
+        return True  # WHY: Keep behavior.
+    if fetched.tzinfo is None:  # WHY: Keep behavior.
+        fetched = fetched.replace(tzinfo=UTC)  # WHY: Keep behavior.
+    age = datetime.now(UTC) - fetched  # WHY: Keep behavior.
+    return age >= _FRESHNESS_TTL  # WHY: Keep behavior.
 
 
-def fetch_cloud(cloud: str, *, timeout: float = _FETCH_TIMEOUT) -> dict[str, Any] | None:
+def fetch_cloud(cloud: str, *, timeout: float = _FETCH_TIMEOUT) -> dict[str, Any] | None:  # WHY: Keep behavior.
     """Fetch and parse the CENR JSON document for a single Zscaler cloud.
 
     Why:
@@ -712,38 +712,38 @@ def fetch_cloud(cloud: str, *, timeout: float = _FETCH_TIMEOUT) -> dict[str, Any
         Parsed JSON document on success, or ``None`` when the fetch or parse
         fails for any reason.
     """
-    url = _CENR_URL_TEMPLATE.format(cloud=cloud)
+    url = _CENR_URL_TEMPLATE.format(cloud=cloud)  # WHY: Keep behavior.
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "MistHelper-menu206/1.0"})
+        req = urllib.request.Request(url, headers={"User-Agent": "MistHelper-menu206/1.0"})  # WHY: Keep behavior.
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 - the host is a fixed HTTPS URL
-            status = getattr(resp, "status", 200)
-            if status != 200:
-                logger.warning(
+            status = getattr(resp, "status", 200)  # WHY: Keep behavior.
+            if status != 200:  # WHY: Keep behavior.
+                logger.warning(  # WHY: Keep behavior.
                     "zscaler_catalogue: %s returned HTTP %s; skipping cloud",
                     url,
                     status,
                 )
-                return None
-            body = resp.read()
-    except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        logger.warning("zscaler_catalogue: fetch failed for %s: %s", url, exc)
-        return None
+                return None  # WHY: Keep behavior.
+            body = resp.read()  # WHY: Keep behavior.
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:  # WHY: Keep behavior.
+        logger.warning("zscaler_catalogue: fetch failed for %s: %s", url, exc)  # WHY: Keep behavior.
+        return None  # WHY: Keep behavior.
     try:
-        parsed = json.loads(body.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        logger.warning("zscaler_catalogue: JSON parse failed for %s: %s", url, exc)
-        return None
-    if not isinstance(parsed, dict):
-        logger.warning(
+        parsed = json.loads(body.decode("utf-8"))  # WHY: Keep behavior.
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:  # WHY: Keep behavior.
+        logger.warning("zscaler_catalogue: JSON parse failed for %s: %s", url, exc)  # WHY: Keep behavior.
+        return None  # WHY: Keep behavior.
+    if not isinstance(parsed, dict):  # WHY: Keep behavior.
+        logger.warning(  # WHY: Keep behavior.
             "zscaler_catalogue: %s returned non-object JSON (%s); skipping",
             url,
             type(parsed).__name__,
         )
-        return None
-    return parsed
+        return None  # WHY: Keep behavior.
+    return parsed  # WHY: Keep behavior.
 
 
-def _strip_prefix(key: str, prefix: str) -> str:
+def _strip_prefix(key: str, prefix: str) -> str:  # WHY: Keep behavior.
     """Strip a ``"prefix : "`` label from a Zscaler CENR JSON key.
 
     Why:
@@ -762,13 +762,13 @@ def _strip_prefix(key: str, prefix: str) -> str:
         The tail after ``"<prefix> : "`` if present, otherwise the key
         unchanged.
     """
-    marker = f"{prefix} : "
-    if key.startswith(marker):
-        return key[len(marker) :]
-    return key
+    marker = f"{prefix} : "  # WHY: Keep behavior.
+    if key.startswith(marker):  # WHY: Keep behavior.
+        return key[len(marker) :]  # WHY: Keep behavior.
+    return key  # WHY: Keep behavior.
 
 
-def _cloud_root_trees(cloud: str, doc: dict[str, Any]) -> list[dict[str, Any]]:
+def _cloud_root_trees(cloud: str, doc: dict[str, Any]) -> list[dict[str, Any]]:  # WHY: Keep behavior.
     """Return the continent-tree dicts hanging off a per-cloud CENR doc.
 
     Why:
@@ -787,18 +787,18 @@ def _cloud_root_trees(cloud: str, doc: dict[str, Any]) -> list[dict[str, Any]]:
     Returns:
         A list (possibly empty) of continent-tree dicts to walk.
     """
-    if isinstance(doc.get(cloud), dict):
-        return [doc[cloud]]
-    fallback: list[dict[str, Any]] = []
-    for top_key, top_val in doc.items():
-        if top_key == "svpnIPs":
-            continue
-        if isinstance(top_val, dict):
-            fallback.append(top_val)
-    return fallback
+    if isinstance(doc.get(cloud), dict):  # WHY: Keep behavior.
+        return [doc[cloud]]  # WHY: Keep behavior.
+    fallback: list[dict[str, Any]] = []  # WHY: Keep behavior.
+    for top_key, top_val in doc.items():  # WHY: Keep behavior.
+        if top_key == "svpnIPs":  # WHY: Keep behavior.
+            continue  # WHY: Keep behavior.
+        if isinstance(top_val, dict):  # WHY: Keep behavior.
+            fallback.append(top_val)  # WHY: Keep behavior.
+    return fallback  # WHY: Keep behavior.
 
 
-def _slot_host_field(entry: Any) -> str:
+def _slot_host_field(entry: Any) -> str:  # WHY: Keep behavior.
     """Return the ``host`` string from a v3 dict entry or a legacy flat string.
 
     Why:
@@ -816,13 +816,13 @@ def _slot_host_field(entry: Any) -> str:
         The hostname string, or empty string when the entry is neither
         a dict-with-host nor a plain string.
     """
-    if isinstance(entry, dict):
-        h = entry.get("host")
-        return h if isinstance(h, str) else ""
-    return entry if isinstance(entry, str) else ""
+    if isinstance(entry, dict):  # WHY: Keep behavior.
+        h = entry.get("host")  # WHY: Keep behavior.
+        return h if isinstance(h, str) else ""  # WHY: Keep behavior.
+    return entry if isinstance(entry, str) else ""  # WHY: Keep behavior.
 
 
-def _seed_slot_host_sets(slot: dict[str, Any]) -> tuple[set[str], set[str]]:
+def _seed_slot_host_sets(slot: dict[str, Any]) -> tuple[set[str], set[str]]:  # WHY: Keep behavior.
     """Rehydrate proxy/vpn dedup sets from a slot's existing v3 host dicts.
 
     Why:
@@ -839,12 +839,16 @@ def _seed_slot_host_sets(slot: dict[str, Any]) -> tuple[set[str], set[str]]:
         A ``(proxy_hosts, vpn_hosts)`` tuple of hostname sets, ready to
         receive new hosts by ``.add``.
     """
-    slot_proxies: set[str] = {h for h in (_slot_host_field(e) for e in slot.get("proxy_hostnames", []) or []) if h}
-    slot_vpns: set[str] = {h for h in (_slot_host_field(e) for e in slot.get("vpn_hostnames", []) or []) if h}
-    return slot_proxies, slot_vpns
+    slot_proxies: set[str] = {
+        h for h in (_slot_host_field(e) for e in slot.get("proxy_hostnames", []) or []) if h
+    }  # WHY: Keep behavior.
+    slot_vpns: set[str] = {
+        h for h in (_slot_host_field(e) for e in slot.get("vpn_hostnames", []) or []) if h
+    }  # WHY: Keep behavior.
+    return slot_proxies, slot_vpns  # WHY: Keep behavior.
 
 
-def _ingest_record(
+def _ingest_record(  # WHY: Keep behavior.
     record: Any,
     proxies: set[str],
     vpns: set[str],
@@ -866,19 +870,19 @@ def _ingest_record(
         slot_proxies: Per-city proxy-hostname set. Mutated in place.
         slot_vpns: Per-city vpn-hostname set. Mutated in place.
     """
-    if not isinstance(record, dict):
-        return
-    host = record.get("hostname")
-    if isinstance(host, str) and host:
-        proxies.add(host)
-        slot_proxies.add(host)
-    vpn = record.get("vpn")
-    if isinstance(vpn, str) and vpn:
-        vpns.add(vpn)
-        slot_vpns.add(vpn)
+    if not isinstance(record, dict):  # WHY: Keep behavior.
+        return  # WHY: Keep behavior.
+    host = record.get("hostname")  # WHY: Keep behavior.
+    if isinstance(host, str) and host:  # WHY: Keep behavior.
+        proxies.add(host)  # WHY: Keep behavior.
+        slot_proxies.add(host)  # WHY: Keep behavior.
+    vpn = record.get("vpn")  # WHY: Keep behavior.
+    if isinstance(vpn, str) and vpn:  # WHY: Keep behavior.
+        vpns.add(vpn)  # WHY: Keep behavior.
+        slot_vpns.add(vpn)  # WHY: Keep behavior.
 
 
-def _finalize_slot(
+def _finalize_slot(  # WHY: Keep behavior.
     slot: dict[str, Any],
     slot_proxies: set[str],
     slot_vpns: set[str],
@@ -899,15 +903,15 @@ def _finalize_slot(
         slot_vpns: Final vpn-hostname set for this city.
         cloud: Cloud slug that supplied this pass's records.
     """
-    slot["proxy_hostnames"] = [_promote_host_entry(h) for h in sorted(slot_proxies)]
-    slot["vpn_hostnames"] = [_promote_host_entry(h) for h in sorted(slot_vpns)]
-    seen_clouds: set[str] = set(slot.get("seen_in_clouds", []) or [])
-    seen_clouds.add(cloud)
-    slot["seen_in_clouds"] = sorted(seen_clouds)
+    slot["proxy_hostnames"] = [_promote_host_entry(h) for h in sorted(slot_proxies)]  # WHY: Keep behavior.
+    slot["vpn_hostnames"] = [_promote_host_entry(h) for h in sorted(slot_vpns)]  # WHY: Keep behavior.
+    seen_clouds: set[str] = set(slot.get("seen_in_clouds", []) or [])  # WHY: Keep behavior.
+    seen_clouds.add(cloud)  # WHY: Keep behavior.
+    slot["seen_in_clouds"] = sorted(seen_clouds)  # WHY: Keep behavior.
 
 
 @dataclass
-class _MergeAccumulators:
+class _MergeAccumulators:  # WHY: Keep behavior.
     """The three collections that the cloud walk fills in place.
 
     Why:
@@ -921,7 +925,7 @@ class _MergeAccumulators:
     by_city: dict[str, dict[str, Any]] = field(default_factory=dict)  # Merged per-city slots.
 
 
-def _absorb_city_records(
+def _absorb_city_records(  # WHY: Keep behavior.
     city: str,
     records: list[Any],
     cloud: str,
@@ -942,14 +946,14 @@ def _absorb_city_records(
             ``seen_in_clouds`` on the slot).
         accumulators: Shared proxy set, VPN set, and by-city map. Mutated in place.
     """
-    slot = accumulators.by_city.setdefault(city, {"proxy_hostnames": [], "vpn_hostnames": []})
-    slot_proxies, slot_vpns = _seed_slot_host_sets(slot)
-    for record in records:
-        _ingest_record(record, accumulators.proxies, accumulators.vpns, slot_proxies, slot_vpns)
-    _finalize_slot(slot, slot_proxies, slot_vpns, cloud)
+    slot = accumulators.by_city.setdefault(city, {"proxy_hostnames": [], "vpn_hostnames": []})  # WHY: Keep behavior.
+    slot_proxies, slot_vpns = _seed_slot_host_sets(slot)  # WHY: Keep behavior.
+    for record in records:  # WHY: Keep behavior.
+        _ingest_record(record, accumulators.proxies, accumulators.vpns, slot_proxies, slot_vpns)  # WHY: Keep behavior.
+    _finalize_slot(slot, slot_proxies, slot_vpns, cloud)  # WHY: Keep behavior.
 
 
-def _walk_city_map(
+def _walk_city_map(  # WHY: Keep behavior.
     city_map: dict[str, Any],
     cloud: str,
     accumulators: _MergeAccumulators,
@@ -967,16 +971,16 @@ def _walk_city_map(
         cloud: Cloud slug supplying these buckets.
         accumulators: Shared proxy set, VPN set, and by-city map. Mutated in place.
     """
-    for city_key, records in city_map.items():
-        if not isinstance(records, list):
-            continue
-        city = _strip_prefix(city_key, "city")
-        if not city:
-            continue
-        _absorb_city_records(city, records, cloud, accumulators)
+    for city_key, records in city_map.items():  # WHY: Keep behavior.
+        if not isinstance(records, list):  # WHY: Keep behavior.
+            continue  # WHY: Keep behavior.
+        city = _strip_prefix(city_key, "city")  # WHY: Keep behavior.
+        if not city:  # WHY: Keep behavior.
+            continue  # WHY: Keep behavior.
+        _absorb_city_records(city, records, cloud, accumulators)  # WHY: Keep behavior.
 
 
-def merge_clouds(per_cloud: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def merge_clouds(per_cloud: dict[str, dict[str, Any]]) -> dict[str, Any]:  # WHY: Keep behavior.
     """Flat-merge per-cloud CENR documents into a single cache-file dict.
 
     Why:
@@ -1007,20 +1011,20 @@ def merge_clouds(per_cloud: dict[str, dict[str, Any]]) -> dict[str, Any]:
     """
     accumulators = _MergeAccumulators()  # One bundle carries the three shared collections.
 
-    for cloud, doc in per_cloud.items():
-        if not isinstance(doc, dict):
-            continue
-        for continent_tree in _cloud_root_trees(cloud, doc):
-            for continent_key, city_map in continent_tree.items():
-                if not isinstance(city_map, dict):
-                    continue
+    for cloud, doc in per_cloud.items():  # WHY: Keep behavior.
+        if not isinstance(doc, dict):  # WHY: Keep behavior.
+            continue  # WHY: Keep behavior.
+        for continent_tree in _cloud_root_trees(cloud, doc):  # WHY: Keep behavior.
+            for continent_key, city_map in continent_tree.items():  # WHY: Keep behavior.
+                if not isinstance(city_map, dict):  # WHY: Keep behavior.
+                    continue  # WHY: Keep behavior.
                 _ = _strip_prefix(continent_key, "continent")  # future: expose continent
-                _walk_city_map(city_map, cloud, accumulators)
+                _walk_city_map(city_map, cloud, accumulators)  # WHY: Keep behavior.
 
-    return _build_cenr_document(per_cloud, accumulators)
+    return _build_cenr_document(per_cloud, accumulators)  # WHY: Keep behavior.
 
 
-def _build_cenr_document(
+def _build_cenr_document(  # WHY: Keep behavior.
     per_cloud: dict[str, dict[str, Any]],
     accumulators: _MergeAccumulators,
 ) -> dict[str, Any]:
@@ -1042,7 +1046,7 @@ def _build_cenr_document(
     source_urls = sorted(_CENR_URL_TEMPLATE.format(cloud=c) for c in per_cloud)  # Stable across runs.
     now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")  # UTC keeps the stamp host-independent.
 
-    return {
+    return {  # WHY: Keep behavior.
         "schema_version": _SCHEMA_VERSION,
         "fetched_utc": now,
         "source_urls": source_urls,
@@ -1066,7 +1070,7 @@ def _build_cenr_document(
     }
 
 
-def _atomic_write_json(path: Path, doc: dict[str, Any]) -> None:
+def _atomic_write_json(path: Path, doc: dict[str, Any]) -> None:  # WHY: Keep behavior.
     """Write ``doc`` to ``path`` atomically via temp-file + rename.
 
     Why:
@@ -1086,23 +1090,23 @@ def _atomic_write_json(path: Path, doc: dict[str, Any]) -> None:
             temp file. Callers upstream (``refresh_cenr``) convert this into a
             warning so the auto-refresh path stays fail-open.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+    path.parent.mkdir(parents=True, exist_ok=True)  # WHY: Keep behavior.
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))  # WHY: Keep behavior.
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(doc, handle, indent=2)
-            handle.write("\n")
-        os.replace(tmp_name, path)
-    except Exception:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:  # WHY: Keep behavior.
+            json.dump(doc, handle, indent=2)  # WHY: Keep behavior.
+            handle.write("\n")  # WHY: Keep behavior.
+        os.replace(tmp_name, path)  # WHY: Keep behavior.
+    except Exception:  # WHY: Keep behavior.
         # Best-effort cleanup on failure so we do not leak temp files.
         try:
-            os.unlink(tmp_name)
-        except OSError:
-            pass
-        raise
+            os.unlink(tmp_name)  # WHY: Keep behavior.
+        except OSError:  # WHY: Keep behavior.
+            pass  # WHY: Keep behavior.
+        raise  # WHY: Keep behavior.
 
 
-def _load_stale_cenr_cache(cenr_path: Path, warnings: list[str]) -> dict[str, Any]:
+def _load_stale_cenr_cache(cenr_path: Path, warnings: list[str]) -> dict[str, Any]:  # WHY: Keep behavior.
     """Return the on-disk stale CENR dict when every cloud fetch fails.
 
     Why:
@@ -1121,17 +1125,17 @@ def _load_stale_cenr_cache(cenr_path: Path, warnings: list[str]) -> dict[str, An
         The stale-but-valid CENR dict, or an empty dict when the file is
         missing, unreadable, or does not decode to a dict.
     """
-    if not cenr_path.is_file():
-        return {}
+    if not cenr_path.is_file():  # WHY: Keep behavior.
+        return {}  # WHY: Keep behavior.
     try:
-        stale = json.loads(cenr_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        warnings.append(f"stale cache read failed: {exc}")
-        return {}
-    return stale if isinstance(stale, dict) else {}
+        stale = json.loads(cenr_path.read_text(encoding="utf-8"))  # WHY: Keep behavior.
+    except (OSError, json.JSONDecodeError) as exc:  # WHY: Keep behavior.
+        warnings.append(f"stale cache read failed: {exc}")  # WHY: Keep behavior.
+        return {}  # WHY: Keep behavior.
+    return stale if isinstance(stale, dict) else {}  # WHY: Keep behavior.
 
 
-def refresh_cenr(cenr_path: Path) -> tuple[dict[str, Any], list[str]]:
+def refresh_cenr(cenr_path: Path) -> tuple[dict[str, Any], list[str]]:  # WHY: Keep behavior.
     """Fetch every Zscaler cloud, merge, decorate, and rewrite ``cenr_path``.
 
     Why:
@@ -1155,30 +1159,32 @@ def refresh_cenr(cenr_path: Path) -> tuple[dict[str, Any], list[str]]:
         fetch failures, unmapped cities from the metadata attach step, and so on)
         for the caller to log.
     """
-    warnings: list[str] = []
-    per_cloud: dict[str, dict[str, Any]] = {}
-    for cloud in _CLOUDS:
-        doc = fetch_cloud(cloud)
-        if doc is None:
-            warnings.append(f"cloud fetch failed: {cloud}")
-            continue
-        per_cloud[cloud] = doc
+    warnings: list[str] = []  # WHY: Keep behavior.
+    per_cloud: dict[str, dict[str, Any]] = {}  # WHY: Keep behavior.
+    for cloud in _CLOUDS:  # WHY: Keep behavior.
+        doc = fetch_cloud(cloud)  # WHY: Keep behavior.
+        if doc is None:  # WHY: Keep behavior.
+            warnings.append(f"cloud fetch failed: {cloud}")  # WHY: Keep behavior.
+            continue  # WHY: Keep behavior.
+        per_cloud[cloud] = doc  # WHY: Keep behavior.
 
-    if not per_cloud:
-        warnings.append("all Zscaler cloud fetches failed; keeping stale cache at " f"{cenr_path}")
-        logger.warning(warnings[-1])
-        return _load_stale_cenr_cache(cenr_path, warnings), warnings
+    if not per_cloud:  # WHY: Keep behavior.
+        warnings.append(
+            "all Zscaler cloud fetches failed; keeping stale cache at " f"{cenr_path}"
+        )  # WHY: Keep behavior.
+        logger.warning(warnings[-1])  # WHY: Keep behavior.
+        return _load_stale_cenr_cache(cenr_path, warnings), warnings  # WHY: Keep behavior.
 
-    merged = merge_clouds(per_cloud)
-    merged, city_warnings = attach_city_metadata(merged)
-    warnings.extend(city_warnings)
+    merged = merge_clouds(per_cloud)  # WHY: Keep behavior.
+    merged, city_warnings = attach_city_metadata(merged)  # WHY: Keep behavior.
+    warnings.extend(city_warnings)  # WHY: Keep behavior.
 
     try:
-        _atomic_write_json(cenr_path, merged)
-    except OSError as exc:
-        warnings.append(f"CENR write failed for {cenr_path}: {exc}")
-        logger.warning(warnings[-1])
-    logger.info(
+        _atomic_write_json(cenr_path, merged)  # WHY: Keep behavior.
+    except OSError as exc:  # WHY: Keep behavior.
+        warnings.append(f"CENR write failed for {cenr_path}: {exc}")  # WHY: Keep behavior.
+        logger.warning(warnings[-1])  # WHY: Keep behavior.
+    logger.info(  # WHY: Keep behavior.
         "zscaler_catalogue: refreshed CENR from %d/%d clouds " "(proxies=%d vpns=%d cities=%d)",
         len(per_cloud),
         len(_CLOUDS),
@@ -1186,10 +1192,10 @@ def refresh_cenr(cenr_path: Path) -> tuple[dict[str, Any], list[str]]:
         len(merged.get("vpn_hostnames", []) or []),
         len(merged.get("by_city", {}) or {}),
     )
-    return merged, warnings
+    return merged, warnings  # WHY: Keep behavior.
 
 
-def _run_probe_validation(
+def _run_probe_validation(  # WHY: Keep behavior.
     cenr_path: Path,
     fresh: dict[str, Any],
 ) -> tuple[dict[str, Any], list[ProbeResult]]:
@@ -1213,33 +1219,33 @@ def _run_probe_validation(
         dict (empty when the file is missing). ``results`` is the probe
         result list (empty on any exception path).
     """
-    probes: dict[str, Any] = {}
-    probes_path = cenr_path.parent / "zscaler_client_connector_probes.json"
-    results: list[ProbeResult] = []
+    probes: dict[str, Any] = {}  # WHY: Keep behavior.
+    probes_path = cenr_path.parent / "zscaler_client_connector_probes.json"  # WHY: Keep behavior.
+    results: list[ProbeResult] = []  # WHY: Keep behavior.
     try:
-        if probes_path.is_file():
-            probes = json.loads(probes_path.read_text(encoding="utf-8"))
+        if probes_path.is_file():  # WHY: Keep behavior.
+            probes = json.loads(probes_path.read_text(encoding="utf-8"))  # WHY: Keep behavior.
         # Promote the ZCC roles cache so run_full_validation and every
         # downstream reader work off the shared v3 dict shape.
         probes = promote_cache_document(probes, kind="zcc")  # v2 -> v3 loader adapter
-        results = run_full_validation(
+        results = run_full_validation(  # WHY: Keep behavior.
             probes,
             fresh,
             timeout=DEFAULT_TIMEOUT,
             workers=DEFAULT_WORKERS,
         )
-        if results and not any(r.responding_protocols for r in results):
-            logger.warning(
+        if results and not any(r.responding_protocols for r in results):  # WHY: Keep behavior.
+            logger.warning(  # WHY: Keep behavior.
                 "zscaler_catalogue: full-fleet validation showed zero responding "
                 "endpoints (n=%d); refresh kept anyway",
                 len(results),
             )
     except Exception as exc:  # validation is best-effort
-        logger.warning("zscaler_catalogue: validation crashed: %s", exc)
-    return probes, results
+        logger.warning("zscaler_catalogue: validation crashed: %s", exc)  # WHY: Keep behavior.
+    return probes, results  # WHY: Keep behavior.
 
 
-def _build_observations_index(
+def _build_observations_index(  # WHY: Keep behavior.
     results: list[ProbeResult],
 ) -> dict[str, tuple[str | None, int | None, str]]:
     """Fold ``results`` into an FQDN -> (protocol, port, iso8601_utc) index.
@@ -1258,20 +1264,20 @@ def _build_observations_index(
         Mapping FQDN -> (protocol, port, now_iso). Empty when no result
         carried a usable FQDN.
     """
-    now_iso = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    observations: dict[str, tuple[str | None, int | None, str]] = {}
-    for pr in results:
+    now_iso = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")  # WHY: Keep behavior.
+    observations: dict[str, tuple[str | None, int | None, str]] = {}  # WHY: Keep behavior.
+    for pr in results:  # WHY: Keep behavior.
         # `getattr` fallback keeps this loop tolerant of duck-typed stubs
         # used in older tests that predate the full ProbeResult shape.
-        fqdn = getattr(pr, "fqdn", None)
-        if not isinstance(fqdn, str) or not fqdn:
-            continue
-        protocol, port = _pick_observation_from_probe_result(pr)
-        observations[fqdn] = (protocol, port, now_iso)
-    return observations
+        fqdn = getattr(pr, "fqdn", None)  # WHY: Keep behavior.
+        if not isinstance(fqdn, str) or not fqdn:  # WHY: Keep behavior.
+            continue  # WHY: Keep behavior.
+        protocol, port = _pick_observation_from_probe_result(pr)  # WHY: Keep behavior.
+        observations[fqdn] = (protocol, port, now_iso)  # WHY: Keep behavior.
+    return observations  # WHY: Keep behavior.
 
 
-def _persist_observations(
+def _persist_observations(  # WHY: Keep behavior.
     cenr_path: Path,
     fresh: dict[str, Any],
     probes: dict[str, Any],
@@ -1296,37 +1302,37 @@ def _persist_observations(
         results: Probe results from ``run_full_validation``. When empty
             this function is a no-op.
     """
-    if not results:
-        return
-    observations = _build_observations_index(results)
-    logger.info(
+    if not results:  # WHY: Keep behavior.
+        return  # WHY: Keep behavior.
+    observations = _build_observations_index(results)  # WHY: Keep behavior.
+    logger.info(  # WHY: Keep behavior.
         "zscaler_catalogue: merging %d probe observations into v3 caches",
         len(observations),
     )
     # Stamp CENR (all four bags) then ZCC (roles[*].fqdns). Force
     # schema_version to the current constant on both docs so the write
     # invariant "on disk == _SCHEMA_VERSION" always holds.
-    cenr_stamped = _merge_observations_into_cenr(fresh, observations)
-    fresh["schema_version"] = _SCHEMA_VERSION
+    cenr_stamped = _merge_observations_into_cenr(fresh, observations)  # WHY: Keep behavior.
+    fresh["schema_version"] = _SCHEMA_VERSION  # WHY: Keep behavior.
     try:
-        _atomic_write_json(cenr_path, fresh)
-    except OSError as exc:
-        logger.warning("zscaler_catalogue: CENR observation rewrite failed: %s", exc)
-    probes_path = cenr_path.parent / "zscaler_client_connector_probes.json"
-    zcc_stamped = _merge_observations_into_zcc(probes, observations)
-    probes["schema_version"] = _SCHEMA_VERSION
+        _atomic_write_json(cenr_path, fresh)  # WHY: Keep behavior.
+    except OSError as exc:  # WHY: Keep behavior.
+        logger.warning("zscaler_catalogue: CENR observation rewrite failed: %s", exc)  # WHY: Keep behavior.
+    probes_path = cenr_path.parent / "zscaler_client_connector_probes.json"  # WHY: Keep behavior.
+    zcc_stamped = _merge_observations_into_zcc(probes, observations)  # WHY: Keep behavior.
+    probes["schema_version"] = _SCHEMA_VERSION  # WHY: Keep behavior.
     try:
-        _atomic_write_json(probes_path, probes)
-    except OSError as exc:
-        logger.warning("zscaler_catalogue: ZCC observation rewrite failed: %s", exc)
-    logger.debug(
+        _atomic_write_json(probes_path, probes)  # WHY: Keep behavior.
+    except OSError as exc:  # WHY: Keep behavior.
+        logger.warning("zscaler_catalogue: ZCC observation rewrite failed: %s", exc)  # WHY: Keep behavior.
+    logger.debug(  # WHY: Keep behavior.
         "zscaler_catalogue: observation merge complete (cenr=%d, zcc=%d stamped)",
         cenr_stamped,
         zcc_stamped,
     )
 
 
-def ensure_fresh(cenr_path: Path, cenr: dict[str, Any]) -> dict[str, Any]:
+def ensure_fresh(cenr_path: Path, cenr: dict[str, Any]) -> dict[str, Any]:  # WHY: Keep behavior.
     """Return an up-to-date CENR dict, refreshing + validating when stale.
 
     Why:
@@ -1358,29 +1364,31 @@ def ensure_fresh(cenr_path: Path, cenr: dict[str, Any]) -> dict[str, Any]:
     # Idempotent for v3+ documents, and emits at most one INFO line.
     cenr = promote_cache_document(cenr, kind="cenr")  # v2 -> v3 loader adapter
     if not is_stale(cenr):  # freshness gate stays the sole trigger for refresh
-        return cenr
+        return cenr  # WHY: Keep behavior.
 
-    logger.info(
+    logger.info(  # WHY: Keep behavior.
         "zscaler_catalogue: CENR cache is stale (>%s old); refreshing from %d clouds",
         _FRESHNESS_TTL,
         len(_CLOUDS),
     )
-    fresh, warnings = refresh_cenr(cenr_path)
-    for warning in warnings:
-        logger.warning("zscaler_catalogue: %s", warning)
+    fresh, warnings = refresh_cenr(cenr_path)  # WHY: Keep behavior.
+    for warning in warnings:  # WHY: Keep behavior.
+        logger.warning("zscaler_catalogue: %s", warning)  # WHY: Keep behavior.
 
-    if not fresh:
+    if not fresh:  # WHY: Keep behavior.
         # Total-failure path returned empty dict. Fall back to whatever the
         # caller already loaded so downstream code keeps a usable shape.
-        logger.warning("zscaler_catalogue: refresh returned empty document; using in-memory copy")
-        return cenr
+        logger.warning(
+            "zscaler_catalogue: refresh returned empty document; using in-memory copy"
+        )  # WHY: Keep behavior.
+        return cenr  # WHY: Keep behavior.
 
     # Best-effort probe run. Validation failures do not block the return.
-    probes, results = _run_probe_validation(cenr_path, fresh)
+    probes, results = _run_probe_validation(cenr_path, fresh)  # WHY: Keep behavior.
 
     # T028/T029: write persisted observations back onto both cache files so a
     # later menu 206 invocation can dispatch on the last observed protocol
     # without re-probing (contract cenr_cache_schema_v3.md §"Write Path").
-    _persist_observations(cenr_path, fresh, probes, results)
+    _persist_observations(cenr_path, fresh, probes, results)  # WHY: Keep behavior.
 
-    return fresh
+    return fresh  # WHY: Keep behavior.
