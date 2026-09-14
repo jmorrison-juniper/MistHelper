@@ -22,7 +22,7 @@ criteria. Test tasks are included and precede or accompany each implementation t
   `.gitignore`. Confirm the licensed PDF is already ignored.
 - [X] T003 [P] Add `[tool.ste_linter]` defaults and the `ste-linter` console script (delivered: pyproject.toml)
   to `pyproject.toml`. Confirm the mypy and ruff scopes include `tools/ste_linter`.
-- [X] T004 [P] Create the test fixtures folder `tests/fixtures/ste_linter/` with a (delivered: tests/fixtures/ste_linter/clear.md)
+- [X] T004 [P] Create the test fixtures folder `tests/fixtures/ste_linter/` with a (delivered: tests/fixtures/ste_linter/compliant.md)
   compliant Markdown file, a noncompliant Markdown file, and a sample Python module.
 
 ## Phase 2: Foundational (blocks all rules)

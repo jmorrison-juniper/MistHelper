@@ -13,7 +13,7 @@
 - Ran `python -m ruff check .`: pass.
 - Ran `python -m black --check .`: pass.
 - Ran `python -m mypy src\ MistHelper.py wsgi.py scripts\mist_ideas_analyzer_pkg\__init__.py scripts\mist_ideas_distiller_v2_pkg\__init__.py --config-file pyproject.toml`: pass.
-- Started `python -m pytest tests/ -x -q`; the pull request checks will give the final suite result.
+- Started `python -m pytest tests/ -x -q`. The pull request checks will give the final suite result.
 
 ## Scope proof
 
