@@ -1165,6 +1165,20 @@ jobs:
 
               ISSUES=$(gh issue list --state open --label "quality-gate" --search "$SEARCH_QUERY" --json number --jq '.[].number')
               for issue_number in $ISSUES; do
+                # A main run speaks for main only. An issue that names a pull
+                # request belongs to that pull request, and only the run of that
+                # pull request may report its gate state. See issue #2623.
+                if [ "$IS_MAIN_RUN" = "true" ]; then
+                  issue_title=$(gh issue view "$issue_number" --json title --jq '.title')
+                  scoped_pr=$(printf '%s' "$issue_title" | sed -n 's/.*(PR #\([0-9][0-9]*\)).*/\1/p')
+                  if [ -n "$scoped_pr" ]; then
+                    pr_state=$(gh pr view "$scoped_pr" --json state --jq '.state' 2>/dev/null || echo "")
+                    if [ "$pr_state" = "OPEN" ]; then
+                      echo "Skipped issue #${issue_number} (gate: ${gate}). Pull request #${scoped_pr} is still open."
+                      continue
+                    fi
+                  fi
+                fi
                 gh issue close "$issue_number" \
                   --reason completed \
                   --comment "Auto-closed: \`${gate}\` gate now passing on \`${HEAD_REF}\` (commit \`${{ github.sha }}\`)."
