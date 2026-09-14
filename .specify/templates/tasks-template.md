@@ -18,6 +18,10 @@ description: "Task list template for feature implementation"
 - **[P]**: Can run in parallel (different files, no dependencies)
 - **[Story]**: Which user story this task belongs to (e.g., US1, US2, US3)
 - Include exact file paths in descriptions
+- Tick a task only after you verify the delivered file. Add an evidence note in
+  this form: `(delivered: path/to/file.py)`.
+- If a task needs a live system or a human decision, keep the box unchecked and
+  explain the condition in the task text.
 
 ## Path Conventions
 
