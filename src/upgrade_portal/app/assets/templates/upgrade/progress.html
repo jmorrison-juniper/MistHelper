@@ -73,6 +73,8 @@
 {% set device_rows = status_record.targets | default([], true) %}
 {% set site_label = site_name | default('', true) %}
 {% set site_key = site_id | default('', true) %}
+{% set typed_actor = operator_address | default(status_record.actor_email | default('', true), true) %} {# Show the typed sign-in name. #}
+{% set cloud_actor = cloud_account | default(status_record.cloud_account | default('', true), true) %} {# Show the cloud account label. #}
 {% set pre_key = status_record.pre_capture_id | default('', true) %}
 {% set post_key = status_record.post_capture_id | default('', true) %}
 {% set failure_rows = status_record.failures | default([], true) %}
@@ -203,6 +205,14 @@
   {% if site_key %}
     <p class="portal-card-note">The site identifier is <code data-testid="upgrade-site-id">{{ site_key }}</code>.</p>
   {% endif %}
+
+  <p class="portal-card-note">
+    The typed operator address is <span data-testid="upgrade-operator-address">{{ typed_actor }}</span>.
+  </p>
+
+  <p class="portal-card-note">
+    The Mist account is <span data-testid="upgrade-cloud-account">{{ cloud_actor | default('Not recorded', true) }}</span>.
+  </p>
 
   <button type="button"
           class="portal-button"

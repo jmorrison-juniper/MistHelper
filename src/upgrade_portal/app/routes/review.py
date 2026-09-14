@@ -1363,6 +1363,105 @@ def run_device_count(record: Mapping[str, Any]) -> int:
     return len(targets) if isinstance(targets, (list, tuple)) else 0
 
 
+def run_operator_fields(record: Mapping[str, Any]) -> dict[str, str]:
+    """Return the operator labels that one run history row shows.
+
+    Args:
+        record: The stored run record.
+
+    Returns:
+        The typed operator address and the Mist account label.
+    """
+    return {  # Keep identity shaping out of the larger history row builder.
+        "actor_email": str(record.get("actor_email") or ""),  # Show the typed address that created the run.
+        "cloud_account": str(record.get("cloud_account") or ""),  # Show the account read before firmware moved.
+    }
+
+
+def run_history_identity_fields(record: Mapping[str, Any], state: str) -> dict[str, Any]:
+    """Return identity fields for one run history row.
+
+    Args:
+        record: The stored run record.
+        state: The safe run state text.
+
+    Returns:
+        The stable identity fields of one history row.
+    """
+    return {  # Keep simple fallback fields out of the row composer.
+        "run_id": str(record.get("run_id") or ""),  # Keep the stored identifier for links and test hooks.
+        "site_name": run_site_label(record),  # Show a name and fall back to the site identifier.
+        "site_id": str(record.get("site_id") or ""),  # Keep the site scope available for later controls.
+        **run_operator_fields(record),  # Show both operator labels without adding branch count here.
+        "state": state,  # Show the stored state or the safe unknown value.
+        "device_count": run_device_count(record),  # Count only a list or tuple of run targets.
+    }
+
+
+def run_history_capture_fields(record: Mapping[str, Any], state: str) -> dict[str, str]:
+    """Return capture and moment fields for one run history row.
+
+    Args:
+        record: The stored run record.
+        state: The safe run state text.
+
+    Returns:
+        The capture and moment fields of one history row.
+    """
+    return {  # Keep date formatting out of the row composer.
+        "started_text": short_moment(record.get("created_at")),  # The human UTC moment.
+        "started_raw": str(record.get("created_at") or ""),  # The stored text, for the title attribute.
+        "ended_text": short_moment(run_end_moment(record, state)),  # Empty while the run still runs.
+        "pre_capture_id": str(record.get("pre_capture_id") or ""),  # Link the capture before the run.
+        "post_capture_id": str(record.get("post_capture_id") or ""),  # Link the capture after the run.
+    }
+
+
+def run_history_stale_fields(stale: Any) -> dict[str, Any]:
+    """Return stale status fields for one run history row.
+
+    Args:
+        stale: The shared stale assessment for the run.
+
+    Returns:
+        The stale status fields of one run history row.
+    """
+    return {  # Keep stale display fields out of the row composer.
+        "updated_at": stale.updated_at,  # Give browser display updates the normalized safe time only.
+        "age_seconds": stale.age_seconds,  # Keep the exact server age beside the display text.
+        "age_text": stale.age_text,  # Show the shared short age or `unknown`.
+        "is_stale": stale.is_stale,  # Let the template show a badge without making a decision.
+        "stale_reason": stale.reason,  # Keep the stable reason available for later controls.
+    }
+
+
+def run_history_state(record: Mapping[str, Any]) -> str:
+    """Return the safe state text for one run history row.
+
+    Args:
+        record: The stored run record.
+
+    Returns:
+        The safe state text.
+    """
+    raw = str(record.get("state") or "").strip()  # Empty and blank states both mean unknown.
+    return raw if raw else UNKNOWN_RUN_STATE  # The history page must never show an empty state.
+
+
+def run_history_policy(stale_policy: RunStalePolicy | None) -> RunStalePolicy:
+    """Return the stale policy for one run history row.
+
+    Args:
+        stale_policy: The shared policy, or None.
+
+    Returns:
+        The policy to use for this row.
+    """
+    if stale_policy is not None:  # The page batch uses one clock for all rows.
+        return stale_policy  # Keep all rows comparable.
+    return RunStalePolicy(datetime.now(tz=UTC))  # A single-row caller still needs an aware UTC clock.
+
+
 def run_history_row(  # Shape one run with an optional shared policy for a page batch.
     record: Mapping[str, Any], stale_policy: RunStalePolicy | None = None
 ) -> dict[str, Any]:
@@ -1385,25 +1484,13 @@ def run_history_row(  # Shape one run with an optional shared policy for a page 
         keys.
     """
     logger.info("review: the portal shapes one run history row")  # Record the transformation before it starts.
-    state = str(record.get("state") or "").strip() or UNKNOWN_RUN_STATE  # An old record names no state.
-    policy = stale_policy or RunStalePolicy(datetime.now(tz=UTC))  # Use one clock when the caller supplies none.
+    state = run_history_state(record)  # An old record names no state.
+    policy = run_history_policy(stale_policy)  # Use one clock when the caller supplies none.
     stale = policy.assess(record)  # Apply the shared policy before the template receives the row.
     shaped = {  # Give the template data only, so it contains no stale rule.
-        "run_id": str(record.get("run_id") or ""),  # Keep the stored identifier for links and test hooks.
-        "site_name": run_site_label(record),  # Show a name and fall back to the site identifier.
-        "site_id": str(record.get("site_id") or ""),  # Keep the site scope available for later controls.
-        "state": state,  # Show the stored state or the safe unknown value.
-        "device_count": run_device_count(record),  # Count only a list or tuple of run targets.
-        "started_text": short_moment(record.get("created_at")),  # The human UTC moment.
-        "started_raw": str(record.get("created_at") or ""),  # The stored text, for the title attribute.
-        "ended_text": short_moment(run_end_moment(record, state)),  # Empty while the run still runs.
-        "pre_capture_id": str(record.get("pre_capture_id") or ""),  # Link the capture before the run.
-        "post_capture_id": str(record.get("post_capture_id") or ""),  # Link the capture after the run.
-        "updated_at": stale.updated_at,  # Give browser display updates the normalized safe time only.
-        "age_seconds": stale.age_seconds,  # Keep the exact server age beside the display text.
-        "age_text": stale.age_text,  # Show the shared short age or `unknown`.
-        "is_stale": stale.is_stale,  # Let the template show a badge without making a decision.
-        "stale_reason": stale.reason,  # Keep the stable reason available for later controls.
+        **run_history_identity_fields(record, state),  # Keep the row composer below the complexity gate.
+        **run_history_capture_fields(record, state),  # Keep the row composer below the complexity gate.
+        **run_history_stale_fields(stale),  # Keep the row composer below the complexity gate.
     }
     logger.debug("review: the run history row has stale state %s", stale.is_stale)  # Report no record value.
     return shaped  # Return the complete display row.
@@ -1776,7 +1863,7 @@ def run_history(site_id: str) -> tuple[Response, int]:
     return jsonify({RUNS_FIELD: rows, TOTAL_FIELD: total}), OK_STATUS
 
 
-def audit_history_rows() -> list[dict[str, Any]]:
+def audit_history_rows(site_id: str = "") -> list[dict[str, Any]]:
     """Return the audit log rows that the history page paints.
 
     Why:
@@ -1788,6 +1875,13 @@ def audit_history_rows() -> list[dict[str, Any]]:
         Every moment reads as UTC, which is the rule that the runs section
         already follows.
 
+        Issue #2596 narrows the rows to the site that the page names. The run
+        list and the capture list already obey that site, so an audit log that
+        showed another site made the operator read the wrong record.
+
+    Args:
+        site_id: The site to narrow to. An empty value reads every site.
+
     Returns:
         One row for each action, newest first. An empty list when the reader is
         absent or the trail holds nothing.
@@ -1797,7 +1891,8 @@ def audit_history_rows() -> list[dict[str, Any]]:
     if reader is None:  # A missing reader draws an empty section, never a fault page.
         logger.info("review: the portal offers no lock audit reader, so the audit log is empty")
         return []
-    rows: Any = reader()
+    logger.info("review: the portal reads the lock audit for %s", site_id or "every site")  # Before the read.
+    rows: Any = reader(site_id=site_id)  # Narrow the read to the site that the page names.
     shaped = [dict(row, moment_text=short_moment(row.get("occurred_at"))) for row in rows]
     logger.debug("review: the audit log holds %s row(s)", len(shaped))
     return shaped
@@ -1836,5 +1931,6 @@ def history_page() -> str:
         run_control_org_id=str(session.get("selected_org_id") or ""),
         run_control_history_scope=f"site:{site_id}" if site_id else "all-sites",
         # Issue #2221 adds the audit log of every site lock action.
-        audit_rows=audit_history_rows(),
+        # Issue #2596 narrows that log to the site that this page names.
+        audit_rows=audit_history_rows(site_id),
     )

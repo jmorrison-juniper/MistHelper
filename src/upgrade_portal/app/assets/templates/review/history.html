@@ -141,6 +141,8 @@
         </th>
         <th scope="col">Run</th>
         <th scope="col">Site</th>
+        <th scope="col">Typed operator</th>
+        <th scope="col">Mist account</th>
         <th scope="col">State</th>
         <th scope="col">Devices</th>
         <th scope="col">Started</th>
@@ -168,6 +170,8 @@
             <a href="/runs/{{ run.run_id }}">{{ run.run_id }}</a>
           </th>
           <td>{{ run.site_name }}</td>
+          <td data-testid="history-run-operator-address-{{ run.run_id }}">{{ run.actor_email }}</td>
+          <td data-testid="history-run-cloud-account-{{ run.run_id }}">{{ run.cloud_account | default('Not recorded', true) }}</td>
           {#
             The badge class carries the stored word, so this page picks no color
             and holds no list of states. A word that no rule matches shows the
@@ -208,7 +212,7 @@
         </tr>
       {% else %}
         <tr>
-          <td colspan="9" class="portal-table-empty" data-testid="history-run-empty">
+          <td colspan="11" class="portal-table-empty" data-testid="history-run-empty">
             The portal holds no upgrade run yet.
           </td>
         </tr>
@@ -332,10 +336,15 @@
   page and never the rows of a later page. The note states that limit, because
   an operator who sorted a paged table and read the first row as the smallest
   value of the whole list would read a false answer.
+
+  Issue #2595 corrects the second sentence. The note named a filter, and this
+  page holds no filter control. It holds the next page control and the previous
+  page control, which carry the test identifiers history-page-next and
+  history-page-previous. An operator who looked for a filter found nothing.
 #}
 <p class="portal-card-note" data-testid="history-sort-scope">
-  A sort orders the rows of this page. Use the filter to reach a row that sits
-  on a later page.
+  A sort orders the rows of this page. Open the next page or the previous page
+  to reach a row that this page does not hold.
 </p>
 
 <div class="portal-table-scroll">

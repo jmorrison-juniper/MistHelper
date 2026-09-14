@@ -81,6 +81,11 @@ STATUS_FAILED = "org_upgrade_status_failed"
 CANCEL_FAILED = "org_upgrade_cancel_failed"
 WRITE_DISABLED = "org_upgrade_write_disabled"
 ALREADY_SUBMITTED = "org_upgrade_already_submitted"
+UNREACHABLE_OPERATOR = "unreachable_operator_address"  # A reserved domain cannot answer for firmware writes.
+UNREACHABLE_OPERATOR_MESSAGE = (  # The cure is a reachable address, not a different credential.
+    "This operator address uses a reserved domain and cannot answer for a firmware write. "
+    "Sign in again with a reachable work address, then start the upgrade."
+)
 JOB_NOT_OWNED = "org_upgrade_job_not_owned"
 TERMINAL_JOB_STATES = frozenset({"cancelled", "completed", "failed"})
 
@@ -924,7 +929,32 @@ def _submission_guard(request_nonce: object) -> tuple[Response, int] | None:
         )
     if _confirmation_value() != "CONFIRM":  # Require the exact typed confirmation.
         return json_error(BAD_REQUEST_STATUS, CONFIRMATION_REQUIRED, CONFIRMATION_MESSAGE)
+    if _operator_cannot_answer():  # A multi-site write reaches many devices, so it needs an accountable name.
+        return json_error(BAD_REQUEST_STATUS, UNREACHABLE_OPERATOR, UNREACHABLE_OPERATOR_MESSAGE)  # Names the cure.
     return None  # Continue to the scope and lock checks.
+
+
+def _operator_cannot_answer() -> bool:
+    """Report whether the signed operator address can answer for a firmware write.
+
+    Why:
+        Issue #2615. A reserved domain such as `.invalid` reaches no mailbox, so
+        no person can answer for the firmware that this route writes. The
+        single-site route already refuses such an address. This route writes
+        firmware to every selected site, so it needs the same guard.
+
+    Returns:
+        True when the portal must refuse the write.
+    """
+    owner = identity.current_owner()  # The session guard already refused an unsigned request.
+    actor = owner.actor_email if owner is not None else ""  # An empty address never reaches a log record.
+    logger.info("org upgrade: check that the operator address can answer for a firmware write")  # No address logged.
+    if not actor:  # A blank address names nobody, so the write fails closed.
+        logger.debug("org upgrade: the operator address is absent, so the write is refused")  # Safe result summary.
+        return True  # A session without an address can never answer for production firmware.
+    reserved = identity.address_uses_reserved_domain(actor)  # One shared rule serves both upgrade routes.
+    logger.debug("org upgrade: the operator address uses a reserved domain: %s", reserved)  # Report no address.
+    return reserved  # A reserved domain cannot name an accountable operator.
 
 
 def _load_submission_context(request_nonce: object) -> SubmissionContext | tuple[Response, int]:

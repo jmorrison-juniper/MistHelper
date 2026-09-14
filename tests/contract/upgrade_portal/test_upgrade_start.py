@@ -38,7 +38,9 @@ RUN_STORE_KEY = "RUN_STORE"  # The seam that holds the run record store.
 LOCK_READER_KEY = "SITE_LOCK_READER"  # The seam that reads the site lock, named by `select.py`.
 LAUNCHER_KEY = "RUN_LAUNCHER"  # The seam that hands a started run to the run driver.
 
-PROBE_EMAIL = "probe.operator@example.invalid"  # A reserved domain, so no real address appears.
+PROBE_EMAIL = "probe.operator@juniper.net"  # A normal corporate address must always pass the firmware gate.
+UNREACHABLE_EMAIL = "someone@example.invalid"  # The reserved domain must fail only at the firmware gate.
+CLOUD_ACCOUNT = "cloud.user@juniper.net"  # The self read returns a real cloud account for audit evidence.
 ORG_ID = "00000000-0000-0000-0000-0000000000aa"  # Matches the shared organization of the other tests.
 SITE_ID = "00000000-0000-0000-0000-0000000000bb"  # Matches the shared site of the other tests.
 PROBE_CAPTURE_ID = "cap-probe-pre-check"  # Stands for a saved pre-check, which FR-035 demands.
@@ -81,6 +83,7 @@ RUN_NOT_FOUND_CODE = "run_not_found"  # One code for every run path with an unkn
 CONFIRMATION_REQUIRED_CODE = "confirmation_required"  # FR-034 refuses any word but `CONFIRM`.
 PRE_CAPTURE_MISSING_CODE = "pre_capture_missing"  # FR-035 refuses a start with no saved pre-check.
 TARGETS_MISSING_CODE = "upgrade_targets_missing"  # The start refuses a saved plan that names no device.
+UNREACHABLE_OPERATOR_CODE = "unreachable_operator_address"  # A reserved domain cannot answer for firmware.
 
 # WHY: `contracts/http-api.md` section 5 fixes exactly this one answer field for
 # a start. The browser reads the state and then polls, so a second field would
@@ -230,6 +233,26 @@ def registered_owner() -> Iterator[identity.SessionOwner]:
         identity.SESSION_REGISTRY.drop(owner.key)  # The registry outlives the test, so clear it here.
 
 
+@pytest.fixture
+def unreachable_owner() -> Iterator[identity.SessionOwner]:
+    """Register an operator address that can sign in but cannot start firmware.
+
+    Yields:
+        The identity pair of the unreachable operator.
+    """
+    owner = identity.build_owner(UNREACHABLE_EMAIL, identity.issue_browser_id())  # The sign-in path still accepts it.
+    record = identity.OperatorSession(  # The session guard must admit this owner before the firmware gate runs.
+        owner=owner,  # The reserved typed address is the value under test.
+        cloud_session=object(),  # A plain object avoids any real Mist cloud call.
+        credential_mode=identity.CredentialMode.ENVIRONMENT_TOKEN,  # The mode is not part of this defect.
+    )
+    identity.SESSION_REGISTRY.register(record)  # The guard reads the registry on every request.
+    try:  # The test body runs with the owner in place.
+        yield owner  # The caller signs a browser as this owner.
+    finally:  # A leaked record would sign in a later test by accident.
+        identity.SESSION_REGISTRY.drop(owner.key)  # The registry outlives the test, so clear it here.
+
+
 def sign_in_client(client: FlaskClient, owner: identity.SessionOwner) -> None:
     """Give one client a signed session, an organization pick, and a site pick.
 
@@ -258,6 +281,22 @@ def upgrade_client(upgrade_app: Flask, registered_owner: identity.SessionOwner) 
     with upgrade_app.test_client() as client:  # The context manager holds the session across requests.
         sign_in_client(client, registered_owner)  # The state that every passing test needs.
         yield client  # Every test below drives this client.
+
+
+@pytest.fixture
+def unreachable_client(upgrade_app: Flask, unreachable_owner: identity.SessionOwner) -> Iterator[FlaskClient]:
+    """Return a signed-in client with a reserved operator address.
+
+    Args:
+        upgrade_app: The application with the seams injected.
+        unreachable_owner: The unreachable identity pair.
+
+    Yields:
+        The Flask test client, with the session held open.
+    """
+    with upgrade_app.test_client() as client:  # The context manager holds the session across requests.
+        sign_in_client(client, unreachable_owner)  # The sign-in state must still work for read-only paths.
+        yield client  # The firmware gate reads this signed-in identity.
 
 
 @pytest.fixture
@@ -617,6 +656,89 @@ def test_a_start_answers_only_the_state_field(
     body: Any = start_run(upgrade_client, run_id, CONFIRM_WORD).get_json()
     assert set(body) == START_ANSWER_FIELDS  # Exactly the one field of the contract.
     assert body["state"] == SUBMITTING_STATE  # The browser then polls until the driver moves the run.
+
+
+def test_a_start_from_a_reserved_domain_is_refused(
+    unreachable_client: FlaskClient,
+    run_store: RecordingRunStore,
+    launcher: RecordingLauncher,
+) -> None:
+    """A firmware start from a reserved domain answers a named refusal.
+
+    Args:
+        unreachable_client: The signed-in client with a reserved address.
+        run_store: The stand-in run record store.
+        launcher: The recorder that counts every launched run.
+    """
+    run_id = seed_ready_run(run_store)  # The run would pass if the operator address were reachable.
+    answer = start_run(unreachable_client, run_id, CONFIRM_WORD)  # Only the reserved operator domain blocks it.
+    assert answer.status_code == BAD_REQUEST_STATUS  # The address defect is a caller correction.
+    assert read_error_code(answer) == UNREACHABLE_OPERATOR_CODE  # The operator sees the exact refusal cause.
+    assert launcher.launched == []  # No firmware write left the portal.
+    assert run_store.runs[run_id]["state"] == READY_STATE  # The run still waits for a safe operator name.
+
+
+def test_a_start_from_a_corporate_domain_succeeds(
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+    launcher: RecordingLauncher,
+) -> None:
+    """A normal corporate address passes the firmware gate.
+
+    Args:
+        upgrade_client: The signed-in client with a corporate address.
+        run_store: The stand-in run record store.
+        launcher: The recorder that counts every launched run.
+    """
+    run_id = seed_ready_run(run_store)  # The fixture owner uses the normal corporate domain.
+    answer = start_run(upgrade_client, run_id, CONFIRM_WORD)  # The address gate must not block this operator.
+    assert answer.status_code == ACCEPTED_STATUS  # A reachable work address may start firmware.
+    assert launcher.launched == [run_id]  # Exactly one firmware run left the portal.
+
+
+def test_a_start_records_the_typed_address_and_cloud_account(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+    launcher: RecordingLauncher,
+) -> None:
+    """The run audit fields name both the typed address and the Mist account.
+
+    Args:
+        upgrade_app: The application with the account reader seam.
+        upgrade_client: The signed-in client with a corporate address.
+        run_store: The stand-in run record store.
+        launcher: The recorder that counts every launched run.
+    """
+    upgrade_app.config["MIST_SELF_READER"] = lambda _session: {"email": CLOUD_ACCOUNT}  # No test reaches the cloud.
+    run_id = seed_ready_run(run_store)  # The start writes audit identity fields onto this row.
+    answer = start_run(upgrade_client, run_id, CONFIRM_WORD)  # The self reader runs just before firmware starts.
+    assert answer.status_code == ACCEPTED_STATUS  # The extra audit read must not stop the write.
+    assert launcher.launched == [run_id]  # The firmware write still starts once.
+    assert run_store.runs[run_id]["actor_email"] == PROBE_EMAIL  # The typed address stays beside the run.
+    assert run_store.runs[run_id]["cloud_account"] == CLOUD_ACCOUNT  # The Mist account is stored beside it.
+
+
+def test_a_missing_cloud_account_does_not_crash_start(
+    upgrade_app: Flask,
+    upgrade_client: FlaskClient,
+    run_store: RecordingRunStore,
+    launcher: RecordingLauncher,
+) -> None:
+    """A self response with a null email still lets the start finish.
+
+    Args:
+        upgrade_app: The application with the account reader seam.
+        upgrade_client: The signed-in client with a corporate address.
+        run_store: The stand-in run record store.
+        launcher: The recorder that counts every launched run.
+    """
+    upgrade_app.config["MIST_SELF_READER"] = lambda _session: {"email": None}  # The measured deployment had no email.
+    run_id = seed_ready_run(run_store)  # The row receives what the self response can supply.
+    answer = start_run(upgrade_client, run_id, CONFIRM_WORD)  # The null account value must not become a crash.
+    assert answer.status_code == ACCEPTED_STATUS  # Missing account data does not block a reachable operator.
+    assert launcher.launched == [run_id]  # The firmware write still starts once.
+    assert run_store.runs[run_id]["cloud_account"] == ""  # The stored gap is explicit and safe to render.
 
 
 def test_a_start_with_no_driver_still_answers_and_saves_the_state(

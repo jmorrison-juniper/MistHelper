@@ -49,6 +49,7 @@ import threading  # One guard for the memory run store, which a driver thread al
 import time  # Issue #2187 previews the moment that a schedule duration names.
 from collections.abc import Iterable, Mapping  # The version answer arrives in more than one shape.
 from datetime import UTC, datetime  # The same preview needs a readable moment.
+from importlib import import_module  # The Mist self reader loads late, so tests need no SDK import.
 from typing import Any, NamedTuple, cast  # Run records are free-form; lock reads carry fixed fields.
 
 from flask import Blueprint, Response, current_app, jsonify, request, session  # The framework of the portal.
@@ -122,6 +123,7 @@ UPGRADE_SERVICE_KEY = "UPGRADE_SERVICE"  # Phase 2 T-008/T-009: The seam for Upg
 OPTIONS_BUILDER_KEY = "UPGRADE_OPTIONS_BUILDER"  # The seam for `upgrade/options.py`.
 OPTIONS_VIEW_KEY = "UPGRADE_OPTIONS_VIEW"  # The seam for the device rows of the options page.
 VERSIONS_KEY = "UPGRADE_VERSIONS"  # The version list of each model, for the options page.
+SELF_READER_KEY = "MIST_SELF_READER"  # The seam that reads the account behind the signed cloud session.
 VERSIONS_MODULE = "upgrade.options"  # The module that reads the version list of each model.
 VERSIONS_ATTRIBUTES = ("read_model_versions",)  # The reader name that the module above publishes.
 VIEW_ATTRIBUTES = ("build_options_view",)  # The builder of the device rows of the options page.
@@ -186,6 +188,7 @@ RUN_NOT_STOPPABLE_CODE = "run_not_stoppable"  # The run already reached a state 
 RUN_WRITE_FAILED_CODE = "run_write_failed"  # The store refused the write, so the operator must retry.
 UPGRADE_RUNNING_CODE = "upgrade_already_running"  # FR-037: one run of this site has not reached a final state.
 LOCK_STORE_DOWN_CODE = "lock_store_unreachable"  # `contracts/site-lock.md:116` refuses a write the lock cannot guard.
+UNREACHABLE_OPERATOR_CODE = "unreachable_operator_address"  # A reserved domain cannot answer for firmware writes.
 
 SITE_LOCKED_MESSAGE = "Another operator holds this site. Ask that operator before you try again."  # The cure.
 SITE_NOT_CHOSEN_MESSAGE = "Choose a site before you start a run."  # Names the missing step.
@@ -203,6 +206,10 @@ UPGRADE_RUNNING_MESSAGE = "An upgrade already runs at this site. Open that run b
 LOCK_STORE_DOWN_MESSAGE = (  # Warning: a guess here can start a second upgrade on a live site.
     "The portal cannot reach the site lock store, so it cannot tell whether "
     "another operator holds this site. Wait, then try again."
+)
+UNREACHABLE_OPERATOR_MESSAGE = (  # The cure is a reachable address, not a different credential.
+    "This operator address uses a reserved domain and cannot answer for a firmware write. "
+    "Sign in again with a reachable work address, then start the upgrade."
 )
 NO_LAUNCHER_MESSAGE = "The portal cannot send an upgrade yet, because the run driver is not wired."  # The gap.
 STOP_RECORDED_MESSAGE = "The portal recorded the stop and starts no further device."  # Claims no cancel.
@@ -525,6 +532,91 @@ def write_failed() -> tuple[Response, int]:
         The 500 answer with a code that names the cure.
     """
     return json_error(SERVER_ERROR_STATUS, RUN_WRITE_FAILED_CODE, RUN_WRITE_FAILED_MESSAGE)  # Retry is the cure.
+
+
+def unreachable_operator_refusal() -> tuple[Response, int]:
+    """Answer an operator address that cannot receive mail.
+
+    Returns:
+        The 400 answer with a code and a cure.
+    """
+    return json_error(BAD_REQUEST_STATUS, UNREACHABLE_OPERATOR_CODE, UNREACHABLE_OPERATOR_MESSAGE)  # Names the cure.
+
+
+def operator_write_refusal() -> tuple[Response, int] | None:
+    """Return the operator refusal for a firmware write, or None.
+
+    Returns:
+        The refusal answer, or None when the operator address can answer.
+    """
+    actor = actor_address()  # The signed session owns the typed address for this write.
+    reserved = identity.address_uses_reserved_domain(actor) if actor else True  # A blank actor cannot answer.
+    if reserved:  # Reserved domains cannot name a person who can answer for production firmware.
+        logger.info("upgrade: refuse a firmware write for an unreachable operator address")  # No address in logs.
+        return unreachable_operator_refusal()  # The operator can sign in again with a reachable address.
+    return None  # A normal corporate address may start the firmware write.
+
+
+def default_self_reader(cloud_session_value: Any) -> Any:
+    """Read the Mist account record from the signed cloud session.
+
+    Args:
+        cloud_session_value: The existing Mist cloud session object.
+
+    Returns:
+        The response from ``GET /api/v1/self``.
+    """
+    module = import_module("mistapi.api.v1.self.self")  # Load late so route tests can run without the SDK.
+    return module.getSelf(cloud_session_value)  # Use the signed session and never a credential value.
+
+
+def self_payload(response: Any) -> Mapping[str, Any]:
+    """Return the body mapping of a Mist self response.
+
+    Args:
+        response: The raw response object or a mapping from a test seam.
+
+    Returns:
+        The payload mapping, or an empty mapping when no body is readable.
+    """
+    if isinstance(response, Mapping):  # A test seam may return the payload directly.
+        return response  # The caller only reads safe identity fields from it.
+    data = getattr(response, "data", None)  # The SDK response stores the decoded JSON here.
+    return data if isinstance(data, Mapping) else {}  # Missing data is normal for a defensive audit read.
+
+
+def cloud_account_text(payload: Mapping[str, Any]) -> str:
+    """Return the best account label from a Mist self payload.
+
+    Args:
+        payload: The decoded ``GET /api/v1/self`` body.
+
+    Returns:
+        The account label, or an empty string when no safe field is present.
+    """
+    fields = ("email", "name", "first_name", "last_name", "id")  # Store a useful label even when email is absent.
+    parts = [str(payload.get(field) or "").strip() for field in fields]  # Preserve missing and null as empty text.
+    return " ".join(part for part in parts if part)  # A compact label gives the audit what the cloud supplied.
+
+
+def read_cloud_account() -> str:
+    """Read the Mist account label for the signed operator.
+
+    Returns:
+        The account label, or an empty string when it cannot be read.
+    """
+    session_value = cloud_session()  # The session registry owns the existing Mist session object.
+    if session_value is None:  # A missing cloud session must not crash the write path.
+        return ""  # The audit still records the typed operator address.
+    reader = current_app.config.get(SELF_READER_KEY, default_self_reader)  # Tests inject this and open no socket.
+    logger.info("upgrade: read the Mist account for the operator before a firmware write")  # Before the read.
+    try:  # The cloud or the test seam may return no body, or raise.
+        account = cloud_account_text(self_payload(reader(session_value)))  # Reduce the response to safe text only.
+    except Exception as fault:  # A self-read failure must not send a 500 instead of a clear audit gap.
+        logger.warning("upgrade: the Mist account read failed with %s", type(fault).__name__)  # No credential detail.
+        return ""  # The firmware guard is the typed address, so the write may continue.
+    logger.debug("upgrade: the Mist account read produced a label: %s", bool(account))  # No account value in logs.
+    return account  # The run record and audit trail may show this safe identity label.
 
 
 # --------------------------------------------------------------------------
@@ -1550,6 +1642,10 @@ def start_run(run_id: str) -> tuple[Response, int]:
             "upgrade: the run %s cannot start from the state %s", run_id, current.value
         )  # The record needs recovery.
         return json_error(CONFLICT_STATUS, RUN_NOT_READY_CODE, RUN_NOT_READY_MESSAGE)  # Name the next operator action.
+    refusal = operator_write_refusal()  # Only the state that sends firmware needs an accountable address.
+    if refusal is not None:  # The typed address uses a reserved domain or is missing.
+        return refusal  # The operator must sign in again with a reachable address before firmware moves.
+    record["cloud_account"] = read_cloud_account()  # Store the cloud identity beside the typed address.
     logger.info("upgrade: start the run %s", run_id)  # BEFORE the state change.
     machine.advance(record, RunState.UPGRADE_SUBMITTING)  # The confirmation state permits this one move.
     if not save_run(record):  # The store reports the true result.
@@ -1735,6 +1831,8 @@ def run_page(run_id: str) -> str:
         PROGRESS_TEMPLATE,  # Use the existing run progress template.
         run_id=run_id,  # The page builds every control identifier from this value.
         status=status,  # The same body that the poll answers.
+        operator_address=str(record.get("actor_email") or ""),  # Show the typed address that created the run.
+        cloud_account=str(record.get("cloud_account") or ""),  # Show the Mist account read before firmware moved.
         poll_interval_seconds=poll_seconds,  # The script reads this through `data-poll-seconds`.
         stale_assessment=stale,  # The template prints the shared age and stale result.
         # Issue #2201 shows the reschedule and the cancel for a run that has not
@@ -1856,6 +1954,9 @@ def start_upgrade_via_service(run_id: str) -> tuple[Response, int]:
     if upgrade_service is None:  # UpgradeService not wired, cannot proceed with upgrade
         logger.error("upgrade: UpgradeService not wired for run %s", run_id)  # Name the missing dependency
         return json_error(SERVER_ERROR_STATUS, "service_unavailable", "UpgradeService not available")
+    refusal = operator_write_refusal()  # The service route also sends firmware, so it needs the same guard.
+    if refusal is not None:  # A reserved operator domain cannot answer for the write.
+        return refusal  # Refuse before the service can start a cloud change.
 
     # WHY: Read the request body to extract upgrade parameters (device IDs, version, strategy, etc)
     body = request.get_json() or {}  # Parse JSON request body, default to empty dict if parsing fails
