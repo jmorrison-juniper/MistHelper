@@ -110,8 +110,8 @@
 - [X] T019 Grep MistHelper.py for any remaining references to `OrgExportUtils.alarms`, `OrgExportUtils.alarm_templates`, `OrgExportUtils.events`, `OrgExportUtils.device_events`, or `OrgExportUtils.device_events_52w` and fix any missed references
 - [X] T020 Run `python -m py_compile MistHelper.py` for final syntax validation
 - [X] T021 Run `python MistHelper.py --test` to verify zero regressions across all non-skipped menu operations
-- [ ] T022 [P] Update README.md changelog with `version YY.MM.DD.HH.MM - Extract OrgAlarmEventExporter from OrgExportUtils (5-Item Rule compliance)` and update operation count if needed
-- [ ] T023 Execute full deployment pipeline: `git add` + `git commit` + `git push origin main`, wait for container build, `podman pull`, restart container, `podman ps` to verify
+- [X] T022 [P] Update README.md changelog with `version YY.MM.DD.HH.MM - Extract OrgAlarmEventExporter from OrgExportUtils (5-Item Rule compliance)` and update operation count if needed
+- [X] T023 Execute full deployment pipeline: `git add` + `git commit` + `git push origin main`, wait for container build, `podman pull`, restart container, `podman ps` to verify
 
 ---
 
