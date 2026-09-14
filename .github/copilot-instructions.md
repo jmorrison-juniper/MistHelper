@@ -46,7 +46,7 @@ Python hierarchy levels:
 - **Container Runtime**: Podman (primary), Docker (compatible but not documented - all examples use Podman)
 
 ### Data Flow
-```
+```text
 Menu Selection -> API Call -> Flatten/Normalize -> Output Backend (CSV / SQLite / ArangoDB+Redis)
                                                  -> Rate Limiting -> Retry Logic
 ```
@@ -498,6 +498,7 @@ See [coding-standards.instructions.md](instructions/coding-standards.instruction
 | File | Purpose |
 |------|---------|
 | `MistHelper.py` | Entrypoint and menu registry (6,054 lines; `src/` holds 123,785 across 360 files) |
+| `documentation/CONTRIBUTING-MistHelper.md` | Contributor map for stable `MistHelper.py` symbols and `src/` packages. |
 | `CHANGELOG.md` | Released version history (Keep a Changelog format). The release coordinator owns it. |
 | `changelog.d/` | One release-note fragment for each change. Add your file here. |
 | `agents.md` | VS Code Chat agent supplement (points here) |
@@ -550,7 +551,7 @@ See [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.ins
 
 ### Agent Worktree Examples
 
-```
+```text
 MistHelper/                    # main checkout (human or merge agent only)
 ../MistHelper-agent-1/         # worktree for Agent 1 (feat/101-new-menu)
 ../MistHelper-agent-2/         # worktree for Agent 2 (fix/102-rate-limit)
@@ -878,7 +879,7 @@ at specs/1016-misthelper-suppression-cleanup/plan.md
 <!-- SPECKIT END -->
 
 <!-- rtk-instructions v2 -->
-# RTK — Token-Optimized CLI
+## RTK — Token-Optimized CLI
 
 **rtk** is a CLI proxy that filters and compresses command outputs, saving 60-90% tokens.
 
