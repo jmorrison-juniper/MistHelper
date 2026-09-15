@@ -11,6 +11,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import MistHelper
+from src.utils.menu_entry import MenuEntry  # WHY: synthetic rows must match production rows.
 from src.utils.operation_registry import (
     OperationRegistry,
 )  # WHY: assert against the canonical fail-closed registry module.
@@ -22,7 +23,14 @@ _SYNTHETIC_KEY = "9998"
 def _install_synthetic_option(monkeypatch):
     """Inject a synthetic, deliberately-unregistered option into menu_actions for the test scope."""
     patched = dict(MistHelper.menu_actions)  # WHY: copy so monkeypatch restores the original after the test.
-    patched[_SYNTHETIC_KEY] = (lambda: None, "Synthetic unregistered test option")  # WHY: dummy handler + label.
+    patched[_SYNTHETIC_KEY] = MenuEntry(  # WHY: dummy row exercises the named row shape.
+        menu_id=_SYNTHETIC_KEY,  # WHY: align the row with the synthetic menu key.
+        handler=lambda: None,  # WHY: the skip path must not call this handler.
+        title="Synthetic unregistered test option",  # WHY: skip telemetry uses this text.
+        category="unregistered",  # WHY: the registry supplies the same fail-closed category.
+        destructive=False,  # WHY: this fixture does not mutate Mist Cloud.
+        supports_fast=False,  # WHY: fast mode is outside this test.
+    )
     monkeypatch.setattr(MistHelper, "menu_actions", patched)  # WHY: swap in the augmented mapping.
 
 

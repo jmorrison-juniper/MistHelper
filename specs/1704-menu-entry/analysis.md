@@ -69,6 +69,7 @@ No menu number changed. No menu name changed. No menu category changed.
 - `rtk pylint src/ --fail-under=9.5 --score=y` with `PYTHONIOENCODING=utf-8`: pass. It reported 9.51/10.
 - `rtk radon cc MistHelper.py src -a -nb`: pass. It reported no block above B, so no block is above complexity 10.
 - `rtk python -m pytest tests/unit/test_menu_entry_metadata.py tests/guardrails/test_menu_number_uniqueness.py tests/unit/export/test_msp_license_exporter.py tests/integration/test_menu_org_license_async_claim_status.py tests/integration/test_menu_site_beacon_detail.py tests/unit/refactors/test_main_entrypoint.py::TestMistHelperMenuAndModeCaches tests/unit/web_portal/test_operation_destructive_gate.py tests/unit/troubleshooting/test_interactive_test_runner.py -q`: pass. It reported 98 passed.
+- `rtk python -m pytest tests/test_ticket_manager.py::TestMenuRegistration tests/unit/test_systematic_test_offline_mode.py tests/unit/test_systematic_test_unregistered_semantics.py -q`: pass. It reported 12 passed.
 
 ## Local Full-Suite Note
 

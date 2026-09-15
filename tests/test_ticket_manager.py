@@ -554,7 +554,7 @@ class TestMenuRegistration:
         """Each ticket menu number must be registered with the correct function."""
         actions = MistHelper.menu_actions  # Access the global menu_actions dict
         assert menu_num in actions, f"Menu {menu_num} not registered"  # Verify entry exists
-        fn = actions[menu_num][0]  # Get the function/lambda from the tuple
+        fn = actions[menu_num].handler  # Get the function from the named menu row.
         assert expected_fn in fn.__name__ or expected_fn in str(fn)  # Verify correct function bound
 
 
