@@ -5,6 +5,8 @@ or API authentication. Used by wsgi.py to populate the operations
 list when the portal starts independently from MistHelper CLI.
 """
 
+from src.utils.menu_entry import MenuEntry  # WHY: static rows must match the real menu row shape.
+
 MENU_DESCRIPTIONS = {
     "1": "Export all organization alarms from the past day",
     "2": "Export all device events from the past 24 hours",
@@ -86,9 +88,15 @@ MENU_DESCRIPTIONS = {
 
 
 def build_static_menu_actions() -> dict:
-    """Build a menu_actions dict with descriptions for listing only.
-
-    Returns a dict compatible with OperationExecutor.build_category_list().
-    Callables are set to None since execution requires full MistHelper init.
-    """
-    return {key: (None, desc) for key, desc in MENU_DESCRIPTIONS.items()}
+    """Build a menu_actions dict with descriptions for listing only."""
+    return {
+        key: MenuEntry(
+            menu_id=key,  # WHY: keep the static row key aligned with the real menu shape.
+            handler=None,  # WHY: execution requires full MistHelper initialization.
+            title=desc,  # WHY: the portal list only needs display text.
+            category="static",  # WHY: the portal still reads live safety from OperationRegistry.
+            destructive=False,  # WHY: static rows cannot execute destructive code.
+            supports_fast=False,  # WHY: static rows never run in the systematic test runner.
+        )
+        for key, desc in MENU_DESCRIPTIONS.items()
+    }

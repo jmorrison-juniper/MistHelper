@@ -5,6 +5,7 @@ from __future__ import annotations  # WHY: keep annotations consistent with the 
 from unittest.mock import MagicMock  # WHY: observe telemetry calls without opening real files.
 
 import MistHelper  # WHY: exercise the public script helpers used by the CLI path.
+from src.utils.menu_entry import MenuEntry  # WHY: patched menu rows must match the production row model.
 
 
 def test_no_token_safe_plan_runs_only_offline_safe_options(monkeypatch) -> None:
@@ -40,7 +41,16 @@ def test_credential_skip_names_mist_token(monkeypatch) -> None:
     monkeypatch.delenv("MIST_APITOKEN", raising=False)  # WHY: force no-token skip behavior.
     monkeypatch.delenv("MIST_API_TOKEN", raising=False)  # WHY: force no-token skip behavior.
     emitter = MagicMock()  # WHY: capture the telemetry skip payload without file I/O.
-    patched = {"1": (lambda: None, "Export a list of all sites")}  # WHY: keep the skip output small.
+    patched = {
+        "1": MenuEntry(  # WHY: keep the skip output small with the production row shape.
+            menu_id="1",  # WHY: align the row with the patched menu key.
+            handler=lambda: None,  # WHY: the skip path must not call this handler.
+            title="Export a list of all sites",  # WHY: the skip event uses this text.
+            category="safe",  # WHY: OperationRegistry supplies the dynamic credential category.
+            destructive=False,  # WHY: this fixture does not mutate Mist Cloud.
+            supports_fast=False,  # WHY: fast mode is outside this test.
+        )
+    }
     monkeypatch.setattr(MistHelper, "menu_actions", patched)  # WHY: isolate one API-backed safe option.
 
     skip_count = MistHelper._systematic_test_emit_skips(emitter, ["1"])  # WHY: emit the dynamic token skip.

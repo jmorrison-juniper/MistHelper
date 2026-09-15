@@ -96,7 +96,7 @@ class SuiteContext:  # WHY: bundle runtime handles to keep run/finalize signatur
 class InteractiveTestRunner:  # WHY: dependency container avoids global module state for the workflow.
     """Run interactive-safe operation tests while preserving legacy operator output."""
 
-    menu_actions: dict[str, tuple[Any, str]]  # WHY: option-id -> (callable, description) dispatch table.
+    menu_actions: dict[str, Any]  # WHY: option-id -> MenuEntry dispatch table.
     operation_registry: Any  # WHY: source of interactive-safe filtering, reasons, and categories.
     telemetry_emitter_cls: Any  # WHY: telemetry emitter factory used to instantiate an emitter.
     config_utils: Any  # WHY: fallback path used to resolve/cache the org id.
@@ -279,7 +279,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         lines = [" Testing interactive read-only operations:"]
         for option in interactive_options:
             if option in self.menu_actions:
-                _, description = self.menu_actions[option]  # WHY: resolve description for option listing.
+                description = self.menu_actions[option].title  # WHY: read menu text from the named row.
                 lines.append(f"   {option:>3}: {description}")  # WHY: preserve per-option tested listing.
         logging.warning("%s", "\n".join(lines))
 
@@ -327,7 +327,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         skip_count = 0  # WHY: initialize skip counter for aggregate reporting.
         for option in skip_list:
             if option in self.menu_actions:
-                _, op_name = self.menu_actions[option]  # WHY: resolve op-name for skip event payload.
+                op_name = self.menu_actions[option].title  # WHY: read menu text from the named row.
                 logging.info("Emitting telemetry skip event for option %s", option)  # WHY: log before skip emission.
                 emitter.emit_test_skip(
                     option,
@@ -378,7 +378,9 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
 
     def _invoke_option(self, option: str, test_site_id: str | None) -> None:
         """Invoke a single menu option callable with prepared kwargs."""
-        function, _description = self.menu_actions[option]  # WHY: resolve callable for option.
+        function = self.menu_actions[option].handler  # WHY: read callable from the named row.
+        if function is None:  # WHY: a static row cannot run under the live interactive runner.
+            raise RuntimeError(f"Menu option {option} has no callable handler")
         signature = inspect.signature(function)  # WHY: inspect signature to gate kwargs injection.
         invoke_kwargs: dict[str, Any] = {}  # WHY: initialize kwargs payload.
         if "site_id" in signature.parameters:
@@ -404,7 +406,9 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             ``"interactive-site-scoped"`` when the handler declares a ``site_id``
             parameter, else ``"interactive-no-context"``.
         """
-        function, _description = self.menu_actions[option]  # WHY: resolve callable for signature inspection.
+        function = self.menu_actions[option].handler  # WHY: read callable from the named row.
+        if function is None:  # WHY: a static row has no callable signature.
+            return "interactive-no-context"
         signature = inspect.signature(function)  # WHY: reuse inspect result to mirror _invoke_option gating.
         if "site_id" in signature.parameters:
             return "interactive-site-scoped"  # WHY: handler participates in site-scoped exercise.
@@ -457,7 +461,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             user aborted a prompt), so reports no longer conflate a completed
             no-context invocation with a prompt-cancelled site-scoped one.
         """
-        _function, description = self.menu_actions[option]  # WHY: resolve description for progress output.
+        description = self.menu_actions[option].title  # WHY: resolve description for progress output.
         logging.warning(
             "   [%2d/%d] Testing option %3s: %s...", index, total, option, description[:60]
         )  # WHY: #886 slice 18/N — per-option progress line via logging.warning.

@@ -106,7 +106,8 @@ class TestExportData:
         from src.export.org_export_utils import OrgExportUtils  # Read the exporter under test.
         from src.utils.operation_registry import OperationRegistry  # Read the safety classification.
 
-        action, description = MistHelper.menu_actions["252"]  # Read the menu dispatch tuple for issue #1376.
+        action = MistHelper.menu_actions["252"].handler  # Read the callable from the named row.
+        description = MistHelper.menu_actions["252"].title  # Read the menu text from the named row.
         assert action is OrgExportUtils.other_device_events  # Require the new menu to call the exporter.
         assert "searchOrgOtherDeviceEvents" in description  # Expose the operation identifier to operators.
         assert OperationRegistry.get("252")["category"] == "safe"  # Keep the read-only operation automated.

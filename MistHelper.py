@@ -468,7 +468,7 @@ from src.export.license_export_utils import (
     LicenseExportUtils,  # Cat B (1013 SC-001 position 24) -- re-export for MistHelper.LicenseExportUtils callers
 )
 from src.export.msp_inventory_exporter import (
-    MSPInventoryExporter,  # Cat B (1013 SC-001 position 8) -- re-export for menu tuple + static call rewire
+    MSPInventoryExporter,  # Cat B (1013 SC-001 position 8) -- re-export for menu row + static call rewire
 )
 from src.export.msp_license_exporter import (
     MSPLicenseExporter,  # Issue #1260 -- the MSP license export, menu 238
@@ -519,7 +519,7 @@ from src.export.self_account_exporter import (
     SelfAccountExporter,  # Issue #1415 -- verify an email change token, menu 247
 )
 from src.export.self_export_utils import (
-    SelfExportUtils,  # Cat B (1013 SC-001 position 7) -- re-export for menu tuple at MistHelper:18167
+    SelfExportUtils,  # Cat B (1013 SC-001 position 7) -- re-export for menu row at MistHelper:18167
 )
 from src.export.simple_endpoint_exporter import (
     SimpleEndpointExporter,  # Issue #1807 -- simple get and list endpoints, grouped by scope.
@@ -1096,6 +1096,10 @@ class GlobalImportManager:
         "traceback": None,  # Built-in
     }
 
+    MenuEntry: ClassVar[type[Any]] = __import__(  # WHY: keep MenuEntry off the module symbol table.
+        "src.utils.menu_entry", fromlist=("MenuEntry",)
+    ).MenuEntry
+
     _OPTIONAL_PACKAGES_RAW: ClassVar[dict[str, str | None]] = {  # Class-level optional spec map (data, not behavior)
         "sshkeyboard": "sshkeyboard>=2.3.0",  # Keyboard capture (legacy/optional)
         "pyte": "pyte>=0.8.0",  # Terminal emulation for parsing device output
@@ -1107,6 +1111,80 @@ class GlobalImportManager:
         "kaleido": "kaleido>=0.2.1",  # Static image export for plotly charts
         "matplotlib": "matplotlib>=3.5.0",  # Static plotting for analytics
     }
+
+    class SiteExportUtilsFactory:
+        """Build the shared `SiteExportUtils` dependency set for menu rows."""
+
+        def build(self) -> SiteExportUtils:
+            """Return a `SiteExportUtils` instance for one menu dispatch."""
+            logging.info("Building the site export utility for menu dispatch")  # WHY: log before dependency wiring.
+            utility = SiteExportUtils(  # WHY: centralize site export wiring.
+                apisession=MainEntrypoint.context.apisession,  # WHY: reuse the active Mist session.
+                PromptUtils=PromptUtils,  # WHY: preserve the existing prompt helper dependency.
+                ConfigUtils=ConfigUtils,  # WHY: preserve config helpers.
+                DataProcessingUtils=DataProcessingUtils,  # WHY: keep data normalization unchanged.
+                DataExporter=DataExporter,  # WHY: keep output selection unchanged.
+                TimeUtils=TimeUtils,  # WHY: preserve time helpers.
+                EnhancedSSHRunner=EnhancedSSHRunner,  # WHY: preserve SSH helper access.
+                InsightMetricsUtils=InsightMetricsUtils,  # WHY: preserve insights helpers.
+                PacketCaptureManager=PacketCaptureManager,  # WHY: preserve packet helpers.
+                APICoreFetchUtils=APICoreFetchUtils,  # WHY: preserve paged fetch helpers.
+                check_fn=IsDebugMode.check,  # WHY: keep the existing debug-mode predicate.
+                PrettyTable=PrettyTable,  # WHY: preserve table rendering.
+                tqdm=tqdm,  # WHY: preserve progress display.
+                mistapi=mistapi,  # WHY: preserve direct Mist SDK access.
+            )
+            logging.debug("Built the site export utility: %s", type(utility).__name__)  # WHY: summarize result.
+            return utility  # WHY: caller invokes the same method as the former inline construction.
+
+    class RoutingUtilsFactory:
+        """Build the shared `RoutingUtils` dependency set for menu rows."""
+
+        def build(self) -> RoutingUtils:
+            """Return a `RoutingUtils` instance for one menu dispatch."""
+            logging.info("Building the routing utility for menu dispatch")  # WHY: log before dependency wiring.
+            deps = RoutingDeps(  # WHY: centralize routing wiring.
+                apisession=MainEntrypoint.context.apisession,  # WHY: reuse the active Mist session.
+                select_site_fn=PromptUtils.select_site_id_from_csv,  # WHY: preserve the site selector.
+                select_device_fn=self._select_device,  # WHY: keep device selection local.
+                safe_input_fn=InputUtils.safe_input,  # WHY: keep EOF-safe operator prompts.
+                websocket_manager_factory=WebSocketManager,  # WHY: preserve WebSocket transport.
+                check_fn=IsDebugMode.check,  # WHY: keep the existing debug-mode predicate.
+            )
+            routing = RoutingUtils(deps)  # WHY: create the utility after the dependency object is complete.
+            logging.debug("Built the routing utility: %s", type(routing).__name__)  # WHY: summarize result.
+            return routing  # WHY: caller invokes the same method as the former inline construction.
+
+        @staticmethod
+        def _select_device(site_id: str, dtype: str) -> Any:
+            """Select one device while preserving the legacy `device_type` keyword."""
+            logging.info("Selecting a device for routing command at site %s", site_id)  # WHY: log before prompt work.
+            device = PromptUtils.select_device_id_from_inventory(  # WHY: keep the same inventory-backed selector.
+                site_id, device_type=dtype
+            )
+            logging.debug("Selected routing device value present: %s", bool(device))  # WHY: do not log sensitive data.
+            return device  # WHY: RoutingDeps expects the selected device identifier.
+
+    class GatewayTemplateConfigManagerFactory:
+        """Build the shared gateway template manager dependency set for menu rows."""
+
+        def build(self) -> GatewayTemplateConfigManager:
+            """Return a gateway template manager for one menu dispatch."""
+            logging.info(
+                "Building the gateway template manager for menu dispatch"
+            )  # WHY: log before dependency wiring.
+            manager = GatewayTemplateConfigManager(  # WHY: centralize manager wiring.
+                org_id=ConfigUtils.get_cached_or_prompted_org_id(),  # WHY: preserve lazy org selection.
+                apisession=MainEntrypoint.context.apisession,  # WHY: reuse the active Mist session.
+                input_fn=InputUtils.safe_input,  # WHY: keep all prompts EOF-safe.
+                get_csv_path_fn=FilePathUtils.get_csv_path,  # WHY: preserve path resolution.
+                save_data_fn=DataExporter.write_with_format_selection,  # WHY: preserve output backend selection.
+                check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,  # WHY: preserve CSV cache generation.
+                generate_sites_fn=OrgSiteExporter.sites,  # WHY: preserve fallback site export.
+                sanitize_filename_fn=EnhancedSSHRunner.sanitize_filename,  # WHY: preserve safe file names.
+            )
+            logging.debug("Built the gateway template manager: %s", type(manager).__name__)  # WHY: summarize result.
+            return manager  # WHY: caller invokes the same method as the former inline construction.
 
     def __init__(self, setup_logging: bool = True) -> None:  # Read config from env and prepare dependency state
         """Initialize the import manager with configuration from environment variables."""
@@ -3325,661 +3403,1415 @@ def _ws_cmd_deps() -> WebSocketCmdDeps:
     # ============================================================================
 
 
-menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
+menu_actions: dict[str, Any] = {
     # ==============================
     # SYSTEM OPERATIONS
     # ==============================
-    "0": (lambda: sys.exit(0), "Exit MistHelper"),
+    "0": GlobalImportManager.MenuEntry(  # Use named fields for menu 0.
+        menu_id="0",  # Store key for drift checks.
+        handler=lambda: sys.exit(0),
+        title="Exit MistHelper",
+        category=OperationRegistry.skip_category("0"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
     # ==============================
     # SITE ADDRESS AUDIT (read-only)
     # ==============================
-    "195": (
-        lambda: AddressAuditEngine().run(
+    "195": GlobalImportManager.MenuEntry(  # Use named fields for menu 195.
+        menu_id="195",  # Store key for drift checks.
+        handler=lambda: AddressAuditEngine().run(
             MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ),
-        (
-            "Audit site addresses from CSV (data/) - fuse Mist + SNMP + CSV hints, verify vs. web; READ-ONLY, saves "
-            "report. Tier-3 browser geocoding auto-engages when available (ADDRESS_AUDIT_GEOCODE=off to skip)"
+        title=(
+            "Audit site addresses from CSV (data/) - fuse Mist + SNMP + CSV hints, "
+            "verify vs. web; READ-ONLY, saves report. Tier-3 browser geocoding "
+            "auto-engages when available (ADDRESS_AUDIT_GEOCODE=off to skip)"
         ),
+        category=OperationRegistry.skip_category("195"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # ==============================
     # READ-ONLY OPERATIONS
     # ==============================
     # > Setup & Core Logs
-    "20": (OrgAlarmEventExporter.alarms, "Export all organization alarms from the past day"),
-    "21": (OrgAlarmEventExporter.device_events, "Export all device events from the past 24 hours"),
-    "22": (
-        lambda: OrgExportUtils.audit_logs(full_history=False),
-        "Export audit logs for the organization (last 24 hours)",
+    "20": GlobalImportManager.MenuEntry(  # Use named fields for menu 20.
+        menu_id="20",  # Store key for drift checks.
+        handler=OrgAlarmEventExporter.alarms,
+        title="Export all organization alarms from the past day",
+        category=OperationRegistry.skip_category("20"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "31": (
-        _dispatch_gateway_management_ips,  # 1014 P13: DI-wiring shim (cascades to canonical GatewayExportUtils)
-        "Export gateway management overlay IPs grouped by template association",
+    "21": GlobalImportManager.MenuEntry(  # Use named fields for menu 21.
+        menu_id="21",  # Store key for drift checks.
+        handler=OrgAlarmEventExporter.device_events,
+        title="Export all device events from the past 24 hours",
+        category=OperationRegistry.skip_category("21"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "22": GlobalImportManager.MenuEntry(  # Use named fields for menu 22.
+        menu_id="22",  # Store key for drift checks.
+        handler=lambda: OrgExportUtils.audit_logs(full_history=False),
+        title="Export audit logs for the organization (last 24 hours)",
+        category=OperationRegistry.skip_category("22"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "31": GlobalImportManager.MenuEntry(  # Use named fields for menu 31.
+        menu_id="31",  # Store key for drift checks.
+        handler=_dispatch_gateway_management_ips,
+        title="Export gateway management overlay IPs grouped by template association",
+        category=OperationRegistry.skip_category("31"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # > WebSocket Device Commands
-    "102": (
-        lambda: MacTableCommand.execute(_ws_cmd_deps()),
-        "Show MAC table on switch device via WebSocket (Layer 2 switching table)",
+    "102": GlobalImportManager.MenuEntry(  # Use named fields for menu 102.
+        menu_id="102",  # Store key for drift checks.
+        handler=lambda: MacTableCommand.execute(_ws_cmd_deps()),
+        title="Show MAC table on switch device via WebSocket (Layer 2 switching table)",
+        category=OperationRegistry.skip_category("102"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "103": (
-        lambda: RoutingUtils(
-            RoutingDeps(
-                apisession=MainEntrypoint.context.apisession,
-                select_site_fn=PromptUtils.select_site_id_from_csv,
-                select_device_fn=lambda site_id, dtype: PromptUtils.select_device_id_from_inventory(
-                    site_id, device_type=dtype
-                ),
-                safe_input_fn=InputUtils.safe_input,
-                websocket_manager_factory=WebSocketManager,
-                check_fn=IsDebugMode.check,
-            )
-        ).execute_show_forwarding_table(),
-        "Show forwarding table on gateway device via WebSocket (Layer 3 routing table)",
+    "103": GlobalImportManager.MenuEntry(  # Use named fields for menu 103.
+        menu_id="103",  # Store key for drift checks.
+        handler=lambda: GlobalImportManager.RoutingUtilsFactory().build().execute_show_forwarding_table(),
+        title="Show forwarding table on gateway device via WebSocket (Layer 3 routing table)",
+        category=OperationRegistry.skip_category("103"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "104": (
-        lambda: RoutingUtils(
-            RoutingDeps(
-                apisession=MainEntrypoint.context.apisession,
-                select_site_fn=PromptUtils.select_site_id_from_csv,
-                select_device_fn=lambda site_id, dtype: PromptUtils.select_device_id_from_inventory(
-                    site_id, device_type=dtype
-                ),
-                safe_input_fn=InputUtils.safe_input,
-                websocket_manager_factory=WebSocketManager,
-                check_fn=IsDebugMode.check,
-            )
-        ).execute_show_routing_table(),
-        "Show routing table on switches via WebSocket (Switch L3 routing - BGP/OSPF/Static)",
+    "104": GlobalImportManager.MenuEntry(  # Use named fields for menu 104.
+        menu_id="104",  # Store key for drift checks.
+        handler=lambda: GlobalImportManager.RoutingUtilsFactory().build().execute_show_routing_table(),
+        title=("Show routing table on switches via WebSocket (Switch L3 routing - " "BGP/OSPF/Static)"),
+        category=OperationRegistry.skip_category("104"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "105": (
-        lambda: RoutingUtils(
-            RoutingDeps(
-                apisession=MainEntrypoint.context.apisession,
-                select_site_fn=PromptUtils.select_site_id_from_csv,
-                select_device_fn=lambda site_id, dtype: PromptUtils.select_device_id_from_inventory(
-                    site_id, device_type=dtype
-                ),
-                safe_input_fn=InputUtils.safe_input,
-                websocket_manager_factory=WebSocketManager,
-                check_fn=IsDebugMode.check,
-            )
-        ).execute_show_ssr_routes(),
-        "Show SSR/SRX routing table via dedicated API (128T/SRX gateways - Advanced BGP analysis)",
+    "105": GlobalImportManager.MenuEntry(  # Use named fields for menu 105.
+        menu_id="105",  # Store key for drift checks.
+        handler=lambda: GlobalImportManager.RoutingUtilsFactory().build().execute_show_ssr_routes(),
+        title=("Show SSR/SRX routing table via dedicated API (128T/SRX gateways - " "Advanced BGP analysis)"),
+        category=OperationRegistry.skip_category("105"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # > Packet Capture Operations
-    "134": (
-        lambda: PacketCaptureManager(
+    "134": GlobalImportManager.MenuEntry(  # Use named fields for menu 134.
+        menu_id="134",  # Store key for drift checks.
+        handler=lambda: PacketCaptureManager(
             MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).start_site_packet_capture(),
-        "Start Site Packet Capture - Wireless/Wired/Gateway/Scan captures with WebSocket streaming",
+        title=("Start Site Packet Capture - Wireless/Wired/Gateway/Scan captures with " "WebSocket streaming"),
+        category=OperationRegistry.skip_category("134"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "135": (
-        lambda: PacketCaptureManager(
+    "135": GlobalImportManager.MenuEntry(  # Use named fields for menu 135.
+        menu_id="135",  # Store key for drift checks.
+        handler=lambda: PacketCaptureManager(
             MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).start_org_packet_capture(),
-        "Start Organization Packet Capture - MxEdge captures for org-level Mist Edges only",
+        title=("Start Organization Packet Capture - MxEdge captures for org-level " "Mist Edges only"),
+        category=OperationRegistry.skip_category("135"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # Organization-Level Exports
-    "1": (OrgSiteExporter.sites, "Export a list of all sites in the organization"),
-    "8": (OrgInventoryExporter.inventory, "Export the full inventory of devices in the organization"),
-    "15": (OrgDeviceStatsExporter.device_stats, "Export statistics for all devices in the organization"),
-    "19": (OrgDeviceStatsExporter.device_port_stats, "Export port-level statistics for switches and gateways"),
-    "16": (OrgDeviceStatsExporter.vpn_peer_stats, "Export VPN peer path statistics for the organization"),
+    "1": GlobalImportManager.MenuEntry(  # Use named fields for menu 1.
+        menu_id="1",  # Store key for drift checks.
+        handler=OrgSiteExporter.sites,
+        title="Export a list of all sites in the organization",
+        category=OperationRegistry.skip_category("1"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "8": GlobalImportManager.MenuEntry(  # Use named fields for menu 8.
+        menu_id="8",  # Store key for drift checks.
+        handler=OrgInventoryExporter.inventory,
+        title="Export the full inventory of devices in the organization",
+        category=OperationRegistry.skip_category("8"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "15": GlobalImportManager.MenuEntry(  # Use named fields for menu 15.
+        menu_id="15",  # Store key for drift checks.
+        handler=OrgDeviceStatsExporter.device_stats,
+        title="Export statistics for all devices in the organization",
+        category=OperationRegistry.skip_category("15"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "19": GlobalImportManager.MenuEntry(  # Use named fields for menu 19.
+        menu_id="19",  # Store key for drift checks.
+        handler=OrgDeviceStatsExporter.device_port_stats,
+        title="Export port-level statistics for switches and gateways",
+        category=OperationRegistry.skip_category("19"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "16": GlobalImportManager.MenuEntry(  # Use named fields for menu 16.
+        menu_id="16",  # Store key for drift checks.
+        handler=OrgDeviceStatsExporter.vpn_peer_stats,
+        title="Export VPN peer path statistics for the organization",
+        category=OperationRegistry.skip_category("16"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
     # Gateway & Site-Wide Exports
     # Direct reference (removed lambda) so systematic test harness can introspect 'fast' parameter
-    "33": (GatewayTestExporter.synthetic_tests, "Export synthetic test results for all gateways"),
-    "9": (OrgInventoryExporter.devices, "Export a list of all devices in the organization"),
-    "59": (SiteConfigExporter.settings, "Export configuration settings for all sites"),
-    "34": (
-        GatewayTestExporter.test_results_by_site,
-        "Export all synthetic test results (including speed tests) for gateways",
+    "33": GlobalImportManager.MenuEntry(  # Use named fields for menu 33.
+        menu_id="33",  # Store key for drift checks.
+        handler=GatewayTestExporter.synthetic_tests,
+        title="Export synthetic test results for all gateways",
+        category=OperationRegistry.skip_category("33"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "9": GlobalImportManager.MenuEntry(  # Use named fields for menu 9.
+        menu_id="9",  # Store key for drift checks.
+        handler=OrgInventoryExporter.devices,
+        title="Export a list of all devices in the organization",
+        category=OperationRegistry.skip_category("9"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "59": GlobalImportManager.MenuEntry(  # Use named fields for menu 59.
+        menu_id="59",  # Store key for drift checks.
+        handler=SiteConfigExporter.settings,
+        title="Export configuration settings for all sites",
+        category=OperationRegistry.skip_category("59"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "34": GlobalImportManager.MenuEntry(  # Use named fields for menu 34.
+        menu_id="34",  # Store key for drift checks.
+        handler=GatewayTestExporter.test_results_by_site,
+        title="Export all synthetic test results (including speed tests) for gateways",
+        category=OperationRegistry.skip_category("34"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # > Location-Enriched Exports
-    "2": (OrgSiteExporter.sites_with_location, "Export a list of sites with location and timezone info"),
-    "11": (
-        OrgInventoryExporter.gateways_with_site_info,
-        "Export a list of gateways with associated site and address info",
+    "2": GlobalImportManager.MenuEntry(  # Use named fields for menu 2.
+        menu_id="2",  # Store key for drift checks.
+        handler=OrgSiteExporter.sites_with_location,
+        title="Export a list of sites with location and timezone info",
+        category=OperationRegistry.skip_category("2"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "10": (
-        OrgInventoryExporter.devices_with_site_info,
-        "Export a list of all devices with associated site and address info",
+    "11": GlobalImportManager.MenuEntry(  # Use named fields for menu 11.
+        menu_id="11",  # Store key for drift checks.
+        handler=OrgInventoryExporter.gateways_with_site_info,
+        title="Export a list of gateways with associated site and address info",
+        category=OperationRegistry.skip_category("11"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "4": (
-        lambda: (OrgSiteExporter.current_guests(), OrgSiteExporter.historical_guests()),
-        "Export all current guest users and last 7 days of historical guests to CSV",
+    "10": GlobalImportManager.MenuEntry(  # Use named fields for menu 10.
+        menu_id="10",  # Store key for drift checks.
+        handler=OrgInventoryExporter.devices_with_site_info,
+        title="Export a list of all devices with associated site and address info",
+        category=OperationRegistry.skip_category("10"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "17": (OrgDeviceStatsExporter.switch_vc_stats, "Export all switch virtual chassis (VC/stacking) stats to CSV"),
-    "12": (
-        OrgInventoryExporter.combined_inventory_with_site_info,
-        "Export combined inventory with site and address info by calendar week",
+    "4": GlobalImportManager.MenuEntry(  # Use named fields for menu 4.
+        menu_id="4",  # Store key for drift checks.
+        handler=lambda: (
+            OrgSiteExporter.current_guests(),
+            OrgSiteExporter.historical_guests(),
+        ),
+        title="Export all current guest users and last 7 days of historical guests to CSV",
+        category=OperationRegistry.skip_category("4"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "32": (_dispatch_gateway_templates, "Export gateway templates from the organization"),
-    "3": (
-        OrgSiteExporter.sites_list_api,
-        "Export all sites using the 'list' sites API endpoint (to SiteList_ListAPI.csv, only if not already present)",
+    "17": GlobalImportManager.MenuEntry(  # Use named fields for menu 17.
+        menu_id="17",  # Store key for drift checks.
+        handler=OrgDeviceStatsExporter.switch_vc_stats,
+        title="Export all switch virtual chassis (VC/stacking) stats to CSV",
+        category=OperationRegistry.skip_category("17"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "35": (
-        _dispatch_gateway_with_wan_overrides,  # 1014 P13: DI-wiring shim (cascades to canonical)
-        "Find gateway ports overridden from template (outliers for compliance correction)",
+    "12": GlobalImportManager.MenuEntry(  # Use named fields for menu 12.
+        menu_id="12",  # Store key for drift checks.
+        handler=OrgInventoryExporter.combined_inventory_with_site_info,
+        title="Export combined inventory with site and address info by calendar week",
+        category=OperationRegistry.skip_category("12"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "32": GlobalImportManager.MenuEntry(  # Use named fields for menu 32.
+        menu_id="32",  # Store key for drift checks.
+        handler=_dispatch_gateway_templates,
+        title="Export gateway templates from the organization",
+        category=OperationRegistry.skip_category("32"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "3": GlobalImportManager.MenuEntry(  # Use named fields for menu 3.
+        menu_id="3",  # Store key for drift checks.
+        handler=OrgSiteExporter.sites_list_api,
+        title=(
+            "Export all sites using the 'list' sites API endpoint (to "
+            "SiteList_ListAPI.csv, only if not already present)"
+        ),
+        category=OperationRegistry.skip_category("3"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "35": GlobalImportManager.MenuEntry(  # Use named fields for menu 35.
+        menu_id="35",  # Store key for drift checks.
+        handler=_dispatch_gateway_with_wan_overrides,
+        title=("Find gateway ports overridden from template (outliers for compliance " "correction)"),
+        category=OperationRegistry.skip_category("35"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # Site-Specific Data Exports
-    "62": (SiteDeviceExporter.port_stats, "Export port statistics for a selected site"),
-    "65": (SiteClientExporter.clients, "Export client statistics for a selected site"),
-    "60": (SiteDeviceExporter.devices, "Export device list for a selected site"),
-    "61": (SiteDeviceExporter.device_stats, "Export device statistics for a selected site"),
-    "63": (
-        SiteDeviceExporter.device_virtual_chassis,
-        "Export virtual chassis information for a selected switch device",
+    "62": GlobalImportManager.MenuEntry(  # Use named fields for menu 62.
+        menu_id="62",  # Store key for drift checks.
+        handler=SiteDeviceExporter.port_stats,
+        title="Export port statistics for a selected site",
+        category=OperationRegistry.skip_category("62"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "64": (
-        SiteClientExporter.wifi_clients,
-        "Export currently connected WiFi clients and session data for a selected site to SiteWiFiClients.CSV",
+    "65": GlobalImportManager.MenuEntry(  # Use named fields for menu 65.
+        menu_id="65",  # Store key for drift checks.
+        handler=SiteClientExporter.clients,
+        title="Export client statistics for a selected site",
+        category=OperationRegistry.skip_category("65"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "60": GlobalImportManager.MenuEntry(  # Use named fields for menu 60.
+        menu_id="60",  # Store key for drift checks.
+        handler=SiteDeviceExporter.devices,
+        title="Export device list for a selected site",
+        category=OperationRegistry.skip_category("60"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "61": GlobalImportManager.MenuEntry(  # Use named fields for menu 61.
+        menu_id="61",  # Store key for drift checks.
+        handler=SiteDeviceExporter.device_stats,
+        title="Export device statistics for a selected site",
+        category=OperationRegistry.skip_category("61"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "63": GlobalImportManager.MenuEntry(  # Use named fields for menu 63.
+        menu_id="63",  # Store key for drift checks.
+        handler=SiteDeviceExporter.device_virtual_chassis,
+        title="Export virtual chassis information for a selected switch device",
+        category=OperationRegistry.skip_category("63"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "64": GlobalImportManager.MenuEntry(  # Use named fields for menu 64.
+        menu_id="64",  # Store key for drift checks.
+        handler=SiteClientExporter.wifi_clients,
+        title=(
+            "Export currently connected WiFi clients and session data for a " "selected site to SiteWiFiClients.CSV"
+        ),
+        category=OperationRegistry.skip_category("64"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # Organization Template Exports
-    "37": (OrgTemplateExporter.all_templates, "Export all organization templates (gateway, network, RF, site, AP)"),
-    "38": (OrgTemplateExporter.network_templates, "Export network template information for the organization"),
-    "39": (OrgTemplateExporter.rf_templates, "Export RF template information for the organization"),
-    "40": (OrgTemplateExporter.ap_templates, "Export AP template information for the organization"),
-    "41": (OrgTemplateExporter.switch_templates, "Export switch template information for the organization"),
+    "37": GlobalImportManager.MenuEntry(  # Use named fields for menu 37.
+        menu_id="37",  # Store key for drift checks.
+        handler=OrgTemplateExporter.all_templates,
+        title="Export all organization templates (gateway, network, RF, site, AP)",
+        category=OperationRegistry.skip_category("37"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "38": GlobalImportManager.MenuEntry(  # Use named fields for menu 38.
+        menu_id="38",  # Store key for drift checks.
+        handler=OrgTemplateExporter.network_templates,
+        title="Export network template information for the organization",
+        category=OperationRegistry.skip_category("38"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "39": GlobalImportManager.MenuEntry(  # Use named fields for menu 39.
+        menu_id="39",  # Store key for drift checks.
+        handler=OrgTemplateExporter.rf_templates,
+        title="Export RF template information for the organization",
+        category=OperationRegistry.skip_category("39"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "40": GlobalImportManager.MenuEntry(  # Use named fields for menu 40.
+        menu_id="40",  # Store key for drift checks.
+        handler=OrgTemplateExporter.ap_templates,
+        title="Export AP template information for the organization",
+        category=OperationRegistry.skip_category("40"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "41": GlobalImportManager.MenuEntry(  # Use named fields for menu 41.
+        menu_id="41",  # Store key for drift checks.
+        handler=OrgTemplateExporter.switch_templates,
+        title="Export switch template information for the organization",
+        category=OperationRegistry.skip_category("41"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
     # Organization Statistics & Analytics
-    "27": (OrgClientSecurityExporter.wireless_clients, "Export wireless client statistics for the organization"),
-    "28": (OrgClientSecurityExporter.wired_clients, "Export wired client statistics for the organization"),
+    "27": GlobalImportManager.MenuEntry(  # Use named fields for menu 27.
+        menu_id="27",  # Store key for drift checks.
+        handler=OrgClientSecurityExporter.wireless_clients,
+        title="Export wireless client statistics for the organization",
+        category=OperationRegistry.skip_category("27"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "28": GlobalImportManager.MenuEntry(  # Use named fields for menu 28.
+        menu_id="28",  # Store key for drift checks.
+        handler=OrgClientSecurityExporter.wired_clients,
+        title="Export wired client statistics for the organization",
+        category=OperationRegistry.skip_category("28"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
     # Security & Monitoring
-    "24": (OrgClientSecurityExporter.security_events, "Export security events for the organization"),
-    "29": (OrgClientSecurityExporter.rogue_clients, "Export rogue client detections for the organization"),
-    "30": (OrgClientSecurityExporter.rogue_aps, "Export rogue AP detections for the organization"),
+    "24": GlobalImportManager.MenuEntry(  # Use named fields for menu 24.
+        menu_id="24",  # Store key for drift checks.
+        handler=OrgClientSecurityExporter.security_events,
+        title="Export security events for the organization",
+        category=OperationRegistry.skip_category("24"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "29": GlobalImportManager.MenuEntry(  # Use named fields for menu 29.
+        menu_id="29",  # Store key for drift checks.
+        handler=OrgClientSecurityExporter.rogue_clients,
+        title="Export rogue client detections for the organization",
+        category=OperationRegistry.skip_category("29"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "30": GlobalImportManager.MenuEntry(  # Use named fields for menu 30.
+        menu_id="30",  # Store key for drift checks.
+        handler=OrgClientSecurityExporter.rogue_aps,
+        title="Export rogue AP detections for the organization",
+        category=OperationRegistry.skip_category("30"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
     # Configuration & Management (Read-Only)
-    "42": (OrgAdminExporter.licenses, "Export license information for the organization"),
-    "196": (
-        LicenseExportUtils.export_org_license_async_claim_status,
-        "Export async organization license-claim status summary (and optional per-device details)",
-    ),
-    "197": (
-        lambda: ClientPacketCaptureDownloader(MainEntrypoint.context.apisession).run(),
-        "Download client packet captures grouped by VLAN (site -> client -> VLAN -> data/packet_captures/)",
-    ),
-    "198": (
-        SiteWanUsageExporter.wan_usages,
-        "Search Site WAN Usages (searchSiteWanUsage) - Export per-site WAN usage records to SiteWanUsages.csv",
-    ),
-    "199": (
-        SiteWebhookDeliveriesExporter.deliveries,
-        "Search Site Webhook Deliveries (searchSiteWebhooksDeliveries) - Per site+webhook delivery audit CSV",
-    ),
-    "200": (
-        SiteGuestAuthorizationExporter.guest_authorizations,
-        "Search Site Guest Authorization (searchSiteGuestAuthorization) - Per-site authorized guest CSV",
-    ),
-    "201": (
-        SiteMistEdgeEventsExporter.mist_edge_events,
-        "Search Site Mist Edge Events (searchSiteMistEdgeEvents) - Per-site Mist Edge event CSV",
-    ),
-    "202": (
-        SiteNacClientEventsExporter.nac_client_events,
-        "Search Site NAC Client Events (searchSiteNacClientEvents) - Per-site NAC client event CSV",
-    ),
-    "203": (
-        SiteClientExporter.wan_client_events,
-        "Search WAN client events for a selected site (spec 899 / issue #1407)",
-    ),
-    "209": (
-        SiteClientExporter.get_site_beacon,
-        "Get site beacon detail by site_id + beacon_id (getSiteBeacon)",
-    ),
-    "210": (
-        SiteAssetExporter.assets_of_interest,
-        "Export BLE beacons matching an Asset or AssetFilter for a site (getSiteAssetsOfInterest)",
-    ),
-    "211": (
-        SiteAssetExporter.asset_filter,
-        "Get site asset filter detail by site_id + assetfilter_id (getSiteAssetFilter)",
-    ),
-    "212": (
-        SiteAssetExporter.asset,
-        "Get site asset detail by site_id + asset_id (getSiteAsset)",
-    ),
-    "213": (
-        SiteApplicationListExporter.application_list,
-        "Export the application list for a selected site (getSiteApplicationList)",
-    ),
-    "214": (
-        SiteSystemEventsExporter.system_events,
-        "Search system events for a selected site (searchSiteSystemEvents)",
-    ),
-    "215": (
-        SiteSearchExporter.alarms,
-        "Search alarms for a selected site (searchSiteAlarms)",
-    ),
-    "216": (
-        SiteSearchExporter.assets,
-        "Search tracked assets for a selected site (searchSiteAssets)",
-    ),
-    "217": (
-        SiteSearchExporter.bgp_stats,
-        "Search BGP peer statistics for a selected site (searchSiteBgpStats)",
-    ),
-    "218": (
-        SiteSearchExporter.calls,
-        "Search call quality records for a selected site (searchSiteCalls)",
-    ),
-    "219": (
-        SiteSearchExporter.skyatp_events,
-        "Search Sky ATP security events for a selected site (searchSiteSkyatpEvents)",
-    ),
-    "220": (
-        SiteSearchExporter.wireless_client_events,
-        "Search wireless client events for a selected site (searchSiteWirelessClientEvents)",
-    ),
-    "221": (
-        SiteSearchExporter.wan_clients,
-        "Search WAN clients for a selected site (searchSiteWanClients)",
-    ),
-    "222": (
-        SiteSearchExporter.device_events,
-        "Search device events for a selected site (searchSiteDeviceEvents)",
-    ),
-    "223": (
-        SiteSearchExporter.devices,
-        "Search devices for a selected site (searchSiteDevices)",
-    ),
-    "224": (
-        SiteSearchExporter.rogue_events,
-        "Search rogue access point events for a selected site (searchSiteRogueEvents)",
-    ),
-    "225": (
-        SiteSearchExporter.ospf_stats,
-        "Search OSPF neighbor statistics for a selected site (searchSiteOspfStats)",
-    ),
-    "226": (
-        SiteSearchExporter.device_last_configs,
-        "Search the last device configurations for a selected site (searchSiteDeviceLastConfigs)",
-    ),
-    "227": (
-        SiteSearchExporter.device_config_history,
-        "Search device configuration history for a selected site (searchSiteDeviceConfigHistory)",
-    ),
-    "228": (
-        SiteSearchExporter.discovered_switches,
-        "Search discovered switches for a selected site (searchSiteDiscoveredSwitches)",
-    ),
-    "229": (
-        SiteSearchExporter.zone_sessions,
-        "Search zone sessions for a selected site and zone type (searchSiteZoneSessions)",
-    ),
-    "230": (
-        OrgSearchExporter.wireless_client_sessions,
-        "Search wireless client sessions for the organization (searchOrgWirelessClientSessions)",
-    ),
-    "231": (
-        OrgSearchExporter.wireless_client_events,
-        "Search wireless client events for the organization (searchOrgWirelessClientEvents)",
-    ),
-    "232": (
-        OrgSearchExporter.wan_clients,
-        "Search WAN clients for the organization (searchOrgWanClients)",
-    ),
-    "233": (
-        OrgSearchExporter.wan_client_events,
-        "Search WAN client events for the organization (searchOrgWanClientEvents)",
-    ),
-    "234": (
-        OrgSearchExporter.system_events,
-        "Search system events for the organization (searchOrgSystemEvents)",
-    ),
-    "250": (
-        OrgSearchExporter.org_vars,
-        "Search organization variables (searchOrgVars)",
-    ),
-    "235": (
-        CountExporter.org_counts,
-        "Run any org-scoped Mist count endpoint (35 operations, issue #1802)",
-    ),
-    "236": (
-        CountExporter.site_counts,
-        "Run any site-scoped Mist count endpoint (32 operations, issue #1802)",
-    ),
-    "237": (
-        CountExporter.msp_counts,
-        "Run any MSP-scoped Mist count endpoint (3 operations, issue #1802)",
-    ),
-    "259": (
-        SimpleEndpointExporter.global_endpoints,
-        "Run any no-identifier Mist get or list endpoint (29 operations, issue #1807)",
-    ),
-    "260": (
-        SimpleEndpointExporter.org_endpoints,
-        "Run any org-scoped Mist get or list endpoint (55 operations, issue #1807)",
-    ),
-    "261": (
-        SimpleEndpointExporter.site_endpoints,
-        "Run any site-scoped simple Mist read endpoint (58 operations, issue #1807)",
-    ),
-    "262": (
-        SimpleEndpointExporter.msp_endpoints,
-        "Run any MSP-scoped Mist get or list endpoint (10 operations, issue #1807)",
-    ),
-    "263": (
-        EndpointFamilyExporter.site_sle_endpoints,
-        "Run any site SLE endpoint with scope prompts (17 operations, issue #1807)",
-    ),
-    "264": (
-        EndpointFamilyExporter.site_map_endpoints,
-        "Run any site map endpoint with map prompts (7 operations, issue #1807)",
-    ),
-    "265": (
-        EndpointFamilyExporter.site_detail_endpoints,
-        "Run any site detail endpoint with identifier prompts (33 operations, issue #1807)",
-    ),
-    "266": (
-        EndpointFamilyExporter.org_detail_endpoints,
-        "Run any org detail endpoint with identifier prompts (61 operations, issue #1807)",
-    ),
-    "267": (
-        EndpointFamilyExporter.msp_detail_endpoints,
-        "Run any MSP detail endpoint with identifier prompts (10 operations, issue #1807)",
-    ),
-    "268": (
-        EndpointFamilyExporter.other_endpoints,
-        "Run any remaining endpoint with identifier prompts (6 operations, issue #1807)",
-    ),
-    "238": (
-        MSPLicenseExporter.licenses,
-        "Export the license entitlement, usage, and subscriptions for an MSP (listMspLicenses)",
-    ),
-    "239": (
-        # A lambda defers the name lookup, because _launch_capture_portal is defined
-        # further down this module and this dict is built the moment the module loads.
-        lambda: _launch_capture_portal(),
-        "Launch the upgrade capture portal on port 8056 (pre-check, upgrade, post-check)",
-    ),
-    "240": (
-        OrgSecIntelProfileExporter.profile,
-        "Export one organization security intelligence profile (getOrgSecIntelProfile)",
-    ),
-    "241": (
-        # A lambda defers the name lookup, because _launch_metrics_gateway is defined
-        # further down this module and this dict is built the moment the module loads.
-        lambda: _launch_metrics_gateway(),
-        "Serve Mist Cloud health to a monitoring system on port 8057 (Prometheus and SNMP)",
-    ),
-    "242": (
-        SSIDBroadcastGapReport.execute,
-        "Find sites where an SSID is not broadcast by any AP",
-    ),
-    "243": (
-        # WHY: the generator lives in another module, so a lambda defers the import to the moment a
-        # person selects the entry. The dict is built the moment this module loads.
-        lambda: _launch_mib_generator(),
-        "Generate the SNMP MIB from the Mist OpenAPI file and the metric catalog",
-    ),
-    "244": (
-        SiteSearchExporter.service_path_events,
-        "Search service path events for a selected site (searchSiteServicePathEvents)",
-    ),
-    "245": (
-        OrgCradlepointConnectionExporter.status,
-        "Export the Cradlepoint connection status for an organization (testOrgCradlepointConnection)",
-    ),
-    "246": (
-        SiteSearchExporter.troubleshoot_call,
-        "Troubleshoot a call for a site, client MAC, and meeting ID (troubleshootSiteCall)",
-    ),
-    "247": (
-        SelfAccountExporter.verify_email,
-        "Verify an email change token from the Mist email (verifySelfEmail)",
-    ),
-    "248": (
-        OrgSearchExporter.sites,
-        "Search sites for the organization (searchOrgSites)",
-    ),
-    "249": (
-        OrgSearchExporter.devices,  # Spec 863 / issue #1371 -- search organization devices.
-        "Search devices for the organization (searchOrgDevices)",  # Expose the read-only endpoint in the menu.
-    ),
-    "251": (
-        OrgSearchExporter.user_macs,  # Issue #1380 -- search organization user MAC assignments.
-        "Search user MAC assignments for the organization (searchOrgUserMacs)",  # Operation ID for operators.
-    ),
-    "252": (
-        OrgExportUtils.other_device_events,  # Issue #1376 -- search organization other-device events.
-        "Search other-device events for the organization (searchOrgOtherDeviceEvents)",  # Operation ID shown.
-    ),
-    "253": (
-        OrgSearchExporter.mx_edges,  # Search the Mist Edges that belong to the organization.
-        "Search Mist Edges for the organization (searchOrgMxEdges)",  # Expose the read-only endpoint in the menu.
-    ),
-    "254": (
-        OrgInventorySearchExporter.inventory,  # Spec 864 / issue #1372 -- search organization inventory.
-        "Search organization inventory with optional filters (searchOrgInventory)",  # Operation ID shown to operators.
-    ),
-    "255": (
-        OrgSearchExporter.psk_portal_logs,  # Issue #1377 -- search organization PSK portal logs.
-        "Search PSK portal logs for the organization (searchOrgPskPortalLogs)",  # Operation ID shown to operators.
-    ),
-    "256": (
-        OrgWebhookDeliveriesExporter.deliveries,  # Spec 876 / issue #1384 -- search organization webhook deliveries.
-        "Search organization webhook deliveries (searchOrgWebhooksDeliveries)",  # Operation ID shown to operators.
-    ),
-    "257": (
-        SiteSearchExporter.nac_clients,  # Spec 892 / issue #1400 -- search NAC clients for a site.
-        "Search NAC clients for a selected site (searchSiteNacClients)",  # Operation ID shown to operators.
-    ),
-    "258": (
-        SiteOtherDeviceEventsExporter.other_device_events,  # Spec 894 / issue #1402 -- search site other-device events.
-        "Search other-device events for a selected site (searchSiteOtherDeviceEvents)",  # Operation ID.
-    ),
-    "44": (OrgConfigExporter.psks, "Export PSK (Pre-Shared Key) information for the organization"),
-    "45": (OrgConfigExporter.webhooks, "Export webhook configuration for the organization"),
-    "46": (OrgConfigExporter.wlans, "Export WLAN configuration for the organization"),
-    "69": (SiteConfigExporter.wlans, "Export WLAN configuration for a selected site"),
-    "66": (SiteClientExporter.beacons, "Export beacon information for a selected site"),
-    "67": (SiteConfigExporter.maps, "Export map information for a selected site"),
-    "68": (SiteConfigExporter.zones, "Export zone information for a selected site"),
-    "73": (
-        lambda: SiteExportUtils(
-            apisession=MainEntrypoint.context.apisession,
-            PromptUtils=PromptUtils,
-            ConfigUtils=ConfigUtils,
-            DataProcessingUtils=DataProcessingUtils,
-            DataExporter=DataExporter,
-            TimeUtils=TimeUtils,
-            EnhancedSSHRunner=EnhancedSSHRunner,
-            InsightMetricsUtils=InsightMetricsUtils,
-            PacketCaptureManager=PacketCaptureManager,
-            APICoreFetchUtils=APICoreFetchUtils,
-            check_fn=IsDebugMode.check,
-            PrettyTable=PrettyTable,
-            tqdm=tqdm,
-            mistapi=mistapi,
-        ).insights(),
-        "Export SLE (Service Level Experience) metrics insights for a selected site",
+    "42": GlobalImportManager.MenuEntry(  # Use named fields for menu 42.
+        menu_id="42",  # Store key for drift checks.
+        handler=OrgAdminExporter.licenses,
+        title="Export license information for the organization",
+        category=OperationRegistry.skip_category("42"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "196": GlobalImportManager.MenuEntry(  # Use named fields for menu 196.
+        menu_id="196",  # Store key for drift checks.
+        handler=LicenseExportUtils.export_org_license_async_claim_status,
+        title=("Export async organization license-claim status summary (and optional " "per-device details)"),
+        category=OperationRegistry.skip_category("196"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "197": GlobalImportManager.MenuEntry(  # Use named fields for menu 197.
+        menu_id="197",  # Store key for drift checks.
+        handler=lambda: ClientPacketCaptureDownloader(MainEntrypoint.context.apisession).run(),
+        title=("Download client packet captures grouped by VLAN (site -> client -> " "VLAN -> data/packet_captures/)"),
+        category=OperationRegistry.skip_category("197"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "198": GlobalImportManager.MenuEntry(  # Use named fields for menu 198.
+        menu_id="198",  # Store key for drift checks.
+        handler=SiteWanUsageExporter.wan_usages,
+        title=(
+            "Search Site WAN Usages (searchSiteWanUsage) - Export per-site WAN " "usage records to SiteWanUsages.csv"
+        ),
+        category=OperationRegistry.skip_category("198"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "199": GlobalImportManager.MenuEntry(  # Use named fields for menu 199.
+        menu_id="199",  # Store key for drift checks.
+        handler=SiteWebhookDeliveriesExporter.deliveries,
+        title=(
+            "Search Site Webhook Deliveries (searchSiteWebhooksDeliveries) - Per " "site+webhook delivery audit CSV"
+        ),
+        category=OperationRegistry.skip_category("199"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "200": GlobalImportManager.MenuEntry(  # Use named fields for menu 200.
+        menu_id="200",  # Store key for drift checks.
+        handler=SiteGuestAuthorizationExporter.guest_authorizations,
+        title=("Search Site Guest Authorization (searchSiteGuestAuthorization) - " "Per-site authorized guest CSV"),
+        category=OperationRegistry.skip_category("200"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "201": GlobalImportManager.MenuEntry(  # Use named fields for menu 201.
+        menu_id="201",  # Store key for drift checks.
+        handler=SiteMistEdgeEventsExporter.mist_edge_events,
+        title=("Search Site Mist Edge Events (searchSiteMistEdgeEvents) - Per-site " "Mist Edge event CSV"),
+        category=OperationRegistry.skip_category("201"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "202": GlobalImportManager.MenuEntry(  # Use named fields for menu 202.
+        menu_id="202",  # Store key for drift checks.
+        handler=SiteNacClientEventsExporter.nac_client_events,
+        title=("Search Site NAC Client Events (searchSiteNacClientEvents) - Per-site " "NAC client event CSV"),
+        category=OperationRegistry.skip_category("202"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "203": GlobalImportManager.MenuEntry(  # Use named fields for menu 203.
+        menu_id="203",  # Store key for drift checks.
+        handler=SiteClientExporter.wan_client_events,
+        title="Search WAN client events for a selected site (spec 899 / issue #1407)",
+        category=OperationRegistry.skip_category("203"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "209": GlobalImportManager.MenuEntry(  # Use named fields for menu 209.
+        menu_id="209",  # Store key for drift checks.
+        handler=SiteClientExporter.get_site_beacon,
+        title="Get site beacon detail by site_id + beacon_id (getSiteBeacon)",
+        category=OperationRegistry.skip_category("209"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "210": GlobalImportManager.MenuEntry(  # Use named fields for menu 210.
+        menu_id="210",  # Store key for drift checks.
+        handler=SiteAssetExporter.assets_of_interest,
+        title=("Export BLE beacons matching an Asset or AssetFilter for a site " "(getSiteAssetsOfInterest)"),
+        category=OperationRegistry.skip_category("210"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "211": GlobalImportManager.MenuEntry(  # Use named fields for menu 211.
+        menu_id="211",  # Store key for drift checks.
+        handler=SiteAssetExporter.asset_filter,
+        title="Get site asset filter detail by site_id + assetfilter_id (getSiteAssetFilter)",
+        category=OperationRegistry.skip_category("211"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "212": GlobalImportManager.MenuEntry(  # Use named fields for menu 212.
+        menu_id="212",  # Store key for drift checks.
+        handler=SiteAssetExporter.asset,
+        title="Get site asset detail by site_id + asset_id (getSiteAsset)",
+        category=OperationRegistry.skip_category("212"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "213": GlobalImportManager.MenuEntry(  # Use named fields for menu 213.
+        menu_id="213",  # Store key for drift checks.
+        handler=SiteApplicationListExporter.application_list,
+        title="Export the application list for a selected site (getSiteApplicationList)",
+        category=OperationRegistry.skip_category("213"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "214": GlobalImportManager.MenuEntry(  # Use named fields for menu 214.
+        menu_id="214",  # Store key for drift checks.
+        handler=SiteSystemEventsExporter.system_events,
+        title="Search system events for a selected site (searchSiteSystemEvents)",
+        category=OperationRegistry.skip_category("214"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "215": GlobalImportManager.MenuEntry(  # Use named fields for menu 215.
+        menu_id="215",  # Store key for drift checks.
+        handler=SiteSearchExporter.alarms,
+        title="Search alarms for a selected site (searchSiteAlarms)",
+        category=OperationRegistry.skip_category("215"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "216": GlobalImportManager.MenuEntry(  # Use named fields for menu 216.
+        menu_id="216",  # Store key for drift checks.
+        handler=SiteSearchExporter.assets,
+        title="Search tracked assets for a selected site (searchSiteAssets)",
+        category=OperationRegistry.skip_category("216"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "217": GlobalImportManager.MenuEntry(  # Use named fields for menu 217.
+        menu_id="217",  # Store key for drift checks.
+        handler=SiteSearchExporter.bgp_stats,
+        title="Search BGP peer statistics for a selected site (searchSiteBgpStats)",
+        category=OperationRegistry.skip_category("217"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "218": GlobalImportManager.MenuEntry(  # Use named fields for menu 218.
+        menu_id="218",  # Store key for drift checks.
+        handler=SiteSearchExporter.calls,
+        title="Search call quality records for a selected site (searchSiteCalls)",
+        category=OperationRegistry.skip_category("218"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "219": GlobalImportManager.MenuEntry(  # Use named fields for menu 219.
+        menu_id="219",  # Store key for drift checks.
+        handler=SiteSearchExporter.skyatp_events,
+        title="Search Sky ATP security events for a selected site (searchSiteSkyatpEvents)",
+        category=OperationRegistry.skip_category("219"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "220": GlobalImportManager.MenuEntry(  # Use named fields for menu 220.
+        menu_id="220",  # Store key for drift checks.
+        handler=SiteSearchExporter.wireless_client_events,
+        title=("Search wireless client events for a selected site " "(searchSiteWirelessClientEvents)"),
+        category=OperationRegistry.skip_category("220"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "221": GlobalImportManager.MenuEntry(  # Use named fields for menu 221.
+        menu_id="221",  # Store key for drift checks.
+        handler=SiteSearchExporter.wan_clients,
+        title="Search WAN clients for a selected site (searchSiteWanClients)",
+        category=OperationRegistry.skip_category("221"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "222": GlobalImportManager.MenuEntry(  # Use named fields for menu 222.
+        menu_id="222",  # Store key for drift checks.
+        handler=SiteSearchExporter.device_events,
+        title="Search device events for a selected site (searchSiteDeviceEvents)",
+        category=OperationRegistry.skip_category("222"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "223": GlobalImportManager.MenuEntry(  # Use named fields for menu 223.
+        menu_id="223",  # Store key for drift checks.
+        handler=SiteSearchExporter.devices,
+        title="Search devices for a selected site (searchSiteDevices)",
+        category=OperationRegistry.skip_category("223"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "224": GlobalImportManager.MenuEntry(  # Use named fields for menu 224.
+        menu_id="224",  # Store key for drift checks.
+        handler=SiteSearchExporter.rogue_events,
+        title="Search rogue access point events for a selected site (searchSiteRogueEvents)",
+        category=OperationRegistry.skip_category("224"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "225": GlobalImportManager.MenuEntry(  # Use named fields for menu 225.
+        menu_id="225",  # Store key for drift checks.
+        handler=SiteSearchExporter.ospf_stats,
+        title="Search OSPF neighbor statistics for a selected site (searchSiteOspfStats)",
+        category=OperationRegistry.skip_category("225"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "226": GlobalImportManager.MenuEntry(  # Use named fields for menu 226.
+        menu_id="226",  # Store key for drift checks.
+        handler=SiteSearchExporter.device_last_configs,
+        title=("Search the last device configurations for a selected site " "(searchSiteDeviceLastConfigs)"),
+        category=OperationRegistry.skip_category("226"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "227": GlobalImportManager.MenuEntry(  # Use named fields for menu 227.
+        menu_id="227",  # Store key for drift checks.
+        handler=SiteSearchExporter.device_config_history,
+        title=("Search device configuration history for a selected site " "(searchSiteDeviceConfigHistory)"),
+        category=OperationRegistry.skip_category("227"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "228": GlobalImportManager.MenuEntry(  # Use named fields for menu 228.
+        menu_id="228",  # Store key for drift checks.
+        handler=SiteSearchExporter.discovered_switches,
+        title="Search discovered switches for a selected site (searchSiteDiscoveredSwitches)",
+        category=OperationRegistry.skip_category("228"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "229": GlobalImportManager.MenuEntry(  # Use named fields for menu 229.
+        menu_id="229",  # Store key for drift checks.
+        handler=SiteSearchExporter.zone_sessions,
+        title=("Search zone sessions for a selected site and zone type " "(searchSiteZoneSessions)"),
+        category=OperationRegistry.skip_category("229"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "230": GlobalImportManager.MenuEntry(  # Use named fields for menu 230.
+        menu_id="230",  # Store key for drift checks.
+        handler=OrgSearchExporter.wireless_client_sessions,
+        title=("Search wireless client sessions for the organization " "(searchOrgWirelessClientSessions)"),
+        category=OperationRegistry.skip_category("230"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "231": GlobalImportManager.MenuEntry(  # Use named fields for menu 231.
+        menu_id="231",  # Store key for drift checks.
+        handler=OrgSearchExporter.wireless_client_events,
+        title=("Search wireless client events for the organization " "(searchOrgWirelessClientEvents)"),
+        category=OperationRegistry.skip_category("231"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "232": GlobalImportManager.MenuEntry(  # Use named fields for menu 232.
+        menu_id="232",  # Store key for drift checks.
+        handler=OrgSearchExporter.wan_clients,
+        title="Search WAN clients for the organization (searchOrgWanClients)",
+        category=OperationRegistry.skip_category("232"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "233": GlobalImportManager.MenuEntry(  # Use named fields for menu 233.
+        menu_id="233",  # Store key for drift checks.
+        handler=OrgSearchExporter.wan_client_events,
+        title="Search WAN client events for the organization (searchOrgWanClientEvents)",
+        category=OperationRegistry.skip_category("233"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "234": GlobalImportManager.MenuEntry(  # Use named fields for menu 234.
+        menu_id="234",  # Store key for drift checks.
+        handler=OrgSearchExporter.system_events,
+        title="Search system events for the organization (searchOrgSystemEvents)",
+        category=OperationRegistry.skip_category("234"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "250": GlobalImportManager.MenuEntry(  # Use named fields for menu 250.
+        menu_id="250",  # Store key for drift checks.
+        handler=OrgSearchExporter.org_vars,
+        title="Search organization variables (searchOrgVars)",
+        category=OperationRegistry.skip_category("250"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "235": GlobalImportManager.MenuEntry(  # Use named fields for menu 235.
+        menu_id="235",  # Store key for drift checks.
+        handler=CountExporter.org_counts,
+        title="Run any org-scoped Mist count endpoint (35 operations, issue #1802)",
+        category=OperationRegistry.skip_category("235"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "236": GlobalImportManager.MenuEntry(  # Use named fields for menu 236.
+        menu_id="236",  # Store key for drift checks.
+        handler=CountExporter.site_counts,
+        title="Run any site-scoped Mist count endpoint (32 operations, issue #1802)",
+        category=OperationRegistry.skip_category("236"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "237": GlobalImportManager.MenuEntry(  # Use named fields for menu 237.
+        menu_id="237",  # Store key for drift checks.
+        handler=CountExporter.msp_counts,
+        title="Run any MSP-scoped Mist count endpoint (3 operations, issue #1802)",
+        category=OperationRegistry.skip_category("237"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "259": GlobalImportManager.MenuEntry(  # Use named fields for menu 259.
+        menu_id="259",  # Store key for drift checks.
+        handler=SimpleEndpointExporter.global_endpoints,
+        title="Run any no-identifier Mist get or list endpoint (29 operations, issue #1807)",
+        category=OperationRegistry.skip_category("259"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "260": GlobalImportManager.MenuEntry(  # Use named fields for menu 260.
+        menu_id="260",  # Store key for drift checks.
+        handler=SimpleEndpointExporter.org_endpoints,
+        title="Run any org-scoped Mist get or list endpoint (55 operations, issue #1807)",
+        category=OperationRegistry.skip_category("260"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "261": GlobalImportManager.MenuEntry(  # Use named fields for menu 261.
+        menu_id="261",  # Store key for drift checks.
+        handler=SimpleEndpointExporter.site_endpoints,
+        title="Run any site-scoped simple Mist read endpoint (58 operations, issue #1807)",
+        category=OperationRegistry.skip_category("261"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "262": GlobalImportManager.MenuEntry(  # Use named fields for menu 262.
+        menu_id="262",  # Store key for drift checks.
+        handler=SimpleEndpointExporter.msp_endpoints,
+        title="Run any MSP-scoped Mist get or list endpoint (10 operations, issue #1807)",
+        category=OperationRegistry.skip_category("262"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "263": GlobalImportManager.MenuEntry(  # Use named fields for menu 263.
+        menu_id="263",  # Store key for drift checks.
+        handler=EndpointFamilyExporter.site_sle_endpoints,
+        title="Run any site SLE endpoint with scope prompts (17 operations, issue #1807)",
+        category=OperationRegistry.skip_category("263"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "264": GlobalImportManager.MenuEntry(  # Use named fields for menu 264.
+        menu_id="264",  # Store key for drift checks.
+        handler=EndpointFamilyExporter.site_map_endpoints,
+        title="Run any site map endpoint with map prompts (7 operations, issue #1807)",
+        category=OperationRegistry.skip_category("264"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "265": GlobalImportManager.MenuEntry(  # Use named fields for menu 265.
+        menu_id="265",  # Store key for drift checks.
+        handler=EndpointFamilyExporter.site_detail_endpoints,
+        title=("Run any site detail endpoint with identifier prompts (33 operations, " "issue #1807)"),
+        category=OperationRegistry.skip_category("265"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "266": GlobalImportManager.MenuEntry(  # Use named fields for menu 266.
+        menu_id="266",  # Store key for drift checks.
+        handler=EndpointFamilyExporter.org_detail_endpoints,
+        title=("Run any org detail endpoint with identifier prompts (61 operations, " "issue #1807)"),
+        category=OperationRegistry.skip_category("266"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "267": GlobalImportManager.MenuEntry(  # Use named fields for menu 267.
+        menu_id="267",  # Store key for drift checks.
+        handler=EndpointFamilyExporter.msp_detail_endpoints,
+        title=("Run any MSP detail endpoint with identifier prompts (10 operations, " "issue #1807)"),
+        category=OperationRegistry.skip_category("267"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "268": GlobalImportManager.MenuEntry(  # Use named fields for menu 268.
+        menu_id="268",  # Store key for drift checks.
+        handler=EndpointFamilyExporter.other_endpoints,
+        title="Run any remaining endpoint with identifier prompts (6 operations, issue #1807)",
+        category=OperationRegistry.skip_category("268"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "238": GlobalImportManager.MenuEntry(  # Use named fields for menu 238.
+        menu_id="238",  # Store key for drift checks.
+        handler=MSPLicenseExporter.licenses,
+        title=("Export the license entitlement, usage, and subscriptions for an MSP " "(listMspLicenses)"),
+        category=OperationRegistry.skip_category("238"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "239": GlobalImportManager.MenuEntry(  # Use named fields for menu 239.
+        menu_id="239",  # Store key for drift checks.
+        handler=lambda: _launch_capture_portal(),
+        title=("Launch the upgrade capture portal on port 8056 (pre-check, upgrade, " "post-check)"),
+        category=OperationRegistry.skip_category("239"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "240": GlobalImportManager.MenuEntry(  # Use named fields for menu 240.
+        menu_id="240",  # Store key for drift checks.
+        handler=OrgSecIntelProfileExporter.profile,
+        title="Export one organization security intelligence profile (getOrgSecIntelProfile)",
+        category=OperationRegistry.skip_category("240"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "241": GlobalImportManager.MenuEntry(  # Use named fields for menu 241.
+        menu_id="241",  # Store key for drift checks.
+        handler=lambda: _launch_metrics_gateway(),
+        title=("Serve Mist Cloud health to a monitoring system on port 8057 " "(Prometheus and SNMP)"),
+        category=OperationRegistry.skip_category("241"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "242": GlobalImportManager.MenuEntry(  # Use named fields for menu 242.
+        menu_id="242",  # Store key for drift checks.
+        handler=SSIDBroadcastGapReport.execute,
+        title="Find sites where an SSID is not broadcast by any AP",
+        category=OperationRegistry.skip_category("242"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "243": GlobalImportManager.MenuEntry(  # Use named fields for menu 243.
+        menu_id="243",  # Store key for drift checks.
+        handler=lambda: _launch_mib_generator(),
+        title="Generate the SNMP MIB from the Mist OpenAPI file and the metric catalog",
+        category=OperationRegistry.skip_category("243"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "244": GlobalImportManager.MenuEntry(  # Use named fields for menu 244.
+        menu_id="244",  # Store key for drift checks.
+        handler=SiteSearchExporter.service_path_events,
+        title="Search service path events for a selected site (searchSiteServicePathEvents)",
+        category=OperationRegistry.skip_category("244"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "245": GlobalImportManager.MenuEntry(  # Use named fields for menu 245.
+        menu_id="245",  # Store key for drift checks.
+        handler=OrgCradlepointConnectionExporter.status,
+        title=("Export the Cradlepoint connection status for an organization " "(testOrgCradlepointConnection)"),
+        category=OperationRegistry.skip_category("245"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "246": GlobalImportManager.MenuEntry(  # Use named fields for menu 246.
+        menu_id="246",  # Store key for drift checks.
+        handler=SiteSearchExporter.troubleshoot_call,
+        title=("Troubleshoot a call for a site, client MAC, and meeting ID " "(troubleshootSiteCall)"),
+        category=OperationRegistry.skip_category("246"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "247": GlobalImportManager.MenuEntry(  # Use named fields for menu 247.
+        menu_id="247",  # Store key for drift checks.
+        handler=SelfAccountExporter.verify_email,
+        title="Verify an email change token from the Mist email (verifySelfEmail)",
+        category=OperationRegistry.skip_category("247"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "248": GlobalImportManager.MenuEntry(  # Use named fields for menu 248.
+        menu_id="248",  # Store key for drift checks.
+        handler=OrgSearchExporter.sites,
+        title="Search sites for the organization (searchOrgSites)",
+        category=OperationRegistry.skip_category("248"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "249": GlobalImportManager.MenuEntry(  # Use named fields for menu 249.
+        menu_id="249",  # Store key for drift checks.
+        handler=OrgSearchExporter.devices,
+        title="Search devices for the organization (searchOrgDevices)",
+        category=OperationRegistry.skip_category("249"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "251": GlobalImportManager.MenuEntry(  # Use named fields for menu 251.
+        menu_id="251",  # Store key for drift checks.
+        handler=OrgSearchExporter.user_macs,
+        title="Search user MAC assignments for the organization (searchOrgUserMacs)",
+        category=OperationRegistry.skip_category("251"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "252": GlobalImportManager.MenuEntry(  # Use named fields for menu 252.
+        menu_id="252",  # Store key for drift checks.
+        handler=OrgExportUtils.other_device_events,
+        title="Search other-device events for the organization (searchOrgOtherDeviceEvents)",
+        category=OperationRegistry.skip_category("252"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "253": GlobalImportManager.MenuEntry(  # Use named fields for menu 253.
+        menu_id="253",  # Store key for drift checks.
+        handler=OrgSearchExporter.mx_edges,
+        title="Search Mist Edges for the organization (searchOrgMxEdges)",
+        category=OperationRegistry.skip_category("253"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "254": GlobalImportManager.MenuEntry(  # Use named fields for menu 254.
+        menu_id="254",  # Store key for drift checks.
+        handler=OrgInventorySearchExporter.inventory,
+        title="Search organization inventory with optional filters (searchOrgInventory)",
+        category=OperationRegistry.skip_category("254"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "255": GlobalImportManager.MenuEntry(  # Use named fields for menu 255.
+        menu_id="255",  # Store key for drift checks.
+        handler=OrgSearchExporter.psk_portal_logs,
+        title="Search PSK portal logs for the organization (searchOrgPskPortalLogs)",
+        category=OperationRegistry.skip_category("255"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "256": GlobalImportManager.MenuEntry(  # Use named fields for menu 256.
+        menu_id="256",  # Store key for drift checks.
+        handler=OrgWebhookDeliveriesExporter.deliveries,
+        title="Search organization webhook deliveries (searchOrgWebhooksDeliveries)",
+        category=OperationRegistry.skip_category("256"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "257": GlobalImportManager.MenuEntry(  # Use named fields for menu 257.
+        menu_id="257",  # Store key for drift checks.
+        handler=SiteSearchExporter.nac_clients,
+        title="Search NAC clients for a selected site (searchSiteNacClients)",
+        category=OperationRegistry.skip_category("257"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "258": GlobalImportManager.MenuEntry(  # Use named fields for menu 258.
+        menu_id="258",  # Store key for drift checks.
+        handler=SiteOtherDeviceEventsExporter.other_device_events,
+        title="Search other-device events for a selected site (searchSiteOtherDeviceEvents)",
+        category=OperationRegistry.skip_category("258"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "44": GlobalImportManager.MenuEntry(  # Use named fields for menu 44.
+        menu_id="44",  # Store key for drift checks.
+        handler=OrgConfigExporter.psks,
+        title="Export PSK (Pre-Shared Key) information for the organization",
+        category=OperationRegistry.skip_category("44"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "45": GlobalImportManager.MenuEntry(  # Use named fields for menu 45.
+        menu_id="45",  # Store key for drift checks.
+        handler=OrgConfigExporter.webhooks,
+        title="Export webhook configuration for the organization",
+        category=OperationRegistry.skip_category("45"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "46": GlobalImportManager.MenuEntry(  # Use named fields for menu 46.
+        menu_id="46",  # Store key for drift checks.
+        handler=OrgConfigExporter.wlans,
+        title="Export WLAN configuration for the organization",
+        category=OperationRegistry.skip_category("46"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "69": GlobalImportManager.MenuEntry(  # Use named fields for menu 69.
+        menu_id="69",  # Store key for drift checks.
+        handler=SiteConfigExporter.wlans,
+        title="Export WLAN configuration for a selected site",
+        category=OperationRegistry.skip_category("69"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "66": GlobalImportManager.MenuEntry(  # Use named fields for menu 66.
+        menu_id="66",  # Store key for drift checks.
+        handler=SiteClientExporter.beacons,
+        title="Export beacon information for a selected site",
+        category=OperationRegistry.skip_category("66"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "67": GlobalImportManager.MenuEntry(  # Use named fields for menu 67.
+        menu_id="67",  # Store key for drift checks.
+        handler=SiteConfigExporter.maps,
+        title="Export map information for a selected site",
+        category=OperationRegistry.skip_category("67"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "68": GlobalImportManager.MenuEntry(  # Use named fields for menu 68.
+        menu_id="68",  # Store key for drift checks.
+        handler=SiteConfigExporter.zones,
+        title="Export zone information for a selected site",
+        category=OperationRegistry.skip_category("68"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "73": GlobalImportManager.MenuEntry(  # Use named fields for menu 73.
+        menu_id="73",  # Store key for drift checks.
+        handler=lambda: GlobalImportManager.SiteExportUtilsFactory().build().insights(),
+        title="Export SLE (Service Level Experience) metrics insights for a selected site",
+        category=OperationRegistry.skip_category("73"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # ==============================
     # GATEWAY TEMPLATE VARIABLE OPERATIONS
     # ==============================
-    "149": (
-        lambda: WAN2MigrationLauncher().launch(),
-        (
-            "Set WAN2 Interface Site Variable - Configure 'wan2_interface' site variable for template-based WAN "
-            "migration (Reports sites with ge-0/0/1 overrides)"
+    "149": GlobalImportManager.MenuEntry(  # Use named fields for menu 149.
+        menu_id="149",  # Store key for drift checks.
+        handler=lambda: WAN2MigrationLauncher().launch(),
+        title=(
+            "Set WAN2 Interface Site Variable - Configure 'wan2_interface' site "
+            "variable for template-based WAN migration (Reports sites with "
+            "ge-0/0/1 overrides)"
         ),
+        category=OperationRegistry.skip_category("149"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "163": (
-        _dispatch_gateway_wan2_variable_migration,  # 1014 P13: DI-wiring shim (cascades to canonical)
-        (
-            "DESTRUCTIVE: Update Gateway Templates to Use WAN2 Variable - Replace hardcoded 'ge-0/0/1' references with "
-            "{{wan2_interface}} variable (Requires uppercase 'MIGRATE' confirmation, supports --dry-run)"
+    "163": GlobalImportManager.MenuEntry(  # Use named fields for menu 163.
+        menu_id="163",  # Store key for drift checks.
+        handler=_dispatch_gateway_wan2_variable_migration,
+        title=(
+            "DESTRUCTIVE: Update Gateway Templates to Use WAN2 Variable - Replace "
+            "hardcoded 'ge-0/0/1' references with {{wan2_interface}} variable "
+            "(Requires uppercase 'MIGRATE' confirmation, supports --dry-run)"
         ),
+        category=OperationRegistry.skip_category("163"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "150": (
-        lambda: GatewayTemplateConfigManager(
-            org_id=ConfigUtils.get_cached_or_prompted_org_id(),
-            apisession=MainEntrypoint.context.apisession,
-            input_fn=InputUtils.safe_input,
-            get_csv_path_fn=FilePathUtils.get_csv_path,
-            save_data_fn=DataExporter.write_with_format_selection,
-            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
-            generate_sites_fn=OrgSiteExporter.sites,
-            sanitize_filename_fn=EnhancedSSHRunner.sanitize_filename,
-        ).extract(),
-        "Extract Gateway Template Configuration (DIA_Pico, Picocell) - Save specific configs to JSON for replication",
-    ),
-    "164": (
-        lambda: GatewayTemplateConfigManager(
-            org_id=ConfigUtils.get_cached_or_prompted_org_id(),
-            apisession=MainEntrypoint.context.apisession,
-            input_fn=InputUtils.safe_input,
-            get_csv_path_fn=FilePathUtils.get_csv_path,
-            save_data_fn=DataExporter.write_with_format_selection,
-            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
-            generate_sites_fn=OrgSiteExporter.sites,
-            sanitize_filename_fn=EnhancedSSHRunner.sanitize_filename,
-        ).apply(),
-        (
-            "DESTRUCTIVE: Apply Gateway Template Configuration - Replicate extracted configs to other templates "
-            "(Requires uppercase 'APPLY' confirmation)"
+    "150": GlobalImportManager.MenuEntry(  # Use named fields for menu 150.
+        menu_id="150",  # Store key for drift checks.
+        handler=lambda: GlobalImportManager.GatewayTemplateConfigManagerFactory().build().extract(),
+        title=(
+            "Extract Gateway Template Configuration (DIA_Pico, Picocell) - Save "
+            "specific configs to JSON for replication"
         ),
+        category=OperationRegistry.skip_category("150"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "148": (
-        lambda: WLANRadiusTimerManager().manage(),
-        (
-            "Manage WLAN RADIUS Authentication Timers - Configure auth_servers_timeout, auth_servers_retries, "
-            "auth_server_selection, and fast_dot1x_timers for site or template WLANs"
+    "164": GlobalImportManager.MenuEntry(  # Use named fields for menu 164.
+        menu_id="164",  # Store key for drift checks.
+        handler=lambda: GlobalImportManager.GatewayTemplateConfigManagerFactory().build().apply(),
+        title=(
+            "DESTRUCTIVE: Apply Gateway Template Configuration - Replicate "
+            "extracted configs to other templates (Requires uppercase 'APPLY' "
+            "confirmation)"
         ),
+        category=OperationRegistry.skip_category("164"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "148": GlobalImportManager.MenuEntry(  # Use named fields for menu 148.
+        menu_id="148",  # Store key for drift checks.
+        handler=lambda: WLANRadiusTimerManager().manage(),
+        title=(
+            "Manage WLAN RADIUS Authentication Timers - Configure "
+            "auth_servers_timeout, auth_servers_retries, auth_server_selection, "
+            "and fast_dot1x_timers for site or template WLANs"
+        ),
+        category=OperationRegistry.skip_category("148"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # Authentication Management
-    "143": (
-        lambda: SwitchToInteractiveLoginManager().run(),
-        "Switch to interactive login (email/password) - Enables MSP-level API access for current session",
+    "143": GlobalImportManager.MenuEntry(  # Use named fields for menu 143.
+        menu_id="143",  # Store key for drift checks.
+        handler=lambda: SwitchToInteractiveLoginManager().run(),
+        title=("Switch to interactive login (email/password) - Enables MSP-level API " "access for current session"),
+        category=OperationRegistry.skip_category("143"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # Organization Management (Read-Only)
-    "47": (OrgAdminExporter.api_tokens, "Export API token information for the organization"),
-    "48": (OrgAdminExporter.admins, "Export administrator information for the organization"),
-    "136": (
-        OrgConfigExporter.msp,
-        (
-            "MSP (Managed Service Provider) info - Displays guidance only (MSP data requires MSP-level API access, not "
-            "org-level)"
-        ),
+    "47": GlobalImportManager.MenuEntry(  # Use named fields for menu 47.
+        menu_id="47",  # Store key for drift checks.
+        handler=OrgAdminExporter.api_tokens,
+        title="Export API token information for the organization",
+        category=OperationRegistry.skip_category("47"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "49": (OrgAdminExporter.sso, "Export SSO (Single Sign-On) information for the organization"),
-    "43": (OrgAdminExporter.usage, "Export license usage information for the organization"),
-    "50": (OrgConfigExporter.mx_edges, "Export MX Edge information for the organization"),
+    "48": GlobalImportManager.MenuEntry(  # Use named fields for menu 48.
+        menu_id="48",  # Store key for drift checks.
+        handler=OrgAdminExporter.admins,
+        title="Export administrator information for the organization",
+        category=OperationRegistry.skip_category("48"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "136": GlobalImportManager.MenuEntry(  # Use named fields for menu 136.
+        menu_id="136",  # Store key for drift checks.
+        handler=OrgConfigExporter.msp,
+        title=(
+            "MSP (Managed Service Provider) info - Displays guidance only (MSP "
+            "data requires MSP-level API access, not org-level)"
+        ),
+        category=OperationRegistry.skip_category("136"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "49": GlobalImportManager.MenuEntry(  # Use named fields for menu 49.
+        menu_id="49",  # Store key for drift checks.
+        handler=OrgAdminExporter.sso,
+        title="Export SSO (Single Sign-On) information for the organization",
+        category=OperationRegistry.skip_category("49"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "43": GlobalImportManager.MenuEntry(  # Use named fields for menu 43.
+        menu_id="43",  # Store key for drift checks.
+        handler=OrgAdminExporter.usage,
+        title="Export license usage information for the organization",
+        category=OperationRegistry.skip_category("43"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "50": GlobalImportManager.MenuEntry(  # Use named fields for menu 50.
+        menu_id="50",  # Store key for drift checks.
+        handler=OrgConfigExporter.mx_edges,
+        title="Export MX Edge information for the organization",
+        category=OperationRegistry.skip_category("50"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
     # Status & Monitoring
-    "137": (
-        lambda: _build_firmware_manager(
+    "137": GlobalImportManager.MenuEntry(  # Use named fields for menu 137.
+        menu_id="137",  # Store key for drift checks.
+        handler=lambda: _build_firmware_manager(
             MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).check_firmware_upgrade_status(),
-        "Check current firmware upgrade status across organization with detailed progress monitoring and export to CSV",
+        title=(
+            "Check current firmware upgrade status across organization with "
+            "detailed progress monitoring and export to CSV"
+        ),
+        category=OperationRegistry.skip_category("137"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "138": (
-        lambda fast=False, address_check=False, debug=False, skip_ssl_verify=False: InventoryCSVComparator(
+    "138": GlobalImportManager.MenuEntry(  # Use named fields for menu 138.
+        menu_id="138",  # Store key for drift checks.
+        handler=lambda fast=False, address_check=False, debug=False, skip_ssl_verify=False: InventoryCSVComparator(
             fast=fast, address_check=address_check, debug=debug, skip_ssl_verify=skip_ssl_verify
         ).execute(),
-        (
-            "Compare inventory data with external CSV file using configurable address similarity threshold "
-            "(ADDRESS_MATCH_THRESHOLD in .env)"
+        title=(
+            "Compare inventory data with external CSV file using configurable "
+            "address similarity threshold (ADDRESS_MATCH_THRESHOLD in .env)"
         ),
+        category=OperationRegistry.skip_category("138"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=True,  # Avoid fast-mode inspection.
     ),
-    "139": (
-        TroubleshootUtils.launch_interactive,
-        "Interactive Marvis (VNA) AI troubleshooting - guided client, device, and network analysis",
+    "139": GlobalImportManager.MenuEntry(  # Use named fields for menu 139.
+        menu_id="139",  # Store key for drift checks.
+        handler=TroubleshootUtils.launch_interactive,
+        title=("Interactive Marvis (VNA) AI troubleshooting - guided client, device, " "and network analysis"),
+        category=OperationRegistry.skip_category("139"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # Long-Running Export Operations (Read-Only)
-    "97": (
-        OrgAlarmEventExporter.device_events_52w,
-        "Export all org device events from the last 52 weeks (streaming with checkpoint/resume)",
+    "97": GlobalImportManager.MenuEntry(  # Use named fields for menu 97.
+        menu_id="97",  # Store key for drift checks.
+        handler=OrgAlarmEventExporter.device_events_52w,
+        title=("Export all org device events from the last 52 weeks (streaming with " "checkpoint/resume)"),
+        category=OperationRegistry.skip_category("97"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "98": (
-        lambda: OrgExportUtils.audit_logs(full_history=True, duration="52w"),
-        "Export ALL audit logs for the organization (last 52 weeks)",
+    "98": GlobalImportManager.MenuEntry(  # Use named fields for menu 98.
+        menu_id="98",  # Store key for drift checks.
+        handler=lambda: OrgExportUtils.audit_logs(full_history=True, duration="52w"),
+        title="Export ALL audit logs for the organization (last 52 weeks)",
+        category=OperationRegistry.skip_category("98"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "99": (
-        _dispatch_gateway_device_configs,  # 1014 P13: DI-wiring shim (cascades to canonical)
-        "Export configuration details for all gateway devices across all sites",
+    "99": GlobalImportManager.MenuEntry(  # Use named fields for menu 99.
+        menu_id="99",  # Store key for drift checks.
+        handler=_dispatch_gateway_device_configs,
+        title="Export configuration details for all gateway devices across all sites",
+        category=OperationRegistry.skip_category("99"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # ==============================
     # UNSAFE/INTERACTIVE OPERATIONS
     # ==============================
     # > Site Selection & Interactive Tools
-    "92": (PromptUtils.select_site_with_logging, "Select a site (used by other functions)"),
-    "93": (InteractiveDisplayUtils.site_inventory, "View device inventory for a selected site"),
-    "94": (InteractiveDisplayUtils.device_stats, "View statistics for a selected device at a site"),
-    "95": (InteractiveDisplayUtils.device_tests, "View synthetic test stats for a selected gateway device"),
-    "96": (InteractiveDisplayUtils.device_config, "View configuration details for a selected device"),
+    "92": GlobalImportManager.MenuEntry(  # Use named fields for menu 92.
+        menu_id="92",  # Store key for drift checks.
+        handler=PromptUtils.select_site_with_logging,
+        title="Select a site (used by other functions)",
+        category=OperationRegistry.skip_category("92"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "93": GlobalImportManager.MenuEntry(  # Use named fields for menu 93.
+        menu_id="93",  # Store key for drift checks.
+        handler=InteractiveDisplayUtils.site_inventory,
+        title="View device inventory for a selected site",
+        category=OperationRegistry.skip_category("93"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "94": GlobalImportManager.MenuEntry(  # Use named fields for menu 94.
+        menu_id="94",  # Store key for drift checks.
+        handler=InteractiveDisplayUtils.device_stats,
+        title="View statistics for a selected device at a site",
+        category=OperationRegistry.skip_category("94"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "95": GlobalImportManager.MenuEntry(  # Use named fields for menu 95.
+        menu_id="95",  # Store key for drift checks.
+        handler=InteractiveDisplayUtils.device_tests,
+        title="View synthetic test stats for a selected gateway device",
+        category=OperationRegistry.skip_category("95"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "96": GlobalImportManager.MenuEntry(  # Use named fields for menu 96.
+        menu_id="96",  # Store key for drift checks.
+        handler=InteractiveDisplayUtils.device_config,
+        title="View configuration details for a selected device",
+        category=OperationRegistry.skip_category("96"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
     # > Continuous Operations & Monitoring
     # WHY: menu 152 duplicated this action with a vaguer description. Issue
     # #2066 retired 152. The number stays retired; see RETIRED_MENU_NUMBERS in
     # tests/guardrails/test_menu_number_uniqueness.py.
-    "151": (
-        DataCollectionManager.continuous_loop,
-        (
-            "Loop refresh of core datasets (site list, inventory, stats, ports, VPN) Stop with CTRL+C or create "
-            "'stop_loop.txt'"
+    "151": GlobalImportManager.MenuEntry(  # Use named fields for menu 151.
+        menu_id="151",  # Store key for drift checks.
+        handler=DataCollectionManager.continuous_loop,
+        title=(
+            "Loop refresh of core datasets (site list, inventory, stats, ports, "
+            "VPN) Stop with CTRL+C or create 'stop_loop.txt'"
         ),
+        category=OperationRegistry.skip_category("151"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # > File Processing & Support Operations
-    "100": (
-        SFPTransceiverDataProcessor.merge_transceiver_data,
-        "Process and merge CSV files of SFP Module locations into a single CSV file",
+    "100": GlobalImportManager.MenuEntry(  # Use named fields for menu 100.
+        menu_id="100",  # Store key for drift checks.
+        handler=SFPTransceiverDataProcessor.merge_transceiver_data,
+        title="Process and merge CSV files of SFP Module locations into a single CSV file",
+        category=OperationRegistry.skip_category("100"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "101": (DataCollectionManager.generate_support_packages, "Generate support package for each site"),
+    "101": GlobalImportManager.MenuEntry(  # Use named fields for menu 101.
+        menu_id="101",  # Store key for drift checks.
+        handler=DataCollectionManager.generate_support_packages,
+        title="Generate support package for each site",
+        category=OperationRegistry.skip_category("101"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
     # > CLI & WebSocket Operations
-    "140": (CLIShellManager.launch, "Interactively execute a CLI command on a gateway or switch (exit with ~)"),
-    "121": (ARPCommandManager.execute, "Run ARP command on an AP and receive output via WebSocket"),
+    "140": GlobalImportManager.MenuEntry(  # Use named fields for menu 140.
+        menu_id="140",  # Store key for drift checks.
+        handler=CLIShellManager.launch,
+        title="Interactively execute a CLI command on a gateway or switch (exit with ~)",
+        category=OperationRegistry.skip_category("140"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "121": GlobalImportManager.MenuEntry(  # Use named fields for menu 121.
+        menu_id="121",  # Store key for drift checks.
+        handler=ARPCommandManager.execute,
+        title="Run ARP command on an AP and receive output via WebSocket",
+        category=OperationRegistry.skip_category("121"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
     # ! DESTRUCTIVE OPERATIONS - USE WITH EXTREME CAUTION
-    "154": (
-        lambda: _build_firmware_manager(
+    "154": GlobalImportManager.MenuEntry(  # Use named fields for menu 154.
+        menu_id="154",  # Store key for drift checks.
+        handler=lambda: _build_firmware_manager(
             MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).execute_firmware_upgrade_with_mode_selection(),
-        (
-            "DESTRUCTIVE: Advanced AP firmware upgrade with mode selection - upgrade by site list/selection or by "
-            "Gateway Template assignment"
+        title=(
+            "DESTRUCTIVE: Advanced AP firmware upgrade with mode selection - "
+            "upgrade by site list/selection or by Gateway Template assignment"
         ),
+        category=OperationRegistry.skip_category("154"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "158": (
-        DeviceRebootManager.by_gateway_template_list,
-        (
-            "DESTRUCTIVE: Reboot all devices associated with templates listed in GatewayTemplateRebootList.CSV and log "
-            "results"
+    "158": GlobalImportManager.MenuEntry(  # Use named fields for menu 158.
+        menu_id="158",  # Store key for drift checks.
+        handler=DeviceRebootManager.by_gateway_template_list,
+        title=(
+            "DESTRUCTIVE: Reboot all devices associated with templates listed in "
+            "GatewayTemplateRebootList.CSV and log results"
         ),
+        category=OperationRegistry.skip_category("158"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "161": (
-        lambda dry_run=False: _configure_virtual_chassis_manager().launch_convert_single(dry_run=dry_run),
-        " DESTRUCTIVE: Convert a virtual chassis switch to virtual MAC (interactive, supports --dry-run)",
+    "161": GlobalImportManager.MenuEntry(  # Use named fields for menu 161.
+        menu_id="161",  # Store key for drift checks.
+        handler=lambda dry_run=False: _configure_virtual_chassis_manager().launch_convert_single(dry_run=dry_run),
+        title=(" DESTRUCTIVE: Convert a virtual chassis switch to virtual MAC " "(interactive, supports --dry-run)"),
+        category=OperationRegistry.skip_category("161"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "162": (
-        lambda: _configure_virtual_chassis_manager().launch_convert_by_site_list(),
-        " DESTRUCTIVE: Convert all virtual chassis switches in sites listed in VCConvert.CSV (bulk operation)",
+    "162": GlobalImportManager.MenuEntry(  # Use named fields for menu 162.
+        menu_id="162",  # Store key for drift checks.
+        handler=lambda: _configure_virtual_chassis_manager().launch_convert_by_site_list(),
+        title=(
+            " DESTRUCTIVE: Convert all virtual chassis switches in sites listed in " "VCConvert.CSV (bulk operation)"
+        ),
+        category=OperationRegistry.skip_category("162"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "14": (
-        lambda: _configure_virtual_chassis_manager().launch_check_status(),
-        "Check virtual chassis to virtual MAC conversion status for all switches",
+    "14": GlobalImportManager.MenuEntry(  # Use named fields for menu 14.
+        menu_id="14",  # Store key for drift checks.
+        handler=lambda: _configure_virtual_chassis_manager().launch_check_status(),
+        title="Check virtual chassis to virtual MAC conversion status for all switches",
+        category=OperationRegistry.skip_category("14"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "18": (
-        lambda fast=False: _dispatch_gateway_stats_device_stats_with_freshness(fast=fast),
-        "Export detailed device statistics for all gateways (with freshness check)",
+    "18": GlobalImportManager.MenuEntry(  # Use named fields for menu 18.
+        menu_id="18",  # Store key for drift checks.
+        handler=lambda fast=False: _dispatch_gateway_stats_device_stats_with_freshness(fast=fast),
+        title="Export detailed device statistics for all gateways (with freshness check)",
+        category=OperationRegistry.skip_category("18"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=True,  # Avoid fast-mode inspection.
     ),
-    "36": (
-        _dispatch_gateway_stats_wan_port_conflicts,
-        "Check and export gateways with duplicate WAN port IP addresses (0/0/0, 0/0/1, 0/0/2)",
+    "36": GlobalImportManager.MenuEntry(  # Use named fields for menu 36.
+        menu_id="36",  # Store key for drift checks.
+        handler=_dispatch_gateway_stats_wan_port_conflicts,
+        title=("Check and export gateways with duplicate WAN port IP addresses " "(0/0/0, 0/0/1, 0/0/2)"),
+        category=OperationRegistry.skip_category("36"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "175": (
-        lambda: SSHRunnerManager.interactive(_build_ssh_runner_deps()),
-        "Enhanced SSH Command Runner - Execute commands on remote network devices via SSH",
+    "175": GlobalImportManager.MenuEntry(  # Use named fields for menu 175.
+        menu_id="175",  # Store key for drift checks.
+        handler=lambda: SSHRunnerManager.interactive(_build_ssh_runner_deps()),
+        title=("Enhanced SSH Command Runner - Execute commands on remote network " "devices via SSH"),
+        category=OperationRegistry.skip_category("175"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "176": (
-        # Wire menu directly to canonical SSH runner impl (facade wrapper removed, 1014 P15).
-        lambda: SSHRunnerManager.by_gateway_template(_build_ssh_runner_deps()),
-        "SSH Runner - Target gateways by template name (online gateways with management IPs only)",
+    "176": GlobalImportManager.MenuEntry(  # Use named fields for menu 176.
+        menu_id="176",  # Store key for drift checks.
+        handler=lambda: SSHRunnerManager.by_gateway_template(_build_ssh_runner_deps()),
+        title=("SSH Runner - Target gateways by template name (online gateways with " "management IPs only)"),
+        category=OperationRegistry.skip_category("176"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # ==============================
     # INSIGHTS API OPERATIONS - Organization & Site Analytics
     # ==============================
-    "51": (OrgExportUtils.sle_metrics, "Export Organization SLE Metrics (Service Level Experience)"),
-    "52": (OrgExportUtils.sites_sle_summary, "Export SLE summary metrics for all sites in the organization"),
-    "74": (
-        lambda: SiteMetricOperation(
+    "51": GlobalImportManager.MenuEntry(  # Use named fields for menu 51.
+        menu_id="51",  # Store key for drift checks.
+        handler=OrgExportUtils.sle_metrics,
+        title="Export Organization SLE Metrics (Service Level Experience)",
+        category=OperationRegistry.skip_category("51"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "52": GlobalImportManager.MenuEntry(  # Use named fields for menu 52.
+        menu_id="52",  # Store key for drift checks.
+        handler=OrgExportUtils.sites_sle_summary,
+        title="Export SLE summary metrics for all sites in the organization",
+        category=OperationRegistry.skip_category("52"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "74": GlobalImportManager.MenuEntry(  # Use named fields for menu 74.
+        menu_id="74",  # Store key for drift checks.
+        handler=lambda: SiteMetricOperation(
             apisession=MainEntrypoint.context.apisession,
             PromptUtils=PromptUtils,
             DataProcessingUtils=DataProcessingUtils,
@@ -3988,11 +4820,22 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
             InsightMetricsUtils=InsightMetricsUtils,
             mistapi=mistapi,
         ).execute(),
-        "Export general insight metrics for a selected site",
+        title="Export general insight metrics for a selected site",
+        category=OperationRegistry.skip_category("74"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "75": (SiteClientExporter.client_insights, "Export client-specific insight metrics for a selected site"),
-    "76": (
-        lambda: DeviceMetricOperation(
+    "75": GlobalImportManager.MenuEntry(  # Use named fields for menu 75.
+        menu_id="75",  # Store key for drift checks.
+        handler=SiteClientExporter.client_insights,
+        title="Export client-specific insight metrics for a selected site",
+        category=OperationRegistry.skip_category("75"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "76": GlobalImportManager.MenuEntry(  # Use named fields for menu 76.
+        menu_id="76",  # Store key for drift checks.
+        handler=lambda: DeviceMetricOperation(
             apisession=MainEntrypoint.context.apisession,
             PromptUtils=PromptUtils,
             DataProcessingUtils=DataProcessingUtils,
@@ -4002,39 +4845,80 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
             PacketCaptureManager=PacketCaptureManager,
             mistapi=mistapi,
         ).execute(),
-        "Export device-specific insight metrics for a selected site",
+        title="Export device-specific insight metrics for a selected site",
+        category=OperationRegistry.skip_category("76"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "54": (
-        lambda: ConstDefinitionsExporter(MainEntrypoint.context.apisession).export_all(),
-        "Export all available const definitions from the Mist API (comprehensive endpoint coverage)",
+    "54": GlobalImportManager.MenuEntry(  # Use named fields for menu 54.
+        menu_id="54",  # Store key for drift checks.
+        handler=lambda: ConstDefinitionsExporter(MainEntrypoint.context.apisession).export_all(),
+        title=("Export all available const definitions from the Mist API " "(comprehensive endpoint coverage)"),
+        category=OperationRegistry.skip_category("54"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "53": (OrgExportUtils.insight_metrics, "Export Organization Insight Metrics (comprehensive operational insights)"),
-    "77": (
-        SiteAnomalyExporter.anomaly_events,
-        "Export Site Anomaly Events (dynamic discovery of all anomaly-related metrics from Mist API)",
+    "53": GlobalImportManager.MenuEntry(  # Use named fields for menu 53.
+        menu_id="53",  # Store key for drift checks.
+        handler=OrgExportUtils.insight_metrics,
+        title="Export Organization Insight Metrics (comprehensive operational insights)",
+        category=OperationRegistry.skip_category("53"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "78": (
-        SiteAnomalyExporter.device_anomaly_events,
-        "Export Site Device Anomaly Events (device-specific anomaly detection)",
+    "77": GlobalImportManager.MenuEntry(  # Use named fields for menu 77.
+        menu_id="77",  # Store key for drift checks.
+        handler=SiteAnomalyExporter.anomaly_events,
+        title=("Export Site Anomaly Events (dynamic discovery of all anomaly-related " "metrics from Mist API)"),
+        category=OperationRegistry.skip_category("77"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "79": (
-        SiteAnomalyExporter.client_anomaly_events,
-        "Export Site Client Anomaly Events (client-specific anomaly detection: connectivity, roaming, throughput)",
+    "78": GlobalImportManager.MenuEntry(  # Use named fields for menu 78.
+        menu_id="78",  # Store key for drift checks.
+        handler=SiteAnomalyExporter.device_anomaly_events,
+        title="Export Site Device Anomaly Events (device-specific anomaly detection)",
+        category=OperationRegistry.skip_category("78"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "118": (
-        lambda: PingDeviceExecutor().execute(_ws_cmd_deps()),
-        "WebSocket Device Ping - Execute ping command on device via WebSocket stream (real-time output)",
-    ),
-    "119": (
-        lambda: ArpDeviceExecutor().execute(_ws_cmd_deps()),
-        "WebSocket Device ARP - Execute ARP command on device via WebSocket stream (real-time output)",
-    ),
-    "120": (
-        lambda: ServicePingLauncher().launch(),
-        (
-            "WebSocket Service Ping - Execute service-specific ping on SSR gateways via WebSocket stream (real-time "
-            "output)"
+    "79": GlobalImportManager.MenuEntry(  # Use named fields for menu 79.
+        menu_id="79",  # Store key for drift checks.
+        handler=SiteAnomalyExporter.client_anomaly_events,
+        title=(
+            "Export Site Client Anomaly Events (client-specific anomaly detection: "
+            "connectivity, roaming, throughput)"
         ),
+        category=OperationRegistry.skip_category("79"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "118": GlobalImportManager.MenuEntry(  # Use named fields for menu 118.
+        menu_id="118",  # Store key for drift checks.
+        handler=lambda: PingDeviceExecutor().execute(_ws_cmd_deps()),
+        title=("WebSocket Device Ping - Execute ping command on device via WebSocket " "stream (real-time output)"),
+        category=OperationRegistry.skip_category("118"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "119": GlobalImportManager.MenuEntry(  # Use named fields for menu 119.
+        menu_id="119",  # Store key for drift checks.
+        handler=lambda: ArpDeviceExecutor().execute(_ws_cmd_deps()),
+        title=("WebSocket Device ARP - Execute ARP command on device via WebSocket " "stream (real-time output)"),
+        category=OperationRegistry.skip_category("119"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "120": GlobalImportManager.MenuEntry(  # Use named fields for menu 120.
+        menu_id="120",  # Store key for drift checks.
+        handler=lambda: ServicePingLauncher().launch(),
+        title=(
+            "WebSocket Service Ping - Execute service-specific ping on SSR "
+            "gateways via WebSocket stream (real-time output)"
+        ),
+        category=OperationRegistry.skip_category("120"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # ==============================
     # POST API OPERATIONS - Device Commands (Starting at 100)
@@ -4043,123 +4927,170 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
     # ==============================
     # SWITCH FIRMWARE OPERATIONS
     # ==============================
-    "155": (
-        lambda: _build_firmware_manager(
+    "155": GlobalImportManager.MenuEntry(  # Use named fields for menu 155.
+        menu_id="155",  # Store key for drift checks.
+        handler=lambda: _build_firmware_manager(
             MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).execute_switch_firmware_upgrade_with_mode_selection(),
-        (
-            "DESTRUCTIVE: Advanced Switch firmware upgrade with mode selection - upgrade by site list/selection or by "
-            "Gateway Template assignment"
+        title=(
+            "DESTRUCTIVE: Advanced Switch firmware upgrade with mode selection - "
+            "upgrade by site list/selection or by Gateway Template assignment"
         ),
+        category=OperationRegistry.skip_category("155"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # ==============================
     # SSR FIRMWARE OPERATIONS
     # ==============================
-    "156": (
-        lambda: _build_firmware_manager(
+    "156": GlobalImportManager.MenuEntry(  # Use named fields for menu 156.
+        menu_id="156",  # Store key for drift checks.
+        handler=lambda: _build_firmware_manager(
             MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ).execute_ssr_firmware_upgrade_with_mode_selection(),
-        (
-            "DESTRUCTIVE: Advanced SSR firmware upgrade with mode selection - upgrade by site list/selection or by "
-            "Gateway Template assignment"
+        title=(
+            "DESTRUCTIVE: Advanced SSR firmware upgrade with mode selection - "
+            "upgrade by site list/selection or by Gateway Template assignment"
         ),
+        category=OperationRegistry.skip_category("156"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # ==============================
     # TERMINAL USER INTERFACE MODE
     # ==============================
-    "141": (
-        lambda: TUILauncher().launch(),
-        (
-            "Launch Terminal User Interface (TUI) mode - Visual navigation of Mist API library with interactive "
-            "exploration"
+    "141": GlobalImportManager.MenuEntry(  # Use named fields for menu 141.
+        menu_id="141",  # Store key for drift checks.
+        handler=lambda: TUILauncher().launch(),
+        title=(
+            "Launch Terminal User Interface (TUI) mode - Visual navigation of Mist "
+            "API library with interactive exploration"
         ),
+        category=OperationRegistry.skip_category("141"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # ==============================
     # TEST DATA GENERATION
     # ==============================
-    "171": (
-        lambda: _configure_site_config_manager().create_test_sites_from_csv(),
-        (
-            "DESTRUCTIVE: Create 137 test sites from NorthAmericanTestSites.csv - Real landmarks across 13 North "
-            "American countries (Requires uppercase 'CREATE' confirmation)"
+    "171": GlobalImportManager.MenuEntry(  # Use named fields for menu 171.
+        menu_id="171",  # Store key for drift checks.
+        handler=lambda: _configure_site_config_manager().create_test_sites_from_csv(),
+        title=(
+            "DESTRUCTIVE: Create 137 test sites from NorthAmericanTestSites.csv - "
+            "Real landmarks across 13 North American countries (Requires uppercase "
+            "'CREATE' confirmation)"
         ),
+        category=OperationRegistry.skip_category("171"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "172": (
-        lambda: _configure_site_config_manager().create_country_rf_templates_and_assign(),
-        (
-            "DESTRUCTIVE: Create country-specific RF templates and assign sites to matching templates (Requires "
-            "uppercase 'CREATE' confirmation)"
+    "172": GlobalImportManager.MenuEntry(  # Use named fields for menu 172.
+        menu_id="172",  # Store key for drift checks.
+        handler=lambda: _configure_site_config_manager().create_country_rf_templates_and_assign(),
+        title=(
+            "DESTRUCTIVE: Create country-specific RF templates and assign sites to "
+            "matching templates (Requires uppercase 'CREATE' confirmation)"
         ),
+        category=OperationRegistry.skip_category("172"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "173": (
-        lambda: _configure_site_config_manager().create_ap_model_device_profiles(),
-        (
-            "DESTRUCTIVE: Scan org for AP models and create Device Profile per model with inherit/auto settings "
-            "(Requires uppercase 'CREATE' confirmation)"
+    "173": GlobalImportManager.MenuEntry(  # Use named fields for menu 173.
+        menu_id="173",  # Store key for drift checks.
+        handler=lambda: _configure_site_config_manager().create_ap_model_device_profiles(),
+        title=(
+            "DESTRUCTIVE: Scan org for AP models and create Device Profile per "
+            "model with inherit/auto settings (Requires uppercase 'CREATE' "
+            "confirmation)"
         ),
+        category=OperationRegistry.skip_category("173"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "174": (
-        lambda: _configure_site_config_manager().assign_aps_to_matching_device_profiles(),
-        (
-            "DESTRUCTIVE: Assign APs to Device Profiles matching their model type (AP-{model}) - Skips APs without "
-            "matching profiles (Requires uppercase 'ASSIGN' confirmation)"
+    "174": GlobalImportManager.MenuEntry(  # Use named fields for menu 174.
+        menu_id="174",  # Store key for drift checks.
+        handler=lambda: _configure_site_config_manager().assign_aps_to_matching_device_profiles(),
+        title=(
+            "DESTRUCTIVE: Assign APs to Device Profiles matching their model type "
+            "(AP-{model}) - Skips APs without matching profiles (Requires "
+            "uppercase 'ASSIGN' confirmation)"
         ),
+        category=OperationRegistry.skip_category("174"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "165": (
-        lambda: GatewayTemplateConfigManager(
-            org_id=ConfigUtils.get_cached_or_prompted_org_id(),
-            apisession=MainEntrypoint.context.apisession,
-            input_fn=InputUtils.safe_input,
-            get_csv_path_fn=FilePathUtils.get_csv_path,
-            save_data_fn=DataExporter.write_with_format_selection,
-            check_and_generate_csv_fn=CacheUtils.check_and_generate_csv,
-            generate_sites_fn=OrgSiteExporter.sites,
-            sanitize_filename_fn=EnhancedSSHRunner.sanitize_filename,
-        ).clone_by_location(),
-        (
-            "DESTRUCTIVE: Clone Gateway Template by State and Country - Create state/country-specific templates and "
-            "assign sites (Requires uppercase 'CLONE' confirmation)"
+    "165": GlobalImportManager.MenuEntry(  # Use named fields for menu 165.
+        menu_id="165",  # Store key for drift checks.
+        handler=lambda: GlobalImportManager.GatewayTemplateConfigManagerFactory().build().clone_by_location(),
+        title=(
+            "DESTRUCTIVE: Clone Gateway Template by State and Country - Create "
+            "state/country-specific templates and assign sites (Requires uppercase "
+            "'CLONE' confirmation)"
         ),
+        category=OperationRegistry.skip_category("165"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "166": (
-        lambda dry_run=False: WANProbeConfigManager.configure(dry_run=dry_run),
-        (
-            "DESTRUCTIVE: Configure WAN Probe Override on Gateway Templates - Set ICMP probe IPs and profile for all "
-            "WAN interfaces (Requires uppercase 'APPLY' confirmation, supports --dry-run)"
+    "166": GlobalImportManager.MenuEntry(  # Use named fields for menu 166.
+        menu_id="166",  # Store key for drift checks.
+        handler=lambda dry_run=False: WANProbeConfigManager.configure(dry_run=dry_run),
+        title=(
+            "DESTRUCTIVE: Configure WAN Probe Override on Gateway Templates - Set "
+            "ICMP probe IPs and profile for all WAN interfaces (Requires uppercase "
+            "'APPLY' confirmation, supports --dry-run)"
         ),
+        category=OperationRegistry.skip_category("166"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "167": (
-        lambda dry_run=False: WANProbeDeviceOverrideManager.configure(dry_run=dry_run),
-        (
-            "DESTRUCTIVE: Configure WAN Probe on Device Port Overrides - Set ICMP probe on device-level WAN overrides "
-            "only (Requires uppercase 'APPLY' confirmation, supports --dry-run)"
+    "167": GlobalImportManager.MenuEntry(  # Use named fields for menu 167.
+        menu_id="167",  # Store key for drift checks.
+        handler=lambda dry_run=False: WANProbeDeviceOverrideManager.configure(dry_run=dry_run),
+        title=(
+            "DESTRUCTIVE: Configure WAN Probe on Device Port Overrides - Set ICMP "
+            "probe on device-level WAN overrides only (Requires uppercase 'APPLY' "
+            "confirmation, supports --dry-run)"
         ),
+        category=OperationRegistry.skip_category("167"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # ==============================
     # ORG-LEVEL FIRMWARE OPERATIONS
     # ==============================
-    "157": (
-        lambda: _build_org_ap_upgrader().run(),
-        (
-            "DESTRUCTIVE: Org-Level AP Firmware Upgrade - Efficient multi-site upgrade using org-level API (1 call per "
-            "version vs 1 per site), MSP multi-org support, supports --dry-run"
+    "157": GlobalImportManager.MenuEntry(  # Use named fields for menu 157.
+        menu_id="157",  # Store key for drift checks.
+        handler=lambda: _build_org_ap_upgrader().run(),
+        title=(
+            "DESTRUCTIVE: Org-Level AP Firmware Upgrade - Efficient multi-site "
+            "upgrade using org-level API (1 call per version vs 1 per site), MSP "
+            "multi-org support, supports --dry-run"
         ),
+        category=OperationRegistry.skip_category("157"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # ==============================
     # MSP OPERATIONS
     # ==============================
-    "144": (
-        MSPInventoryExporter.execute,
-        (
-            "MSP Inventory Export - Export device inventory across all MSPs and all organizations to CSV (requires MSP "
-            "privileges via --login)"
+    "144": GlobalImportManager.MenuEntry(  # Use named fields for menu 144.
+        menu_id="144",  # Store key for drift checks.
+        handler=MSPInventoryExporter.execute,
+        title=(
+            "MSP Inventory Export - Export device inventory across all MSPs and "
+            "all organizations to CSV (requires MSP privileges via --login)"
         ),
+        category=OperationRegistry.skip_category("144"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # ==============================
     # SITE AUTO-UPGRADE CONFIGURATION
     # ==============================
-    "168": (
-        lambda: SiteAutoUpgradeConfigurator.execute(
+    "168": GlobalImportManager.MenuEntry(  # Use named fields for menu 168.
+        menu_id="168",  # Store key for drift checks.
+        handler=lambda: SiteAutoUpgradeConfigurator.execute(
             apisession=MainEntrypoint.context.apisession,
             msp_privileges=MainEntrypoint.context.msp_privileges if MainEntrypoint.context.msp_privileges else [],
             safe_input_fn=InputUtils.safe_input,
@@ -4170,38 +5101,33 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
             select_msps_fn=lambda: _build_org_ap_upgrader(org_id="")._select_msps(),
             select_orgs_fn=lambda msp: _build_org_ap_upgrader(org_id="")._select_orgs_from_msp(msp),
         ),
-        (
-            "Site Auto-Upgrade Configuration - Configure AP auto-upgrade settings for sites with MSP multi-org support "
-            "(supports --dry-run)"
+        title=(
+            "Site Auto-Upgrade Configuration - Configure AP auto-upgrade settings "
+            "for sites with MSP multi-org support (supports --dry-run)"
         ),
+        category=OperationRegistry.skip_category("168"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # ==============================
     # ZONE & ENGAGEMENT CONFIGURATION ANALYSIS
     # ==============================
-    "6": (
-        lambda: SiteExportUtils(
-            apisession=MainEntrypoint.context.apisession,
-            PromptUtils=PromptUtils,
-            ConfigUtils=ConfigUtils,
-            DataProcessingUtils=DataProcessingUtils,
-            DataExporter=DataExporter,
-            TimeUtils=TimeUtils,
-            EnhancedSSHRunner=EnhancedSSHRunner,
-            InsightMetricsUtils=InsightMetricsUtils,
-            PacketCaptureManager=PacketCaptureManager,
-            APICoreFetchUtils=APICoreFetchUtils,
-            check_fn=IsDebugMode.check,
-            PrettyTable=PrettyTable,
-            tqdm=tqdm,
-            mistapi=mistapi,
-        ).zone_config_analysis(),
-        "Site Config Analysis - Scan all sites for zone, engagement dwell tag, and occupancy setting deviations",
+    "6": GlobalImportManager.MenuEntry(  # Use named fields for menu 6.
+        menu_id="6",  # Store key for drift checks.
+        handler=lambda: GlobalImportManager.SiteExportUtilsFactory().build().zone_config_analysis(),
+        title=(
+            "Site Config Analysis - Scan all sites for zone, engagement dwell tag, " "and occupancy setting deviations"
+        ),
+        category=OperationRegistry.skip_category("6"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # ==============================
     # SITE ANALYTICS CONFIGURATION (DESTRUCTIVE)
     # ==============================
-    "169": (
-        lambda: ExtractedSiteAnalyticsConfigurator.execute(
+    "169": GlobalImportManager.MenuEntry(  # Use named fields for menu 169.
+        menu_id="169",  # Store key for drift checks.
+        handler=lambda: ExtractedSiteAnalyticsConfigurator.execute(
             SiteAnalyticsConfiguratorDeps(
                 apisession=MainEntrypoint.context.apisession,
                 mistapi=mistapi,
@@ -4213,16 +5139,20 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
                 tqdm_fn=tqdm,
             )
         ),
-        (
-            "DESTRUCTIVE: Site Analytics Configuration - Apply standard RTSA/Rogue/Engagement/Occupancy settings to "
-            "deviating sites"
+        title=(
+            "DESTRUCTIVE: Site Analytics Configuration - Apply standard "
+            "RTSA/Rogue/Engagement/Occupancy settings to deviating sites"
         ),
+        category=OperationRegistry.skip_category("169"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # ==============================
     # SITE INVENTORY HEALTH ANALYSIS
     # ==============================
-    "7": (
-        lambda: ExtractedSiteInventoryHealthAnalyzer.analyze(
+    "7": GlobalImportManager.MenuEntry(  # Use named fields for menu 7.
+        menu_id="7",  # Store key for drift checks.
+        handler=lambda: ExtractedSiteInventoryHealthAnalyzer.analyze(
             SiteInventoryHealthAnalyzerDeps(
                 apisession=MainEntrypoint.context.apisession,
                 mistapi=mistapi,
@@ -4231,376 +5161,706 @@ menu_actions: dict[str, tuple[Callable[..., Any], str]] = {
                 save_data_fn=DataExporter.write_with_format_selection,
             )
         ),
-        (
-            "Site Inventory Health Analysis - Find sites with APs missing switches/gateways, or with offline "
-            "infrastructure"
+        title=(
+            "Site Inventory Health Analysis - Find sites with APs missing "
+            "switches/gateways, or with offline infrastructure"
         ),
+        category=OperationRegistry.skip_category("7"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # ==============================
     # BULK RADIUS WLAN CONFIGURATION
     # ==============================
-    "170": (
-        lambda dry_run=False: BulkRadiusWLANConfigManager().manage(dry_run=dry_run),
-        (
-            "Bulk RADIUS WLAN Configuration - Configure auth_servers_timeout, auth_servers_retries, fast_dot1x_timers "
-            "for org-level RADIUS WLANs"
+    "170": GlobalImportManager.MenuEntry(  # Use named fields for menu 170.
+        menu_id="170",  # Store key for drift checks.
+        handler=lambda dry_run=False: BulkRadiusWLANConfigManager().manage(dry_run=dry_run),
+        title=(
+            "Bulk RADIUS WLAN Configuration - Configure auth_servers_timeout, "
+            "auth_servers_retries, fast_dot1x_timers for org-level RADIUS WLANs"
         ),
+        category=OperationRegistry.skip_category("170"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # ==============================
     # MAPS MANAGER (External Module)
     # ==============================
-    "142": (
-        lambda: MapsManagerLauncher().launch(),
-        "Maps Manager - Interactive site floorplan and map operations (sub-menu)",
+    "142": GlobalImportManager.MenuEntry(  # Use named fields for menu 142.
+        menu_id="142",  # Store key for drift checks.
+        handler=lambda: MapsManagerLauncher().launch(),
+        title="Maps Manager - Interactive site floorplan and map operations (sub-menu)",
+        category=OperationRegistry.skip_category("142"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # ==============================
     # DEVICE UTILITY COMMANDS (Menus 123-157)
     # ==============================
     # > Diagnostic Commands
-    "123": (lambda: _get_duc_instance().traceroute(), "Traceroute from device to destination host (AP/Switch/Gateway)"),
-    "106": (lambda: _get_duc_instance().show_ospf_neighbors(), "Show OSPF Neighbors on SSR/SRX Gateway"),
-    "107": (lambda: _get_duc_instance().show_ospf_interfaces(), "Show OSPF Interfaces on SSR/SRX Gateway"),
-    "108": (lambda: _get_duc_instance().show_ospf_database(), "Show OSPF Database on SSR/SRX Gateway"),
-    "109": (lambda: _get_duc_instance().show_ospf_summary(), "Show OSPF Summary on SSR/SRX Gateway"),
-    "117": (lambda: _get_duc_instance().resolve_dns(), "Test DNS Resolution on SSR Gateway"),
-    "124": (
-        lambda: _get_duc_instance().monitor_traffic(),
-        "Monitor Traffic on Switch/SRX Port (streaming, Ctrl+C to stop)",
+    "123": GlobalImportManager.MenuEntry(  # Use named fields for menu 123.
+        menu_id="123",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().traceroute(),
+        title="Traceroute from device to destination host (AP/Switch/Gateway)",
+        category=OperationRegistry.skip_category("123"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "125": (lambda: _get_duc_instance().run_top(), "Run Top Command on Switch/SRX (streaming, Ctrl+C to stop)"),
+    "106": GlobalImportManager.MenuEntry(  # Use named fields for menu 106.
+        menu_id="106",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().show_ospf_neighbors(),
+        title="Show OSPF Neighbors on SSR/SRX Gateway",
+        category=OperationRegistry.skip_category("106"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "107": GlobalImportManager.MenuEntry(  # Use named fields for menu 107.
+        menu_id="107",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().show_ospf_interfaces(),
+        title="Show OSPF Interfaces on SSR/SRX Gateway",
+        category=OperationRegistry.skip_category("107"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "108": GlobalImportManager.MenuEntry(  # Use named fields for menu 108.
+        menu_id="108",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().show_ospf_database(),
+        title="Show OSPF Database on SSR/SRX Gateway",
+        category=OperationRegistry.skip_category("108"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "109": GlobalImportManager.MenuEntry(  # Use named fields for menu 109.
+        menu_id="109",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().show_ospf_summary(),
+        title="Show OSPF Summary on SSR/SRX Gateway",
+        category=OperationRegistry.skip_category("109"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "117": GlobalImportManager.MenuEntry(  # Use named fields for menu 117.
+        menu_id="117",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().resolve_dns(),
+        title="Test DNS Resolution on SSR Gateway",
+        category=OperationRegistry.skip_category("117"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "124": GlobalImportManager.MenuEntry(  # Use named fields for menu 124.
+        menu_id="124",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().monitor_traffic(),
+        title="Monitor Traffic on Switch/SRX Port (streaming, Ctrl+C to stop)",
+        category=OperationRegistry.skip_category("124"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "125": GlobalImportManager.MenuEntry(  # Use named fields for menu 125.
+        menu_id="125",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().run_top(),
+        title="Run Top Command on Switch/SRX (streaming, Ctrl+C to stop)",
+        category=OperationRegistry.skip_category("125"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
     # > Show Commands
-    "110": (lambda: _get_duc_instance().show_session(), "Show Sessions on SSR/SRX Gateway"),
-    "111": (lambda: _get_duc_instance().show_service_path(), "Show Service Path on SSR Gateway"),
-    "112": (lambda: _get_duc_instance().show_bgp_summary(), "Show BGP Summary on Switch or Gateway"),
-    "113": (lambda: _get_duc_instance().show_arp_table(), "Show ARP Table on Switch or Gateway"),
-    "114": (lambda: _get_duc_instance().show_dhcp_leases(), "Show DHCP Leases on Switch or Gateway"),
-    "115": (lambda: _get_duc_instance().show_dot1x(), "Show 802.1X Table on Switch"),
-    "116": (lambda: _get_duc_instance().show_evpn_database(), "Show EVPN Database on Switch or Gateway"),
+    "110": GlobalImportManager.MenuEntry(  # Use named fields for menu 110.
+        menu_id="110",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().show_session(),
+        title="Show Sessions on SSR/SRX Gateway",
+        category=OperationRegistry.skip_category("110"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "111": GlobalImportManager.MenuEntry(  # Use named fields for menu 111.
+        menu_id="111",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().show_service_path(),
+        title="Show Service Path on SSR Gateway",
+        category=OperationRegistry.skip_category("111"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "112": GlobalImportManager.MenuEntry(  # Use named fields for menu 112.
+        menu_id="112",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().show_bgp_summary(),
+        title="Show BGP Summary on Switch or Gateway",
+        category=OperationRegistry.skip_category("112"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "113": GlobalImportManager.MenuEntry(  # Use named fields for menu 113.
+        menu_id="113",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().show_arp_table(),
+        title="Show ARP Table on Switch or Gateway",
+        category=OperationRegistry.skip_category("113"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "114": GlobalImportManager.MenuEntry(  # Use named fields for menu 114.
+        menu_id="114",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().show_dhcp_leases(),
+        title="Show DHCP Leases on Switch or Gateway",
+        category=OperationRegistry.skip_category("114"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "115": GlobalImportManager.MenuEntry(  # Use named fields for menu 115.
+        menu_id="115",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().show_dot1x(),
+        title="Show 802.1X Table on Switch",
+        category=OperationRegistry.skip_category("115"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "116": GlobalImportManager.MenuEntry(  # Use named fields for menu 116.
+        menu_id="116",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().show_evpn_database(),
+        title="Show EVPN Database on Switch or Gateway",
+        category=OperationRegistry.skip_category("116"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
     # > Management Commands
-    "128": (lambda: _get_duc_instance().locate_device(), "Locate Device - Blink LED on AP or Switch"),
-    "129": (lambda: _get_duc_instance().unlocate_device(), "Unlocate Device - Stop LED Blinking on AP or Switch"),
-    "159": (lambda: _get_duc_instance().bounce_port(), " Bounce Switch/Gateway Port (y/N confirmation)"),
-    "122": (lambda: _get_duc_instance().cable_test(), "Cable Test on Switch Port"),
-    "160": (lambda: _get_duc_instance().reprovision_device(), " Reprovision Switch/Gateway (y/N confirmation)"),
-    "130": (lambda: _get_duc_instance().readopt_device(), "Re-adopt Switch Device"),
-    "131": (lambda: _get_duc_instance().get_ztp_password(), "Get ZTP Password for Switch/Gateway (console only)"),
-    "132": (lambda: _get_duc_instance().get_config_commands(), "Get Config CLI Commands for Switch Adoption"),
-    "133": (lambda: _get_duc_instance().upload_support_file(), "Upload Support File from Switch/Gateway"),
+    "128": GlobalImportManager.MenuEntry(  # Use named fields for menu 128.
+        menu_id="128",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().locate_device(),
+        title="Locate Device - Blink LED on AP or Switch",
+        category=OperationRegistry.skip_category("128"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "129": GlobalImportManager.MenuEntry(  # Use named fields for menu 129.
+        menu_id="129",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().unlocate_device(),
+        title="Unlocate Device - Stop LED Blinking on AP or Switch",
+        category=OperationRegistry.skip_category("129"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "159": GlobalImportManager.MenuEntry(  # Use named fields for menu 159.
+        menu_id="159",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().bounce_port(),
+        title=" Bounce Switch/Gateway Port (y/N confirmation)",
+        category=OperationRegistry.skip_category("159"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "122": GlobalImportManager.MenuEntry(  # Use named fields for menu 122.
+        menu_id="122",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().cable_test(),
+        title="Cable Test on Switch Port",
+        category=OperationRegistry.skip_category("122"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "160": GlobalImportManager.MenuEntry(  # Use named fields for menu 160.
+        menu_id="160",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().reprovision_device(),
+        title=" Reprovision Switch/Gateway (y/N confirmation)",
+        category=OperationRegistry.skip_category("160"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "130": GlobalImportManager.MenuEntry(  # Use named fields for menu 130.
+        menu_id="130",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().readopt_device(),
+        title="Re-adopt Switch Device",
+        category=OperationRegistry.skip_category("130"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "131": GlobalImportManager.MenuEntry(  # Use named fields for menu 131.
+        menu_id="131",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().get_ztp_password(),
+        title="Get ZTP Password for Switch/Gateway (console only)",
+        category=OperationRegistry.skip_category("131"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "132": GlobalImportManager.MenuEntry(  # Use named fields for menu 132.
+        menu_id="132",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().get_config_commands(),
+        title="Get Config CLI Commands for Switch Adoption",
+        category=OperationRegistry.skip_category("132"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "133": GlobalImportManager.MenuEntry(  # Use named fields for menu 133.
+        menu_id="133",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().upload_support_file(),
+        title="Upload Support File from Switch/Gateway",
+        category=OperationRegistry.skip_category("133"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
     # > Clear/Reset Commands
-    "177": (lambda: _get_duc_instance().clear_arp_cache(), " DESTRUCTIVE: Clear ARP Cache (type CLEAR)"),
-    "178": (lambda: _get_duc_instance().clear_bgp_routes(), " DESTRUCTIVE: Clear BGP Routes (type CLEAR)"),
-    "179": (lambda: _get_duc_instance().clear_session(), " DESTRUCTIVE: Clear Session on SSR/SRX (type CLEAR)"),
-    "180": (lambda: _get_duc_instance().clear_mac_table(), " DESTRUCTIVE: Clear MAC Table (type CLEAR)"),
-    "181": (lambda: _get_duc_instance().clear_bpdu_error(), " DESTRUCTIVE: Clear BPDU Errors on Switch (type CLEAR)"),
-    "182": (
-        lambda: _get_duc_instance().clear_learned_macs(),
-        " DESTRUCTIVE: Clear Learned MACs from Switch Port (type CLEAR)",
+    "177": GlobalImportManager.MenuEntry(  # Use named fields for menu 177.
+        menu_id="177",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().clear_arp_cache(),
+        title=" DESTRUCTIVE: Clear ARP Cache (type CLEAR)",
+        category=OperationRegistry.skip_category("177"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "183": (
-        lambda: _get_duc_instance().clear_policy_hit_count(),
-        " DESTRUCTIVE: Clear Policy Hit Count on SSR (type CLEAR)",
+    "178": GlobalImportManager.MenuEntry(  # Use named fields for menu 178.
+        menu_id="178",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().clear_bgp_routes(),
+        title=" DESTRUCTIVE: Clear BGP Routes (type CLEAR)",
+        category=OperationRegistry.skip_category("178"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "184": (lambda: _get_duc_instance().release_dhcp_lease(), " Release DHCP Lease on Switch/Gateway (y/N)"),
-    "185": (lambda: _get_duc_instance().release_dhcp_ssr(), " Release DHCP Lease on SSR/SRX (y/N)"),
+    "179": GlobalImportManager.MenuEntry(  # Use named fields for menu 179.
+        menu_id="179",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().clear_session(),
+        title=" DESTRUCTIVE: Clear Session on SSR/SRX (type CLEAR)",
+        category=OperationRegistry.skip_category("179"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "180": GlobalImportManager.MenuEntry(  # Use named fields for menu 180.
+        menu_id="180",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().clear_mac_table(),
+        title=" DESTRUCTIVE: Clear MAC Table (type CLEAR)",
+        category=OperationRegistry.skip_category("180"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "181": GlobalImportManager.MenuEntry(  # Use named fields for menu 181.
+        menu_id="181",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().clear_bpdu_error(),
+        title=" DESTRUCTIVE: Clear BPDU Errors on Switch (type CLEAR)",
+        category=OperationRegistry.skip_category("181"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "182": GlobalImportManager.MenuEntry(  # Use named fields for menu 182.
+        menu_id="182",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().clear_learned_macs(),
+        title=" DESTRUCTIVE: Clear Learned MACs from Switch Port (type CLEAR)",
+        category=OperationRegistry.skip_category("182"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "183": GlobalImportManager.MenuEntry(  # Use named fields for menu 183.
+        menu_id="183",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().clear_policy_hit_count(),
+        title=" DESTRUCTIVE: Clear Policy Hit Count on SSR (type CLEAR)",
+        category=OperationRegistry.skip_category("183"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "184": GlobalImportManager.MenuEntry(  # Use named fields for menu 184.
+        menu_id="184",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().release_dhcp_lease(),
+        title=" Release DHCP Lease on Switch/Gateway (y/N)",
+        category=OperationRegistry.skip_category("184"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "185": GlobalImportManager.MenuEntry(  # Use named fields for menu 185.
+        menu_id="185",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().release_dhcp_ssr(),
+        title=" Release DHCP Lease on SSR/SRX (y/N)",
+        category=OperationRegistry.skip_category("185"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
     # > Hardware Commands
-    "126": (lambda: _get_duc_instance().poll_switch_stats(), "Poll Fresh Statistics from Switch"),
-    "127": (lambda: _get_duc_instance().create_device_snapshot(), "Create Device Snapshot on Switch"),
+    "126": GlobalImportManager.MenuEntry(  # Use named fields for menu 126.
+        menu_id="126",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().poll_switch_stats(),
+        title="Poll Fresh Statistics from Switch",
+        category=OperationRegistry.skip_category("126"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "127": GlobalImportManager.MenuEntry(  # Use named fields for menu 127.
+        menu_id="127",  # Store key for drift checks.
+        handler=lambda: _get_duc_instance().create_device_snapshot(),
+        title="Create Device Snapshot on Switch",
+        category=OperationRegistry.skip_category("127"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
     # > Offline / Reporting
-    "26": (OfflineDeviceReporter.execute, "Offline Device Report"),
-    "145": (OrgExportUtils.ssid_template_consolidation, "SSID Template Consolidation (5-Phase Guided Workflow)"),
-    "89": (OrgExportUtils.e911_bssid_compliance_report, "E911 BSSID Compliance Report"),
-    "90": (GlobalWiredClientReportGenerator.execute, "Global Wired Client Report (operator-based MAC/MFG filtering)"),
-    "91": (
-        WiredClientManufacturerReportGenerator.execute,
-        "Wired Client Manufacturer Report (browse & select)",
+    "26": GlobalImportManager.MenuEntry(  # Use named fields for menu 26.
+        menu_id="26",  # Store key for drift checks.
+        handler=OfflineDeviceReporter.execute,
+        title="Offline Device Report",
+        category=OperationRegistry.skip_category("26"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "146": (
-        lambda: WanHubGroupNumberManager.execute(
+    "145": GlobalImportManager.MenuEntry(  # Use named fields for menu 145.
+        menu_id="145",  # Store key for drift checks.
+        handler=OrgExportUtils.ssid_template_consolidation,
+        title="SSID Template Consolidation (5-Phase Guided Workflow)",
+        category=OperationRegistry.skip_category("145"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "89": GlobalImportManager.MenuEntry(  # Use named fields for menu 89.
+        menu_id="89",  # Store key for drift checks.
+        handler=OrgExportUtils.e911_bssid_compliance_report,
+        title="E911 BSSID Compliance Report",
+        category=OperationRegistry.skip_category("89"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "90": GlobalImportManager.MenuEntry(  # Use named fields for menu 90.
+        menu_id="90",  # Store key for drift checks.
+        handler=GlobalWiredClientReportGenerator.execute,
+        title="Global Wired Client Report (operator-based MAC/MFG filtering)",
+        category=OperationRegistry.skip_category("90"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "91": GlobalImportManager.MenuEntry(  # Use named fields for menu 91.
+        menu_id="91",  # Store key for drift checks.
+        handler=WiredClientManufacturerReportGenerator.execute,
+        title="Wired Client Manufacturer Report (browse & select)",
+        category=OperationRegistry.skip_category("91"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "146": GlobalImportManager.MenuEntry(  # Use named fields for menu 146.
+        menu_id="146",  # Store key for drift checks.
+        handler=lambda: WanHubGroupNumberManager.execute(
             MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
         ),
-        "WAN Hub Group Number Manager",
+        title="WAN Hub Group Number Manager",
+        category=OperationRegistry.skip_category("146"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "147": (
-        lambda: WanVpnBuilder.execute(
+    "147": GlobalImportManager.MenuEntry(  # Use named fields for menu 147.
+        menu_id="147",  # Store key for drift checks.
+        handler=lambda: WanVpnBuilder.execute(
             MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
         ),
-        "WAN Hub-Spoke VPN Builder",
+        title="WAN Hub-Spoke VPN Builder",
+        category=OperationRegistry.skip_category("147"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # > Bulk Data Collection
-    "153": (
-        lambda: OrgDataCollector.execute(
+    "153": GlobalImportManager.MenuEntry(  # Use named fields for menu 153.
+        menu_id="153",  # Store key for drift checks.
+        handler=lambda: OrgDataCollector.execute(
             OrgExportUtils.export_data, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
         ),
-        "Bulk Org Data Collection (populate ArangoDB/Redis/SQLite with all org-level APIs)",
+        title=("Bulk Org Data Collection (populate ArangoDB/Redis/SQLite with all " "org-level APIs)"),
+        category=OperationRegistry.skip_category("153"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # ==============================
     # MISTAPI 0.62.0 NEW ENDPOINTS
     # ==============================
-    "5": (OrgExportUtils.e911_report, "Export E911 report for the organization"),
-    "56": (OrgExportUtils.jsi_pbn, "Export JSI PBN (Product Bulletin Notifications) data"),
-    "57": (OrgExportUtils.jsi_sirt, "Export JSI SIRT (Security Incident Response) advisories"),
+    "5": GlobalImportManager.MenuEntry(  # Use named fields for menu 5.
+        menu_id="5",  # Store key for drift checks.
+        handler=OrgExportUtils.e911_report,
+        title="Export E911 report for the organization",
+        category=OperationRegistry.skip_category("5"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "56": GlobalImportManager.MenuEntry(  # Use named fields for menu 56.
+        menu_id="56",  # Store key for drift checks.
+        handler=OrgExportUtils.jsi_pbn,
+        title="Export JSI PBN (Product Bulletin Notifications) data",
+        category=OperationRegistry.skip_category("56"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "57": GlobalImportManager.MenuEntry(  # Use named fields for menu 57.
+        menu_id="57",  # Store key for drift checks.
+        handler=OrgExportUtils.jsi_sirt,
+        title="Export JSI SIRT (Security Incident Response) advisories",
+        category=OperationRegistry.skip_category("57"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
     # Spec 865 / issue #1373 -- surfaces mistapi.api.v1.orgs.jsi.searchOrgJsiAssetsAndContracts
     # alongside the existing PBN/SIRT reports so operators can pull JSI inventory + contracts.
-    "204": (OrgExportUtils.jsi_assets, "Export JSI assets and contract search results"),
+    "204": GlobalImportManager.MenuEntry(  # Use named fields for menu 204.
+        menu_id="204",  # Store key for drift checks.
+        handler=OrgExportUtils.jsi_assets,
+        title="Export JSI assets and contract search results",
+        category=OperationRegistry.skip_category("204"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
     # Spec 866 / issue #1374 -- surfaces mistapi.api.v1.orgs.mxedges.searchOrgMistEdgeEvents
     # (org-scope peer of the site-scoped SiteMistEdgeEventsExporter registered on menu 201).
-    "205": (OrgExportUtils.mist_edge_events, "Export Org Mist Edge event search results"),
-    "55": (OrgExportUtils.ospf_stats, "Export OSPF adjacency statistics for the organization"),
-    "70": (
-        lambda: SiteExportUtils(
-            apisession=MainEntrypoint.context.apisession,
-            PromptUtils=PromptUtils,
-            ConfigUtils=ConfigUtils,
-            DataProcessingUtils=DataProcessingUtils,
-            DataExporter=DataExporter,
-            TimeUtils=TimeUtils,
-            EnhancedSSHRunner=EnhancedSSHRunner,
-            InsightMetricsUtils=InsightMetricsUtils,
-            PacketCaptureManager=PacketCaptureManager,
-            APICoreFetchUtils=APICoreFetchUtils,
-            check_fn=IsDebugMode.check,
-            PrettyTable=PrettyTable,
-            tqdm=tqdm,
-            mistapi=mistapi,
-        ).ospf_stats(),
-        "Export OSPF adjacency statistics for a selected site",
+    "205": GlobalImportManager.MenuEntry(  # Use named fields for menu 205.
+        menu_id="205",  # Store key for drift checks.
+        handler=OrgExportUtils.mist_edge_events,
+        title="Export Org Mist Edge event search results",
+        category=OperationRegistry.skip_category("205"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "71": (
-        lambda: SiteExportUtils(
-            apisession=MainEntrypoint.context.apisession,
-            PromptUtils=PromptUtils,
-            ConfigUtils=ConfigUtils,
-            DataProcessingUtils=DataProcessingUtils,
-            DataExporter=DataExporter,
-            TimeUtils=TimeUtils,
-            EnhancedSSHRunner=EnhancedSSHRunner,
-            InsightMetricsUtils=InsightMetricsUtils,
-            PacketCaptureManager=PacketCaptureManager,
-            APICoreFetchUtils=APICoreFetchUtils,
-            check_fn=IsDebugMode.check,
-            PrettyTable=PrettyTable,
-            tqdm=tqdm,
-            mistapi=mistapi,
-        ).mxedge_upgrade_status(),
-        "Export MxEdge upgrade status for a selected site",
+    "55": GlobalImportManager.MenuEntry(  # Use named fields for menu 55.
+        menu_id="55",  # Store key for drift checks.
+        handler=OrgExportUtils.ospf_stats,
+        title="Export OSPF adjacency statistics for the organization",
+        category=OperationRegistry.skip_category("55"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "72": (
-        lambda: SiteExportUtils(
-            apisession=MainEntrypoint.context.apisession,
-            PromptUtils=PromptUtils,
-            ConfigUtils=ConfigUtils,
-            DataProcessingUtils=DataProcessingUtils,
-            DataExporter=DataExporter,
-            TimeUtils=TimeUtils,
-            EnhancedSSHRunner=EnhancedSSHRunner,
-            InsightMetricsUtils=InsightMetricsUtils,
-            PacketCaptureManager=PacketCaptureManager,
-            APICoreFetchUtils=APICoreFetchUtils,
-            check_fn=IsDebugMode.check,
-            PrettyTable=PrettyTable,
-            tqdm=tqdm,
-            mistapi=mistapi,
-        ).auto_map_assignment_status(),
-        "Export auto-map assignment status for a selected site",
+    "70": GlobalImportManager.MenuEntry(  # Use named fields for menu 70.
+        menu_id="70",  # Store key for drift checks.
+        handler=lambda: GlobalImportManager.SiteExportUtilsFactory().build().ospf_stats(),
+        title="Export OSPF adjacency statistics for a selected site",
+        category=OperationRegistry.skip_category("70"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "88": (SitesByAPModelExporter.export_sites_by_ap_model, "Export sites by AP model with site address (CSV)"),
-    "25": (AuditAnalysisOps.audit_log_analysis, "Audit Log Analysis - Mermaid timeline + interactive HTML report"),
-    "186": (CacheUtils.clear_cache, "Clear CSV Cache Files (delete all generated cache CSVs)"),
-    "58": (
-        lambda: cast(Any, OrgConfigMigrationManager)(
+    "71": GlobalImportManager.MenuEntry(  # Use named fields for menu 71.
+        menu_id="71",  # Store key for drift checks.
+        handler=lambda: GlobalImportManager.SiteExportUtilsFactory().build().mxedge_upgrade_status(),
+        title="Export MxEdge upgrade status for a selected site",
+        category=OperationRegistry.skip_category("71"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "72": GlobalImportManager.MenuEntry(  # Use named fields for menu 72.
+        menu_id="72",  # Store key for drift checks.
+        handler=lambda: GlobalImportManager.SiteExportUtilsFactory().build().auto_map_assignment_status(),
+        title="Export auto-map assignment status for a selected site",
+        category=OperationRegistry.skip_category("72"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "88": GlobalImportManager.MenuEntry(  # Use named fields for menu 88.
+        menu_id="88",  # Store key for drift checks.
+        handler=SitesByAPModelExporter.export_sites_by_ap_model,
+        title="Export sites by AP model with site address (CSV)",
+        category=OperationRegistry.skip_category("88"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "25": GlobalImportManager.MenuEntry(  # Use named fields for menu 25.
+        menu_id="25",  # Store key for drift checks.
+        handler=AuditAnalysisOps.audit_log_analysis,
+        title="Audit Log Analysis - Mermaid timeline + interactive HTML report",
+        category=OperationRegistry.skip_category("25"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "186": GlobalImportManager.MenuEntry(  # Use named fields for menu 186.
+        menu_id="186",  # Store key for drift checks.
+        handler=CacheUtils.clear_cache,
+        title="Clear CSV Cache Files (delete all generated cache CSVs)",
+        category=OperationRegistry.skip_category("186"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "58": GlobalImportManager.MenuEntry(  # Use named fields for menu 58.
+        menu_id="58",  # Store key for drift checks.
+        handler=lambda: cast(Any, OrgConfigMigrationManager)(
             MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
         ).export_config(),
-        "Export Org WAN/Gateway Config (JSON bundle for cross-org migration)",
+        title="Export Org WAN/Gateway Config (JSON bundle for cross-org migration)",
+        category=OperationRegistry.skip_category("58"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "187": (
-        lambda: cast(Any, OrgConfigMigrationManager)(
+    "187": GlobalImportManager.MenuEntry(  # Use named fields for menu 187.
+        menu_id="187",  # Store key for drift checks.
+        handler=lambda: cast(Any, OrgConfigMigrationManager)(
             MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id, InputUtils.safe_input
         ).import_config(),
-        "Import Org WAN/Gateway Config (cross-org migration with conflict detection)",
+        title="Import Org WAN/Gateway Config (cross-org migration with conflict detection)",
+        category=OperationRegistry.skip_category("187"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # ==============================
     # SITE STATS, METRICS & CHANNEL PLANNING
     # ==============================
-    "80": (
-        lambda: SiteExportUtils(
-            apisession=MainEntrypoint.context.apisession,
-            PromptUtils=PromptUtils,
-            ConfigUtils=ConfigUtils,
-            DataProcessingUtils=DataProcessingUtils,
-            DataExporter=DataExporter,
-            TimeUtils=TimeUtils,
-            EnhancedSSHRunner=EnhancedSSHRunner,
-            InsightMetricsUtils=InsightMetricsUtils,
-            PacketCaptureManager=PacketCaptureManager,
-            APICoreFetchUtils=APICoreFetchUtils,
-            check_fn=IsDebugMode.check,
-            PrettyTable=PrettyTable,
-            tqdm=tqdm,
-            mistapi=mistapi,
-        ).site_stats(),
-        "Export site aggregate health & capacity statistics",
+    "80": GlobalImportManager.MenuEntry(  # Use named fields for menu 80.
+        menu_id="80",  # Store key for drift checks.
+        handler=lambda: GlobalImportManager.SiteExportUtilsFactory().build().site_stats(),
+        title="Export site aggregate health & capacity statistics",
+        category=OperationRegistry.skip_category("80"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "81": (
-        lambda: SiteExportUtils(
-            apisession=MainEntrypoint.context.apisession,
-            PromptUtils=PromptUtils,
-            ConfigUtils=ConfigUtils,
-            DataProcessingUtils=DataProcessingUtils,
-            DataExporter=DataExporter,
-            TimeUtils=TimeUtils,
-            EnhancedSSHRunner=EnhancedSSHRunner,
-            InsightMetricsUtils=InsightMetricsUtils,
-            PacketCaptureManager=PacketCaptureManager,
-            APICoreFetchUtils=APICoreFetchUtils,
-            check_fn=IsDebugMode.check,
-            PrettyTable=PrettyTable,
-            tqdm=tqdm,
-            mistapi=mistapi,
-        ).gateway_metrics(),
-        "Export site gateway performance metrics summary",
+    "81": GlobalImportManager.MenuEntry(  # Use named fields for menu 81.
+        menu_id="81",  # Store key for drift checks.
+        handler=lambda: GlobalImportManager.SiteExportUtilsFactory().build().gateway_metrics(),
+        title="Export site gateway performance metrics summary",
+        category=OperationRegistry.skip_category("81"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "82": (
-        lambda: SiteExportUtils(
-            apisession=MainEntrypoint.context.apisession,
-            PromptUtils=PromptUtils,
-            ConfigUtils=ConfigUtils,
-            DataProcessingUtils=DataProcessingUtils,
-            DataExporter=DataExporter,
-            TimeUtils=TimeUtils,
-            EnhancedSSHRunner=EnhancedSSHRunner,
-            InsightMetricsUtils=InsightMetricsUtils,
-            PacketCaptureManager=PacketCaptureManager,
-            APICoreFetchUtils=APICoreFetchUtils,
-            check_fn=IsDebugMode.check,
-            PrettyTable=PrettyTable,
-            tqdm=tqdm,
-            mistapi=mistapi,
-        ).switches_metrics(),
-        "Export site switch performance metrics summary",
+    "82": GlobalImportManager.MenuEntry(  # Use named fields for menu 82.
+        menu_id="82",  # Store key for drift checks.
+        handler=lambda: GlobalImportManager.SiteExportUtilsFactory().build().switches_metrics(),
+        title="Export site switch performance metrics summary",
+        category=OperationRegistry.skip_category("82"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "83": (
-        lambda: SiteExportUtils(
-            apisession=MainEntrypoint.context.apisession,
-            PromptUtils=PromptUtils,
-            ConfigUtils=ConfigUtils,
-            DataProcessingUtils=DataProcessingUtils,
-            DataExporter=DataExporter,
-            TimeUtils=TimeUtils,
-            EnhancedSSHRunner=EnhancedSSHRunner,
-            InsightMetricsUtils=InsightMetricsUtils,
-            PacketCaptureManager=PacketCaptureManager,
-            APICoreFetchUtils=APICoreFetchUtils,
-            check_fn=IsDebugMode.check,
-            PrettyTable=PrettyTable,
-            tqdm=tqdm,
-            mistapi=mistapi,
-        ).beacons_stats(),
-        "Export site BLE beacon statistics",
+    "83": GlobalImportManager.MenuEntry(  # Use named fields for menu 83.
+        menu_id="83",  # Store key for drift checks.
+        handler=lambda: GlobalImportManager.SiteExportUtilsFactory().build().beacons_stats(),
+        title="Export site BLE beacon statistics",
+        category=OperationRegistry.skip_category("83"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "84": (
-        lambda: SiteExportUtils(
-            apisession=MainEntrypoint.context.apisession,
-            PromptUtils=PromptUtils,
-            ConfigUtils=ConfigUtils,
-            DataProcessingUtils=DataProcessingUtils,
-            DataExporter=DataExporter,
-            TimeUtils=TimeUtils,
-            EnhancedSSHRunner=EnhancedSSHRunner,
-            InsightMetricsUtils=InsightMetricsUtils,
-            PacketCaptureManager=PacketCaptureManager,
-            APICoreFetchUtils=APICoreFetchUtils,
-            check_fn=IsDebugMode.check,
-            PrettyTable=PrettyTable,
-            tqdm=tqdm,
-            mistapi=mistapi,
-        ).wxrules_usage(),
-        "Export site WxLAN rule usage statistics",
+    "84": GlobalImportManager.MenuEntry(  # Use named fields for menu 84.
+        menu_id="84",  # Store key for drift checks.
+        handler=lambda: GlobalImportManager.SiteExportUtilsFactory().build().wxrules_usage(),
+        title="Export site WxLAN rule usage statistics",
+        category=OperationRegistry.skip_category("84"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "85": (
-        lambda: SiteExportUtils(
-            apisession=MainEntrypoint.context.apisession,
-            PromptUtils=PromptUtils,
-            ConfigUtils=ConfigUtils,
-            DataProcessingUtils=DataProcessingUtils,
-            DataExporter=DataExporter,
-            TimeUtils=TimeUtils,
-            EnhancedSSHRunner=EnhancedSSHRunner,
-            InsightMetricsUtils=InsightMetricsUtils,
-            PacketCaptureManager=PacketCaptureManager,
-            APICoreFetchUtils=APICoreFetchUtils,
-            check_fn=IsDebugMode.check,
-            PrettyTable=PrettyTable,
-            tqdm=tqdm,
-            mistapi=mistapi,
-        ).assets_stats(),
-        "Export site asset statistics",
+    "85": GlobalImportManager.MenuEntry(  # Use named fields for menu 85.
+        menu_id="85",  # Store key for drift checks.
+        handler=lambda: GlobalImportManager.SiteExportUtilsFactory().build().assets_stats(),
+        title="Export site asset statistics",
+        category=OperationRegistry.skip_category("85"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "86": (
-        lambda: SiteExportUtils(
-            apisession=MainEntrypoint.context.apisession,
-            PromptUtils=PromptUtils,
-            ConfigUtils=ConfigUtils,
-            DataProcessingUtils=DataProcessingUtils,
-            DataExporter=DataExporter,
-            TimeUtils=TimeUtils,
-            EnhancedSSHRunner=EnhancedSSHRunner,
-            InsightMetricsUtils=InsightMetricsUtils,
-            PacketCaptureManager=PacketCaptureManager,
-            APICoreFetchUtils=APICoreFetchUtils,
-            check_fn=IsDebugMode.check,
-            PrettyTable=PrettyTable,
-            tqdm=tqdm,
-            mistapi=mistapi,
-        ).current_channel_planning(),
-        "Export current RRM channel & power plan per AP radio",
+    "86": GlobalImportManager.MenuEntry(  # Use named fields for menu 86.
+        menu_id="86",  # Store key for drift checks.
+        handler=lambda: GlobalImportManager.SiteExportUtilsFactory().build().current_channel_planning(),
+        title="Export current RRM channel & power plan per AP radio",
+        category=OperationRegistry.skip_category("86"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "23": (SelfExportUtils.audit_logs, "Export self (admin account) audit log"),
-    "87": (GatewayHaExporter.ha_cluster_info, "Export HA gateway cluster info, stats & node pair for a site"),
-    "13": (
-        OrgDeviceInventorySummary.dispatch,
-        "Export org device model counts, firmware version distribution, and versions per model (MSP-aware)",
+    "23": GlobalImportManager.MenuEntry(  # Use named fields for menu 23.
+        menu_id="23",  # Store key for drift checks.
+        handler=SelfExportUtils.audit_logs,
+        title="Export self (admin account) audit log",
+        category=OperationRegistry.skip_category("23"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "87": GlobalImportManager.MenuEntry(  # Use named fields for menu 87.
+        menu_id="87",  # Store key for drift checks.
+        handler=GatewayHaExporter.ha_cluster_info,
+        title="Export HA gateway cluster info, stats & node pair for a site",
+        category=OperationRegistry.skip_category("87"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "13": GlobalImportManager.MenuEntry(  # Use named fields for menu 13.
+        menu_id="13",  # Store key for drift checks.
+        handler=OrgDeviceInventorySummary.dispatch,
+        title=("Export org device model counts, firmware version distribution, and " "versions per model (MSP-aware)"),
+        category=OperationRegistry.skip_category("13"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
     # ==============================
     # SUPPORT TICKETS
     # ==============================
-    "188": (OrgTicketManager.list_tickets, "Export all organization support tickets to CSV"),
-    "189": (OrgTicketManager.create_ticket, "Create a new organization support ticket"),
-    "190": (OrgTicketManager.add_comment, "Add a comment (with optional file attachment) to a support ticket"),
-    "191": (OrgTicketManager.update_ticket, "Update fields on an existing support ticket"),
-    "192": (OrgTicketManager.view_ticket, "View a support ticket with full comments and history"),
-    "193": (OrgTicketManager.export_ticket_details, "Export all tickets with full details and comments"),
-    "194": (
-        DeviceConfigTemplateClonerManager.clone,  # Delegate to extracted implementation class
-        (
-            " DESTRUCTIVE: Clone Device Config to Gateway Template"
-            " - Select a gateway, extract its local config, and create a new org gateway template"
-            " (Requires typing 'CREATE' to confirm)"
-        ),
+    "188": GlobalImportManager.MenuEntry(  # Use named fields for menu 188.
+        menu_id="188",  # Store key for drift checks.
+        handler=OrgTicketManager.list_tickets,
+        title="Export all organization support tickets to CSV",
+        category=OperationRegistry.skip_category("188"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "206": (
-        lambda: manage_org_synthetic_probes(
+    "189": GlobalImportManager.MenuEntry(  # Use named fields for menu 189.
+        menu_id="189",  # Store key for drift checks.
+        handler=OrgTicketManager.create_ticket,
+        title="Create a new organization support ticket",
+        category=OperationRegistry.skip_category("189"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "190": GlobalImportManager.MenuEntry(  # Use named fields for menu 190.
+        menu_id="190",  # Store key for drift checks.
+        handler=OrgTicketManager.add_comment,
+        title="Add a comment (with optional file attachment) to a support ticket",
+        category=OperationRegistry.skip_category("190"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "191": GlobalImportManager.MenuEntry(  # Use named fields for menu 191.
+        menu_id="191",  # Store key for drift checks.
+        handler=OrgTicketManager.update_ticket,
+        title="Update fields on an existing support ticket",
+        category=OperationRegistry.skip_category("191"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "192": GlobalImportManager.MenuEntry(  # Use named fields for menu 192.
+        menu_id="192",  # Store key for drift checks.
+        handler=OrgTicketManager.view_ticket,
+        title="View a support ticket with full comments and history",
+        category=OperationRegistry.skip_category("192"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "193": GlobalImportManager.MenuEntry(  # Use named fields for menu 193.
+        menu_id="193",  # Store key for drift checks.
+        handler=OrgTicketManager.export_ticket_details,
+        title="Export all tickets with full details and comments",
+        category=OperationRegistry.skip_category("193"),  # Read the safety class.
+        destructive=False,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "194": GlobalImportManager.MenuEntry(  # Use named fields for menu 194.
+        menu_id="194",  # Store key for drift checks.
+        handler=DeviceConfigTemplateClonerManager.clone,
+        title=(
+            " DESTRUCTIVE: Clone Device Config to Gateway Template - Select a "
+            "gateway, extract its local config, and create a new org gateway "
+            "template (Requires typing 'CREATE' to confirm)"
+        ),
+        category=OperationRegistry.skip_category("194"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "206": GlobalImportManager.MenuEntry(  # Use named fields for menu 206.
+        menu_id="206",  # Store key for drift checks.
+        handler=lambda: manage_org_synthetic_probes(
             MainEntrypoint.context.apisession, ConfigUtils.get_cached_or_prompted_org_id()
         ),
-        (
-            " DESTRUCTIVE: Manage org Zscaler synthetic probes"
-            " - Build/merge/swap synthetic_test.custom_probes from curated Zscaler catalogue"
+        title=(
+            " DESTRUCTIVE: Manage org Zscaler synthetic probes - Build/merge/swap "
+            "synthetic_test.custom_probes from curated Zscaler catalogue"
         ),
+        category=OperationRegistry.skip_category("206"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "207": (
-        lambda: APProfileMigrationManager.migrate_aps_between_device_profiles(MainEntrypoint.context.apisession),
-        (
-            " DESTRUCTIVE: Migrate APs between device profiles"
-            " - Reassign every AP bound to a source device profile to a chosen target profile"
-            " (Requires typing 'MIGRATE' or 'DRY-RUN' to confirm)"
+    "207": GlobalImportManager.MenuEntry(  # Use named fields for menu 207.
+        menu_id="207",  # Store key for drift checks.
+        handler=lambda: APProfileMigrationManager.migrate_aps_between_device_profiles(
+            MainEntrypoint.context.apisession
         ),
+        title=(
+            " DESTRUCTIVE: Migrate APs between device profiles - Reassign every AP "
+            "bound to a source device profile to a chosen target profile (Requires "
+            "typing 'MIGRATE' or 'DRY-RUN' to confirm)"
+        ),
+        category=OperationRegistry.skip_category("207"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
-    "208": (
-        lambda: APProfileMigrationManager.revert_ap_profile_migration(MainEntrypoint.context.apisession),
-        (
-            " DESTRUCTIVE: Revert an AP profile migration from a backup file"
-            " - Reassign each listed AP back to its original device profile"
-            " (Requires typing 'REVERT' to confirm)"
+    "208": GlobalImportManager.MenuEntry(  # Use named fields for menu 208.
+        menu_id="208",  # Store key for drift checks.
+        handler=lambda: APProfileMigrationManager.revert_ap_profile_migration(MainEntrypoint.context.apisession),
+        title=(
+            " DESTRUCTIVE: Revert an AP profile migration from a backup file - "
+            "Reassign each listed AP back to its original device profile (Requires "
+            "typing 'REVERT' to confirm)"
         ),
+        category=OperationRegistry.skip_category("208"),  # Read the safety class.
+        destructive=True,  # Keep the safety flag.
+        supports_fast=False,  # Avoid fast-mode inspection.
     ),
 }
 
@@ -4666,7 +5926,7 @@ def _systematic_test_emit_skips(emitter: Any, unsafe_list: list[str]) -> int:
     has_api_token = _systematic_test_has_api_token()  # Use one credential check for all skip rows.
     for opt in unsafe_list:  # Iterate every unsafe option so none are silently omitted.
         if opt in menu_actions:  # Guard against stale unsafe lists that reference removed options.
-            _, description = menu_actions[opt]  # Unpack action tuple to get the display description.
+            description = menu_actions[opt].title  # Read the display text from the named menu row.
             reason, category = _systematic_test_skip_details(opt, has_api_token)  # Resolve static or token skip.
             echo(
                 "   %3s: %s... (Reason: %s)",
@@ -4681,17 +5941,13 @@ def _systematic_test_emit_skips(emitter: Any, unsafe_list: list[str]) -> int:
     return len([opt for opt in unsafe_list if opt in menu_actions])  # Return actual skip count for summary reporting.
 
 
-def _resolve_systematic_test_invoke_kwargs(func: Any, fast_enabled: bool) -> dict[str, Any]:
-    """Inspect a menu function's signature and build invoke kwargs (fast=True only if supported)."""
-    supports_fast = False  # Default to no fast-mode support until introspection confirms it.
-    try:  # inspect.signature can raise on built-in callables. Degrade gracefully.
-        sig = inspect.signature(func)  # Detect optional 'fast' parameter
-        supports_fast = "fast" in sig.parameters  # True when function accepts fast-mode
-    except Exception:  # Signature inspection failure is non-fatal
-        supports_fast = False  # Treat as non-fast-capable when signature is uninspectable
+def _resolve_systematic_test_invoke_kwargs(entry: Any, fast_enabled: bool) -> dict[str, Any]:
+    """Build invoke kwargs from explicit menu metadata."""
+    logging.info("Resolving systematic-test kwargs for option %s", entry.menu_id)  # WHY: log before metadata read.
     invoke_kwargs: dict[str, Any] = {}  # Build kwargs dict
-    if supports_fast and fast_enabled:  # Both function and global mode agree
+    if entry.supports_fast and fast_enabled:  # Both function and global mode agree
         invoke_kwargs["fast"] = True  # Activate fast mode for this operation
+    logging.debug("Resolved systematic-test kwargs for option %s: %s", entry.menu_id, invoke_kwargs)  # WHY: log result.
     return invoke_kwargs
 
 
@@ -4723,11 +5979,12 @@ def _systematic_test_run_option(
     fast_enabled: bool,
 ) -> tuple[bool, float]:
     """Run one menu option in the systematic test harness and return (success, duration)."""
-    option, func, description = case.option, case.func, case.description  # Unpack identity (issue #470)
+    option = case.option  # Read option id for telemetry.
+    description = case.description  # Read menu text for telemetry.
     echo("   [%2d/%d] Testing option %3s: %s...", i, total_safe, option, description[:60])
     emitter.emit_test_start(option, description, "systematic")  # Telemetry start
     op_start = time.time()  # Capture start time before invocation overhead
-    invoke_kwargs = _resolve_systematic_test_invoke_kwargs(func, fast_enabled)  # Signature-aware kwargs
+    invoke_kwargs = _resolve_systematic_test_invoke_kwargs(menu_actions[option], fast_enabled)  # Use menu metadata.
     logging.info(
         "SYSTEMATIC_TEST: INVOKE option=%s fast_supported=%s fast_enabled=%s test_mode=True description='%s'",
         option,
@@ -4850,7 +6107,11 @@ def _execute_systematic_test_loop(
     success_count = 0  # Track how many options completed without raising.
     error_count = 0  # Track how many options raised an exception.
     for i, option in enumerate(safe_options, 1):  # Iterate options in optimized order, 1-indexed for display.
-        func, description = menu_actions[option]  # Unpack callable and display name for this option.
+        entry = menu_actions[option]  # Read the named row for this option.
+        func = entry.handler  # Read the callable without tuple-position unpacking.
+        description = entry.title  # Read the display text without tuple-position unpacking.
+        if func is None:  # Static rows cannot run in systematic mode.
+            continue  # Skip impossible rows, though real MistHelper rows always have callables.
         success, _duration = _systematic_test_run_option(
             emitter, SystematicTestOption(option, func, description), i, len(safe_options), fast_enabled
         )  # Execute option with telemetry (issue #470: option identity bundled).
@@ -5857,7 +7118,12 @@ def _dispatch_cli_menu_action(args: argparse.Namespace, site_id: str | None, dev
         logging.error("! Invalid menu option: %s", args.menu)  # Log invalid menu selection.
         echo("! Invalid menu option: %s", args.menu)
         sys.exit(1)  # Exit with error code on invalid menu option.
-    func, _ = menu_actions[args.menu]  # Extract callable from menu_actions dispatch table.
+    entry = menu_actions[args.menu]  # Read the named row from the dispatch table.
+    func = entry.handler  # Extract the callable from the named row.
+    if func is None:  # CLI mode cannot execute a static metadata row.
+        logging.error("! Invalid static menu option: %s", args.menu)  # Log invalid static row use.
+        echo("! Invalid menu option: %s", args.menu)
+        sys.exit(1)  # Exit with error code on invalid menu option.
     logging.info("Executing menu action '%s'.", args.menu)  # Log before function dispatch.
     func_args = _build_cli_func_kwargs(args, site_id, device_id)  # Build the full candidate kwargs dict.
     sig = inspect.signature(func)  # Introspect signature to keep only valid kwargs.
@@ -5906,7 +7172,10 @@ def _run_interactive_mode(args: argparse.Namespace) -> None:
         if not selected:  # Invalid (non-empty) selection entered -- redisplay or exit.
             _handle_interactive_invalid_selection(iwant, container_mode)  # Print + maybe exit on invalid input.
             continue  # In container mode, loop again. Direct mode already exited inside the handler.
-        func, _ = selected  # Extract callable from menu_actions entry.
+        func = selected.handler  # Extract callable from the named menu entry.
+        if func is None:  # Static metadata rows cannot run from the interactive CLI.
+            _handle_interactive_invalid_selection(iwant, container_mode)  # Reuse the existing invalid-input handler.
+            continue  # Return to the menu loop in container mode.
         logging.info(
             "User selected menu option '%s'. Executing associated function.", iwant
         )  # Log selection before dispatch.
@@ -5936,7 +7205,7 @@ def _print_interactive_menu() -> None:
         globals()["_SORTED_MENU_KEYS_CACHE"] = cache  # Store the cache without a global statement.
     sorted_menu_keys = cache[1]  # Read the valid cached order for this redraw.
     for key in sorted_menu_keys:  # Iterate every menu key in numeric order.
-        _, description = menu_actions[key]  # Unpack description from dispatch table tuple.
+        description = menu_actions[key].title  # Read the display text from the named menu row.
         echo("%s: %s", key, description)
 
 

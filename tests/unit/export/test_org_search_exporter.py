@@ -184,7 +184,8 @@ class TestSharedBehavior:
         import MistHelper  # Import the runtime menu registry under test.
         from src.utils.operation_registry import OperationRegistry  # Read the safety classification.
 
-        action, description = MistHelper.menu_actions["250"]  # Read the menu dispatch tuple.
+        action = MistHelper.menu_actions["250"].handler
+        description = MistHelper.menu_actions["250"].title  # Read the menu row.
         assert action is OrgSearchExporter.org_vars  # Require the new menu to call the exporter.
         assert "searchOrgVars" in description  # Expose the operation identifier to operators.
         assert OperationRegistry.get("250")["category"] == "safe"  # Keep the read-only operation automated.
@@ -201,7 +202,8 @@ class TestSharedBehavior:
         import MistHelper  # Import the runtime menu registry under test.
         from src.utils.operation_registry import OperationRegistry  # Read the safety classification.
 
-        action, description = MistHelper.menu_actions["251"]  # Read the menu dispatch tuple for issue #1380.
+        action = MistHelper.menu_actions["251"].handler
+        description = MistHelper.menu_actions["251"].title  # Read the menu row for issue #1380.
         assert action is OrgSearchExporter.user_macs  # Require the new menu to call the exporter.
         assert "searchOrgUserMacs" in description  # Expose the operation identifier to operators.
         assert OperationRegistry.get("251")["category"] == "safe"  # Keep the read-only operation automated.
@@ -286,7 +288,8 @@ class TestMxEdgeSearch:
         import MistHelper  # Import the runtime menu registry under test.
         from src.utils.operation_registry import OperationRegistry  # Read the safety classification.
 
-        action, description = MistHelper.menu_actions["253"]  # Read the menu dispatch tuple.
+        action = MistHelper.menu_actions["253"].handler
+        description = MistHelper.menu_actions["253"].title  # Read the menu row.
         assert action is OrgSearchExporter.mx_edges  # Require the new menu to call the exporter.
         assert "searchOrgMxEdges" in description  # Expose the operation identifier to operators.
         assert OperationRegistry.get("253")["category"] == "safe"  # Keep the read-only operation automated.
