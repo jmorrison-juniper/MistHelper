@@ -110,6 +110,23 @@ python -m pytest tests/ -x -q
 Read `MYPY_PATHS` from `.github\workflows\ci.yml` before you run mypy.
 The workflow owns that path list.
 
+## Prove a new guard
+
+If you add or change a guard, prove that it can fail.
+The guard output must state how many files, records, events, tests, or call sites it checked.
+A required guard must fail when it cannot read its input.
+If a guard skips for an environmental reason, it must print that reason and name the missing capability.
+
+Use one of two proofs.
+
+1. Link a red run from a temporary bad commit, then remove the commit before merge.
+2. Test the guard decision directly with no network and no environment need.
+
+Pull request #2591 proves the first method.
+Pull request #2611 proves the second method.
+Issue #2689 shows why the count matters.
+That SDK compatibility guard skipped all seven tests and still reported green.
+
 ## Hot-file rule
 
 Caution: only one open pull request may change `MistHelper.py` at a time.
