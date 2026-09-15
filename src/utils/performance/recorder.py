@@ -8,19 +8,73 @@ high-frequency events, and the recorder keeps every failure.
 from __future__ import annotations
 
 import logging
-import os
-import random
+import os  # Read operator performance settings from the environment.
+import random  # Thin sampled success events without security impact.
+import time  # Read nanosecond wall and process CPU clocks.
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass  # Build immutable recorder settings and elapsed records.
 from types import TracebackType
 from typing import Any, Final, Literal
 
-from src.utils.performance.clock import Stopwatch
 from src.utils.performance.event import EventSource, PerformanceEvent
-from src.utils.performance.privacy import scrub_dimensions
+from src.utils.performance.privacy import PerformancePrivacyPolicy
 from src.utils.performance.sink import DEFAULT_MAX_BYTES, BoundedSink
 
-log = logging.getLogger(__name__)
+log = logging.getLogger(__name__)  # Share one logger for recorder diagnostics.
+
+
+@dataclass(frozen=True, slots=True)
+class Elapsed:
+    """Hold the measured cost of one boundary."""
+
+    wall_ns: int  # Elapsed wall-clock nanoseconds, which include any waiting.
+    cpu_ns: int  # Process CPU nanoseconds, which exclude any waiting.
+
+
+class Stopwatch:
+    """Measure one boundary with wall and process CPU clocks."""
+
+    __slots__ = ("_wall_start", "_cpu_start", "_elapsed", "_measure_cpu")  # Keep each stopwatch small.
+
+    def __init__(self, measure_cpu: bool = True) -> None:
+        """Prepare the clock readings and the result holder."""
+        self._wall_start = 0  # Wall reading taken when the boundary starts.
+        self._cpu_start = 0  # CPU reading taken when the boundary starts.
+        self._elapsed: Elapsed | None = None  # Result, which the exit path sets once.
+        self._measure_cpu = measure_cpu  # On Windows the CPU clock is the costly call.
+
+    def __enter__(self) -> Stopwatch:
+        """Read the selected clocks once."""
+        if self._measure_cpu:  # Read the CPU clock only when the level asked for it.
+            self._cpu_start = time.process_time_ns()  # Read CPU first, before the work.
+        self._wall_start = time.perf_counter_ns()  # Read wall last, closest to the work.
+        return self  # Give the caller the handle that later holds the result.
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> Literal[False]:
+        """Read the selected clocks once and keep the result."""
+        wall_end = time.perf_counter_ns()  # Read wall first, closest to the work.
+        cpu_ns = self._cpu_elapsed_ns()  # Read the CPU delta only when requested.
+        self._elapsed = Elapsed(max(0, wall_end - self._wall_start), cpu_ns)  # Clamp durations at zero.
+        return False  # Return False so the original exception keeps propagating.
+
+    def _cpu_elapsed_ns(self) -> int:
+        """Return the measured process CPU time or zero."""
+        if not self._measure_cpu:  # Skip the costly clock when the level turned it off.
+            return 0  # Report zero instead of a false CPU value.
+        return max(0, time.process_time_ns() - self._cpu_start)  # Clamp the process CPU delta.
+
+    @property
+    def elapsed(self) -> Elapsed:
+        """Return the measured cost, or zero when the span never ran."""
+        if self._elapsed is None:  # Guard, because a caller can read before the exit runs.
+            return Elapsed(wall_ns=0, cpu_ns=0)  # Report zero rather than raise inside a metric.
+        return self._elapsed  # Return the frozen record, which the caller cannot mutate.
+
 
 LEVELS: Final = ("off", "base", "targeted", "diagnostic")  # The ordered level names.
 _LEVEL_FAMILIES: Final = {
@@ -264,7 +318,7 @@ class Span:
             source=self._source,  # The file, symbol, and class.
             status=self.status,  # The closed outcome value.
             measurements=counts,  # The measurements, which always hold the two clocks.
-            dimensions=scrub_dimensions(self._labels),  # Apply the privacy policy.
+            dimensions=PerformancePrivacyPolicy.scrub_dimensions(self._labels),  # Apply the privacy policy.
             sample_rate=sample_rate,  # State the share this hook kept.
         )
 

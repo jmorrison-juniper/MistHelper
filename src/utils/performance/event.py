@@ -14,6 +14,8 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any, Final
 
+from src.utils.performance.privacy import PerformancePrivacyPolicy  # Scrub source labels before JSON storage.
+
 SCHEMA_VERSION: Final = "1.0.0"  # The single contract version this build emits.
 DIMENSION_KEY_RE: Final = re.compile(r"^[a-z][a-z0-9_]{0,47}$")  # Bounded label key.
 MEASUREMENT_KEY_RE: Final = re.compile(r"^[a-z][a-z0-9_.]{0,63}$")  # Bounded measurement key.
@@ -70,10 +72,10 @@ class EventSource:
     def to_dict(self) -> dict[str, Any]:
         """Return the source block the schema expects."""
         return {
-            "file": self.file,  # The path that the hook catalog also records.
-            "symbol": self.symbol,  # The symbol that the AST inventory also records.
-            "class": self.class_name,  # The schema allows a null class.
-        }
+            "file": PerformancePrivacyPolicy.scrub_source_label(self.file),  # Store a source area, never a raw path.
+            "symbol": PerformancePrivacyPolicy.scrub_value(self.symbol),  # Store only a bounded symbol label.
+            "class": None if self.class_name is None else PerformancePrivacyPolicy.scrub_value(self.class_name),
+        }  # The schema allows a null class and safe source labels.
 
 
 @dataclass(frozen=True, slots=True)

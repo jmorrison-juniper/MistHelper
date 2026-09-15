@@ -15,7 +15,6 @@ from pathlib import Path
 
 import pytest
 
-from src.utils.performance.clock import Stopwatch
 from src.utils.performance.event import (
     MAX_DIMENSIONS,
     MAX_MEASUREMENTS,
@@ -24,8 +23,8 @@ from src.utils.performance.event import (
     EventSource,
     PerformanceEvent,
 )
-from src.utils.performance.privacy import REDACTED, bucket_size, scrub_value, status_class
-from src.utils.performance.recorder import NULL_SPAN, Recorder, RecorderSettings
+from src.utils.performance.privacy import REDACTED, PerformancePrivacyPolicy
+from src.utils.performance.recorder import NULL_SPAN, Recorder, RecorderSettings, Stopwatch
 
 SCHEMA_PATH = (
     Path(__file__).resolve().parents[1]
@@ -65,7 +64,7 @@ class TestEventContract:
     def test_the_source_names_the_file_symbol_and_class(self) -> None:
         """The source block gives per-file, per-function, and per-class attribution."""
         source = _event().to_dict()["source"]
-        assert source["file"] == "src/api/api_data_fetcher.py"
+        assert source["file"] == "src_api"
         assert source["symbol"] == "execute"
         assert source["class"] == "ApiFetcher"
 
@@ -174,7 +173,7 @@ class TestPrivacy:
     )
     def test_a_private_value_never_reaches_a_label(self, value: str) -> None:
         """Every private shape becomes the single redacted placeholder."""
-        assert scrub_value(value) == REDACTED
+        assert PerformancePrivacyPolicy.scrub_value(value) == REDACTED
 
     def test_an_unlisted_label_is_dropped_before_the_sink(self) -> None:
         """A label outside the allowlist never reaches the sink."""
@@ -190,12 +189,12 @@ class TestPrivacy:
     )
     def test_a_count_becomes_a_fixed_bucket(self, count: int, expected: str) -> None:
         """A raw count becomes one of five fixed names."""
-        assert bucket_size(count) == expected
+        assert PerformancePrivacyPolicy.bucket_size(count) == expected
 
     @pytest.mark.parametrize(("code", "expected"), [(200, "2xx"), (429, "4xx"), (503, "5xx"), (99, "invalid")])
     def test_a_status_code_becomes_a_family(self, code: int, expected: str) -> None:
         """An exact status code becomes one of five families."""
-        assert status_class(code) == expected
+        assert PerformancePrivacyPolicy.status_class(code) == expected
 
 
 class TestClocks:

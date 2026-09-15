@@ -29,7 +29,7 @@ from typing import Any
 
 from src.upgrade_portal.capture.clients import normalize_mac
 from src.upgrade_portal.compare.diff import matched_sections
-from src.utils.performance import EventSource, Recorder, RecorderSettings, bucket_size
+from src.utils.performance import EventSource, PerformancePrivacyPolicy, Recorder, RecorderSettings
 
 logger = logging.getLogger(__name__)
 
@@ -608,7 +608,9 @@ def compare_clients(before: Mapping[str, Any], after: Mapping[str, Any]) -> Clie
         if span.sampled:  # Add labels and counters only when a success event will emit.
             item_count = len(deltas) + proved  # Count compared rows and digest-proved rows for the event.
             span.label("operation", "compare_clients")  # Use one fixed operation label.
-            span.label("workload_size", bucket_size(item_count))  # Emit a bucket, never the raw site size.
+            span.label(
+                "workload_size", PerformancePrivacyPolicy.bucket_size(item_count)
+            )  # Emit a bucket, never the raw site size.
             span.count("work.items_total", item_count)  # Emit the real work size as a measurement.
             span.count("perf.calls_total", 1)  # Emit one operation event for this call.
         logger.info(  # Log completion with counts only.
