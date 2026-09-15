@@ -33,6 +33,7 @@ from src.upgrade_portal.persistence.actions import (
     canonical_digest,
 )
 from src.upgrade_portal.runtime.runs import RunStateMachine, RunTransitionError
+from src.upgrade_portal.upgrade import gate
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,10 @@ DRIVER_STATES = frozenset({"stopped", "completed", "failed", "cancelled"})
 SOURCES = frozenset({"stored", "cloud_task", "device", "driver"})
 CONFLICT_REASONS = frozenset({"task_state_conflict", "write_state_conflict", "driver_state_conflict", "target_missing"})
 LOCK_CHANGED_MESSAGE = "The site lock token changed before the write."  # Name the text without a credential term.
+FAILED_REPAIR_NOTE = (  # State exactly why the repair leaves the direct settle fields empty.
+    "The portal reconciled this phase from later cloud firmware evidence. "
+    "The phase gate did not observe the reboot time or the settle time."
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +65,10 @@ class TargetEvidence:
     is_complete: bool
     has_conflict: bool
     conflict_reason: str | None
+    version_target: str
+    running_version: str
+    fwupdate_status: str
+    firmware_success: bool
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> TargetEvidence:
@@ -93,6 +102,10 @@ class TargetEvidence:
             is_complete=bool(value.get("is_complete")),
             has_conflict=bool(value.get("has_conflict")),
             conflict_reason=cls._optional_text(value, "conflict_reason"),
+            version_target=str(value.get("version_target") or ""),
+            running_version=str(value.get("running_version") or value.get("version_after") or ""),
+            fwupdate_status=str(value.get("fwupdate_status") or "").strip().lower(),
+            firmware_success=cls._firmware_success(value),
         )
 
     @staticmethod
@@ -171,6 +184,19 @@ class TargetEvidence:
         """
         if self.observed_at is None and self.is_complete:  # Preserve complete evidence observation requirement.
             raise ValueError("Complete target evidence requires an observation time.")
+        if self.firmware_success and self.fwupdate_status != "success":  # A success needs the cloud status token.
+            raise ValueError("Firmware success evidence requires a success status.")  # Refuse an unsafe success.
+        if self.firmware_success and not gate.version_matches(self.version_target, self.running_version):  # Match.
+            raise ValueError("Firmware success evidence requires a matching running version.")  # Refuse mismatch.
+
+    @classmethod
+    def _firmware_success(cls, value: Mapping[str, Any]) -> bool:
+        """Return whether the evidence proves a completed firmware update."""
+        status = str(value.get("fwupdate_status") or "").strip().lower()  # Normalize the Mist status token.
+        target = str(value.get("version_target") or "")  # Read the requested firmware version from safe evidence.
+        running = str(value.get("running_version") or value.get("version_after") or "")  # Read the running version.
+        explicit = bool(value.get("firmware_success"))  # Preserve scripted tests that state the final conclusion.
+        return explicit or (status == "success" and gate.version_matches(target, running))  # Reuse gate rule.
 
     def summary(self) -> dict[str, Any]:
         """Return the safe canonical target summary."""
@@ -186,6 +212,10 @@ class TargetEvidence:
             "is_complete": self.is_complete,
             "has_conflict": self.has_conflict,
             "conflict_reason": self.conflict_reason,
+            "version_target": self.version_target,
+            "running_version": self.running_version,
+            "fwupdate_status": self.fwupdate_status,
+            "firmware_success": self.firmware_success,
         }
 
 
@@ -225,6 +255,7 @@ class ReconciliationEvidence:
         return {  # Preserve each summary metric name and value.
             "target_count": len(ordered),
             "complete_target_count": sum(item.is_complete for item in ordered),
+            "firmware_success_count": sum(item.firmware_success for item in ordered),
             "active_write_count": sum(item.write_state == "writing" for item in ordered),
             "active_task_count": ReconciliationEvidence._active_task_count(ordered),
             "unknown_target_count": ReconciliationEvidence._unknown_target_count(ordered),
@@ -323,6 +354,8 @@ class StoppingRunReconciler:
             return refusal
         record = cast(Mapping[str, Any], record)  # Narrow the checked record after the refusal helper.
         prior_state = self._state(record)
+        if prior_state == "failed":  # A terminal false failure must bypass the stale gate.
+            return self._failed_decision(item, record, now)  # Use positive cloud evidence before any mutation.
         stale = RunStalePolicy(self._clock()).assess(record)
         if not stale.is_stale:
             return RecoveryDecision(self._outcome(item, "refused", "run_not_stale", prior_state or "", "", now))
@@ -331,6 +364,13 @@ class StoppingRunReconciler:
         if prior_state != "stopping":
             return RecoveryDecision(self._outcome(item, "refused", "run_not_reconcilable", prior_state or "", "", now))
         return self._stopping_decision(item, record, now)
+
+    @classmethod
+    def failed_run_reconciliation_available(cls, record: Mapping[str, Any]) -> bool:
+        """Report whether one failed run is narrow enough for repair evidence."""
+        state = str(record.get("state") or "")  # Read the terminal run state before any nested value.
+        error = record.get("error")  # Read the stored error that made the run terminal.
+        return state == "failed" and cls._error_is_upgrade_timeout(error) and bool(cls._failed_target_digests(record))
 
     def _initial_refusal(
         self,
@@ -383,6 +423,44 @@ class StoppingRunReconciler:
         )
         return RecoveryDecision(outcome, mutation)
 
+    def _failed_decision(
+        self,
+        item: RunActionOutcome,
+        record: Mapping[str, Any],
+        now: str,
+    ) -> RecoveryDecision:
+        """Repair one failed timeout only when current cloud evidence proves success."""
+        revision = str(record.get("_rev") or "")  # Bind the repair to the exact stored record revision.
+        summary = self._read_evidence_summary(item, record, revision, now)  # Read only safe evidence fields.
+        if not revision:  # A run that cannot bind a revision cannot receive a safe repair.
+            return RecoveryDecision(self._outcome(item, "unknown", "run_write_unverified", "failed", "", now, summary))
+        if not self.failed_run_reconciliation_available(record):  # Refuse failed records outside the timeout defect.
+            return RecoveryDecision(self._outcome(item, "refused", "run_not_reconcilable", "failed", "", now, summary))
+        reason, classification = self._failed_evidence_result(summary, self._failed_target_digests(record))
+        if classification != "succeeded":  # Incomplete or conflicting evidence must not become success.
+            return RecoveryDecision(self._outcome(item, classification, reason, "failed", "", now, summary))
+        document = self._failed_repair_document(record, summary, now)  # Build one explicit unmeasured repair record.
+        outcome = self._outcome(item, "succeeded", "failed_run_reconciled", "failed", "complete", now, summary)
+        mutation = RunMutation("update", item.identity.source_run_id, revision, "failed", document)
+        return RecoveryDecision(outcome, mutation)
+
+    def _read_evidence_summary(
+        self,
+        item: RunActionOutcome,
+        record: Mapping[str, Any],
+        revision: str,
+        now: str,
+    ) -> dict[str, Any]:
+        """Return one safe evidence summary for a terminal repair."""
+        try:  # Evidence collection can fail through a cloud or store seam.
+            rows = self._evidence_reader(record, now)  # Read the configured evidence source once.
+            targets = tuple(TargetEvidence.from_mapping(row) for row in rows)  # Validate every safe evidence row.
+        except Exception:  # Keep the failure in the audit row and do not mutate the run.
+            logger.exception("The read-only reconciliation evidence collection failed")  # Preserve traceback.
+            targets = self._unavailable_targets(record)  # Make unavailable evidence explicit.
+        evidence = ReconciliationEvidence(item.identity.source_run_id, revision, now, targets)  # Bind proof.
+        return evidence.summary()  # Return the digest-bound summary.
+
     def _stopping_decision(
         self,
         item: RunActionOutcome,
@@ -423,6 +501,137 @@ class StoppingRunReconciler:
             {"state": "stopped", "updated_at": now},
         )
         return RecoveryDecision(outcome, mutation)
+
+    @staticmethod
+    def _failed_evidence_result(summary: Mapping[str, Any], failed_digests: frozenset[str]) -> tuple[str, str]:
+        """Return the outcome for a failed-run firmware evidence repair."""
+        if int(summary["active_write_count"]) > 0:  # A device still writing firmware is not settled evidence.
+            return "firmware_write_active", "refused"
+        if int(summary["active_task_count"]) > 0:  # An active cloud task can still fail later.
+            return "cloud_task_active", "refused"
+        if bool(summary["has_conflict"]):  # A conflict must stay visible for an operator.
+            return "cloud_evidence_conflict", "unknown"
+        if not bool(summary["is_complete"]):  # Missing evidence must not become a false success.
+            return "cloud_evidence_incomplete", "unknown"
+        proved = StoppingRunReconciler._firmware_success_digests(summary)  # Read the proven target set.
+        if not failed_digests.issubset(proved):  # Every failed target needs positive current proof.
+            return "firmware_success_unproved", "unknown"
+        return "failed_run_reconciled", "succeeded"
+
+    @staticmethod
+    def _firmware_success_digests(summary: Mapping[str, Any]) -> frozenset[str]:
+        """Return the target digests whose firmware success is proven."""
+        targets = summary.get("targets")  # Read the safe target rows from the summary.
+        if not isinstance(targets, Sequence):  # A malformed summary cannot prove a device.
+            return frozenset()
+        return frozenset(  # Return only targets with the success flag that validation checked.
+            str(target.get("target_digest") or "")
+            for target in targets
+            if isinstance(target, Mapping) and bool(target.get("firmware_success"))
+        )
+
+    @classmethod
+    def _failed_repair_document(cls, record: Mapping[str, Any], summary: Mapping[str, Any], now: str) -> dict[str, Any]:
+        """Return the run fields for one false-failure repair."""
+        targets = cls._repaired_targets(record, summary)  # Repair only targets that current evidence proves.
+        phases = cls._repaired_phases(record, now)  # Repair the phase result without inventing direct proof.
+        return {  # Store one complete compare-and-swap update document.
+            "state": "complete",
+            "updated_at": now,
+            "targets": targets,
+            "phases": phases,
+            "error": None,
+            "reconciliation": cls._reconciliation_record(record, summary, now),
+        }
+
+    @classmethod
+    def _repaired_targets(cls, record: Mapping[str, Any], summary: Mapping[str, Any]) -> list[dict[str, Any]]:
+        """Return target rows with proven false failures repaired."""
+        evidence = cls._evidence_by_digest(summary)  # Index validated evidence by digest.
+        repaired: list[dict[str, Any]] = []  # Preserve the stored target order.
+        for target in record.get("targets", ()):  # Inspect every stored target row once.
+            copied = dict(target) if isinstance(target, Mapping) else {"value": target}  # Preserve odd rows.
+            digest = cls._target_digest(copied)  # Use the same digest that the evidence summary stores.
+            proof = evidence.get(digest)  # Read current proof for this target, if any.
+            if cls._target_needs_repair(copied) and proof is not None:  # Repair only false failed targets.
+                cls._repair_target(copied, proof)  # Mutate the copied row with explicit evidence fields.
+            repaired.append(copied)  # Keep the target in its original position.
+        return repaired
+
+    @staticmethod
+    def _repair_target(target: dict[str, Any], proof: Mapping[str, Any]) -> None:
+        """Write one target repair without inventing direct settle observations."""
+        target["state"] = "settled"  # Current cloud evidence proves the upgrade did complete.
+        target["version_after"] = proof.get("running_version")  # Store the running version that proved success.
+        target["version_outcome"] = gate.OUTCOME_VERSION_MATCH  # The shared comparison rule already passed.
+        target["reboot_seen_at"] = None  # The gate did not observe this moment, so keep it unmeasured.
+        target["settled_at"] = None  # The gate did not observe this moment, so keep it unmeasured.
+        target["reconciliation_state"] = "firmware_success_unmeasured_settle"  # Explain the repaired state.
+        target["reconciliation_note"] = FAILED_REPAIR_NOTE  # State why the direct proof fields stay empty.
+
+    @classmethod
+    def _repaired_phases(cls, record: Mapping[str, Any], now: str) -> list[dict[str, Any]]:
+        """Return phase rows with a repaired timeout phase."""
+        phases: list[dict[str, Any]] = []  # Preserve the stored phase order.
+        for phase in record.get("phases", ()):  # Inspect every phase row once.
+            copied = dict(phase) if isinstance(phase, Mapping) else {"value": phase}  # Preserve odd rows.
+            if copied.get("state") == "failed" and cls._error_is_upgrade_timeout(record.get("error")):
+                copied.update({"state": "settled", "settled": copied.get("total", 0), "settled_at": now})
+                copied["note"] = FAILED_REPAIR_NOTE  # State that the direct gate observations stayed absent.
+            phases.append(copied)  # Keep the phase in its original position.
+        return phases
+
+    @staticmethod
+    def _reconciliation_record(record: Mapping[str, Any], summary: Mapping[str, Any], now: str) -> dict[str, Any]:
+        """Return an audit pointer that distinguishes a repaired result."""
+        return {  # Keep only safe values in the operator-facing run record.
+            "reason": "failed_run_reconciled",
+            "at": now,
+            "prior_state": "failed",
+            "prior_error": record.get("error"),
+            "evidence_summary_digest": summary.get("decision_basis_digest"),
+            "unmeasured_fields": ["reboot_seen_at", "settled_at"],
+        }
+
+    @staticmethod
+    def _evidence_by_digest(summary: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
+        """Return evidence rows by target digest."""
+        targets = summary.get("targets")  # Read the validated target list.
+        rows = targets if isinstance(targets, Sequence) else ()  # Refuse malformed rows by returning empty.
+        return {  # Index only proven firmware success rows.
+            str(row.get("target_digest") or ""): row
+            for row in rows
+            if isinstance(row, Mapping) and bool(row.get("firmware_success"))
+        }
+
+    @staticmethod
+    def _target_needs_repair(target: Mapping[str, Any]) -> bool:
+        """Report whether one target carries the false-failure shape."""
+        return str(target.get("state") or "") == "failed" and target.get("version_after") in (None, "")
+
+    @staticmethod
+    def _target_digest(target: Mapping[str, Any]) -> str:
+        """Return the canonical digest for one stored target identifier."""
+        target_id = str(target.get("device_id") or target.get("mac") or target.get("id") or "")  # Preserve priority.
+        return canonical_digest(target_id) if target_id else ""  # Match TargetEvidence without storing raw values.
+
+    @classmethod
+    def _failed_target_digests(cls, record: Mapping[str, Any]) -> frozenset[str]:
+        """Return the failed target digests that require proof."""
+        return frozenset(  # Build the exact set that evidence must prove.
+            cls._target_digest(target)
+            for target in record.get("targets", ())
+            if isinstance(target, Mapping) and cls._target_needs_repair(target) and cls._target_digest(target)
+        )
+
+    @staticmethod
+    def _error_is_upgrade_timeout(error: Any) -> bool:
+        """Report whether the stored error is the phase-limit timeout defect."""
+        if not isinstance(error, Mapping):  # A missing or malformed error cannot identify the timeout defect.
+            return False
+        message = str(error.get("message") or "")  # Read safe operator text only.
+        stage = str(error.get("stage") or "")  # Read the failed stage that the driver stored.
+        return stage == "upgrade" and "did not return before the phase limit" in message
 
     @staticmethod
     def _evidence_result(summary: Mapping[str, Any]) -> tuple[str, str]:
@@ -492,8 +701,13 @@ class StoppingRunReconciler:
             "cloud_evidence_incomplete": "The cloud evidence is incomplete.",
             "cloud_evidence_conflict": "The cloud evidence conflicts.",
             "cloud_evidence_unavailable": "The cloud evidence is unavailable.",
+            "firmware_success_unproved": "The cloud does not prove firmware success for every failed target.",
             "run_write_failed": "The portal could not write the run record.",
             "run_write_unverified": "The portal cannot verify the run write.",
+            "failed_run_reconciled": (
+                "The portal confirmed firmware success from current cloud evidence. "
+                "The original gate did not measure the reboot or settle times."
+            ),
             "stopping_run_reconciled": (
                 "The portal confirmed that no selected firmware task remains. "
                 "Some devices can have finished before this check."
