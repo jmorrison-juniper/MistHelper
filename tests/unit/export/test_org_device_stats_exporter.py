@@ -19,6 +19,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.config import runtime_settings
+from src.refactors import fast_mode_constants
 from tests.support.thread_scoped_sleep import ThreadScopedSleepSpy
 
 
@@ -39,7 +41,6 @@ def fake_mh(monkeypatch):
         The stubbed ``MistHelper`` module (also registered in ``sys.modules``).
     """
     mh = ModuleType("MistHelper")
-    mh.CSV_FRESHNESS_MINUTES = 60
     mh.PROGRESS_EMITTER = MagicMock()
     mh.mistapi = MagicMock()
     mh.apisession = MagicMock()
@@ -51,11 +52,12 @@ def fake_mh(monkeypatch):
     mh.DataExporter = MagicMock()
     mh.ConfigUtils = MagicMock()
     mh.ConnectionPoolExecutor = MagicMock()
-    mh.FAST_MODE_MAX_RETRIES = 2
-    mh.FAST_MODE_RETRY_DELAY = 0.01
-    mh.FAST_MODE_RETRY_THREADS = 2
     mh.FastModeBackoffMultiplier = SimpleNamespace(VALUE=2)
     monkeypatch.setitem(sys.modules, "MistHelper", mh)
+    monkeypatch.setattr(runtime_settings, "CSV_FRESHNESS_MINUTES", 60)
+    monkeypatch.setattr(fast_mode_constants, "FAST_MODE_MAX_RETRIES", 2)
+    monkeypatch.setattr(fast_mode_constants, "FAST_MODE_RETRY_DELAY", 0.01)
+    monkeypatch.setattr(fast_mode_constants, "FAST_MODE_RETRY_THREADS", 2)
     return mh
 
 
@@ -614,7 +616,7 @@ class TestRetryFailedSitePortStats:
         """When computed retry_threads <= 0 the retry pool is skipped."""
         from src.export.org_device_stats_exporter import OrgDeviceStatsExporter
 
-        fake_mh.FAST_MODE_RETRY_THREADS = 0
+        fast_mode_constants.FAST_MODE_RETRY_THREADS = 0
         with patch("src.refactors.fast_mode_constants.FAST_MODE_MAX_CONCURRENT_CONNECTIONS", 1):
             recovered, still = OrgDeviceStatsExporter._retry_failed_site_port_stats([("s1", "Site1")], MagicMock())
         assert recovered == []

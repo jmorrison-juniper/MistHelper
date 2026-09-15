@@ -21,6 +21,7 @@ from unittest.mock import MagicMock
 import mistapi
 import pytest
 
+from src.config import runtime_settings
 from src.upgrade_portal.capture import devices
 
 # WHY: Obviously fake identifiers. A reader sees at once that no test reaches a
@@ -95,21 +96,6 @@ def _response(payload: Any, status_code: int = HTTP_OK) -> SimpleNamespace:
         An object with the two fields that the guard reads.
     """
     return SimpleNamespace(data=payload, status_code=status_code)
-
-
-def _install_loader(monkeypatch: pytest.MonkeyPatch, loader: MagicMock) -> None:
-    """Replace the late module import of the page size reader.
-
-    Why:
-        ``resolve_page_limit`` imports ``MistHelper`` late, because a top level
-        import would build a cycle. A unit test must not import that large
-        module, so this helper swaps the whole ``importlib`` reference.
-
-    Args:
-        monkeypatch: The pytest patch helper.
-        loader: A mock that stands in for ``importlib.import_module``.
-    """
-    monkeypatch.setattr(devices, "importlib", SimpleNamespace(import_module=loader))
 
 
 @pytest.fixture
@@ -258,7 +244,7 @@ class TestResolvePageLimit:
         Args:
             monkeypatch: The pytest patch helper.
         """
-        _install_loader(monkeypatch, MagicMock(return_value=SimpleNamespace(DEFAULT_API_PAGE_LIMIT=250)))
+        monkeypatch.setattr(runtime_settings, "DEFAULT_API_PAGE_LIMIT", 250)
         assert devices.resolve_page_limit() == 250
 
     def test_a_size_above_the_cloud_maximum_falls_to_the_maximum(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -271,7 +257,7 @@ class TestResolvePageLimit:
         Args:
             monkeypatch: The pytest patch helper.
         """
-        _install_loader(monkeypatch, MagicMock(return_value=SimpleNamespace(DEFAULT_API_PAGE_LIMIT=5000)))
+        monkeypatch.setattr(runtime_settings, "DEFAULT_API_PAGE_LIMIT", 5000)
         assert devices.resolve_page_limit() == devices.MAX_PAGE_LIMIT
 
     def test_a_size_of_zero_rises_to_the_minimum(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -284,7 +270,7 @@ class TestResolvePageLimit:
         Args:
             monkeypatch: The pytest patch helper.
         """
-        _install_loader(monkeypatch, MagicMock(return_value=SimpleNamespace(DEFAULT_API_PAGE_LIMIT=0)))
+        monkeypatch.setattr(runtime_settings, "DEFAULT_API_PAGE_LIMIT", 0)
         assert devices.resolve_page_limit() == devices.MIN_PAGE_LIMIT
 
     def test_an_absent_shared_setting_gives_the_fallback_size(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -297,7 +283,7 @@ class TestResolvePageLimit:
         Args:
             monkeypatch: The pytest patch helper.
         """
-        _install_loader(monkeypatch, MagicMock(side_effect=ModuleNotFoundError("MistHelper")))
+        monkeypatch.setattr(runtime_settings, "DEFAULT_API_PAGE_LIMIT", object())
         assert devices.resolve_page_limit() == devices.FALLBACK_PAGE_LIMIT
 
 

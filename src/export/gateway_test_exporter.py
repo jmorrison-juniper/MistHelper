@@ -28,9 +28,11 @@ from typing import Any  # WHY: mistapi payloads + heterogeneous stats dicts are 
 import mistapi  # WHY: direct call to getSiteDeviceSyntheticTest endpoint.
 from tqdm import tqdm  # WHY: progress bar for sequential + retry loops.
 
+from src.api import api_usage_cache  # WHY: share quota state without reading MistHelper.
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
+from src.refactors import fast_mode_constants  # WHY: read fast-mode settings from source.
 from src.validation.validation_utils import ValidationUtils  # WHY: 1014 P5 direct import (FR-005).
 
 
@@ -99,11 +101,10 @@ class GatewayTestExporter:
     @staticmethod
     def _resolve_retry_defaults(max_retries: int | None, retry_delay: float | None) -> tuple[int, float]:
         """Apply FAST_MODE defaults for unset retry budget / delay (returns the tuple)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FAST_MODE_MAX_RETRIES + FAST_MODE_RETRY_DELAY.
         if max_retries is None:  # Default max retries.
-            max_retries = mh.FAST_MODE_MAX_RETRIES  # Fast-mode default.
+            max_retries = fast_mode_constants.FAST_MODE_MAX_RETRIES  # Fast-mode default from the source module.
         if retry_delay is None:  # Default retry delay.
-            retry_delay = mh.FAST_MODE_RETRY_DELAY  # Fast-mode default.
+            retry_delay = fast_mode_constants.FAST_MODE_RETRY_DELAY  # Fast-mode delay from the source module.
         return max_retries, retry_delay  # Tuple back to caller
 
     @staticmethod
@@ -214,13 +215,12 @@ class GatewayTestExporter:
         failed_devices: list[Any], connection_semaphore: Any
     ) -> tuple[list[Any], list[Any]]:
         """Retry failed devices through a small dedicated pool. Return (results, still_failed)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FAST_MODE_RETRY_THREADS.
         from src.refactors.fast_mode_constants import (
             FAST_MODE_MAX_CONCURRENT_CONNECTIONS,
         )  # WHY: post-T-02 direct import from landing module (no more mh.SYMBOL bypass)
 
         retry_threads = min(  # Size the retry pool.
-            mh.FAST_MODE_RETRY_THREADS,
+            fast_mode_constants.FAST_MODE_RETRY_THREADS,
             len(failed_devices),
             max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2),
         )
@@ -247,12 +247,11 @@ class GatewayTestExporter:
         executor: ThreadPoolExecutor, failed_devices: list[Any], connection_semaphore: Any
     ) -> dict[Any, Any]:
         """Submit retry calls for every failed device and return the future->device map."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FAST_MODE_RETRY_MAX_RETRIES.
         return {  # Map futures to devices.
             executor.submit(
                 GatewayTestExporter.fetch_synthetic_test_stats_with_retry,
                 device_info,
-                max_retries=mh.FAST_MODE_RETRY_MAX_RETRIES,
+                max_retries=fast_mode_constants.FAST_MODE_RETRY_MAX_RETRIES,
                 connection_semaphore=connection_semaphore,
             ): device_info
             for device_info in failed_devices
@@ -292,7 +291,7 @@ class GatewayTestExporter:
             if result:  # Have a result.
                 all_stats.append(result)  # Collect it.
             smoothed, delay = mh.RateLimitingUtils.get_rate_limited_delay(  # type: ignore[no-untyped-call]
-                smoothed, mh.apisession, mh._api_usage_cache
+                smoothed, mh.apisession, api_usage_cache.api_usage_cache
             )
             logging.info("[INFO] Sleeping for %.2fs.", delay)  # Log the sleep.
             time.sleep(delay)  # Pace the API.

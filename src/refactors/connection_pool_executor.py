@@ -31,20 +31,11 @@ from src.refactors.fast_mode_devices_per_thread import FastModeDevicesPerThread 
 def _resolve_fast_mode_env() -> tuple[bool, int, int]:  # Late-bind MistHelper module-level fast-mode env values
     """Return (use_connection_aware, max_concurrent_connections, fallback_threads) from MistHelper globals.
 
-    Late-binds via ``import MistHelper`` to avoid a circular import at module
-    load time (MistHelper.py imports ConnectionPoolExecutor and vice-versa
-    would deadlock). By the time these executor methods are called at
-    runtime, MistHelper is fully initialized and the constants are readable.
-
-    Note: FAST_MODE_MAX_CONCURRENT_CONNECTIONS is imported directly from
-    src/refactors/fast_mode_constants.py per initiative 1015 T-02, and
-    FAST_MODE_USE_CONNECTION_AWARE_THREADING is imported from the same
-    module per T-03 (both bypass the ``MistHelper.SYMBOL`` module-attribute
-    hop). FAST_MODE_FALLBACK_THREADS remains on MistHelper pending later
-    extraction.
+    Reads fast-mode settings from ``src.refactors.fast_mode_constants``.
+    That keeps the executor out of the ``MistHelper`` root facade.
     """
-    import MistHelper  # Late-binding import. MistHelper is fully loaded by the time methods run
     from src.refactors.fast_mode_constants import (
+        FAST_MODE_FALLBACK_THREADS,  # Direct import of the fallback thread count.
         FAST_MODE_MAX_CONCURRENT_CONNECTIONS,  # Direct import of the extracted concurrent-connection cap (post-T-02)
         FAST_MODE_USE_CONNECTION_AWARE_THREADING,  # Direct import of the threading-strategy toggle (post-T-03)
     )
@@ -52,7 +43,7 @@ def _resolve_fast_mode_env() -> tuple[bool, int, int]:  # Late-bind MistHelper m
     return (  # Bundle the 3 fast-mode env-derived constants into a tuple
         FAST_MODE_USE_CONNECTION_AWARE_THREADING,  # Threading strategy toggle (from landing module)
         FAST_MODE_MAX_CONCURRENT_CONNECTIONS,  # Cap on simultaneous API calls (from landing module)
-        MistHelper.FAST_MODE_FALLBACK_THREADS,  # CPU-aware fallback thread count
+        FAST_MODE_FALLBACK_THREADS,  # CPU-aware fallback thread count
     )
 
 

@@ -31,9 +31,11 @@ from concurrent.futures import ThreadPoolExecutor  # WHY: bounded retry worker p
 
 from tqdm import tqdm  # WHY: progress bar during retry pool.
 
+from src.config import runtime_settings  # WHY: read shared source settings without a MistHelper back-reference.
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
+from src.refactors import fast_mode_constants  # WHY: read fast-mode settings from a source module.
 from src.time.time_utils import TimeUtils  # WHY: 1014 P6 direct import (FR-005).
 
 
@@ -47,18 +49,17 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
     @staticmethod
     def _device_stats_cache_hit(output_file: str, fast: bool) -> bool:
         """Return True if fast-mode cache for OrgDeviceStats can be reused."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of CSV_FRESHNESS_MINUTES.
         if not (fast and os.path.exists(output_file)):  # Cache reuse needs both flag + file
             return False  # No cache path available
         try:
             mtime = os.path.getmtime(output_file)  # Read file modified time
             age_minutes = (time.time() - mtime) / 60.0  # Compute file age in minutes
-            if age_minutes < mh.CSV_FRESHNESS_MINUTES:  # Cache still fresh
+            if age_minutes < runtime_settings.CSV_FRESHNESS_MINUTES:  # Cache still fresh
                 logging.info(  # Log cache reuse
                     " Fast mode cache hit: %s is fresh (%.1fm < %sm); skipping fetch.",
                     output_file,
                     age_minutes,
-                    mh.CSV_FRESHNESS_MINUTES,
+                    runtime_settings.CSV_FRESHNESS_MINUTES,
                 )
                 # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logging.info("* Fast mode: Using cached %s (age %.1fm)", output_file, age_minutes)  # User notice
@@ -98,18 +99,17 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
     @staticmethod
     def _port_stats_cache_hit(output_file: str, fast: bool) -> bool:  # Check port-stats cache hit.
         """Return True when fast mode can safely reuse a fresh cached CSV."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of CSV_FRESHNESS_MINUTES.
         if not (fast and os.path.exists(output_file)):  # Cache reuse needs flag + file
             return False  # No valid cache path
         try:  # Filesystem metadata lookup should never crash export path
             mtime = os.path.getmtime(output_file)  # Read last-modified time
             age_minutes = (time.time() - mtime) / 60.0  # Convert to minutes
-            if age_minutes < mh.CSV_FRESHNESS_MINUTES:  # Fresh cache means skip API
+            if age_minutes < runtime_settings.CSV_FRESHNESS_MINUTES:  # Fresh cache means skip API
                 logging.info(
                     " Fast mode cache hit: %s is fresh (%.1fm < %sm); skipping fetch.",
                     output_file,
                     age_minutes,
-                    mh.CSV_FRESHNESS_MINUTES,
+                    runtime_settings.CSV_FRESHNESS_MINUTES,
                 )  # Record why no API calls were made
                 # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logging.info("* Fast mode: Using cached %s (age %.1fm)", output_file, age_minutes)  # User notice
@@ -196,15 +196,17 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
     @staticmethod
     def _handle_site_port_stats_retry(attempt, site_name, exception):
         """Backoff + log retry. Return True if more attempts remain."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FAST_MODE_* + FastModeBackoffMultiplier.
-        if attempt < mh.FAST_MODE_MAX_RETRIES:  # More retries remain
-            backoff_delay = mh.FAST_MODE_RETRY_DELAY * (mh.FastModeBackoffMultiplier.VALUE**attempt)  # Backoff curve
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FastModeBackoffMultiplier only.
+        if attempt < fast_mode_constants.FAST_MODE_MAX_RETRIES:  # More retries remain
+            backoff_delay = (  # Build the same exponential curve with source-owned retry settings.
+                fast_mode_constants.FAST_MODE_RETRY_DELAY * (mh.FastModeBackoffMultiplier.VALUE**attempt)
+            )
             logging.warning("! Attempt %s failed for site %s: %s", attempt + 1, site_name, exception)  # Log fail
             logging.info(
                 "! Retrying in %.1fs (attempt %s/%s)",
                 backoff_delay,
                 attempt + 2,
-                mh.FAST_MODE_MAX_RETRIES + 1,
+                fast_mode_constants.FAST_MODE_MAX_RETRIES + 1,
             )  # When next retry will occur
             time.sleep(backoff_delay)  # Pause before retry
             return True  # Continue loop
@@ -214,9 +216,8 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
     @staticmethod
     def _fetch_site_port_stats(site_info, connection_semaphore):  # Fetch port stats for a site.
         """Fetch one site's switch/gateway port stats with bounded concurrency and retries."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FAST_MODE_MAX_RETRIES.
         site_id, site_name = site_info  # Unpack tuple
-        for attempt in range(mh.FAST_MODE_MAX_RETRIES + 1):  # Retry loop
+        for attempt in range(fast_mode_constants.FAST_MODE_MAX_RETRIES + 1):  # Retry loop
             try:
                 port_stats = OrgDeviceStatsExporter._attempt_site_port_stats_fetch(
                     site_id, site_name, connection_semaphore
@@ -269,7 +270,6 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
     @staticmethod
     def _retry_failed_site_port_stats(failed_sites, connection_semaphore):  # Retry failed site port stats.
         """Retry previously failed site fetches using a smaller worker pool."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FAST_MODE_RETRY_THREADS.
         from src.refactors.fast_mode_constants import (
             FAST_MODE_MAX_CONCURRENT_CONNECTIONS,
         )  # WHY: post-T-02 direct import from landing module (no more mh.SYMBOL bypass)
@@ -277,7 +277,9 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         retry_results: list = []  # Successful retry rows
         still_failed: list = []  # Sites remaining failed after retries
         retry_threads = min(
-            mh.FAST_MODE_RETRY_THREADS, len(failed_sites), max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2)
+            fast_mode_constants.FAST_MODE_RETRY_THREADS,
+            len(failed_sites),
+            max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2),
         )  # Smaller retry pool
         if retry_threads <= 0:  # Defensive guard
             logging.warning(" FAST MODE: No available threads for retry; skipping retries")  # Explain skip
@@ -422,18 +424,17 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
     @staticmethod
     def _vpn_peer_stats_cache_hit(output_file: str, fast: bool) -> bool:
         """Return True if fast-mode cache for VPN peer stats is fresh. Emit cache-hit log + print."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of CSV_FRESHNESS_MINUTES.
         if not (fast and os.path.exists(output_file)):  # Either non-fast or no file yet.
             return False
         try:
             mtime = os.path.getmtime(output_file)  # Disk mtime for freshness math.
             age_minutes = (time.time() - mtime) / 60.0  # Age in minutes.
-            if age_minutes < mh.CSV_FRESHNESS_MINUTES:  # Fresh enough to reuse.
+            if age_minutes < runtime_settings.CSV_FRESHNESS_MINUTES:  # Fresh enough to reuse.
                 logging.info(
                     " Fast mode cache hit: %s is fresh (%.1fm < %sm); skipping fetch.",
                     output_file,
                     age_minutes,
-                    mh.CSV_FRESHNESS_MINUTES,
+                    runtime_settings.CSV_FRESHNESS_MINUTES,
                 )  # Structured log.
                 # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logging.info("* Fast mode: Using cached %s (age %.1fm)", output_file, age_minutes)  # Operator-facing.

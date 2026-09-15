@@ -39,7 +39,7 @@ GUNICORN_GRACEFUL_TIMEOUT_SECONDS = 30.0
 # WHY: The sizing code reads both settings late, inside the function body. A
 #      patch on the module attribute reaches the code at call time.
 CONNECTION_CAP_PATH = "src.refactors.fast_mode_constants.FAST_MODE_MAX_CONCURRENT_CONNECTIONS"
-FALLBACK_THREADS_PATH = "MistHelper.FAST_MODE_FALLBACK_THREADS"
+FALLBACK_THREADS_PATH = "src.refactors.fast_mode_constants.FAST_MODE_FALLBACK_THREADS"
 
 # WHY: The shipped default of the connection cap. A test that names it reads
 #      better than a bare 8, and it shows which value the target of 4 answers.

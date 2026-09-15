@@ -13,6 +13,7 @@ import time
 from unittest.mock import MagicMock
 
 import MistHelper
+from src.config import runtime_settings
 
 
 class TestDeviceStatsAPIDataFetcherWiring:
@@ -184,7 +185,7 @@ class TestDeviceStatsFastMode:
         csv_file.write_text("header\nrow1\n")
 
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setattr(MistHelper, "CSV_FRESHNESS_MINUTES", 5)
+        monkeypatch.setattr(runtime_settings, "CSV_FRESHNESS_MINUTES", 5)
         monkeypatch.setattr(MistHelper, "PROGRESS_EMITTER", None)
 
         fetcher_created = False
@@ -211,7 +212,7 @@ class TestDeviceStatsFastMode:
         os.utime(str(csv_file), (stale_time, stale_time))
 
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setattr(MistHelper, "CSV_FRESHNESS_MINUTES", 5)
+        monkeypatch.setattr(runtime_settings, "CSV_FRESHNESS_MINUTES", 5)
         monkeypatch.setattr(MistHelper, "PROGRESS_EMITTER", None)
         monkeypatch.setattr(
             MistHelper.TimeUtils,

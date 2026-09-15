@@ -18,6 +18,8 @@ import mistapi  # WHY: direct SDK access for mistapi.get_all pagination.
 from prettytable import PrettyTable  # WHY: render result rows for logging.
 from tqdm import tqdm  # WHY: progress bar during table build.
 
+from src.api import api_usage_cache  # WHY: share API quota state without a MistHelper back-reference.
+from src.config import runtime_settings  # WHY: read API retry settings from the source settings module.
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -119,9 +121,9 @@ class APIDataFetcher:
 
     def _call_api_with_retry(self, api_name: str) -> Any:  # Retry the API call.
         """Call API with retry/backoff (mistapi swallows timeouts as status_code=None)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession + retry constants.
-        max_retries = mh.API_REQUEST_MAX_RETRIES  # Retry ceiling.
-        retry_delay = mh.API_REQUEST_RETRY_DELAY  # Base backoff delay.
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the live API session only.
+        max_retries = runtime_settings.API_REQUEST_MAX_RETRIES  # Read retry ceiling from the source settings module.
+        retry_delay = runtime_settings.API_REQUEST_RETRY_DELAY  # Read backoff delay from the source settings module.
         last_response = None  # Track the last response.
         for attempt in range(max_retries + 1):  # Bounded retry loop.
             response = self.api_call(mh.apisession, self.org_id, **self.kwargs)  # Invoke the API.
@@ -137,8 +139,7 @@ class APIDataFetcher:
     @staticmethod
     def _log_retry_attempt(api_name: str, attempt: int, delay: float) -> None:  # Log + sleep before retry.
         """Log a warning, print user-visible retry notice, and sleep for the backoff window."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of retry-ceiling constant.
-        max_retries = mh.API_REQUEST_MAX_RETRIES  # Retry ceiling.
+        max_retries = runtime_settings.API_REQUEST_MAX_RETRIES  # Read retry ceiling without importing MistHelper.
         # WHY (#886 Phase 2): retired duplicate print(); logging.warning below already reaches the
         # operator terminal via the WARNING-level default handler.
         logging.warning(  # Warn and back off (operator-visible).
@@ -166,9 +167,9 @@ class APIDataFetcher:
 
     def _apply_rate_limiting(self) -> None:  # Sleep to respect rate limits.
         """Apply rate limiting delay between API calls."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of RateLimitingUtils + globals.
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of RateLimitingUtils and live session.
         self.smoothed, delay = mh.RateLimitingUtils.get_rate_limited_delay(
-            self.smoothed, mh.apisession, mh._api_usage_cache
+            self.smoothed, mh.apisession, api_usage_cache.api_usage_cache
         )
         logging.debug("Applying rate limit delay: %.2fs", delay)  # Trace the delay.
         time.sleep(delay)  # Apply the delay.
