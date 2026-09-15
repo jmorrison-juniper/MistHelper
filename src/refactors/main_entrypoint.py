@@ -119,11 +119,15 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
         the environment, writes logs, checks dependencies, and parses CLI input.
     """
 
-    def __init__(self, argv: Sequence[str] | None = None, parse_cli: bool = True) -> None:
+    def __init__(
+        self, argv: Sequence[str] | None = None, parse_cli: bool = True, context: AppContext | None = None
+    ) -> None:
         """Store the startup mode and parse command-line input when the CLI host asks for it."""
         self.parse_cli = parse_cli  # Store the mode so web bootstrap never reads process argv.
         self.argv = tuple(sys.argv[1:] if argv is None else argv)  # Snapshot argv so the parse input stays stable.
-        self.context = MainEntrypoint.context  # Use the single process context that the entry point owns.
+        logging.info("Selecting the bootstrap application context")  # Log before choosing the context owner.
+        self.context = context if context is not None else AppContext()  # Isolate default state for each invocation.
+        logging.debug("The bootstrap application context is selected: %s", id(self.context))  # Log safe identity.
         self.parsed_args = (  # Keep one stored Namespace for every later startup decision.
             self._parse_arguments() if parse_cli else self._build_web_args()
         )
@@ -150,6 +154,7 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
 
     def bootstrap_for_cli(self) -> argparse.Namespace:
         """Run the side-effect startup path for the command-line host."""
+        self._activate_context()  # Publish this invocation state before legacy startup helpers write to it.
         self._run_common_startup()  # Move import-time work behind the explicit bootstrap boundary.
         _MH.InputUtils.ensure_tqdm_available()  # Keep the progress wrapper available before dispatch.
         _MH._setup_runtime_flags(self.parsed_args)  # Publish the stored parse result to legacy call sites.
@@ -160,10 +165,17 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
 
     def bootstrap_for_web(self) -> argparse.Namespace:
         """Run the side-effect startup path for the WSGI host."""
+        self._activate_context()  # Publish this web invocation state before legacy startup helpers write to it.
         self._run_common_startup()  # Move import-time work behind the explicit web bootstrap boundary.
         _MH._setup_runtime_flags(self.parsed_args)  # Publish default web args for helpers that read globals()["args"].
         _MH._initialize_dependencies(self.parsed_args)  # Initialize imports without a command-line parse.
         return self.parsed_args  # Let the caller inspect the startup mode if needed.
+
+    def _activate_context(self) -> None:
+        """Make this bootstrap context the active legacy bridge context."""
+        logging.info("Activating the bootstrap application context")  # Log before changing the active state owner.
+        MainEntrypoint.activate_context(self.context)  # Route legacy module views to this invocation's context.
+        logging.debug("The bootstrap application context is active: %s", id(self.context))  # Log the safe identity.
 
     def _run_common_startup(self) -> None:
         """Run the import-time side effects in a fixed explicit order."""
@@ -352,6 +364,13 @@ class MainEntrypoint:  # CLI main entry-point seam
     context = AppContext()  # Own the live process state without module-level session globals.
 
     @classmethod
+    def activate_context(cls, context: AppContext) -> None:
+        """Set the active context that legacy MistHelper module views use."""
+        logging.info("Setting the active application context")  # Log before replacing the active context.
+        cls.context = context  # Point legacy context reads at the invocation that owns the startup work.
+        logging.debug("The active application context is set: %s", id(cls.context))  # Log a non-secret identifier.
+
+    @classmethod
     def _needs_startup_session(cls, args: Any) -> bool:
         """Return whether this invocation must build a Mist API session before dispatch."""
         logging.info("Checking whether startup needs a Mist API session")  # Explain the branch decision before it runs.
@@ -367,6 +386,11 @@ class MainEntrypoint:  # CLI main entry-point seam
     def run(cls) -> None:  # CLI entrypoint
         """Main entry point for MistHelper CLI application."""
         logging.debug("ENTRY: main()")  # Log application entry point.
-        bootstrap = ApplicationBootstrap()  # Parse the command line once before side effects run.
+        logging.info("Creating a fresh application context for the CLI invocation")  # Log before state allocation.
+        context = AppContext()  # Create fresh state so this invocation cannot inherit a prior session.
+        logging.debug("Created the CLI application context: %s", id(context))  # Log the non-secret context identity.
+        logging.info("Creating the CLI application bootstrap")  # Log before parsing and startup preparation.
+        bootstrap = ApplicationBootstrap(context=context)  # Parse the command line once with invocation state.
+        logging.debug("The CLI application bootstrap is ready")  # Log after startup preparation is ready.
         args = bootstrap.bootstrap_for_cli()  # Run explicit startup and keep the stored Namespace for dispatch.
         _MH._dispatch_main_mode(args)  # Choose and run the right mode (test, TUI, web portal, CLI, interactive).
