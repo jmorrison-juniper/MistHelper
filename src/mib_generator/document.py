@@ -28,6 +28,7 @@ JSON_MEDIA_TYPE = "application/json"  # Mist answers every statistics call with 
 OK_STATUS = "200"  # The generator reads the success response only.
 REF_KEY = "$ref"  # The OpenAPI keyword that points at a component schema.
 REF_PREFIX = "#/components/schemas/"  # Every reference in the Mist file is local and points here.
+RESPONSE_REF_PREFIX = "#/components/responses/"  # OpenAPI 3.1 can put a full response behind a local reference.
 
 
 class OpenApiVersionError(ValueError):
@@ -148,12 +149,30 @@ class OpenApiDocument:
             declares no JSON success body.
         """
         _method, _path, operation = self.get_operation(operation_id)  # The method check belongs to the allow list.
-        responses = (operation.get("responses") or {}).get(OK_STATUS) or {}  # Only the success body makes readings.
+        raw_response = (operation.get("responses") or {}).get(OK_STATUS) or {}  # Only the success body makes readings.
+        responses = self.resolve_response(raw_response)  # Newer Mist specs store responses in components.
         schema = ((responses.get("content") or {}).get(JSON_MEDIA_TYPE) or {}).get("schema") or {}
         resolved = self.resolve(schema)  # A response schema is often a bare `$ref`, so resolve it first.
         if resolved.get("type") == "array":  # A table endpoint wraps its record in an array.
             return self.resolve(dict(resolved.get("items") or {}))
         return resolved
+
+    def resolve_response(self, response: dict[str, Any], depth: int = 0, chain: tuple[str, ...] = ()) -> dict[str, Any]:
+        """Follow a response `$ref` chain until it reaches the response body."""
+        ref = response.get(REF_KEY) if isinstance(response, dict) else None  # Only maps can carry a response ref.
+        if not ref:  # Inline responses already hold their own content map.
+            return response  # Return the response unchanged for the schema reader.
+        if depth > REF_DEPTH_LIMIT or ref in chain:  # A bad response ref chain must not recurse forever.
+            logger.warning("%s Stopped response reference chain at %s", LOG_PREFIX, ref)  # Log the cut point.
+            return {}  # Return no schema when the response reference chain is unsafe.
+        if not str(ref).startswith(RESPONSE_REF_PREFIX):  # Only local component responses are valid here.
+            logger.warning("%s Ignoring unsupported response reference %s", LOG_PREFIX, ref)  # Log unsupported input.
+            return {}  # External response refs cannot be resolved from the local file.
+        name = str(ref)[len(RESPONSE_REF_PREFIX) :]  # Extract the response component name after the prefix.
+        next_response = ((self._document.get("components") or {}).get("responses") or {}).get(
+            name
+        ) or {}  # Read target.
+        return self.resolve_response(dict(next_response), depth + 1, (*chain, str(ref)))  # Continue until inline.
 
     def resolve(self, schema: dict[str, Any], depth: int = 0, chain: tuple[str, ...] = ()) -> dict[str, Any]:
         """Follow a `$ref` chain until it reaches a real schema.

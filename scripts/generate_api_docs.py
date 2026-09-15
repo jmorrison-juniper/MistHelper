@@ -9,8 +9,8 @@ Source files (already downloaded to documentation/):
     - documentation/mist-api-openapi31yaml.yaml  (11MB, OpenAPI 3.1)
 
 Download URLs for spec updates:
-    - JSON: https://doc.mist-lab.fr/openapi/spec/mist-api-openapi31json.json
-    - YAML: https://doc.mist-lab.fr/openapi/spec/mist-api-openapi31yaml.yaml
+    - JSON: https://raw.githubusercontent.com/mistsys/mist_openapi/master/mist.openapi.json
+    - YAML: https://raw.githubusercontent.com/mistsys/mist_openapi/master/mist.openapi.yaml
 
 Offline regeneration:
     python scripts/generate_api_docs.py
