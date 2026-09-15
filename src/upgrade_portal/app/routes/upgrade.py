@@ -54,6 +54,7 @@ from typing import Any, NamedTuple, cast  # Run records are free-form; lock read
 
 from flask import Blueprint, Response, current_app, jsonify, request, session  # The framework of the portal.
 
+from ...api.run_controls.services.reconciliation import StoppingRunReconciler  # Use one reconciliation policy.
 from ...api.run_controls.views import RunStalePolicy  # Use the same stale policy as the history page.
 from ...runtime import identity  # The real session guard. No copy of it lives here.
 from ...runtime.runs import (  # The record layer owns every rule below, so no copy of one lives here.
@@ -1909,9 +1910,12 @@ def run_page(run_id: str) -> str:
         # Older records can say complete while a phase says failed. The status
         # view repairs that contradiction for the retry control.
         run_state_name=str(status.get("state") or ""),
-        reconciliation_available=stale.is_stale
-        and str(status.get("state") or "")
-        in {"created", "pre_capture_running", "pre_capture_done", "awaiting_confirmation", "stopping"},
+        reconciliation_available=(
+            stale.is_stale
+            and str(status.get("state") or "")
+            in {"created", "pre_capture_running", "pre_capture_done", "awaiting_confirmation", "stopping"}
+        )
+        or StoppingRunReconciler.failed_run_reconciliation_available(record),
         **context,  # The site labels, the stop partial values, and the lock banner values.
     )
     logger.debug("upgrade: the run page render is complete")  # Confirm the page action without response content.
