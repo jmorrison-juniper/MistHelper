@@ -86,27 +86,30 @@ See Shared Appendix §5 for the always-required ticket fields.
 | Check | Command / Action |
 |---|---|
 | SSR reachable in Mist | Mist UI → WAN Edges → *device* → Health / Insights |
-| SSR connected to conductor / cloud | `show system connected` |
+| Mist cloud link | `show mist` |
 | System status | `show system` |
 | SVR peer path status (all peers, all transports) | `show peers` |
-| SVR peer path detail | `show peers detail` |
+| SVR peer path detail, with loss, latency, jitter, and uptime | `show peers detail` |
+| Protocol that decides the path state | `show bfd` |
+| Firewall workaround state | `show udp-transform` |
 | WAN transport / underlay interfaces | `show device-interface` and `show network-interface` |
-| Routing table | `show route` |
-| Reachability to remote peer using correct source | `ping <remote-public-ip> source <local-transport-ip>` |
+| Routes that the router learned | `show rib` |
+| Reachability to remote peer over the affected transport | `ping egress-interface <network-interface> <remote-public-ip>` |
+| Path size over the affected transport | `ping set-df-bit size 1400 egress-interface <network-interface> <remote-public-ip>` |
 | Path to remote peer | `traceroute <remote-public-ip>` |
 | Alarms on device | `show alarms` |
-| Recent events (scoped) | `show events` |
+| Recent events | `show events from 1d` |
 | Peer path history / performance in Mist | WAN Assurance → Peer Path Insights → filter by device → drill into affected path |
 | WAN link health | WAN Assurance → WAN Links |
 
-**Never** run a bare `ping <remote-public-ip>` on SSR — it may egress from the wrong interface and produce a false-negative. Always pin the source with `source <local-transport-ip>` so you're actually testing the ISP transport that the path uses. See Shared Appendix §7.
+**Never** run a bare `ping <remote-public-ip>` on an SSR. The request can leave through the wrong interface, so it tests the wrong transport and reports a false result. Name the transport with `egress-interface <network-interface>`. The `ping` command holds no `source` keyword. See Shared Appendix §7 and [SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md) stage E.
 
 ### BGP checks (only if correlated BGP alarm is active, or the shared transport is suspect)
 
 | Check | Command / Action |
 |---|---|
 | BGP session summary | `show bgp summary` |
-| Specific peer detail | `show bgp neighbor <peer-ip>` |
+| Specific peer detail | `show bgp neighbors <peer-ip>` |
 
 If BGP is `Established` while SVR paths are down, transport-to-BGP-peer-IP is fine but the SVR overlay is broken — investigate SVR-specific causes (MTU/PMTUD, UDP filtering on the underlay, tenant / service-route / security policy). If BGP is also down on the same transport, treat the shared underlay as the primary suspect and prioritize the underlay-link alarms (`bad_wan_uplink`, `intermittent_wan_connectivity`).
 
@@ -118,12 +121,12 @@ If BGP is `Established` while SVR paths are down, transport-to-BGP-peer-IP is fi
 | ISP degradation | If the underlay is technically `up` but performance is bad (loss / latency / jitter above SVR thresholds), open an ISP ticket with the affected circuit ID; SVR is doing the right thing by marking the path down. |
 | Interface / optics | Check CRC, drops, and optics DDM on the WAN-facing interface (`show device-interface`). Replace cable / SFP if physical-layer fault is confirmed. |
 | Peer device | Verify the DC-hub SSR1300's SVR process is up and its side of the path is not the problem (hub-side runbook / Mist WAN Edges view for that hub). If the hub-side gateway is impaired, coordinate with the hub-side on-call rather than driving from the branch. |
-| Reachability | From SSR, confirm the remote peer's public IP is reachable **from the correct source IP** with `ping <remote-public-ip> source <local-transport-ip>`. |
+| Reachability | From SSR, confirm the remote peer's public IP is reachable over the affected transport with `ping egress-interface <network-interface> <remote-public-ip>`. |
 | MTU / PMTUD | SVR encapsulates in UDP; a PMTUD blackhole on the underlay will cause paths to flap or stay down. Verify path MTU on the affected transport. |
-| UDP filtering | Some carrier / customer-edge firewalls silently drop UDP once a session ages out. If path repeatedly flaps at a fixed interval, suspect stateful UDP filtering upstream. |
+| UDP filtering | Some carrier / customer-edge firewalls silently drop UDP once a session ages out. If path repeatedly flaps at a fixed interval, suspect stateful UDP filtering upstream. Run `show udp-transform`. An enabled state names the firewall test that triggered the workaround. |
 | Firewall / policy | On SSR the peer path traverses a tenant / service-route / security policy — verify these were not recently changed. |
 | Configuration | Review Mist audit logs for SVR or interface config changes in the last 24 h. Rollback if a recent change caused the outage. |
-| Routing | Verify next-hop resolution for the peer's public IP on the affected transport (`show route`). |
+| Routing | Verify next-hop resolution for the peer's public IP on the affected transport (`show rib` and `show fib <peer-public-ip>/32`). |
 | Recovery (SVR) | Confirm `show peers` reports the affected path back to `up` on the expected transport, and the paired clear event has fired. |
 | Recovery (BGP, if it was also affected) | Confirm BGP transitions back to `Established`. Do not close the SVR ticket until any BGP alarm has also cleared. |
 
@@ -168,13 +171,14 @@ SSR uses PCLI, not Junos. Do not paste Junos syntax into an SSR.
 
 | Purpose | Command |
 |---|---|
-| System / model / uptime | `show system` |
-| Conductor / cloud connectivity | `show system connected` |
+| System state, role, version, uptime, alarm count | `show system` |
+| Mist cloud link | `show mist` |
 | Alarms | `show alarms` |
 | Device interfaces (physical) | `show device-interface` |
 | Network interfaces (logical) | `show network-interface` |
-| Routing table | `show route` |
-| Reachability with correct source | `ping <remote-public-ip> source <local-transport-ip>` |
+| Routes that the router learned | `show rib` |
+| Reachability over the affected transport | `ping egress-interface <network-interface> <remote-public-ip>` |
+| Path size over the affected transport | `ping set-df-bit size 1400 egress-interface <network-interface> <remote-public-ip>` |
 | Path to remote peer | `traceroute <remote-public-ip>` |
 
 **SVR (this alarm):**
@@ -182,18 +186,22 @@ SSR uses PCLI, not Junos. Do not paste Junos syntax into an SSR.
 | Purpose | Command |
 |---|---|
 | SVR peer paths (all peers, all transports) | `show peers` |
-| SVR peer path detail | `show peers detail` |
-| Active sessions on device | `show sessions summary` |
-| Events (SVR-scoped) | `show events` |
+| SVR peer path detail, with loss, latency, jitter, and uptime | `show peers detail` |
+| One peer only | `show peers name <peer>` |
+| Protocol that decides the path state | `show bfd` |
+| Firewall workaround state | `show udp-transform` |
+| Service paths that the overlay carries | `show service-path` |
+| Active sessions on device | `show sessions rows 20` |
+| Events (scoped by time) | `show events from 1d` |
 
 **BGP (only for correlated control-plane checks — BGP outages are separate alarms):**
 
 | Purpose | Command |
 |---|---|
 | BGP summary | `show bgp summary` |
-| BGP peer detail | `show bgp neighbor <peer-ip>` |
+| BGP peer detail | `show bgp neighbors <peer-ip>` |
 
-See Shared Appendix §7 for the full SSR PCLI reference.
+See Shared Appendix §7 for the full SSR PCLI reference, and [SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md) for the failure signature of each command.
 
 ## 9. Cross-references (sibling alarms)
 
