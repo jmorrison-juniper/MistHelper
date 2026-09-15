@@ -84,7 +84,7 @@ class TestMenuNumbersAreUnique:
         seen: dict[str, str] = {}  # WHY: maps the action name to the first number that used it.
         duplicates: list[str] = []
         for number, entry in MistHelper.menu_actions.items():
-            action = getattr(entry[0], "__qualname__", "")  # A lambda shares one name, so skip it.
+            action = getattr(entry.handler, "__qualname__", "")  # A lambda shares one name, so skip it.
             if not action or "<lambda>" in action:
                 continue  # WHY: every menu lambda is a distinct object with the same name.
             if action in seen:
@@ -124,5 +124,5 @@ class TestTheUpgradePortalStaysDestructive:
         """
         entry = OperationRegistry.get(MSP_LICENSE_MENU)
         assert entry["category"] == "interactive_safe"
-        action = getattr(MistHelper.menu_actions[MSP_LICENSE_MENU][0], "__qualname__", "")
+        action = getattr(MistHelper.menu_actions[MSP_LICENSE_MENU].handler, "__qualname__", "")
         assert "MSPLicenseExporter" in action, f"Menu {MSP_LICENSE_MENU} no longer runs the MSP license export"

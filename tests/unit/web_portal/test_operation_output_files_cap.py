@@ -11,6 +11,7 @@ import logging
 
 import pytest
 
+from src.utils.menu_entry import MenuEntry  # WHY: fixtures must match the production menu row.
 from web_portal.services.operation import (
     DEFAULT_RUN_OUTPUT_FILES_MAX,
     OperationExecutor,
@@ -18,9 +19,21 @@ from web_portal.services.operation import (
 )
 
 
+def _entry(menu_id: str, handler, title: str) -> MenuEntry:
+    """Return a menu row for web portal fixtures."""
+    return MenuEntry(  # WHY: the portal reads named row fields.
+        menu_id=menu_id,  # WHY: keep the row aligned with its dictionary key.
+        handler=handler,  # WHY: the executor runs this callable.
+        title=title,  # WHY: the page and run record display this text.
+        category="safe",  # WHY: OperationRegistry supplies the real gate category.
+        destructive=False,  # WHY: fixture actions are no-op or bounded sleep calls.
+        supports_fast=False,  # WHY: the portal never uses fast-mode metadata.
+    )
+
+
 def _menu_actions() -> dict:
     """Return one harmless menu entry for the executor under test."""
-    return {"11": (lambda: None, "Export the organization inventory")}
+    return {"11": _entry("11", lambda: None, "Export the organization inventory")}
 
 
 def _make_record(message: str) -> logging.LogRecord:

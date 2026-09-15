@@ -8,6 +8,7 @@ failure branches, and option-loop failure telemetry.
 from __future__ import annotations
 
 import logging  # WHY: #886 slice 18/N — caplog level control for logger-based output
+from typing import Any  # WHY: fixture helper accepts different callables.
 from unittest.mock import MagicMock
 
 import pytest  # WHY: pytest monkeypatch fixture for os.environ selector control
@@ -19,6 +20,7 @@ from src.troubleshooting.interactive_test_runner import (
     SuiteTallies,
     TestSiteSelectorUnresolved,  # WHY: #1637 fail-closed selector contract exception.
 )
+from src.utils.menu_entry import MenuEntry  # WHY: test fixtures must use the production row model.
 
 
 @pytest.fixture(autouse=True)
@@ -68,6 +70,18 @@ class _TelemetryStub:
 
     def enforce_retention(self) -> None:
         self.retention_enforced = True
+
+
+def _entry(menu_id: str, handler: Any, title: str) -> MenuEntry:
+    """Return a menu row for test fixtures."""
+    return MenuEntry(  # WHY: tests should exercise the named row shape.
+        menu_id=menu_id,  # WHY: keep the row aligned with its test key.
+        handler=handler,  # WHY: the runner invokes this callable.
+        title=title,  # WHY: telemetry and listings read this text.
+        category="interactive_safe",  # WHY: these fixtures model interactive-safe rows.
+        destructive=False,  # WHY: no unit fixture mutates Mist Cloud.
+        supports_fast=False,  # WHY: interactive runner tests do not use fast mode.
+    )
 
 
 class _OperationRegistryStub:
@@ -121,7 +135,7 @@ def _make_runner(
 ) -> InteractiveTestRunner:
     """Build a runner with sensible defaults so per-test setup stays terse."""
     if menu_actions is None:  # WHY: default menu wires one no-op interactive option
-        menu_actions = {"1": (lambda site_id=None: None, "Option One")}
+        menu_actions = {"1": _entry("1", lambda site_id=None: None, "Option One")}
     if mistapi_module is None:  # WHY: default mistapi returns a single site
         mistapi_module = MagicMock()
         site_response = MagicMock()
@@ -146,7 +160,7 @@ def test_execute_runs_interactive_option_successfully() -> None:
     def _option(site_id=None):
         called["value"] = site_id == "site-1"
 
-    menu_actions = {"1": (_option, "Option One")}
+    menu_actions = {"1": _entry("1", _option, "Option One")}
     runner = _make_runner(menu_actions=menu_actions)
 
     result = runner.execute()
@@ -300,8 +314,8 @@ def test_emit_skip_events_records_skip_per_option() -> None:
         return None
 
     menu_actions = {
-        "1": (_noop_with_site, "Option One"),
-        "2": (_noop, "Option Two"),
+        "1": _entry("1", _noop_with_site, "Option One"),
+        "2": _entry("2", _noop, "Option Two"),
     }
     runner = _make_runner(menu_actions=menu_actions, registry=_RegistryWithSkip)
     emitter = _TelemetryStub("data/x.jsonl")
@@ -320,8 +334,8 @@ def test_print_skipped_options_writes_reason_lines(caplog: pytest.LogCaptureFixt
         return None
 
     menu_actions = {
-        "1": (_noop_with_site, "Option One"),
-        "2": (_noop, "Option Two"),
+        "1": _entry("1", _noop_with_site, "Option One"),
+        "2": _entry("2", _noop, "Option Two"),
     }
     runner = _make_runner(menu_actions=menu_actions, registry=_RegistryWithSkip)
     runner._print_skipped_options(["2"])
@@ -345,7 +359,7 @@ def test_run_option_loop_records_failure_via_telemetry() -> None:
     def _boom(site_id=None):
         raise RuntimeError("kaboom")
 
-    menu_actions = {"1": (_boom, "Fails")}
+    menu_actions = {"1": _entry("1", _boom, "Fails")}
     runner = _make_runner(menu_actions=menu_actions)
     emitter = _TelemetryStub("data/x.jsonl")
     success, failure = runner._run_option_loop(["1"], "site-1", emitter)
@@ -358,7 +372,7 @@ def test_run_option_loop_records_failure_via_telemetry() -> None:
 
 def test_run_option_loop_skips_options_missing_from_menu() -> None:
     """_run_option_loop silently skips option ids not present in menu_actions."""
-    menu_actions = {"1": (lambda site_id=None: None, "One")}
+    menu_actions = {"1": _entry("1", lambda site_id=None: None, "One")}
     runner = _make_runner(menu_actions=menu_actions)
     emitter = _TelemetryStub("data/x.jsonl")
     # WHY: pass an option not in menu_actions to exercise the `continue` branch
@@ -387,7 +401,7 @@ def test_run_and_finalize_returns_false_when_option_fails() -> None:
     def _boom(site_id=None):
         raise RuntimeError("boom")
 
-    menu_actions = {"1": (_boom, "Fails")}
+    menu_actions = {"1": _entry("1", _boom, "Fails")}
     runner = _make_runner(menu_actions=menu_actions)
     emitter = _TelemetryStub("data/x.jsonl")
     ctx = SuiteContext(
@@ -428,7 +442,7 @@ def test_run_option_loop_flags_logged_error_as_failure(caplog: pytest.LogCapture
         logging.error("simulated operation failure")
         return None
 
-    menu_actions = {"1": (_logs_error, "Logs Error")}
+    menu_actions = {"1": _entry("1", _logs_error, "Logs Error")}
     runner = _make_runner(menu_actions=menu_actions)
     emitter = _TelemetryStub("data/x.jsonl")
     with caplog.at_level(logging.ERROR):
@@ -566,7 +580,7 @@ def test_execute_returns_false_on_unresolved_selector(monkeypatch: pytest.Monkey
     mistapi_module.api.v1.orgs.sites.listOrgSites.return_value = MagicMock()
     mistapi_module.get_all.return_value = [{"id": "site-a", "name": "Alpha"}]
     runner = InteractiveTestRunner(
-        menu_actions={"1": (lambda site_id=None: None, "Option One")},
+        menu_actions={"1": _entry("1", lambda site_id=None: None, "Option One")},
         operation_registry=_OperationRegistryStub,
         telemetry_emitter_cls=_CapturingStub,
         config_utils=MagicMock(),
@@ -598,7 +612,7 @@ def test_run_single_option_marks_site_scoped_when_handler_accepts_site_id() -> N
     def _accepts_site(site_id: str | None = None) -> None:
         del site_id  # WHY: signature acceptance is the only behaviour under test.
 
-    menu_actions = {"1": (_accepts_site, "Site-Scoped Op")}
+    menu_actions = {"1": _entry("1", _accepts_site, "Site-Scoped Op")}
     runner = _make_runner(menu_actions=menu_actions)
     emitter = _TelemetryStub("data/x.jsonl")
 
@@ -626,7 +640,7 @@ def test_run_single_option_marks_no_context_when_handler_lacks_site_id() -> None
     def _no_site() -> None:
         return None
 
-    menu_actions = {"1": (_no_site, "No Context Op")}
+    menu_actions = {"1": _entry("1", _no_site, "No Context Op")}
     runner = _make_runner(menu_actions=menu_actions)
     emitter = _TelemetryStub("data/x.jsonl")
 
@@ -658,7 +672,7 @@ def test_run_single_option_marks_prompt_cancelled_on_eof(caplog: pytest.LogCaptu
         del site_id  # WHY: cancellation is the only behaviour under test.
         raise EOFError("simulated Ctrl+D at prompt")
 
-    menu_actions = {"1": (_cancelled, "Prompt Cancelled")}
+    menu_actions = {"1": _entry("1", _cancelled, "Prompt Cancelled")}
     runner = _make_runner(menu_actions=menu_actions)
     emitter = _TelemetryStub("data/x.jsonl")
 

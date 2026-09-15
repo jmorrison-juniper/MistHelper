@@ -112,10 +112,13 @@ class WikiMenuReferenceGenerator:
         raise SystemExit("Unexpected menu_actions key format")
 
     def extract_value_pair(self, value_node: ast.AST) -> tuple[str, str]:
-        if not isinstance(value_node, ast.Tuple) or len(value_node.elts) < 2:
+        if not isinstance(value_node, ast.Call):
             raise SystemExit("Unexpected menu_actions value format")
-        handler_node = value_node.elts[0]
-        description_node = value_node.elts[1]
+        fields = {keyword.arg: keyword.value for keyword in value_node.keywords if keyword.arg}
+        handler_node = fields.get("handler")
+        description_node = fields.get("title")
+        if handler_node is None or description_node is None:
+            raise SystemExit("Unexpected menu_actions value fields")
         handler = ast.unparse(handler_node).strip()
         description = self.extract_string(description_node)
         return handler, description

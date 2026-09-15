@@ -220,5 +220,5 @@ class TestMenuRegistration:
         import MistHelper  # WHY: menu_actions is the authoritative runtime mapping.
         from src.utils.operation_registry import OperationRegistry
 
-        assert MistHelper.menu_actions["238"][0] is MSPLicenseExporter.licenses
+        assert MistHelper.menu_actions["238"].handler is MSPLicenseExporter.licenses
         assert OperationRegistry.get("238")["category"] == "interactive_safe"

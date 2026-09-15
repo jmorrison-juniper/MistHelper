@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import pytest
 
+from src.utils.menu_entry import MenuEntry  # WHY: fixtures must match the production menu row.
 from src.utils.operation_registry import OperationRegistry
 from web_portal.services.operation import OperationExecutor
 
@@ -27,20 +28,32 @@ def _noop() -> None:
     return None  # The gate must refuse before the executor reaches this body.
 
 
+def _entry(menu_id: str, handler, title: str) -> MenuEntry:
+    """Return a menu row for web portal gate fixtures."""
+    return MenuEntry(  # WHY: the executor reads named row fields.
+        menu_id=menu_id,  # WHY: keep the row aligned with its dictionary key.
+        handler=handler,  # WHY: the gate checks this callable before execution.
+        title=title,  # WHY: the listing path displays this text.
+        category="safe",  # WHY: OperationRegistry supplies the real gate category.
+        destructive=False,  # WHY: fixture actions must not mutate Mist Cloud.
+        supports_fast=False,  # WHY: the portal does not use fast-mode metadata.
+    )
+
+
 @pytest.fixture
 def executor():
     """Build an executor whose menu holds one entry for each test case."""
     menu_actions = {
-        "11": (_noop, "Export the organization inventory"),  # Registry category `safe`.
-        "60": (_noop, "An interactive but safe export"),  # Registry category `interactive_safe`.
-        "0": (_noop, "An interactive operation"),  # Registry category `interactive`.
-        "14": (_noop, "A resource intensive export"),  # Registry category `resource_intensive`.
-        "18": (_noop, "A second resource intensive export"),  # Registry category `resource_intensive`.
-        "59": (_noop, "A third resource intensive export"),  # Registry category `resource_intensive`.
-        "154": (_noop, "A destructive operation"),  # Registry category `destructive`.
-        "102": (_noop, "A websocket operation"),  # Registry category `websocket`.
-        "151": (_noop, "A continuous loop operation"),  # Registry category `continuous_loop`.
-        "x1": (_noop, "A key that int() cannot parse"),  # The old gate failed open on this key.
+        "11": _entry("11", _noop, "Export the organization inventory"),  # Registry category `safe`.
+        "60": _entry("60", _noop, "An interactive but safe export"),  # Registry category `interactive_safe`.
+        "0": _entry("0", _noop, "An interactive operation"),  # Registry category `interactive`.
+        "14": _entry("14", _noop, "A resource intensive export"),  # Registry category `resource_intensive`.
+        "18": _entry("18", _noop, "A second resource intensive export"),  # Registry category `resource_intensive`.
+        "59": _entry("59", _noop, "A third resource intensive export"),  # Registry category `resource_intensive`.
+        "154": _entry("154", _noop, "A destructive operation"),  # Registry category `destructive`.
+        "102": _entry("102", _noop, "A websocket operation"),  # Registry category `websocket`.
+        "151": _entry("151", _noop, "A continuous loop operation"),  # Registry category `continuous_loop`.
+        "x1": _entry("x1", _noop, "A key that int() cannot parse"),  # The old gate failed open on this key.
     }
     built = OperationExecutor(menu_actions, None, None, None)  # Executor under test.
     yield built  # Hand the executor to the test before the pool shuts down.

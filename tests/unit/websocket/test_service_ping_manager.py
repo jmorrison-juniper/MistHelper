@@ -1194,7 +1194,8 @@ def test_misthelper_menu_120_launcher_delegates_execute(monkeypatch: pytest.Monk
 
 def test_menu_action_120_description_is_preserved() -> None:
     """Menu 120 should keep the documented service ping route and description text."""
-    handler, description = MistHelper.menu_actions["120"]
+    handler = MistHelper.menu_actions["120"].handler
+    description = MistHelper.menu_actions["120"].title
 
     assert callable(handler)
     assert "WebSocket Service Ping" in description

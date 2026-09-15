@@ -13,7 +13,7 @@ import uuid
 from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import wait as wait_for_futures
-from typing import Any, Optional
+from typing import Any
 
 from src.utils.operation_registry import OperationRegistry
 
@@ -361,9 +361,9 @@ class OperationExecutor:
     def __init__(
         self,
         menu_actions: dict,
-        apisession: Optional[Any],
-        org_id: Optional[str],
-        event_bus: Optional[Any],
+        apisession: Any | None,
+        org_id: str | None,
+        event_bus: Any | None,
     ):
         """Initialize with shared MistHelper dependencies."""
         self._menu_actions = menu_actions
@@ -416,7 +416,7 @@ class OperationExecutor:
         run["_future"] = self._pool.submit(self._execute_operation, run, parameters)
         return self._run_to_dict(run)
 
-    def get_run_status(self, run_id: str) -> Optional[dict]:
+    def get_run_status(self, run_id: str) -> dict | None:
         """Return current status of a specific operation run."""
         with self._lock:
             run = self._runs.get(run_id)
@@ -496,7 +496,7 @@ class OperationExecutor:
                 continue
             num = self._parse_menu_number(key)  # Safe here, because the gate proved the key parses.
             category = self._get_category(num)
-            desc = value[1] if isinstance(value, tuple) and len(value) > 1 else str(value)
+            desc = value.title  # Use the named menu row instead of legacy tuple positions.
             reg_entry = PARAMETER_REGISTRY.get(key)
             op_category = reg_entry["category"] if reg_entry else "non_interactive"
             if category not in categories:
@@ -510,12 +510,12 @@ class OperationExecutor:
             )
         return [{"name": name, "operations": ops} for name, ops in sorted(categories.items(), key=lambda x: x[0])]
 
-    def get_operation_parameters(self, menu_number: str) -> Optional[dict]:
+    def get_operation_parameters(self, menu_number: str) -> dict | None:
         """Return parameter requirements for an operation."""
         if menu_number not in self._menu_actions:
             return None
         value = self._menu_actions[menu_number]
-        desc = value[1] if isinstance(value, tuple) and len(value) > 1 else str(value)
+        desc = value.title  # Use the named menu row instead of legacy tuple positions.
         entry = PARAMETER_REGISTRY.get(menu_number)
         if entry is not None:
             result = {
@@ -534,14 +534,14 @@ class OperationExecutor:
             "parameters": [],
         }
 
-    def _validate_operation(self, menu_number: str) -> Optional[dict]:
+    def _validate_operation(self, menu_number: str) -> dict | None:
         """Check that the operation exists and that the portal may run it."""
         if menu_number not in self._menu_actions:
             return {"error": f"Operation {menu_number} not found"}
         if not self._is_portal_runnable(menu_number):  # One rule for the page and the run gate.
             return {"error": self._refusal_message(menu_number)}
         value = self._menu_actions[menu_number]
-        func = value[0] if isinstance(value, tuple) else value
+        func = value.handler  # Use the named menu row instead of legacy tuple positions.
         if func is None:
             return {"error": "API not authenticated. Connect via SSH to run operations."}
         return None
@@ -574,7 +574,7 @@ class OperationExecutor:
             f"The safety category is '{category}'. Connect over SSH to run this operation."
         )
 
-    def _check_conflict(self, menu_number: str) -> Optional[dict]:
+    def _check_conflict(self, menu_number: str) -> dict | None:
         """Check if the same operation is already running."""
         with self._lock:
             for run in self._runs.values():
@@ -598,7 +598,7 @@ class OperationExecutor:
     def _build_run_record(self, menu_number: str) -> dict:
         """Return one run record that holds bounded log stores."""
         value = self._menu_actions[menu_number]
-        desc = value[1] if isinstance(value, tuple) and len(value) > 1 else str(value)
+        desc = value.title  # Use the named menu row instead of legacy tuple positions.
         return {
             "run_id": str(uuid.uuid4()),
             "menu_number": menu_number,
@@ -662,7 +662,7 @@ class OperationExecutor:
         self._update_status(run, "running", 0)
         input_answers = parameters.get("input_answers", [])
         try:
-            func = self._menu_actions[run["menu_number"]][0]
+            func = self._menu_actions[run["menu_number"]].handler  # Use the named menu row for execution.
             if input_answers:
                 with web_input_context(input_answers):
                     self._capture_and_run(run, func)
@@ -786,7 +786,7 @@ class OperationExecutor:
             "dropped_output_file_count": run.get("dropped_output_file_count", 0),
         }
 
-    def _parse_menu_number(self, key: str) -> Optional[int]:
+    def _parse_menu_number(self, key: str) -> int | None:
         """Parse string menu key to integer, return None if non-numeric."""
         try:
             return int(key)

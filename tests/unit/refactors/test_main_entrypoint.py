@@ -22,6 +22,7 @@ from src.refactors.main_entrypoint import (  # WHY: SUT + proxy direct imports.
     MainEntrypoint,
     _MistHelperProxy,
 )
+from src.utils.menu_entry import MenuEntry  # WHY: menu cache fixtures use the production row model.
 
 
 @pytest.fixture
@@ -80,6 +81,18 @@ class TestMistHelperProxy:
         second = MagicMock(name="second")  # WHY: rebound value.
         monkeypatch.setattr("MistHelper._sentinel_rebind_attr", second, raising=False)  # WHY: publish new value.
         assert proxy._sentinel_rebind_attr is second  # WHY: proxy call-time lookup honours the rebound value.
+
+
+def _menu_entry(menu_id: str, handler, title: str) -> MenuEntry:
+    """Return a small menu row for cache tests."""
+    return MenuEntry(  # WHY: `_print_interactive_menu` reads the named row fields.
+        menu_id=menu_id,  # WHY: keep the row aligned with its dictionary key.
+        handler=handler,  # WHY: the cache test does not call the handler.
+        title=title,  # WHY: the output assertion reads this text.
+        category="safe",  # WHY: this fixture only exercises display order.
+        destructive=False,  # WHY: the fixture performs no Mist Cloud write.
+        supports_fast=False,  # WHY: the cache test never invokes systematic tests.
+    )
 
 
 class TestMainEntrypointRun:
@@ -158,8 +171,8 @@ class TestMistHelperMenuAndModeCaches:
         """A menu key change invalidates the sorted-key cache before the next redraw."""
         lines: list[str] = []  # WHY: collect formatted menu output without writing to the terminal.
         menu_actions = {
-            "10": (lambda: None, "ten"),
-            "2": (lambda: None, "two"),
+            "10": _menu_entry("10", lambda: None, "ten"),
+            "2": _menu_entry("2", lambda: None, "two"),
         }  # WHY: non-lexical order proves numeric sorting stays active.
 
         def fake_echo(message: str, *args: object) -> None:
@@ -171,7 +184,7 @@ class TestMistHelperMenuAndModeCaches:
         monkeypatch.setattr(MistHelper, "_SORTED_MENU_KEYS_CACHE", None)  # WHY: start from a cold cache.
 
         MistHelper._print_interactive_menu()  # WHY: build the initial cached order.
-        menu_actions["3"] = (lambda: None, "three")  # WHY: simulate a runtime registry extension.
+        menu_actions["3"] = _menu_entry("3", lambda: None, "three")  # WHY: simulate a runtime registry extension.
         MistHelper._print_interactive_menu()  # WHY: prove the next redraw sees the new key.
 
         assert lines == [
