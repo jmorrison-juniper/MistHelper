@@ -1,6 +1,6 @@
 # Mist API Endpoint Index
 
-> 1013 spec operations, 61 library-only stubs (1074 total)
+> 1059 spec operations, 23 library-only stubs (1082 total)
 
 ## Admins
 
@@ -61,6 +61,7 @@
 | GET | /api/v1/const/insight_metrics | listInsightMetrics | listInsightMetrics | [GET_const_insight_metrics.md](constants/GET_const_insight_metrics.md) |
 | GET | /api/v1/const/languages | listSiteLanguages | listSiteLanguages | [GET_const_languages.md](constants/GET_const_languages.md) |
 | GET | /api/v1/const/license_types | listLicenseTypes | listLicenseTypes | [GET_const_license_types.md](constants/GET_const_license_types.md) |
+| GET | /api/v1/const/marvisclient_events | listMarvisClientEventsDefinitions | listMarvisClientEventsDefinitions | [GET_const_marvisclient_events.md](constants/GET_const_marvisclient_events.md) |
 | GET | /api/v1/const/marvisclient_versions | listMarvisClientVersions | listMarvisClientVersions | [GET_const_marvisclient_versions.md](constants/GET_const_marvisclient_versions.md) |
 | GET | /api/v1/const/states | listStates | listStates | [GET_const_states.md](constants/GET_const_states.md) |
 | GET | /api/v1/const/traffic_types | listTrafficTypes | listTrafficTypes | [GET_const_traffic_types.md](constants/GET_const_traffic_types.md) |
@@ -210,6 +211,7 @@
 | GET | /api/v1/msps/{msp_id}/ssos/{sso_id} | getMspSso | getMspSso | [GET_msps_msp_id_ssos_sso_id.md](msps/GET_msps_msp_id_ssos_sso_id.md) |
 | PUT | /api/v1/msps/{msp_id}/ssos/{sso_id} | updateMspSso | updateMspSso | [PUT_msps_msp_id_ssos_sso_id.md](msps/PUT_msps_msp_id_ssos_sso_id.md) |
 | DELETE | /api/v1/msps/{msp_id}/ssos/{sso_id} | deleteMspSso | deleteMspSso | [DELETE_msps_msp_id_ssos_sso_id.md](msps/DELETE_msps_msp_id_ssos_sso_id.md) |
+| POST | /api/v1/msps/{msp_id}/ssos/{sso_id}/delete_admins | deleteMspSsoAdmins | deleteMspSsoAdmins | [POST_msps_msp_id_ssos_sso_id_delete_admins.md](msps/POST_msps_msp_id_ssos_sso_id_delete_admins.md) |
 | GET | /api/v1/msps/{msp_id}/ssos/{sso_id}/failures | listMspSsoLatestFailures | listMspSsoLatestFailures | [GET_msps_msp_id_ssos_sso_id_failures.md](msps/GET_msps_msp_id_ssos_sso_id_failures.md) |
 | GET | /api/v1/msps/{msp_id}/ssos/{sso_id}/metadata | getMspSamlMetadata | getMspSamlMetadata | [GET_msps_msp_id_ssos_sso_id_metadata.md](msps/GET_msps_msp_id_ssos_sso_id_metadata.md) |
 | GET | /api/v1/msps/{msp_id}/ssos/{sso_id}/metadata.xml | downloadMspSamlMetadata | downloadMspSamlMetadata | [GET_msps_msp_id_ssos_sso_id_metadata.xml.md](msps/GET_msps_msp_id_ssos_sso_id_metadata.xml.md) |
@@ -278,7 +280,7 @@
 | GET | /api/v1/orgs/{org_id}/aamwprofiles | listOrgAAMWProfiles | listOrgAAMWProfiles | [GET_orgs_org_id_aamwprofiles.md](orgs/GET_orgs_org_id_aamwprofiles.md) |
 | POST | /api/v1/orgs/{org_id}/aamwprofiles | createOrgAAMWProfile | createOrgAAMWProfile | [POST_orgs_org_id_aamwprofiles.md](orgs/POST_orgs_org_id_aamwprofiles.md) |
 | GET | /api/v1/orgs/{org_id}/aamwprofiles/{aamwprofile_id} | getOrgAAMWProfile | getOrgAAMWProfile | [GET_orgs_org_id_aamwprofiles_aamwprofile_id.md](orgs/GET_orgs_org_id_aamwprofiles_aamwprofile_id.md) |
-| PUT | /api/v1/orgs/{org_id}/aamwprofiles/{aamwprofile_id} | updateOrgAAMWProfile | updateOrgAAMWProfile | [PUT_orgs_org_id_aamwprofiles_aamwprofile_id.md](orgs/PUT_orgs_org_id_aamwprofiles_aamwprofile_id.md) |
+| PUT | /api/v1/orgs/{org_id}/aamwprofiles/{aamwprofile_id} | updateOrgAAMWProfile | createOrgAAMWProfile | [PUT_orgs_org_id_aamwprofiles_aamwprofile_id.md](orgs/PUT_orgs_org_id_aamwprofiles_aamwprofile_id.md) |
 | DELETE | /api/v1/orgs/{org_id}/aamwprofiles/{aamwprofile_id} | deleteOrgAAMWProfile | deleteOrgAAMWProfile | [DELETE_orgs_org_id_aamwprofiles_aamwprofile_id.md](orgs/DELETE_orgs_org_id_aamwprofiles_aamwprofile_id.md) |
 
 ## Orgs Alarm Templates
@@ -316,7 +318,7 @@
 | POST | /api/v1/orgs/{org_id}/avprofiles | createOrgAntivirusProfile | createOrgAntivirusProfile | [POST_orgs_org_id_avprofiles.md](orgs/POST_orgs_org_id_avprofiles.md) |
 | GET | /api/v1/orgs/{org_id}/avprofiles/{avprofile_id} | getOrgAntivirusProfile | getOrgAntivirusProfile | [GET_orgs_org_id_avprofiles_avprofile_id.md](orgs/GET_orgs_org_id_avprofiles_avprofile_id.md) |
 | PUT | /api/v1/orgs/{org_id}/avprofiles/{avprofile_id} | updateOrgAntivirusProfile | updateOrgAntivirusProfile | [PUT_orgs_org_id_avprofiles_avprofile_id.md](orgs/PUT_orgs_org_id_avprofiles_avprofile_id.md) |
-| DELETE | /api/v1/orgs/{org_id}/avprofiles/{avprofile_id} | deleteOrgAntivirusProfile | deleteOrgAntivirusProfile | [DELETE_orgs_org_id_avprofiles_avprofile_id.md](orgs/DELETE_orgs_org_id_avprofiles_avprofile_id.md) |
+| DELETE | /api/v1/orgs/{org_id}/avprofiles/{avprofile_id} | deleteOrgAntivirusProfile | Delete Org Antivirus Profile | [DELETE_orgs_org_id_avprofiles_avprofile_id.md](orgs/DELETE_orgs_org_id_avprofiles_avprofile_id.md) |
 
 ## Orgs Asset Filters
 
@@ -359,6 +361,9 @@
 
 | Method | Path | operationId | Summary | File |
 |--------|------|-------------|---------|------|
+| GET | /api/v1/orgs/{org_id}/insights/marvisclient/{marvisclient_id}/marvisclient-metrics | getOrgMarvisClientInsights | getOrgMarvisClientInsights | [GET_orgs_org_id_insights_marvisclient_marvisclient_id_marvisclient-metrics.md](orgs/GET_orgs_org_id_insights_marvisclient_marvisclient_id_marvisclient-metrics.md) |
+| GET | /api/v1/orgs/{org_id}/marvisclients/events/count | countOrgMarvisClientEvents | countOrgMarvisClientEvents | [GET_orgs_org_id_marvisclients_events_count.md](orgs/GET_orgs_org_id_marvisclients_events_count.md) |
+| GET | /api/v1/orgs/{org_id}/marvisclients/events/search | searchOrgMarvisClientEvents | searchOrgMarvisClientEvents | [GET_orgs_org_id_marvisclients_events_search.md](orgs/GET_orgs_org_id_marvisclients_events_search.md) |
 | DELETE | /api/v1/orgs/{org_id}/stats/marvisclients | deleteOrgMarvisClient | deleteOrgMarvisClient | [DELETE_orgs_org_id_stats_marvisclients.md](orgs/DELETE_orgs_org_id_stats_marvisclients.md) |
 
 ## Orgs Clients - NAC
@@ -369,6 +374,7 @@
 | GET | /api/v1/orgs/{org_id}/nac_clients/events/count | countOrgNacClientEvents | countOrgNacClientEvents | [GET_orgs_org_id_nac_clients_events_count.md](orgs/GET_orgs_org_id_nac_clients_events_count.md) |
 | GET | /api/v1/orgs/{org_id}/nac_clients/events/search | searchOrgNacClientEvents | searchOrgNacClientEvents | [GET_orgs_org_id_nac_clients_events_search.md](orgs/GET_orgs_org_id_nac_clients_events_search.md) |
 | GET | /api/v1/orgs/{org_id}/nac_clients/search | searchOrgNacClients | searchOrgNacClients | [GET_orgs_org_id_nac_clients_search.md](orgs/GET_orgs_org_id_nac_clients_search.md) |
+| POST | /api/v1/orgs/{org_id}/nac_clients/{client_mac}/coa | sendOrgNacClientCoA | sendOrgNacClientCoA | [POST_orgs_org_id_nac_clients_client_mac_coa.md](orgs/POST_orgs_org_id_nac_clients_client_mac_coa.md) |
 
 ## Orgs Clients - SDK
 
@@ -430,11 +436,17 @@
 | GET | /api/v1/orgs/{org_id}/devices/summary | listOrgDevicesSummary | listOrgDevicesSummary | [GET_orgs_org_id_devices_summary.md](orgs/GET_orgs_org_id_devices_summary.md) |
 | GET | /api/v1/orgs/{org_id}/ocdevices/outbound_ssh_cmd | getOrgJuniperDevicesCommand | getOrgJuniperDevicesCommand | [GET_orgs_org_id_ocdevices_outbound_ssh_cmd.md](orgs/GET_orgs_org_id_ocdevices_outbound_ssh_cmd.md) |
 
-## Orgs Devices - AOS
+## Orgs Devices - AOSCX
 
 | Method | Path | operationId | Summary | File |
 |--------|------|-------------|---------|------|
-| GET | /api/v1/orgs/{org_id}/aos/register_cmd | getOrgAosRegisterCmd | getOrgAosRegisterCmd | [GET_orgs_org_id_aos_register_cmd.md](orgs/GET_orgs_org_id_aos_register_cmd.md) |
+| GET | /api/v1/orgs/{org_id}/aoscx/register_cmd | getOrgAoscxRegisterCmd | getOrgAoscxRegisterCmd | [GET_orgs_org_id_aoscx_register_cmd.md](orgs/GET_orgs_org_id_aoscx_register_cmd.md) |
+
+## Orgs Devices - EdgeConnect
+
+| Method | Path | operationId | Summary | File |
+|--------|------|-------------|---------|------|
+| GET | /api/v1/orgs/{org_id}/edgeconnect/register_cmd | getOrgEdgeconnectRegisterCmd | getOrgEdgeconnectRegisterCmd | [GET_orgs_org_id_edgeconnect_register_cmd.md](orgs/GET_orgs_org_id_edgeconnect_register_cmd.md) |
 
 ## Orgs Devices - Others
 
@@ -586,6 +598,9 @@
 |--------|------|-------------|---------|------|
 | POST | /api/v1/orgs/{org_id}/claim | claimOrgLicense | claimOrgLicense | [POST_orgs_org_id_claim.md](orgs/POST_orgs_org_id_claim.md) |
 | GET | /api/v1/orgs/{org_id}/claim/status | GetOrgLicenseAsyncClaimStatus | GetOrgLicenseAsyncClaimStatus | [GET_orgs_org_id_claim_status.md](orgs/GET_orgs_org_id_claim_status.md) |
+| GET | /api/v1/orgs/{org_id}/claims | listOrgAsyncClaims | listOrgAsyncClaims | [GET_orgs_org_id_claims.md](orgs/GET_orgs_org_id_claims.md) |
+| POST | /api/v1/orgs/{org_id}/claims | createOrgAsyncClaim | createOrgAsyncClaim | [POST_orgs_org_id_claims.md](orgs/POST_orgs_org_id_claims.md) |
+| GET | /api/v1/orgs/{org_id}/claims/{claim_id} | getOrgAsyncClaimStatus | getOrgAsyncClaimStatus | [GET_orgs_org_id_claims_claim_id.md](orgs/GET_orgs_org_id_claims_claim_id.md) |
 | GET | /api/v1/orgs/{org_id}/licenses | getOrgLicensesSummary | getOrgLicensesSummary | [GET_orgs_org_id_licenses.md](orgs/GET_orgs_org_id_licenses.md) |
 | PUT | /api/v1/orgs/{org_id}/licenses | moveOrDeleteOrgLicenseToAnotherOrg | moveOrDeleteOrgLicenseToAnotherOrg | [PUT_orgs_org_id_licenses.md](orgs/PUT_orgs_org_id_licenses.md) |
 | GET | /api/v1/orgs/{org_id}/licenses/usages | getOrgLicensesBySite | getOrgLicensesBySite | [GET_orgs_org_id_licenses_usages.md](orgs/GET_orgs_org_id_licenses_usages.md) |
@@ -594,7 +609,7 @@
 
 | Method | Path | operationId | Summary | File |
 |--------|------|-------------|---------|------|
-| GET | /api/v1/orgs/{org_id}/setting/{app_name}/link_accounts | getOrgOauthAppLinkedStatus | getOrgOauthAppLinkedStatus | [GET_orgs_org_id_setting_app_name_link_accounts.md](orgs/GET_orgs_org_id_setting_app_name_link_accounts.md) |
+| GET | /api/v1/orgs/{org_id}/setting/{app_name}/link_accounts | getOrgOauthAppLinkedStatus | getOrgOauthAppAuthorizationUrl | [GET_orgs_org_id_setting_app_name_link_accounts.md](orgs/GET_orgs_org_id_setting_app_name_link_accounts.md) |
 | POST | /api/v1/orgs/{org_id}/setting/{app_name}/link_accounts | addOrgOauthAppAccounts | addOrgOauthAppAccounts | [POST_orgs_org_id_setting_app_name_link_accounts.md](orgs/POST_orgs_org_id_setting_app_name_link_accounts.md) |
 | PUT | /api/v1/orgs/{org_id}/setting/{app_name}/link_accounts/{account_id} | updateOrgOauthAppAccount | updateOrgOauthAppAccount | [PUT_orgs_org_id_setting_app_name_link_accounts_account_id.md](orgs/PUT_orgs_org_id_setting_app_name_link_accounts_account_id.md) |
 | DELETE | /api/v1/orgs/{org_id}/setting/{app_name}/link_accounts/{account_id} | deleteOrgOauthAppAuthorization | deleteOrgOauthAppAuthorization | [DELETE_orgs_org_id_setting_app_name_link_accounts_account_id.md](orgs/DELETE_orgs_org_id_setting_app_name_link_accounts_account_id.md) |
@@ -603,8 +618,9 @@
 
 | Method | Path | operationId | Summary | File |
 |--------|------|-------------|---------|------|
-| GET | /api/v1/orgs/{org_id}/logs | listOrgAuditLogs | listOrgAuditLogs | [GET_orgs_org_id_logs.md](orgs/GET_orgs_org_id_logs.md) |
+| GET | /api/v1/orgs/{org_id}/logs | listOrgAuditLogsLegacy | listOrgAuditLogsLegacy | [GET_orgs_org_id_logs.md](orgs/GET_orgs_org_id_logs.md) |
 | GET | /api/v1/orgs/{org_id}/logs/count | countOrgAuditLogs | countOrgAuditLogs | [GET_orgs_org_id_logs_count.md](orgs/GET_orgs_org_id_logs_count.md) |
+| GET | /api/v1/orgs/{org_id}/logs/search | listOrgAuditLogs | listOrgAuditLogs | [GET_orgs_org_id_logs_search.md](orgs/GET_orgs_org_id_logs_search.md) |
 
 ## Orgs Maps
 
@@ -683,13 +699,6 @@
 | GET | /api/v1/orgs/{org_id}/setting/mist_nac_crls | getOrgNacCrl | getOrgNacCrl | [GET_orgs_org_id_setting_mist_nac_crls.md](orgs/GET_orgs_org_id_setting_mist_nac_crls.md) |
 | POST | /api/v1/orgs/{org_id}/setting/mist_nac_crls | importOrgNacCrl | importOrgNacCrl | [POST_orgs_org_id_setting_mist_nac_crls.md](orgs/POST_orgs_org_id_setting_mist_nac_crls.md) |
 | DELETE | /api/v1/orgs/{org_id}/setting/mist_nac_crls/{naccrl_id} | deleteOrgNacCrl | deleteOrgNacCrl | [DELETE_orgs_org_id_setting_mist_nac_crls_naccrl_id.md](orgs/DELETE_orgs_org_id_setting_mist_nac_crls_naccrl_id.md) |
-
-## Orgs NAC Fingerprints
-
-| Method | Path | operationId | Summary | File |
-|--------|------|-------------|---------|------|
-| GET | /api/v1/sites/{site_id}/insights/fingerprints/count | countOrgClientFingerprints | countOrgClientFingerprints | [GET_sites_site_id_insights_fingerprints_count.md](orgs/GET_sites_site_id_insights_fingerprints_count.md) |
-| GET | /api/v1/sites/{site_id}/insights/fingerprints/search | searchOrgClientFingerprints | searchOrgClientFingerprints | [GET_sites_site_id_insights_fingerprints_search.md](orgs/GET_sites_site_id_insights_fingerprints_search.md) |
 
 ## Orgs NAC IDP
 
@@ -799,6 +808,14 @@
 | PUT | /api/v1/orgs/{org_id}/rftemplates/{rftemplate_id} | updateOrgRfTemplate | updateOrgRfTemplate | [PUT_orgs_org_id_rftemplates_rftemplate_id.md](orgs/PUT_orgs_org_id_rftemplates_rftemplate_id.md) |
 | DELETE | /api/v1/orgs/{org_id}/rftemplates/{rftemplate_id} | deleteOrgRfTemplate | deleteOrgRfTemplate | [DELETE_orgs_org_id_rftemplates_rftemplate_id.md](orgs/DELETE_orgs_org_id_rftemplates_rftemplate_id.md) |
 
+## Orgs Reports
+
+| Method | Path | operationId | Summary | File |
+|--------|------|-------------|---------|------|
+| GET | /api/v1/orgs/{org_id}/exports/e911_report | getOrgE911Report | getOrgE911Report | [GET_orgs_org_id_exports_e911_report.md](orgs/GET_orgs_org_id_exports_e911_report.md) |
+| POST | /api/v1/orgs/{org_id}/exports/e911_report | enableOrgE911Report | enableOrgE911Report | [POST_orgs_org_id_exports_e911_report.md](orgs/POST_orgs_org_id_exports_e911_report.md) |
+| DELETE | /api/v1/orgs/{org_id}/exports/e911_report | disableOrgE911Report | disableOrgE911Report | [DELETE_orgs_org_id_exports_e911_report.md](orgs/DELETE_orgs_org_id_exports_e911_report.md) |
+
 ## Orgs SCEP
 
 | Method | Path | operationId | Summary | File |
@@ -849,6 +866,7 @@
 | GET | /api/v1/orgs/{org_id}/ssos/{sso_id} | getOrgSso | getOrgSso | [GET_orgs_org_id_ssos_sso_id.md](orgs/GET_orgs_org_id_ssos_sso_id.md) |
 | PUT | /api/v1/orgs/{org_id}/ssos/{sso_id} | updateOrgSso | updateOrgSso | [PUT_orgs_org_id_ssos_sso_id.md](orgs/PUT_orgs_org_id_ssos_sso_id.md) |
 | DELETE | /api/v1/orgs/{org_id}/ssos/{sso_id} | deleteOrgSso | deleteOrgSso | [DELETE_orgs_org_id_ssos_sso_id.md](orgs/DELETE_orgs_org_id_ssos_sso_id.md) |
+| POST | /api/v1/orgs/{org_id}/ssos/{sso_id}/delete_admins | deleteOrgSsoAdmins | deleteOrgSsoAdmins | [POST_orgs_org_id_ssos_sso_id_delete_admins.md](orgs/POST_orgs_org_id_ssos_sso_id_delete_admins.md) |
 | GET | /api/v1/orgs/{org_id}/ssos/{sso_id}/failures | listOrgSsoLatestFailures | listOrgSsoLatestFailures | [GET_orgs_org_id_ssos_sso_id_failures.md](orgs/GET_orgs_org_id_ssos_sso_id_failures.md) |
 | GET | /api/v1/orgs/{org_id}/ssos/{sso_id}/metadata | getOrgSamlMetadata | getOrgSamlMetadata | [GET_orgs_org_id_ssos_sso_id_metadata.md](orgs/GET_orgs_org_id_ssos_sso_id_metadata.md) |
 | GET | /api/v1/orgs/{org_id}/ssos/{sso_id}/metadata.xml | downloadOrgSamlMetadata | downloadOrgSamlMetadata | [GET_orgs_org_id_ssos_sso_id_metadata.xml.md](orgs/GET_orgs_org_id_ssos_sso_id_metadata.xml.md) |
@@ -969,6 +987,13 @@
 | Method | Path | operationId | Summary | File |
 |--------|------|-------------|---------|------|
 | GET | /api/v1/orgs/{org_id}/stats/devices | listOrgDevicesStats | listOrgDevicesStats | [GET_orgs_org_id_stats_devices.md](orgs/GET_orgs_org_id_stats_devices.md) |
+
+## Orgs Stats - Marvis Clients
+
+| Method | Path | operationId | Summary | File |
+|--------|------|-------------|---------|------|
+| GET | /api/v1/orgs/{org_id}/stats/marvisclients/count | countOrgMarvisClientsStats | countOrgMarvisClientsStats | [GET_orgs_org_id_stats_marvisclients_count.md](orgs/GET_orgs_org_id_stats_marvisclients_count.md) |
+| GET | /api/v1/orgs/{org_id}/stats/marvisclients/search | searchOrgMarvisClientsStats | searchOrgMarvisClientsStats | [GET_orgs_org_id_stats_marvisclients_search.md](orgs/GET_orgs_org_id_stats_marvisclients_search.md) |
 
 ## Orgs Stats - MxEdges
 
@@ -1265,6 +1290,16 @@
 | POST | /api/v1/sites/{site_id}/assets/{asset_id}/image | attachSiteAssetImage | attachSiteAssetImage | [POST_sites_site_id_assets_asset_id_image.md](sites/POST_sites_site_id_assets_asset_id_image.md) |
 | DELETE | /api/v1/sites/{site_id}/assets/{asset_id}/image | deleteSiteAssetImage | deleteSiteAssetImage | [DELETE_sites_site_id_assets_asset_id_image.md](sites/DELETE_sites_site_id_assets_asset_id_image.md) |
 
+## Sites Auto Map Assignment
+
+| Method | Path | operationId | Summary | File |
+|--------|------|-------------|---------|------|
+| POST | /api/v1/sites/{site_id}/apply_auto_map_assignment | applySiteAutoMapAssignment | applySiteAutoMapAssignment | [POST_sites_site_id_apply_auto_map_assignment.md](sites/POST_sites_site_id_apply_auto_map_assignment.md) |
+| GET | /api/v1/sites/{site_id}/auto_map_assignment | getSiteAutoMapAssignmentStatus | getSiteAutoMapAssignmentStatus | [GET_sites_site_id_auto_map_assignment.md](sites/GET_sites_site_id_auto_map_assignment.md) |
+| POST | /api/v1/sites/{site_id}/auto_map_assignment | startSiteAutoMapAssignment | startSiteAutoMapAssignment | [POST_sites_site_id_auto_map_assignment.md](sites/POST_sites_site_id_auto_map_assignment.md) |
+| DELETE | /api/v1/sites/{site_id}/auto_map_assignment | cancelSiteAutoMapAssignment | cancelSiteAutoMapAssignment | [DELETE_sites_site_id_auto_map_assignment.md](sites/DELETE_sites_site_id_auto_map_assignment.md) |
+| POST | /api/v1/sites/{site_id}/clear_auto_map_assignment | clearSiteAutoMapAssignment | clearSiteAutoMapAssignment | [POST_sites_site_id_clear_auto_map_assignment.md](sites/POST_sites_site_id_clear_auto_map_assignment.md) |
+
 ## Sites Beacons
 
 | Method | Path | operationId | Summary | File |
@@ -1283,6 +1318,7 @@
 | GET | /api/v1/sites/{site_id}/nac_clients/events/count | countSiteNacClientEvents | countSiteNacClientEvents | [GET_sites_site_id_nac_clients_events_count.md](sites/GET_sites_site_id_nac_clients_events_count.md) |
 | GET | /api/v1/sites/{site_id}/nac_clients/events/search | searchSiteNacClientEvents | searchSiteNacClientEvents | [GET_sites_site_id_nac_clients_events_search.md](sites/GET_sites_site_id_nac_clients_events_search.md) |
 | GET | /api/v1/sites/{site_id}/nac_clients/search | searchSiteNacClients | searchSiteNacClients | [GET_sites_site_id_nac_clients_search.md](sites/GET_sites_site_id_nac_clients_search.md) |
+| POST | /api/v1/sites/{site_id}/nac_clients/{client_mac}/coa | sendSiteNacClientCoA | sendSiteNacClientCoA | [POST_sites_site_id_nac_clients_client_mac_coa.md](sites/POST_sites_site_id_nac_clients_client_mac_coa.md) |
 
 ## Sites Clients - Wan
 
@@ -1381,6 +1417,11 @@
 | GET | /api/v1/sites/{site_id}/devices/ap_channels | listSiteDeviceRadioChannels | listSiteDeviceRadioChannels | [GET_sites_site_id_devices_ap_channels.md](sites/GET_sites_site_id_devices_ap_channels.md) |
 | GET | /api/v1/sites/{site_id}/devices/{device_id}/iot | getSiteDeviceIotPort | getSiteDeviceIotPort | [GET_sites_site_id_devices_device_id_iot.md](sites/GET_sites_site_id_devices_device_id_iot.md) |
 | PUT | /api/v1/sites/{site_id}/devices/{device_id}/iot | setSiteDeviceIotPort | setSiteDeviceIotPort | [PUT_sites_site_id_devices_device_id_iot.md](sites/PUT_sites_site_id_devices_device_id_iot.md) |
+| POST | /api/v1/sites/{site_id}/devices/{device_id}/zigbee_event_trail | startSiteDeviceZigbeeEventTrail | startSiteDeviceZigbeeEventTrail | [POST_sites_site_id_devices_device_id_zigbee_event_trail.md](sites/POST_sites_site_id_devices_device_id_zigbee_event_trail.md) |
+| POST | /api/v1/sites/{site_id}/devices/{device_id}/zigbee_join | enableSiteDeviceZigbeeJoin | enableSiteDeviceZigbeeJoin | [POST_sites_site_id_devices_device_id_zigbee_join.md](sites/POST_sites_site_id_devices_device_id_zigbee_join.md) |
+| DELETE | /api/v1/sites/{site_id}/devices/{device_id}/zigbee_join | stopSiteDeviceZigbeeJoin | stopSiteDeviceZigbeeJoin | [DELETE_sites_site_id_devices_device_id_zigbee_join.md](sites/DELETE_sites_site_id_devices_device_id_zigbee_join.md) |
+| POST | /api/v1/sites/{site_id}/devices/{device_id}/zigbee_kick | kickSiteDeviceZigbeeClients | kickSiteDeviceZigbeeClients | [POST_sites_site_id_devices_device_id_zigbee_kick.md](sites/POST_sites_site_id_devices_device_id_zigbee_kick.md) |
+| POST | /api/v1/sites/{site_id}/devices/{device_id}/zigbee_packet_trail | startSiteDeviceZigbeePacketTrail | startSiteDeviceZigbeePacketTrail | [POST_sites_site_id_devices_device_id_zigbee_packet_trail.md](sites/POST_sites_site_id_devices_device_id_zigbee_packet_trail.md) |
 
 ## Sites EVPN Topologies
 
@@ -1428,12 +1469,13 @@
 
 | Method | Path | operationId | Summary | File |
 |--------|------|-------------|---------|------|
-| GET | /api/v1/sites/{site_id}/insights/client/{client_mac}/{metric} | getSiteInsightMetricsForClient | getSiteInsightMetricsForClient | [GET_sites_site_id_insights_client_client_mac_metric.md](sites/GET_sites_site_id_insights_client_client_mac_metric.md) |
+| GET | /api/v1/sites/{site_id}/insights | getSiteInsightMetrics | getSiteInsightMetrics | [GET_sites_site_id_insights.md](sites/GET_sites_site_id_insights.md) |
+| GET | /api/v1/sites/{site_id}/insights/ap/{device_id}/stats | getSiteInsightMetricsForAP | getSiteInsightMetricsForAP | [GET_sites_site_id_insights_ap_device_id_stats.md](sites/GET_sites_site_id_insights_ap_device_id_stats.md) |
+| GET | /api/v1/sites/{site_id}/insights/client/{client_mac} | getSiteInsightMetricsForClient | getSiteInsightMetricsForClient | [GET_sites_site_id_insights_client_client_mac.md](sites/GET_sites_site_id_insights_client_client_mac.md) |
 | GET | /api/v1/sites/{site_id}/insights/device/{device_mac}/{metric} | getSiteInsightMetricsForDevice | getSiteInsightMetricsForDevice | [GET_sites_site_id_insights_device_device_mac_metric.md](sites/GET_sites_site_id_insights_device_device_mac_metric.md) |
-| GET | /api/v1/sites/{site_id}/insights/gateway/{device_id}/stats/{metric} | getSiteInsightMetricsForGateway | getSiteInsightMetricsForGateway | [GET_sites_site_id_insights_gateway_device_id_stats_metric.md](sites/GET_sites_site_id_insights_gateway_device_id_stats_metric.md) |
+| GET | /api/v1/sites/{site_id}/insights/gateway/{device_id}/stats | getSiteInsightMetricsForGateway | getSiteInsightMetricsForGateway | [GET_sites_site_id_insights_gateway_device_id_stats.md](sites/GET_sites_site_id_insights_gateway_device_id_stats.md) |
 | GET | /api/v1/sites/{site_id}/insights/mxedge/{device_mac}/{metric} | getSiteInsightMetricsForMxEdge | getSiteInsightMetricsForMxEdge | [GET_sites_site_id_insights_mxedge_device_mac_metric.md](sites/GET_sites_site_id_insights_mxedge_device_mac_metric.md) |
 | GET | /api/v1/sites/{site_id}/insights/switch/{device_mac}/{metric} | getSiteInsightMetricsForSwitch | getSiteInsightMetricsForSwitch | [GET_sites_site_id_insights_switch_device_mac_metric.md](sites/GET_sites_site_id_insights_switch_device_mac_metric.md) |
-| GET | /api/v1/sites/{site_id}/insights/{metric} | getSiteInsightMetrics | getSiteInsightMetrics | [GET_sites_site_id_insights_metric.md](sites/GET_sites_site_id_insights_metric.md) |
 
 ## Sites JSE
 
@@ -1497,15 +1539,25 @@
 
 | Method | Path | operationId | Summary | File |
 |--------|------|-------------|---------|------|
+| POST | /api/v1/sites/{site_id}/maps/{map_id}/apply_autoplacement | acceptSiteApLocalizationData | acceptSiteApLocalizationData | [POST_sites_site_id_maps_map_id_apply_autoplacement.md](sites/POST_sites_site_id_maps_map_id_apply_autoplacement.md) |
 | GET | /api/v1/sites/{site_id}/maps/{map_id}/auto_orient | getSiteApAutoOrientation | getSiteApAutoOrientation | [GET_sites_site_id_maps_map_id_auto_orient.md](sites/GET_sites_site_id_maps_map_id_auto_orient.md) |
 | POST | /api/v1/sites/{site_id}/maps/{map_id}/auto_orient | startSiteApAutoOrientation | startSiteApAutoOrientation | [POST_sites_site_id_maps_map_id_auto_orient.md](sites/POST_sites_site_id_maps_map_id_auto_orient.md) |
 | DELETE | /api/v1/sites/{site_id}/maps/{map_id}/auto_orient | deleteSiteApAutoOrientation | deleteSiteApAutoOrientation | [DELETE_sites_site_id_maps_map_id_auto_orient.md](sites/DELETE_sites_site_id_maps_map_id_auto_orient.md) |
-| GET | /api/v1/sites/{site_id}/maps/{map_id}/auto_placement | getSiteApAutoPlacement | getSiteApAutoPlacement | [GET_sites_site_id_maps_map_id_auto_placement.md](sites/GET_sites_site_id_maps_map_id_auto_placement.md) |
+| GET | /api/v1/sites/{site_id}/maps/{map_id}/auto_placement | getSiteApAutoPlacement | getSiteApAutoplacement | [GET_sites_site_id_maps_map_id_auto_placement.md](sites/GET_sites_site_id_maps_map_id_auto_placement.md) |
 | POST | /api/v1/sites/{site_id}/maps/{map_id}/auto_placement | runSiteApAutoplacement | runSiteApAutoplacement | [POST_sites_site_id_maps_map_id_auto_placement.md](sites/POST_sites_site_id_maps_map_id_auto_placement.md) |
 | DELETE | /api/v1/sites/{site_id}/maps/{map_id}/auto_placement | deleteSiteApAutoplacement | deleteSiteApAutoplacement | [DELETE_sites_site_id_maps_map_id_auto_placement.md](sites/DELETE_sites_site_id_maps_map_id_auto_placement.md) |
 | POST | /api/v1/sites/{site_id}/maps/{map_id}/clear_auto_orient | clearSiteApAutoOrient | clearSiteApAutoOrient | [POST_sites_site_id_maps_map_id_clear_auto_orient.md](sites/POST_sites_site_id_maps_map_id_clear_auto_orient.md) |
 | POST | /api/v1/sites/{site_id}/maps/{map_id}/clear_autoplacement | clearSiteApAutoplacement | clearSiteApAutoplacement | [POST_sites_site_id_maps_map_id_clear_autoplacement.md](sites/POST_sites_site_id_maps_map_id_clear_autoplacement.md) |
 | POST | /api/v1/sites/{site_id}/maps/{map_id}/use_auto_ap_values | confirmSiteApLocalizationData | confirmSiteApLocalizationData | [POST_sites_site_id_maps_map_id_use_auto_ap_values.md](sites/POST_sites_site_id_maps_map_id_use_auto_ap_values.md) |
+
+## Sites Marvis Configs
+
+| Method | Path | operationId | Summary | File |
+|--------|------|-------------|---------|------|
+| GET | /api/v1/sites/{site_id}/marvis_configs/count | countSiteMarvisConfigActions | countSiteMarvisConfigActions | [GET_sites_site_id_marvis_configs_count.md](sites/GET_sites_site_id_marvis_configs_count.md) |
+| GET | /api/v1/sites/{site_id}/marvis_configs/search | searchSiteMarvisConfigActions | searchSiteMarvisConfigActions | [GET_sites_site_id_marvis_configs_search.md](sites/GET_sites_site_id_marvis_configs_search.md) |
+| DELETE | /api/v1/sites/{site_id}/marvis_configs/{id} | deleteSiteMarvisConfigAction | deleteSiteMarvisConfigAction | [DELETE_sites_site_id_marvis_configs_id.md](sites/DELETE_sites_site_id_marvis_configs_id.md) |
+| POST | /api/v1/sites/{site_id}/marvis_configs/{id}/feedback | submitSiteMarvisConfigFeedback | submitSiteMarvisConfigFeedback | [POST_sites_site_id_marvis_configs_id_feedback.md](sites/POST_sites_site_id_marvis_configs_id_feedback.md) |
 
 ## Sites MxEdges
 
@@ -1518,6 +1570,13 @@
 | PUT | /api/v1/sites/{site_id}/mxedges/{mxedge_id} | updateSiteMxEdge | updateSiteMxEdge | [PUT_sites_site_id_mxedges_mxedge_id.md](sites/PUT_sites_site_id_mxedges_mxedge_id.md) |
 | DELETE | /api/v1/sites/{site_id}/mxedges/{mxedge_id} | deleteSiteMxEdge | deleteSiteMxEdge | [DELETE_sites_site_id_mxedges_mxedge_id.md](sites/DELETE_sites_site_id_mxedges_mxedge_id.md) |
 | POST | /api/v1/sites/{site_id}/mxedges/{mxedge_id}/support | uploadSiteMxEdgeSupportFiles | uploadSiteMxEdgeSupportFiles | [POST_sites_site_id_mxedges_mxedge_id_support.md](sites/POST_sites_site_id_mxedges_mxedge_id_support.md) |
+
+## Sites NAC Fingerprints
+
+| Method | Path | operationId | Summary | File |
+|--------|------|-------------|---------|------|
+| GET | /api/v1/sites/{site_id}/insights/fingerprints/count | countSiteClientFingerprints | countSiteClientFingerprints | [GET_sites_site_id_insights_fingerprints_count.md](sites/GET_sites_site_id_insights_fingerprints_count.md) |
+| GET | /api/v1/sites/{site_id}/insights/fingerprints/search | searchSiteClientFingerprints | searchSiteClientFingerprints | [GET_sites_site_id_insights_fingerprints_search.md](sites/GET_sites_site_id_insights_fingerprints_search.md) |
 
 ## Sites Network Templates
 
@@ -1553,6 +1612,7 @@
 
 | Method | Path | operationId | Summary | File |
 |--------|------|-------------|---------|------|
+| GET | /api/v1/sites/{site_id}/rrm/channel_scores/band/{band} | getSiteChannelScores | getSiteChannelScores | [GET_sites_site_id_rrm_channel_scores_band_band.md](sites/GET_sites_site_id_rrm_channel_scores_band_band.md) |
 | GET | /api/v1/sites/{site_id}/rrm/current | getSiteCurrentChannelPlanning | getSiteCurrentChannelPlanning | [GET_sites_site_id_rrm_current.md](sites/GET_sites_site_id_rrm_current.md) |
 | GET | /api/v1/sites/{site_id}/rrm/current/devices/{device_id}/band/{band} | getSiteCurrentRrmConsiderations | getSiteCurrentRrmConsiderations | [GET_sites_site_id_rrm_current_devices_device_id_band_band.md](sites/GET_sites_site_id_rrm_current_devices_device_id_band_band.md) |
 | GET | /api/v1/sites/{site_id}/rrm/events | listSiteRrmEvents | listSiteRrmEvents | [GET_sites_site_id_rrm_events.md](sites/GET_sites_site_id_rrm_events.md) |
@@ -1751,6 +1811,14 @@
 | GET | /api/v1/sites/{site_id}/stats/discovered_switches/metrics | listSiteDiscoveredSwitchesMetrics | listSiteDiscoveredSwitchesMetrics | [GET_sites_site_id_stats_discovered_switches_metrics.md](sites/GET_sites_site_id_stats_discovered_switches_metrics.md) |
 | GET | /api/v1/sites/{site_id}/stats/discovered_switches/search | searchSiteDiscoveredSwitches | searchSiteDiscoveredSwitches | [GET_sites_site_id_stats_discovered_switches_search.md](sites/GET_sites_site_id_stats_discovered_switches_search.md) |
 
+## Sites Stats - IoT Endpoints
+
+| Method | Path | operationId | Summary | File |
+|--------|------|-------------|---------|------|
+| GET | /api/v1/sites/{site_id}/iotendpoints/count | countSiteIotEndpoints | countSiteIotEndpoints | [GET_sites_site_id_iotendpoints_count.md](sites/GET_sites_site_id_iotendpoints_count.md) |
+| GET | /api/v1/sites/{site_id}/iotendpoints/search | searchSiteIotEndpoints | searchSiteIotEndpoints | [GET_sites_site_id_iotendpoints_search.md](sites/GET_sites_site_id_iotendpoints_search.md) |
+| POST | /api/v1/sites/{site_id}/iotendpoints/{id}/zigbee_rejoin | rejoinSiteIotEndpointZigbee | rejoinSiteIotEndpointZigbee | [POST_sites_site_id_iotendpoints_id_zigbee_rejoin.md](sites/POST_sites_site_id_iotendpoints_id_zigbee_rejoin.md) |
+
 ## Sites Stats - MxEdges
 
 | Method | Path | operationId | Summary | File |
@@ -1762,7 +1830,7 @@
 
 | Method | Path | operationId | Summary | File |
 |--------|------|-------------|---------|------|
-| GET | /api/v1/sites/{site_id}/stats/ospf_peers/count | countSiteOspfStats | countSiteOspfStats | [GET_sites_site_id_stats_ospf_peers_count.md](sites/GET_sites_site_id_stats_ospf_peers_count.md) |
+| GET | /api/v1/sites/{site_id}/stats/ospf_peers/count | countSiteOspfStats | countOrgOspfStats | [GET_sites_site_id_stats_ospf_peers_count.md](sites/GET_sites_site_id_stats_ospf_peers_count.md) |
 | GET | /api/v1/sites/{site_id}/stats/ospf_peers/search | searchSiteOspfStats | searchSiteOspfStats | [GET_sites_site_id_stats_ospf_peers_search.md](sites/GET_sites_site_id_stats_ospf_peers_search.md) |
 
 ## Sites Stats - Ports
@@ -1791,7 +1859,7 @@
 
 | Method | Path | operationId | Summary | File |
 |--------|------|-------------|---------|------|
-| POST | /api/v1/sites/{site_id}/devices/{device_id}/check_radius_server | startSiteSwitchRadiusSyntheticTest | startSiteSwitchRadiusSyntheticTest | [POST_sites_site_id_devices_device_id_check_radius_server.md](sites/POST_sites_site_id_devices_device_id_check_radius_server.md) |
+| POST | /api/v1/sites/{site_id}/devices/{device_id}/check_radius_server | startSiteSwitchRadiusSyntheticTest | triggerSiteSwitchRadiusSyntheticTest | [POST_sites_site_id_devices_device_id_check_radius_server.md](sites/POST_sites_site_id_devices_device_id_check_radius_server.md) |
 | GET | /api/v1/sites/{site_id}/devices/{device_id}/synthetic_test | getSiteDeviceSyntheticTest | getSiteDeviceSyntheticTest | [GET_sites_site_id_devices_device_id_synthetic_test.md](sites/GET_sites_site_id_devices_device_id_synthetic_test.md) |
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/synthetic_test | triggerSiteDeviceSyntheticTest | triggerSiteDeviceSyntheticTest | [POST_sites_site_id_devices_device_id_synthetic_test.md](sites/POST_sites_site_id_devices_device_id_synthetic_test.md) |
 | POST | /api/v1/sites/{site_id}/synthetic_test | triggerSiteSyntheticTest | triggerSiteSyntheticTest | [POST_sites_site_id_synthetic_test.md](sites/POST_sites_site_id_synthetic_test.md) |
@@ -1917,11 +1985,10 @@
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/ping | pingFromDevice | pingFromDevice | [POST_sites_site_id_devices_device_id_ping.md](utilities/POST_sites_site_id_devices_device_id_ping.md) |
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/readopt | readoptSiteOctermDevice | readoptSiteOctermDevice | [POST_sites_site_id_devices_device_id_readopt.md](utilities/POST_sites_site_id_devices_device_id_readopt.md) |
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/release_dhcp_leases | releaseSiteDeviceDhcpLease | releaseSiteDeviceDhcpLease | [POST_sites_site_id_devices_device_id_release_dhcp_leases.md](utilities/POST_sites_site_id_devices_device_id_release_dhcp_leases.md) |
-| POST | /api/v1/sites/{site_id}/devices/{device_id}/reprovision | reprovisionSiteOctermDevice | reprovisionSiteOctermDevice | [POST_sites_site_id_devices_device_id_reprovision.md](utilities/POST_sites_site_id_devices_device_id_reprovision.md) |
+| POST | /api/v1/sites/{site_id}/devices/{device_id}/reprovision | reprovisionSiteOctermDevice | readoptSiteOctermDevice | [POST_sites_site_id_devices_device_id_reprovision.md](utilities/POST_sites_site_id_devices_device_id_reprovision.md) |
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/request_ztp_password | getSiteDeviceZtpPassword | getSiteDeviceZtpPassword | [POST_sites_site_id_devices_device_id_request_ztp_password.md](utilities/POST_sites_site_id_devices_device_id_request_ztp_password.md) |
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/restart | restartSiteDevice | restartSiteDevice | [POST_sites_site_id_devices_device_id_restart.md](utilities/POST_sites_site_id_devices_device_id_restart.md) |
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/shell | createSiteDeviceShellSession | createSiteDeviceShellSession | [POST_sites_site_id_devices_device_id_shell.md](utilities/POST_sites_site_id_devices_device_id_shell.md) |
-| POST | /api/v1/sites/{site_id}/devices/{device_id}/show_arp | showSiteDeviceArpTable | showSiteDeviceArpTable | [POST_sites_site_id_devices_device_id_show_arp.md](utilities/POST_sites_site_id_devices_device_id_show_arp.md) |
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/show_bgp_summary | showSiteDeviceBgpSummary | showSiteDeviceBgpSummary | [POST_sites_site_id_devices_device_id_show_bgp_summary.md](utilities/POST_sites_site_id_devices_device_id_show_bgp_summary.md) |
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/show_dhcp_leases | showSiteDeviceDhcpLeases | showSiteDeviceDhcpLeases | [POST_sites_site_id_devices_device_id_show_dhcp_leases.md](utilities/POST_sites_site_id_devices_device_id_show_dhcp_leases.md) |
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/show_dot1x | showSiteDeviceDot1xTable | showSiteDeviceDot1xTable | [POST_sites_site_id_devices_device_id_show_dot1x.md](utilities/POST_sites_site_id_devices_device_id_show_dot1x.md) |
@@ -1946,8 +2013,10 @@
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/clear_dot1x | clearSiteDeviceDot1xSession | clearSiteDeviceDot1xSession | [POST_sites_site_id_devices_device_id_clear_dot1x.md](utilities/POST_sites_site_id_devices_device_id_clear_dot1x.md) |
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/clear_macs | clearAllLearnedMacsFromPortOnSwitch | clearAllLearnedMacsFromPortOnSwitch | [POST_sites_site_id_devices_device_id_clear_macs.md](utilities/POST_sites_site_id_devices_device_id_clear_macs.md) |
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/clear_pending_version | clearSiteDevicePendingVersion | clearSiteDevicePendingVersion | [POST_sites_site_id_devices_device_id_clear_pending_version.md](utilities/POST_sites_site_id_devices_device_id_clear_pending_version.md) |
+| GET | /api/v1/sites/{site_id}/devices/{device_id}/flow_records/search | searchSiteDeviceFlowRecords | searchSiteDeviceFlowRecords | [GET_sites_site_id_devices_device_id_flow_records_search.md](utilities/GET_sites_site_id_devices_device_id_flow_records_search.md) |
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/poll_stats | pollSiteSwitchStats | pollSiteSwitchStats | [POST_sites_site_id_devices_device_id_poll_stats.md](utilities/POST_sites_site_id_devices_device_id_poll_stats.md) |
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/restore_backup_version | restoreSiteDeviceBackupVersion | restoreSiteDeviceBackupVersion | [POST_sites_site_id_devices_device_id_restore_backup_version.md](utilities/POST_sites_site_id_devices_device_id_restore_backup_version.md) |
+| POST | /api/v1/sites/{site_id}/devices/{device_id}/show_arp | showSiteDeviceArpTable | showSiteDeviceArpTable | [POST_sites_site_id_devices_device_id_show_arp.md](utilities/POST_sites_site_id_devices_device_id_show_arp.md) |
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/snapshot | createSiteDeviceSnapshot | createSiteDeviceSnapshot | [POST_sites_site_id_devices_device_id_snapshot.md](utilities/POST_sites_site_id_devices_device_id_snapshot.md) |
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/upgrade_bios | upgradeDeviceBios | upgradeDeviceBios | [POST_sites_site_id_devices_device_id_upgrade_bios.md](utilities/POST_sites_site_id_devices_device_id_upgrade_bios.md) |
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/upgrade_fpga | upgradeDeviceFPGA | upgradeDeviceFPGA | [POST_sites_site_id_devices_device_id_upgrade_fpga.md](utilities/POST_sites_site_id_devices_device_id_upgrade_fpga.md) |
@@ -1993,6 +2062,8 @@
 | GET | /api/v1/orgs/{org_id}/mxedges/upgrade | listOrgMxEdgeUpgrades | listOrgMxEdgeUpgrades | [GET_orgs_org_id_mxedges_upgrade.md](utilities/GET_orgs_org_id_mxedges_upgrade.md) |
 | POST | /api/v1/orgs/{org_id}/mxedges/upgrade | upgradeOrgMxEdges | upgradeOrgMxEdges | [POST_orgs_org_id_mxedges_upgrade.md](utilities/POST_orgs_org_id_mxedges_upgrade.md) |
 | GET | /api/v1/orgs/{org_id}/mxedges/upgrade/{upgrade_id} | getOrgMxEdgeUpgrade | getOrgMxEdgeUpgrade | [GET_orgs_org_id_mxedges_upgrade_upgrade_id.md](utilities/GET_orgs_org_id_mxedges_upgrade_upgrade_id.md) |
+| PUT | /api/v1/orgs/{org_id}/mxedges/upgrade/{upgrade_id} | updateOrgMxEdgeUpgrade | updateOrgMxEdgeUpgrade | [PUT_orgs_org_id_mxedges_upgrade_upgrade_id.md](utilities/PUT_orgs_org_id_mxedges_upgrade_upgrade_id.md) |
+| POST | /api/v1/orgs/{org_id}/mxedges/upgrade/{upgrade_id}/cancel | cancelOrgMxEdgeUpgrade | cancelOrgMxEdgeUpgrade | [POST_orgs_org_id_mxedges_upgrade_upgrade_id_cancel.md](utilities/POST_orgs_org_id_mxedges_upgrade_upgrade_id_cancel.md) |
 | GET | /api/v1/orgs/{org_id}/ssr/upgrade | listOrgSsrUpgrades | listOrgSsrUpgrades | [GET_orgs_org_id_ssr_upgrade.md](utilities/GET_orgs_org_id_ssr_upgrade.md) |
 | POST | /api/v1/orgs/{org_id}/ssr/upgrade | upgradeOrgSsrs | upgradeOrgSsrs | [POST_orgs_org_id_ssr_upgrade.md](utilities/POST_orgs_org_id_ssr_upgrade.md) |
 | GET | /api/v1/orgs/{org_id}/ssr/upgrade/{upgrade_id}/cancel | getOrgSsrUpgrade | getOrgSsrUpgrade | [GET_orgs_org_id_ssr_upgrade_upgrade_id_cancel.md](utilities/GET_orgs_org_id_ssr_upgrade_upgrade_id_cancel.md) |
@@ -2004,6 +2075,11 @@
 | POST | /api/v1/sites/{site_id}/devices/upgrade/{upgrade_id}/cancel | cancelSiteDeviceUpgrade | cancelSiteDeviceUpgrade | [POST_sites_site_id_devices_upgrade_upgrade_id_cancel.md](utilities/POST_sites_site_id_devices_upgrade_upgrade_id_cancel.md) |
 | GET | /api/v1/sites/{site_id}/devices/versions | listSiteAvailableDeviceVersions | listSiteAvailableDeviceVersions | [GET_sites_site_id_devices_versions.md](utilities/GET_sites_site_id_devices_versions.md) |
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/upgrade | upgradeDevice | upgradeDevice | [POST_sites_site_id_devices_device_id_upgrade.md](utilities/POST_sites_site_id_devices_device_id_upgrade.md) |
+| GET | /api/v1/sites/{site_id}/mxedges/upgrade | listSiteMxEdgeUpgrades | listSiteMxEdgeUpgrades | [GET_sites_site_id_mxedges_upgrade.md](utilities/GET_sites_site_id_mxedges_upgrade.md) |
+| POST | /api/v1/sites/{site_id}/mxedges/upgrade | upgradeSiteMxEdges | upgradeSiteMxEdges | [POST_sites_site_id_mxedges_upgrade.md](utilities/POST_sites_site_id_mxedges_upgrade.md) |
+| GET | /api/v1/sites/{site_id}/mxedges/upgrade/{upgrade_id} | getSiteMxEdgeUpgrade | getSiteMxEdgeUpgrade | [GET_sites_site_id_mxedges_upgrade_upgrade_id.md](utilities/GET_sites_site_id_mxedges_upgrade_upgrade_id.md) |
+| PUT | /api/v1/sites/{site_id}/mxedges/upgrade/{upgrade_id} | updateSiteMxEdgeUpgrade | updateSiteMxEdgeUpgrade | [PUT_sites_site_id_mxedges_upgrade_upgrade_id.md](utilities/PUT_sites_site_id_mxedges_upgrade_upgrade_id.md) |
+| POST | /api/v1/sites/{site_id}/mxedges/upgrade/{upgrade_id}/cancel | cancelSiteMxEdgeUpgrade | cancelSiteMxEdgeUpgrade | [POST_sites_site_id_mxedges_upgrade_upgrade_id_cancel.md](utilities/POST_sites_site_id_mxedges_upgrade_upgrade_id_cancel.md) |
 | GET | /api/v1/sites/{site_id}/ssr/upgrade/{upgrade_id} | getSiteSsrUpgrade | getSiteSsrUpgrade | [GET_sites_site_id_ssr_upgrade_upgrade_id.md](utilities/GET_sites_site_id_ssr_upgrade_upgrade_id.md) |
 | POST | /api/v1/sites/{site_id}/ssr/{device_id}/upgrade | upgradeSsr | upgradeSsr | [POST_sites_site_id_ssr_device_id_upgrade.md](utilities/POST_sites_site_id_ssr_device_id_upgrade.md) |
 
@@ -2012,7 +2088,7 @@
 | Method | Path | operationId | Summary | File |
 |--------|------|-------------|---------|------|
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/clear_arp | clearSiteSsrArpCache | clearSiteSsrArpCache | [POST_sites_site_id_devices_device_id_clear_arp.md](utilities/POST_sites_site_id_devices_device_id_clear_arp.md) |
-| POST | /api/v1/sites/{site_id}/devices/{device_id}/clear_bgp | clearSiteSsrBgpRoutes | clearSiteSsrBgpRoutes | [POST_sites_site_id_devices_device_id_clear_bgp.md](utilities/POST_sites_site_id_devices_device_id_clear_bgp.md) |
+| POST | /api/v1/sites/{site_id}/devices/{device_id}/clear_bgp | clearSiteSsrBgpRoutes | clearSiteBgpRoutes | [POST_sites_site_id_devices_device_id_clear_bgp.md](utilities/POST_sites_site_id_devices_device_id_clear_bgp.md) |
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/clear_session | clearSiteDeviceSession | clearSiteDeviceSession | [POST_sites_site_id_devices_device_id_clear_session.md](utilities/POST_sites_site_id_devices_device_id_clear_session.md) |
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/release_dhcp | releaseSiteSsrDhcpLease | releaseSiteSsrDhcpLease | [POST_sites_site_id_devices_device_id_release_dhcp.md](utilities/POST_sites_site_id_devices_device_id_release_dhcp.md) |
 | POST | /api/v1/sites/{site_id}/devices/{device_id}/resolve_dns | testSiteSsrDnsResolution | testSiteSsrDnsResolution | [POST_sites_site_id_devices_device_id_resolve_dns.md](utilities/POST_sites_site_id_devices_device_id_resolve_dns.md) |
@@ -2052,36 +2128,12 @@
 | Function | Module | Category | File |
 |----------|--------|----------|------|
 | UploadOrgTicketAttachmentFile | `mistapi.api.v1.orgs.tickets` | orgs | [SDK_UploadOrgTicketAttachmentFile.md](orgs/SDK_UploadOrgTicketAttachmentFile.md) |
-| acceptSiteApLocalizationData | `mistapi.api.v1.sites.maps` | sites | [SDK_acceptSiteApLocalizationData.md](sites/SDK_acceptSiteApLocalizationData.md) |
 | addInstallerDeviceImageFile | `mistapi.api.v1.installer.orgs.devices` | installer | [SDK_addInstallerDeviceImageFile.md](installer/SDK_addInstallerDeviceImageFile.md) |
 | addOrgMxEdgeImageFile | `mistapi.api.v1.orgs.mxedges` | orgs | [SDK_addOrgMxEdgeImageFile.md](orgs/SDK_addOrgMxEdgeImageFile.md) |
 | addOrgTicketCommentFile | `mistapi.api.v1.orgs.tickets` | orgs | [SDK_addOrgTicketCommentFile.md](orgs/SDK_addOrgTicketCommentFile.md) |
 | addSiteDeviceImageFile | `mistapi.api.v1.sites.devices` | sites | [SDK_addSiteDeviceImageFile.md](sites/SDK_addSiteDeviceImageFile.md) |
 | addSiteMapImageFile | `mistapi.api.v1.sites.maps` | sites | [SDK_addSiteMapImageFile.md](sites/SDK_addSiteMapImageFile.md) |
-| applySiteAutoMapAssignment | `mistapi.api.v1.sites.apply_auto_map_assignment` | sites | [SDK_applySiteAutoMapAssignment.md](sites/SDK_applySiteAutoMapAssignment.md) |
 | attachSiteAssetImageFile | `mistapi.api.v1.sites.assets` | sites | [SDK_attachSiteAssetImageFile.md](sites/SDK_attachSiteAssetImageFile.md) |
-| cancelOrgMxEdgeUpgrade | `mistapi.api.v1.orgs.mxedges` | orgs | [SDK_cancelOrgMxEdgeUpgrade.md](orgs/SDK_cancelOrgMxEdgeUpgrade.md) |
-| cancelSiteAutoMapAssignment | `mistapi.api.v1.sites.auto_map_assignment` | sites | [SDK_cancelSiteAutoMapAssignment.md](sites/SDK_cancelSiteAutoMapAssignment.md) |
-| cancelSiteMxEdgeUpgrade | `mistapi.api.v1.sites.mxedges` | sites | [SDK_cancelSiteMxEdgeUpgrade.md](sites/SDK_cancelSiteMxEdgeUpgrade.md) |
-| clearSiteAutoMapAssignment | `mistapi.api.v1.sites.clear_auto_map_assignment` | sites | [SDK_clearSiteAutoMapAssignment.md](sites/SDK_clearSiteAutoMapAssignment.md) |
-| countOrgMarvisClientEvents | `mistapi.api.v1.orgs.marvisclients` | orgs | [SDK_countOrgMarvisClientEvents.md](orgs/SDK_countOrgMarvisClientEvents.md) |
-| countOrgMarvisClientsStats | `mistapi.api.v1.orgs.stats` | orgs | [SDK_countOrgMarvisClientsStats.md](orgs/SDK_countOrgMarvisClientsStats.md) |
-| countSiteClientFingerprints | `mistapi.api.v1.sites.insights` | sites | [SDK_countSiteClientFingerprints.md](sites/SDK_countSiteClientFingerprints.md) |
-| countSiteMarvisConfigActions | `mistapi.api.v1.sites.marvis_configs` | sites | [SDK_countSiteMarvisConfigActions.md](sites/SDK_countSiteMarvisConfigActions.md) |
-| createOrgAsyncClaim | `mistapi.api.v1.orgs.claims` | orgs | [SDK_createOrgAsyncClaim.md](orgs/SDK_createOrgAsyncClaim.md) |
-| deleteMspSsoAdmins | `mistapi.api.v1.msps.ssos` | msps | [SDK_deleteMspSsoAdmins.md](msps/SDK_deleteMspSsoAdmins.md) |
-| deleteOrgSsoAdmins | `mistapi.api.v1.orgs.ssos` | orgs | [SDK_deleteOrgSsoAdmins.md](orgs/SDK_deleteOrgSsoAdmins.md) |
-| deleteSiteMarvisConfigAction | `mistapi.api.v1.sites.marvis_configs` | sites | [SDK_deleteSiteMarvisConfigAction.md](sites/SDK_deleteSiteMarvisConfigAction.md) |
-| disableOrgE911Report | `mistapi.api.v1.orgs.exports` | orgs | [SDK_disableOrgE911Report.md](orgs/SDK_disableOrgE911Report.md) |
-| enableOrgE911Report | `mistapi.api.v1.orgs.exports` | orgs | [SDK_enableOrgE911Report.md](orgs/SDK_enableOrgE911Report.md) |
-| enableSiteDeviceZigbeeJoin | `mistapi.api.v1.sites.devices` | sites | [SDK_enableSiteDeviceZigbeeJoin.md](sites/SDK_enableSiteDeviceZigbeeJoin.md) |
-| getOrgAsyncClaimStatus | `mistapi.api.v1.orgs.claims` | orgs | [SDK_getOrgAsyncClaimStatus.md](orgs/SDK_getOrgAsyncClaimStatus.md) |
-| getOrgE911Report | `mistapi.api.v1.orgs.exports` | orgs | [SDK_getOrgE911Report.md](orgs/SDK_getOrgE911Report.md) |
-| getOrgMarvisClientInsights | `mistapi.api.v1.orgs.insights` | orgs | [SDK_getOrgMarvisClientInsights.md](orgs/SDK_getOrgMarvisClientInsights.md) |
-| getSiteAutoMapAssignmentStatus | `mistapi.api.v1.sites.auto_map_assignment` | sites | [SDK_getSiteAutoMapAssignmentStatus.md](sites/SDK_getSiteAutoMapAssignmentStatus.md) |
-| getSiteChannelScores | `mistapi.api.v1.sites.rrm` | sites | [SDK_getSiteChannelScores.md](sites/SDK_getSiteChannelScores.md) |
-| getSiteInsightMetricsForAP | `mistapi.api.v1.sites.insights` | sites | [SDK_getSiteInsightMetricsForAP.md](sites/SDK_getSiteInsightMetricsForAP.md) |
-| getSiteMxEdgeUpgrade | `mistapi.api.v1.sites.mxedges` | sites | [SDK_getSiteMxEdgeUpgrade.md](sites/SDK_getSiteMxEdgeUpgrade.md) |
 | importInstallerMapFile | `mistapi.api.v1.installer.orgs.sites` | installer | [SDK_importInstallerMapFile.md](installer/SDK_importInstallerMapFile.md) |
 | importOrgAssetsFile | `mistapi.api.v1.orgs.assets` | orgs | [SDK_importOrgAssetsFile.md](orgs/SDK_importOrgAssetsFile.md) |
 | importOrgMapToSiteFile | `mistapi.api.v1.orgs.sites` | orgs | [SDK_importOrgMapToSiteFile.md](orgs/SDK_importOrgMapToSiteFile.md) |
@@ -2093,21 +2145,7 @@
 | importSiteDevicesFile | `mistapi.api.v1.sites.devices` | sites | [SDK_importSiteDevicesFile.md](sites/SDK_importSiteDevicesFile.md) |
 | importSiteMapsFile | `mistapi.api.v1.sites.maps` | sites | [SDK_importSiteMapsFile.md](sites/SDK_importSiteMapsFile.md) |
 | importSitePsksFile | `mistapi.api.v1.sites.psks` | sites | [SDK_importSitePsksFile.md](sites/SDK_importSitePsksFile.md) |
-| listOrgAsyncClaims | `mistapi.api.v1.orgs.claims` | orgs | [SDK_listOrgAsyncClaims.md](orgs/SDK_listOrgAsyncClaims.md) |
-| listSiteMxEdgeUpgrades | `mistapi.api.v1.sites.mxedges` | sites | [SDK_listSiteMxEdgeUpgrades.md](sites/SDK_listSiteMxEdgeUpgrades.md) |
 | replaceSiteMapImageFile | `mistapi.api.v1.sites.maps` | sites | [SDK_replaceSiteMapImageFile.md](sites/SDK_replaceSiteMapImageFile.md) |
-| searchOrgMarvisClientEvents | `mistapi.api.v1.orgs.marvisclients` | orgs | [SDK_searchOrgMarvisClientEvents.md](orgs/SDK_searchOrgMarvisClientEvents.md) |
-| searchOrgMarvisClientsStats | `mistapi.api.v1.orgs.stats` | orgs | [SDK_searchOrgMarvisClientsStats.md](orgs/SDK_searchOrgMarvisClientsStats.md) |
-| searchSiteClientFingerprints | `mistapi.api.v1.sites.insights` | sites | [SDK_searchSiteClientFingerprints.md](sites/SDK_searchSiteClientFingerprints.md) |
-| searchSiteIotEndpoints | `mistapi.api.v1.sites.iotendpoints` | sites | [SDK_searchSiteIotEndpoints.md](sites/SDK_searchSiteIotEndpoints.md) |
-| searchSiteMarvisConfigActions | `mistapi.api.v1.sites.marvis_configs` | sites | [SDK_searchSiteMarvisConfigActions.md](sites/SDK_searchSiteMarvisConfigActions.md) |
-| sendOrgNacClientCoA | `mistapi.api.v1.orgs.nac_clients` | orgs | [SDK_sendOrgNacClientCoA.md](orgs/SDK_sendOrgNacClientCoA.md) |
-| sendSiteNacClientCoA | `mistapi.api.v1.sites.nac_clients` | sites | [SDK_sendSiteNacClientCoA.md](sites/SDK_sendSiteNacClientCoA.md) |
-| startSiteAutoMapAssignment | `mistapi.api.v1.sites.auto_map_assignment` | sites | [SDK_startSiteAutoMapAssignment.md](sites/SDK_startSiteAutoMapAssignment.md) |
-| submitSiteMarvisConfigFeedback | `mistapi.api.v1.sites.marvis_configs` | sites | [SDK_submitSiteMarvisConfigFeedback.md](sites/SDK_submitSiteMarvisConfigFeedback.md) |
-| updateOrgMxEdgeUpgrade | `mistapi.api.v1.orgs.mxedges` | orgs | [SDK_updateOrgMxEdgeUpgrade.md](orgs/SDK_updateOrgMxEdgeUpgrade.md) |
-| updateSiteMxEdgeUpgrade | `mistapi.api.v1.sites.mxedges` | sites | [SDK_updateSiteMxEdgeUpgrade.md](sites/SDK_updateSiteMxEdgeUpgrade.md) |
-| upgradeSiteMxEdges | `mistapi.api.v1.sites.mxedges` | sites | [SDK_upgradeSiteMxEdges.md](sites/SDK_upgradeSiteMxEdges.md) |
 | uploadOrgNacPortalImageFile | `mistapi.api.v1.orgs.nacportals` | orgs | [SDK_uploadOrgNacPortalImageFile.md](orgs/SDK_uploadOrgNacPortalImageFile.md) |
 | uploadOrgPskPortalImageFile | `mistapi.api.v1.orgs.pskportals` | orgs | [SDK_uploadOrgPskPortalImageFile.md](orgs/SDK_uploadOrgPskPortalImageFile.md) |
 | uploadOrgWlanPortalImageFile | `mistapi.api.v1.orgs.wlans` | orgs | [SDK_uploadOrgWlanPortalImageFile.md](orgs/SDK_uploadOrgWlanPortalImageFile.md) |

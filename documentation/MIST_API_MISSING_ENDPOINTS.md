@@ -1,10 +1,10 @@
 # Mist API Missing GET Endpoints
 
-> Generated 2026-06-29T00:28:12Z. Diff between OpenAPI GET endpoints and current `MistHelper.py` usage.
+> Generated 2026-09-15T21:39:14Z. Diff between OpenAPI GET endpoints and current `MistHelper.py` usage.
 
-- **GET endpoints in spec**: 508
-- **Implemented in repo**: 100
-- **Missing (to be specced)**: 408
+- **GET endpoints in spec**: 529
+- **Implemented in repo**: 69
+- **Missing (to be specced)**: 460
 
 ## Coverage by Tag
 
@@ -12,7 +12,7 @@
 |---|---:|---:|---:|
 | Admins | 0 | 1 | 1 |
 | Admins Login - OAuth2 | 0 | 1 | 1 |
-| Constants Definitions | 1 | 15 | 16 |
+| Constants Definitions | 0 | 17 | 17 |
 | Constants Events | 0 | 7 | 7 |
 | Constants Models | 0 | 4 | 4 |
 | Installer | 0 | 9 | 9 |
@@ -29,28 +29,30 @@
 | MSPs SSO Roles | 0 | 1 | 1 |
 | MSPs Tickets | 0 | 2 | 2 |
 | Orgs | 1 | 0 | 1 |
-| Orgs AP Templates | 1 | 1 | 2 |
-| Orgs API Tokens | 1 | 1 | 2 |
-| Orgs Admins | 1 | 0 | 1 |
+| Orgs AP Templates | 0 | 2 | 2 |
+| Orgs API Tokens | 0 | 2 | 2 |
+| Orgs Admins | 0 | 1 | 1 |
 | Orgs Advanced Anti Malware Profiles | 0 | 2 | 2 |
-| Orgs Alarm Templates | 1 | 2 | 3 |
-| Orgs Alarms | 1 | 1 | 2 |
+| Orgs Alarm Templates | 0 | 3 | 3 |
+| Orgs Alarms | 0 | 2 | 2 |
 | Orgs Antivirus Profiles | 0 | 2 | 2 |
 | Orgs Asset Filters | 0 | 2 | 2 |
 | Orgs Assets | 0 | 2 | 2 |
 | Orgs CRL | 0 | 1 | 1 |
 | Orgs Cert | 0 | 2 | 2 |
-| Orgs Clients - NAC | 2 | 2 | 4 |
+| Orgs Clients - Marvis | 0 | 3 | 3 |
+| Orgs Clients - NAC | 0 | 4 | 4 |
 | Orgs Clients - Wan | 0 | 4 | 4 |
 | Orgs Clients - Wired | 1 | 1 | 2 |
 | Orgs Clients - Wireless | 1 | 5 | 6 |
 | Orgs Device Profiles | 1 | 1 | 2 |
-| Orgs Devices | 2 | 8 | 10 |
-| Orgs Devices - AOS | 0 | 1 | 1 |
+| Orgs Devices | 1 | 9 | 10 |
+| Orgs Devices - AOSCX | 0 | 1 | 1 |
+| Orgs Devices - EdgeConnect | 0 | 1 | 1 |
 | Orgs Devices - Others | 0 | 4 | 4 |
 | Orgs Devices - SSR | 0 | 2 | 2 |
 | Orgs EVPN Topologies | 0 | 2 | 2 |
-| Orgs Events | 1 | 2 | 3 |
+| Orgs Events | 0 | 3 | 3 |
 | Orgs Gateway Templates | 2 | 0 | 2 |
 | Orgs Guests | 1 | 3 | 4 |
 | Orgs IDP Profiles | 0 | 2 | 2 |
@@ -59,58 +61,59 @@
 | Orgs Integration SkyATP | 0 | 1 | 1 |
 | Orgs Integration Zscaler | 0 | 1 | 1 |
 | Orgs Inventory | 1 | 2 | 3 |
-| Orgs JSI | 2 | 7 | 9 |
-| Orgs Licenses | 1 | 2 | 3 |
+| Orgs JSI | 1 | 8 | 9 |
+| Orgs Licenses | 0 | 5 | 5 |
 | Orgs Linked Applications | 0 | 1 | 1 |
-| Orgs Logs | 1 | 1 | 2 |
+| Orgs Logs | 1 | 2 | 3 |
 | Orgs Marvis | 1 | 0 | 1 |
 | Orgs Marvis Invites | 0 | 2 | 2 |
 | Orgs MxClusters | 0 | 2 | 2 |
-| Orgs MxEdges | 1 | 7 | 8 |
+| Orgs MxEdges | 2 | 6 | 8 |
 | Orgs MxTunnels | 0 | 2 | 2 |
 | Orgs NAC CRL | 0 | 1 | 1 |
-| Orgs NAC Fingerprints | 0 | 2 | 2 |
-| Orgs NAC Portals | 1 | 4 | 5 |
-| Orgs NAC Rules | 1 | 1 | 2 |
-| Orgs NAC Tags | 1 | 1 | 2 |
+| Orgs NAC Portals | 0 | 5 | 5 |
+| Orgs NAC Rules | 0 | 2 | 2 |
+| Orgs NAC Tags | 0 | 2 | 2 |
 | Orgs Network Templates | 1 | 1 | 2 |
 | Orgs Networks | 1 | 1 | 2 |
 | Orgs Premium Analytics | 0 | 1 | 1 |
 | Orgs Psk Portals | 0 | 5 | 5 |
-| Orgs Psks | 1 | 1 | 2 |
+| Orgs Psks | 0 | 2 | 2 |
 | Orgs RF Templates | 1 | 1 | 2 |
+| Orgs Reports | 0 | 1 | 1 |
 | Orgs SCEP | 0 | 2 | 2 |
 | Orgs SDK Invites | 0 | 3 | 3 |
 | Orgs SDK Templates | 0 | 2 | 2 |
 | Orgs SLEs | 2 | 0 | 2 |
-| Orgs SSO | 1 | 4 | 5 |
+| Orgs SSO | 0 | 5 | 5 |
 | Orgs SSO Roles | 0 | 2 | 2 |
 | Orgs SecIntel Profiles | 1 | 1 | 2 |
 | Orgs Security Policies | 1 | 1 | 2 |
 | Orgs Service Policies | 1 | 1 | 2 |
 | Orgs Services | 1 | 1 | 2 |
 | Orgs Setting | 0 | 1 | 1 |
-| Orgs Site Templates | 2 | 0 | 2 |
+| Orgs Site Templates | 1 | 1 | 2 |
 | Orgs Sitegroups | 0 | 2 | 2 |
 | Orgs Sites | 1 | 2 | 3 |
 | Orgs Stats | 0 | 1 | 1 |
-| Orgs Stats - Assets | 1 | 2 | 3 |
-| Orgs Stats - BGP Peers | 1 | 1 | 2 |
+| Orgs Stats - Assets | 0 | 3 | 3 |
+| Orgs Stats - BGP Peers | 0 | 2 | 2 |
 | Orgs Stats - Devices | 1 | 0 | 1 |
+| Orgs Stats - Marvis Clients | 0 | 2 | 2 |
 | Orgs Stats - MxEdges | 2 | 0 | 2 |
-| Orgs Stats - Ospf | 1 | 1 | 2 |
+| Orgs Stats - Ospf | 0 | 2 | 2 |
 | Orgs Stats - Other Devices | 0 | 1 | 1 |
-| Orgs Stats - Ports | 1 | 1 | 2 |
-| Orgs Stats - Sites | 1 | 0 | 1 |
-| Orgs Stats - Tunnels | 1 | 1 | 2 |
-| Orgs Stats - VPN Peers | 1 | 1 | 2 |
-| Orgs Tickets | 2 | 2 | 4 |
+| Orgs Stats - Ports | 0 | 2 | 2 |
+| Orgs Stats - Sites | 0 | 1 | 1 |
+| Orgs Stats - Tunnels | 0 | 2 | 2 |
+| Orgs Stats - VPN Peers | 0 | 2 | 2 |
+| Orgs Tickets | 0 | 4 | 4 |
 | Orgs UI Settings | 0 | 2 | 2 |
 | Orgs User MACs | 0 | 3 | 3 |
-| Orgs VPNs | 1 | 1 | 2 |
+| Orgs VPNs | 0 | 2 | 2 |
 | Orgs Vars | 0 | 1 | 1 |
 | Orgs WLAN Templates | 1 | 1 | 2 |
-| Orgs Webhooks | 1 | 3 | 4 |
+| Orgs Webhooks | 0 | 4 | 4 |
 | Orgs Wlans | 1 | 1 | 2 |
 | Orgs WxRules | 0 | 2 | 2 |
 | Orgs WxTags | 0 | 4 | 4 |
@@ -118,7 +121,7 @@
 | Self API Token | 0 | 2 | 2 |
 | Self Account | 1 | 3 | 4 |
 | Self Alarms | 0 | 1 | 1 |
-| Self Audit Logs | 1 | 0 | 1 |
+| Self Audit Logs | 0 | 1 | 1 |
 | Self MFA | 0 | 1 | 1 |
 | Self OAuth2 | 0 | 1 | 1 |
 | Sites | 1 | 0 | 1 |
@@ -130,6 +133,7 @@
 | Sites Applications | 0 | 1 | 1 |
 | Sites Asset Filters | 0 | 2 | 2 |
 | Sites Assets | 0 | 2 | 2 |
+| Sites Auto Map Assignment | 0 | 1 | 1 |
 | Sites Beacons | 1 | 1 | 2 |
 | Sites Clients - NAC | 0 | 4 | 4 |
 | Sites Clients - Wan | 0 | 4 | 4 |
@@ -138,7 +142,7 @@
 | Sites Device Profiles | 0 | 1 | 1 |
 | Sites Devices | 2 | 9 | 11 |
 | Sites Devices - Others | 0 | 3 | 3 |
-| Sites Devices - WAN Cluster | 1 | 0 | 1 |
+| Sites Devices - WAN Cluster | 0 | 1 | 1 |
 | Sites Devices - Wired - Virtual Chassis | 1 | 0 | 1 |
 | Sites Devices - Wireless | 0 | 2 | 2 |
 | Sites EVPN Topologies | 0 | 2 | 2 |
@@ -146,7 +150,7 @@
 | Sites Gateway Templates | 1 | 0 | 1 |
 | Sites Guests | 0 | 5 | 5 |
 | Sites IDP Profiles | 0 | 1 | 1 |
-| Sites Insights | 3 | 3 | 6 |
+| Sites Insights | 3 | 4 | 7 |
 | Sites JSE | 0 | 1 | 1 |
 | Sites Licenses | 0 | 1 | 1 |
 | Sites Location | 0 | 3 | 3 |
@@ -154,12 +158,14 @@
 | Sites Maps | 2 | 0 | 2 |
 | Sites Maps - Auto-Zone | 0 | 1 | 1 |
 | Sites Maps - Auto-placement | 0 | 2 | 2 |
+| Sites Marvis Configs | 0 | 2 | 2 |
 | Sites MxEdges | 0 | 4 | 4 |
+| Sites NAC Fingerprints | 0 | 2 | 2 |
 | Sites Network Templates | 0 | 1 | 1 |
 | Sites Networks | 1 | 0 | 1 |
 | Sites Psks | 0 | 2 | 2 |
 | Sites RF Templates | 0 | 1 | 1 |
-| Sites RRM | 0 | 4 | 4 |
+| Sites RRM | 0 | 5 | 5 |
 | Sites RSSI Zones | 0 | 2 | 2 |
 | Sites Rfdiags | 0 | 3 | 3 |
 | Sites Rogues | 2 | 3 | 5 |
@@ -181,6 +187,7 @@
 | Sites Stats - Clients Wireless | 1 | 3 | 4 |
 | Sites Stats - Devices | 2 | 3 | 5 |
 | Sites Stats - Discovered Switches | 0 | 4 | 4 |
+| Sites Stats - IoT Endpoints | 0 | 2 | 2 |
 | Sites Stats - MxEdges | 0 | 2 | 2 |
 | Sites Stats - Ospf | 0 | 2 | 2 |
 | Sites Stats - Ports | 1 | 1 | 2 |
@@ -191,15 +198,16 @@
 | Sites VPNs | 0 | 1 | 1 |
 | Sites WAN Usages | 0 | 2 | 2 |
 | Sites Webhooks | 0 | 4 | 4 |
-| Sites Wlans | 2 | 1 | 3 |
+| Sites Wlans | 1 | 2 | 3 |
 | Sites WxRules | 0 | 3 | 3 |
 | Sites WxTags | 0 | 3 | 3 |
 | Sites WxTunnels | 0 | 2 | 2 |
 | Sites Zones | 1 | 3 | 4 |
 | Sites vBeacons | 1 | 1 | 2 |
 | Utilities Common | 0 | 1 | 1 |
+| Utilities LAN | 0 | 1 | 1 |
 | Utilities PCAPs | 2 | 2 | 4 |
-| Utilities Upgrade | 5 | 7 | 12 |
+| Utilities Upgrade | 5 | 9 | 14 |
 
 ## Missing Endpoints
 
@@ -228,7 +236,9 @@
 | `listCountryCodes` | `/api/v1/const/countries` | listCountryCodes | `mist-list-country-codes` |
 | `listFingerprintTypes` | `/api/v1/const/fingerprint_types` | listFingerprintTypes | `mist-list-fingerprint-types` |
 | `listGatewayApplications` | `/api/v1/const/gateway_applications` | listGatewayApplications | `mist-list-gateway-applications` |
+| `listInsightMetrics` | `/api/v1/const/insight_metrics` | listInsightMetrics | `mist-list-insight-metrics` |
 | `listLicenseTypes` | `/api/v1/const/license_types` | listLicenseTypes | `mist-list-license-types` |
+| `listMarvisClientEventsDefinitions` | `/api/v1/const/marvisclient_events` | listMarvisClientEventsDefinitions | `mist-list-marvis-client-events-definitions` |
 | `listMarvisClientVersions` | `/api/v1/const/marvisclient_versions` | listMarvisClientVersions | `mist-list-marvis-client-versions` |
 | `listSiteLanguages` | `/api/v1/const/languages` | listSiteLanguages | `mist-list-site-languages` |
 | `listStates` | `/api/v1/const/states` | listStates | `mist-list-states` |
@@ -360,12 +370,20 @@
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
 | `getOrgAptemplate` | `/api/v1/orgs/{org_id}/aptemplates/{aptemplate_id}` | getOrgAptemplate | `mist-get-org-aptemplate` |
+| `listOrgAptemplates` | `/api/v1/orgs/{org_id}/aptemplates` | listOrgAptemplates | `mist-list-org-aptemplates` |
 
 ### Orgs API Tokens
 
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
 | `getOrgApiToken` | `/api/v1/orgs/{org_id}/apitokens/{apitoken_id}` | getOrgApiToken | `mist-get-org-api-token` |
+| `listOrgApiTokens` | `/api/v1/orgs/{org_id}/apitokens` | listOrgApiTokens | `mist-list-org-api-tokens` |
+
+### Orgs Admins
+
+| operationId | Path | Summary | Proposed Spec Slug |
+|---|---|---|---|
+| `listOrgAdmins` | `/api/v1/orgs/{org_id}/admins` | listOrgAdmins | `mist-list-org-admins` |
 
 ### Orgs Advanced Anti Malware Profiles
 
@@ -379,6 +397,7 @@
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
 | `getOrgAlarmTemplate` | `/api/v1/orgs/{org_id}/alarmtemplates/{alarmtemplate_id}` | getOrgAlarmTemplate | `mist-get-org-alarm-template` |
+| `listOrgAlarmTemplates` | `/api/v1/orgs/{org_id}/alarmtemplates` | listOrgAlarmTemplates | `mist-list-org-alarm-templates` |
 | `listOrgSuppressedAlarms` | `/api/v1/orgs/{org_id}/alarmtemplates/suppress` | listOrgSuppressedAlarms | `mist-list-org-suppressed-alarms` |
 
 ### Orgs Alarms
@@ -386,6 +405,7 @@
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
 | `countOrgAlarms` | `/api/v1/orgs/{org_id}/alarms/count` | countOrgAlarms | `mist-count-org-alarms` |
+| `searchOrgAlarms` | `/api/v1/orgs/{org_id}/alarms/search` | searchOrgAlarms | `mist-search-org-alarms` |
 
 ### Orgs Antivirus Profiles
 
@@ -421,12 +441,22 @@
 | `getOrgSslProxyCert` | `/api/v1/orgs/{org_id}/ssl_proxy_cert` | getOrgSslProxyCert | `mist-get-org-ssl-proxy-cert` |
 | `listOrgCertificates` | `/api/v1/orgs/{org_id}/cert` | listOrgCertificates | `mist-list-org-certificates` |
 
+### Orgs Clients - Marvis
+
+| operationId | Path | Summary | Proposed Spec Slug |
+|---|---|---|---|
+| `countOrgMarvisClientEvents` | `/api/v1/orgs/{org_id}/marvisclients/events/count` | countOrgMarvisClientEvents | `mist-count-org-marvis-client-events` |
+| `getOrgMarvisClientInsights` | `/api/v1/orgs/{org_id}/insights/marvisclient/{marvisclient_id}/marvisclient-metrics` | getOrgMarvisClientInsights | `mist-get-org-marvis-client-insights` |
+| `searchOrgMarvisClientEvents` | `/api/v1/orgs/{org_id}/marvisclients/events/search` | searchOrgMarvisClientEvents | `mist-search-org-marvis-client-events` |
+
 ### Orgs Clients - NAC
 
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
 | `countOrgNacClientEvents` | `/api/v1/orgs/{org_id}/nac_clients/events/count` | countOrgNacClientEvents | `mist-count-org-nac-client-events` |
 | `countOrgNacClients` | `/api/v1/orgs/{org_id}/nac_clients/count` | countOrgNacClients | `mist-count-org-nac-clients` |
+| `searchOrgNacClientEvents` | `/api/v1/orgs/{org_id}/nac_clients/events/search` | searchOrgNacClientEvents | `mist-search-org-nac-client-events` |
+| `searchOrgNacClients` | `/api/v1/orgs/{org_id}/nac_clients/search` | searchOrgNacClients | `mist-search-org-nac-clients` |
 
 ### Orgs Clients - Wan
 
@@ -468,15 +498,22 @@
 | `countOrgDevices` | `/api/v1/orgs/{org_id}/devices/count` | countOrgDevices | `mist-count-org-devices` |
 | `getOrgJuniperDevicesCommand` | `/api/v1/orgs/{org_id}/ocdevices/outbound_ssh_cmd` | getOrgJuniperDevicesCommand | `mist-get-org-juniper-devices-command` |
 | `listOrgApsMacs` | `/api/v1/orgs/{org_id}/devices/radio_macs` | listOrgApsMacs | `mist-list-org-aps-macs` |
+| `listOrgDevices` | `/api/v1/orgs/{org_id}/devices` | listOrgDevices | `mist-list-org-devices` |
 | `listOrgDevicesSummary` | `/api/v1/orgs/{org_id}/devices/summary` | listOrgDevicesSummary | `mist-list-org-devices-summary` |
 | `searchOrgDeviceLastConfigs` | `/api/v1/orgs/{org_id}/devices/last_config/search` | searchOrgDeviceLastConfigs | `mist-search-org-device-last-configs` |
 | `searchOrgDevices` | `/api/v1/orgs/{org_id}/devices/search` | searchOrgDevices | `mist-search-org-devices` |
 
-### Orgs Devices - AOS
+### Orgs Devices - AOSCX
 
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
-| `getOrgAosRegisterCmd` | `/api/v1/orgs/{org_id}/aos/register_cmd` | getOrgAosRegisterCmd | `mist-get-org-aos-register-cmd` |
+| `getOrgAoscxRegisterCmd` | `/api/v1/orgs/{org_id}/aoscx/register_cmd` | getOrgAoscxRegisterCmd | `mist-get-org-aoscx-register-cmd` |
+
+### Orgs Devices - EdgeConnect
+
+| operationId | Path | Summary | Proposed Spec Slug |
+|---|---|---|---|
+| `getOrgEdgeconnectRegisterCmd` | `/api/v1/orgs/{org_id}/edgeconnect/register_cmd` | getOrgEdgeconnectRegisterCmd | `mist-get-org-edgeconnect-register-cmd` |
 
 ### Orgs Devices - Others
 
@@ -506,6 +543,7 @@
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
 | `countOrgSystemEvents` | `/api/v1/orgs/{org_id}/events/system/count` | countOrgSystemEvents | `mist-count-org-system-events` |
+| `searchOrgEvents` | `/api/v1/orgs/{org_id}/events/search` | searchOrgEvents | `mist-search-org-events` |
 | `searchOrgSystemEvents` | `/api/v1/orgs/{org_id}/events/system/search` | searchOrgSystemEvents | `mist-search-org-system-events` |
 
 ### Orgs Guests
@@ -565,26 +603,31 @@
 | `countOrgJsiSirt` | `/api/v1/orgs/{org_id}/jsi/sirt/count` | countOrgJsiSirt | `mist-count-org-jsi-sirt` |
 | `listOrgJsiDevices` | `/api/v1/orgs/{org_id}/jsi/devices` | listOrgJsiDevices | `mist-list-org-jsi-devices` |
 | `listOrgJsiPastPurchases` | `/api/v1/orgs/{org_id}/jsi/inventory` | listOrgJsiPastPurchases | `mist-list-org-jsi-past-purchases` |
-| `searchOrgJsiAssetsAndContracts` | `/api/v1/orgs/{org_id}/jsi/inventory/search` | searchOrgJsiAssetsAndContracts | `mist-search-org-jsi-assets-and-contracts` |
+| `searchOrgJsiPbn` | `/api/v1/orgs/{org_id}/jsi/pbn/search` | searchOrgJsiPbn | `mist-search-org-jsi-pbn` |
+| `searchOrgJsiSirt` | `/api/v1/orgs/{org_id}/jsi/sirt/search` | searchOrgJsiSirt | `mist-search-org-jsi-sirt` |
 
 ### Orgs Licenses
 
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
 | `GetOrgLicenseAsyncClaimStatus` | `/api/v1/orgs/{org_id}/claim/status` | GetOrgLicenseAsyncClaimStatus | `mist-get-org-license-async-claim-status` |
+| `getOrgAsyncClaimStatus` | `/api/v1/orgs/{org_id}/claims/{claim_id}` | getOrgAsyncClaimStatus | `mist-get-org-async-claim-status` |
+| `getOrgLicensesBySite` | `/api/v1/orgs/{org_id}/licenses/usages` | getOrgLicensesBySite | `mist-get-org-licenses-by-site` |
 | `getOrgLicensesSummary` | `/api/v1/orgs/{org_id}/licenses` | getOrgLicensesSummary | `mist-get-org-licenses-summary` |
+| `listOrgAsyncClaims` | `/api/v1/orgs/{org_id}/claims` | listOrgAsyncClaims | `mist-list-org-async-claims` |
 
 ### Orgs Linked Applications
 
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
-| `getOrgOauthAppLinkedStatus` | `/api/v1/orgs/{org_id}/setting/{app_name}/link_accounts` | getOrgOauthAppLinkedStatus | `mist-get-org-oauth-app-linked-status` |
+| `getOrgOauthAppLinkedStatus` | `/api/v1/orgs/{org_id}/setting/{app_name}/link_accounts` | getOrgOauthAppAuthorizationUrl | `mist-get-org-oauth-app-linked-status` |
 
 ### Orgs Logs
 
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
 | `countOrgAuditLogs` | `/api/v1/orgs/{org_id}/logs/count` | countOrgAuditLogs | `mist-count-org-audit-logs` |
+| `listOrgAuditLogsLegacy` | `/api/v1/orgs/{org_id}/logs` | listOrgAuditLogsLegacy | `mist-list-org-audit-logs-legacy` |
 
 ### Orgs Marvis Invites
 
@@ -609,7 +652,7 @@
 | `getOrgMxEdge` | `/api/v1/orgs/{org_id}/mxedges/{mxedge_id}` | getOrgMxEdge | `mist-get-org-mx-edge` |
 | `getOrgMxEdgeUpgradeInfo` | `/api/v1/orgs/{org_id}/mxedges/versions` | getOrgMxEdgeUpgradeInfo | `mist-get-org-mx-edge-upgrade-info` |
 | `getOrgMxEdgeVmParams` | `/api/v1/orgs/{org_id}/mxedges/{mxedge_id}/vm_params` | getOrgMxEdgeVmParams | `mist-get-org-mx-edge-vm-params` |
-| `searchOrgMistEdgeEvents` | `/api/v1/orgs/{org_id}/mxedges/events/search` | searchOrgMistEdgeEvents | `mist-search-org-mist-edge-events` |
+| `searchOrgMxEdges` | `/api/v1/orgs/{org_id}/mxedges/search` | searchOrgMxEdges | `mist-search-org-mx-edges` |
 
 ### Orgs MxTunnels
 
@@ -624,13 +667,6 @@
 |---|---|---|---|
 | `getOrgNacCrl` | `/api/v1/orgs/{org_id}/setting/mist_nac_crls` | getOrgNacCrl | `mist-get-org-nac-crl` |
 
-### Orgs NAC Fingerprints
-
-| operationId | Path | Summary | Proposed Spec Slug |
-|---|---|---|---|
-| `countOrgClientFingerprints` | `/api/v1/sites/{site_id}/insights/fingerprints/count` | countOrgClientFingerprints | `mist-count-org-client-fingerprints` |
-| `searchOrgClientFingerprints` | `/api/v1/sites/{site_id}/insights/fingerprints/search` | searchOrgClientFingerprints | `mist-search-org-client-fingerprints` |
-
 ### Orgs NAC Portals
 
 | operationId | Path | Summary | Proposed Spec Slug |
@@ -639,18 +675,21 @@
 | `getOrgNacPortal` | `/api/v1/orgs/{org_id}/nacportals/{nacportal_id}` | getOrgNacPortal | `mist-get-org-nac-portal` |
 | `getOrgNacPortalSamlMetadata` | `/api/v1/orgs/{org_id}/nacportals/{nacportal_id}/saml_metadata` | getOrgNacPortalSamlMetadata | `mist-get-org-nac-portal-saml-metadata` |
 | `listOrgNacPortalSsoLatestFailures` | `/api/v1/orgs/{org_id}/nacportals/{nacportal_id}/failures` | listOrgNacPortalSsoLatestFailures | `mist-list-org-nac-portal-sso-latest-failures` |
+| `listOrgNacPortals` | `/api/v1/orgs/{org_id}/nacportals` | listOrgNacPortals | `mist-list-org-nac-portals` |
 
 ### Orgs NAC Rules
 
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
 | `getOrgNacRule` | `/api/v1/orgs/{org_id}/nacrules/{nacrule_id}` | getOrgNacRule | `mist-get-org-nac-rule` |
+| `listOrgNacRules` | `/api/v1/orgs/{org_id}/nacrules` | listOrgNacRules | `mist-list-org-nac-rules` |
 
 ### Orgs NAC Tags
 
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
 | `getOrgNacTag` | `/api/v1/orgs/{org_id}/nactags/{nactag_id}` | getOrgNacTag | `mist-get-org-nac-tag` |
+| `listOrgNacTags` | `/api/v1/orgs/{org_id}/nactags` | listOrgNacTags | `mist-list-org-nac-tags` |
 
 ### Orgs Network Templates
 
@@ -685,12 +724,19 @@
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
 | `getOrgPsk` | `/api/v1/orgs/{org_id}/psks/{psk_id}` | getOrgPsk | `mist-get-org-psk` |
+| `listOrgPsks` | `/api/v1/orgs/{org_id}/psks` | listOrgPsks | `mist-list-org-psks` |
 
 ### Orgs RF Templates
 
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
 | `getOrgRfTemplate` | `/api/v1/orgs/{org_id}/rftemplates/{rftemplate_id}` | getOrgRfTemplate | `mist-get-org-rf-template` |
+
+### Orgs Reports
+
+| operationId | Path | Summary | Proposed Spec Slug |
+|---|---|---|---|
+| `getOrgE911Report` | `/api/v1/orgs/{org_id}/exports/e911_report` | getOrgE911Report | `mist-get-org-e911-report` |
 
 ### Orgs SCEP
 
@@ -722,6 +768,7 @@
 | `getOrgSamlMetadata` | `/api/v1/orgs/{org_id}/ssos/{sso_id}/metadata` | getOrgSamlMetadata | `mist-get-org-saml-metadata` |
 | `getOrgSso` | `/api/v1/orgs/{org_id}/ssos/{sso_id}` | getOrgSso | `mist-get-org-sso` |
 | `listOrgSsoLatestFailures` | `/api/v1/orgs/{org_id}/ssos/{sso_id}/failures` | listOrgSsoLatestFailures | `mist-list-org-sso-latest-failures` |
+| `listOrgSsos` | `/api/v1/orgs/{org_id}/ssos` | listOrgSsos | `mist-list-org-ssos` |
 
 ### Orgs SSO Roles
 
@@ -760,6 +807,12 @@
 |---|---|---|---|
 | `getOrgSettings` | `/api/v1/orgs/{org_id}/setting` | getOrgSettings | `mist-get-org-settings` |
 
+### Orgs Site Templates
+
+| operationId | Path | Summary | Proposed Spec Slug |
+|---|---|---|---|
+| `listOrgSiteTemplates` | `/api/v1/orgs/{org_id}/sitetemplates` | listOrgSiteTemplates | `mist-list-org-site-templates` |
+
 ### Orgs Sitegroups
 
 | operationId | Path | Summary | Proposed Spec Slug |
@@ -786,18 +839,28 @@
 |---|---|---|---|
 | `countOrgAssetsByDistanceField` | `/api/v1/orgs/{org_id}/stats/assets/count` | countOrgAssetsByDistanceField | `mist-count-org-assets-by-distance-field` |
 | `listOrgAssetsStats` | `/api/v1/orgs/{org_id}/stats/assets` | listOrgAssetsStats | `mist-list-org-assets-stats` |
+| `searchOrgAssets` | `/api/v1/orgs/{org_id}/stats/assets/search` | searchOrgAssets | `mist-search-org-assets` |
 
 ### Orgs Stats - BGP Peers
 
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
 | `countOrgBgpStats` | `/api/v1/orgs/{org_id}/stats/bgp_peers/count` | countOrgBgpStats | `mist-count-org-bgp-stats` |
+| `searchOrgBgpStats` | `/api/v1/orgs/{org_id}/stats/bgp_peers/search` | searchOrgBgpStats | `mist-search-org-bgp-stats` |
+
+### Orgs Stats - Marvis Clients
+
+| operationId | Path | Summary | Proposed Spec Slug |
+|---|---|---|---|
+| `countOrgMarvisClientsStats` | `/api/v1/orgs/{org_id}/stats/marvisclients/count` | countOrgMarvisClientsStats | `mist-count-org-marvis-clients-stats` |
+| `searchOrgMarvisClientsStats` | `/api/v1/orgs/{org_id}/stats/marvisclients/search` | searchOrgMarvisClientsStats | `mist-search-org-marvis-clients-stats` |
 
 ### Orgs Stats - Ospf
 
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
 | `countOrgOspfStats` | `/api/v1/orgs/{org_id}/stats/ospf_peers/count` | countOrgOspfStats | `mist-count-org-ospf-stats` |
+| `searchOrgOspfStats` | `/api/v1/orgs/{org_id}/stats/ospf_peers/search` | searchOrgOspfStats | `mist-search-org-ospf-stats` |
 
 ### Orgs Stats - Other Devices
 
@@ -810,18 +873,27 @@
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
 | `countOrgSwOrGwPorts` | `/api/v1/orgs/{org_id}/stats/ports/count` | countOrgSwOrGwPorts | `mist-count-org-sw-or-gw-ports` |
+| `searchOrgSwOrGwPorts` | `/api/v1/orgs/{org_id}/stats/ports/search` | searchOrgSwOrGwPorts | `mist-search-org-sw-or-gw-ports` |
+
+### Orgs Stats - Sites
+
+| operationId | Path | Summary | Proposed Spec Slug |
+|---|---|---|---|
+| `listOrgSiteStats` | `/api/v1/orgs/{org_id}/stats/sites` | listOrgSiteStats | `mist-list-org-site-stats` |
 
 ### Orgs Stats - Tunnels
 
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
 | `countOrgTunnelsStats` | `/api/v1/orgs/{org_id}/stats/tunnels/count` | countOrgTunnelsStats | `mist-count-org-tunnels-stats` |
+| `searchOrgTunnelsStats` | `/api/v1/orgs/{org_id}/stats/tunnels/search` | searchOrgTunnelsStats | `mist-search-org-tunnels-stats` |
 
 ### Orgs Stats - VPN Peers
 
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
 | `countOrgPeerPathStats` | `/api/v1/orgs/{org_id}/stats/vpn_peers/count` | countOrgPeerPathStats | `mist-count-org-peer-path-stats` |
+| `searchOrgPeerPathStats` | `/api/v1/orgs/{org_id}/stats/vpn_peers/search` | searchOrgPeerPathStats | `mist-search-org-peer-path-stats` |
 
 ### Orgs Tickets
 
@@ -829,6 +901,8 @@
 |---|---|---|---|
 | `GetOrgTicketAttachment` | `/api/v1/orgs/{org_id}/tickets/{ticket_id}/attachments/{attachment_id}` | GetOrgTicketAttachment | `mist-get-org-ticket-attachment` |
 | `countOrgTickets` | `/api/v1/orgs/{org_id}/tickets/count` | countOrgTickets | `mist-count-org-tickets` |
+| `getOrgTicket` | `/api/v1/orgs/{org_id}/tickets/{ticket_id}` | getOrgTicket | `mist-get-org-ticket` |
+| `listOrgTickets` | `/api/v1/orgs/{org_id}/tickets` | listOrgTickets | `mist-list-org-tickets` |
 
 ### Orgs UI Settings
 
@@ -850,6 +924,7 @@
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
 | `getOrgVpn` | `/api/v1/orgs/{org_id}/vpns/{vpn_id}` | getOrgVpn | `mist-get-org-vpn` |
+| `listOrgVpns` | `/api/v1/orgs/{org_id}/vpns` | listOrgVpns | `mist-list-org-vpns` |
 
 ### Orgs Vars
 
@@ -869,6 +944,7 @@
 |---|---|---|---|
 | `countOrgWebhooksDeliveries` | `/api/v1/orgs/{org_id}/webhooks/{webhook_id}/events/count` | countOrgWebhooksDeliveries | `mist-count-org-webhooks-deliveries` |
 | `getOrgWebhook` | `/api/v1/orgs/{org_id}/webhooks/{webhook_id}` | getOrgWebhook | `mist-get-org-webhook` |
+| `listOrgWebhooks` | `/api/v1/orgs/{org_id}/webhooks` | listOrgWebhooks | `mist-list-org-webhooks` |
 | `searchOrgWebhooksDeliveries` | `/api/v1/orgs/{org_id}/webhooks/{webhook_id}/events/search` | searchOrgWebhooksDeliveries | `mist-search-org-webhooks-deliveries` |
 
 ### Orgs Wlans
@@ -920,6 +996,12 @@
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
 | `listAlarmSubscriptions` | `/api/v1/self/subscriptions` | listAlarmSubscriptions | `mist-list-alarm-subscriptions` |
+
+### Self Audit Logs
+
+| operationId | Path | Summary | Proposed Spec Slug |
+|---|---|---|---|
+| `listSelfAuditLogs` | `/api/v1/self/logs` | listSelfAuditLogs | `mist-list-self-audit-logs` |
 
 ### Self MFA
 
@@ -977,6 +1059,12 @@
 |---|---|---|---|
 | `getSiteAsset` | `/api/v1/sites/{site_id}/assets/{asset_id}` | getSiteAsset | `mist-get-site-asset` |
 | `listSiteAssets` | `/api/v1/sites/{site_id}/assets` | listSiteAssets | `mist-list-site-assets` |
+
+### Sites Auto Map Assignment
+
+| operationId | Path | Summary | Proposed Spec Slug |
+|---|---|---|---|
+| `getSiteAutoMapAssignmentStatus` | `/api/v1/sites/{site_id}/auto_map_assignment` | getSiteAutoMapAssignmentStatus | `mist-get-site-auto-map-assignment-status` |
 
 ### Sites Beacons
 
@@ -1046,6 +1134,12 @@
 | `listSiteOtherDevices` | `/api/v1/sites/{site_id}/otherdevices` | listSiteOtherDevices | `mist-list-site-other-devices` |
 | `searchSiteOtherDeviceEvents` | `/api/v1/sites/{site_id}/otherdevices/events/search` | searchSiteOtherDeviceEvents | `mist-search-site-other-device-events` |
 
+### Sites Devices - WAN Cluster
+
+| operationId | Path | Summary | Proposed Spec Slug |
+|---|---|---|---|
+| `GetSiteDeviceHaClusterNode` | `/api/v1/sites/{site_id}/devices/{device_id}/ha` | GetSiteDeviceHaClusterNode | `mist-get-site-device-ha-cluster-node` |
+
 ### Sites Devices - Wireless
 
 | operationId | Path | Summary | Proposed Spec Slug |
@@ -1088,7 +1182,8 @@
 
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
-| `getSiteInsightMetricsForGateway` | `/api/v1/sites/{site_id}/insights/gateway/{device_id}/stats/{metric}` | getSiteInsightMetricsForGateway | `mist-get-site-insight-metrics-for-gateway` |
+| `getSiteInsightMetricsForAP` | `/api/v1/sites/{site_id}/insights/ap/{device_id}/stats` | getSiteInsightMetricsForAP | `mist-get-site-insight-metrics-for-a-p` |
+| `getSiteInsightMetricsForGateway` | `/api/v1/sites/{site_id}/insights/gateway/{device_id}/stats` | getSiteInsightMetricsForGateway | `mist-get-site-insight-metrics-for-gateway` |
 | `getSiteInsightMetricsForMxEdge` | `/api/v1/sites/{site_id}/insights/mxedge/{device_mac}/{metric}` | getSiteInsightMetricsForMxEdge | `mist-get-site-insight-metrics-for-mx-edge` |
 | `getSiteInsightMetricsForSwitch` | `/api/v1/sites/{site_id}/insights/switch/{device_mac}/{metric}` | getSiteInsightMetricsForSwitch | `mist-get-site-insight-metrics-for-switch` |
 
@@ -1129,7 +1224,14 @@
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
 | `getSiteApAutoOrientation` | `/api/v1/sites/{site_id}/maps/{map_id}/auto_orient` | getSiteApAutoOrientation | `mist-get-site-ap-auto-orientation` |
-| `getSiteApAutoPlacement` | `/api/v1/sites/{site_id}/maps/{map_id}/auto_placement` | getSiteApAutoPlacement | `mist-get-site-ap-auto-placement` |
+| `getSiteApAutoPlacement` | `/api/v1/sites/{site_id}/maps/{map_id}/auto_placement` | getSiteApAutoplacement | `mist-get-site-ap-auto-placement` |
+
+### Sites Marvis Configs
+
+| operationId | Path | Summary | Proposed Spec Slug |
+|---|---|---|---|
+| `countSiteMarvisConfigActions` | `/api/v1/sites/{site_id}/marvis_configs/count` | countSiteMarvisConfigActions | `mist-count-site-marvis-config-actions` |
+| `searchSiteMarvisConfigActions` | `/api/v1/sites/{site_id}/marvis_configs/search` | searchSiteMarvisConfigActions | `mist-search-site-marvis-config-actions` |
 
 ### Sites MxEdges
 
@@ -1139,6 +1241,13 @@
 | `getSiteMxEdge` | `/api/v1/sites/{site_id}/mxedges/{mxedge_id}` | getSiteMxEdge | `mist-get-site-mx-edge` |
 | `listSiteMxEdges` | `/api/v1/sites/{site_id}/mxedges` | listSiteMxEdges | `mist-list-site-mx-edges` |
 | `searchSiteMistEdgeEvents` | `/api/v1/sites/{site_id}/mxedges/events/search` | searchSiteMistEdgeEvents | `mist-search-site-mist-edge-events` |
+
+### Sites NAC Fingerprints
+
+| operationId | Path | Summary | Proposed Spec Slug |
+|---|---|---|---|
+| `countSiteClientFingerprints` | `/api/v1/sites/{site_id}/insights/fingerprints/count` | countSiteClientFingerprints | `mist-count-site-client-fingerprints` |
+| `searchSiteClientFingerprints` | `/api/v1/sites/{site_id}/insights/fingerprints/search` | searchSiteClientFingerprints | `mist-search-site-client-fingerprints` |
 
 ### Sites Network Templates
 
@@ -1163,6 +1272,7 @@
 
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
+| `getSiteChannelScores` | `/api/v1/sites/{site_id}/rrm/channel_scores/band/{band}` | getSiteChannelScores | `mist-get-site-channel-scores` |
 | `getSiteCurrentChannelPlanning` | `/api/v1/sites/{site_id}/rrm/current` | getSiteCurrentChannelPlanning | `mist-get-site-current-channel-planning` |
 | `getSiteCurrentRrmConsiderations` | `/api/v1/sites/{site_id}/rrm/current/devices/{device_id}/band/{band}` | getSiteCurrentRrmConsiderations | `mist-get-site-current-rrm-considerations` |
 | `listSiteCurrentRrmNeighbors` | `/api/v1/sites/{site_id}/rrm/neighbors/band/{band}` | listSiteCurrentRrmNeighbors | `mist-list-site-current-rrm-neighbors` |
@@ -1332,6 +1442,13 @@
 | `searchSiteDiscoveredSwitches` | `/api/v1/sites/{site_id}/stats/discovered_switches/search` | searchSiteDiscoveredSwitches | `mist-search-site-discovered-switches` |
 | `searchSiteDiscoveredSwitchesMetrics` | `/api/v1/sites/{site_id}/stats/discovered_switch_metrics/search` | searchSiteDiscoveredSwitchesMetrics | `mist-search-site-discovered-switches-metrics` |
 
+### Sites Stats - IoT Endpoints
+
+| operationId | Path | Summary | Proposed Spec Slug |
+|---|---|---|---|
+| `countSiteIotEndpoints` | `/api/v1/sites/{site_id}/iotendpoints/count` | countSiteIotEndpoints | `mist-count-site-iot-endpoints` |
+| `searchSiteIotEndpoints` | `/api/v1/sites/{site_id}/iotendpoints/search` | searchSiteIotEndpoints | `mist-search-site-iot-endpoints` |
+
 ### Sites Stats - MxEdges
 
 | operationId | Path | Summary | Proposed Spec Slug |
@@ -1343,7 +1460,7 @@
 
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
-| `countSiteOspfStats` | `/api/v1/sites/{site_id}/stats/ospf_peers/count` | countSiteOspfStats | `mist-count-site-ospf-stats` |
+| `countSiteOspfStats` | `/api/v1/sites/{site_id}/stats/ospf_peers/count` | countOrgOspfStats | `mist-count-site-ospf-stats` |
 | `searchSiteOspfStats` | `/api/v1/sites/{site_id}/stats/ospf_peers/search` | searchSiteOspfStats | `mist-search-site-ospf-stats` |
 
 ### Sites Stats - Ports
@@ -1402,6 +1519,7 @@
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
 | `getSiteWlan` | `/api/v1/sites/{site_id}/wlans/{wlan_id}` | getSiteWlan | `mist-get-site-wlan` |
+| `listSiteWlansDerived` | `/api/v1/sites/{site_id}/wlans/derived` | listSiteWlansDerived | `mist-list-site-wlans-derived` |
 
 ### Sites WxRules
 
@@ -1446,6 +1564,12 @@
 |---|---|---|---|
 | `getSiteDeviceConfigCmd` | `/api/v1/sites/{site_id}/devices/{device_id}/config_cmd` | getSiteDeviceConfigCmd | `mist-get-site-device-config-cmd` |
 
+### Utilities LAN
+
+| operationId | Path | Summary | Proposed Spec Slug |
+|---|---|---|---|
+| `searchSiteDeviceFlowRecords` | `/api/v1/sites/{site_id}/devices/{device_id}/flow_records/search` | searchSiteDeviceFlowRecords | `mist-search-site-device-flow-records` |
+
 ### Utilities PCAPs
 
 | operationId | Path | Summary | Proposed Spec Slug |
@@ -1460,7 +1584,10 @@
 | `getOrgDeviceUpgrade` | `/api/v1/orgs/{org_id}/devices/upgrade/{upgrade_id}` | getOrgDeviceUpgrade | `mist-get-org-device-upgrade` |
 | `getOrgMxEdgeUpgrade` | `/api/v1/orgs/{org_id}/mxedges/upgrade/{upgrade_id}` | getOrgMxEdgeUpgrade | `mist-get-org-mx-edge-upgrade` |
 | `getOrgSsrUpgrade` | `/api/v1/orgs/{org_id}/ssr/upgrade/{upgrade_id}/cancel` | getOrgSsrUpgrade | `mist-get-org-ssr-upgrade` |
+| `getSiteMxEdgeUpgrade` | `/api/v1/sites/{site_id}/mxedges/upgrade/{upgrade_id}` | getSiteMxEdgeUpgrade | `mist-get-site-mx-edge-upgrade` |
 | `getSiteSsrUpgrade` | `/api/v1/sites/{site_id}/ssr/upgrade/{upgrade_id}` | getSiteSsrUpgrade | `mist-get-site-ssr-upgrade` |
 | `listOrgDeviceUpgrades` | `/api/v1/orgs/{org_id}/devices/upgrade` | listOrgDeviceUpgrades | `mist-list-org-device-upgrades` |
 | `listOrgMxEdgeUpgrades` | `/api/v1/orgs/{org_id}/mxedges/upgrade` | listOrgMxEdgeUpgrades | `mist-list-org-mx-edge-upgrades` |
 | `listSiteAvailableDeviceVersions` | `/api/v1/sites/{site_id}/devices/versions` | listSiteAvailableDeviceVersions | `mist-list-site-available-device-versions` |
+| `listSiteMxEdgeUpgrades` | `/api/v1/sites/{site_id}/mxedges/upgrade` | listSiteMxEdgeUpgrades | `mist-list-site-mx-edge-upgrades` |
+
