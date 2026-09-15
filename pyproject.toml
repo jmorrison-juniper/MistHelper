@@ -483,7 +483,7 @@ disable_error_code = [
 ]
 
 [tool.bandit]
-targets = ["MistHelper.py", "maps_manager.py", "wsgi.py", "wsgi_capture.py", "web_portal", "mist-ops-platform", "ops-portal", "src"]
+targets = ["MistHelper.py", "maps_manager.py", "wsgi.py", "wsgi_capture.py", "web_portal", "mist-ops-platform", "ops-portal", "src", "tools"]
 # tools/test_quality_analyzer/fixtures: deliberately-bad code used as test
 # material by the analyzer — mirrors the ruff per-file-ignore for the same tree
 # (see [tool.ruff.lint.per-file-ignores] at "tools/test_quality_analyzer/fixtures/bad/**").
