@@ -276,7 +276,6 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
         _MH.FAST_MODE_RETRY_THREADS = int(os.getenv("FAST_MODE_RETRY_THREADS", "4"))  # Set retry worker count.
         _MH.FAST_MODE_RETRY_MAX_RETRIES = int(os.getenv("FAST_MODE_RETRY_MAX_RETRIES", "2"))  # Set retry-pass limit.
         _MH.FAST_MODE_FALLBACK_THREADS = int(os.getenv("FAST_MODE_FALLBACK_THREADS", "8"))  # Set fallback workers.
-        _MH.MIST_SITE_EXCLUDE_PREFIX = os.getenv("MIST_SITE_EXCLUDE_PREFIX", "")  # Set destructive-operation filter.
         self._publish_site_exclude_prefix()  # Update extracted modules that imported the prefix directly.
 
     def _publish_page_limit_configuration(self) -> None:
@@ -289,13 +288,19 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
 
     def _publish_site_exclude_prefix(self) -> None:
         """Publish the site exclude prefix to modules that cached the direct import."""
+        logging.info("Publishing the site exclude prefix")  # Log before the bootstrap writes the filter.
         prefix_module = cast(  # Type the dynamic module as mutable for the copied prefix value.
             Any, importlib.import_module("src.refactors.mist_site_exclude_prefix")
         )
-        prefix_module.MIST_SITE_EXCLUDE_PREFIX = _MH.MIST_SITE_EXCLUDE_PREFIX  # Update the canonical value.
+        prefix_value = os.getenv("MIST_SITE_EXCLUDE_PREFIX", "")  # Read the filter once from the startup environment.
+        prefix_module.MIST_SITE_EXCLUDE_PREFIX = prefix_value  # Publish the canonical value for destructive filters.
         for module_name in self._site_prefix_consumer_names():  # Update each extracted module that copied the value.
             module = cast(Any, importlib.import_module(module_name))  # Resolve the already-imported consumer module.
-            module.MIST_SITE_EXCLUDE_PREFIX = _MH.MIST_SITE_EXCLUDE_PREFIX  # Keep filters consistent.
+            module.MIST_SITE_EXCLUDE_PREFIX = prefix_value  # Keep copied filters consistent with the canonical owner.
+        logging.debug(  # Log how many modules received the filter value.
+            "Published the site exclude prefix to %s modules",
+            len(self._site_prefix_consumer_names()) + 1,
+        )
 
     @staticmethod
     def _site_prefix_consumer_names() -> tuple[str, ...]:

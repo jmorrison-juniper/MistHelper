@@ -7,6 +7,27 @@
 
 ## Overview
 
+## 2026-09-14 reconciliation
+
+The current tree satisfies all 15 tasks. The before count was 14 done and 1 open.
+This change finishes T-15 and leaves 15 done and 0 open.
+
+- [x] T-01 `DeviceFetchConfig`: `src\refactors\device_data_fetcher.py` defines `DeviceFetchConfig`.
+- [x] T-02 `FAST_MODE_MAX_CONCURRENT_CONNECTIONS`: `src\refactors\fast_mode_constants.py` defines `FAST_MODE_MAX_CONCURRENT_CONNECTIONS`.
+- [x] T-03 `FAST_MODE_USE_CONNECTION_AWARE_THREADING`: `src\refactors\fast_mode_constants.py` defines `FAST_MODE_USE_CONNECTION_AWARE_THREADING`.
+- [x] T-04 `ENDPOINT_PRIMARY_KEY_STRATEGIES`: `src\refactors\endpoint_primary_key_strategies.py` defines `ENDPOINT_PRIMARY_KEY_STRATEGIES`.
+- [x] T-05 `detect_msp_privileges`: `src\refactors\msp_privilege_detection.py` defines `detect_msp_privileges`.
+- [x] T-06 `OrgInventoryExporter`: `src\export\org_inventory_exporter.py` defines `OrgInventoryExporter`.
+- [x] T-07 `PromptUtils`: `src\ui\prompt_utils.py` defines `PromptUtils`.
+- [x] T-08 `DataExporter`: `src\export\data_exporter.py` defines `DataExporter`.
+- [x] T-09 `InputUtils`: `src\utils\input_utils.py` defines `InputUtils`.
+- [x] T-10 `DataProcessingUtils`: `src\data\data_processing_utils.py` defines `DataProcessingUtils`.
+- [x] T-11 `VirtualChassisManager`: `src\device\virtual_chassis.py` defines `VirtualChassisManager`.
+- [x] T-12 `ConfigUtils`: `src\config\config_utils.py` defines `ConfigUtils`.
+- [x] T-13 `FilePathUtils`: `src\utils\file_path_utils.py` defines `FilePathUtils`.
+- [x] T-14 `tqdm`: `src\utils\tqdm_wrapper.py` defines `tqdm`.
+- [x] T-15 `MIST_SITE_EXCLUDE_PREFIX`: `src\refactors\mist_site_exclude_prefix.py` defines `MIST_SITE_EXCLUDE_PREFIX`.
+
 Fifteen atomic **Cat E fresh cross-package extraction** PRs — one candidate per PR — clearing every remaining actionable entry from the analyzer catalog (excluding `menu_actions` and `GlobalImportManager` per FR-010 / FR-009). Dispatch order mirrors the Dispatch Queue in the spec (bucket-first: Single-use → Low-use → Hot descending-by-LOC).
 
 **Bucket distribution**: 3 Single-use, 2 Low-use, 10 Hot. **Category distribution**: 15 Cat E, 0 Cat A, 0 Cat B.

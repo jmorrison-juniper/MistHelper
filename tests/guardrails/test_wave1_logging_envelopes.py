@@ -16,6 +16,9 @@ Reference: specs/192-compliance-decomposition-wave1/high-risk-function-map.md
 import logging  # For log-level constants used in caplog assertions
 
 import MistHelper  # Main module under test (all classes are module-level)
+from src.refactors.mist_site_exclude_prefix import (  # Import the canonical site filter owner.
+    MIST_SITE_EXCLUDE_PREFIX,  # Use the moved constant without a MistHelper pass-through.
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -147,7 +150,7 @@ class TestGetSiteSelectionEnvelopes:
                 input_utils=MistHelper.InputUtils,  # Safe input facade
                 data_exporter=MistHelper.DataExporter,  # Report writer facade
                 mistapi=MistHelper.mistapi,  # mistapi library reference
-                site_exclude_prefix=MistHelper.MIST_SITE_EXCLUDE_PREFIX,  # Exclusion prefix
+                site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,  # Use the canonical exclusion prefix.
             )
         )
         monkeypatch.setattr(  # Prevent real org_id lookup during __init__
@@ -214,7 +217,7 @@ class TestConfirmSiteVariableOperationEnvelopes:
                 input_utils=MistHelper.InputUtils,  # Safe input facade
                 data_exporter=MistHelper.DataExporter,  # Report writer facade
                 mistapi=MistHelper.mistapi,  # mistapi library reference
-                site_exclude_prefix=MistHelper.MIST_SITE_EXCLUDE_PREFIX,  # Exclusion prefix
+                site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,  # Use the canonical exclusion prefix.
             )
         )
         monkeypatch.setattr(  # Prevent real org_id lookup
