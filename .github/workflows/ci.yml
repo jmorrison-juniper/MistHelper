@@ -228,14 +228,30 @@ jobs:
   # ──────────────────────────────────────────────────────────────
   # TESTS + COVERAGE
   # ──────────────────────────────────────────────────────────────
-  pytest:
-    name: "pytest (coverage gate)"
+  pytest_coverage_shards:
+    name: "pytest coverage shard (${{ matrix.shard }})"
     needs:
       - pip_audit
       - mypy
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: root-and-contracts
+            test_paths: "tests/test_*.py tests/bootstrap tests/contract tests/guardrails tests/integration tests/maps tests/tools"
+            extra_ignore: "--ignore=tests/contract/upgrade_portal"
+          - shard: upgrade-contracts
+            test_paths: "tests/contract/upgrade_portal"
+            extra_ignore: ""
+          - shard: root-units
+            test_paths: "tests/unit"
+            extra_ignore: "--ignore=tests/unit/upgrade_portal"
+          - shard: upgrade-units
+            test_paths: "tests/unit/upgrade_portal"
+            extra_ignore: ""
     steps:
       - uses: actions/checkout@v7
         with:
@@ -257,30 +273,83 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt  # pinned pytest stack (issue #1779)
       - name: Run changelog fragment guard
-        # Issue #1899: run the shared-record guard before the large suite.
+        # Issue #1899: run the shared-record guard before the large shard.
         # A direct CHANGELOG.md edit then fails fast, with its own message.
+        if: ${{ matrix.shard == 'root-and-contracts' }}
         run: pytest tests/guardrails/test_changelog_fragment_policy.py -q
       - name: Run dependency import smoke tests
         # Issue #1948: the coverage scope excludes scripts/, so name the import
         # test directly and fail when a dependency removes an imported symbol.
+        if: ${{ matrix.shard == 'root-and-contracts' }}
         run: python -m pytest tests/unit/scripts/test_script_imports.py -q
       - name: Run tests with coverage
-        # Issue #888: this gate keeps SRC_PATH. Widening the measured scope adds
-        # uncovered lines to the denominator, so the percentage drops against the 80
-        # floor without any test changing. Widen it only together with the tests that
-        # cover the added code.
+        # Issue #888: each shard keeps the same SRC_PATH denominator. The final
+        # coverage gate combines the data before it applies the unchanged floor.
         #
         # Issue #2036: --timeout=120 gives each test 120 seconds before pytest marks
-        # it as FAILED with a traceback that names the hung call. The job limit is 15
-        # minutes, so a single stalled test now fails fast and visibly instead of
-        # silently consuming the full job budget.
-        run: pytest --ignore=tests/e2e --cov=${{ env.SRC_PATH }} --cov-fail-under=${{ env.COVERAGE_THRESHOLD }} --timeout=120
+        # it as FAILED with a traceback that names the hung call. The shard limit is
+        # 15 minutes, so a single stalled test fails fast and names the call.
+        run: pytest ${{ matrix.test_paths }} ${{ matrix.extra_ignore }} --ignore=tests/e2e --cov=${{ env.SRC_PATH }} --cov-report= --cov-fail-under=0 --timeout=120
+        env:
+          COVERAGE_FILE: .coverage.${{ matrix.shard }}
+      - name: Upload coverage data
+        # Issue #2650: each shard stores one hidden coverage data file. The final
+        # gate combines them and applies the threshold once.
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-${{ matrix.shard }}
+          path: .coverage.${{ matrix.shard }}
+          if-no-files-found: error
+          include-hidden-files: true
       - name: Report job timeout
         # Issue #2036: a cancelled result means the job hit timeout-minutes, not that
         # a test failed. This step writes a plain line so a reader can tell a stalled
         # runner from a broken test without counting timestamps in the log.
         if: cancelled()
-        run: echo "::error::The pytest job was cancelled at the timeout-minutes limit (15 min). A per-test timeout of 120 s should have caught any stalled test first. Check the log for a test that held the runner."
+        run: echo "::error::A pytest shard was cancelled at the timeout-minutes limit (15 min). A per-test timeout of 120 s should have caught any stalled test first. Check the log for a test that held the runner."
+
+  pytest:
+    name: "pytest (coverage gate)"
+    needs:
+      - pytest_coverage_shards
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install coverage tooling
+        run: pip install -r requirements-dev.txt
+      - name: Verify coverage shards
+        # Issue #2650: a failed or skipped shard means the final percentage is
+        # incomplete. Fail here before coverage reads partial data.
+        run: |
+          if [ "${{ needs.pytest_coverage_shards.result }}" != "success" ]; then
+            echo "::error::The coverage shards finished with ${{ needs.pytest_coverage_shards.result }}."
+            exit 1
+          fi
+      - name: Download coverage data
+        uses: actions/download-artifact@v8
+        with:
+          pattern: coverage-*
+          path: coverage-data
+          merge-multiple: true
+      - name: Combine coverage and enforce threshold
+        # Issue #2650: the final job keeps the required check name while shards
+        # run in parallel. The threshold stays unchanged at COVERAGE_THRESHOLD.
+        run: |
+          coverage combine --keep coverage-data
+          coverage report --fail-under=${{ env.COVERAGE_THRESHOLD }} | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Report job timeout
+        # Issue #2650: a final timeout now points to coverage combination, not to
+        # the test suite. Shards own per-test timeouts.
+        if: cancelled()
+        run: echo "::error::The coverage combine job was cancelled at the timeout-minutes limit (8 min). Check artifact download and coverage combine output."
 
   # ──────────────────────────────────────────────────────────────
   # SECURITY
