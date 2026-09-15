@@ -87,18 +87,32 @@ def test_credential_problem_edges_do_not_build_a_session(monkeypatch: pytest.Mon
     assert dotenv_value is None  # WHY: an absent .env file must not supply an organization.
 
 
-def test_second_web_bootstrap_call_reuses_context(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A second bootstrap call in one process keeps one explicit context."""
+def test_second_web_bootstrap_call_uses_separate_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A second default bootstrap call in one process receives a separate context."""
     logging.info("Patching bootstrap side effects for a two-call check")  # WHY: no file, network, or dependency work.
     startup = MagicMock(name="startup")  # WHY: count common startup calls.
     monkeypatch.setattr(ApplicationBootstrap, "_run_common_startup", startup)  # WHY: isolate bootstrap behavior.
-    monkeypatch.setattr(MistHelper, "_setup_runtime_flags", MagicMock(name="flags"))  # WHY: avoid real flags.
-    monkeypatch.setattr(MistHelper, "_initialize_dependencies", MagicMock(name="deps"))  # WHY: avoid imports.
+    monkeypatch.setattr(MistHelper, "_setup_runtime_flags", MagicMock(name="flags"), raising=False)  # WHY: avoid flags.
+    dependency_mock = MagicMock(name="deps")  # WHY: avoid real dependency imports during the context test.
+    monkeypatch.setattr(MistHelper, "_initialize_dependencies", dependency_mock, raising=False)  # WHY: no imports.
     first = ApplicationBootstrap(parse_cli=False)  # WHY: build the first web bootstrap.
     second = ApplicationBootstrap(parse_cli=False)  # WHY: build the second web bootstrap.
+    first.context.apisession = object()  # WHY: a session on one bootstrap must not leak to another.
     first.bootstrap_for_web()  # WHY: run the first explicit startup.
     second.bootstrap_for_web()  # WHY: run the second explicit startup.
     logging.debug("Bootstrap startup call count: %s", startup.call_count)  # WHY: report the two-call result.
-    assert first.context is MainEntrypoint.context  # WHY: the bootstrap must use the entry-point context.
-    assert second.context is MainEntrypoint.context  # WHY: a second call must not create hidden state.
+    assert first.context is not second.context  # WHY: default bootstrap contexts must isolate invocation state.
+    assert second.context.apisession is None  # WHY: the second bootstrap must not inherit the first session.
+    assert second.context is MainEntrypoint.context  # WHY: the active bridge must point to the latest bootstrap.
     assert startup.call_count == 2  # WHY: each explicit bootstrap call runs its side-effect boundary.
+
+
+def test_bootstrap_can_share_explicit_context() -> None:
+    """An explicit context remains shared when the caller asks for that behavior."""
+    logging.info("Building two bootstraps with an explicit context")  # WHY: test the allowed sharing path.
+    context = AppContext()  # WHY: explicit callers can own one context outside the bootstrap.
+    first = ApplicationBootstrap(context=context, parse_cli=False)  # WHY: first owner receives caller state.
+    second = ApplicationBootstrap(context=context, parse_cli=False)  # WHY: second owner receives same caller state.
+    logging.debug("Explicit context was reused: %s", first.context is second.context)  # WHY: report sharing status.
+    assert first.context is context  # WHY: the constructor must respect an explicit context.
+    assert second.context is context  # WHY: no hidden context is allowed when the caller passes one.

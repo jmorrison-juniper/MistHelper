@@ -18,6 +18,7 @@ import pytest  # WHY: monkeypatch fixture for MistHelper attribute overrides.
 import MistHelper  # WHY: cache tests exercise the runtime menu and mode dispatch tables.
 from src.refactors.main_entrypoint import (  # WHY: SUT + proxy direct imports.
     _MH,
+    AppContext,
     ApplicationBootstrap,
     MainEntrypoint,
     _MistHelperProxy,
@@ -123,6 +124,15 @@ class TestMainEntrypointRun:
         assert wired_misthelper["_establish_mist_session"].call_args == call(expected_args)  # WHY: step 7 args-pass.
         assert wired_misthelper["_configure_runtime_options"].call_args == call(expected_args)  # WHY: step 8a pass.
         assert wired_misthelper["_dispatch_main_mode"].call_args == call(expected_args)  # WHY: step 8b args-pass.
+
+    def test_run_replaces_active_context_for_each_invocation(self, wired_misthelper: dict[str, Any]) -> None:
+        """Each CLI invocation receives a fresh active context."""
+        old_context = MainEntrypoint.context  # WHY: capture the pre-run bridge owner for identity comparison.
+
+        MainEntrypoint.run()  # WHY: run must create and activate a fresh invocation context.
+
+        assert isinstance(MainEntrypoint.context, AppContext)  # WHY: legacy readers still need an AppContext view.
+        assert MainEntrypoint.context is not old_context  # WHY: one run must not reuse prior invocation state.
 
     def test_run_skips_startup_session_for_offline_safe_test(self, wired_misthelper: dict[str, Any]) -> None:
         """A no-token `--test` run reaches the test dispatcher without Mist session startup."""
