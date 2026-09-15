@@ -139,17 +139,20 @@ Validate from the Mist cloud first. The gateway is usually still reachable when 
 | Check | Command |
 |---|---|
 | System, model, and uptime | `show system` |
-| Cloud connectivity | `show system connected` |
+| Mist cloud link | `show mist` |
 | Physical port state | `show device-interface` |
+| Port error counters | `show device-interface <name> extended-statistics` |
+| Optical transmit and receive levels | `show device-interface <name> optics-statistics` |
 | Logical interface state | `show network-interface` |
+| Neighbor that the port sees | `show lldp-neighbors` |
 | Alarms on the box | `show alarms` |
-| Recent events | `show events` |
-| Routing table | `show route` |
+| Recent events | `show events from 1d` |
+| Routes that the router learned | `show rib` |
 | SVR peer paths | `show peers` |
 | BGP session summary | `show bgp summary` |
-| Reachability to the hub with a pinned source | `ping <hub-public-ip> source <local-transport-ip>` |
+| Reachability to the hub over a chosen path | `ping egress-interface <network-interface> <hub-public-ip>` |
 
-**Never** run a bare `ping <target>` on an SSR. The packet may leave through the wrong interface and report a false negative. Always pin the source with `source <local-transport-ip>`. See Shared Appendix §7.
+**Never** run a bare `ping <target>` on an SSR. The request can leave through the wrong interface and report a false failure. Name the path with `egress-interface <network-interface>`. The `ping` command holds no `source` keyword. See Shared Appendix §7 and [SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md) stage C.
 
 ### On an SRX gateway (Junos, not SSR)
 
@@ -220,20 +223,27 @@ SSR uses PCLI. Do not paste Junos syntax into an SSR.
 | Purpose | Command |
 |---|---|
 | System, model, and uptime | `show system` |
-| Cloud connectivity | `show system connected` |
+| Mist cloud link | `show mist` |
 | Physical ports | `show device-interface` |
+| Physical ports, one line each | `show device-interface summary` |
+| Port error counters | `show device-interface <name> extended-statistics` |
+| Optical levels | `show device-interface <name> optics-statistics` |
 | Logical interfaces | `show network-interface` |
+| Neighbor that each port sees | `show lldp-neighbors` |
+| Take one port down without a config change | `set provisional-status node <node> <device-interface> down` |
 | Alarms | `show alarms` |
-| Events | `show events` |
-| Routing table | `show route` |
+| Events | `show events from 1d` |
+| Routes that the router learned | `show rib` |
 | SVR peer paths | `show peers` |
 | BGP summary | `show bgp summary` |
-| BGP peer detail | `show bgp neighbor <peer-ip>` |
-| Active sessions | `show sessions summary` |
-| Reachability with a pinned source | `ping <target> source <local-transport-ip>` |
+| BGP peer detail | `show bgp neighbors <peer-ip>` |
+| Active sessions | `show sessions rows 20` |
+| Reachability over a chosen path | `ping egress-interface <network-interface> <target>` |
 | Path to a remote target | `traceroute <target>` |
 
-See Shared Appendix §7 for the full SSR PCLI reference, and §6 for the Junos reference used on SRX gateways.
+Warning: `set provisional-status` takes a port down. Use it only for a planned failover test, and only with approval. It is service affecting.
+
+See Shared Appendix §7 for the full SSR PCLI reference, §6 for the Junos reference used on SRX gateways, and [SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md) for the failure signature of each command.
 
 ## 9. Cross-references (sibling alarms)
 

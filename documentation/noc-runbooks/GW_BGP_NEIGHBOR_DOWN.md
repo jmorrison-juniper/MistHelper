@@ -34,7 +34,7 @@ The downstream paging/ticketing tier escalates this alarm to **critical** on tha
 | Layer | Control plane — exchanges routes | Data plane — forwards session-oriented traffic between SSRs |
 | Transport | TCP/179 to peer IP over an underlay interface | UDP-based Secure Vector Routing between SSRs over one or more transports |
 | Independence | BGP can be `Established` while SVR peer paths are down | SVR peer paths can be `up` while BGP is down |
-| SSR command | `show bgp summary`, `show bgp neighbor <peer-ip>` | `show peers` |
+| SSR command | `show bgp summary`, `show bgp neighbors <peer-ip>` | `show peers` |
 | Mist GUI | BGP state is not surfaced in a dedicated view — use PCLI | WAN Assurance → Peer Path Insights |
 
 The two often correlate: a shared WAN transport can bring both down at once. Validate each separately with its own commands.
@@ -87,20 +87,20 @@ See Shared Appendix §5 for the always-required ticket fields.
 | Check | Command / Action |
 |---|---|
 | SSR reachable in Mist | Mist UI → WAN Edges → *device* → Health / Insights |
-| SSR connected to conductor / cloud | `show system connected` |
+| Mist cloud link | `show mist` |
 | System status | `show system` |
 | BGP session summary | `show bgp summary` |
-| Specific peer detail | `show bgp neighbor <peer-ip>` |
-| Received routes from peer | `show bgp neighbor <peer-ip> received-routes` |
-| Advertised routes to peer | `show bgp neighbor <peer-ip> advertised-routes` |
-| Routing table (does peer's prefix appear?) | `show route` |
+| Specific peer detail | `show bgp neighbors <peer-ip>` |
+| Received routes from peer | `show bgp neighbors <peer-ip> received-routes` |
+| Advertised routes to peer | `show bgp neighbors <peer-ip> advertised-routes` |
+| Routes that the router learned from BGP | `show rib bgp` |
 | Physical / logical interface state | `show device-interface` and `show network-interface` |
-| Reachability to peer using correct source | `ping <peer-ip> source <local-transport-ip>` |
+| Reachability to peer over a chosen path | `ping egress-interface <network-interface> <peer-ip>` |
 | Path to peer | `traceroute <peer-ip>` |
 | Alarms on device | `show alarms` |
-| BGP-scoped event log | `show events filter type bgp` |
+| Alarm event history | `show events type alarm` |
 
-**Never** run a bare `ping <peer-ip>` on SSR — it may egress from the wrong interface and produce a false-negative. Always pin the source with `source <local-transport-ip>`. See Shared Appendix §7.
+**Never** run a bare `ping <peer-ip>` on an SSR. The request can leave through the wrong interface and report a false failure. Name the path with `egress-interface <network-interface>`. The `ping` command holds no `source` keyword. See Shared Appendix §7 and [SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md) stage D.
 
 ### SVR peer-path checks (only if correlated SVR alarm is active, or the shared transport is suspect)
 
@@ -117,7 +117,7 @@ If SVR peer paths are healthy while BGP is down, transport is not the root cause
 |---|---|
 | Underlay link | If a WAN link alarm (`bad_wan_uplink`, `intermittent_wan_connectivity`) is co-firing, resolve that first — BGP will re-establish once transport recovers. |
 | Peer device | Verify the DC-hub SSR1300's BGP process is up (check the hub-side runbook / Mist WAN Edges view for that hub). If the hub-side gateway is impaired, coordinate with the hub-side on-call rather than driving from the branch. |
-| Reachability | From SSR, confirm the peer is reachable **from the correct source IP** with `ping <peer-ip> source <local-transport-ip>`. |
+| Reachability | From SSR, confirm the peer is reachable over the transport that carries the session with `ping egress-interface <network-interface> <peer-ip>`. |
 | MTU / TCP MSS | If the session repeatedly reaches `OpenSent` then fails, suspect PMTUD blackhole. Verify path MTU and MSS clamping on the transport. |
 | Timers / graceful restart | If flap coincides with peer maintenance, confirm hold-time, keepalive, and graceful-restart settings match on both ends. |
 | Authentication | If the neighbor uses MD5, verify the shared secret is identical on both peers; a recent rotation on either side will drop the session. |
@@ -174,13 +174,13 @@ SSR uses PCLI, not Junos. Do not paste Junos syntax into an SSR.
 
 | Purpose | Command |
 |---|---|
-| System / model / uptime | `show system` |
-| Conductor / cloud connectivity | `show system connected` |
+| System state, role, version, uptime, alarm count | `show system` |
+| Mist cloud link | `show mist` |
 | Alarms | `show alarms` |
 | Device interfaces (physical) | `show device-interface` |
 | Network interfaces (logical) | `show network-interface` |
-| Routing table | `show route` |
-| Reachability with correct source | `ping <peer-ip> source <local-transport-ip>` |
+| Routes that the router learned | `show rib` |
+| Reachability over a chosen path | `ping egress-interface <network-interface> <peer-ip>` |
 | Path to peer | `traceroute <peer-ip>` |
 
 **BGP (this alarm):**
@@ -188,19 +188,21 @@ SSR uses PCLI, not Junos. Do not paste Junos syntax into an SSR.
 | Purpose | Command |
 |---|---|
 | BGP summary | `show bgp summary` |
-| BGP peer detail | `show bgp neighbor <peer-ip>` |
-| BGP received routes | `show bgp neighbor <peer-ip> received-routes` |
-| BGP advertised routes | `show bgp neighbor <peer-ip> advertised-routes` |
-| BGP event log | `show events filter type bgp` |
+| BGP peer detail | `show bgp neighbors <peer-ip>` |
+| BGP received routes | `show bgp neighbors <peer-ip> received-routes` |
+| BGP advertised routes | `show bgp neighbors <peer-ip> advertised-routes` |
+| Routes learned from BGP | `show rib bgp` |
+| Alarm event history | `show events type alarm` |
 
 **SVR (only for correlated peer-path checks — SVR outages are separate alarms):**
 
 | Purpose | Command |
 |---|---|
 | SVR peer paths (all peers, all transports) | `show peers` |
-| Active sessions on device | `show sessions summary` |
+| SVR peer path quality | `show peers detail` |
+| Active sessions on device | `show sessions rows 20` |
 
-See Shared Appendix §7 for the full SSR PCLI reference.
+See Shared Appendix §7 for the full SSR PCLI reference, and [SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md) for the failure signature of each command.
 
 ## 9. Cross-references (sibling alarms)
 

@@ -17,6 +17,16 @@ documentation/ASD-STE100_ISSUE9.pdf
 # STE linter dictionary - generated locally from the licensed PDF, never committed
 data/ste_dictionary.json
 
+# Vendor reference corpus - do not redistribute (Juniper Networks copyright).
+# Holds the Session Smart Networking documentation and the Juniper Mist PDFs that
+# the NOC runbooks cite. The files are verbatim vendor text, so they follow the
+# same rule as data/ste_dictionary.json above: generated locally, never committed.
+# The distilled runbooks under documentation/noc-runbooks/ are committed instead.
+# Rebuild the corpus with:
+#   python scripts/fetch_ssr_docs.py
+#   python scripts/pdf_to_markdown.py <downloaded.pdf>
+documentation/references/
+
 .env.local
 .env.production
 .env.staging
