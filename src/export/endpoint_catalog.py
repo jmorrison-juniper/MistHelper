@@ -89,7 +89,7 @@ ENDPOINT_CATALOG: dict[str, EndpointInfo] = {
     "getOrgAAMWProfile": EndpointInfo("Get org AAMW profile", INTERACTIVE_SAFE),
     "getOrgAlarmTemplate": EndpointInfo("Get org alarm template", INTERACTIVE_SAFE),
     "getOrgAntivirusProfile": EndpointInfo("Get org antivirus profile (needs AV profile)", INTERACTIVE_SAFE),
-    "getOrgAosRegisterCmd": EndpointInfo("Get org aos register cmd", INTERACTIVE_SAFE),
+    "getOrgAoscxRegisterCmd": EndpointInfo("Get org AOS-CX register command", INTERACTIVE_SAFE),
     "getOrgApiToken": EndpointInfo("Get org API token", INTERACTIVE_SAFE),
     "getOrgApplicationList": EndpointInfo("Get org application list", INTERACTIVE_SAFE),
     "getOrgAptemplate": EndpointInfo("Get org AP template", INTERACTIVE_SAFE),

@@ -495,7 +495,7 @@
 
 | operationId | Path | Summary | mistapi module |
 |---|---|---|---|
-| `getOrgAosRegisterCmd` | `/api/v1/orgs/{org_id}/aos/register_cmd` | getOrgAosRegisterCmd | `mistapi.api.v1.orgs.aos.register_cmd` |
+| `getOrgAoscxRegisterCmd` | `/api/v1/orgs/{org_id}/aoscx/register_cmd` | getOrgAoscxRegisterCmd | `mistapi.api.v1.orgs.aoscx.register_cmd` |
 
 ## Orgs Devices - Others
 

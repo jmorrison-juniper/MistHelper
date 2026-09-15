@@ -2,7 +2,7 @@
 # Requires Python 3.13 or newer
 
 # Core API and networking
-mistapi>=0.63.3
+mistapi>=0.64.0,<0.65
 requests
 websocket-client>=1.8.0
 urllib3

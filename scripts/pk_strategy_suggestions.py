@@ -574,12 +574,12 @@ SUGGESTED_PK_STRATEGIES = {
         "description": "getOrg \u2014 stable UUID entities (sample fields: alarmtemplate_id, allow_mist, created_time, id, modified_time)",
     },
     # Live response fields: ['cli_commands']
-    "getOrgAosRegisterCmd": {
+    "getOrgAoscxRegisterCmd": {
         "type": "auto_increment_with_unique",
         "primary_key": ["misthelper_internal_id"],
         "indexes": [],
         "unique_constraints": [],
-        "description": "getOrgAosRegisterCmd \u2014 no stable key \u2014 internal id assigned (sample fields: cli_commands)",
+        "description": "getOrgAoscxRegisterCmd \u2014 no stable key \u2014 internal id assigned (sample fields: cli_commands)",
     },
     # Live response fields: []
     "getOrgApplicationList": {

@@ -63,7 +63,7 @@ _NONE_OPS: tuple[_SimpleEndpointOp, ...] = (
 )
 
 _ORG_OPS: tuple[_SimpleEndpointOp, ...] = (
-    _SimpleEndpointOp("getOrgAosRegisterCmd", "mistapi.api.v1.orgs.aos"),  # Issue #1108.
+    _SimpleEndpointOp("getOrgAoscxRegisterCmd", "mistapi.api.v1.orgs.aoscx"),  # Issue #1108.
     _SimpleEndpointOp("getOrgApplicationList", "mistapi.api.v1.orgs.wxtags"),  # Issue #1110.
     _SimpleEndpointOp("getOrgCapturingStatus", "mistapi.api.v1.orgs.pcaps"),  # Issue #1114.
     _SimpleEndpointOp("getOrgCrlFile", "mistapi.api.v1.orgs.crl"),  # Issue #1115.

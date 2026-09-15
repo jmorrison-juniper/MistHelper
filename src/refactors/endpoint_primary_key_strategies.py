@@ -1657,6 +1657,13 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Mist site count distribution (countSiteWirelessClients)",
     },
+    "countSiteIotEndpoints": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": ["site_id", "org_id"],
+        "unique_constraints": [],
+        "description": "Mist site count distribution (countSiteIotEndpoints)",
+    },
     "countSiteZoneSessions": {
         "type": "auto_increment_with_unique",
         "primary_key": ["misthelper_internal_id"],
@@ -2449,12 +2456,12 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "SSL proxy certificate",
     },
-    "getOrgAosRegisterCmd": {
+    "getOrgAoscxRegisterCmd": {
         "type": "auto_increment_with_unique",
         "primary_key": ["misthelper_internal_id"],
         "indexes": ["org_id"],
         "unique_constraints": [],
-        "description": "AOS register command",
+        "description": "AOS-CX register command",
     },
     "getOrgSsrRegistrationCommands": {
         "type": "auto_increment_with_unique",
