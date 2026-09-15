@@ -774,10 +774,12 @@ from src.websocket.manager import WebSocketManager  # Import WebSocket connectio
 def _get_installed_version(package_name: str) -> str:  # Look up the installed version string for a package
     """Get installed version of a package using importlib.metadata."""
     try:  # Try to read version metadata from the installed distribution
+        from importlib.metadata import PackageNotFoundError  # Import the precise absence signal for metadata lookup
         from importlib.metadata import version as get_version  # Import the stdlib version lookup (Python 3.8+)
 
         return get_version(package_name)  # Return the installed version string (for example '0.59.3')
-    except Exception:  # Package not installed or its metadata is absent
+    except (PackageNotFoundError, ValueError) as error:  # Missing metadata or a bad name must not stop startup
+        logging.exception("Installed package version lookup failed for %s: %s", package_name, error)  # Keep trace
         return ""  # Return empty string to signal 'not installed' to callers
 
 
@@ -827,7 +829,8 @@ def _get_latest_pypi_version(package_name: str) -> str:  # Ask PyPI for a packag
         data = response.json()  # Parse the small JSON body through requests
         version = data.get("info", {}).get("version", "")  # Return latest version string, or empty if absent
         return str(version) if version else ""  # Cast to str for strict typing
-    except Exception:  # Any error (offline, proxy block, parse failure) means we cannot determine the latest version
+    except (ImportError, OSError, TypeError, ValueError) as error:  # Offline hosts and bad JSON mean latest is unknown
+        logging.exception("Latest package version lookup failed for %s: %s", package_name, error)  # Keep trace
         return ""  # Empty string signals 'latest unknown' so callers skip the upgrade check
 
 
@@ -865,8 +868,8 @@ def _parse_requirements_file(filepath: str = "requirements.txt") -> list[tuple[s
     except FileNotFoundError:  # requirements.txt does not exist at the given path
         logging.warning("Requirements file not found: %s", filepath)  # Warn that auto-install is skipped
         return []  # No packages to check
-    except Exception as parse_error:  # Any other read/parse error
-        logging.warning("Error parsing requirements file: %s", parse_error)  # Log the failure reason
+    except (OSError, UnicodeDecodeError) as parse_error:  # Bad files must skip startup install without a crash
+        logging.warning("Error parsing requirements file: %s", parse_error, exc_info=True)  # Keep the traceback
         return []  # Fail safe with an empty list rather than crashing startup
 
         # _early_dependency_check_legacy_impl removed per issue #431 (ARCH-NAMING +
@@ -1038,8 +1041,8 @@ def _fallback_load_dotenv() -> None:  # Minimal .env parser used when python-dot
                 _apply_dotenv_line(line)  # Set this KEY=VALUE pair (skips blanks/comments internally)
     except FileNotFoundError:  # No .env file present
         logging.debug("No .env file found")  # Not an error. Just note it at debug level
-    except Exception as parse_error:  # Any other read/parse problem
-        logging.debug("Error loading .env file: %s", parse_error)  # Log the reason without crashing startup
+    except (OSError, UnicodeDecodeError, ValueError) as parse_error:  # Bad .env content must not stop startup
+        logging.debug("Error loading .env file: %s", parse_error, exc_info=True)  # Keep the traceback for repair
 
 
 if "load_dotenv" not in globals():  # Keep the loader name without reading .env during module import.
@@ -1569,8 +1572,8 @@ class GlobalImportManager:
                 return True  # Installed via pip
             logging.warning("Failed to install/upgrade %s", pkg_spec)  # Both paths failed -- warn, keep going
             return False  # This package did not install
-        except Exception as e:  # Any unexpected error during install of this package
-            logging.warning("Error processing package %s: %s", pkg_spec, e)  # Log and continue with remaining packages
+        except (OSError, SubprocessError, ValueError, RuntimeError) as e:  # Package tool errors affect only this item
+            logging.warning("Error processing package %s: %s", pkg_spec, e, exc_info=True)  # Keep the traceback
             return False  # Treat as a failed package
 
     def _import_concurrent_futures(self) -> Any:
@@ -1649,8 +1652,10 @@ class GlobalImportManager:
             logging.debug("Current version of %s: %s", package_name, current_version)  # Record the current version
             logging.info("  Checking for updates to %s...", package_name)  # Inform the user an upgrade check runs
             return self._upgrade_and_verify(package_name, package_spec, current_version)  # Upgrade + report
-        except Exception as e:  # Any unexpected error during the check/upgrade
-            logging.debug("Error checking/upgrading %s: %s", module_name, e)  # Log for diagnostics
+        except (KeyboardInterrupt, SystemExit):  # Operators must be able to stop startup immediately
+            raise  # Do not convert an operator stop into a successful startup check
+        except Exception as e:  # Broad by contract because upgrade checks are always non-fatal
+            logging.warning("Error checking/upgrading %s: %s", module_name, e, exc_info=True)  # Keep startup non-fatal
             return True  # Non-critical failure -- never block startup on upgrade issues
 
     @staticmethod
@@ -1925,9 +1930,15 @@ class GlobalImportManager:
         try:
             result: tuple[str, bool] = future.result()  # Retrieve the worker's return value (re-raises worker errors)
             return result  # Return the successful result
-        except Exception as exc:  # A worker raised an unexpected exception
+        except (
+            concurrent.futures.CancelledError,
+            TimeoutError,
+            ImportError,
+            OSError,
+            RuntimeError,
+        ) as exc:  # Worker failed
             with log_lock:  # Serialize the error log line against other worker threads
-                logging.error("Package %s import generated an exception: %s", package_info[0], exc)  # Log the failure
+                logging.exception("Package %s import generated an exception: %s", package_info[0], exc)  # Keep trace
             return None  # Signal failure to caller
 
     def _import_packages_concurrently(
@@ -2148,10 +2159,12 @@ class GlobalImportManager:
                 vars(sys.modules[__name__])["mistapi"] = mistapi  # Bind dynamic SDK module without a typed attr write
                 logging.debug("Successfully imported mistapi main module")  # Confirm SDK wired up
                 self._verify_mistapi_api_structure(mistapi)  # Run the hasattr structural check
-            except Exception as sub_e:  # Sub-module wiring hit an unexpected issue
-                logging.debug("Note: mistapi sub-modules handled dynamically: %s", sub_e)  # Non-fatal
-        except Exception as e:  # Failed to even access the cached mistapi object
-            logging.warning("Error accessing mistapi: %s", e)  # Warn -- API features may be unavailable
+            except (KeyError, AttributeError, TypeError, RuntimeError) as sub_e:  # Optional SDK wiring failed safely
+                logging.debug(
+                    "Note: mistapi sub-modules handled dynamically: %s", sub_e, exc_info=True
+                )  # Keep the traceback
+        except (KeyError, AttributeError, TypeError) as e:  # Cached SDK access failed before feature dispatch
+            logging.warning("Error accessing mistapi: %s", e, exc_info=True)  # Warn with traceback for repair
 
     def _verify_mistapi_api_structure(self, mistapi: Any) -> None:
         """Verify mistapi.api.v1 module structure is present and log the result."""
@@ -2206,7 +2219,10 @@ def _get_tuning_data_file_path() -> str:
     data_dir = os.path.join(os.getcwd(), "data")  # Build the path to the data/ subdirectory under the CWD
     try:
         os.makedirs(data_dir, exist_ok=True)  # Create data/ if it does not already exist (idempotent)
-    except Exception:
+    except (KeyboardInterrupt, SystemExit):  # Operators must be able to stop before logging is ready
+        raise  # Do not hide an operator stop behind the tuning file fallback
+    except Exception as error:  # Broad by design because logging may not be ready during early startup
+        logging.exception("Failed to create data directory for tuning data: %s", error)  # Keep early failure trace
         # If directory creation fails, fall back to current working directory.
         # Logging deferred until logger configured.
         return os.path.join(os.getcwd(), "tuning_data.json")  # Degrade gracefully to a CWD-level file
@@ -2578,9 +2594,15 @@ def _invoke_mistapi_org_picker_and_apply() -> None:
         else:  # The user selected nothing
             echo("  X No organization selected")
             logging.warning("No organization selected from session privileges")  # Log the empty selection
-    except Exception as e:  # The SDK picker raised an error
+    except (
+        AttributeError,
+        TypeError,
+        IndexError,
+        ValueError,
+        OSError,
+    ) as e:  # Picker errors should keep login controlled
         echo("  X Error selecting organization: %s", e)
-        logging.error("Failed to select org from session: %s", e)  # Log the failure detail (not a SQL statement)
+        logging.exception("Failed to select org from session: %s", e)  # Keep picker traceback
 
 
 def _select_org_from_session() -> None:
@@ -2745,8 +2767,13 @@ def _check_token_rate_limit(token: str, test_host: str, label: str) -> bool:
         else:  # Any unexpected status treated as unavailable (defensive)
             logging.warning("Token %s returned unexpected status %d", label, response.status_code)
             return True  # Treat unexpected response as unavailable for safety
-    except Exception as test_err:
-        logging.warning("Failed to test token %s: %s", label, test_err)
+    except (
+        ImportError,
+        OSError,
+        RuntimeError,
+        ValueError,
+    ) as test_err:  # Probe failures make only this token unavailable
+        logging.warning("Failed to test token %s: %s", label, test_err, exc_info=True)  # Keep probe trace
         return True  # Treat connection exception as unavailable to avoid broken tokens
 
 
@@ -2771,8 +2798,10 @@ def _introspect_apisession_class(mistapi_module: Any) -> tuple[Any, list[str]]:
         sig_params = list(inspect.signature(apisession_cls).parameters.keys())  # Inspect constructor for param names
         logging.debug("mistapi.APISession accepted parameters: %s", sig_params)
         return apisession_cls, sig_params  # Return class and parameter name list
-    except Exception:  # Introspection failed (unusual but non-fatal -- proceed with empty params)
-        logging.debug("Failed to introspect APISession signature -- proceeding with empty param list")
+    except (TypeError, ValueError) as error:  # Some SDK callables do not expose a signature
+        logging.debug(
+            "Failed to introspect APISession signature: %s", error, exc_info=True
+        )  # Proceed with no parameter list
         return apisession_cls, []  # Return class but no param info -- attempts list will be minimal
 
 
@@ -2856,8 +2885,8 @@ def _log_session_attempt_traceback(exc: Exception) -> None:
         tb_details = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))  # Format full traceback
         for line in tb_details.rstrip().splitlines():  # Split into individual lines for log aggregator
             logging.info("  TRACE: %s", line)  # Prefix with TRACE so operators can filter
-    except Exception as trace_err:
-        logging.warning("Failed to log traceback: %s", trace_err)  # Non-fatal -- continue without trace
+    except (TypeError, ValueError, OSError, RuntimeError) as trace_err:  # Secondary trace logging must not hide auth
+        logging.warning("Failed to log traceback: %s", trace_err, exc_info=True)  # Non-fatal with secondary trace
 
 
 def _try_single_session_kwargs(
@@ -2873,9 +2902,11 @@ def _try_single_session_kwargs(
         session = apisession_cls(**kwargs)  # Attempt APISession constructor with these kwargs
         logging.info("Mist API session initialized with mistapi.APISession using kwargs=%s", list(kwargs.keys()))
         return session, False  # Success -- no rate-limit signal needed
-    except Exception as e:  # Constructor failed for this kwargs combination
+    except (TypeError, ValueError, RuntimeError, OSError) as e:  # Constructor variant failed without ending retries
         error_msg = str(e)  # Convert exception to string for rate-limit signature check
-        logging.warning("APISession attempt %d/%d failed kwargs=%s: %s", attempt_num, total, kwargs, e)
+        logging.warning(
+            "APISession attempt %d/%d failed kwargs=%s: %s", attempt_num, total, kwargs, e, exc_info=True
+        )  # Keep constructor trace while the retry loop continues
         rate_limit = (
             "'NoneType' object is not iterable" in error_msg
         )  # Heuristic for rate-limit during token validation
@@ -2949,8 +2980,8 @@ def _create_session_isolated_from_env(apisession_cls: Any, filtered_kwargs: dict
         session = apisession_cls(**filtered_kwargs)  # Create session with filtered token set
         logging.info("SUCCESS: API session initialized with filtered token kwargs=%s", list(filtered_kwargs.keys()))
         return session  # Caller pairs it back with filtered_kwargs for auth validation
-    except Exception as filtered_err:  # Constructor still failed even with filtered tokens
-        logging.error("Failed to initialize with filtered tokens: %s", filtered_err)  # Log failure reason
+    except (TypeError, ValueError, RuntimeError, OSError) as filtered_err:  # Filtered retry can still fail safely
+        logging.exception("Failed to initialize with filtered tokens: %s", filtered_err)  # Keep trace
         return None  # Signal failure to caller
 
 
@@ -3008,8 +3039,8 @@ def _try_session_fallback(mistapi_module: Any) -> tuple[Any, Any]:
         session = mistapi_module.Session()  # Attempt legacy Session() with no explicit params
         logging.info("Mist API session initialized with mistapi.Session fallback")
         return session, {"fallback": "mistapi.Session"}  # Return session and method label for auth validation
-    except Exception as e:
-        logging.error("mistapi.Session fallback failed: %s", e)  # Log why the last resort failed
+    except (TypeError, ValueError, RuntimeError, OSError) as e:  # Last-resort SDK session creation failed safely
+        logging.exception("mistapi.Session fallback failed: %s", e)  # Log why the last resort failed
         return None, None  # Fallback also failed -- caller will report total failure
 
 
@@ -5967,11 +5998,13 @@ def _invoke_one_systematic_test(
         emitter.emit_test_pass(option, description, duration, "systematic")  # Record pass
         logging.info("SYSTEMATIC_TEST: Successfully completed menu option %s", option)
         return True, duration
-    except Exception as exc:  # Catch all so harness continues
+    except (KeyboardInterrupt, SystemExit):  # Operators and automation must be able to stop the harness
+        raise  # Do not record a stop request as a menu test failure
+    except Exception as exc:  # Broad by design so one menu defect cannot stop the test harness
         duration = time.time() - op_start  # Still record elapsed
         echo("   [FAILED]  Option %s failed: %s...", option, str(exc)[:100])
         emitter.emit_test_fail(option, description, duration, exc, "systematic")  # Record failure
-        logging.error("SYSTEMATIC_TEST: Failed menu option %s: %s", option, exc)
+        logging.exception("SYSTEMATIC_TEST: Failed menu option %s: %s", option, exc)  # Keep menu failure trace
         return False, duration
 
 
@@ -6003,7 +6036,10 @@ def _fast_mode_from_global() -> bool:
     """Return True iff the module-level ``FAST_MODE_ENABLED`` flag is set (errors -> False)."""
     try:  # Context access is normally safe but guarded for parity with original.
         return bool(MainEntrypoint.context.fast_mode_enabled)  # Read the context flag set by CLI parse at startup.
-    except Exception:  # Defensive -- never propagate.
+    except (KeyboardInterrupt, SystemExit):  # Operators must be able to stop fast-mode resolution
+        raise  # Do not convert an operator stop into the default fast-mode value
+    except Exception as error:  # Broad by design so a broken context only disables fast mode
+        logging.exception("Failed to read context fast-mode flag: %s", error)  # Keep context failure trace
         return False  # Safe default for any introspection failure.
 
 
@@ -6012,7 +6048,10 @@ def _fast_mode_from_cli_args() -> bool:
     try:  # CLI args presence + attribute lookup can both fail. Degrade safely.
         cli_args = globals().get("args") if "args" in globals() else None  # Locate parsed args, if any.
         return bool(cli_args and getattr(cli_args, "fast", False))  # Truthy only when the caller set --fast.
-    except Exception:  # Defensive -- never propagate.
+    except (KeyboardInterrupt, SystemExit):  # Operators must be able to stop CLI flag resolution
+        raise  # Do not convert an operator stop into the default fast-mode value
+    except Exception as error:  # Broad by design so a broken CLI namespace only disables fast mode
+        logging.exception("Failed to read CLI fast-mode flag: %s", error)  # Keep CLI namespace failure trace
         return False  # Safe default for any introspection failure.
 
 
@@ -6783,10 +6822,11 @@ def _setup_runtime_flags(args: argparse.Namespace) -> None:
         MainEntrypoint.context.fast_mode_enabled = bool(
             args.fast
         )  # Derive flag from --fast CLI argument (bool is safe cast)
-    except Exception:
+    except (AttributeError, TypeError) as error:  # Bad args or a broken context must only disable fast mode
+        logging.warning("Failed to set context fast-mode flag: %s", error, exc_info=True)  # Keep trace for repair
         MainEntrypoint.context.fast_mode_enabled = False  # Fail-safe: ensure symbol exists even if args access fails
     logging.debug("FAST_MODE_ENABLED set to %s", MainEntrypoint.context.fast_mode_enabled)  # Log fast mode state
-    if args.fast:  # Announce scope only when fast mode actually engaged
+    if MainEntrypoint.context.fast_mode_enabled:  # Announce only after the guarded flag write succeeds
         _announce_fast_mode_scope()  # Log + print fast-capable function list
     logging.debug("_setup_runtime_flags: complete")  # Log exit
 
@@ -6936,7 +6976,8 @@ def _configure_runtime_options(args: argparse.Namespace) -> None:
             os.path.join("data", "test_events.jsonl")
         )  # Initialize JSONL telemetry emitter
         logging.info("Progress telemetry emitter initialized: data/test_events.jsonl")  # Log emitter ready
-    except Exception as emitter_exc:
+    except (OSError, ValueError, TypeError) as emitter_exc:  # Telemetry file issues must not stop the CLI
+        logging.warning("Progress telemetry emitter init failed: %s", emitter_exc, exc_info=True)  # Keep trace
         echo("Progress telemetry emitter init failed (non-blocking): %s", emitter_exc)  # Log non-fatal failure
         MainEntrypoint.context.progress_emitter = None  # Set to None so callers skip telemetry gracefully
     if args.debug:  # Apply debug logging level to file handlers. Keep console at INFO to avoid noise
@@ -7022,7 +7063,9 @@ def _run_tui_event_loop(args: argparse.Namespace) -> None:
         tui.run()  # Launch TUI event loop (blocks until user exits)
     except KeyboardInterrupt:  # User pressed Ctrl+C inside the TUI
         _handle_tui_keyboard_interrupt(args.debug)  # Log and inform user of clean exit
-    except Exception as error:  # Unexpected error inside the TUI event loop
+    except SystemExit:  # Program exits from the TUI must keep their intended code
+        raise  # Do not convert an explicit exit into a fatal TUI crash
+    except Exception as error:  # Broad by design so TUI defects keep terminal cleanup and traceback logging
         _handle_tui_exception(args.debug, error)  # Log + print + exit(1)
 
 
@@ -7261,7 +7304,9 @@ def _execute_interactive_menu_action(iwant: str, func: Callable[[], None], conta
         _dispatch_post_menu_success(iwant, container_mode)  # Branch on container vs direct + session-management ops.
     except KeyboardInterrupt:  # User pressed Ctrl+C during operation.
         _handle_post_menu_interrupt(iwant, container_mode)  # Container loops. Direct exits with SIGINT code.
-    except Exception as error:  # Unexpected error during menu function execution.
+    except SystemExit:  # Menu functions can request a controlled process exit
+        raise  # Do not turn a deliberate exit into an operation failure
+    except Exception as error:  # Broad by design so one menu defect does not crash a container session
         _handle_post_menu_exception(iwant, error, container_mode)  # Container loops. Direct exits with error code.
 
 
@@ -7298,7 +7343,7 @@ def _handle_post_menu_interrupt(iwant: str, container_mode: bool) -> None:
 
 def _handle_post_menu_exception(iwant: str, error: Exception, container_mode: bool) -> None:
     """Handle an unexpected exception raised during a menu function call."""
-    logging.error("Error executing menu option '%s': %s", iwant, error)  # Log error with context.
+    logging.exception("Error executing menu option '%s': %s", iwant, error)  # Log error with traceback.
     if container_mode:  # Container mode: show error but return to menu.
         logging.debug("Container mode: option '%s' failed with error, returning to menu", iwant)  # Log container error.
         logging.error("\n[CONTAINER MODE] Error in operation '%s': %s", iwant, error)
@@ -7449,30 +7494,34 @@ if __name__ == "__main__":
                 logging.error("UNHANDLED TOP-LEVEL EXCEPTION TRACEBACK FOLLOWS")
                 for line in formatted.rstrip().splitlines():
                     logging.error(line)
-            except Exception as hook_err:
-                logging.error("Exception in global excepthook: %s", hook_err)
+            except (TypeError, ValueError, OSError, RuntimeError) as hook_err:
+                logging.exception("Exception in global excepthook: %s", hook_err)  # Keep hook trace
 
         try:
             import sys as _sys_mod
 
             _sys_mod.excepthook = _global_excepthook
-        except Exception as hook_setup_err:
-            logging.warning("Failed to install global excepthook: %s", hook_setup_err)
+        except (AttributeError, TypeError) as hook_setup_err:
+            logging.warning(
+                "Failed to install global excepthook: %s", hook_setup_err, exc_info=True
+            )  # Keep setup trace
         MainEntrypoint.run()  # Invoke extracted CLI main entrypoint (SC-026)
     except KeyboardInterrupt:
         logging.info("Application interrupted by user (Ctrl+C)")
         logging.debug("EXIT: __main__ - user interrupt")
         sys.exit(130)  # Standard exit code for SIGINT
-    except Exception as e:
-        logging.error("Unhandled exception in main application: %s", e)
+    except SystemExit:  # Explicit exits must keep their intended process code
+        raise  # Do not convert a deliberate exit into the top-level crash path
+    except Exception as e:  # Broad by design so unexpected startup defects get a controlled final trace
+        logging.error("Unhandled exception in main application: %s", e)  # Log before traceback formatting
         try:
             import traceback
 
             traceback_details = "".join(traceback.format_exception(type(e), e, e.__traceback__))
             for line in traceback_details.rstrip().splitlines():
                 logging.error(line)
-        except Exception as trace_err:
-            logging.error("Failed to log exception traceback: %s", trace_err)
+        except (TypeError, ValueError, OSError, RuntimeError) as trace_err:
+            logging.exception("Failed to log exception traceback: %s", trace_err)  # Keep secondary trace
         logging.debug("EXIT: __main__ - unhandled exception")
         sys.exit(1)
     finally:
