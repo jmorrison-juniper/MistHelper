@@ -17,7 +17,7 @@ import mistapi.api.v1.orgs.aamwprofiles  # WHY: Advanced anti-malware profiles e
 import mistapi.api.v1.orgs.admins  # WHY: Org administrators endpoint bindings
 import mistapi.api.v1.orgs.alarms  # WHY: Org alarm search and count endpoint bindings
 import mistapi.api.v1.orgs.alarmtemplates  # WHY: Org alarm-template list endpoints
-import mistapi.api.v1.orgs.aos  # WHY: AOS device-registration command endpoint
+import mistapi.api.v1.orgs.aoscx  # WHY: AOS-CX device-registration command endpoint
 import mistapi.api.v1.orgs.apitokens  # WHY: Org API-token inventory endpoint
 import mistapi.api.v1.orgs.aptemplates  # WHY: AP-template list endpoint
 import mistapi.api.v1.orgs.assetfilters  # WHY: Asset-filter list endpoint
@@ -399,7 +399,7 @@ _GET_OPERATIONS: tuple[Operation, ...] = (  # WHY: Immutable tuple of single-obj
         _CERT_SEC,
         paginated=False,
     ),
-    Operation(mistapi.api.v1.orgs.aos.getOrgAosRegisterCmd, "aos register cmd", _DEVICE_REG, paginated=False),
+    Operation(mistapi.api.v1.orgs.aoscx.getOrgAoscxRegisterCmd, "aoscx register cmd", _DEVICE_REG, paginated=False),
     Operation(
         mistapi.api.v1.orgs.ssr.getOrgSsrRegistrationCommands,
         "ssr registration commands",

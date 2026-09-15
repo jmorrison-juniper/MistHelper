@@ -1235,7 +1235,7 @@ ENTITY_TYPE_TO_VERTEX: dict[str, str] = {  # WHY: map API function names to vert
     "getOrgNacCrl": "org_settings",
     "getOrgCrlFile": "org_settings",
     "getOrgSslProxyCert": "org_settings",
-    "getOrgAosRegisterCmd": "org_settings",
+    "getOrgAoscxRegisterCmd": "org_settings",
     "getOrgSsrRegistrationCommands": "org_settings",
     "getOrgMxEdgeUpgradeInfo": "org_settings",
     "getOrgSitesSle": "org_sle",
