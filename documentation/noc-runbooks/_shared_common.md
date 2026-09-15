@@ -110,23 +110,54 @@ Applicable to any Junos-based device (EX switches, SRX gateways). Use these as b
 
 Applicable to SSR gateways. SSR PCLI differs from Junos — do not mix.
 
+Every command below is verified against the Session Smart Networking command line
+reference at <https://docs.128technology.com/docs/cli_reference>.
+
+Run `python scripts/fetch_ssr_docs.py` to build a local copy under
+`documentation/references/ssr/`. That directory is not committed, because it holds
+verbatim vendor text.
+
+For the reason to run each command, the healthy output, and the failure signature,
+see [SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md).
+
 | Purpose | Command |
 |---|---|
-| System / model / uptime | `show system` |
-| Conductor / cloud connectivity | `show system connected` |
+| System state, role, version, uptime, alarm count | `show system` |
+| Mist cloud link | `show mist` |
+| Link between the nodes of one router | `show system connectivity` |
+| Process state | `show system processes` |
 | Device interfaces (physical) | `show device-interface` |
 | Network interfaces (logical) | `show network-interface` |
-| Routing table | `show route` |
+| Address resolution table | `show arp` |
+| Routes that the router learned | `show rib` |
+| Forwarding decision for a prefix | `show fib <ip-prefix>` |
 | BGP summary | `show bgp summary` |
-| BGP peer detail | `show bgp neighbor <peer-ip>` |
-| BGP received prefixes | `show bgp neighbor <peer-ip> received-routes` |
-| BGP advertised prefixes | `show bgp neighbor <peer-ip> advertised-routes` |
+| BGP peer detail | `show bgp neighbors <peer-ip>` |
+| BGP received prefixes | `show bgp neighbors <peer-ip> received-routes` |
+| BGP advertised prefixes | `show bgp neighbors <peer-ip> advertised-routes` |
 | SVR peer paths (overlay) | `show peers` |
-| Active session count | `show sessions summary` |
-| Events (scoped) | `show events filter type <type>` |
+| SVR peer path quality | `show peers detail` |
+| Service paths for applications | `show service-path` |
+| Active sessions (always limit the rows) | `show sessions rows 20` |
+| Largest sessions by bandwidth | `show sessions top bandwidth` |
+| Events (scoped by type) | `show events type <type>` |
+| Events (scoped by time) | `show events from 1d` |
 | Alarms | `show alarms` |
-| Reachability (correct source) | `ping <target> source <local-transport-ip>` |
+| Reachability over a chosen path | `ping egress-interface <network-interface> <target>` |
+| Reachability as a user (policy plane) | `service-ping service-name <service> tenant <tenant> source-ip <address> <target>` |
 | Traceroute | `traceroute <target>` |
+| Support archive | `save tech-support-info` |
+
+Warning: six commands in the earlier version of this table do not exist in any SSR
+release. Do not reintroduce them. `show system connected`, `show route`,
+`show bgp neighbor` in the singular form, `show sessions summary`,
+`show events filter type`, and `ping <target> source <ip>` all fail at the prompt.
+[SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md) § 11 states the working
+replacement for each one.
+
+Warning: `ping` bypasses the policy plane, and `service-ping` does not. A
+successful `ping` proves the transport only. Run both commands before you report
+that a gateway is healthy.
 
 ## 8. Standard escalation ladder
 

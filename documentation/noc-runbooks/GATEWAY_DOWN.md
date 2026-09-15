@@ -75,18 +75,18 @@ The SSR130 is unreachable from the NOC when this alarm fires. Validate from the 
 
 | Check | Command / Action |
 |---|---|
-| System / model / uptime | `show system` |
-| Conductor / cloud connectivity | `show system connected` |
+| System state, role, version, uptime, alarm count | `show system` |
+| Mist cloud link | `show mist` |
 | Alarms | `show alarms` |
-| Recent events | `show events` |
+| Recent events | `show events from 1d` |
 | Interfaces (physical) | `show device-interface` |
 | Interfaces (logical) | `show network-interface` |
-| Routing table | `show route` |
+| Routes that the router learned | `show rib` |
 | SVR peer paths | `show peers` |
 | BGP session summary | `show bgp summary` |
-| Reachability to hub with correct source | `ping <hub-public-ip> source <local-transport-ip>` |
+| Reachability to the hub over a chosen path | `ping egress-interface <network-interface> <hub-public-ip>` |
 
-**Never** run a bare `ping <target>` on SSR — it may egress from the wrong interface and produce a false-negative. Always pin the source with `source <local-transport-ip>`. See Shared Appendix §7.
+**Never** run a bare `ping <target>` on an SSR. The request can leave through the wrong interface and report a false failure. Name the path with `egress-interface <network-interface>`. The `ping` command holds no `source` keyword. To test the path that a user takes, run `service-ping`. See Shared Appendix §7 and [SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md) stage D.
 
 ### From the branch (on-site or via alternate access)
 
@@ -145,21 +145,22 @@ SSR uses PCLI, not Junos. Do not paste Junos syntax into an SSR. These commands 
 
 | Purpose | Command |
 |---|---|
-| System / model / uptime | `show system` |
-| Conductor / cloud connectivity | `show system connected` |
+| System state, role, version, uptime, alarm count | `show system` |
+| Mist cloud link | `show mist` |
+| Link between the nodes of one router | `show system connectivity` |
 | Alarms | `show alarms` |
-| Events (scoped) | `show events` |
+| Events (scoped by time) | `show events from 1d` |
 | Device interfaces (physical) | `show device-interface` |
 | Network interfaces (logical) | `show network-interface` |
-| Routing table | `show route` |
+| Routes that the router learned | `show rib` |
 | SVR peer paths | `show peers` |
 | BGP summary | `show bgp summary` |
-| BGP peer detail | `show bgp neighbor <peer-ip>` |
-| Active sessions on device | `show sessions summary` |
-| Reachability with correct source | `ping <target> source <local-transport-ip>` |
+| BGP peer detail | `show bgp neighbors <peer-ip>` |
+| Active sessions on device | `show sessions rows 20` |
+| Reachability over a chosen path | `ping egress-interface <network-interface> <target>` |
 | Path to remote target | `traceroute <target>` |
 
-See Shared Appendix §7 for the full SSR PCLI reference.
+See Shared Appendix §7 for the full SSR PCLI reference, and [SSR_CONSOLE_HEALTH_CHECK.md](SSR_CONSOLE_HEALTH_CHECK.md) for the failure signature of each command.
 
 ## 9. Cross-references (sibling alarms)
 
