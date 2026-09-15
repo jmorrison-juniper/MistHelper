@@ -438,17 +438,34 @@ contract test reads the workflow file and asserts the setting.
 1. Link the issue. Write `Closes #<issue>`.
 2. Add a type label and a scope label.
 3. Add the release-note fragment under `changelog.d/` for a user-visible change.
-4. Complete every checklist item in the template.
-5. Wait for every required check, including CodeQL. Use
+4. If the change adds or changes a guard, prove that the guard fails.
+5. Complete every checklist item in the template.
+6. Wait for every required check, including CodeQL. Use
    `gh pr checks <number> --watch`.
-6. Add the `auto-merge` label only after every check reports green.
-7. Never add `auto-merge` to a pull request that changes a destructive
+7. Add the `auto-merge` label only after every check reports green.
+8. Never add `auto-merge` to a pull request that changes a destructive
    operation. A human reviews that change.
 
 Warning: a pull request from a fork receives a read-only token and no secrets.
 The automation in this repository writes labels, writes comments, and pushes a
 container image. A fork breaks all three. Work from a branch in this
 repository, never from a fork.
+
+### Guard proof rule
+
+A guard must prove that it measured at least one path. The guard output must
+state the count of files, records, events, tests, or call sites that it checked.
+
+Prove the failure path with one of two methods.
+
+1. Record a red run from a temporary bad commit. Link the run in the pull request.
+2. Test the guard decision directly with no network and no environment need.
+
+Pull request #2591 used a red run to prove the `CHANGELOG.md` guard failed.
+Pull request #2611 used a direct test of `should_close_linked_issue`.
+
+If a required guard cannot read its input, it must fail. If a guard skips for an
+environmental reason, it must print the reason and name the missing capability.
 
 ## Part 6. The commit and the merge
 
