@@ -41,8 +41,14 @@ class MistapiSpecModuleIndex:
     def spec_declarations() -> list[tuple[Path, str, str]]:
         """Return each spec that declares an operation and an SDK module path."""
         declarations: list[tuple[Path, str, str]] = []  # Hold the spec path, operation ID, and declared module.
+        frozen_spec_files = {  # Keep historical specifications out of current SDK drift checks.
+            Path("specs/595-mist-get-org-aos-register-cmd/spec.md"),  # Preserve the original AOS contract record.
+        }
         _LOGGER.info("Scanning endpoint specifications at %s", _SPECS_ROOT)  # Log the spec scan start.
         for spec_file in sorted(_SPECS_ROOT.rglob("spec.md")):  # Read only endpoint spec files.
+            relative_spec_file = spec_file.relative_to(_REPO_ROOT)  # Compare paths without machine-specific prefixes.
+            if relative_spec_file in frozen_spec_files:  # Skip frozen historical contracts that must not drift.
+                continue  # Leave the original source record untouched by current SDK guardrails.
             fields = MistapiSpecModuleIndex._source_fields(spec_file)  # Extract source endpoint fields from the spec.
             if fields is not None:  # Keep only specs with both required fields.
                 declarations.append((spec_file, fields[0], fields[1]))  # Add one declaration for later validation.

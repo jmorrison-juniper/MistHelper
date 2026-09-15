@@ -434,7 +434,7 @@
 
 | Method | Path | operationId | Summary | File |
 |--------|------|-------------|---------|------|
-| GET | /api/v1/orgs/{org_id}/aoscx/register_cmd | getOrgAoscxRegisterCmd | getOrgAoscxRegisterCmd | [GET_orgs_org_id_aoscx_register_cmd.md](orgs/GET_orgs_org_id_aoscx_register_cmd.md) |
+| GET | /api/v1/orgs/{org_id}/aos/register_cmd | getOrgAosRegisterCmd | getOrgAosRegisterCmd | [GET_orgs_org_id_aos_register_cmd.md](orgs/GET_orgs_org_id_aos_register_cmd.md) |
 
 ## Orgs Devices - Others
 

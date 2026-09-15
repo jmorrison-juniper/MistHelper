@@ -476,7 +476,7 @@
 
 | operationId | Path | Summary | Proposed Spec Slug |
 |---|---|---|---|
-| `getOrgAoscxRegisterCmd` | `/api/v1/orgs/{org_id}/aoscx/register_cmd` | getOrgAoscxRegisterCmd | `mist-get-org-aoscx-register-cmd` |
+| `getOrgAosRegisterCmd` | `/api/v1/orgs/{org_id}/aos/register_cmd` | getOrgAosRegisterCmd | `mist-get-org-aos-register-cmd` |
 
 ### Orgs Devices - Others
 

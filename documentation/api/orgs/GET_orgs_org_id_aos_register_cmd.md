@@ -1,14 +1,14 @@
-# getOrgAoscxRegisterCmd
+# getOrgAosRegisterCmd
 
-> getOrgAoscxRegisterCmd
+> getOrgAosRegisterCmd
 
 ## HTTP
 
-`GET /api/v1/orgs/{org_id}/aoscx/register_cmd`
+`GET /api/v1/orgs/{org_id}/aos/register_cmd`
 
 ## Description
 
-Generates a registration challenge token and AOS-CX-specific CLI commands for TPM-based brownfield registration of AOS-CX devices. The returned command string can be copied and pasted directly into an AOS-CX device to register it with Mist.
+Generates a registration challenge token and AOS-specific CLI commands for TPM-based brownfield registration of AOS devices. The returned command string can be copied and pasted directly into an AOS device to register it with Mist.
 
 ## Authentication
 
@@ -30,7 +30,7 @@ None.
 
 ### 200
 
-AOS-CX Brownfield Registration Commands
+AOS Brownfield Registration Commands
 
 ```json
 {
@@ -38,10 +38,10 @@ AOS-CX Brownfield Registration Commands
   "properties": {
     "cli_commands": {
       "type": "string",
-      "description": "AOS-CX-specific CLI commands that can be copied and pasted directly into an AOS-CX device to register it with Mist. Includes registration code and configuration commands."
+      "description": "AOS-specific CLI commands that can be copied and pasted directly into an AOS device to register it with Mist. Includes registration code and configuration commands."
     }
   },
-  "description": "AOS-CX Brownfield Registration Commands"
+  "description": "AOS Brownfield Registration Commands"
 }
 ```
 
@@ -65,11 +65,11 @@ Standard Mist API rate limits apply.
 
 ## mistapi SDK
 
-`mistapi.api.v1.orgs.aoscx.getOrgAoscxRegisterCmd()`
+`mistapi.api.v1.orgs.devices_-_aos.getOrgAosRegisterCmd()`
 
 ## Usage Context
 
-Retrieves the registration command for AOS-CX devices to onboard into Mist.
+Retrieves the registration command for AOS (Aruba OS) devices to onboard into Mist.
 
 ## Gotchas
 

@@ -47478,13 +47478,13 @@ paths:
                     detail: Too Many Request. The API Token used for the request reached the 5000 API Calls per hour threshold
       deprecated: false
     parameters: []
-  /api/v1/orgs/{org_id}/aoscx/register_cmd:
+  /api/v1/orgs/{org_id}/aos/register_cmd:
     get:
       tags:
       - Orgs Devices - AOS
-      summary: getOrgAoscxRegisterCmd
-      description: Generates a registration challenge token and AOS-CX-specific CLI commands for TPM-based brownfield registration of AOS-CX devices. The returned command string can be copied and pasted directly into an AOS-CX device to register it with Mist.
-      operationId: getOrgAoscxRegisterCmd
+      summary: getOrgAosRegisterCmd
+      description: Generates a registration challenge token and AOS-specific CLI commands for TPM-based brownfield registration of AOS devices. The returned command string can be copied and pasted directly into an AOS device to register it with Mist.
+      operationId: getOrgAosRegisterCmd
       parameters:
       - name: org_id
         in: path
@@ -47497,20 +47497,20 @@ paths:
           - 000000ab-00ab-00ab-00ab-0000000000ab
       responses:
         '200':
-          description: AOS-CX Brownfield Registration Commands
+          description: AOS Brownfield Registration Commands
           headers: {}
           content:
             application/json:
               schema:
                 allOf:
                 - $ref: '#/components/schemas/aos_register_cmd'
-                - description: AOS-CX Brownfield Registration Commands
+                - description: AOS Brownfield Registration Commands
                 contentMediaType: application/json
             application/vnd.api+json:
               schema:
                 allOf:
                 - $ref: '#/components/schemas/aos_register_cmd'
-                - description: AOS-CX Brownfield Registration Commands
+                - description: AOS Brownfield Registration Commands
                 contentMediaType: application/vnd.api+json
         '400':
           description: Bad Syntax
@@ -254327,8 +254327,8 @@ components:
       properties:
         cli_commands:
           type: string
-          description: AOS-CX-specific CLI commands that can be copied and pasted directly into an AOS-CX device to register it with Mist. Includes registration code and configuration commands.
-      description: AOS-CX Brownfield Registration Commands
+          description: AOS-specific CLI commands that can be copied and pasted directly into an AOS device to register it with Mist. Includes registration code and configuration commands.
+      description: AOS Brownfield Registration Commands
     ap_aeroscout:
       title: ap_aeroscout
       type: object

@@ -1,21 +1,21 @@
-# Feature Specification: Mist API Read Operation -- getOrgAoscxRegisterCmd
+# Feature Specification: Mist API Read Operation -- getOrgAosRegisterCmd
 
 **Feature Branch**: `595-mist-get-org-aos-register-cmd`
 **Created**: 2026-06-29
 **Status**: Draft
-**Input**: User description: "Catalog the missing Mist API GET endpoint `getOrgAoscxRegisterCmd` and add it as a new MistHelper menu item."
+**Input**: User description: "Catalog the missing Mist API GET endpoint `getOrgAosRegisterCmd` and add it as a new MistHelper menu item."
 
 ## Source Endpoint
 
-- **operationId**: `getOrgAoscxRegisterCmd`
+- **operationId**: `getOrgAosRegisterCmd`
 - **Method**: `GET`
-- **Path**: `/api/v1/orgs/{org_id}/aoscx/register_cmd`
-- **Tag**: `Orgs Devices - AOS-CX`
-- **mistapi SDK module**: `mistapi.api.v1.orgs.aoscx`
+- **Path**: `/api/v1/orgs/{org_id}/aos/register_cmd`
+- **Tag**: `Orgs Devices - AOS`
+- **mistapi SDK module**: `mistapi.api.v1.orgs.aos`
 
 ### Description
 
-Generates a registration challenge token and AOS-CX-specific CLI commands for TPM-based brownfield registration of AOS-CX devices. The returned command string can be copied and pasted directly into an AOS-CX device to register it with Mist.
+Generates a registration challenge token and AOS-specific CLI commands for TPM-based brownfield registration of AOS devices. The returned command string can be copied and pasted directly into an AOS device to register it with Mist.
 
 ### Path Parameters
 
@@ -30,7 +30,7 @@ _None._
 ### User Story 1 - Read-only data retrieval (Priority: P1)
 
 A junior NOC engineer launches MistHelper, selects the new menu item, supplies the required identifiers
-(org / site / device as applicable), and receives the JSON payload exposed by `getOrgAoscxRegisterCmd` -- exported to the
+(org / site / device as applicable), and receives the JSON payload exposed by `getOrgAosRegisterCmd` -- exported to the
 configured storage backend (CSV, SQLite, or ArangoDB+Redis) under `data/`.
 
 **Why this priority**: This is a read-only Mist API call -- no destructive effect, so it can ship as P1
@@ -44,7 +44,7 @@ item upserts cleanly into SQLite (no duplicate primary keys).
 **Acceptance Scenarios**:
 
 1. **Given** valid credentials and org context, **When** the user selects the new menu item, **Then**
-   MistHelper invokes `mistapi.api.v1.orgs.aoscx.register_cmd.getOrgAoscxRegisterCmd()` exactly once per required scope and persists results.
+   MistHelper invokes `mistapi.api.v1.orgs.aos.register_cmd.getOrgAosRegisterCmd()` exactly once per required scope and persists results.
 2. **Given** an SSH or container session, **When** the user is prompted for identifiers, **Then**
    `safe_input()` handles EOF gracefully and the operation exits 0 without a traceback.
 3. **Given** repeated runs, **When** SQLite is the active backend, **Then** rows upsert by the configured
@@ -60,11 +60,11 @@ item upserts cleanly into SQLite (no duplicate primary keys).
 
 ## Requirements *(mandatory)*
 
-**FR-001**: Provide a new menu item that invokes `mistapi.api.v1.orgs.aoscx.register_cmd.getOrgAoscxRegisterCmd()` via the `mistapi` SDK.
+**FR-001**: Provide a new menu item that invokes `mistapi.api.v1.orgs.aos.register_cmd.getOrgAosRegisterCmd()` via the `mistapi` SDK.
 **FR-002**: Collect required inputs using `safe_input()` so the operation works in SSH and container contexts.
 **FR-003**: Apply rate limiting and retry logic consistent with adjacent menu items (delay_metrics.json + tuning_data.json).
 **FR-004**: Persist results using `DataExporter.write_with_format_selection(data, filename, api_function_name=...)` so CSV/SQLite/ArangoDB backends all work.
-**FR-005**: Register the operationId `getOrgAoscxRegisterCmd` in `ENDPOINT_PRIMARY_KEY_STRATEGIES` with the correct PK strategy (natural / composite / auto-increment).
+**FR-005**: Register the operationId `getOrgAosRegisterCmd` in `ENDPOINT_PRIMARY_KEY_STRATEGIES` with the correct PK strategy (natural / composite / auto-increment).
 **FR-006**: Log `INFO` before the API call and `DEBUG` with response counts after, ASCII-only, per Action Logging principle.
 **FR-007**: Add inline comments on every new executable line per Inline Comments principle.
 **FR-008**: Update README.md menu table and CHANGELOG.md with the new operation number.
