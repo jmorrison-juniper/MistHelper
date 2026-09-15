@@ -94,7 +94,7 @@ new modules, no new top-level directories.
   A new class is justified (and preferred over bolting onto an
   existing one) because: (a) the related endpoints
   `getOrgSsrRegistrationCommands` (spec 645) and
-  `getOrgAoscxRegisterCmd` (spec 595) share the same shape and natural
+  `getOrgAosRegisterCmd` (spec 595) share the same shape and natural
   owner -- adding all three to one class keeps the SSR-adoption
   surface cohesive; (b) the existing `InventoryExportUtils` and
   `DeviceExportUtils` classes already each carry close to the 5-method
@@ -221,7 +221,7 @@ number proposal is **96**, chosen because (a) it sits at the boundary
 between the Safe Org Exports cluster and the resource-intensive cluster
 that begins at 97, (b) it is adjacent to spec 500's proposed menu 95
 (also an org-license / device-adoption read), and (c) it leaves a tight
-sibling slot for specs 595 (`getOrgAoscxRegisterCmd`) and 645
+sibling slot for specs 595 (`getOrgAosRegisterCmd`) and 645
 (`getOrgSsrRegistrationCommands`) in the same SSR family. The full
 menu list is re-verified at task generation time; if 96 collides with
 an in-flight feature branch, the next free integer in the same cluster

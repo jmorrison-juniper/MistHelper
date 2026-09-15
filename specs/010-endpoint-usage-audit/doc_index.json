@@ -557,7 +557,7 @@
   "mistapi.api.v1.orgs.alarm_templates.listOrgSuppressedAlarms": [
     "documentation/api\\orgs\\GET_orgs_org_id_alarmtemplates_suppress.md"
   ],
-  "mistapi.api.v1.orgs.aoscx.getOrgAoscxRegisterCmd": [
+  "mistapi.api.v1.orgs.devices_-_aos.getOrgAosRegisterCmd": [
     "documentation/api\\orgs\\GET_orgs_org_id_aos_register_cmd.md"
   ],
   "mistapi.api.v1.orgs.api_tokens.listOrgApiTokens": [

@@ -139,7 +139,7 @@ operators see the deprecation flag at selection time.
 flagged Resource Intensive. 96 is the last slot in the Interactive Safe
 range and currently sits at the viewer boundary. Spec 500
 (`getOrgLicenseAsyncClaimStatus`) already proposed 95, and specs 595
-(`getOrgAoscxRegisterCmd`) and 645 (`getOrgSsrRegistrationCommands`) will
+(`getOrgAosRegisterCmd`) and 645 (`getOrgSsrRegistrationCommands`) will
 need adjacent slots. Using 96 keeps the three SSR-family read endpoints
 contiguous (95-97 once 595 and 645 are placed) and stops just short of
 the resource-intensive boundary. If a parallel feature branch lands at
