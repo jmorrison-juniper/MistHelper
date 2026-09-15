@@ -259,6 +259,8 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
         config = _MH.import_manager.get_configuration()  # Read manager values after .env loading has finished.
         _MH.config = config  # Keep the historical module global available for readers.
         _MH.CSV_FRESHNESS_MINUTES = int(config["csv_freshness_minutes"])  # Preserve the cached CSV setting.
+        runtime_settings = cast(Any, importlib.import_module("src.config.runtime_settings"))  # Type dynamic settings.
+        runtime_settings.CSV_FRESHNESS_MINUTES = _MH.CSV_FRESHNESS_MINUTES  # Publish the cache age for src readers.
         _MH.AUTO_UPGRADE_UV = bool(config["auto_upgrade_uv"])  # Preserve the UV self-update setting.
         _MH.AUTO_UPGRADE_DEPENDENCIES = bool(config["auto_upgrade_dependencies"])  # Preserve the dependency setting.
         _MH.UPGRADE_CHECK_TIMEOUT = int(config["upgrade_check_timeout"])  # Preserve the subprocess timeout setting.
@@ -270,13 +272,37 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
         _MH.API_REQUEST_TIMEOUT = int(os.getenv("API_REQUEST_TIMEOUT", "120"))  # Set the HTTP timeout at startup.
         _MH.API_REQUEST_MAX_RETRIES = int(os.getenv("API_REQUEST_MAX_RETRIES", "3"))  # Set HTTP retry count.
         _MH.API_REQUEST_RETRY_DELAY = float(os.getenv("API_REQUEST_RETRY_DELAY", "5.0"))  # Set retry delay.
+        runtime_settings = cast(Any, importlib.import_module("src.config.runtime_settings"))  # Type dynamic settings.
+        runtime_settings.API_REQUEST_MAX_RETRIES = _MH.API_REQUEST_MAX_RETRIES  # Publish retry count for src readers.
+        runtime_settings.API_REQUEST_RETRY_DELAY = _MH.API_REQUEST_RETRY_DELAY  # Publish retry delay for src readers.
         self._publish_page_limit_configuration()  # Publish the page limit after reading the startup environment.
         _MH.FAST_MODE_MAX_RETRIES = int(os.getenv("FAST_MODE_MAX_RETRIES", "3"))  # Set fast-mode retry count.
         _MH.FAST_MODE_RETRY_DELAY = float(os.getenv("FAST_MODE_RETRY_DELAY", "0.5"))  # Set fast-mode retry delay.
         _MH.FAST_MODE_RETRY_THREADS = int(os.getenv("FAST_MODE_RETRY_THREADS", "4"))  # Set retry worker count.
         _MH.FAST_MODE_RETRY_MAX_RETRIES = int(os.getenv("FAST_MODE_RETRY_MAX_RETRIES", "2"))  # Set retry-pass limit.
         _MH.FAST_MODE_FALLBACK_THREADS = int(os.getenv("FAST_MODE_FALLBACK_THREADS", "8"))  # Set fallback workers.
+        self._publish_fast_mode_configuration()  # Publish the fast-mode settings for the source readers.
         self._publish_site_exclude_prefix()  # Update extracted modules that imported the prefix directly.
+
+    def _publish_fast_mode_configuration(self) -> None:
+        """Publish the fast-mode settings so the source packages read no MistHelper attribute."""
+        logging.info("Publishing the fast mode configuration for the source readers")  # Log before the publish.
+        fast_settings = cast(
+            Any,
+            importlib.import_module(
+                "src.refactors.fast_mode_constants"
+            ),  # Resolve the fast settings module for source readers.
+        )
+        fast_settings.FAST_MODE_MAX_RETRIES = _MH.FAST_MODE_MAX_RETRIES  # Publish retry count for src readers.
+        fast_settings.FAST_MODE_RETRY_DELAY = _MH.FAST_MODE_RETRY_DELAY  # Publish retry delay for src readers.
+        fast_settings.FAST_MODE_RETRY_THREADS = (
+            _MH.FAST_MODE_RETRY_THREADS
+        )  # Publish retry worker count for src readers.
+        fast_settings.FAST_MODE_RETRY_MAX_RETRIES = _MH.FAST_MODE_RETRY_MAX_RETRIES  # Publish retry pass count.
+        fast_settings.FAST_MODE_FALLBACK_THREADS = _MH.FAST_MODE_FALLBACK_THREADS  # Publish fallback workers.
+        logging.debug(
+            "Published the fast mode retry count %s", _MH.FAST_MODE_MAX_RETRIES
+        )  # Log the published result.
 
     def _publish_page_limit_configuration(self) -> None:
         """Publish the configured Mist API page limit after startup begins."""
@@ -285,6 +311,8 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
         _MH._raw_page_limit_env = raw_limit  # Preserve the diagnostic module global for callers.
         _MH._parsed_limit = parsed_limit  # Preserve the parsed module global for callers.
         _MH.DEFAULT_API_PAGE_LIMIT = max(1, min(parsed_limit, 1000))  # Clamp to the Mist API accepted range.
+        runtime_settings = cast(Any, importlib.import_module("src.config.runtime_settings"))  # Type dynamic settings.
+        runtime_settings.DEFAULT_API_PAGE_LIMIT = _MH.DEFAULT_API_PAGE_LIMIT  # Publish the page size for src readers.
 
     def _publish_site_exclude_prefix(self) -> None:
         """Publish the site exclude prefix to modules that cached the direct import."""

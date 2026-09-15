@@ -30,3 +30,9 @@ FAST_MODE_MAX_CONCURRENT_CONNECTIONS: int = int(  # Cap on simultaneous API conn
 FAST_MODE_USE_CONNECTION_AWARE_THREADING: bool = (  # Whether to size threads based on connection limits
     os.getenv("FAST_MODE_USE_CONNECTION_AWARE_THREADING", "true").lower() == "true"  # Parse the boolean env flag
 )
+
+FAST_MODE_MAX_RETRIES: int = int(os.getenv("FAST_MODE_MAX_RETRIES", "3"))  # Bound fast-mode API retry attempts.
+FAST_MODE_RETRY_DELAY: float = float(os.getenv("FAST_MODE_RETRY_DELAY", "0.5"))  # Pace each fast-mode retry.
+FAST_MODE_RETRY_THREADS: int = int(os.getenv("FAST_MODE_RETRY_THREADS", "4"))  # Bound retry worker threads.
+FAST_MODE_RETRY_MAX_RETRIES: int = int(os.getenv("FAST_MODE_RETRY_MAX_RETRIES", "2"))  # Bound retry pass attempts.
+FAST_MODE_FALLBACK_THREADS: int = int(os.getenv("FAST_MODE_FALLBACK_THREADS", "8"))  # Size pools when CPU count fails.

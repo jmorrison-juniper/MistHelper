@@ -43,7 +43,9 @@ class TestResolveFastModeEnv:
 
     def test_returns_tuple_of_three_constants(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The helper returns (use_conn_aware, max_conn, fallback_threads) sourced from live modules."""
-        monkeypatch.setattr("MistHelper.FAST_MODE_FALLBACK_THREADS", 7, raising=False)  # WHY: publish fallback const.
+        monkeypatch.setattr(  # WHY: publish fallback thread count in the source settings module.
+            "src.refactors.fast_mode_constants.FAST_MODE_FALLBACK_THREADS", 7, raising=False
+        )
         monkeypatch.setattr(  # WHY: publish concurrent-connection cap in the landing module.
             "src.refactors.fast_mode_constants.FAST_MODE_MAX_CONCURRENT_CONNECTIONS", 12, raising=False
         )

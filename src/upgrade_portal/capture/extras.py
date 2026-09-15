@@ -226,12 +226,12 @@ def _page_limit() -> int:
         The shared page limit, or the largest page the cloud accepts.
     """
     try:
-        import MistHelper  # Late-binding import. MistHelper imports from src, so a top-level import cycles
+        from src.config import runtime_settings  # Read the shared setting without importing MistHelper.
 
-        return int(MistHelper.DEFAULT_API_PAGE_LIMIT)
-    except Exception as error:  # A page size is a tuning value, never a reason to lose a section
-        logger.debug("Upgrade portal uses the fallback page limit: %s", type(error).__name__)
-        return _FALLBACK_PAGE_LIMIT
+        return int(runtime_settings.DEFAULT_API_PAGE_LIMIT)  # Apply the same page size as the other source readers.
+    except (TypeError, ValueError) as error:  # A page size is a tuning value, never a reason to lose a section.
+        logger.debug("Upgrade portal uses the fallback page limit: %s", type(error).__name__)  # Record the fallback.
+        return _FALLBACK_PAGE_LIMIT  # Continue with the largest safe page.
 
 
 def _records_of(payload: Any) -> tuple[dict[str, Any], ...]:

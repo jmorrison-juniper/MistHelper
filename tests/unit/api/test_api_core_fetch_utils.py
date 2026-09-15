@@ -11,13 +11,14 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from src.api.api_core_fetch_utils import APICoreFetchUtils
+from src.config import runtime_settings
 
 # ---------- all_sites_with_limit ----------
 
 
 def test_all_sites_with_limit_calls_list_org_sites_and_paginates() -> None:
     """all_sites_with_limit must call listOrgSites then delegate to get_all."""
-    fake_mh = SimpleNamespace(apisession="session-obj", DEFAULT_API_PAGE_LIMIT=500)
+    fake_mh = SimpleNamespace(apisession="session-obj")
     initial_response = MagicMock(name="listOrgSitesResponse")
     paginated_sites = [{"id": "s1"}, {"id": "s2"}]
     fake_mistapi = MagicMock(name="mistapi")
@@ -27,6 +28,7 @@ def test_all_sites_with_limit_calls_list_org_sites_and_paginates() -> None:
     with (
         patch("src.api.api_core_fetch_utils.mistapi", fake_mistapi),
         patch("src.api.api_core_fetch_utils.importlib.import_module", return_value=fake_mh),
+        patch.object(runtime_settings, "DEFAULT_API_PAGE_LIMIT", 500),
     ):
         result = APICoreFetchUtils.all_sites_with_limit("org-uuid")
 
@@ -40,7 +42,7 @@ def test_all_sites_with_limit_calls_list_org_sites_and_paginates() -> None:
 
 def test_all_inventory_with_limit_requests_vc_members_and_paginates() -> None:
     """all_inventory_with_limit must pass vc=True and paginate through get_all."""
-    fake_mh = SimpleNamespace(apisession="session-obj", DEFAULT_API_PAGE_LIMIT=250)
+    fake_mh = SimpleNamespace(apisession="session-obj")
     initial_response = MagicMock(name="getOrgInventoryResponse")
     paginated_inventory = [{"mac": "aa"}, {"mac": "bb"}]
     fake_mistapi = MagicMock(name="mistapi")
@@ -50,6 +52,7 @@ def test_all_inventory_with_limit_requests_vc_members_and_paginates() -> None:
     with (
         patch("src.api.api_core_fetch_utils.mistapi", fake_mistapi),
         patch("src.api.api_core_fetch_utils.importlib.import_module", return_value=fake_mh),
+        patch.object(runtime_settings, "DEFAULT_API_PAGE_LIMIT", 250),
     ):
         result = APICoreFetchUtils.all_inventory_with_limit("org-uuid")
 

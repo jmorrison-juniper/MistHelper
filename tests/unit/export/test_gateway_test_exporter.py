@@ -21,6 +21,7 @@ import pytest
 
 from src.export import gateway_test_exporter as gte
 from src.export.gateway_test_exporter import GatewayTestExporter
+from src.refactors import fast_mode_constants
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -43,14 +44,9 @@ def fake_mh(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     mh.ConfigUtils = MagicMock()  # type: ignore[attr-defined]
     mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"
     mh.GatewayExportUtils = MagicMock()  # type: ignore[attr-defined]
-    mh.FAST_MODE_MAX_RETRIES = 3  # type: ignore[attr-defined]
-    mh.FAST_MODE_RETRY_DELAY = 0.0  # type: ignore[attr-defined]
-    mh.FAST_MODE_RETRY_THREADS = 4  # type: ignore[attr-defined]
-    mh.FAST_MODE_RETRY_MAX_RETRIES = 1  # type: ignore[attr-defined]
     mh.FastModeBackoffMultiplier = SimpleNamespace(VALUE=2)  # type: ignore[attr-defined]
     mh.FastModeSequentialMaxRetries = SimpleNamespace(VALUE=2)  # type: ignore[attr-defined]
     mh.apisession = MagicMock()  # type: ignore[attr-defined]
-    mh._api_usage_cache = {}  # type: ignore[attr-defined]
     mh.ConnectionPoolExecutor = MagicMock()  # type: ignore[attr-defined]
     mh.RateLimitingUtils = MagicMock()  # type: ignore[attr-defined]
     mh.RateLimitingUtils.get_rate_limited_delay.return_value = (0.1, 0.0)
@@ -127,7 +123,10 @@ class TestEmitSyntheticComplete:
 class TestResolveRetryDefaults:
     def test_all_defaults_from_mh(self, fake_mh: ModuleType) -> None:
         r, d = GatewayTestExporter._resolve_retry_defaults(None, None)
-        assert (r, d) == (fake_mh.FAST_MODE_MAX_RETRIES, fake_mh.FAST_MODE_RETRY_DELAY)  # type: ignore[attr-defined]
+        assert (r, d) == (
+            fast_mode_constants.FAST_MODE_MAX_RETRIES,
+            fast_mode_constants.FAST_MODE_RETRY_DELAY,
+        )
 
     def test_explicit_values_preserved(self, fake_mh: ModuleType) -> None:
         r, d = GatewayTestExporter._resolve_retry_defaults(7, 1.5)
@@ -276,9 +275,8 @@ class TestRetryFailedSyntheticDevices:
     def test_no_threads_available_returns_original_failures(
         self, fake_mh: ModuleType, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setattr(gte, "FAST_MODE_MAX_CONCURRENT_CONNECTIONS", 1, raising=False)
-        # Force FAST_MODE_RETRY_THREADS=0 so min(...)=0 → early warning branch
-        fake_mh.FAST_MODE_RETRY_THREADS = 0  # type: ignore[attr-defined]
+        monkeypatch.setattr(fast_mode_constants, "FAST_MODE_MAX_CONCURRENT_CONNECTIONS", 1)
+        monkeypatch.setattr(fast_mode_constants, "FAST_MODE_RETRY_THREADS", 0)
         failed = [("s", "d", "dn", "sn")]
         results, still = GatewayTestExporter._retry_failed_synthetic_devices(failed, None)
         assert results == []

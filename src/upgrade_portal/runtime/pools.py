@@ -172,13 +172,13 @@ class CapturePool:
         Returns:
             The connection cap and the fallback thread count, in that order.
         """
-        import MistHelper  # Late-binding import. MistHelper is fully loaded by the time methods run
         from src.refactors.fast_mode_constants import (
+            FAST_MODE_FALLBACK_THREADS,  # Thread count when the cap is absent.
             FAST_MODE_MAX_CONCURRENT_CONNECTIONS,  # Cap on simultaneous API connections
         )
 
         connection_cap = int(FAST_MODE_MAX_CONCURRENT_CONNECTIONS)  # Shared cap on simultaneous API connections
-        fallback_threads = int(MistHelper.FAST_MODE_FALLBACK_THREADS)  # Thread count when the cap is absent
+        fallback_threads = int(FAST_MODE_FALLBACK_THREADS)  # Thread count when the cap is absent
         return connection_cap, fallback_threads  # Bundle both settings for the sizing step
 
     @staticmethod

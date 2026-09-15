@@ -14,11 +14,13 @@ statement).
 
 from __future__ import annotations  # WHY: PEP 604 unions in annotations.
 
-import importlib  # WHY: lazy MistHelper fetch of apisession + page-limit global.
+import importlib  # WHY: lazy MistHelper fetch of the live API session.
 import logging  # WHY: debug trace for API-response unwrap.
 from typing import Any  # WHY: dynamic response-object annotation.
 
 import mistapi  # WHY: dotted-path Mist API resolution + pagination helper.
+
+from src.config import runtime_settings  # WHY: read the page limit from a source module.
 
 
 class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
@@ -40,8 +42,10 @@ class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
 
         SECURITY: Read-only. No sensitive data logged.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession + DEFAULT_API_PAGE_LIMIT.
-        response = mistapi.api.v1.orgs.sites.listOrgSites(mh.apisession, org_id, limit=mh.DEFAULT_API_PAGE_LIMIT)
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the live API session only.
+        response = mistapi.api.v1.orgs.sites.listOrgSites(
+            mh.apisession, org_id, limit=runtime_settings.DEFAULT_API_PAGE_LIMIT
+        )
         return mistapi.get_all(response=response, mist_session=mh.apisession)  # type: ignore[no-any-return]
 
     @staticmethod
@@ -56,9 +60,9 @@ class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
 
         SECURITY: Read-only. No secrets in inventory object fields.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession + DEFAULT_API_PAGE_LIMIT.
+        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the live API session only.
         response = mistapi.api.v1.orgs.inventory.getOrgInventory(
-            mh.apisession, org_id, vc=True, limit=mh.DEFAULT_API_PAGE_LIMIT
+            mh.apisession, org_id, vc=True, limit=runtime_settings.DEFAULT_API_PAGE_LIMIT
         )  # vc=True includes all physical VC member devices
         return mistapi.get_all(response=response, mist_session=mh.apisession)  # type: ignore[no-any-return]
 

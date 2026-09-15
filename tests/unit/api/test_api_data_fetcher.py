@@ -20,7 +20,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.api import api_usage_cache
 from src.api.api_data_fetcher import APIDataFetcher
+from src.config import runtime_settings
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -43,11 +45,8 @@ class _FakeMH:
         self.ConfigUtils = MagicMock()
         self.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-123"
         self.apisession = MagicMock(name="apisession")
-        self.API_REQUEST_MAX_RETRIES = 2
-        self.API_REQUEST_RETRY_DELAY = 0.0  # collapse sleeps to zero
         self.RateLimitingUtils = MagicMock()
         self.RateLimitingUtils.get_rate_limited_delay.return_value = (0.5, 0.0)
-        self._api_usage_cache = {}
         self.DataExporter = MagicMock()
 
 
@@ -71,6 +70,9 @@ def fake_mh(monkeypatch: pytest.MonkeyPatch) -> _FakeMH:
 
     monkeypatch.setattr("src.api.api_data_fetcher.importlib.import_module", _stub)
     monkeypatch.setattr("src.api.api_data_fetcher.time.sleep", lambda _: None)
+    monkeypatch.setattr(runtime_settings, "API_REQUEST_MAX_RETRIES", 2)
+    monkeypatch.setattr(runtime_settings, "API_REQUEST_RETRY_DELAY", 0.0)
+    monkeypatch.setattr(api_usage_cache, "api_usage_cache", {})
     return fake
 
 
@@ -284,7 +286,7 @@ class TestCallAPIWithRetry:
         fetcher = _make_fetcher(api_call)
         result = fetcher._call_api_with_retry("listOrgSites")
         assert result is bad
-        assert api_call.call_count == fake_mh.API_REQUEST_MAX_RETRIES + 1
+        assert api_call.call_count == runtime_settings.API_REQUEST_MAX_RETRIES + 1
 
 
 # ---------------------------------------------------------------------------
@@ -307,7 +309,7 @@ class TestApplyRateLimiting:
         fetcher._apply_rate_limiting()
         assert fetcher.smoothed == 0.7
         fake_mh.RateLimitingUtils.get_rate_limited_delay.assert_called_once_with(
-            None, fake_mh.apisession, fake_mh._api_usage_cache
+            None, fake_mh.apisession, api_usage_cache.api_usage_cache
         )
 
 

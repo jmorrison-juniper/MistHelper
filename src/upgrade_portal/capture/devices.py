@@ -15,7 +15,6 @@ Why:
 
 from __future__ import annotations
 
-import importlib
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -24,6 +23,7 @@ from typing import Any
 
 import mistapi
 
+from src.config import runtime_settings  # Keep the page-size source inside src.
 from src.upgrade_portal.capture.clients import normalize_mac
 
 logger = logging.getLogger(__name__)
@@ -157,11 +157,10 @@ def resolve_page_limit() -> int:
         A page size inside the range that the cloud accepts.
     """
     try:
-        module = importlib.import_module("MistHelper")
-        limit = int(module.DEFAULT_API_PAGE_LIMIT)
-    except Exception as error:  # A missing constant must not stop a capture.
-        logger.debug("Upgrade portal uses the fallback page size: %s", type(error).__name__)
-        return FALLBACK_PAGE_LIMIT
+        limit = int(runtime_settings.DEFAULT_API_PAGE_LIMIT)  # Read the shared source setting.
+    except (TypeError, ValueError) as error:  # A bad setting must not stop a capture.
+        logger.debug("Upgrade portal uses the fallback page size: %s", type(error).__name__)  # Record the fallback.
+        return FALLBACK_PAGE_LIMIT  # Continue with the known safe maximum page size.
     return max(MIN_PAGE_LIMIT, min(limit, MAX_PAGE_LIMIT))
 
 
