@@ -300,9 +300,7 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
         )  # Publish retry worker count for src readers.
         fast_settings.FAST_MODE_RETRY_MAX_RETRIES = _MH.FAST_MODE_RETRY_MAX_RETRIES  # Publish retry pass count.
         fast_settings.FAST_MODE_FALLBACK_THREADS = _MH.FAST_MODE_FALLBACK_THREADS  # Publish fallback workers.
-        logging.debug(
-            "Published the fast mode retry count %s", _MH.FAST_MODE_MAX_RETRIES
-        )  # Log the published result.
+        logging.debug("Published the fast mode retry count %s", _MH.FAST_MODE_MAX_RETRIES)  # Log the published result.
 
     def _publish_page_limit_configuration(self) -> None:
         """Publish the configured Mist API page limit after startup begins."""
