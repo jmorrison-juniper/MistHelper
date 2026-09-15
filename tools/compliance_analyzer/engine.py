@@ -313,7 +313,7 @@ class ComplianceAnalyzer:
         collected: list[Path] = []  # Accumulate matching Python files.
         for target in targets:  # Process each requested target.
             collected.extend(self._expand_target(Path(target), recursive, exclude_tokens))  # Expand it.
-        return self._filter_git_ignored(collected)  # Drop git-ignored files so scans match a clean checkout.
+        return self._filter_git_ignored(collected, self.coverage)  # Drop git-ignored files and record skips.
 
     @staticmethod
     def _resolve_git_executable() -> str | None:
@@ -323,7 +323,11 @@ class ComplianceAnalyzer:
         logger.debug("Resolved the git executable to %s", git_path)  # Log the result of the PATH lookup.
         return git_path  # Hand the resolved path, or None, back to the caller.
 
-    def _filter_git_ignored(self, files: list[Path]) -> list[Path]:
+    @staticmethod
+    def _filter_git_ignored(
+        files: list[Path],
+        coverage: AnalyzerCoverageTracker | None = None,
+    ) -> list[Path]:
         """Drop files that git ignores so scans match a clean checkout / CI.
 
         Compliance applies to version-controlled source. Untracked, ignored
@@ -365,15 +369,23 @@ class ComplianceAnalyzer:
         if not ignored:  # Fast path when git reports nothing ignored.
             return files  # Return the original ordering unchanged.
         kept = [path for path in files if path.as_posix() not in ignored]  # Keep only non-ignored files.
-        self._record_git_ignored(files, ignored)  # Make each git-ignore skip visible to the caller.
+        ComplianceAnalyzer._record_git_ignored(files, ignored, coverage)  # Make git-ignore skips visible.
         return kept  # Return the filtered file list.
 
-    def _record_git_ignored(self, files: list[Path], ignored: set[str]) -> None:
+    @staticmethod
+    def _record_git_ignored(
+        files: list[Path],
+        ignored: set[str],
+        coverage: AnalyzerCoverageTracker | None,
+    ) -> None:
         """Record git-ignored paths that left the collected file set."""
         logger.info("Recording %d git-ignored analyzer skip(s)", len(ignored))  # Log before coverage writes.
+        if coverage is None:  # Legacy static callers do not collect coverage.
+            logger.debug("No coverage tracker supplied for git-ignored skips")  # Log the compatibility path.
+            return  # Preserve the historical static helper contract.
         for path in files:  # Compare each collected path against the ignored set.
             if path.as_posix() in ignored:  # Git named this file as ignored.
-                self.coverage.record_skip(path, "git_ignored")  # Report the skip reason.
+                coverage.record_skip(path, "git_ignored")  # Report the skip reason.
         logger.debug("Recorded git-ignored analyzer skip(s)")  # Log after coverage writes.
 
     def _expand_target(self, target: Path, recursive: bool, exclude_tokens: tuple[str, ...]) -> list[Path]:
