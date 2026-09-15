@@ -177,7 +177,6 @@ __all__ = [
     "IS_TEST_MODE",
     "LAST_SELECTED_SITE_ID",
     "MINIMUM_PYTHON_VERSION",
-    "MIST_SITE_EXCLUDE_PREFIX",
     "OUTPUT_FORMAT",
     "PROGRESS_EMITTER",
     "TYPE_CHECKING",
@@ -2320,8 +2319,6 @@ FAST_MODE_RETRY_THREADS = 4  # Bootstrap updates this value from the environment
 FAST_MODE_RETRY_MAX_RETRIES = 2  # Bootstrap updates this value from the environment.
 FAST_MODE_FALLBACK_THREADS = 8  # Bootstrap updates this value from the environment.
 
-MIST_SITE_EXCLUDE_PREFIX = ""  # Bootstrap reads the optional site filter after import.
-
 # Global configuration for output format (CSV or Redis/SQLite)
 # Default to CSV for general use, can be overridden by CLI flag
 OUTPUT_FORMAT: str  # MainEntrypoint.context owns the selected output format.
@@ -3197,6 +3194,13 @@ def _get_duc_instance() -> DeviceUtilityCommands:  # Build DeviceUtilityCommands
 
 def _build_gateway_export_kwargs() -> dict[str, Any]:
     """Build the kwargs dict passed to configure_gateway_export_utils_dependencies()."""
+    logging.info("Reading the canonical site exclude prefix")  # Log before the prefix module read.
+    from src.refactors import mist_site_exclude_prefix  # Read the canonical filter owner at dispatch time.
+
+    logging.debug(  # Log the filter length without exposing the configured text.
+        "Read the canonical site exclude prefix with length %s",
+        len(mist_site_exclude_prefix.MIST_SITE_EXCLUDE_PREFIX),
+    )
     return {  # Single dependency-wiring payload assembled in one place.
         "apisession_dependency": MainEntrypoint.context.apisession,  # Live mistapi session.
         "mistapi_dependency": mistapi,  # mistapi root module.
@@ -3214,7 +3218,7 @@ def _build_gateway_export_kwargs() -> dict[str, Any]:
         "validation_utils": ValidationUtils,  # Input validation.
         "rate_limiting_utils": RateLimitingUtils,  # Adaptive delay.
         "mist_wan_target_ports": MistWanTargetPorts.VALUE,  # Port list from extracted class attribute.
-        "mist_site_exclude_prefix": MIST_SITE_EXCLUDE_PREFIX,  # Site filter prefix.
+        "mist_site_exclude_prefix": mist_site_exclude_prefix.MIST_SITE_EXCLUDE_PREFIX,  # Canonical site filter prefix.
         "fast_mode_max_retries": FAST_MODE_MAX_RETRIES,  # Retry cap.
         "fast_mode_retry_delay": FAST_MODE_RETRY_DELAY,  # Delay between retries.
         "api_usage_cache": _api_usage_cache,  # Shared API usage cache.

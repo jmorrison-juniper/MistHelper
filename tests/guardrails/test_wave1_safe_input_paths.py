@@ -4,6 +4,9 @@ from unittest.mock import MagicMock
 
 import MistHelper
 from src.refactors.is_debug_mode import IsDebugMode  # WHY: replaces removed MistHelper.is_debug_mode per 1012 SC-002
+from src.refactors.mist_site_exclude_prefix import (  # WHY: read the site filter at the canonical owner.
+    MIST_SITE_EXCLUDE_PREFIX,  # WHY: avoid the removed MistHelper pass-through for the extracted constant.
+)
 
 
 def test_ssh_runner_confirm_execution_returns_false_on_eof(monkeypatch):
@@ -31,7 +34,7 @@ def test_wan2_confirm_operation_handles_eof_as_cancel(monkeypatch):
             input_utils=MistHelper.InputUtils,  # Safe input facade
             data_exporter=MistHelper.DataExporter,  # Report writer facade
             mistapi=MistHelper.mistapi,  # mistapi library reference
-            site_exclude_prefix=MistHelper.MIST_SITE_EXCLUDE_PREFIX,  # Exclusion prefix
+            site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,  # Use the canonical exclusion prefix.
         )
     )
     # Patch org_id lookup before construction so __init__ does not hit the real API
