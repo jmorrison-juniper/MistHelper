@@ -4,12 +4,11 @@
 
 ## HTTP
 
-`GET /api/v1/sites/{site_id}/insights/client/{client_mac}/{metric}`
+`GET /api/v1/sites/{site_id}/insights/client/{client_mac}`
 
 ## Description
 
 Get Client Insight Metrics
-See metrics possibilities at [List Insight Metrics]($e/Constants%20Definitions/listInsightMetrics)
 
 ## Authentication
 
@@ -17,24 +16,17 @@ Requires API token authentication (`Authorization: Token {api_token}` header or 
 
 ## Parameters
 
-### Path Parameters
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| site_id | string | Yes |  |
-| client_mac | string | Yes |  |
-| metric | string | Yes | See [List Insight Metrics]($e/Constants%20Definitions/listInsightMetrics) for available metrics |
-
 ### Query Parameters
 
 | Name | Type | Required | Default | Enum | Description |
 |------|------|----------|---------|------|-------------|
-| start | string | No |  |  | Start time (epoch timestamp in seconds, or relative string like "-1d", "-1w") |
-| end | string | No |  |  | End time (epoch timestamp in seconds, or relative string like "-1d", "-2h", "now") |
-| duration | string | No | 1d |  | Duration like 7d, 2w |
-| interval | string | No |  |  | Aggregation works by giving a time range plus interval (e.g. 1d, 1h, 10m) where aggregation function would be applied to. |
-| limit | integer | No | 100 |  |  |
-| page | integer | No | 1 |  |  |
+| metrics | string | Yes |  |  | Comma separated Metric names, e.g. `top-app-by-num_client,top-app-by-bytes`. See possible values at [List Insight Metrics](/#operations/listInsightMetrics) |
+|  | string | No |  |  |  |
+|  | string | No |  |  |  |
+|  | string | No |  |  |  |
+|  | string | No |  |  |  |
+|  | string | No |  |  |  |
+|  | string | No |  |  |  |
 
 ## Request Body
 
@@ -48,45 +40,49 @@ OK
 
 ```json
 {
-  "type": "object",
+  "additionalProperties": false,
+  "description": "Insight metric response for a requested time range and aggregation interval",
   "properties": {
     "end": {
-      "type": "integer",
-      "contentEncoding": "int32"
+      "description": "Window end timestamp for the returned insight metrics",
+      "type": "integer"
     },
     "interval": {
-      "type": "integer",
-      "contentEncoding": "int32"
+      "description": "Aggregation interval used for the metric results",
+      "type": "integer"
     },
     "limit": {
-      "type": "integer",
-      "contentEncoding": "int32"
+      "description": "Maximum number of insight metric result items returned",
+      "type": "integer"
     },
     "results": {
-      "uniqueItems": true,
-      "type": "array",
+      "description": "Results depends on the `metric` - some return numbers (e.g. bytes, ap-count), others return objects",
       "items": {
         "anyOf": [
           {
             "type": "number"
           },
           {
+            "additionalProperties": true,
             "type": "object"
           }
-        ]
+        ],
+        "description": "Insight metric result item, returned either as a number or an object depending on the requested metric"
       },
-      "description": "Results depends on the `metric` - some return numbers (e.g. bytes, ap-count), others return objects"
+      "type": "array",
+      "uniqueItems": true
     },
     "start": {
-      "type": "integer",
-      "contentEncoding": "int32"
+      "description": "Window start timestamp for the returned insight metrics",
+      "type": "integer"
     }
   },
   "required": [
     "end",
     "interval",
     "start"
-  ]
+  ],
+  "type": "object"
 }
 ```
 
@@ -102,7 +98,7 @@ OK
 
 ## Pagination
 
-Supports pagination. Use `limit` and `page` query parameters.
+Not paginated.
 
 ## Rate Limiting
 
@@ -118,13 +114,13 @@ Retrieves detailed insight metrics for a specific wireless client by MAC address
 
 ## Gotchas
 
-- Requires a valid `metric` parameter. Available metrics vary by client type and activity.
+- Requires a valid `metrics` query parameter. Available metrics vary by client type and activity.
 - Time range must be specified for meaningful trend data.
 
 ## Related Endpoints
 
 - [GET_sites_site_id_insights_device_device_mac_metric.md](GET_sites_site_id_insights_device_device_mac_metric.md) — Device insights
-- [GET_sites_site_id_insights_metric.md](GET_sites_site_id_insights_metric.md) — Site-level insight metrics
+- [GET_sites_site_id_insights.md](GET_sites_site_id_insights.md) — Site-level insight metrics
 
 ## MistHelper Notes
 
