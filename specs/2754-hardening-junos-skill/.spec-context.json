@@ -22,10 +22,26 @@
     {
       "decision": "Deduplication: the newest readable train wins, with fallback to the next newest readable train. The index records the train used, the newest train available, and a supersedes field.",
       "why": "A document repeats across trains 21.1 to 26.2, and the newest copy is not always readable."
+    },
+    {
+      "decision": "The index holds 775 rows, not 757. Membership is: the catalog security flag (710), the FR-007 term match on the file name (38), and a named checklist-need list (27), minus 8 documents below the 200-characters-per-page floor.",
+      "why": "No rule reproduces 757. The term rule alone misses routing-policy.pdf, network-mgmt.pdf, time-mgmt.pdf, icmp.pdf, junos-install-upgrade.pdf, and the routing protocol guides, which 6 of the 8 checklist sections need."
+    },
+    {
+      "decision": "The skill never cites a path below documentation/references/. It cites a public URL first and the corpus root path second, which follows the 15 committed noc-runbooks.",
+      "why": "git check-ignore shows .gitignore line 28 ignores that directory because it holds verbatim vendor text. git ls-files returns 0 files, and Test-Path returns False in a fresh worktree."
+    },
+    {
+      "decision": "Upgrade the committed scripts/pdf_to_markdown.py so the documented rebuild command reproduces the staged corpus. The skill folder still ships documentation only.",
+      "why": ".gitignore lines 20 to 28 already promise that command. The committed script writes a flat page dump with no front matter and no heading detection, so the promise is false today."
+    },
+    {
+      "decision": "Use pdfplumber for the upgraded converter. Do not add PyMuPDF. Check V15 tests the structural contract of 30 sample files, not a byte match against the staged corpus.",
+      "why": "PyMuPDF is dual licensed under AGPL-3.0, and container-build.yml pushes to ghcr.io, which is distribution. pdfplumber is MIT, pyproject.toml already declares it, and the char size key gives the font size that the heading rule needs at about 5 times slower, which is 0.3 hours for a full rebuild."
     }
   ],
-  "currentStep": "specify",
-  "status": "specified",
+  "currentStep": "plan",
+  "status": "planned",
   "history": [
     {
       "step": "specify",
@@ -33,6 +49,13 @@
       "kind": "complete",
       "by": "extension",
       "at": "2026-09-16T18:03:50.308Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-09-16T18:47:57.262Z"
     }
   ],
   "telemetryInstanceId": "ad2c2ae0-32a5-4e62-b224-493e2d613680",
@@ -45,12 +68,66 @@
     {
       "what": "Repository STE linter score for spec.md",
       "result": "96 out of 100, which is above the floor of 80."
+    },
+    {
+      "what": "STE linter score for the plan artifacts",
+      "result": "plan 98, research 99, data-model 100, quickstart 99, contracts 99. All above the floor of 80.",
+      "command": "python -m tools.ste_linter --min-score 80 @((Get-ChildItem specs/2754-hardening-junos-skill -Recurse -Filter *.md).FullName)"
+    },
+    {
+      "what": "Index size and row count",
+      "result": "775 rows at 70.0 KB, plus an 11.1 KB archive-code table. Below the 90 KB per-file limit.",
+      "command": "Measured against the catalog of 4,006 documents. All 4,006 rows cost 1,202 KB, and the 718-row lean set costs 109 KB."
+    },
+    {
+      "what": "DISA STIG rule count and severity split",
+      "result": "181 rules: 25 high, 122 medium, 34 low. Full rule text is 485 KB, so each rule ships condensed.",
+      "command": "Counted Rule elements in the 3 XCCDF files under extracted/U_Juniper_EX_Switches_Y26M07_STIG/"
+    },
+    {
+      "what": "The ignored vendor corpus policy",
+      "result": ".gitignore:28 ignores documentation/references/. 0 files tracked there, against 15 tracked noc-runbooks.",
+      "command": "git check-ignore -v documentation/references/hardening/hardening-junos-devices-checklist.md"
+    },
+    {
+      "what": "The committed converter gap",
+      "result": "pdf_to_markdown.py writes # stem, a Source file line, and ## Page N. It has no front matter, no heading detection, and needs an undeclared pypdf.",
+      "command": "Read scripts/pdf_to_markdown.py and pyproject.toml"
+    },
+    {
+      "what": "The PDF library options",
+      "result": "pymupdf 1.28.2 (AGPL, used for the staged corpus), pdfplumber 0.11.10 (MIT, already declared), pypdf 6.16.2 (no font size).",
+      "command": "python -c importlib.metadata.version for each library"
+    },
+    {
+      "what": "The PyMuPDF license and the distribution condition",
+      "result": "Dual Licensed - GNU AFFERO GPL 3.0 or Artifex Commercial License. container-build.yml sets REGISTRY: ghcr.io and push: true.",
+      "command": "importlib.metadata.metadata('pymupdf')['License'] and a read of the workflow"
+    },
+    {
+      "what": "pdfplumber gives the font size and the speed cost",
+      "result": "Sizes 9.0 to 30.0 on 12 pages of pki.pdf, with a modal size of 9.0. 18.0 pages per second against 88.8 for PyMuPDF, which is about 5 times slower.",
+      "command": "Timed both readers over the same 12 pages"
+    },
+    {
+      "what": "Front matter field frequency in 400 staged files",
+      "result": "source_file and pages 100 percent, creationDate 98.8, modDate 98.5, title 87.8, author 68.0, subject 11.2. Only 2 fields are always present.",
+      "command": "Parsed the front matter of a 400 file random sample"
+    },
+    {
+      "what": "Index rows near the quality floor",
+      "result": "8 documents sit between 200 and 250 characters for each page, and 3 sit between 150 and 200. A reader change can move up to 11 of the 775 rows.",
+      "command": "Banded the character density of the selection from the conversion manifest"
     }
   ],
   "step_summaries": {
     "specify": {
       "summary": "The spec for the hardening-junos project skill is written and validated. It settles the corpus scope, the storage split, the retrieval design, the conversion quality criteria, and the deduplication rule.",
       "key_finding": "The corpus is too large for the repository, so the skill holds curated guidance plus one index, and the bulk text stays on disk outside the repository."
+    },
+    "plan": {
+      "summary": "The implementation plan and its design artifacts are written and then revised against 3 repository facts. The skill ships 6 files at about 262 KB. The corpus of 744 MB stays outside the repository, and the plan upgrades the committed converter.",
+      "key_finding": "documentation/references/ is ignored on purpose, so the repository already runs the vendor-text policy that the spec proposes. The committed scripts/pdf_to_markdown.py must be upgraded with pdfplumber, not PyMuPDF, because the container image is a distribution and the AGPL applies."
     }
   }
 }
