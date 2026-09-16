@@ -2,17 +2,19 @@
 
 from __future__ import annotations  # WHY: PEP 563 postponed annotations for forward Any typing
 
-import importlib  # WHY: Late-bound MistHelper import avoids circular src->MistHelper
 import logging  # WHY: Structured trace for workflow start/abort events
 from dataclasses import dataclass  # WHY: Frozen slotted state bundles keep execute() CC low
 from types import SimpleNamespace  # WHY: SimpleNamespace preserves the deps shape tests already rely on
-from typing import Any  # WHY: MistHelper collaborators are dynamic attrs typed loosely
+from typing import Any  # WHY: Runtime collaborators are dynamic attrs typed loosely
+
+from src.config.source_dependency_resolver import (  # WHY: Avoid a root import.
+    SourceDependencyResolver,
+)
 
 logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
 
 # Module-level constants: banners, log messages, prompts, tag keys, filename template.
 # Extracting them keeps every method free of repeated string literals so CC stays low.
-_MIST_MODULE = "MistHelper"  # WHY: Single source for the late-import target
 _BANNER = "Export Site Client Insights:"  # WHY: User-facing workflow banner
 _MSG_START = "Starting export of site client insights..."  # WHY: Log message: workflow start
 _MSG_REFRESH = "! Refreshing available insight metrics from Mist API..."  # WHY: User-facing metric refresh notice
@@ -60,8 +62,8 @@ _PREVIEW_LIMIT = 5  # WHY: Number of clients to show in the preview
 
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:
-    """Resolve MistHelper runtime dependencies without static cross-module imports."""
-    misthelper_module = importlib.import_module(_MIST_MODULE)  # WHY: Late import avoids circular src->MistHelper
+    """Resolve runtime dependencies without importing the root module."""
+    misthelper_module = SourceDependencyResolver.active_dependency_host()  # WHY: Use the bound host or test seam.
     return SimpleNamespace(
         mistapi=misthelper_module.mistapi,
         apisession=misthelper_module.apisession,

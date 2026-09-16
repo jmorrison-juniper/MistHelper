@@ -2,15 +2,17 @@
 
 from __future__ import annotations  # WHY: PEP 563 postponed annotations for forward Any typing
 
-import importlib  # WHY: Late-bound MistHelper import avoids circular src->MistHelper
 import logging  # WHY: Structured trace for workflow start/site abort events
 from dataclasses import dataclass  # WHY: Frozen slotted state bundles keep execute() CC low
 from types import SimpleNamespace  # WHY: SimpleNamespace preserves bounded-int spec shape used in tests
-from typing import Any  # WHY: Manager/prompt helpers are dynamic MistHelper attrs
+from typing import Any  # WHY: Manager/prompt helpers are dynamic runtime attrs
+
+from src.config.source_dependency_resolver import (  # WHY: Avoid a root import.
+    SourceDependencyResolver,
+)
 
 # Module-level constants - dividers, banner text, prompts, and event log strings extracted so
 # every method has fixed CC and no repeated string literals appear inline.
-_MIST_MODULE = "MistHelper"  # WHY: Single source for the late-import target
 _LOG_START = "Starting site wireless client capture"  # WHY: Event log message (single-source)
 _DIVIDER_DASH = "-" * 80  # WHY: Banner top/bottom rule
 _DIVIDER_EQUAL = "=" * 80  # WHY: Summary top/bottom rule
@@ -90,8 +92,8 @@ logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print
 
 
 def _resolve_prompt_helpers() -> tuple[Any, Any, Any, Any]:
-    """Resolve helper classes from MistHelper module to preserve runtime compatibility."""
-    misthelper_module = importlib.import_module(_MIST_MODULE)  # WHY: Late import avoids circular src->MistHelper
+    """Resolve helper classes without importing the root module."""
+    misthelper_module = SourceDependencyResolver.active_dependency_host()  # WHY: Use the bound host or test seam.
     return (
         misthelper_module.InputUtils,
         misthelper_module.PromptUtils,
