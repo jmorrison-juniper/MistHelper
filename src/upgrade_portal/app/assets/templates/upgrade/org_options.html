@@ -101,6 +101,27 @@
       </span>
     </fieldset>
 
+    <div class="mb-3" data-testid="org-upgrade-reboot-at-field">
+      <label class="form-label" for="org-upgrade-reboot-at">
+        Reboot each switch and each gateway after this much time
+      </label>
+      <input class="form-control"
+             type="text"
+             id="org-upgrade-reboot-at"
+             name="reboot_at"
+             data-testid="org-upgrade-reboot-at"
+             autocomplete="off"
+             placeholder="8h"
+             value="{{ options.reboot_at | default('', true) }}"
+             aria-describedby="org-upgrade-reboot-at-note">
+      <p class="portal-card-note" id="org-upgrade-reboot-at-note">
+        Write a number and a unit. Use s for seconds, m for minutes, h for
+        hours, and d for days. An example is 8h. The time counts from the moment
+        that you start the job. Leave the field empty to reboot as soon as the
+        write ends.
+      </p>
+    </div>
+
     <fieldset class="bubble-group mb-3" data-testid="org-upgrade-junos-file-action-group">
       <legend class="bubble-group-legend">Complete the Junos file action after the reboot</legend>
       <span class="bubble-option">

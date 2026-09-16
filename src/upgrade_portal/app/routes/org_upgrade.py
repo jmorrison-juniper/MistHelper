@@ -105,6 +105,39 @@ class SubmissionContext:
     request_nonce: object  # Keep the replay-prevention value.
 
 
+class OrgUpgradeScheduleReader:
+    """Read organization schedule controls with the single-site schedule rules."""
+
+    @staticmethod
+    def add_start_option(body: dict[str, Any], source: Mapping[str, Any]) -> None:
+        """Add the optional start time as epoch seconds."""
+        start_text = str(source.get("start_time", "")).strip()  # Read the existing local date and time control.
+        if not start_text:  # Omit an empty schedule to preserve the current immediate-start behavior.
+            return  # Keep an immediate start when the operator leaves the existing control empty.
+        logger.info("Read the organization upgrade start time")  # Log before parsing the submitted schedule.
+        start = datetime.fromisoformat(start_text)  # Parse the submitted ISO value from the existing form field.
+        start = start.replace(tzinfo=UTC) if start.tzinfo is None else start  # Give a naive value the portal zone.
+        body["start_time"] = int(start.timestamp())  # Store the same epoch format as the existing service.
+        logger.debug("The organization upgrade start time is present")  # Log after parsing without naming the value.
+
+    @staticmethod
+    def add_reboot_option(body: dict[str, Any], source: Mapping[str, Any]) -> None:
+        """Add the optional reboot delay by using the single-site duration rules."""
+        reboot_text = str(source.get("reboot_at", "")).strip()  # Read the same field name as the single-site form.
+        if not reboot_text:  # Omit an empty delay to preserve the current immediate-reboot behavior.
+            return  # Keep the existing behavior when the operator leaves the new control empty.
+        logger.info("Validate the organization upgrade reboot delay")  # Log before the safety guard runs.
+        build_options({"reboot_at": reboot_text})  # Reuse the single-site parser so invalid or past values fail closed.
+        body["reboot_at"] = reboot_text  # Store the operator duration for the single-site mapper to convert later.
+        logger.debug("The organization upgrade reboot delay passed validation")  # Log after the guard succeeds.
+
+    @staticmethod
+    def reboot_text(options: Mapping[str, Any]) -> str:
+        """Return the reboot delay text that the options page and confirmation page show."""
+        reboot_at = options.get("reboot_at")  # Read the raw duration saved by the organization route.
+        return str(reboot_at) if reboot_at is not None else ""  # Preserve the operator text without a unit change.
+
+
 def upgrade_service() -> Any:
     """Return the injected service or the production service class."""
     return current_app.config.get(SERVICE_CONFIG_KEY, OrgUpgradeService)
@@ -161,7 +194,8 @@ def read_options() -> dict[str, Any]:
     """Read and normalize the supported form or JSON option fields."""
     source = _request_source()  # Read one request representation.
     request_body = _base_request_options(source)  # Normalize the shared AP fields.
-    _add_start_option(request_body, source)  # Add the optional schedule.
+    OrgUpgradeScheduleReader.add_start_option(request_body, source)  # Add the optional schedule.
+    OrgUpgradeScheduleReader.add_reboot_option(request_body, source)  # Add the optional reboot delay.
     selected = _selected_types(source)  # Read all selected device families.
     if selected is not None:  # The legacy AP-only request omits this field.
         _add_device_options(request_body, source, selected)  # Add the multi-device controls.
@@ -190,16 +224,6 @@ def _phase_values(source: Mapping[str, Any]) -> list[int]:
     """Return the submitted canary phase percentages."""
     text = str(source.get("canary_phases", "")).strip()  # Read the comma-separated field.
     return [int(part.strip()) for part in text.split(",") if part.strip()] if text else []  # Parse each value.
-
-
-def _add_start_option(body: dict[str, Any], source: Mapping[str, Any]) -> None:
-    """Add the optional start time as epoch seconds."""
-    start_text = str(source.get("start_time", "")).strip()  # Read the local date and time.
-    if not start_text:  # Omit an empty schedule.
-        return  # Keep an immediate start.
-    start = datetime.fromisoformat(start_text)  # Parse the submitted ISO value.
-    start = start.replace(tzinfo=UTC) if start.tzinfo is None else start  # Give a naive value the portal zone.
-    body["start_time"] = int(start.timestamp())  # Store the same epoch format as the service.
 
 
 def _selected_types(source: Mapping[str, Any]) -> list[str] | None:
@@ -239,6 +263,7 @@ def _site_option_body(options: Mapping[str, Any], targets: list[dict[str, str]])
         "junos_file_action": options.get("junos_file_action", True),
         "force": options.get("force", False),
         "start_time": options.get("start_time"),
+        "reboot_at": options.get("reboot_at"),
         "canary_phases": ",".join(str(value) for value in options.get("canary_phases", [])),
         "max_failure_percentage": options.get("max_failure_percentage"),
     }
@@ -336,6 +361,7 @@ def options_view(options: Mapping[str, Any]) -> dict[str, Any]:
         "canary_phases": _phase_text(options.get("canary_phases")),
         "max_failure_percentage": options.get("max_failure_percentage", 5),
         "start_time": _start_text(options.get("start_time")),
+        "reboot_at": OrgUpgradeScheduleReader.reboot_text(options),
     }
 
 

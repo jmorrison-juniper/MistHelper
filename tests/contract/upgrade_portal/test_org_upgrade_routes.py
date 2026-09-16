@@ -16,7 +16,9 @@ import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 
+from src.firmware.aggregate_upgrade_service import AggregateBuildInput, AggregateUpgradeService
 from src.firmware.org_upgrade_service import OrgUpgradeResult
+from src.firmware.upgrade_service import DeviceTarget, UpgradeOptions
 from src.upgrade_portal.app.routes import org_upgrade, select
 from src.upgrade_portal.app.routes.org_upgrade import status_summary
 from src.upgrade_portal.runtime import identity, lock
@@ -111,10 +113,12 @@ class AggregateBoundaryStandIn:
         """Start with no submitted operation."""
         self.submit_count = 0
         self.cancel_count = 0
+        self.requests: list[Any] = []  # Store build inputs so safety tests can inspect validated options.
         self.final_state = ""  # An empty value keeps the mixed status answer below.
 
     def build(self, request: Any) -> dict[str, Any]:
         """Build three child rows for the selected device families."""
+        self.requests.append(request)  # Record the validated input before this stand-in builds child rows.
         children = [
             {
                 "child_id": f"child-{family}",
@@ -259,6 +263,8 @@ def test_the_options_page_shows_all_supported_device_types(org_upgrade_client: F
     assert b"Access points" in answer.data
     assert b"Switches" in answer.data
     assert b"Gateways" in answer.data
+    assert b'data-testid="org-upgrade-reboot-at"' in answer.data
+    assert b"Reboot each switch and each gateway after this much time" in answer.data
     assert b"Start time (UTC)" in answer.data
     assert b'data-testid="org-strategy-serial"' in answer.data
 
@@ -579,6 +585,115 @@ def test_multidevice_operation_is_durable_transparent_and_replay_safe(
     assert store.records["org-run-contract"]["children"][1]["error"] == "The switch child failed."
     assert store.records["org-run-contract"]["site_locks"] == {}  # A settled operation blocks no later work.
     assert lock.read_lock(fake_org_id, fake_site_id, select.lock_client()) is None  # The site accepts new work.
+
+
+def test_multidevice_reboot_delay_reaches_the_confirmed_options(
+    org_upgrade_client: FlaskClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The multi-site path stores the same reboot delay field as the single-site path."""
+    store = AggregateStoreStandIn()  # Hold the aggregate plan without a database.
+    boundary = AggregateBoundaryStandIn()  # Capture the build input without a cloud write.
+    org_upgrade_client.application.config["RUN_STORE"] = store  # Route aggregate plans to the test store.
+    org_upgrade_client.application.config["AGGREGATE_UPGRADE_SERVICE"] = boundary  # Stop before the cloud seam.
+    devices = [{"mac": "001122334466", "name": "switch", "device_type": "switch", "model": "EX4400"}]  # Use one switch.
+    monkeypatch.setattr(org_upgrade, "build_options_view", lambda session, org_id, site_id: {"targets": devices})
+
+    def built(session: Any, org_id: str, site_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Return a validated option record that preserves the submitted reboot delay."""
+        target = {  # Build the target that the aggregate service will plan.
+            **devices[0],
+            "version_before": "old",
+            "version_target": body["targets"][0]["version_target"],
+            "site_id": site_id,
+        }
+        options = {"strategy": "big_bang", "reboot": True, "reboot_at": body["reboot_at"]}  # Preserve the field.
+        return {"targets": [target], "options": options}  # Return the same shape as the production mapper.
+
+    monkeypatch.setattr(org_upgrade, "build_options_record", built)  # Keep the test offline and deterministic.
+    saved = org_upgrade_client.post(  # Save the multi-device options with the new reboot delay.
+        ORG_OPTIONS_API,
+        json={
+            "selected_types": ["switch"],
+            "version_switch": "23.4R1.9",
+            "strategy": "big_bang",
+            "reboot_at": "8h",
+        },
+    )
+    page = org_upgrade_client.get(ORG_CONFIRM_PAGE)  # Read the confirmation that the operator sees.
+    with org_upgrade_client.session_transaction() as browser_session:  # Inspect the signed browser session.
+        saved_options = dict(browser_session["org_upgrade_options"])  # Detach the session record for assertions.
+    assert saved.status_code == 200  # The valid delay must not block the save.
+    assert saved_options["reboot_at"] == "8h"  # The route stores the same field name and duration units.
+    assert boundary.requests[0].options.reboot_at is not None  # The service receives an epoch value for the cloud.
+    assert b'data-testid="org-upgrade-reboot-at"' in page.data  # The confirmation names the reboot delay.
+    assert b"8h" in page.data  # The operator sees the same duration they entered.
+
+
+def test_multidevice_without_reboot_delay_preserves_current_behavior(
+    org_upgrade_client: FlaskClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty reboot delay keeps the existing immediate-reboot behavior."""
+    boundary = AggregateBoundaryStandIn()  # Capture the build input without a cloud write.
+    org_upgrade_client.application.config["RUN_STORE"] = AggregateStoreStandIn()  # Hold the plan in memory.
+    org_upgrade_client.application.config["AGGREGATE_UPGRADE_SERVICE"] = boundary  # Stop before submission.
+    devices = [{"mac": "001122334466", "name": "switch", "device_type": "switch", "model": "EX4400"}]  # Use one switch.
+    monkeypatch.setattr(org_upgrade, "build_options_view", lambda session, org_id, site_id: {"targets": devices})
+    monkeypatch.setattr(  # Return a production-shaped record that has no reboot_at field.
+        org_upgrade,
+        "build_options_record",
+        lambda session, org_id, site_id, body: {
+            "targets": [{**devices[0], "version_before": "old", "version_target": "23.4R1.9", "site_id": site_id}],
+            "options": {"strategy": "big_bang", "reboot": True},
+        },
+    )
+    saved = org_upgrade_client.post(  # Save the multi-device options without the new control.
+        ORG_OPTIONS_API,
+        json={"selected_types": ["switch"], "version_switch": "23.4R1.9", "strategy": "big_bang"},
+    )
+    assert saved.status_code == 200  # Empty delay must keep the existing successful path.
+    assert boundary.requests[0].options.reboot_at is None  # The cloud body keeps its immediate-reboot default.
+
+
+def test_past_multidevice_reboot_delay_is_refused(org_upgrade_client: FlaskClient) -> None:
+    """A past reboot delay must not fall back to an immediate reboot."""
+    answer = org_upgrade_client.post(  # Submit an old epoch value through the same field name.
+        ORG_OPTIONS_API,
+        json={
+            "selected_types": ["switch"],
+            "version_switch": "23.4R1.9",
+            "strategy": "big_bang",
+            "reboot_at": "1000000000",
+        },
+    )
+    payload = answer.get_json()  # Read the refusal as structured JSON.
+    assert answer.status_code == 400  # The route must fail closed before the confirmation page.
+    assert payload["error"]["code"] == "org_upgrade_options_invalid"  # Keep the existing route error code.
+    assert "Reboot each switch and each gateway after this much time" in payload["error"]["message"]  # Name control.
+
+
+def test_aggregate_service_applies_reboot_delay_to_each_selected_site() -> None:
+    """Each selected non-AP site child receives the same reboot_at epoch seconds."""
+    service = AggregateUpgradeService()  # Use the production aggregate planner.
+    moment = 1_900_028_800  # Use a fixed epoch value so the assertion is deterministic.
+    request = AggregateBuildInput(  # Build a multi-site request without a cloud session.
+        owner="operator",
+        org_id="org",
+        sites=[{"site_id": "site-one", "name": "Site One"}, {"site_id": "site-two", "name": "Site Two"}],
+        targets=[
+            DeviceTarget("001122334466", "switch-one", "switch", "EX4400", "old", "23.4R1.9", "site-one"),
+            DeviceTarget("001122334477", "switch-two", "switch", "EX4400", "old", "23.4R1.9", "site-two"),
+        ],
+        options=UpgradeOptions(reboot=True, reboot_at=moment),
+        request_nonce="nonce",
+    )
+    record = service.build(request)  # Plan the aggregate record with no cloud write.
+    site_children = [child for child in record["children"] if child["scope"] == "site"]  # Inspect non-AP children.
+    assert len(site_children) == 2  # The planner must keep both selected sites.
+    assert {child["site_id"] for child in site_children} == {"site-one", "site-two"}  # No site may lose the delay.
+    assert {child["body"]["reboot_at"] for child in site_children} == {moment}  # The cloud body uses epoch seconds.
+    assert {child["reboot_at"] for child in site_children} == {moment}  # The durable child stores the same field.
 
 
 def test_settled_operation_releases_every_site_lock(

@@ -13,6 +13,9 @@
   <p><strong>Device families:</strong> {{ device_families | join(', ') if device_families else 'Access points' }}</p>
   <p data-testid="org-upgrade-firmware"><strong>Firmware:</strong> {{ firmware_summary }}</p>
   <p><strong>Strategy:</strong> {{ options.strategy }}</p>
+  {% if options.reboot_at %}
+    <p data-testid="org-upgrade-reboot-at"><strong>Reboot each switch and each gateway after this much time:</strong> {{ options.reboot_at }}</p>
+  {% endif %}
 
   <div class="alert alert-danger" role="alert">
     Warning: the upgrade can interrupt network service at all selected sites. Cancellation does not restore upgraded devices.

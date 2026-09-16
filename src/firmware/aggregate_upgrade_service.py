@@ -366,7 +366,15 @@ class AggregateUpgradeService:  # Coordinate all child routes through one durabl
             body=deepcopy(dict(plan.body)),
             targets=[cls._target_record(target) for target in plan.targets],
         )
+        cls._add_child_reboot_at(child, plan.body)  # Store the confirmed reboot moment beside each site child.
         return child  # The stored child can rebuild the proven plan.
+
+    @staticmethod
+    def _add_child_reboot_at(child: dict[str, Any], body: Mapping[str, object]) -> None:
+        """Copy the scheduled reboot moment onto a site child when one exists."""
+        reboot_at = body.get("reboot_at")  # Read the same cloud field that the single-site path uses.
+        if type(reboot_at) is int and reboot_at >= 0:  # Exclude the SSR disable value and malformed values.
+            child["reboot_at"] = reboot_at  # Store epoch seconds so every site child carries the same units.
 
     @staticmethod
     def _base_child(route: str, scope: str, org_id: str, site_id: str | None, family: str) -> dict[str, Any]:
