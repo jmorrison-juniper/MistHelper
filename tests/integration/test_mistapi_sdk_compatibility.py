@@ -15,20 +15,7 @@ LOGGER = logging.getLogger(__name__)  # Let pytest or callers choose the log lev
 REPO_ROOT = Path(__file__).resolve().parents[2]  # Locate the checkout even when pytest changes the working directory.
 UNRESOLVED_CALL_SITE_BASELINE = 10  # Fail only when new dynamic SDK paths increase the measured baseline.
 UNVERIFIABLE_SIGNATURE_BASELINE = 366  # Fail only when new dynamic SDK argument patterns increase the baseline.
-KNOWN_SIGNATURE_FAILURES = frozenset(
-    {
-        (
-            "src/ssh/cli_shell_manager.py:91",
-            "omits required parameter 'body'",
-            "mistapi.api.v1.sites.devices.createSiteDeviceShellSession",
-        ),
-        (
-            "src/upgrade_portal/api/run_controls/routes.py:65",
-            "passes unsupported parameter 'fields'",
-            "mistapi.api.v1.sites.stats.listSiteDevicesStats",
-        ),
-    }
-)  # Keep issue #2741 discoveries visible without mixing repairs into this guard change.
+KNOWN_SIGNATURE_FAILURES: frozenset[tuple[str, str, str]] = frozenset()  # Issue #2741 removed the known failures.
 
 
 @dataclass(frozen=True)

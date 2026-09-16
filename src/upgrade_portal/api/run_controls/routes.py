@@ -62,19 +62,43 @@ class SiteStatsFirmwareEvidenceReader:
         """Return one safe evidence row for each stored target."""
         logger.info("Read site statistics for reconciliation evidence")  # Record the read before the cloud call.
         site_id = str(record.get("site_id") or "")  # Limit the approved endpoint to the run site.
-        response = mistapi.api.v1.sites.stats.listSiteDevicesStats(  # Read the approved running-version endpoint.
-            self._cloud_session,
-            site_id,
-            type="all",
-            fields=gate.STATISTICS_FIELDS,
-            limit=DEFAULT_STATS_PAGE_LIMIT,
-        )
-        rows = [dict(row) for row in mistapi.get_all(mist_session=self._cloud_session, response=response)]
+        response = self._read_site_statistics(site_id)  # WHY: isolate the SDK call so signature faults stay visible.
+        raw_rows = mistapi.get_all(mist_session=self._cloud_session, response=response)  # WHY: read all pages.
+        logger.debug("Read %s raw site statistics row(s)", len(raw_rows or ()))  # WHY: measure the cloud result.
+        rows = self._project_statistics_rows(raw_rows or ())  # WHY: keep the approved reconciliation fields only.
         running = RunningFirmwareVersionResolver.index_stats_rows(rows)  # Use the shared running-version rule.
         indexed = self._index_readings(rows, running)  # Preserve firmware status beside the running version.
         result = [_target_evidence_row(target, indexed, observed_at) for target in self._targets(record)]
         logger.debug("Read reconciliation evidence for %s target(s)", len(result))  # Report a safe count.
         return result  # Give the reconciliation service only safe rows.
+
+    def _read_site_statistics(self, site_id: str) -> Any:
+        """Read device statistics with the installed SDK signature."""
+        try:
+            logger.info("Call listSiteDevicesStats for reconciliation evidence")  # WHY: audit the cloud read.
+            response = mistapi.api.v1.sites.stats.listSiteDevicesStats(  # WHY: mistapi 0.64.0 has no fields kwarg.
+                self._cloud_session,
+                site_id,
+                type="all",
+                limit=DEFAULT_STATS_PAGE_LIMIT,
+            )
+            logger.debug("listSiteDevicesStats returned status %s", getattr(response, "status_code", "unknown"))
+            return response  # WHY: the pagination helper consumes the response object.
+        except TypeError:  # WHY: signature drift is a programming error, not a recoverable cloud result.
+            logger.exception(  # WHY: preserve the stack trace for a developer repair.
+                "The listSiteDevicesStats call does not match the installed mistapi SDK signature"
+            )
+            raise  # WHY: keep a malformed SDK call visible to tests and callers.
+
+    @staticmethod
+    def _project_statistics_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+        """Keep only the reconciliation fields from site statistics rows."""
+        field_names = tuple(gate.STATISTICS_FIELDS.split(","))  # WHY: reuse the gate field contract.
+        return [  # WHY: avoid storing full cloud rows after the SDK returns them.
+            {field_name: row[field_name] for field_name in field_names if field_name in row}
+            for row in rows
+            if isinstance(row, Mapping)
+        ]
 
     @staticmethod
     def _targets(record: Mapping[str, Any]) -> list[Mapping[str, Any]]:
