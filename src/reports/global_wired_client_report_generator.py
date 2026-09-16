@@ -9,14 +9,13 @@ then writes both a CSV/SQLite export and a JSON summary artifact.
 Direct imports cover stdlib + installed packages (mistapi). Live-global reads
 (``apisession``, ``ConfigUtils``, ``FilterOperatorEngine``, ``InputUtils``,
 ``DataProcessingUtils``, ``DataExporter``) are resolved via lazy
-``mh = importlib.import_module("MistHelper")`` inside each helper. Callers
+``mh = the source dependency resolver`` inside each helper. Callers
 continue to reach the class through the
 ``MistHelper.GlobalWiredClientReportGenerator`` re-export alias.
 """
 
 from __future__ import annotations  # WHY: PEP 604 unions for return types.
 
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import json  # WHY: local report summary is serialized as JSON.
 import logging  # WHY: structured trace for report lifecycle events.
 import os  # WHY: build cross-platform output paths under data/.
@@ -25,6 +24,9 @@ from typing import Any, Literal  # WHY: Literal[False] to distinguish user cance
 
 import mistapi  # WHY: direct SDK access for search + pagination helpers.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -37,7 +39,7 @@ class GlobalWiredClientReportGenerator:
     @staticmethod
     def execute() -> None:  # Run the report.
         """Main entry point from menu system."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         criteria = GlobalWiredClientReportGenerator._prompt_filter_criteria()  # Prompt for filters.
         if criteria is False:  # User cancelled.
@@ -67,7 +69,7 @@ class GlobalWiredClientReportGenerator:
     @staticmethod
     def _collect_single_filter(field_label: str, key_prefix: str, criteria: dict[str, str]) -> bool | None:
         """Collect a single field operator and value. Returns False on validation failure."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilterOperatorEngine + InputUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         operator = GlobalWiredClientReportGenerator._prompt_operator(field_label)  # Prompt the operator.
         if not operator:  # No operator chosen.
             return None  # Skip this field.
@@ -83,7 +85,7 @@ class GlobalWiredClientReportGenerator:
     @staticmethod
     def _resolve_operator_choice(choice: str, field_name: str) -> str | None:
         """Map a 1-based operator choice (or '0'/empty) to an operator string, or ``None`` on skip/invalid."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilterOperatorEngine.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if choice == "0" or not choice:  # Operator explicitly skipped
             return None
         try:
@@ -100,7 +102,7 @@ class GlobalWiredClientReportGenerator:
     @staticmethod
     def _prompt_operator(field_name: str) -> str | None:  # Prompt an operator choice.
         """Display operator selection menu and return chosen operator or None."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilterOperatorEngine + InputUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         echo("  %s filter operator:", field_name)
         echo("    0. No filter (skip)")
         for index, operator in enumerate(mh.FilterOperatorEngine.OPERATOR_CATALOG, 1):  # List operators
@@ -115,7 +117,7 @@ class GlobalWiredClientReportGenerator:
     @staticmethod
     def _fetch_clients(org_id: str, criteria: dict[str, str] | None) -> tuple[list[dict[str, Any]], bool]:
         """Fetch org-wide wired clients with optional remote prefiltering."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         remote_params: dict[str, Any] = {"limit": 1000}  # Base API params.
         remote_used = False  # Track remote prefilter use.
         if criteria:  # Have criteria.
@@ -140,7 +142,7 @@ class GlobalWiredClientReportGenerator:
     @staticmethod
     def _build_remote_params(criteria: dict[str, str], params: dict[str, Any]) -> bool:
         """Add best-effort remote prefilter params. Returns True if any were added."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilterOperatorEngine.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         remote_used = False  # Track whether we added any server-side prefilter parameters
         mac_operator = criteria.get("mac_operator", "")  # The chosen MAC comparison operator (may be empty)
         if (
@@ -202,7 +204,7 @@ class GlobalWiredClientReportGenerator:
     @staticmethod
     def _record_matches(record: dict[str, Any], criteria: dict[str, str]) -> bool:  # Test one record vs criteria.
         """Evaluate a single record against all active filter criteria with AND logic."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilterOperatorEngine.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         mac_operator = criteria.get("mac_operator")  # The MAC operator to evaluate, if any
         if mac_operator:  # A MAC filter is active
             mac_value = criteria.get("mac_value", "")  # The MAC value to compare against
@@ -261,7 +263,7 @@ class GlobalWiredClientReportGenerator:
     @staticmethod
     def _write_standard_export(matched: list[dict[str, Any]]) -> None:  # Write the standard CSV.
         """Write matched records through the standard CSV/SQLite export path."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if matched:  # Have matches.
             flattened = DataProcessingUtils.flatten_nested_fields(matched)  # Flatten nested fields.
             sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]

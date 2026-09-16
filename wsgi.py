@@ -8,6 +8,7 @@ bootstraps API authentication, injects session globals, and
 exposes the real menu_actions with working callables.
 """
 
+import importlib
 import logging
 import os
 import sys
@@ -18,6 +19,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.refactors.main_entrypoint import ApplicationBootstrap  # Explicit bootstrap keeps MistHelper import passive.
 from web_portal.app import WebPortalApp
+
+_MISTHELPER_MODULE: Any = importlib.import_module("MistHelper")  # Import root once for the bound source host.
+_MISTHELPER_MODULE_NAME = _MISTHELPER_MODULE.__name__  # Keep the import visible to static analysis.
 
 ApplicationBootstrap(parse_cli=False).bootstrap_for_web()  # Run web startup without reading command-line arguments.
 
@@ -75,17 +79,15 @@ def _load_menu_actions(wsgi_session: Any, wsgi_org_id: str) -> Any:
     static description-only registry on import failure.
     """
     try:
-        import MistHelper
-
         if wsgi_session is not None:
-            MistHelper.apisession = wsgi_session
+            _MISTHELPER_MODULE.apisession = wsgi_session
             # Apply timeout adapter so API calls don't hang indefinitely
-            MistHelper._configure_session_timeout(wsgi_session)
+            _MISTHELPER_MODULE._configure_session_timeout(wsgi_session)
         if wsgi_org_id:
-            MistHelper.org_id = wsgi_org_id
+            _MISTHELPER_MODULE.org_id = wsgi_org_id
             os.environ["ORG_ID"] = wsgi_org_id
-        logging.info("WSGI: MistHelper imported - %d menu actions loaded", len(MistHelper.menu_actions))
-        return MistHelper.menu_actions
+        logging.info("WSGI: MistHelper imported - %d menu actions loaded", len(_MISTHELPER_MODULE.menu_actions))
+        return _MISTHELPER_MODULE.menu_actions
     except Exception as exc:
         logging.warning("WSGI: MistHelper import failed (%s) - using static registry", exc)
         from web_portal.menu_registry import build_static_menu_actions

@@ -7,12 +7,11 @@ entry is safe. Tasks T027 and T041 ask for these checks.
 
 from __future__ import annotations
 
-import importlib  # The main script loads by name, because a dash blocks a plain import.
 from types import SimpleNamespace  # A light stand-in for the parsed argument namespace.
 
 import pytest  # One table of parameters drives the test over each flag.
 
-MAIN = importlib.import_module("MistHelper")  # The main script holds the flags and the menu.
+import MistHelper as MAIN  # WHY: the root script holds CLI flags and menus.
 
 
 @pytest.mark.parametrize(

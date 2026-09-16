@@ -10,7 +10,6 @@ Why:
 
 from __future__ import annotations
 
-import importlib
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -43,7 +42,7 @@ def fake_mh() -> Any:
 
     Why:
         The exporter resolves ``apisession``, ``InputUtils``, and ``DataExporter``
-        through a lazy ``importlib.import_module("MistHelper")`` call. One stub
+        through a lazy ``SourceDependencyResolver`` call. One stub
         covers all three and records what the exporter wrote.
     """
     module = MagicMock()  # WHY: a MagicMock auto-creates each attribute the exporter reads.
@@ -58,7 +57,7 @@ class TestFetch:
         """The SDK contract is exactly two positional arguments, session first."""
         sdk_callable = MagicMock(return_value=MagicMock(data=_PAYLOAD))  # WHY: stand in for the SDK function.
         with (
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.msp_license_exporter.SourceDependencyResolver", fake_mh),
             patch.object(mistapi.api.v1.msps.licenses, "listMspLicenses", sdk_callable),
         ):
             assert MSPLicenseExporter._fetch("msp-1") == _PAYLOAD
@@ -69,7 +68,7 @@ class TestFetch:
         """A null body or a list body means the MSP holds no license record."""
         sdk_callable = MagicMock(return_value=MagicMock(data=body))  # WHY: drive the non-dict guard.
         with (
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.msp_license_exporter.SourceDependencyResolver", fake_mh),
             patch.object(mistapi.api.v1.msps.licenses, "listMspLicenses", sdk_callable),
         ):
             assert MSPLicenseExporter._fetch("msp-1") == {}
@@ -138,13 +137,13 @@ class TestPersist:
 
     def test_writes_nothing_when_there_is_no_row(self, fake_mh: Any) -> None:
         """An empty result must report plainly instead of writing an empty file."""
-        with patch.object(importlib, "import_module", return_value=fake_mh):
+        with patch("src.export.msp_license_exporter.SourceDependencyResolver", fake_mh):
             MSPLicenseExporter._persist([], "x.csv", "listMspLicenses", "license summary")
         fake_mh.DataExporter.write_with_format_selection.assert_not_called()
 
     def test_routes_the_write_through_the_declared_api_function_name(self, fake_mh: Any) -> None:
         """The api_function_name is what selects the primary-key strategy."""
-        with patch.object(importlib, "import_module", return_value=fake_mh):
+        with patch("src.export.msp_license_exporter.SourceDependencyResolver", fake_mh):
             MSPLicenseExporter._persist([{"msp_id": "msp-1"}], "x.csv", "listMspLicenses", "license summary")
         _, kwargs = fake_mh.DataExporter.write_with_format_selection.call_args  # WHY: read the routing key.
         assert kwargs["api_function_name"] == "listMspLicenses"
@@ -157,7 +156,7 @@ class TestLicensesEntryPoint:
         """No MSP identifier means no API call and no write."""
         sdk_callable = MagicMock()  # WHY: assert the SDK is never reached.
         with (
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.msp_license_exporter.SourceDependencyResolver", fake_mh),
             patch.object(InputUtils, "prompt_msp_id", return_value=None),
             patch.object(mistapi.api.v1.msps.licenses, "listMspLicenses", sdk_callable),
         ):
@@ -168,7 +167,7 @@ class TestLicensesEntryPoint:
     def test_writes_a_summary_file_and_a_detail_file(self, fake_mh: Any) -> None:
         """One API call must produce exactly two writes with distinct names."""
         with (
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.msp_license_exporter.SourceDependencyResolver", fake_mh),
             patch.object(InputUtils, "prompt_msp_id", return_value="msp-1"),
             patch.object(MSPLicenseExporter, "_fetch", return_value=_PAYLOAD),
         ):
@@ -179,7 +178,7 @@ class TestLicensesEntryPoint:
     def test_writes_nothing_when_the_msp_holds_no_license(self, fake_mh: Any) -> None:
         """An empty body must produce no summary row and no detail row."""
         with (
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.msp_license_exporter.SourceDependencyResolver", fake_mh),
             patch.object(InputUtils, "prompt_msp_id", return_value="msp-1"),
             patch.object(MSPLicenseExporter, "_fetch", return_value={}),
         ):
@@ -190,7 +189,7 @@ class TestLicensesEntryPoint:
         """A network or SDK failure must be logged, not raised into the menu loop."""
         caplog.set_level("ERROR")  # WHY: the handler reports the failure at ERROR level.
         with (
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.msp_license_exporter.SourceDependencyResolver", fake_mh),
             patch.object(InputUtils, "prompt_msp_id", return_value="msp-1"),
             patch.object(MSPLicenseExporter, "_fetch", side_effect=RuntimeError("connection reset")),
         ):

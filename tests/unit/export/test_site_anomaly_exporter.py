@@ -3,7 +3,7 @@
 Why: Exercises every line and branch of the 17 static methods so that
 un-omitting the module in ``[tool.coverage.run].omit`` keeps overall coverage
 above the 90% gate. The module resolves cross-class collaborators lazily via
-``importlib.import_module("MistHelper")``; tests inject a fake ``MistHelper``
+``SourceDependencyResolver``; tests inject a fake ``MistHelper``
 module via ``sys.modules`` monkeypatching to control those interactions.
 ``DataProcessingUtils`` is imported directly at module scope and is patched
 against the module's own binding.
@@ -23,7 +23,7 @@ import pytest
 def fake_mh(monkeypatch):
     """Install a fake MistHelper module for lazy importlib resolution.
 
-    Why: SiteAnomalyExporter methods call ``importlib.import_module("MistHelper")``
+    Why: SiteAnomalyExporter methods call ``SourceDependencyResolver``
     to fetch PromptUtils, EnhancedSSHRunner, AnomalyMetricsDiscovery, mistapi,
     apisession, DataExporter, and PromptClientUtils. Replacing the module lets
     tests observe and control every collaborator without loading the monolith.

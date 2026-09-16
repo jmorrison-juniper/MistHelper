@@ -3,10 +3,10 @@
 Why:
     Un-omit ``src/ui/prompt_utils.py`` (issue #878 tranche 34) and drive 100%
     line + branch coverage over the 25 static prompt/selection helpers. The
-    module leans on a lazy ``importlib.import_module("MistHelper")`` for live
+    module leans on a lazy ``SourceDependencyResolver`` for live
     globals (``apisession``, ``DataExporter``, ``LAST_SELECTED_SITE_ID``);
     tests replace that lookup with a ``SimpleNamespace`` fake through
-    ``patch("src.ui.prompt_utils.importlib.import_module", ...)`` -- the
+    ``patch("src.ui.prompt_utils.SourceDependencyResolver", ...)`` -- the
     canonical pattern established by the tranche 33 exemplar.
 """
 
@@ -87,7 +87,7 @@ def test_fetch_and_filter_devices_empty_rawdata(caplog: pytest.LogCaptureFixture
             "src.ui.prompt_utils.mistapi.api.v1.sites.devices.listSiteDevices",
             return_value=fake_response,
         ),
-        patch("src.ui.prompt_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
         caplog.at_level(logging.WARNING),
     ):
         result = PromptUtils._fetch_and_filter_devices("site-1", "all")
@@ -104,7 +104,7 @@ def test_fetch_and_filter_devices_empty_after_filter(caplog: pytest.LogCaptureFi
             "src.ui.prompt_utils.mistapi.api.v1.sites.devices.listSiteDevices",
             return_value=fake_response,
         ),
-        patch("src.ui.prompt_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
         caplog.at_level(logging.WARNING),
     ):
         result = PromptUtils._fetch_and_filter_devices("site-1", "gateway")
@@ -121,7 +121,7 @@ def test_fetch_and_filter_devices_happy_path() -> None:
             "src.ui.prompt_utils.mistapi.api.v1.sites.devices.listSiteDevices",
             return_value=fake_response,
         ),
-        patch("src.ui.prompt_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         result = PromptUtils._fetch_and_filter_devices("site-1", "ap")
     assert result == [{"type": "ap"}]
@@ -146,7 +146,7 @@ def test_export_and_index_inventory_builds_maps_and_calls_exporter() -> None:
             "src.ui.prompt_utils.DataProcessingUtils.escape_multiline",
             side_effect=lambda x: x,
         ),
-        patch("src.ui.prompt_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         table, index_map, name_map = PromptUtils._export_and_index_inventory(rawdata, "out.csv")
     assert isinstance(table, PrettyTable)
@@ -274,7 +274,7 @@ def test_select_site_id_from_csv_by_index(caplog: pytest.LogCaptureFixture) -> N
             return_value=({0: {"id": "s0", "name": "A"}}, {"A": {"id": "s0"}}),
         ),
         patch("src.ui.prompt_utils.InputUtils.safe_input", return_value="0"),
-        patch("src.ui.prompt_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
         caplog.at_level(logging.WARNING),
     ):
         result = PromptUtils.select_site_id_from_csv()
@@ -294,7 +294,7 @@ def test_select_site_id_from_csv_index_invalid_keeps_last_selected_unset() -> No
             return_value=({0: {"id": "s0", "name": "A"}}, {"A": {"id": "s0"}}),
         ),
         patch("src.ui.prompt_utils.InputUtils.safe_input", return_value="99"),
-        patch("src.ui.prompt_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         result = PromptUtils.select_site_id_from_csv()
     assert result is None
@@ -312,7 +312,7 @@ def test_select_site_id_from_csv_by_name() -> None:
             return_value=({0: {"id": "s0", "name": "A"}}, {"A": {"id": "s0"}}),
         ),
         patch("src.ui.prompt_utils.InputUtils.safe_input", return_value="A"),
-        patch("src.ui.prompt_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         result = PromptUtils.select_site_id_from_csv()
     assert result == "s0"
@@ -330,7 +330,7 @@ def test_select_site_id_from_csv_not_found(caplog: pytest.LogCaptureFixture) -> 
             return_value=({0: {"id": "s0", "name": "A"}}, {"A": {"id": "s0"}}),
         ),
         patch("src.ui.prompt_utils.InputUtils.safe_input", return_value="Zed"),
-        patch("src.ui.prompt_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
         caplog.at_level(logging.WARNING),
     ):
         result = PromptUtils.select_site_id_from_csv()
@@ -411,7 +411,7 @@ def test_fetch_site_wireless_clients_success() -> None:
             return_value="resp",
         ),
         patch("src.ui.prompt_utils.mistapi.get_all", return_value=clients),
-        patch("src.ui.prompt_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         result = PromptUtils._fetch_site_wireless_clients("site-1")
     assert all(c["client_type"] == "wireless" for c in result)
@@ -427,7 +427,7 @@ def test_fetch_site_wireless_clients_get_all_none_returns_empty() -> None:
             return_value="resp",
         ),
         patch("src.ui.prompt_utils.mistapi.get_all", return_value=None),
-        patch("src.ui.prompt_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         assert PromptUtils._fetch_site_wireless_clients("site-1") == []
 
@@ -440,7 +440,7 @@ def test_fetch_site_wireless_clients_exception_returns_empty() -> None:
             "src.ui.prompt_utils.mistapi.api.v1.sites.clients.searchSiteWirelessClients",
             side_effect=RuntimeError("boom"),
         ),
-        patch("src.ui.prompt_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         assert PromptUtils._fetch_site_wireless_clients("site-1") == []
 
@@ -458,7 +458,7 @@ def test_fetch_site_wired_clients_success() -> None:
             return_value="resp",
         ),
         patch("src.ui.prompt_utils.mistapi.get_all", return_value=clients),
-        patch("src.ui.prompt_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         result = PromptUtils._fetch_site_wired_clients("site-1")
     assert result[0]["client_type"] == "wired"
@@ -473,7 +473,7 @@ def test_fetch_site_wired_clients_exception_returns_empty() -> None:
             "src.ui.prompt_utils.mistapi.api.v1.sites.wired_clients.searchSiteWiredClients",
             side_effect=RuntimeError("boom"),
         ),
-        patch("src.ui.prompt_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         assert PromptUtils._fetch_site_wired_clients("site-1") == []
 
@@ -491,7 +491,7 @@ def test_fetch_org_wireless_clients_success() -> None:
             return_value="resp",
         ),
         patch("src.ui.prompt_utils.mistapi.get_all", return_value=clients),
-        patch("src.ui.prompt_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         result = PromptUtils._fetch_org_wireless_clients("org-1")
     assert result[0]["client_type"] == "wireless"
@@ -506,7 +506,7 @@ def test_fetch_org_wireless_clients_exception_returns_empty() -> None:
             "src.ui.prompt_utils.mistapi.api.v1.orgs.clients.searchOrgWirelessClients",
             side_effect=RuntimeError("boom"),
         ),
-        patch("src.ui.prompt_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         assert PromptUtils._fetch_org_wireless_clients("org-1") == []
 
@@ -524,7 +524,7 @@ def test_fetch_org_wired_clients_success() -> None:
             return_value="resp",
         ),
         patch("src.ui.prompt_utils.mistapi.get_all", return_value=clients),
-        patch("src.ui.prompt_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         result = PromptUtils._fetch_org_wired_clients("org-1")
     assert result[0]["client_type"] == "wired"
@@ -538,7 +538,7 @@ def test_fetch_org_wired_clients_exception_returns_empty() -> None:
             "src.ui.prompt_utils.mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients",
             side_effect=RuntimeError("boom"),
         ),
-        patch("src.ui.prompt_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.ui.prompt_utils.SourceDependencyResolver", fake_mh),
     ):
         assert PromptUtils._fetch_org_wired_clients("org-1") == []
 

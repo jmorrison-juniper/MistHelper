@@ -8,13 +8,15 @@ through the ``MistHelper.SiteConfigExporter`` re-export alias.
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+.
 
-import importlib  # WHY: lazy MistHelper import to reach live helper classes without circular load.
 import logging  # WHY: structured trace for export lifecycle events.
 from typing import Any  # WHY: raw WLAN rows are duck-typed dicts from mistapi.
 
 import mistapi  # WHY: direct SDK access for sites/orgs endpoints.
 
 from src.api.api_fetch_utils import APIFetchUtils  # WHY: 1014 P8 direct import (FR-005).
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -32,7 +34,7 @@ class SiteConfigExporter:
     @staticmethod
     def _resolve_wlan_site_name(site_id: str) -> str:
         """Look up site name from org's site list, falling back to site_id on failure."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             response = mistapi.api.v1.orgs.sites.listOrgSites(  # List org sites.
                 mh.apisession,
@@ -47,7 +49,7 @@ class SiteConfigExporter:
     @staticmethod
     def _fetch_wlans_with_fallback(site_id: str) -> list[Any]:
         """Prefer derived WLANs (includes inherited/template). Fall back to site-local on failure."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession module global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             derived_response = mistapi.api.v1.sites.wlans.listSiteWlansDerived(  # List derived WLANs.
                 mh.apisession,
@@ -67,7 +69,7 @@ class SiteConfigExporter:
     @staticmethod
     def _persist_site_wlans_csv(rawdata: list[Any], filename: str, site_name: str) -> None:
         """Flatten + sort by SSID + write WLAN rows (or write empty CSV when none)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No rows.
             logging.warning("No data provided for output to %s", filename)  # Warn none.
             mh.DataExporter.write_with_format_selection([], filename, api_function_name="listSiteWlans")  # Empty CSV.
@@ -85,7 +87,7 @@ class SiteConfigExporter:
     @staticmethod
     def wlans(site_id: str | None = None) -> None:
         """Export effective WLANs for a site to SiteWlans.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PromptUtils helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Starting export of site WLANs...")  # Log start.
         if not site_id:  # No site given.
             site_id = mh.PromptUtils.select_site()  # Select a site.
@@ -100,7 +102,7 @@ class SiteConfigExporter:
     @staticmethod
     def maps() -> None:
         """Export maps for a site to SiteMaps.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: fetch live dep symbols for SiteExportUtils construction.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         SiteExportUtils(
             apisession=mh.apisession,
             PromptUtils=mh.PromptUtils,
@@ -123,7 +125,7 @@ class SiteConfigExporter:
     @staticmethod
     def zones() -> None:
         """Export zones for a site to SiteZones.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: fetch live dep symbols for SiteExportUtils construction.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         SiteExportUtils(
             apisession=mh.apisession,
             PromptUtils=mh.PromptUtils,
@@ -146,9 +148,7 @@ class SiteConfigExporter:
     @staticmethod
     def settings() -> None:
         """Export configuration settings for all sites to AllSiteConfigs.csv."""
-        mh = importlib.import_module(
-            "MistHelper"
-        )  # WHY: lazy fetch of ConfigUtils/APIFetchUtils/DataProcessingUtils/DataExporter + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: Preserve user-facing banner verbatim.
         logging.info("Site Configuration Settings:")
         logging.info("Starting export of all site configuration settings...")  # Log start.

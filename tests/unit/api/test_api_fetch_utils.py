@@ -50,7 +50,7 @@ def test_organization_services_happy_path_returns_normalized_rows() -> None:
     fake_response = SimpleNamespace(data=[{"name": "svc-a", "type": "custom", "description": "d1"}])
     with (
         patch("src.api.api_fetch_utils.mistapi.api.v1.orgs.services.listOrgServices", return_value=fake_response),
-        patch("src.api.api_fetch_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh),
     ):
         result = APIFetchUtils.organization_services()
     assert result == [
@@ -69,7 +69,7 @@ def test_organization_services_empty_data_returns_empty_list() -> None:
     fake_response = SimpleNamespace(data=[])
     with (
         patch("src.api.api_fetch_utils.mistapi.api.v1.orgs.services.listOrgServices", return_value=fake_response),
-        patch("src.api.api_fetch_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh),
     ):
         assert APIFetchUtils.organization_services() == []
 
@@ -80,7 +80,7 @@ def test_organization_services_missing_data_attribute_returns_empty_list() -> No
     fake_response = SimpleNamespace()
     with (
         patch("src.api.api_fetch_utils.mistapi.api.v1.orgs.services.listOrgServices", return_value=fake_response),
-        patch("src.api.api_fetch_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh),
     ):
         assert APIFetchUtils.organization_services() == []
 
@@ -89,7 +89,7 @@ def test_organization_services_exception_returns_empty_list() -> None:
     """Any exception during the API call -> return [] (never crash)."""
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.side_effect = RuntimeError("boom")
-    with patch("src.api.api_fetch_utils.importlib.import_module", return_value=fake_mh):
+    with patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh):
         assert APIFetchUtils.organization_services() == []
 
 
@@ -157,7 +157,7 @@ def test_all_site_settings_iterates_all_sites_and_skips_failures() -> None:
         return None if site["id"] == "s2" else {"site_id": site["id"], "site_name": site["name"]}
 
     with (
-        patch("src.api.api_fetch_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh),
         patch.object(APIFetchUtils, "_fetch_single_site_setting", side_effect=fetcher),
     ):
         result = APIFetchUtils.all_site_settings(MagicMock(), "org-1")
@@ -173,7 +173,7 @@ def test_all_site_settings_stops_when_signal_set() -> None:
     fake_mh.ConfigUtils.check_stop_signal.return_value = True
 
     with (
-        patch("src.api.api_fetch_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh),
         patch.object(APIFetchUtils, "_fetch_single_site_setting") as fetcher,
     ):
         result = APIFetchUtils.all_site_settings(MagicMock(), "org-1")
@@ -219,7 +219,7 @@ def test_gw_load_site_names_parses_csv_into_id_name_map(tmp_path) -> None:
     csv_path = tmp_path / "SiteList.csv"
     csv_path.write_text("id,name\ns1,SiteOne\ns2,SiteTwo\n", encoding="utf-8")
     fake_mh.FilePathUtils.get_csv_path.return_value = str(csv_path)
-    with patch("src.api.api_fetch_utils.importlib.import_module", return_value=fake_mh):
+    with patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh):
         result = APIFetchUtils._gw_load_site_names()
     assert result == {"s1": "SiteOne", "s2": "SiteTwo"}
 
@@ -230,7 +230,7 @@ def test_gw_load_site_names_defaults_missing_name_column(tmp_path) -> None:
     csv_path = tmp_path / "SiteList.csv"
     csv_path.write_text("id\ns1\n", encoding="utf-8")
     fake_mh.FilePathUtils.get_csv_path.return_value = str(csv_path)
-    with patch("src.api.api_fetch_utils.importlib.import_module", return_value=fake_mh):
+    with patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh):
         result = APIFetchUtils._gw_load_site_names()
     assert result == {"s1": "Unnamed Site"}
 
@@ -239,7 +239,7 @@ def test_gw_load_site_names_returns_empty_on_missing_file() -> None:
     """Missing CSV -> return {} without raising."""
     fake_mh = _make_mh()
     fake_mh.FilePathUtils.get_csv_path.return_value = "/nonexistent/SiteList.csv"
-    with patch("src.api.api_fetch_utils.importlib.import_module", return_value=fake_mh):
+    with patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh):
         assert APIFetchUtils._gw_load_site_names() == {}
 
 
@@ -342,7 +342,7 @@ def test_gw_retry_configs_keeps_only_successful_retries() -> None:
     failed_items = [("s1", "d1", "A"), ("s2", "d2", "B"), ("s3", "d3", "C")]
     recovered = [{"id": "d1"}, None, {"id": "d3"}]
     with (
-        patch("src.api.api_fetch_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh),
         patch.object(APIFetchUtils, "_gw_retry_one_item", side_effect=recovered),
     ):
         out = APIFetchUtils._gw_retry_configs(MagicMock(), failed_items, sem)
@@ -358,7 +358,7 @@ def test_gw_collect_fast_delegates_to_pool_executor() -> None:
     successes = [{"id": "d1"}, {"id": "d2"}]
     fake_mh.ConnectionPoolExecutor.execute.return_value = (successes, [])
     work_items = [("s1", "d1", "A"), ("s2", "d2", "B")]
-    with patch("src.api.api_fetch_utils.importlib.import_module", return_value=fake_mh):
+    with patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh):
         out = APIFetchUtils._gw_collect_fast(MagicMock(), work_items)
     assert out == successes
     call = fake_mh.ConnectionPoolExecutor.execute.call_args

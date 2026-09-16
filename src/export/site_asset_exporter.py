@@ -22,12 +22,14 @@ resolved against the installed SDK.
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+ toolchains.
 
-import importlib  # WHY: lazy MistHelper import avoids a circular load at module init.
 import logging  # WHY: structured trace for export lifecycle events.
 from typing import Any  # WHY: raw asset rows are duck-typed dicts from mistapi.
 
 import mistapi  # WHY: direct SDK access for the asset, assetfilter, and stats endpoints.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: canonical flatten and escape helpers keep CSV output consistent with peers.
@@ -86,7 +88,7 @@ class SiteAssetExporter:
             api_function_name: The operationId used to route the primary-key strategy.
             label: A human-readable noun used in the operator messages.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the DataExporter helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No rows, so inform the operator and return.
             logging.info("! No %s data found", label)  # ASCII-only user notice.
             return
@@ -113,7 +115,7 @@ class SiteAssetExporter:
         Returns:
             The trimmed identifier, or None when the operator gave no answer.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils keeps the import acyclic.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Prompting the operator for %s", context)  # Action log before the prompt.
         value = str(  # WHY: the lazy module attribute is untyped, so pin the declared str return.
             mh.InputUtils.safe_input(  # safe_input enforces EOF-safe prompting.
@@ -138,7 +140,7 @@ class SiteAssetExporter:
             resolution is delegated to the shared helper so behavior matches the
             peer site-scoped exports.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession and the shared helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Site Assets Of Interest:")  # Menu header echoed to the operator.
         logging.info("Starting the getSiteAssetsOfInterest export...")  # Pre-call trace.
         resolved = mh.SiteDeviceExporter._resolve_site_for_stats("assets of interest")  # Shared site prompt.
@@ -165,7 +167,7 @@ class SiteAssetExporter:
             Interactive menu entry point for ``getSiteAssetFilter``. The endpoint
             needs both a site and an asset-filter identifier.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession and the shared helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Site Asset Filter Detail:")  # Menu header echoed to the operator.
         logging.info("Starting the getSiteAssetFilter export...")  # Pre-call trace.
         resolved = mh.SiteDeviceExporter._resolve_site_for_stats("asset filter detail")  # Shared site prompt.
@@ -201,7 +203,7 @@ class SiteAssetExporter:
             Interactive menu entry point for ``getSiteAsset``. The endpoint needs
             both a site and an asset identifier.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession and the shared helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Site Asset Detail:")  # Menu header echoed to the operator.
         logging.info("Starting the getSiteAsset export...")  # Pre-call trace.
         resolved = mh.SiteDeviceExporter._resolve_site_for_stats("asset detail")  # Shared site prompt.

@@ -36,7 +36,7 @@ def fake_mh(monkeypatch):
 
     Why:
         ARPCommandManager reaches ``PromptClientUtils``, ``apisession``, and
-        ``FilePathUtils`` via ``importlib.import_module("MistHelper")`` at call
+        ``FilePathUtils`` via ``SourceDependencyResolver`` at call
         time. Registering a synthetic module in ``sys.modules`` lets each test
         stub only what it needs without depending on the real MistHelper.py.
     """

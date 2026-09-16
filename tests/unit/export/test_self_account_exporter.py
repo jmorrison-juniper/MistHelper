@@ -34,7 +34,7 @@ MODULE = "src.export.self_account_exporter"
 def mist_helper(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     """Stand in for the lazily imported MistHelper module.
 
-    The exporter calls ``importlib.import_module("MistHelper")``, which returns
+    The exporter calls ``SourceDependencyResolver``, which returns
     the entry in ``sys.modules`` when one is present. Replacing that entry keeps
     the stub local to the test.
     """

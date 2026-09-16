@@ -5,7 +5,7 @@ requires 100% line + branch coverage across the 10 static methods, the
 ``_SHELL_KEYMAP`` class attribute, and the module-level ``_has_pyte`` fallback
 branch. The manager reaches live-global state (``apisession``, ``mistapi``,
 ``PromptClientUtils``, ``KeyboardListener``) through lazy
-``importlib.import_module("MistHelper")`` reads, so tests inject a fake
+``SourceDependencyResolver`` reads, so tests inject a fake
 ``MistHelper`` module via ``sys.modules`` and patch module-scope collaborators
 (``websocket``, ``mistapi``, ``pyte``, ``threading``, ``time``,
 ``shutil.get_terminal_size``) to exercise each branch deterministically.
@@ -46,7 +46,7 @@ def fake_mh(monkeypatch):
     """Install a fake MistHelper module for lazy importlib resolution.
 
     Why: ``launch``, ``_create_session``, and ``_run_interactive`` each call
-    ``importlib.import_module("MistHelper")`` and reach ``mh.apisession``,
+    ``SourceDependencyResolver`` and reach ``mh.apisession``,
     ``mh.PromptClientUtils``, ``mh.KeyboardListener``. Injecting a stub lets
     tests control the return values of those live globals without touching
     the real module graph.

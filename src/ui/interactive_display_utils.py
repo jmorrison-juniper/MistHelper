@@ -8,11 +8,13 @@ the monolith. All methods are static -- no state is kept on the class.
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+.
 
-import importlib  # WHY: lazy MistHelper import to reach live helper classes without circular load.
 import logging  # WHY: emit structured trace for each menu entry.
 
 import mistapi  # WHY: dotted-path API resolution for device stats / test / config endpoints.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.refactors.device_data_fetcher import (
     DeviceFetchConfig,
 )  # T-01: DeviceFetchConfig now lives with DeviceDataFetcher.
@@ -28,7 +30,7 @@ class InteractiveDisplayUtils:
     @staticmethod
     def site_inventory() -> None:
         """Prompt the user to select a site and display its device inventory."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PromptUtils + SiteDeviceExporter.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Prompting user to select a site for device inventory view...")  # Log the prompt.
         # WHY (#886 Phase 2): retire print() in favor of logging.warning so operator sees the
         # header on the default root-logger config (INFO is suppressed by default).
@@ -48,9 +50,7 @@ class InteractiveDisplayUtils:
             site_id: Optional site ID (prompts if not provided)
             device_id: Optional device ID (prompts if not provided)
         """
-        mh = importlib.import_module(
-            "MistHelper"
-        )  # WHY: lazy fetch of DeviceDataFetcher (still lives in MistHelper.py).
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Prompting user to select a device for detailed statistics view...")  # Log the prompt.
         mh.DeviceDataFetcher(  # Fetch and display.
             DeviceFetchConfig(  # Issue #470: bundle fetch params (T-01: imported from src.refactors).
@@ -66,9 +66,7 @@ class InteractiveDisplayUtils:
     @staticmethod
     def device_tests() -> None:
         """Prompt user to select a gateway device and display its synthetic test stats."""
-        mh = importlib.import_module(
-            "MistHelper"
-        )  # WHY: lazy fetch of DeviceDataFetcher (still lives in MistHelper.py).
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Prompting user to select a gateway device for synthetic test stats view...")  # Log the prompt.
         mh.DeviceDataFetcher(  # Fetch and display.
             DeviceFetchConfig(  # Issue #470: bundle fetch params (T-01: imported from src.refactors).
@@ -83,9 +81,7 @@ class InteractiveDisplayUtils:
     @staticmethod
     def device_config() -> None:
         """Prompt user to select a device and display its configuration details."""
-        mh = importlib.import_module(
-            "MistHelper"
-        )  # WHY: lazy fetch of DeviceDataFetcher (still lives in MistHelper.py).
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Prompting user to select a device for configuration details view...")  # Log the prompt.
         mh.DeviceDataFetcher(  # Fetch and display.
             DeviceFetchConfig(  # Issue #470: bundle fetch params (T-01: imported from src.refactors).

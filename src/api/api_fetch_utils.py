@@ -7,7 +7,7 @@ alias (``from src.api.api_fetch_utils import APIFetchUtils``) so historical
 
 Cross-class references (ConfigUtils, APICoreFetchUtils, FilePathUtils,
 FastModeSequentialMaxRetries, ConnectionPoolExecutor) and the module-level
-``apisession`` are resolved lazily via ``importlib.import_module("MistHelper")``
+``apisession`` are resolved lazily via the source dependency resolver
 inside method bodies to keep FR-028 IG-health clean (no top-level MistHelper
 import statement).
 """
@@ -18,7 +18,6 @@ from __future__ import annotations  # WHY: PEP 604 unions in annotations.
 
 import csv  # WHY: parse SiteList.csv for gateway site-name enrichment.
 import functools  # WHY: functools.partial for pool worker bindings.
-import importlib  # WHY: lazy MistHelper fetch of cross-class refs + apisession.
 import logging  # WHY: structured trace + failure reporting.
 import threading  # WHY: Semaphore serialization in sequential gateway fetch.
 import time  # WHY: exponential backoff sleep between retries.
@@ -27,6 +26,9 @@ from typing import Any  # WHY: return-type annotations for dynamic dicts.
 import mistapi  # WHY: dotted-path Mist API resolution + pagination helper.
 from tqdm import tqdm  # WHY: progress bar for long-running site/device fetches.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.security import CredentialRedactor  # WHY: strip device credentials at the read boundary (#2011).
 
 
@@ -44,7 +46,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
         SECURITY: Read-only operation fetching configuration data only.
         """
         try:
-            mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils + apisession.
+            mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
             org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the target org.
             logging.info("Fetching organization services for org_id: %s", org_id)  # Log before the API call.
 
@@ -107,7 +109,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
     def all_site_settings(apisession, org_id, limit=1000):  # Fetch settings for every site.
         """Fetch per-site settings for every site in the org. Limit param is unused (kept for back-compat)."""
         del limit  # Kept in signature for back-compat. Explicitly discard so linters do not flag it.
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of APICoreFetchUtils + ConfigUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Fetching all site settings...")  # Log before fetching sites
         sites = mh.APICoreFetchUtils.all_sites_with_limit(org_id)  # List all sites first
         all_configs = []  # Collect per-site settings
@@ -135,7 +137,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
     def _gw_load_site_names():
         """Load the site id -> name map from SiteList.csv. Return an empty map when the file is unavailable."""
         try:  # The site-name CSV is optional enrichment. Missing file is non-fatal.
-            mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilePathUtils.
+            mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
             site_list_path = mh.FilePathUtils.get_csv_path("SiteList.csv")  # Locate the site list CSV.
             with open(site_list_path, encoding="utf-8") as file_handle:  # Read site names from CSV.
                 reader = csv.DictReader(file_handle)  # Parse CSV rows.
@@ -206,7 +208,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
     @staticmethod
     def _gw_retry_configs(apisession, failed_items, connection_semaphore):
         """Retry failed gateway config fetches with bounded exponential backoff. Return the recovered configs."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FastModeSequentialMaxRetries.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         max_retries = mh.FastModeSequentialMaxRetries.VALUE  # Configurable retry count from extracted class attribute.
         retry_results = []  # Collect configs recovered on retry.
         for failed_work_item in failed_items:  # Walk every failed item.
@@ -220,7 +222,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
     @staticmethod
     def _gw_collect_fast(apisession, work_items):
         """Fetch gateway configs concurrently through the connection pool with retry. Return the successes."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConnectionPoolExecutor.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         successful_results, _ = mh.ConnectionPoolExecutor.execute(  # Pooled concurrent fetch. Discard failures.
             work_items=work_items,
             worker_function=functools.partial(APIFetchUtils._gw_fetch_one_config, apisession),  # Bind apisession.

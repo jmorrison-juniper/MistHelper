@@ -2,7 +2,6 @@
 
 from __future__ import annotations  # WHY: keep annotations compatible with the project target.
 
-import importlib  # WHY: patch the lazy MistHelper lookup used by the exporter.
 from typing import Any  # WHY: type the test stand-in without binding to MistHelper internals.
 from unittest.mock import MagicMock, patch  # WHY: isolate the test from Mist Cloud and disk.
 
@@ -29,7 +28,9 @@ def test_primary_key_strategy_uses_mac_and_timestamp() -> None:
 def test_empty_results_do_not_write_an_export() -> None:
     """An empty response reports no data and skips the writer."""
     fake_mh = _fake_mist_helper()  # WHY: provide the lazy module dependency.
-    with patch.object(importlib, "import_module", return_value=fake_mh):  # WHY: isolate the persistence helper.
+    with patch(
+        "src.export.site_other_device_events_exporter.SourceDependencyResolver", fake_mh
+    ):  # WHY: isolate the persistence helper.
         SiteOtherDeviceEventsExporter._persist_events([], "Branch")  # WHY: exercise the empty-response branch.
     fake_mh.DataExporter.write_with_format_selection.assert_not_called()  # WHY: empty responses need no file.
 
@@ -38,7 +39,9 @@ def test_persistence_routes_flattened_rows_and_operation_name() -> None:
     """Non-empty results use the shared writer and operationId."""
     fake_mh = _fake_mist_helper()  # WHY: capture the write call without touching disk.
     rows = [{"mac": "aa:bb", "metadata": {"vendor": "Juniper"}}]  # WHY: exercise nested-field flattening.
-    with patch.object(importlib, "import_module", return_value=fake_mh):  # WHY: isolate MistHelper imports.
+    with patch(
+        "src.export.site_other_device_events_exporter.SourceDependencyResolver", fake_mh
+    ):  # WHY: isolate MistHelper imports.
         SiteOtherDeviceEventsExporter._persist_events(rows, "Head Office")  # WHY: write one representative site export.
     args, kwargs = fake_mh.DataExporter.write_with_format_selection.call_args  # WHY: inspect the writer contract.
     assert args[1] == "SiteOtherDeviceEvents_Head_Office.csv"  # WHY: spaces must not reach the filename.
@@ -52,7 +55,9 @@ def test_menu_entry_resolves_site_calls_sdk_and_persists_rows() -> None:
     fake_mh.SiteDeviceExporter._resolve_site_for_stats.return_value = ("site-1", "Branch")  # WHY: select one site.
     rows = [{"mac": "aa:bb", "timestamp": "2026-09-09T00:00:00Z"}]  # WHY: represent one API event.
     with (
-        patch.object(importlib, "import_module", return_value=fake_mh),  # WHY: isolate shared CLI globals.
+        patch(
+            "src.export.site_other_device_events_exporter.SourceDependencyResolver", fake_mh
+        ),  # WHY: isolate shared CLI globals.
         patch.object(
             mistapi.api.v1.sites.otherdevices,
             "searchSiteOtherDeviceEvents",
@@ -71,7 +76,9 @@ def test_sdk_failure_is_logged_without_raising() -> None:
     fake_mh = _fake_mist_helper()  # WHY: provide the shared collaborators.
     fake_mh.SiteDeviceExporter._resolve_site_for_stats.return_value = ("site-1", "Branch")  # WHY: reach the SDK call.
     with (
-        patch.object(importlib, "import_module", return_value=fake_mh),  # WHY: isolate shared CLI globals.
+        patch(
+            "src.export.site_other_device_events_exporter.SourceDependencyResolver", fake_mh
+        ),  # WHY: isolate shared CLI globals.
         patch.object(
             mistapi.api.v1.sites.otherdevices,
             "searchSiteOtherDeviceEvents",

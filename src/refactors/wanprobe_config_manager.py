@@ -22,7 +22,6 @@ from __future__ import annotations  # Enable postponed evaluation for forward-re
 
 import concurrent.futures  # Provides as_completed for the ThreadPoolExecutor result loop
 import csv  # Reads the generated OrgGatewayTemplates.csv and SiteList.csv files
-import importlib  # Late-import MistHelper module to avoid circular src<->MistHelper dependency
 import logging  # Structured action logging required by coding standards
 import os  # Environment variable lookup for MIST_WAN_PROBE_IPS / MIST_WAN_PROBE_PROFILE
 import traceback  # Format traceback strings for exception logging
@@ -32,19 +31,12 @@ from typing import Any  # Loose typing for late-bound MistHelper attributes and 
 import mistapi  # Direct dependency: Mist API SDK used to fetch/update gateway templates
 from tqdm import tqdm  # Progress bar used during parallel analyze and update loops
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.utils.rate_limiting import AdaptivePacer  # WHY: quota-aware pacing for the bulk template PUT loop
 
-
-class _MistHelperProxy:  # Attribute forwarder to MistHelper module attributes
-    """Forward attribute access to the currently-loaded MistHelper module."""
-
-    def __getattr__(self, name: str) -> Any:  # Called only when the attribute is not found normally
-        """Resolve name against the live MistHelper module (call-time lookup)."""
-        misthelper_module = importlib.import_module("MistHelper")  # Lazy import at call time
-        return getattr(misthelper_module, name)  # Fetch the current bound value from MistHelper
-
-
-_MH = _MistHelperProxy()  # Sole module-level proxy handle used inside the class body
+_MH = SourceDependencyResolver  # Use the source resolver for lazy dependency access.
 
 
 class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive entrypoint)
@@ -369,7 +361,7 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
         """Apply probe configuration changes to templates and return per-template results."""
         print("\n  Applying WAN probe configuration...")  # Tell the user.
         results: list[dict[str, Any]] = []  # Collect results.
-        mh = importlib.import_module("MistHelper")  # WHY: reach the live session and the shared quota cache.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         pacer = AdaptivePacer(  # WHY: the bulk PUT loop had no pacing at all before this change.
             getattr(mh, "apisession", None),  # WHY: the PID pipeline reads the quota through this session.
             getattr(mh, "_api_usage_cache", None),  # WHY: share one quota view with every other menu.

@@ -191,7 +191,9 @@ class APProfileMigrationManager:
 
         # WHY: lazy import breaks the circular dependency between the top-level
         # MistHelper.py module and this src/ package.
-        import MistHelper as _mh  # WHY: call-time only.
+        from src.config.source_dependency_resolver import (
+            SourceDependencyResolver as _mh,  # WHY: resolve source dependencies without importing the root module.
+        )
 
         # WHY: resolve org context via the shared cached-or-prompted helper.
         org_id = _mh.ConfigUtils.get_cached_or_prompted_org_id()
@@ -359,7 +361,9 @@ class APProfileMigrationManager:
 
         # WHY: lazy import for the shared MistHelper helpers keeps this module
         # circular-import-safe.
-        import MistHelper as _mh
+        from src.config.source_dependency_resolver import (
+            SourceDependencyResolver as _mh,  # WHY: resolve source dependencies without importing the root module.
+        )
 
         org_id = _mh.ConfigUtils.get_cached_or_prompted_org_id()
         # WHY: fall back to the ambient MistHelper apisession when the caller
@@ -850,7 +854,9 @@ class APProfileMigrationManager:
         """
         # WHY: lazy import matches lines 147/265/471; keeps top-of-module
         # circular-safe against the MistHelper entry point.
-        import MistHelper as _mh
+        from src.config.source_dependency_resolver import (
+            SourceDependencyResolver as _mh,  # WHY: resolve source dependencies without importing the root module.
+        )
 
         try:
             smoothed, delay = _mh.RateLimitingUtils.get_rate_limited_delay(
@@ -899,7 +905,9 @@ class APProfileMigrationManager:
             never crashes the loop.
         """
         # WHY: lazy import for the same reason as _apply_pacing above.
-        import MistHelper as _mh
+        from src.config.source_dependency_resolver import (
+            SourceDependencyResolver as _mh,  # WHY: resolve source dependencies without importing the root module.
+        )
 
         _LOGGER.warning(
             "The API returned HTTP 429. Invalidating the API usage cache to trigger a limiter refresh",
@@ -978,7 +986,9 @@ class APProfileMigrationManager:
                 operator cancels the picker.
         """
         # WHY: lazy import for InputUtils so this module stays circular-safe.
-        import MistHelper as _mh
+        from src.config.source_dependency_resolver import (
+            SourceDependencyResolver as _mh,  # WHY: resolve source dependencies without importing the root module.
+        )
 
         ap_profiles = APProfileMigrationManager._fetch_and_sort_ap_profiles(session, org_id)
 
@@ -1115,7 +1125,9 @@ class APProfileMigrationManager:
               * ``"cancel"`` -- any other input; abort with no changes.
         """
         # WHY: lazy import for InputUtils per the module load rule.
-        import MistHelper as _mh
+        from src.config.source_dependency_resolver import (
+            SourceDependencyResolver as _mh,  # WHY: resolve source dependencies without importing the root module.
+        )
 
         prompt = (
             f"\nType {_KEYWORD_LIVE!r} to reassign {count} APs from "
@@ -1538,7 +1550,9 @@ class APProfileMigrationManager:
             list is empty.
         """
         # WHY: lazy import for InputUtils keeps this module circular-safe.
-        import MistHelper as _mh
+        from src.config.source_dependency_resolver import (
+            SourceDependencyResolver as _mh,  # WHY: resolve source dependencies without importing the root module.
+        )
 
         if not candidates:
             print("No backup files found under data/. Nothing to revert.")
@@ -1810,7 +1824,9 @@ class APProfileMigrationManager:
             otherwise.
         """
         # WHY: lazy import for InputUtils per the module load rule.
-        import MistHelper as _mh
+        from src.config.source_dependency_resolver import (
+            SourceDependencyResolver as _mh,  # WHY: resolve source dependencies without importing the root module.
+        )
 
         prompt = (
             f"\nType {_KEYWORD_REVERT!r} to revert {count} APs back to "

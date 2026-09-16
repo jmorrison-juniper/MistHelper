@@ -3,13 +3,12 @@
 Extracted from MistHelper.py per issue #1015 T-07 (Cat E fresh extraction).
 Canonical home for site/device/client selection prompts. Uses lazy access
 to MistHelper globals (``apisession``, ``DataExporter``, ``LAST_SELECTED_SITE_ID``)
-via ``importlib.import_module("MistHelper")`` to avoid circular imports.
+via the source dependency resolver to avoid circular imports.
 """
 
 from __future__ import annotations
 
 import csv
-import importlib
 import logging
 import time
 from typing import Literal
@@ -19,6 +18,9 @@ from prettytable import PrettyTable
 
 from src.api.api_core_fetch_utils import APICoreFetchUtils
 from src.cache.cache_utils import CacheUtils
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import DataProcessingUtils
 from src.export.org_site_exporter import OrgSiteExporter
 from src.input.prompt_client_utils import PromptClientUtils
@@ -68,7 +70,7 @@ class PromptUtils:  # General prompt helpers.
     @staticmethod
     def _fetch_and_filter_devices(site_id: str, device_type: str) -> list | None:
         """Fetch the full site inventory (``type=all``) and filter locally to ``device_type``."""
-        mh = importlib.import_module("MistHelper")
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         rawdata = mistapi.api.v1.sites.devices.listSiteDevices(mh.apisession, site_id, type="all").data  # Fetch
         if not rawdata:  # Empty inventory path
             # WHY (#886 Phase 2): collapse paired print+logger into a single logging.warning so
@@ -86,7 +88,7 @@ class PromptUtils:  # General prompt helpers.
     @staticmethod
     def _export_and_index_inventory(rawdata: list, csv_filename: str) -> tuple:
         """Sort + flatten + CSV-export ``rawdata`` and return ``(table, index_map, name_map)``."""
-        mh = importlib.import_module("MistHelper")
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         inventory = sorted(rawdata, key=lambda x: x.get("model", ""))  # Sort by model.
         inventory = DataProcessingUtils.flatten_nested_fields(inventory)  # Flatten nested fields.
         inventory = DataProcessingUtils.escape_multiline(inventory)  # type: ignore[no-untyped-call]
@@ -126,7 +128,7 @@ class PromptUtils:  # General prompt helpers.
     @staticmethod
     def select_site_id_from_csv(csv_file: str = "SiteList.csv") -> str | None:  # Prompt site id from CSV.
         """Prompt user to select a site by index or name from csv_file. Returns the site ID or None."""
-        mh = importlib.import_module("MistHelper")
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         CacheUtils.check_and_generate_csv(csv_file, OrgSiteExporter.sites)  # Ensure site CSV exists/fresh.
         index_to_site, name_to_site = PromptUtils._load_site_csv_maps(csv_file)  # Read CSV into index/name maps.
         # WHY (#886 Phase 2): retire print() in favor of logging.warning so operator sees the
@@ -268,7 +270,7 @@ class PromptUtils:  # General prompt helpers.
     @staticmethod
     def _fetch_site_wireless_clients(site_id: str) -> list[dict]:  # type: ignore[type-arg]
         """Fetches wireless clients for a specific site."""
-        mh = importlib.import_module("MistHelper")
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(mh.apisession, site_id, limit=1000)
             clients = mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page through all results.
@@ -284,7 +286,7 @@ class PromptUtils:  # General prompt helpers.
     @staticmethod
     def _fetch_site_wired_clients(site_id: str) -> list[dict]:  # type: ignore[type-arg]
         """Fetches wired clients for a specific site."""
-        mh = importlib.import_module("MistHelper")
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             response = mistapi.api.v1.sites.wired_clients.searchSiteWiredClients(mh.apisession, site_id, limit=1000)
             clients = mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page through all results.
@@ -300,7 +302,7 @@ class PromptUtils:  # General prompt helpers.
     @staticmethod
     def _fetch_org_wireless_clients(org_id: str) -> list[dict]:  # type: ignore[type-arg]
         """Fetches wireless clients for the entire organization."""
-        mh = importlib.import_module("MistHelper")
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             response = mistapi.api.v1.orgs.clients.searchOrgWirelessClients(mh.apisession, org_id, limit=1000)
             clients = mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page through all results.
@@ -315,7 +317,7 @@ class PromptUtils:  # General prompt helpers.
     @staticmethod
     def _fetch_org_wired_clients(org_id: str) -> list[dict]:  # type: ignore[type-arg]
         """Fetches wired clients for the entire organization."""
-        mh = importlib.import_module("MistHelper")
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(mh.apisession, org_id, limit=1000)
             clients = mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page through all results.

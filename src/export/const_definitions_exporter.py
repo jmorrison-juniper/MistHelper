@@ -11,10 +11,13 @@ fresh fetch.  Callers continue to reach the class via the
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+.
 
-import importlib  # WHY: lazy MistHelper import to reach DataExporter + DataProcessingUtils without circular load.
+import importlib  # WHY: source resolver access to reach DataExporter + DataProcessingUtils without circular load.
 import logging  # WHY: structured trace for discovery/fetch/export lifecycle events.
 from typing import Any  # WHY: helper return types normalize heterogenous mistapi payloads.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -317,7 +320,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         except Exception as error:  # Export failed.
             print(f"  ! Error exporting {config.description.lower()}: {error}")  # Tell the user.
             logging.error("Failed to export %s from %s: %s", config.description.lower(), config.endpoint_name, error)
-            mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter helper.
+            mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
             mh.DataExporter.write_with_format_selection([], config.filename, api_function_name=config.function_name)  # type: ignore[no-untyped-call]
             self.endpoints_failed += 1  # Count failed.
 
@@ -670,7 +673,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
 
     def _export_data(self, config: EndpointConfig, const_data) -> None:  # Export const data to CSV.
         """Convert data to list format and export to file."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter + DataProcessingUtils helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not const_data:  # No data.
             print(f"  ! 0 {config.description.lower()} exported to {config.filename} (no data available)")
             logging.warning("No %s data available from %s endpoint", config.description.lower(), config.endpoint_name)

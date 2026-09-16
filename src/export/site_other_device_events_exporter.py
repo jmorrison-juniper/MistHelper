@@ -5,12 +5,14 @@ This module provides the menu entry for issue #1402.
 
 from __future__ import annotations  # WHY: keep type annotations compatible with the project target.
 
-import importlib  # WHY: load MistHelper lazily and avoid an import cycle.
 import logging  # WHY: record the export lifecycle for operators.
 from typing import Any  # WHY: Mist event rows are untyped API dictionaries.
 
 import mistapi  # WHY: call the verified site other-device event SDK operation.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (  # WHY: reuse the shared export normalization pipeline.
     DataProcessingUtils,
 )
@@ -22,7 +24,7 @@ class SiteOtherDeviceEventsExporter:
     @staticmethod
     def _persist_events(rawdata: list[Any], site_name: str) -> None:
         """Flatten and persist event rows for one site."""
-        mh = importlib.import_module("MistHelper")  # WHY: obtain the shared DataExporter after module loading.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # WHY: an empty search is valid and needs no output file.
             logging.info(
                 "! No other-device event data found for this site"
@@ -51,7 +53,7 @@ class SiteOtherDeviceEventsExporter:
     @staticmethod
     def other_device_events() -> None:
         """Search and export other-device events for a selected site."""
-        mh = importlib.import_module("MistHelper")  # WHY: obtain the session and shared site resolver lazily.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Site Other Device Events Search:")  # WHY: identify the selected menu action.
         logging.info("Starting searchSiteOtherDeviceEvents export")  # WHY: trace the operation before site selection.
         resolved = mh.SiteDeviceExporter._resolve_site_for_stats(

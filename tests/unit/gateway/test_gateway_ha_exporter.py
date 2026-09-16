@@ -4,7 +4,7 @@ Why: Un-omitting this module from ``[tool.coverage.run].omit`` requires 100%
 line + branch coverage across the 6 static methods that back Menu #87 -- the
 Gateway HA Cluster Info export. Cross-class collaborators (APICoreFetchUtils,
 ConfigUtils, PromptUtils, DataExporter) are resolved lazily through
-``importlib.import_module("MistHelper")``; ``mistapi`` and
+``SourceDependencyResolver``; ``mistapi`` and
 ``DataProcessingUtils`` are module-level imports patched directly on the
 module. Tests inject a fake ``MistHelper`` module via ``sys.modules`` to
 observe and control lazy collaborator interactions without importing the

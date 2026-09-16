@@ -7,7 +7,6 @@ All methods are static -- no state is kept on the class.
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+.
 
-import importlib  # WHY: lazy MistHelper import to reach module globals + helper classes without circular load.
 import logging  # WHY: structured trace for API/analysis stages.
 import os  # WHY: cross-platform path building for report output.
 
@@ -17,6 +16,9 @@ from src.audit.analyzer import AuditAnalysisResult, AuditLogAnalyzer  # Audit an
 from src.audit.filter import AuditLogFilter  # Audit log filtering to remove noise and system events.
 from src.audit.renderer import AuditReportRenderer  # Mermaid timeline + HTML report rendering.
 from src.audit.time_parser import ParsedTimeRange, TimeRangeParser  # Audit log time range parsing (7d, 4w, and so on).
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 
 
 class AuditAnalysisOps:
@@ -25,7 +27,7 @@ class AuditAnalysisOps:
     @staticmethod
     def _prompt_audit_time_range_input() -> str:
         """Capture the audit-log time-range input string (test-mode fixed default or interactive prompt)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of IS_TEST_MODE + InputUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if mh.IS_TEST_MODE:  # Use a fixed time range so --test runs without interactive input.
             return "7d"  # Default to 7 days in test mode. Skips the safe_input prompt.
         logging.warning(  # Uses warning level so the hint shows by default (#886).
@@ -37,7 +39,7 @@ class AuditAnalysisOps:
     @staticmethod
     def _fetch_filtered_audit_entries(org_id: str, time_range: ParsedTimeRange) -> list[dict] | None:  # type: ignore[type-arg]
         """Call Mist audit-logs API for the chosen org+time-range and return paginated entries (None on failure)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession module global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         api_kwargs = TimeRangeParser.to_api_kwargs(time_range)  # Convert to API start/end params.
         try:
             logging.info(
@@ -67,7 +69,7 @@ class AuditAnalysisOps:
     @staticmethod
     def audit_log_analysis() -> None:
         """Fetch org audit logs, filter noise, generate analysis reports."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of CacheUtils + ConfigUtils helper classes.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if mh.CacheUtils.fast_cache_hit("OrgAuditAnalysis.md"):  # Skip if cached report exists.
             return
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org context.

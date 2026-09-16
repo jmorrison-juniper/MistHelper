@@ -28,28 +28,36 @@ except ImportError:  # WHY: allow module import without SDK for offline tooling/
 
 def _get_config_utils() -> Any:  # WHY: module-level factory for deferred ConfigUtils access
     """Lazy import ConfigUtils to avoid circular imports."""
-    import MistHelper as _mh  # pylint: disable=import-outside-toplevel  # WHY: deferred to break capture<->MistHelper cycle
+    from src.config.source_dependency_resolver import (
+        SourceDependencyResolver as _mh,  # WHY: resolve source dependencies without importing the root module.
+    )
 
     return _mh.ConfigUtils  # WHY: caller invokes org-id cache lookup helpers on this class
 
 
 def _get_input_utils() -> Any:  # WHY: module-level factory for deferred InputUtils access
     """Lazy import InputUtils to avoid circular imports."""
-    import MistHelper as _mh  # pylint: disable=import-outside-toplevel  # WHY: deferred to break capture<->MistHelper cycle
+    from src.config.source_dependency_resolver import (
+        SourceDependencyResolver as _mh,  # WHY: resolve source dependencies without importing the root module.
+    )
 
     return _mh.InputUtils  # WHY: caller uses safe_input wrapper for all user prompts
 
 
 def _get_prompt_utils() -> Any:  # WHY: module-level factory for deferred PromptUtils access
     """Lazy import PromptUtils to avoid circular imports."""
-    import MistHelper as _mh  # pylint: disable=import-outside-toplevel  # WHY: deferred to break capture<->MistHelper cycle
+    from src.config.source_dependency_resolver import (
+        SourceDependencyResolver as _mh,  # WHY: resolve source dependencies without importing the root module.
+    )
 
     return _mh.PromptUtils  # WHY: caller uses select_site_with_logging and related prompt helpers
 
 
 def _get_prompt_client_utils() -> Any:  # WHY: module-level factory for deferred PromptClientUtils access
     """Lazy import PromptClientUtils to avoid circular imports."""
-    import MistHelper as _mh  # pylint: disable=import-outside-toplevel  # WHY: deferred to break capture<->MistHelper cycle
+    from src.config.source_dependency_resolver import (
+        SourceDependencyResolver as _mh,  # WHY: resolve source dependencies without importing the root module.
+    )
 
     return _mh.PromptClientUtils  # WHY: caller invokes select_client_mac interactive selection
 
@@ -65,21 +73,27 @@ def _get_prompt_network_device_utils() -> Any:  # WHY: module-level factory for 
 
 def _get_data_exporter() -> Any:  # WHY: module-level factory for deferred DataExporter access
     """Lazy import DataExporter to avoid circular imports."""
-    import MistHelper as _mh  # pylint: disable=import-outside-toplevel  # WHY: deferred to break capture<->MistHelper cycle
+    from src.config.source_dependency_resolver import (
+        SourceDependencyResolver as _mh,  # WHY: resolve source dependencies without importing the root module.
+    )
 
     return _mh.DataExporter  # WHY: caller uses CSV export for capture metadata
 
 
 def _get_device_utils() -> Any:  # WHY: module-level factory for deferred DeviceUtils access
     """Lazy import DeviceUtils to avoid circular imports."""
-    import MistHelper as _mh  # pylint: disable=import-outside-toplevel  # WHY: deferred to break capture<->MistHelper cycle
+    from src.config.source_dependency_resolver import (
+        SourceDependencyResolver as _mh,  # WHY: resolve source dependencies without importing the root module.
+    )
 
     return _mh.DeviceUtils  # WHY: caller uses AP enumeration helpers for multi-AP captures
 
 
 def _get_websocket_manager() -> Any:  # WHY: module-level factory for deferred WebSocketManager access
     """Lazy import WebSocketManager to avoid circular imports."""
-    import MistHelper as _mh  # pylint: disable=import-outside-toplevel  # WHY: deferred to break capture<->MistHelper cycle
+    from src.config.source_dependency_resolver import (
+        SourceDependencyResolver as _mh,  # WHY: resolve source dependencies without importing the root module.
+    )
 
     return _mh.WebSocketManager  # WHY: caller instantiates stream manager for real-time capture
 

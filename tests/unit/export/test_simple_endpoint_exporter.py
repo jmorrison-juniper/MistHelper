@@ -99,7 +99,7 @@ def test_choose_rejects_a_non_numeric_answer() -> None:
     """A non-number answer must return to the menu safely."""
     fake = _fake_mist_helper()
     fake.InputUtils.safe_input.return_value = "abc"
-    with patch.object(importlib, "import_module", return_value=fake):
+    with patch("src.export.simple_endpoint_exporter.SourceDependencyResolver", fake):
         assert SimpleEndpointExporter._choose(_ORG_OPS, "org") is None
 
 
@@ -107,7 +107,7 @@ def test_choose_rejects_an_out_of_range_answer() -> None:
     """An out-of-range answer must not index the table."""
     fake = _fake_mist_helper()
     fake.InputUtils.safe_input.return_value = str(len(_ORG_OPS) + 1)
-    with patch.object(importlib, "import_module", return_value=fake):
+    with patch("src.export.simple_endpoint_exporter.SourceDependencyResolver", fake):
         assert SimpleEndpointExporter._choose(_ORG_OPS, "org") is None
 
 
@@ -115,14 +115,14 @@ def test_choose_returns_the_selected_operation() -> None:
     """A valid selection must return the matching table row."""
     fake = _fake_mist_helper()
     fake.InputUtils.safe_input.return_value = "1"
-    with patch.object(importlib, "import_module", return_value=fake):
+    with patch("src.export.simple_endpoint_exporter.SourceDependencyResolver", fake):
         assert SimpleEndpointExporter._choose(_ORG_OPS, "org") == _ORG_OPS[0]
 
 
 def test_persist_skips_empty_rows() -> None:
     """An empty endpoint response must not create an export file."""
     fake = _fake_mist_helper()
-    with patch.object(importlib, "import_module", return_value=fake):
+    with patch("src.export.simple_endpoint_exporter.SourceDependencyResolver", fake):
         SimpleEndpointExporter._persist([], "empty.csv", "listAlarmDefinitions")
     fake.DataExporter.write_with_format_selection.assert_not_called()
 
@@ -130,7 +130,7 @@ def test_persist_skips_empty_rows() -> None:
 def test_persist_wraps_single_object_response() -> None:
     """A single JSON object response must export as one row."""
     fake = _fake_mist_helper()
-    with patch.object(importlib, "import_module", return_value=fake):
+    with patch("src.export.simple_endpoint_exporter.SourceDependencyResolver", fake):
         SimpleEndpointExporter._persist({"id": "one"}, "one.csv", "getSelf")
     args, kwargs = fake.DataExporter.write_with_format_selection.call_args
     assert args[0] == [{"id": "one"}]
@@ -148,7 +148,7 @@ def test_run_uses_session_only_for_global_operation() -> None:
     fake = _fake_mist_helper()
     callable_obj = MagicMock(return_value=MagicMock())
     with (
-        patch.object(importlib, "import_module", return_value=fake),
+        patch("src.export.simple_endpoint_exporter.SourceDependencyResolver", fake),
         patch.object(SimpleEndpointExporter, "_resolve", return_value=callable_obj),
         patch("src.export.simple_endpoint_exporter.mistapi.get_all", return_value=[]),
     ):
@@ -161,7 +161,7 @@ def test_run_uses_identifier_for_scoped_operation() -> None:
     fake = _fake_mist_helper()
     callable_obj = MagicMock(return_value=MagicMock())
     with (
-        patch.object(importlib, "import_module", return_value=fake),
+        patch("src.export.simple_endpoint_exporter.SourceDependencyResolver", fake),
         patch.object(SimpleEndpointExporter, "_resolve", return_value=callable_obj),
         patch("src.export.simple_endpoint_exporter.mistapi.get_all", return_value=[]),
     ):

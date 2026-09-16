@@ -13,6 +13,7 @@ mutated and no filesystem I/O occurs beyond the per-test tmp_path fixture.
 from __future__ import annotations  # PEP 604 unions across Python 3.10-3.13 test runs
 
 import sqlite3  # WHY: sqlite3.Error type used for raising into except-branch tests
+import sys  # WHY: inject a fake host module for the source dependency resolver.
 from pathlib import Path  # WHY: tmp_path fixture returns pathlib.Path objects
 from types import SimpleNamespace  # WHY: build stand-in namespace matching writer._deps shape
 from typing import Any, cast  # WHY: cast() lets tests pass wrong-type inputs without # type: ignore
@@ -70,24 +71,15 @@ def stub_deps(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> SimpleNamespac
 # ---------------------------------------------------------------------------
 
 
-def test_resolve_runtime_dependencies_calls_import_module(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The runtime resolver must go through importlib.import_module('MistHelper')."""
+def test_resolve_runtime_dependencies_uses_the_source_resolver(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The runtime resolver must use the source dependency resolver."""
     fake_module = SimpleNamespace(  # Fake MistHelper module with only the attrs we need
         DatabaseSchemaUtils="schema-sentinel",
         DataProcessingUtils="processing-sentinel",
     )
-    import_calls: list[str] = []  # Track what import_module was asked to load
-
-    def fake_import(name: str) -> object:  # Stand-in for importlib.import_module
-        import_calls.append(name)  # Record the requested module name
-        return fake_module  # Return the sentinel-bearing namespace
-
-    import importlib as _importlib  # Local import to satisfy mypy strict re: explicit re-export
-
-    monkeypatch.setattr(_importlib, "import_module", fake_import)  # Divert late import
+    monkeypatch.setitem(sys.modules, "MistHelper", fake_module)  # Divert the resolver to the fake host.
     ns = swr_mod._resolve_runtime_dependencies()  # Invoke the resolver directly
 
-    assert import_calls == ["MistHelper"]  # Only MistHelper should be imported
     assert ns.DatabaseSchemaUtils == "schema-sentinel"  # Value plumbed through to namespace
     assert ns.DataProcessingUtils == "processing-sentinel"  # Value plumbed through to namespace
     assert ns.misthelper_module is fake_module  # Full module handle retained for later lookups

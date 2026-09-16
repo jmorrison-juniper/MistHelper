@@ -15,6 +15,9 @@ from typing import Any  # WHY: Mist SDK responses have dynamic row shapes.
 
 import mistapi  # WHY: the SDK supplies the endpoint call and pagination helper.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: shared flatten and escape logic keeps exports consistent.
@@ -218,7 +221,7 @@ class SimpleEndpointExporter:
     @staticmethod
     def _choose(operations: tuple[_SimpleEndpointOp, ...], scope_label: str) -> _SimpleEndpointOp | None:
         """Prompt the operator to select one operation from a scope table."""
-        mh = importlib.import_module("MistHelper")  # Load MistHelper lazily to avoid an import cycle.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Offering %d %s simple endpoint operations", len(operations), scope_label)  # Log the prompt.
         for index, operation in enumerate(operations, start=1):
             print(f"  [{index}] {menu_text(operation.operation)}")  # Show the name, the description, and the flag.
@@ -256,7 +259,7 @@ class SimpleEndpointExporter:
     @staticmethod
     def _persist(rawdata: Any, filename: str, operation: str) -> None:
         """Flatten and persist endpoint rows through the shared exporter."""
-        mh = importlib.import_module("MistHelper")  # Load the shared DataExporter only when needed.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         rows = SimpleEndpointExporter._normalize(rawdata)  # Convert single-object responses to one row.
         logging.debug("%s returned %d normalized rows", operation, len(rows))  # Record the normalized size.
         if not rows:
@@ -273,7 +276,7 @@ class SimpleEndpointExporter:
     @staticmethod
     def _run(operation: _SimpleEndpointOp, identifier: str | None, label: str) -> None:
         """Call one endpoint and persist all returned rows."""
-        mh = importlib.import_module("MistHelper")  # Load apisession only during execution.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         callable_obj = SimpleEndpointExporter._resolve(operation)  # Resolve the SDK function before the API call.
         if callable_obj is None:
             logging.info("! %s is unavailable in this SDK version.", operation.operation)  # Explain SDK drift.
@@ -303,7 +306,7 @@ class SimpleEndpointExporter:
     @staticmethod
     def org_endpoints() -> None:
         """Run any org-scoped simple endpoint."""
-        mh = importlib.import_module("MistHelper")  # Load the shared org selector lazily.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Org Simple Endpoints:")  # Show the menu header.
         operation = SimpleEndpointExporter._choose(_ORG_OPS, "org")  # Ask which endpoint to run.
         if operation is None:
@@ -317,7 +320,7 @@ class SimpleEndpointExporter:
     @staticmethod
     def site_endpoints() -> None:
         """Run any site-scoped simple endpoint."""
-        mh = importlib.import_module("MistHelper")  # Load the shared site selector lazily.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Site Simple Endpoints:")  # Show the menu header.
         operation = SimpleEndpointExporter._choose(_SITE_OPS, "site")  # Ask which endpoint to run.
         if operation is None:

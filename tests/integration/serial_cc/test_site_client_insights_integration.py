@@ -4,7 +4,8 @@ import importlib
 
 
 def test_client_insights_delegates_to_serial_cc_service(monkeypatch):
-    misthelper_module = importlib.import_module("MistHelper")
+    import MistHelper as misthelper_module  # WHY: integration test verifies the root delegator.
+
     serial_cc_module = importlib.import_module("src.refactors.serial_cc.site_client_insights")
     called = {"count": 0}
 

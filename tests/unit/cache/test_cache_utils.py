@@ -7,7 +7,7 @@ Why:
     failure export, and the fast-path freshness check.
 
 Strategy:
-    - Redirect ``importlib.import_module("MistHelper")`` to a lightweight fake
+    - Redirect ``SourceDependencyResolver`` to a lightweight fake
       so ``mh.FilePathUtils.get_csv_path`` resolves to ``tmp_path / <name>``
       and ``mh.CSV_FRESHNESS_MINUTES`` is a small integer.
     - Exercise real filesystem paths via ``tmp_path`` so os.path.getmtime /
@@ -76,7 +76,7 @@ def fake_mh(monkeypatch, tmp_path):
             return fake
         return real_import(name, *args, **kwargs)
 
-    monkeypatch.setattr("src.cache.cache_utils.importlib.import_module", _stub)
+    monkeypatch.setattr("src.cache.cache_utils.SourceDependencyResolver", fake)
     return fake
 
 

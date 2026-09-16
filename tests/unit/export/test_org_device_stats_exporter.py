@@ -32,7 +32,7 @@ def fake_mh(monkeypatch):
         ``OrgDeviceStatsExporter`` reaches out to ``mh.APIDataFetcher``,
         ``mh.mistapi``, ``mh.PROGRESS_EMITTER``, cache/config utilities, and
         several ``FAST_MODE_*`` constants via a lazy
-        ``importlib.import_module("MistHelper")`` call. The real MistHelper
+        ``SourceDependencyResolver`` call. The real MistHelper
         module has heavy side effects and network hooks, so tests replace it
         with a lightweight ``ModuleType`` populated with ``MagicMock``
         stand-ins plus the concrete constants the code compares against.

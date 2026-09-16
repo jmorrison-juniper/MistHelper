@@ -40,7 +40,7 @@ def _profile(name: str = "Baseline", profile_id: str = PROFILE_ID) -> dict[str, 
 def mist_helper(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     """Stand in for the lazily imported MistHelper module.
 
-    The exporter calls ``importlib.import_module("MistHelper")``, which returns
+    The exporter calls ``SourceDependencyResolver``, which returns
     the entry in ``sys.modules`` when one is present. Replacing that entry keeps
     the stub local to the test. Replacing ``importlib.import_module`` would
     instead mutate the shared importlib module and break ``mock.patch``.

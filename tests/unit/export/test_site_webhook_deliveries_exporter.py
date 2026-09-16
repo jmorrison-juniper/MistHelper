@@ -10,7 +10,6 @@ Why:
 
 from __future__ import annotations
 
-import importlib
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -95,7 +94,7 @@ class TestSelectWebhookId:
         with (
             patch.object(mistapi, "get_all", return_value=[]),
             patch.object(mistapi.api.v1.sites.webhooks, "listSiteWebhooks", return_value={"result": []}),
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.site_webhook_deliveries_exporter.SourceDependencyResolver", fake_mh),
             patch.object(InputUtils, "safe_input") as prompt_spy,
         ):
             assert SiteWebhookDeliveriesExporter._select_webhook_id("site-1") is None
@@ -106,7 +105,7 @@ class TestSelectWebhookId:
         with (
             patch.object(mistapi, "get_all", return_value=_WEBHOOKS),
             patch.object(mistapi.api.v1.sites.webhooks, "listSiteWebhooks", return_value={"result": []}) as list_spy,
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.site_webhook_deliveries_exporter.SourceDependencyResolver", fake_mh),
             patch.object(InputUtils, "safe_input", return_value="1"),
         ):
             SiteWebhookDeliveriesExporter._select_webhook_id("site-1")  # WHY: drive the listing call.
@@ -118,7 +117,7 @@ class TestSelectWebhookId:
         with (
             patch.object(mistapi, "get_all", return_value=_WEBHOOKS),
             patch.object(mistapi.api.v1.sites.webhooks, "listSiteWebhooks", return_value={"result": []}),
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.site_webhook_deliveries_exporter.SourceDependencyResolver", fake_mh),
             patch.object(InputUtils, "safe_input", return_value="2"),
         ):
             result = SiteWebhookDeliveriesExporter._select_webhook_id("site-1")
@@ -130,14 +129,14 @@ class TestPersistSiteWebhookDeliveries:
 
     def test_an_empty_response_writes_nothing(self, fake_mh: Any) -> None:
         """A webhook that never fired is legitimate and must not create a file."""
-        with patch.object(importlib, "import_module", return_value=fake_mh):
+        with patch("src.export.site_webhook_deliveries_exporter.SourceDependencyResolver", fake_mh):
             SiteWebhookDeliveriesExporter._persist_site_webhook_deliveries([], "Site", "Hook")
         # WHY: a scheduled run must stay quiet rather than emit an empty file.
         fake_mh.DataExporter.write_with_format_selection.assert_not_called()
 
     def test_spaces_in_the_names_do_not_reach_the_filename(self, fake_mh: Any) -> None:
         """A site or webhook name with a space must yield a portable filename."""
-        with patch.object(importlib, "import_module", return_value=fake_mh):
+        with patch("src.export.site_webhook_deliveries_exporter.SourceDependencyResolver", fake_mh):
             SiteWebhookDeliveriesExporter._persist_site_webhook_deliveries(
                 [{"status": 200}], "Head Office", "Alarm Hook"
             )
@@ -147,7 +146,7 @@ class TestPersistSiteWebhookDeliveries:
 
     def test_the_operation_name_reaches_the_writer(self, fake_mh: Any) -> None:
         """The operationId selects the primary key strategy, so it must reach the writer."""
-        with patch.object(importlib, "import_module", return_value=fake_mh):
+        with patch("src.export.site_webhook_deliveries_exporter.SourceDependencyResolver", fake_mh):
             SiteWebhookDeliveriesExporter._persist_site_webhook_deliveries([{"status": 200}], "Site", "Hook")
         _, kwargs = fake_mh.DataExporter.write_with_format_selection.call_args  # WHY: read the keyword.
         # WHY: a wrong name would pick the wrong primary key strategy and duplicate rows.
@@ -161,7 +160,7 @@ class TestDeliveries:
         """A declined site must abort before the exporter lists any webhook."""
         fake_mh.SiteDeviceExporter._resolve_site_for_stats.return_value = None  # WHY: declined site.
         with (
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.site_webhook_deliveries_exporter.SourceDependencyResolver", fake_mh),
             patch.object(SiteWebhookDeliveriesExporter, "_select_webhook_id") as select_spy,
         ):
             SiteWebhookDeliveriesExporter.deliveries()  # WHY: drive the first guard branch.
@@ -171,7 +170,7 @@ class TestDeliveries:
         """A declined webhook must abort before the delivery search runs."""
         fake_mh.SiteDeviceExporter._resolve_site_for_stats.return_value = ("site-1", "Branch")
         with (
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.site_webhook_deliveries_exporter.SourceDependencyResolver", fake_mh),
             patch.object(SiteWebhookDeliveriesExporter, "_select_webhook_id", return_value=None),
             patch.object(mistapi.api.v1.sites.webhooks, "searchSiteWebhooksDeliveries") as search_spy,
         ):
@@ -188,7 +187,7 @@ class TestDeliveries:
                 "searchSiteWebhooksDeliveries",
                 return_value={"result": []},
             ) as search_spy,
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.site_webhook_deliveries_exporter.SourceDependencyResolver", fake_mh),
             patch.object(SiteWebhookDeliveriesExporter, "_select_webhook_id", return_value=("wh-2", "Audit")),
             patch.object(SiteWebhookDeliveriesExporter, "_persist_site_webhook_deliveries"),
         ):
@@ -207,7 +206,7 @@ class TestDeliveries:
                 "searchSiteWebhooksDeliveries",
                 return_value={"result": []},
             ),
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.site_webhook_deliveries_exporter.SourceDependencyResolver", fake_mh),
             patch.object(SiteWebhookDeliveriesExporter, "_select_webhook_id", return_value=("wh-2", "Audit")),
             patch.object(SiteWebhookDeliveriesExporter, "_persist_site_webhook_deliveries") as persist_spy,
         ):
@@ -225,7 +224,7 @@ class TestDeliveries:
                 "searchSiteWebhooksDeliveries",
                 side_effect=RuntimeError("gateway timeout"),
             ),
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.site_webhook_deliveries_exporter.SourceDependencyResolver", fake_mh),
             patch.object(SiteWebhookDeliveriesExporter, "_select_webhook_id", return_value=("wh-2", "Audit")),
         ):
             SiteWebhookDeliveriesExporter.deliveries()  # WHY: must not raise.
@@ -243,7 +242,7 @@ class TestDeliveries:
                 "searchSiteWebhooksDeliveries",
                 return_value={"result": []},
             ),
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.site_webhook_deliveries_exporter.SourceDependencyResolver", fake_mh),
             patch.object(SiteWebhookDeliveriesExporter, "_select_webhook_id", return_value=("wh-2", "Audit")),
         ):
             SiteWebhookDeliveriesExporter.deliveries()  # WHY: must not raise.

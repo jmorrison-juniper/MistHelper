@@ -10,13 +10,15 @@ re-export alias.
 
 from __future__ import annotations  # WHY: PEP 604 unions for return types.
 
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured trace for report lifecycle events.
 import re  # WHY: slugify manufacturer names into filesystem-safe filenames.
 from typing import Any  # WHY: raw wired-client rows are duck-typed dicts from mistapi.
 
 import mistapi  # WHY: direct SDK access for search + pagination helpers.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -29,7 +31,7 @@ class WiredClientManufacturerReportGenerator:
     @staticmethod
     def execute() -> None:  # Run the report.
         """Main entry point: always export ALL, then optionally filter by manufacturer."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         records = WiredClientManufacturerReportGenerator._fetch_all_clients(org_id)  # Fetch all clients.
         if not records:  # No records.
@@ -47,7 +49,7 @@ class WiredClientManufacturerReportGenerator:
     @staticmethod
     def _fetch_all_clients(org_id: str) -> list[dict[str, Any]]:  # Fetch all wired clients.
         """Fetch all wired clients across the organization without filters."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             logging.info("Fetching all organization wired clients for manufacturer report...")  # Log the fetch.
             echo("\n  Retrieving all wired clients from organization...")
@@ -108,7 +110,7 @@ class WiredClientManufacturerReportGenerator:
     @staticmethod
     def _prompt_selection(summary: list[tuple[str, int]]) -> str | None:  # Prompt manufacturer selection.
         """Display manufacturer list with counts and prompt user to select one."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         WiredClientManufacturerReportGenerator._print_manufacturer_table(summary)  # Render the picker table.
         choice = mh.InputUtils.safe_input(  # Read the choice.
             "\n  Enter manufacturer number for filtered report (Enter to skip): ",
@@ -144,7 +146,7 @@ class WiredClientManufacturerReportGenerator:
     @staticmethod
     def _write_outputs(filtered: list[dict[str, Any]], manufacturer: str) -> None:  # Write the export outputs.
         """Write filtered records through the standard CSV/SQLite export path."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         label = manufacturer if manufacturer else "ALL manufacturers"  # Label for messages.
         filename = WiredClientManufacturerReportGenerator._build_filename(manufacturer)  # Build the filename.
         echo("\n  Exporting %s records for: %s", len(filtered), label)

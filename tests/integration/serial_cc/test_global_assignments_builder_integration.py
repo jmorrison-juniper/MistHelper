@@ -4,7 +4,8 @@ import importlib
 
 
 def test_global_import_manager_delegates_global_assignment_builder(monkeypatch):
-    misthelper_module = importlib.import_module("MistHelper")
+    import MistHelper as misthelper_module  # WHY: integration test verifies the root delegator.
+
     serial_cc_module = importlib.import_module("src.refactors.serial_cc.global_assignments_builder")
     manager = misthelper_module.GlobalImportManager()
     manager.imports = {"foo": object()}

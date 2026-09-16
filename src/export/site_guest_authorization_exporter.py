@@ -15,12 +15,14 @@ Why:
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+ toolchains.
 
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured trace for export lifecycle events.
 from typing import Any  # WHY: raw guest authorization rows are duck-typed dicts from mistapi.
 
 import mistapi  # WHY: direct SDK access for searchSiteGuestAuthorization + get_all pagination.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: canonical flatten/escape helpers. Keeps CSV output consistent with peers.
@@ -51,7 +53,7 @@ class SiteGuestAuthorizationExporter:
             site_name: Human-readable site name used to name the output
                 file (falls back to site_id when name lookup failed).
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No guest authorization rows for this site -- inform the operator and return.
             # WHY: ASCII-only user notice.
             logging.info("! No guest authorization data found for this site")
@@ -78,7 +80,7 @@ class SiteGuestAuthorizationExporter:
             with peer site-scoped exports.  Errors are logged and surfaced
             to the user rather than crashing the menu loop.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession + shared helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: menu header echoed to operator.
         logging.info("Site Guest Authorization Search:")
         logging.info(  # INFO trace before the API call per Action Logging principle (pre-call).

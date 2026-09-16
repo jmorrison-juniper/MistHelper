@@ -9,13 +9,15 @@ on the class. Callers continue to reach it through the
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+.
 
-import importlib  # WHY: lazy MistHelper import to reach live helper globals without circular load.
 import logging  # WHY: structured trace for export lifecycle events.
 import time  # WHY: sites_sle_summary progress timer.
 from typing import Any  # WHY: raw insight rows are duck-typed dicts from mistapi.
 
 import mistapi  # WHY: direct SDK access for org export endpoints.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -39,7 +41,7 @@ class OrgExportUtils:
     @staticmethod
     def export_data(api_call, data_type, sort_key="name", limit=1000, **api_kwargs):  # Export an org endpoint.
         """Generic org-data export: build Org<DataType>.csv from `api_call`, pass `limit`/extras as API kwargs."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of APIDataFetcher helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Starting export of organization %s...", data_type)  # Log start.
 
         # Create filename from data_type
@@ -68,7 +70,7 @@ class OrgExportUtils:
         all_sites_sle_data: list,
     ) -> None:
         """Fetch sites-SLE rows for one type and append (tagged) into the shared accumulator."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             response = mistapi.api.v1.orgs.insights.getOrgSitesSle(  # Call the SLE API for this type.
                 mh.apisession, org_id, sle=sle_type, duration="7d", limit=1000
@@ -84,7 +86,7 @@ class OrgExportUtils:
     @staticmethod
     def _persist_sites_sle_summary(all_sites_sle_data: list) -> None:
         """Persist aggregated sites-SLE rows to OrgSitesSLESummary.csv (or write empty + warn)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if all_sites_sle_data:  # Have data -- flatten + write + tell user.
             processed = DataProcessingUtils.flatten_nested_fields(all_sites_sle_data)  # Flatten nested fields.
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]  # CSV-safe.
@@ -105,7 +107,7 @@ class OrgExportUtils:
     @staticmethod
     def _gather_all_sites_sle(org_id: str, sle_types: list, emitter: Any) -> tuple[list, int]:
         """Walk SLE types, accumulate rows, tick progress per type. Return (rows, items_done)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ProgressContext class.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         all_sites_sle_data: list = []  # Accumulator for SLE rows across types.
         items_done = 0  # Items processed counter.
         for sle_type in sle_types:  # Fetch each SLE type.
@@ -123,7 +125,7 @@ class OrgExportUtils:
     @staticmethod
     def sites_sle_summary():  # Export sites SLE summary.
         """Export SLE summary metrics for all sites in the organization to OrgSitesSLESummary.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils, PROGRESS_EMITTER, ProgressContext.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Export Organization Sites SLE Summary:")  # Header.
         logging.info("Starting export of sites SLE summary...")  # Log start.
@@ -186,7 +188,7 @@ class OrgExportUtils:
         call returns HTTP 400 "Bad Syntax". Reading the live constants lets callers expand each
         such metric into one request per valid choice instead of failing.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Loading parameterized insight-metric choices from Mist constants...")  # Trace the lookup
         try:  # The constants call may fail offline -> degrade to no expansion
             response = mistapi.api.v1.const.insight_metrics.listInsightMetrics(
@@ -205,7 +207,7 @@ class OrgExportUtils:
         org_id: str, metric: str, choice: str, duration: str
     ) -> dict[str, Any] | None:  # One (metric, choice) GET.
         """Issue the org-insight GET for one (metric, choice) pair. Return a tagged record or None."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         uri = f"/api/v1/orgs/{org_id}/insights/{metric}"  # Org insight endpoint for this parameterized metric
         query = {"metric": choice, "duration": duration}  # Required 'metric' choice plus the lookback window
         logging.debug("Fetching parameterized metric %s with metric=%s", metric, choice)  # Trace the attempt
@@ -275,7 +277,7 @@ class OrgExportUtils:
     @staticmethod
     def _insight_fetch_one_sle_category(org_id: str, metric: str, sle_category: str) -> dict[str, Any] | None:
         """Fetch one SLE category's site data. Return aggregated result row, or None when empty/failed."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:  # Isolate this category so one failure does not abort the others.
             response = mistapi.api.v1.orgs.insights.getOrgSitesSle(  # Call the sites-SLE API for this category.
                 mh.apisession, org_id, sle=sle_category, duration="7d", limit=1000
@@ -307,7 +309,7 @@ class OrgExportUtils:
     @staticmethod
     def _insight_fetch_default_metric(org_id: str, metric: str) -> tuple[list[dict[str, Any]], int, int]:
         """Fetch one ordinary metric via getOrgSle. Return (records, retrieved, failed)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         response = mistapi.api.v1.orgs.insights.getOrgSle(
             mh.apisession, org_id, metric, duration="7d"
         )  # Direct SLE GET.
@@ -343,7 +345,7 @@ class OrgExportUtils:
     @staticmethod
     def _insight_fetch_sites_sle_summary(org_id: str) -> tuple[list[dict[str, Any]], int, int]:
         """Fetch the org-wide sites SLE summary. Return (records, retrieved, failed)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:  # Isolate the summary fetch so its failure does not abort the export.
             logging.debug("Attempting to retrieve org sites SLE summary")  # Trace the attempt.
             response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
@@ -385,7 +387,7 @@ class OrgExportUtils:
     @staticmethod
     def _insight_normalize_records(all_insight_data: list[dict[str, Any]], org_id: str) -> dict[str, list]:  # type: ignore[type-arg]
         """Normalize raw insight rows into the four output buckets (summary, time_series, results, sites_data)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InsightMetricsUtils helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         buckets: dict[str, list] = {  # type: ignore[type-arg]  # One list per normalized output file.
             "summary": [],  # Rows destined for OrgMetricsSummary.csv.
             "time_series": [],  # Rows destined for OrgMetricsTimeSeries.csv.
@@ -403,7 +405,7 @@ class OrgExportUtils:
     @staticmethod
     def _insight_export_normalized(all_insight_data: list[dict[str, Any]], org_id: str, metrics_retrieved: int) -> None:
         """Normalize the insight rows and export them to the four normalized CSVs plus the legacy combined file."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! Parsing metrics into normalized data structures...")  # Tell the user normalization is starting.
         buckets = OrgExportUtils._insight_normalize_records(all_insight_data, org_id)  # Build the 4 output buckets.
@@ -435,7 +437,7 @@ class OrgExportUtils:
     @staticmethod
     def _insight_write_combined(all_insight_data: list[dict[str, Any]]) -> None:
         """Write the flattened combined insight file (OrgInsightMetrics_Legacy.csv) for backward compatibility."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         processed_combined = DataProcessingUtils.flatten_nested_fields(all_insight_data)  # Flatten for combined.
         processed_combined = DataProcessingUtils.escape_multiline(processed_combined)  # type: ignore[no-untyped-call]
         mh.DataExporter.write_with_format_selection(
@@ -447,7 +449,7 @@ class OrgExportUtils:
     @staticmethod
     def _insight_write_empty_outputs(include_legacy: bool = True) -> None:
         """Write empty normalized CSVs so downstream consumers always see the expected files."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         files = [  # The four normalized output files are always written.
             "OrgMetricsSummary.csv",
             "OrgMetricsTimeSeries.csv",
@@ -462,7 +464,7 @@ class OrgExportUtils:
     @staticmethod
     def _insight_setup_or_empty() -> list[str] | None:
         """Refresh and load org-scope metrics. Write empty outputs and return None when none exist."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InsightMetricsUtils helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Export Organization Insight Metrics (Normalized):")  # Header for the operation.
         logging.info("Starting export of organization insight metrics with normalized structure...")  # Log start.
@@ -492,7 +494,7 @@ class OrgExportUtils:
     @staticmethod
     def insight_metrics():
         """Export organization-wide insight metrics to normalized CSV files."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         org_metrics = OrgExportUtils._insight_setup_or_empty()  # Refresh + load org metrics (None means abort early).
         if org_metrics is None:  # Setup wrote empty outputs and signaled there is nothing to export.
             return  # Abort the export.
@@ -724,7 +726,7 @@ class OrgExportUtils:
     @staticmethod
     def audit_logs(full_history: bool = False, duration: str | None = None) -> None:  # Export audit logs.
         """Export org audit logs (24h/explicit duration/full history) to OrgAuditLogs.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils + apisession + helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Menu #22: Starting audit logs export")  # Log start.
         logging.debug("ENTRY: OrgExportUtils.audit_logs(full_history=%s, duration=%s)", full_history, duration)
         try:
@@ -760,7 +762,7 @@ class OrgExportUtils:
     @staticmethod
     def ssid_template_consolidation() -> None:  # Consolidate SSID templates.
         """SSID template consolidation workflow (Menu #145). Delegates to src.ssid_consolidation."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession, DEFAULT_API_PAGE_LIMIT, helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         from src.ssid_consolidation.ssid_template_consolidation import (
             SSIDTemplateConsolidationManager as _Impl,
         )
@@ -776,7 +778,7 @@ class OrgExportUtils:
     @staticmethod
     def e911_bssid_compliance_report() -> None:  # E911 BSSID compliance report.
         """E911 BSSID compliance report (Menu #89). Delegates to src.reports.e911_bssid."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils + apisession + helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         current_org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         if not current_org_id:  # No org.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.

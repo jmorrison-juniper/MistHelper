@@ -30,7 +30,7 @@ def fake_mh(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
 
     Why:
         Every helper in ``org_alarm_event_exporter`` calls
-        ``importlib.import_module("MistHelper")``.  Patching that lookup once
+        ``SourceDependencyResolver``.  Patching that lookup once
         keeps the tests deterministic and avoids pulling in real live globals.
     """
     mh = ModuleType("MistHelper")

@@ -46,7 +46,7 @@ def test_ensure_prereq_csvs_does_nothing_when_both_exist() -> None:
     with (
         patch("src.reports.sfp_transceiver_data_processor.OrgInventoryExporter") as inv_exporter,
         patch("src.reports.sfp_transceiver_data_processor.os.path.exists", return_value=True),
-        patch("src.reports.sfp_transceiver_data_processor.importlib.import_module", return_value=fake_mh),
+        patch("src.reports.sfp_transceiver_data_processor.SourceDependencyResolver", fake_mh),
     ):
         P._ensure_prerequisite_csvs("port.csv", "devices.csv")
     fake_mh.OrgDeviceStatsExporter.device_port_stats.assert_not_called()
@@ -64,7 +64,7 @@ def test_ensure_prereq_csvs_generates_port_stats_when_missing(caplog: pytest.Log
     with (
         patch("src.reports.sfp_transceiver_data_processor.OrgInventoryExporter") as inv_exporter,
         patch("src.reports.sfp_transceiver_data_processor.os.path.exists", side_effect=exists),
-        patch("src.reports.sfp_transceiver_data_processor.importlib.import_module", return_value=fake_mh),
+        patch("src.reports.sfp_transceiver_data_processor.SourceDependencyResolver", fake_mh),
     ):
         P._ensure_prerequisite_csvs("port.csv", "devices.csv")
     fake_mh.OrgDeviceStatsExporter.device_port_stats.assert_called_once_with()
@@ -83,7 +83,7 @@ def test_ensure_prereq_csvs_generates_devices_when_missing(caplog: pytest.LogCap
     with (
         patch("src.reports.sfp_transceiver_data_processor.OrgInventoryExporter") as inv_exporter,
         patch("src.reports.sfp_transceiver_data_processor.os.path.exists", side_effect=exists),
-        patch("src.reports.sfp_transceiver_data_processor.importlib.import_module", return_value=fake_mh),
+        patch("src.reports.sfp_transceiver_data_processor.SourceDependencyResolver", fake_mh),
     ):
         P._ensure_prerequisite_csvs("port.csv", "devices.csv")
     fake_mh.OrgDeviceStatsExporter.device_port_stats.assert_not_called()
@@ -97,7 +97,7 @@ def test_ensure_prereq_csvs_generates_both_when_missing() -> None:
     with (
         patch("src.reports.sfp_transceiver_data_processor.OrgInventoryExporter") as inv_exporter,
         patch("src.reports.sfp_transceiver_data_processor.os.path.exists", return_value=False),
-        patch("src.reports.sfp_transceiver_data_processor.importlib.import_module", return_value=fake_mh),
+        patch("src.reports.sfp_transceiver_data_processor.SourceDependencyResolver", fake_mh),
     ):
         P._ensure_prerequisite_csvs("port.csv", "devices.csv")
     fake_mh.OrgDeviceStatsExporter.device_port_stats.assert_called_once_with()
@@ -218,7 +218,7 @@ def test_finalize_merge_output_writes_via_backend_and_notifies_user(
     fake_mh = _make_mh()
     rows = [{"site_name": "HQ"}]
     caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
-    with patch("src.reports.sfp_transceiver_data_processor.importlib.import_module", return_value=fake_mh):
+    with patch("src.reports.sfp_transceiver_data_processor.SourceDependencyResolver", fake_mh):
         P._finalize_merge_output(rows)
     fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
         rows, "MergedTransceiverData.csv", api_function_name="listSiteDevices"
@@ -279,7 +279,7 @@ def test_merge_transceiver_data_resolves_paths_and_delegates() -> None:
     fake_mh = _make_mh()
     fake_mh.FilePathUtils.get_csv_path.side_effect = lambda name: f"/data/{name}"
     with (
-        patch("src.reports.sfp_transceiver_data_processor.importlib.import_module", return_value=fake_mh),
+        patch("src.reports.sfp_transceiver_data_processor.SourceDependencyResolver", fake_mh),
         patch.object(P, "_ensure_prerequisite_csvs") as ensure,
         patch.object(P, "_run_merge_pipeline") as pipeline,
     ):

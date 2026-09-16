@@ -10,14 +10,13 @@ Direct imports cover stdlib (importlib, logging, time, datetime.datetime)
 and third-party (prettytable.PrettyTable). Every live-global read
 (``IS_TEST_MODE``, ``InputUtils``, ``APICoreFetchUtils``, ``mistapi``,
 ``apisession``, ``DataExporter``, ``ConfigUtils``) is resolved via lazy
-``mh = importlib.import_module("MistHelper")`` inside the methods that
+``mh = the source dependency resolver`` inside the methods that
 need them. Callers continue to reach the class through the
 ``MistHelper.OfflineDeviceReporter`` re-export alias.
 """
 
 from __future__ import annotations  # WHY: PEP 604 unions for future annotations.
 
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured trace + info/warn/error logging.
 import time  # WHY: wall-time epoch + elapsed timing.
 from datetime import UTC, datetime  # WHY: format epoch to human timestamp. Timestamp CSV filename.
@@ -25,6 +24,9 @@ from typing import Any  # WHY: device dicts carry heterogeneous values.
 
 from prettytable import PrettyTable  # WHY: render offline device rows as a table.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.utils.console import echo  # WHY: 1031 stdout + INFO log helper replaces legacy WARNING-channel echoes.
 
 
@@ -64,7 +66,7 @@ class OfflineDeviceReporter:  # Offline device inventory report.
     @staticmethod
     def _prompt_threshold() -> int:
         """Prompt user for offline threshold in hours, with validation."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of IS_TEST_MODE + InputUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if mh.IS_TEST_MODE:  # Test mode skips interactive prompt.
             logging.debug("Test mode: using default threshold 48 hours")  # Log shortcut.
             return OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS  # Default value.
@@ -87,7 +89,7 @@ class OfflineDeviceReporter:  # Offline device inventory report.
     @staticmethod
     def _fetch_data(current_org_id: str) -> tuple[dict[str, str], list[dict[str, Any]]]:
         """Fetch site lookup and device stats from Mist API."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of APICoreFetchUtils/mistapi/apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Fetching site information for offline device report...")
         echo("  Fetching site information...")
         all_sites = mh.APICoreFetchUtils.all_sites_with_limit(current_org_id)
@@ -233,7 +235,7 @@ class OfflineDeviceReporter:  # Offline device inventory report.
     @staticmethod
     def _save_offline_csv(offline_records: list[dict[str, str]], total_count: int) -> None:
         """Build CSV rows and persist via shared exporter. Log + print result."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         fields = OfflineDeviceReporter._OFFLINE_DISPLAY_FIELDS  # Column order.
         csv_records = [{f: record.get(f, "") for f in fields} for record in offline_records]  # Strip helper keys.
         timestamp_str = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")  # Timestamp for filename.
@@ -261,7 +263,7 @@ class OfflineDeviceReporter:  # Offline device inventory report.
     @staticmethod
     def _gather_offline_inputs() -> tuple[str | None, int]:
         """Resolve org_id + threshold prompt; (None, _) signals early-abort."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         current_org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         if not current_org_id:  # No org selected.
             echo("! No organization selected. Exiting.")

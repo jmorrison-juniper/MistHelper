@@ -34,7 +34,7 @@ def fake_mh(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
 
     Why:
         Every helper in ``gateway_test_exporter`` calls
-        ``importlib.import_module("MistHelper")``.  Patching that lookup once
+        ``SourceDependencyResolver``.  Patching that lookup once
         keeps the tests deterministic and avoids pulling in real live globals.
     """
     mh = ModuleType("MistHelper")
@@ -53,6 +53,7 @@ def fake_mh(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     mh.DataExporter = MagicMock()  # type: ignore[attr-defined]
 
     monkeypatch.setitem(sys.modules, "MistHelper", mh)
+    monkeypatch.setattr("src.export.gateway_test_exporter.SourceDependencyResolver", mh)
     return mh
 
 

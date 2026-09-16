@@ -8,12 +8,14 @@ reach it through the ``MistHelper.OrgTemplateExporter`` re-export alias.
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+.
 
-import importlib  # WHY: lazy MistHelper import to reach live helper globals without circular load.
 import logging  # WHY: structured trace for export lifecycle events.
 from typing import Any  # WHY: raw template rows are duck-typed dicts from mistapi.
 
 import mistapi  # WHY: direct SDK access for org template endpoints.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -62,7 +64,7 @@ class OrgTemplateExporter:
     @staticmethod
     def _export_one_template(title: str, api_call: Any, filename: str, error_label: str) -> None:
         """Fetch one template type to its CSV. Log (do not raise) on failure so other types still export."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of APIDataFetcher helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             mh.APIDataFetcher(  # Fetch this template type and write it to CSV.
                 title=title,
@@ -77,7 +79,7 @@ class OrgTemplateExporter:
     @staticmethod
     def network_templates() -> None:
         """Export network templates to OrgNetworkTemplates.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of OrgExportUtils helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         mh.OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.networktemplates.listOrgNetworkTemplates,
             data_type="network templates",
@@ -87,7 +89,7 @@ class OrgTemplateExporter:
     @staticmethod
     def rf_templates() -> None:
         """Export RF templates to OrgRfTemplates.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of OrgExportUtils helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         mh.OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates, data_type="rf templates", sort_key="name"
         )
@@ -95,7 +97,7 @@ class OrgTemplateExporter:
     @staticmethod
     def _persist_ap_template_profiles(ap_profiles: list[Any], filename: str) -> None:
         """Flatten + write AP template profiles to CSV. Emit operator + log summary."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter + DataProcessingUtils helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not ap_profiles:  # No AP templates in this org.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info("! 0 AP templates exported to OrgApTemplates.csv (no templates found)")  # Inform user.
@@ -118,7 +120,7 @@ class OrgTemplateExporter:
     @staticmethod
     def ap_templates() -> None:
         """Export AP templates (canonical deviceprofiles type=ap) to OrgApTemplates.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils + DataExporter + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("Export Organization AP Templates:")  # Header.
         logging.info("Starting export of organization AP templates (canonical deviceprofiles type=ap)...")  # Log start.
@@ -143,7 +145,7 @@ class OrgTemplateExporter:
     @staticmethod
     def _persist_switch_template_csv(switch_profiles: list[Any], filename: str) -> None:
         """Flatten + escape + write switch-template payload, then log/emit a success line."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter + DataProcessingUtils helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not switch_profiles:  # No templates returned from the API.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info("! 0 switch templates exported to OrgSwitchTemplates.csv (no templates found)")  # User notice.
@@ -164,7 +166,7 @@ class OrgTemplateExporter:
     @staticmethod
     def switch_templates() -> None:
         """Export switch templates to OrgSwitchTemplates.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils + DataExporter + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("Export Organization Switch Templates:")  # Header.
         logging.info("Starting export of organization switch templates (canonical networktemplates)...")  # Log start.

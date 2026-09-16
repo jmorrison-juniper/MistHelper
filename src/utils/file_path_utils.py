@@ -1,7 +1,7 @@
 """FilePathUtils extracted from MistHelper (initiative 1015 T-13).
 
 Owns the ``FilePathUtils`` class originally defined at MistHelper.py:2886.
-This module is fully self-contained: no ``import MistHelper``, no ``mh.*``
+This module is fully self-contained: no the source dependency resolver, no ``mh.*``
 reach-back, no dependency on any MistHelper module-global. The class is
 a pure static utility that resolves filenames under the ``data/`` output
 directory and can render empty CSV placeholders.

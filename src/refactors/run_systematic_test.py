@@ -18,13 +18,15 @@ sweep in explicit info-before / debug-after envelopes at the manager level.
 
 from __future__ import annotations  # Enable postponed evaluation for forward-ref typing on 3.10+
 
-import importlib  # Late-import MistHelper module to avoid circular src<->MistHelper dependency
 import logging  # Structured action logging required by coding standards
 import time  # Measure total sweep duration and enforce inter-option API delay via helper
 from dataclasses import dataclass  # Bundle sweep counters to keep _finalize_sweep within the 5-Item Rule
 from types import SimpleNamespace  # Bundle runtime dependencies without coupling to a dataclass
 from typing import Any  # Loose typing for late-bound module attributes and helper return values
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.dataclasses.progress_event import TestSummary  # Aggregate result event bundled for emitter + printer
 
 
@@ -38,9 +40,9 @@ class _SweepCounters:
 
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:
-    """Resolve MistHelper-owned runtime dependencies without static cross-module imports."""
+    """Resolve source-owned runtime dependencies without static cross-module imports."""
     logging.info("Resolving RunSystematicTestManager runtime dependencies from MistHelper")  # Log before import
-    misthelper_module = importlib.import_module("MistHelper")  # Late import avoids circular dependency
+    misthelper_module = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
     logging.debug("RunSystematicTestManager runtime dependencies resolved successfully")  # Log after resolution
     return SimpleNamespace(
         misthelper_module=misthelper_module,  # Retained so global lookups honour monkeypatch in tests

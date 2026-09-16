@@ -4,7 +4,7 @@ Extracted from MistHelper.py during initiative 1013 (Cat B, position 30).
 Provides menu option 140. Direct imports cover stdlib + installed packages
 (mistapi, websocket, pyte). Live-global reads (``apisession``,
 ``PromptClientUtils``, ``KeyboardListener``) are resolved via lazy
-``mh = importlib.import_module("MistHelper")`` inside each helper. Callers
+``mh = the source dependency resolver`` inside each helper. Callers
 continue to reach the class through the ``MistHelper.CLIShellManager``
 re-export alias.
 """
@@ -12,7 +12,6 @@ re-export alias.
 from __future__ import annotations  # WHY: PEP 604 unions for return types.
 
 import functools  # WHY: partial() binds shared session state to thread target + keyboard callback.
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import json  # WHY: encode terminal resize control message for the WebSocket.
 import logging  # WHY: #886 print()->logging migration for user-visible banners and debug traces.
 import shutil  # WHY: read local terminal size for PTY resize.
@@ -24,6 +23,9 @@ from typing import Any  # WHY: WebSocket + pyte objects are duck-typed here.
 import mistapi  # WHY: createSiteDeviceShellSession call to open a shell.
 
 import websocket  # WHY: create_connection + enableTrace for the interactive shell.
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 
 try:  # pyte is optional (terminal emulation for parsing WebSocket output)
     import pyte  # In-memory terminal emulator to render device CLI screens
@@ -64,7 +66,7 @@ class CLIShellManager:
             device_id: Optional device ID (prompts if not provided)
             debug: Enable debug mode for WebSocket tracing
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PromptClientUtils facade.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         site_id, device_id = mh.PromptClientUtils.select_site_and_device_ids(site_id, device_id)
         if not site_id or not device_id:  # Need both ids.
             return  # Abort.
@@ -84,7 +86,7 @@ class CLIShellManager:
         Returns:
             WebSocket URL for the shell session or None on failure
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             response = mistapi.api.v1.sites.devices.createSiteDeviceShellSession(mh.apisession, site_id, device_id)
             shell_data = response.data  # Read the URL data.
@@ -204,7 +206,7 @@ class CLIShellManager:
     @staticmethod
     def _run_interactive(shell_url: str, debug: bool = False) -> None:
         """Run an interactive WebSocket shell session against shell_url (debug enables WebSocket tracing)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of KeyboardListener facade.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not _has_pyte or pyte is None:  # pyte (terminal emulation) is required.
             # WHY: user-visible install hint (was print()).
             logging.warning("! Terminal emulation requires pyte. Install: pip install pyte")

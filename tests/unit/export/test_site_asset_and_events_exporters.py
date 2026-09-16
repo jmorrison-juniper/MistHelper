@@ -3,7 +3,7 @@
 Covers specs 666, 667, 668, 670 and 898 (issues #1416, #1417, #1418, #1419, #1406).
 
 Each exporter is exercised through its public menu entry point. The collaborators
-that the exporters reach lazily through ``importlib.import_module("MistHelper")``
+that the exporters reach lazily through ``SourceDependencyResolver``
 are monkeypatched, so no network call and no real session is needed.
 """
 

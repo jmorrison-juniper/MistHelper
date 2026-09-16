@@ -8,11 +8,13 @@ read operations.
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+.
 
-import importlib  # WHY: lazy MistHelper import to avoid circular load.
 import logging  # WHY: emit structured trace for export progress + failures.
 
 import mistapi  # WHY: dotted-path API resolution + pagination helper.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -31,7 +33,7 @@ class SelfExportUtils:  # Self/account exporters.
     @staticmethod
     def _persist_self_audit_rows(rows: list, filename: str, hours: int) -> None:
         """Flatten + persist self audit rows, or write an empty file when nothing was returned."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live writer + processing helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rows:  # No data returned -- write empty output rather than failing silently.
             logging.warning("No self audit log records returned for the last %d hours", hours)  # Warn empty.
             mh.DataExporter.write_with_format_selection(
@@ -50,7 +52,7 @@ class SelfExportUtils:  # Self/account exporters.
         logging.info("Starting export of self (admin account) audit logs...")  # Log before operation.
         filename = "SelfAuditLogs.csv"  # Output filename for self audit log entries.
         try:
-            mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live session.
+            mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
             hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Same lookback as other audit log exports.
             TimeUtils.log_dynamic_lookback("self audit logs export", hours)  # Log lookback window selection.
             logging.info("Fetching self audit logs for last %d hours...", hours)  # Log before API call.

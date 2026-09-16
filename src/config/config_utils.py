@@ -1,7 +1,7 @@
 """ConfigUtils extracted from MistHelper (initiative 1015 T-12).
 
 Owns the ``ConfigUtils`` class originally defined at MistHelper.py:2912.
-This module is fully self-contained: no ``import MistHelper``, no ``mh.*``
+This module is fully self-contained: no the source dependency resolver, no ``mh.*``
 reach-back, no dependency on any MistHelper module-global. The class
 holds its own class-level state for the resolved ``org_id`` (replacing
 the former ``MistHelper.org_id`` module-global as source of truth) and
@@ -127,7 +127,7 @@ class ConfigUtils:
         # reached after cache/env/.env resolution all miss. In a systematic test mode there is no human to
         # answer a prompt, and calling mistapi.cli.select_org() on a blank-host session issues the exact
         # malformed-URL HTTP request the 2026-07-16 defect exhibited. Detect the mode via local sys.argv
-        # inspection (preserving this module's "no import MistHelper" self-containment) and exit with an
+        # inspection (preserving this module's "no source resolver access" self-containment) and exit with an
         # actionable message naming the real variable (org_id, not MIST_ORG_ID) before any network call.
         if "--test" in sys.argv or "--testinteractive" in sys.argv:  # Non-interactive systematic test mode.
             logging.error("Cannot resolve org_id non-interactively for --test/--testinteractive: none configured.")

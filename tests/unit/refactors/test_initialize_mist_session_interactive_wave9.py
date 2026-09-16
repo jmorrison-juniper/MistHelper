@@ -22,10 +22,10 @@ from unittest.mock import MagicMock  # WHY: FR-008 mandates MagicMock doubles.
 
 import pytest  # WHY: monkeypatch fixture.
 
+from src.config.source_dependency_resolver import SourceDependencyResolver  # WHY: assert the source dependency seam.
 from src.refactors.initialize_mist_session_interactive import (  # WHY: SUT direct imports.
     _MH,
     MistSessionInteractiveInitializer,
-    _MistHelperProxy,
 )
 
 
@@ -37,7 +37,7 @@ class TestMistHelperProxy:
         logging.info("test: publishing sentinel attribute on MistHelper module")  # WHY: pre-action log.
         sentinel = MagicMock(name="interactive_sentinel")  # WHY: unique identity for equality check.
         monkeypatch.setattr("MistHelper._interactive_sentinel_attr", sentinel, raising=False)  # WHY: publish for proxy.
-        proxy = _MistHelperProxy()  # WHY: fresh proxy instance to exercise __getattr__ in isolation.
+        proxy = _MH  # WHY: fresh proxy instance to exercise __getattr__ in isolation.
         result = proxy._interactive_sentinel_attr  # WHY: exercise __getattr__ on unpublished attribute name.
         logging.debug("test: proxy returned attribute; identity=%s", id(result))  # WHY: post-action log.
         assert result is sentinel  # WHY: identity match confirms lazy resolution against live module.
@@ -45,7 +45,7 @@ class TestMistHelperProxy:
     def test_module_level_singleton_is_proxy(self) -> None:
         """`_MH` module-level singleton is an instance of `_MistHelperProxy`."""
         logging.info("test: asserting module-level _MH is a proxy instance")  # WHY: pre-action log.
-        assert isinstance(_MH, _MistHelperProxy)  # WHY: guard against accidental rebinding.
+        assert _MH is SourceDependencyResolver  # WHY: guard against accidental rebinding.
         logging.debug("test: module-level _MH proxy identity confirmed")  # WHY: post-action log.
 
 

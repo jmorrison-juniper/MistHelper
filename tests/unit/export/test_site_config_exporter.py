@@ -3,7 +3,7 @@
 Why: Un-omitting this module in ``[tool.coverage.run].omit`` requires 100%
 line + branch coverage on the seven static methods that ship site-level
 WLAN, map, zone, and settings exports. The module resolves its cross-class
-collaborators lazily through ``importlib.import_module("MistHelper")``; tests
+collaborators lazily through ``SourceDependencyResolver``; tests
 inject a fake ``MistHelper`` module via ``sys.modules`` to observe and control
 those interactions without importing the monolith.
 """

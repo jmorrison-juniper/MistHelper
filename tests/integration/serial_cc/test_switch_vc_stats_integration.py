@@ -5,7 +5,8 @@ import importlib
 
 def test_misthelper_switch_vc_stats_delegates_to_serial_cc_service(monkeypatch):
     """Legacy switch_vc_stats method delegates to extracted serial_cc service."""
-    misthelper_module = importlib.import_module("MistHelper")  # Import MistHelper module under test
+    import MistHelper as misthelper_module  # WHY: integration test verifies the root delegator.
+
     called = {"count": 0}  # Invocation counter for delegator verification
 
     def fake_execute():

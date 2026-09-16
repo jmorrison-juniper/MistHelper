@@ -8,11 +8,13 @@ authentication).
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+.
 
-import importlib  # WHY: lazy MistHelper import to reach live session + helper classes without circular load.
 import logging  # WHY: emit structured trace for MSP + org iteration.
 import os  # WHY: build cross-platform output path for CSV artifact.
 from typing import Any  # WHY: duck-typed device dicts + Mist API responses.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -81,7 +83,7 @@ class MSPInventoryExporter:
 
     def _ensure_msp_privileges(self) -> bool:
         """Ensure MSP privileges are available, offering login if needed."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live msp_privileges module global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
 
         if mh.msp_privileges:
             print(f"  + MSP privileges detected: {len(mh.msp_privileges)} MSP(s) available")
@@ -92,7 +94,7 @@ class MSPInventoryExporter:
 
     def _attempt_interactive_login(self) -> bool:
         """Offer interactive login to obtain MSP privileges."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
 
         self._print_login_prompt()
 
@@ -122,7 +124,7 @@ class MSPInventoryExporter:
 
     def _execute_login_and_validate(self) -> bool:
         """Execute login and validate MSP privileges obtained."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession + msp_privileges module global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
 
         if not MistSessionInteractiveInitializer.initialize():
             print("")
@@ -147,7 +149,7 @@ class MSPInventoryExporter:
 
     def _print_continuation_header(self) -> None:
         """Print continuation header after successful login."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of msp_privileges module global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         print("")
         print("=" * 70)
         print("  MSP-WIDE DEVICE INVENTORY EXPORT (Continuing)")
@@ -158,7 +160,7 @@ class MSPInventoryExporter:
 
     def _process_all_msps(self) -> None:
         """Process all MSPs to collect device inventory."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of msp_privileges module global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         for msp_info in mh.msp_privileges:
             self._process_msp(msp_info)
 
@@ -189,7 +191,7 @@ class MSPInventoryExporter:
 
     def _fetch_msp_orgs(self, msp_id: str, msp_name: str) -> list:  # type: ignore[type-arg]
         """Fetch organizations under this MSP. Returns empty list on failure."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if mh.apisession is None:
             print("    X API session not initialized")
             return []
@@ -217,7 +219,7 @@ class MSPInventoryExporter:
 
     def _process_msp(self, msp_info: dict) -> None:  # type: ignore[type-arg]
         """Process a single MSP - fetch all orgs and their devices."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         msp_id, msp_name = self._validate_msp_info(msp_info)
         if msp_id is None:  # Invalid input.
             return
@@ -236,7 +238,7 @@ class MSPInventoryExporter:
 
     def _fetch_org_inventory(self, org_id: str, org_name: str) -> list:  # type: ignore[type-arg]
         """Fetch all devices from org inventory. Returns empty list on failure."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if mh.apisession is None:  # No authenticated session available
             print(f"      {org_name}: API session not initialized")  # Tell the user
             return []  # Nothing to fetch
@@ -301,7 +303,7 @@ class MSPInventoryExporter:
 
     def _process_org(self, msp_id: str, msp_name: str, org: dict) -> None:  # type: ignore[type-arg]
         """Process a single organization - fetch all devices from inventory."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         resolved = self._validate_org(org)  # Delegate input validation
         if resolved is None:  # Bad input -- helper already logged
             return
@@ -326,7 +328,7 @@ class MSPInventoryExporter:
 
     def _build_site_lookup(self, org_id: str) -> dict:  # type: ignore[type-arg]
         """Build a site_id -> site_name lookup for an org."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of APICoreFetchUtils helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             sites = mh.APICoreFetchUtils.all_sites_with_limit(org_id)
             return {s.get("id"): s.get("name", "Unknown") for s in sites}
@@ -375,7 +377,7 @@ class MSPInventoryExporter:
 
     def _write_results(self) -> None:
         """Write all devices to CSV."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         priority_fields = self._get_priority_fields()
         flattened = DataProcessingUtils.flatten_nested_fields(self.all_devices)
 

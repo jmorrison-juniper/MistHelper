@@ -1,7 +1,6 @@
 """Security export orchestration extracted from MistHelper offender #8."""
 
 import csv  # CSV DictReader powers the SiteList iteration for rogue exports.
-import importlib  # Dynamic import shields the module from a MistHelper import cycle.
 import logging  # Structured trace/warn/error logging across the export flow.
 import os  # File existence and mtime probes for the fast-mode freshness check.
 import time  # Wall clock for freshness math and progress duration reporting.
@@ -13,6 +12,7 @@ from dataclasses import dataclass  # Frozen dataclass bundles flattened-export c
 from types import SimpleNamespace  # SimpleNamespace bags all runtime dependencies.
 from typing import Any  # Loose typing for heterogeneous API payloads.
 
+from src.config.source_dependency_resolver import SourceDependencyResolver  # WHY: resolve source dependencies.
 from src.dataclasses.progress_event import (
     ProgressContext,
 )  # Bundles progress identity for emit_progress_* (issue #470).
@@ -22,6 +22,7 @@ _OUTPUT_FILES: tuple[str, ...] = (  # Files the service produces. Also drives fa
     "OrgSecIntelProfiles.csv",  # Flattened org security intelligence profiles dataset.
     "OrgRogueData.csv",  # Combined rogue APs and rogue clients dataset.
 )
+
 _ROGUE_OUTPUT: str = "OrgRogueData.csv"  # Single source of truth for the combined rogue export file name.
 _SITE_LIST_CSV: str = "SiteList.csv"  # SiteList cache filename used to seed rogue iteration.
 _PROGRESS_ISSUE_ID: str = "42"  # Progress identifier tying emissions to the security export operation.
@@ -48,7 +49,7 @@ _ROGUE_KINDS: tuple[_RogueKind, ...] = (  # Table-driven dispatch across rogue t
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:  # Deferred import avoids MistHelper import cycles.
     """Resolve MistHelper runtime dependencies without static src imports."""
-    misthelper_module = importlib.import_module("MistHelper")  # Late-bind MistHelper to sidestep circular imports.
+    misthelper_module = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
     return SimpleNamespace(  # Bundle the pieces the service needs into a single namespace.
         ConfigUtils=misthelper_module.ConfigUtils,  # Config helpers (org id, stop signal, ...).
         PROGRESS_EMITTER=getattr(misthelper_module, "PROGRESS_EMITTER", None),  # Optional progress emitter.

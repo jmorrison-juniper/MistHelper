@@ -5,7 +5,8 @@ import importlib
 
 def test_misthelper_sle_metrics_delegates_to_serial_cc_service(monkeypatch):
     """Legacy SLE export method delegates to extracted serial_cc service."""
-    misthelper_module = importlib.import_module("MistHelper")
+    import MistHelper as misthelper_module  # WHY: integration test verifies the root delegator.
+
     called = {"count": 0, "fast": None}
 
     def fake_execute(fast=False):

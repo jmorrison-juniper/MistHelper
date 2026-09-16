@@ -1,17 +1,17 @@
 """SLE metrics export orchestration extracted from MistHelper offender #9."""
 
-import importlib
 import logging
 import time
 from types import SimpleNamespace
 from typing import Any
 
+from src.config.source_dependency_resolver import SourceDependencyResolver  # WHY: resolve source dependencies.
 from src.dataclasses.progress_event import ProgressContext  # Issue #470: bundle progress identity for emit_progress_*.
 
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:
     """Resolve MistHelper runtime dependencies without static src imports."""
-    misthelper_module = importlib.import_module("MistHelper")  # Late import avoids circular src->MistHelper dependency
+    misthelper_module = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
     return SimpleNamespace(
         ConfigUtils=misthelper_module.ConfigUtils,
         PROGRESS_EMITTER=getattr(misthelper_module, "PROGRESS_EMITTER", None),

@@ -17,12 +17,14 @@ Why:
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+ toolchains.
 
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured trace for export lifecycle events.
 from typing import Any  # WHY: raw webhook rows are duck-typed dicts from mistapi.
 
 import mistapi  # WHY: direct SDK access for listSiteWebhooks + searchSiteWebhooksDeliveries.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: canonical flatten/escape helpers. Keeps CSV output consistent with peers.
@@ -54,7 +56,7 @@ class SiteWebhookDeliveriesExporter:
             ``(webhook_id, webhook_name)`` when a valid selection is made,
             otherwise ``None`` (no webhooks configured or invalid input).
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info(  # INFO trace before the listing SDK call (pre-call per Action Logging).
             "Listing webhooks for site_id=%s for delivery-search selection", site_id
         )
@@ -119,7 +121,7 @@ class SiteWebhookDeliveriesExporter:
             site_name: Human-readable site name used in the output filename.
             webhook_name: Human-readable webhook name used in the output filename.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No delivery rows in the query window -- inform the operator.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logging.info("! No webhook delivery data found")  # ASCII-only user notice.
@@ -149,7 +151,7 @@ class SiteWebhookDeliveriesExporter:
             of the site's configured webhooks.  Errors are logged and
             surfaced to the user rather than crashing the menu loop.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession + shared helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("Site Webhook Deliveries Search:")  # Menu header echoed to operator.
         logging.info(  # INFO trace before the API call per Action Logging principle (pre-call).

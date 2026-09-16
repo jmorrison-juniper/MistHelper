@@ -7,20 +7,23 @@ alias (``from src.cache.cache_utils import CacheUtils``) so historical
 
 Cross-class references (``FilePathUtils``) and the module-level
 ``CSV_FRESHNESS_MINUTES`` constant are resolved lazily via
-``importlib.import_module("MistHelper")`` inside method bodies to keep
+the source dependency resolver inside method bodies to keep
 FR-028 IG-health clean (no top-level MistHelper import statement).
 """
 
 from __future__ import annotations  # WHY: PEP 604 unions in annotations.
 
 import csv  # WHY: CSV reading/writing helpers.
-import importlib  # WHY: lazy MistHelper fetch of FilePathUtils + CSV_FRESHNESS_MINUTES.
 import logging  # WHY: debug/trace + failure reporting.
 import os  # WHY: filesystem existence checks + listdir/remove.
 import time  # WHY: fast_cache_hit uses time.time() for age math.
 from collections.abc import Callable  # WHY: generator callable annotation for CSV producers.
 from datetime import UTC, datetime, timedelta  # WHY: mtime comparisons in freshness gate.
 from typing import Any  # WHY: dynamic row payload annotations.
+
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 
 
 class CacheUtils:
@@ -59,7 +62,7 @@ class CacheUtils:
             freshness_minutes,
         )
 
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilePathUtils + CSV_FRESHNESS_MINUTES.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if freshness_minutes is None:  # No explicit override supplied
             freshness_minutes = mh.CSV_FRESHNESS_MINUTES  # Fall back to the configured default freshness
 
@@ -105,7 +108,7 @@ class CacheUtils:
         logging.info(
             "Loading CSV file '%s' into dictionary keyed by '%s'...", filename, key
         )  # Log before reading the file
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilePathUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         csv_file_path = mh.FilePathUtils.get_csv_path(filename)  # Resolve the CSV path under the data/ directory
         with open(csv_file_path, encoding="utf-8") as file:  # Open the CSV for reading
             reader = csv.DictReader(file)  # Parse each row into a dictionary keyed by column name
@@ -151,7 +154,7 @@ class CacheUtils:
         logging.debug("Preparing to write support package to %s...", filename)  # Log before doing IO
         fieldnames_sorted = CacheUtils._collect_csv_fieldnames(data)  # Union of keys, deterministic order
         logging.debug("Final CSV fieldnames: %s", fieldnames_sorted)  # Trace exact header order
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilePathUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         csv_file_path = mh.FilePathUtils.get_csv_path(filename)  # SECURITY: anchor under data/
         with open(csv_file_path, mode="w", newline="", encoding="utf-8") as file:  # Open for writing
             writer = csv.DictWriter(file, fieldnames=fieldnames_sorted)  # Bind writer to fixed header
@@ -263,7 +266,7 @@ class CacheUtils:
             logging.info("No address parsing failures to document.")
             return
         try:
-            mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilePathUtils.
+            mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
             output_path = mh.FilePathUtils.get_csv_path(filename)  # Resolve target path under data/
             with open(output_path, "w", newline="", encoding="utf-8") as f:
                 writer = csv.DictWriter(f, fieldnames=CacheUtils._ADDRESS_PARSE_FAILURE_FIELDNAMES)
@@ -282,7 +285,7 @@ class CacheUtils:
     @staticmethod
     def fast_cache_hit(filename: str, max_age_minutes: int = 60) -> bool:  # Check if cached output file is fresh
         """Return True when filename exists in data/ and is younger than max_age_minutes."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilePathUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         full_path = mh.FilePathUtils.get_csv_path(filename)  # Resolve path inside data/ directory
         logging.debug("fast_cache_hit check for %s (max_age=%d min)", filename, max_age_minutes)  # Log check
         if not os.path.exists(full_path):  # File not present -- always a miss

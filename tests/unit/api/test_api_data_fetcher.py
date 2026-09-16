@@ -6,7 +6,7 @@ Why:
     class (fetch/export pipeline, retry/backoff, malformed-response recovery,
     rate-limit handling, emergency saves) so the module can enter the
     ``--cov-fail-under=80`` gate without lowering the floor. The lazy
-    ``importlib.import_module("MistHelper")`` calls inside the class body are
+    ``SourceDependencyResolver`` calls inside the class body are
     stubbed via :func:`monkeypatch.setattr(importlib, "import_module", ...)` so
     that no real MistHelper globals need to load during tests.
 """
@@ -34,7 +34,7 @@ class _FakeMH:
 
     Why:
         ``APIDataFetcher`` lazy-imports MistHelper via
-        ``importlib.import_module("MistHelper")`` from inside methods to
+        ``SourceDependencyResolver`` from inside methods to
         dodge circular imports. Tests need a namespace object exposing the
         specific attributes each code path touches; this class collects them
         so a single fixture can serve every test.
@@ -55,7 +55,7 @@ def fake_mh(monkeypatch: pytest.MonkeyPatch) -> _FakeMH:
     """Install a stubbed MistHelper module and return the stub.
 
     Why:
-        Every APIDataFetcher path invokes ``importlib.import_module("MistHelper")``.
+        Every APIDataFetcher path invokes ``SourceDependencyResolver``.
         Redirecting *that specific name* keeps other imports (``mistapi`` etc.)
         untouched. Time is patched to a no-op so the retry loop does not sleep.
     """
@@ -68,7 +68,7 @@ def fake_mh(monkeypatch: pytest.MonkeyPatch) -> _FakeMH:
             return fake
         return real_import(name, *args, **kwargs)
 
-    monkeypatch.setattr("src.api.api_data_fetcher.importlib.import_module", _stub)
+    monkeypatch.setattr("src.api.api_data_fetcher.SourceDependencyResolver", fake)
     monkeypatch.setattr("src.api.api_data_fetcher.time.sleep", lambda _: None)
     monkeypatch.setattr(runtime_settings, "API_REQUEST_MAX_RETRIES", 2)
     monkeypatch.setattr(runtime_settings, "API_REQUEST_RETRY_DELAY", 0.0)

@@ -8,7 +8,7 @@ Direct imports cover stdlib (csv, importlib, json, logging, os, threading,
 time) plus third-party (requests, websocket, prettytable) and the
 ``WebSocketStreamTarget`` dataclass. Every live-global read
 (``apisession``, ``PromptClientUtils``, ``FilePathUtils``) is resolved via
-lazy ``mh = importlib.import_module("MistHelper")`` inside the methods
+lazy ``mh = the source dependency resolver`` inside the methods
 that need them. Callers continue to reach the class through the
 ``MistHelper.ARPCommandManager`` re-export alias.
 """
@@ -16,7 +16,6 @@ that need them. Callers continue to reach the class through the
 from __future__ import annotations  # WHY: PEP 604 unions for future annotations.
 
 import csv  # WHY: _write_dataset_csv writes CSV rows to disk.
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import json  # WHY: parse WebSocket JSON envelope + subscribe payload serialization.
 import logging  # WHY: structured trace for WS lifecycle + parse errors.
 import os  # WHY: environment fallback for MIST_HOST / MIST_APITOKEN.
@@ -27,6 +26,9 @@ import requests  # WHY: HTTP POST to trigger the ARP command.
 from prettytable import PrettyTable  # WHY: render parsed ARP rows as a table.
 
 import websocket  # WHY: websocket-client stream subscription.
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.dataclasses.websocket_stream_target import WebSocketStreamTarget  # Bundle for WS connection identity.
 
 logger = logging.getLogger(__name__)  # WHY: module-scoped logger routes former print notices for capture/redirection.
@@ -44,14 +46,14 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         """Resolve (site_id, device_id), prompting if either is missing. Returns tuple or (None, None) on abort."""
         if site_id and device_id:  # Already supplied — pass through
             return site_id, device_id
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PromptClientUtils live-global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         site_id, device_id = mh.PromptClientUtils.select_site_and_device_ids(site_id, device_id)  # type: ignore[no-untyped-call]
         return site_id, device_id  # Caller validates emptiness
 
     @staticmethod
     def _resolve_mist_ws_credentials():
         """Resolve (host, token) from session or environment. Returns (None, None) when either is missing."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession live-global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         mist_host = getattr(mh.apisession, "host", None) or os.getenv("MIST_HOST")  # Session host > env
         mist_apitoken = getattr(mh.apisession, "apitoken", None) or os.getenv("MIST_APITOKEN")  # Session token > env
         if not mist_host or not mist_apitoken:  # Either missing — caller bails
@@ -290,7 +292,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
     def _save_output(compiled_output, filename="arp_output_raw.txt"):  # Save raw output.
         """Save compiled output to file."""
         try:
-            mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilePathUtils live-global.
+            mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
             file_path = mh.FilePathUtils.get_csv_path(filename)  # Build the path.
             with open(file_path, "w", encoding="utf-8") as f:  # Open the file.
                 f.write(compiled_output)  # Write the output.
@@ -333,7 +335,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
     def _export_to_csv(txt_filename="arp_output_raw.txt", csv1="arp_dataset1.csv", csv2="arp_dataset2.csv"):
         """Export ARP output to CSV files."""
         try:
-            mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilePathUtils live-global.
+            mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
             txt_file_path = mh.FilePathUtils.get_csv_path(txt_filename)  # Source path.
             csv1_path = mh.FilePathUtils.get_csv_path(csv1)  # First CSV path.
             csv2_path = mh.FilePathUtils.get_csv_path(csv2)  # Second CSV path.

@@ -13,7 +13,6 @@ graph flat and to preserve monkeypatch-friendly test hooks that address
 
 from __future__ import annotations  # Enable postponed evaluation for forward-ref typing on 3.10+
 
-import importlib  # Late-import MistHelper module to avoid circular src<->MistHelper dependency
 import logging  # Structured action logging required by coding standards
 import re  # Sanitise table and column names for SQL identifier positions
 import sqlite3  # Direct SQLite driver for connect/execute/commit
@@ -22,11 +21,15 @@ from pathlib import Path  # Filesystem-safe directory creation for the DB parent
 from types import SimpleNamespace  # Bundle runtime dependencies without coupling to a dataclass
 from typing import Any  # Column values from the Mist API are heterogeneous
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
+
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:
-    """Resolve MistHelper-owned runtime dependencies without static cross-module imports."""
+    """Resolve source-owned runtime dependencies without static cross-module imports."""
     logging.info("Resolving SQLiteDatabaseWriter runtime dependencies from MistHelper")  # Log before import
-    misthelper_module = importlib.import_module("MistHelper")  # Late import avoids circular dependency
+    misthelper_module = SourceDependencyResolver.active_dependency_host()  # WHY: preserve fake-host test seams.
     logging.debug("SQLiteDatabaseWriter runtime dependencies resolved successfully")  # Log after resolution
     return SimpleNamespace(
         DatabaseSchemaUtils=misthelper_module.DatabaseSchemaUtils,  # DDL builder + PK/index strategy picker

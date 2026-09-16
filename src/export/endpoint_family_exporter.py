@@ -14,6 +14,9 @@ from typing import Any  # WHY: Mist SDK responses have dynamic row shapes.
 
 import mistapi  # WHY: the SDK supplies endpoint calls and the pagination helper.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: shared flatten and escape logic keeps exports consistent.
@@ -437,8 +440,8 @@ class EndpointFamilyExporter:
 
     @staticmethod
     def _mist_helper() -> Any:
-        """Return the loaded MistHelper module."""
-        return importlib.import_module("MistHelper")  # Load MistHelper lazily to avoid an import cycle.
+        """Return the source dependency resolver."""
+        return SourceDependencyResolver  # WHY: return the source resolver instead of importing the root module.
 
     @staticmethod
     def _resolve(operation: _EndpointFamilyOp) -> Any:

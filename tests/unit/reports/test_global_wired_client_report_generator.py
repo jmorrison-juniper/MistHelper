@@ -63,10 +63,7 @@ def _make_mh(**extra):
 
 def _patch_mh(fake_mh):
     """Patch importlib.import_module in the target module to return ``fake_mh``."""
-    return patch(
-        "src.reports.global_wired_client_report_generator.importlib.import_module",
-        return_value=fake_mh,
-    )
+    return patch("src.reports.global_wired_client_report_generator.SourceDependencyResolver", fake_mh)
 
 
 # ---------- execute ----------

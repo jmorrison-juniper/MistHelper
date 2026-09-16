@@ -18,10 +18,10 @@ from unittest.mock import MagicMock  # WHY: FR-008 mandates MagicMock(spec=...) 
 
 import pytest  # WHY: monkeypatch/tmp_path/caplog fixtures.
 
+from src.config.source_dependency_resolver import SourceDependencyResolver  # WHY: assert the source dependency seam.
 from src.refactors.anomaly_metrics_discovery import (  # WHY: SUT + proxy direct imports.
     _MH,
     AnomalyMetricsDiscovery,
-    _MistHelperProxy,
 )
 
 
@@ -42,12 +42,12 @@ class TestMistHelperProxy:
         """A published attribute on MistHelper is returned by the proxy's __getattr__."""
         sentinel = MagicMock(name="sentinel")  # WHY: unique object we can identity-compare.
         monkeypatch.setattr("MistHelper._anomaly_sentinel_attr", sentinel, raising=False)  # WHY: publish attr.
-        proxy = _MistHelperProxy()  # WHY: fresh proxy to exercise __getattr__ in isolation.
+        proxy = _MH  # WHY: fresh proxy to exercise __getattr__ in isolation.
         assert proxy._anomaly_sentinel_attr is sentinel  # WHY: identity check confirms zero-copy passthrough.
 
     def test_module_level_singleton_is_proxy(self) -> None:
         """`_MH` module-level singleton is an instance of `_MistHelperProxy`."""
-        assert isinstance(_MH, _MistHelperProxy)  # WHY: guard against accidental replacement.
+        assert _MH is SourceDependencyResolver  # WHY: guard against accidental replacement.
 
 
 class TestDiscover:

@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-import importlib
 import logging
 from datetime import UTC, datetime
 from typing import Any
 
 import mistapi
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.utils.console import echo
 
 
@@ -20,7 +22,7 @@ class SSIDBroadcastGapReport:
     @staticmethod
     def execute() -> None:
         """Prompt for an SSID, collect effective WLANs, and write the report."""
-        mh = importlib.import_module("MistHelper")  # WHY: resolve live session and shared utilities after startup.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         ssid = mh.InputUtils.safe_input("  Enter the SSID: ", context="ssid_broadcast_gap_report").strip()
         if not ssid:  # WHY: an empty SSID cannot identify a WLAN.
             echo("  The SSID cannot be empty.")

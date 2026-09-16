@@ -20,11 +20,11 @@ from unittest.mock import MagicMock  # WHY: FR-008 mandates MagicMock for collab
 
 import pytest  # WHY: fixture + monkeypatch + caplog fixtures.
 
+from src.config.source_dependency_resolver import SourceDependencyResolver  # WHY: assert the source dependency seam.
 from src.refactors.device_data_fetcher import (  # WHY: direct SUT imports.
     _MH,
     DeviceDataFetcher,
     DeviceFetchConfig,
-    _MistHelperProxy,
 )
 
 
@@ -96,12 +96,12 @@ class TestMistHelperProxy:
         """A value published on MistHelper is returned by the proxy."""
         sentinel = MagicMock(name="sentinel")  # WHY: unique object for identity check.
         monkeypatch.setattr("MistHelper._ddf_sentinel_attr", sentinel, raising=False)  # WHY: publish.
-        proxy = _MistHelperProxy()  # WHY: fresh proxy instance.
+        proxy = _MH  # WHY: fresh proxy instance.
         assert proxy._ddf_sentinel_attr is sentinel  # WHY: identity confirms zero-copy passthrough.
 
     def test_module_singleton_is_proxy(self) -> None:
         """The module-level `_MH` is an instance of `_MistHelperProxy`."""
-        assert isinstance(_MH, _MistHelperProxy)  # WHY: guard against accidental replacement.
+        assert _MH is SourceDependencyResolver  # WHY: guard against accidental replacement.
 
 
 class TestDeviceDataFetcherFetchOrchestration:

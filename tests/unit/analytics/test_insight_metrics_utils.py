@@ -57,7 +57,7 @@ def test_export_const_insight_metrics_delegates_and_reports_present(
     with (
         caplog.at_level("INFO", logger="root"),
         patch("src.analytics.insight_metrics_utils.os.path.exists", return_value=True),
-        patch("src.analytics.insight_metrics_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.analytics.insight_metrics_utils.SourceDependencyResolver", fake_mh),
     ):
         InsightMetricsUtils.export_const_insight_metrics()
     fake_mh.ConstDefinitionsExporter.assert_called_once_with(fake_mh.apisession)
@@ -75,7 +75,7 @@ def test_export_const_insight_metrics_warns_when_csv_missing(
     with (
         caplog.at_level("WARNING", logger="root"),
         patch("src.analytics.insight_metrics_utils.os.path.exists", return_value=False),
-        patch("src.analytics.insight_metrics_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.analytics.insight_metrics_utils.SourceDependencyResolver", fake_mh),
     ):
         InsightMetricsUtils.export_const_insight_metrics()
     messages = " ".join(rec.getMessage() for rec in caplog.records)

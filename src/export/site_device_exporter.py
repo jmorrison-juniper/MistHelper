@@ -6,14 +6,13 @@ and site device virtual-chassis exports. Direct imports cover stdlib + installed
 packages (mistapi, prettytable). Live-global reads (``apisession``,
 ``DataProcessingUtils``, ``DataExporter``, ``PromptUtils``, ``ConfigUtils``,
 ``APICoreFetchUtils``, ``SiteExportUtils``, ``PROGRESS_EMITTER``,
-``ProgressContext``) are resolved via lazy ``mh = importlib.import_module("MistHelper")``
+``ProgressContext``) are resolved via lazy ``mh = the source dependency resolver``
 inside each helper. Callers continue to reach the class through the
 ``MistHelper.SiteDeviceExporter`` re-export alias.
 """
 
 from __future__ import annotations  # WHY: PEP 604 unions for return types.
 
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured trace for device-export lifecycle events.
 import time  # WHY: measure op_start for port-stats progress reporting.
 from typing import Any  # WHY: mistapi response payloads + inventory rows are duck-typed here.
@@ -21,6 +20,9 @@ from typing import Any  # WHY: mistapi response payloads + inventory rows are du
 import mistapi  # WHY: direct calls to sites.devices + sites.stats endpoints + get_all pager.
 from prettytable import PrettyTable  # WHY: debug-log a formatted inventory table.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -45,7 +47,7 @@ class SiteDeviceExporter:
 
         SECURITY: always fetches type=all then filters locally, avoiding Mist's APs-only default.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession + DataProcessingUtils/DataExporter.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Fetching device inventory for site_id=%s, device_type=%s", site_id, device_type)  # Log the fetch.
         rawdata = mistapi.api.v1.sites.devices.listSiteDevices(
             mh.apisession, site_id, type="all"
@@ -98,7 +100,7 @@ class SiteDeviceExporter:
     @staticmethod
     def _persist_site_device_stats(rawdata: list[dict[str, Any]], site_name: str) -> None:
         """Flatten + write device-stats rows to a per-site CSV, or tell the user when empty."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No data -- tell the user and return.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! No device statistics found for this site")  # User notice.
@@ -115,7 +117,7 @@ class SiteDeviceExporter:
     @staticmethod
     def _resolve_site_for_stats(export_label: str = "data") -> tuple[str, str] | None:
         """Prompt for a site + org, then return the chosen ``(site_id, site_name)`` or ``None`` to abort."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PromptUtils + ConfigUtils + APICoreFetchUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         site_id = mh.PromptUtils.select_site()  # Prompt the operator to choose a site
         if not site_id:  # Operator skipped or no sites available
             logging.error("No site selected. Exiting.")
@@ -134,7 +136,7 @@ class SiteDeviceExporter:
     @staticmethod
     def device_stats() -> None:  # Export site device stats.
         """Export device statistics for a site to SiteDeviceStats.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Site Device Statistics:")  # Header
         logging.info("Starting export of site device statistics...")  # Trace start
@@ -154,9 +156,7 @@ class SiteDeviceExporter:
     @staticmethod
     def port_stats() -> None:  # Export site port stats.
         """Export port statistics for a site to SitePortStats.csv."""
-        mh = importlib.import_module(
-            "MistHelper"
-        )  # WHY: fetch live dep symbols for SiteExportUtils construction + progress emitter access.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         emitter = mh.PROGRESS_EMITTER  # Progress emitter.
         if emitter:  # Emitter present.
             emitter.emit_progress_start("29", "port_stats", 1)  # Signal progress start.
@@ -185,7 +185,7 @@ class SiteDeviceExporter:
     @staticmethod
     def device_virtual_chassis() -> None:  # Export device virtual chassis.
         """Export virtual chassis data for a site to SiteDeviceVirtualChassis.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PromptUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Export Virtual Chassis Information:")  # Header.
         logging.info("Starting export of site device virtual chassis information...")  # Log start.
@@ -205,7 +205,7 @@ class SiteDeviceExporter:
     @staticmethod
     def _resolve_device_name(site_id: str, device_id: str) -> str:  # Resolve a device's friendly name
         """Return the device's name from the site device list, falling back to its id when not found."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         response = mistapi.api.v1.sites.devices.listSiteDevices(
             mh.apisession, site_id, type="all"
         )  # List site devices.
@@ -217,7 +217,7 @@ class SiteDeviceExporter:
     @staticmethod
     def _export_vc_for_device(site_id: str, device_id: str, device_name: str) -> None:  # Fetch + write VC data
         """Fetch the device's virtual chassis, write it to a CSV, and print a short summary (non-fatal on error)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession + DataProcessingUtils/DataExporter.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             response = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(
                 mh.apisession, site_id, device_id
@@ -262,7 +262,7 @@ class SiteDeviceExporter:
     @staticmethod
     def _persist_site_devices(rawdata: list[dict[str, Any]], site_name: str) -> None:
         """Flatten + persist site-devices rows to a per-site CSV (or tell the user when empty)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No devices -- tell the user and return.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! No devices found for this site")  # User notice.
@@ -279,7 +279,7 @@ class SiteDeviceExporter:
     @staticmethod
     def devices() -> None:  # Export site device list.
         """Export device data for a site to SiteDevices.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Site Device List:")  # Header
         logging.info("Starting export of site device list...")  # Trace start

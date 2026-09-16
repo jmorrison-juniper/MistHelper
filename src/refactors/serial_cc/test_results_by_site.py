@@ -1,19 +1,19 @@
 """Gateway synthetic test results export extracted from MistHelper GatewayTestExporter offender."""
 
 import csv  # Read cached OrgInventory.csv to derive site IDs in fast mode
-import importlib  # Late-import MistHelper to avoid circular src<->MistHelper dependency
 import logging  # Emit action-level tracing required by coding standards
 import time  # Measure elapsed duration for fast-mode summary and rate-limit delay
 from types import SimpleNamespace  # Bundle runtime dependencies without a formal dataclass
 from typing import Any  # MistHelper surface is dynamic. Typed as Any at the boundary
 
+from src.config.source_dependency_resolver import SourceDependencyResolver  # WHY: resolve source dependencies.
 from src.refactors.connection_pool_executor import ConnectionPoolExecutor  # Pool executor extracted per 1012 SC-003
 
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:
     """Resolve MistHelper runtime dependencies without static cross-module imports."""
     logging.info("Resolving GatewayTestResultsService runtime dependencies from MistHelper")  # Log before import
-    misthelper_module = importlib.import_module("MistHelper")  # Late import avoids circular src->MistHelper dependency
+    misthelper_module = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
     logging.debug("Runtime dependencies resolved successfully")  # Log after successful resolution
     return SimpleNamespace(
         ConfigUtils=misthelper_module.ConfigUtils,  # Org ID prompt/cache utility

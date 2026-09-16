@@ -7,12 +7,14 @@ The MistHelper module retains only a bare re-export for backward compatibility.
 from __future__ import annotations
 
 import csv
-import importlib
 import logging
 import os
 import time
 from typing import Any
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import DataProcessingUtils
 from src.dataclasses.export_backend_options import ExportBackendOptions
 from src.dataclasses.polyglot_write_outcome import PolyglotWriteOutcome
@@ -147,7 +149,7 @@ class DataExporter:  # Multi-backend export facade.
     ) -> bool:
         """Write data to CSV or SQLite per OUTPUT_FORMAT (or backend_options.format_override). Mirror to polyglot DB."""
         opts = backend_options if backend_options is not None else ExportBackendOptions()  # Resolve defaults
-        mh = importlib.import_module("MistHelper")  # OUTPUT_FORMAT is a mutable module-level global in MistHelper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         output_format = opts.format_override if opts.format_override else mh.OUTPUT_FORMAT  # Override or global
         logging.debug(
             "DataExporter.write_with_format_selection: rows=%s, target=%s, format=%s, api_func=%s",

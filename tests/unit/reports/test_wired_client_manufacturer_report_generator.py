@@ -45,10 +45,7 @@ def test_execute_aborts_when_no_records(caplog: pytest.LogCaptureFixture) -> Non
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-uuid"
     with (
-        patch(
-            "src.reports.wired_client_manufacturer_report_generator.importlib.import_module",
-            return_value=fake_mh,
-        ),
+        patch("src.reports.wired_client_manufacturer_report_generator.SourceDependencyResolver", fake_mh),
         patch.object(R, "_fetch_all_clients", return_value=[]),
         patch.object(R, "_write_outputs") as write_outputs,
     ):
@@ -63,10 +60,7 @@ def test_execute_writes_all_only_when_selection_skipped() -> None:
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-uuid"
     records = [{"manufacture": "Cisco"}]
     with (
-        patch(
-            "src.reports.wired_client_manufacturer_report_generator.importlib.import_module",
-            return_value=fake_mh,
-        ),
+        patch("src.reports.wired_client_manufacturer_report_generator.SourceDependencyResolver", fake_mh),
         patch.object(R, "_fetch_all_clients", return_value=records),
         patch.object(R, "_prompt_selection", return_value=None),
         patch.object(R, "_write_outputs") as write_outputs,
@@ -82,10 +76,7 @@ def test_execute_writes_all_and_filtered_when_manufacturer_selected() -> None:
     records = [{"manufacture": "Cisco"}, {"manufacture": "Juniper"}]
     filtered = [{"manufacture": "Cisco"}]
     with (
-        patch(
-            "src.reports.wired_client_manufacturer_report_generator.importlib.import_module",
-            return_value=fake_mh,
-        ),
+        patch("src.reports.wired_client_manufacturer_report_generator.SourceDependencyResolver", fake_mh),
         patch.object(R, "_fetch_all_clients", return_value=records),
         patch.object(R, "_prompt_selection", return_value="Cisco"),
         patch.object(R, "_filter_by_manufacturer", return_value=filtered) as filter_call,
@@ -109,10 +100,7 @@ def test_fetch_all_clients_returns_paginated_records() -> None:
     fake_mistapi.get_all.return_value = [{"mac": "aa"}]
     with (
         patch("src.reports.wired_client_manufacturer_report_generator.mistapi", fake_mistapi),
-        patch(
-            "src.reports.wired_client_manufacturer_report_generator.importlib.import_module",
-            return_value=fake_mh,
-        ),
+        patch("src.reports.wired_client_manufacturer_report_generator.SourceDependencyResolver", fake_mh),
     ):
         result = R._fetch_all_clients("org-uuid")
     fake_mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients.assert_called_once_with(
@@ -130,10 +118,7 @@ def test_fetch_all_clients_defaults_none_pagination_to_empty_list() -> None:
     fake_mistapi.get_all.return_value = None
     with (
         patch("src.reports.wired_client_manufacturer_report_generator.mistapi", fake_mistapi),
-        patch(
-            "src.reports.wired_client_manufacturer_report_generator.importlib.import_module",
-            return_value=fake_mh,
-        ),
+        patch("src.reports.wired_client_manufacturer_report_generator.SourceDependencyResolver", fake_mh),
     ):
         assert R._fetch_all_clients("org-uuid") == []
 
@@ -146,10 +131,7 @@ def test_fetch_all_clients_returns_empty_on_api_exception(caplog: pytest.LogCapt
     fake_mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients.side_effect = RuntimeError("boom")
     with (
         patch("src.reports.wired_client_manufacturer_report_generator.mistapi", fake_mistapi),
-        patch(
-            "src.reports.wired_client_manufacturer_report_generator.importlib.import_module",
-            return_value=fake_mh,
-        ),
+        patch("src.reports.wired_client_manufacturer_report_generator.SourceDependencyResolver", fake_mh),
     ):
         assert R._fetch_all_clients("org-uuid") == []
     assert "Error retrieving wired clients" in caplog.text
@@ -239,10 +221,7 @@ def test_prompt_selection_delegates_to_input_utils_and_parses_choice() -> None:
     fake_mh = _make_mh()
     fake_mh.InputUtils.safe_input.return_value = "1"
     summary = [("Cisco", 1)]
-    with patch(
-        "src.reports.wired_client_manufacturer_report_generator.importlib.import_module",
-        return_value=fake_mh,
-    ):
+    with patch("src.reports.wired_client_manufacturer_report_generator.SourceDependencyResolver", fake_mh):
         assert R._prompt_selection(summary) == "Cisco"
     fake_mh.InputUtils.safe_input.assert_called_once()
 
@@ -295,10 +274,7 @@ def test_write_outputs_writes_empty_list_when_no_records() -> None:
     fake_mh = _make_mh()
     with (
         patch("src.reports.wired_client_manufacturer_report_generator.DataProcessingUtils") as fake_dpu,
-        patch(
-            "src.reports.wired_client_manufacturer_report_generator.importlib.import_module",
-            return_value=fake_mh,
-        ),
+        patch("src.reports.wired_client_manufacturer_report_generator.SourceDependencyResolver", fake_mh),
     ):
         R._write_outputs([], "Cisco")
     fake_dpu.flatten_nested_fields.assert_not_called()
@@ -312,10 +288,7 @@ def test_write_outputs_runs_pipeline_and_writes_when_records_present() -> None:
     fake_mh = _make_mh()
     with (
         patch("src.reports.wired_client_manufacturer_report_generator.DataProcessingUtils") as fake_dpu,
-        patch(
-            "src.reports.wired_client_manufacturer_report_generator.importlib.import_module",
-            return_value=fake_mh,
-        ),
+        patch("src.reports.wired_client_manufacturer_report_generator.SourceDependencyResolver", fake_mh),
     ):
         fake_dpu.flatten_nested_fields.return_value = [{"flat": True}]
         fake_dpu.escape_multiline.return_value = [{"safe": True}]

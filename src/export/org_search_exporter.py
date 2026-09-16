@@ -31,13 +31,15 @@ the installed SDK.
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+ toolchains.
 
-import importlib  # WHY: lazy MistHelper import avoids a circular load at module init.
 import logging  # WHY: structured trace for export lifecycle events.
 from collections.abc import Callable  # WHY: the per-operation SDK callable is injected.
 from typing import Any
 
 import mistapi  # WHY: direct SDK access for the search endpoints and get_all pagination.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: canonical flatten and escape helpers keep CSV output consistent with peers.
@@ -131,7 +133,7 @@ class OrgSearchExporter:
         Returns:
             The filters to forward to the SDK call. The map can be empty.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the safe prompt helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if getattr(mh, "IS_TEST_MODE", False):  # The unattended sweep must never block on stdin.
             logging.info("Test mode skips the optional %s filters", operation)  # Action log before the skip.
             logging.debug("Completed the %s prompts with 0 filters", operation)  # Result trace.
@@ -165,7 +167,7 @@ class OrgSearchExporter:
             operation: The operationId used to route the primary-key strategy.
             label: A human-readable noun used in the operator messages.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the DataExporter helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No rows, so inform the operator and return.
             logging.info("! No %s data found for this organization", label)  # ASCII-only user notice.
             return
@@ -201,7 +203,7 @@ class OrgSearchExporter:
             label: A human-readable noun used in the operator messages.
             prompts: The optional filter prompts, or None to ask for no filter.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession and the shared helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Organization %s Search:", label.title())  # Menu header echoed to the operator.
         logging.info("Starting the %s export...", operation)  # Pre-call trace.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the organization context.
