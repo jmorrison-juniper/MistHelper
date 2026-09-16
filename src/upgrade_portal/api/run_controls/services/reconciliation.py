@@ -89,24 +89,46 @@ class TargetEvidence:
         Returns:
             The immutable target evidence value.
         """
-        task_id = str(value.get("task_id") or "")  # Preserve empty task identifier handling.
         return cls(  # Preserve each field conversion from the prior constructor call.
             target_digest=canonical_digest(target),
-            stored_stop_result=str(value.get("stored_stop_result") or "unknown"),
-            task_digest=canonical_digest(task_id) if task_id else None,
+            stored_stop_result=cls._text(value, "stored_stop_result", "unknown"),
+            task_digest=cls._task_digest(value),
             task_state=str(value.get("task_state") or "unknown"),
             write_state=str(value.get("write_state") or "unknown"),
             driver_state=cls._optional_text(value, "driver_state"),
-            sources=tuple(sorted({str(source) for source in value.get("sources", ())})),
+            sources=cls._sources(value),
             observed_at=cls._optional_text(value, "observed_at"),
             is_complete=bool(value.get("is_complete")),
             has_conflict=bool(value.get("has_conflict")),
             conflict_reason=cls._optional_text(value, "conflict_reason"),
             version_target=str(value.get("version_target") or ""),
-            running_version=str(value.get("running_version") or value.get("version_after") or ""),
+            running_version=cls._running_version(value),
             fwupdate_status=str(value.get("fwupdate_status") or "").strip().lower(),
             firmware_success=cls._firmware_success(value),
         )
+
+    @staticmethod
+    def _text(value: Mapping[str, Any], field: str, default: str) -> str:
+        """Return one text field with a safe default."""
+        return str(value.get(field) or default)  # Keep empty evidence fields on their defined fallback.
+
+    @classmethod
+    def _task_digest(cls, value: Mapping[str, Any]) -> str | None:
+        """Return the safe digest of one task identifier."""
+        task_id = cls._text(value, "task_id", "")  # Preserve empty task identifier handling.
+        return canonical_digest(task_id) if task_id else None  # Store no raw cloud task identifier.
+
+    @staticmethod
+    def _sources(value: Mapping[str, Any]) -> tuple[str, ...]:
+        """Return the normalized evidence source list."""
+        return tuple(sorted({str(source) for source in value.get("sources", ())}))  # Keep stable digest order.
+
+    @staticmethod
+    def _running_version(value: Mapping[str, Any]) -> str:
+        """Return the running firmware version from approved evidence fields."""
+        running = value.get("running_version")  # Prefer the current running-version evidence field.
+        fallback = value.get("version_after")  # Accept old scripted evidence that used the target row field.
+        return str(running or fallback or "")  # A blank version proves no firmware success.
 
     @staticmethod
     def _target(value: Mapping[str, Any]) -> str:
