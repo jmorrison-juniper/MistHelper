@@ -14,6 +14,23 @@ description: >-
 
 Prove each retained optimization with repeatable measurements. A shorter
 implementation is not evidence of better performance.
+An unmeasured optimization is a guess, so measure before you change code.
+
+## MistHelper evidence baseline
+
+Use this repository's own measurements before you use general Python advice.
+For MistHelper work, start with these verified sources.
+
+| Source | Verified result | How to reproduce |
+| --- | --- | --- |
+| `tools/bench_performance_overhead.py` | On this workstation, one disabled span cost 193 ns, one base span cost 8,322 ns, and one targeted span cost 7,998 ns. | Run `.\.venv\Scripts\python.exe tools\bench_performance_overhead.py --calls 20000 --repeats 9 --out data\performance\issue2394-performance-overhead.json`. |
+| Pull request #2693 | The original merged report measured one disabled span at 451 ns, one base span at 21,987 ns, and one targeted span at 20,667 ns. | Rerun the same benchmark on the target host before you cite those values. |
+| Pull request #2690 | The coverage gate moved from a serial job near 11 minutes 47 seconds to a longest main shard of 4 minutes 48 seconds. | Read workflow run `34983706229` for the before job and run `35020159627` for the after jobs. |
+| `scripts/benchmarks/bench_flatten_dict.py` | The harness measures 500 synthetic Mist records through `DataProcessingUtils.flatten_nested_fields`. | Run the `pyperf` commands in the script header. |
+
+These values prove only their measured environment.
+Rerun the benchmark when the host, interpreter, dependency set, or workload changes.
+Do not use the coverage-shard result as permission to change application concurrency.
 
 ## Scope and safety
 
@@ -32,6 +49,11 @@ repository's supported Python versions. Do not lower a higher minimum version.
    benchmark. Live requests require explicit authorization and a bounded budget.
 5. Follow the repository's edit, test, dependency, artifact, and approval rules.
    Keep secrets and private payloads out of reports and benchmark metadata.
+
+For MistHelper, preserve the 5-Item Rule. Keep each function at 25 lines or less,
+with at most five parameters, five logical blocks, and five operations per block.
+Do not inline code into a large function to save time. Extract a small, named
+method and measure the whole path again.
 
 Native libraries must not introduce hidden parallel execution. Verify their
 execution mode before a comparison. Keep application concurrency settings
@@ -123,6 +145,15 @@ unrelated optimizations or retain speculative rewrites as performance fixes.
 
 If profiling or benchmark evidence is unavailable, use **Hypothesis**. Give the
 exact benchmark needed to resolve it. Never claim that unmeasured code is faster.
+
+Warning: do not hide a slow or failing path with broad `except Exception` logic.
+The handler can swallow the cost and make the benchmark report the wrong path.
+Issue #1794 recorded 412 broad handlers, and issue #2717 recorded five hidden
+call sites.
+
+MistHelper changes must still pass Ruff, Black, mypy, Pylint at 9.5, Radon at
+10, Vulture at confidence 70, pydocstyle, interrogate at 90 percent, and
+coverage at 80 percent.
 
 ## Acceptance criteria
 

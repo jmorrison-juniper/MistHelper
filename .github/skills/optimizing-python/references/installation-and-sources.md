@@ -101,6 +101,22 @@ The source review date is **2026-09-09**. The user's supplied playbook defines
 the scope and default acceptance thresholds. The references below support tool
 behavior and technical cautions. They do not prove a gain in a target project.
 
+For MistHelper, update the review date when you remeasure repository evidence.
+Issue #2394 verified these repository sources on **2026-09-16**.
+
+| Source | Purpose |
+| --- | --- |
+| `tools/bench_performance_overhead.py` | Measures the span cost for `src/utils/performance/`. |
+| `scripts/benchmarks/bench_flatten_dict.py` | Measures `DataProcessingUtils.flatten_nested_fields` with 500 synthetic Mist records. |
+| `specs/2448-misthelper-performance-monitoring/` | Records the performance monitoring contract and acceptance rules. |
+| Pull request #2690 workflow run `35020159627` | Shows the longest coverage shard at 4 minutes 48 seconds after sharding. |
+| Workflow run `34983706229` | Shows the serial `pytest (coverage gate)` duration before sharding. |
+| `delay_metrics.json` and `tuning_data.json` | Hold adaptive delay measurements when API request timing is the target. |
+| `--fast` and `FAST_MODE_MAX_CONCURRENT_CONNECTIONS` | Define the existing concurrency controls that this skill must not change. |
+
+Do not cite these values from memory. Run the benchmark or read the workflow run
+again, then record the command, run identifier, host, and raw values.
+
 Read documentation for the installed version before using optional flags or
 native compilation. A `latest` page can describe a development version.
 Follow links only when they resolve a relevant question. The packaged workflow

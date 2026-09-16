@@ -3,6 +3,27 @@
 Read this guide before a baseline or comparison. Select measurements that answer
 the optimization contract. Do not collect every metric without a reason.
 
+## MistHelper measurement sources
+
+Use repository measurements before you use a general Python claim.
+Each value below needs a fresh run before you cite it in a change.
+
+| Measurement | Verified value | Evidence |
+| --- | --- | --- |
+| Performance package disabled span | 193 ns on the issue #2394 workstation run. Pull request #2693 reported 451 ns. | `.\.venv\Scripts\python.exe tools\bench_performance_overhead.py --calls 20000 --repeats 9 --out data\performance\issue2394-performance-overhead.json` |
+| Performance package base span | 8,322 ns on the issue #2394 workstation run. Pull request #2693 reported 21,987 ns. | Same benchmark command. |
+| Performance package targeted span | 7,998 ns on the issue #2394 workstation run. Pull request #2693 reported 20,667 ns. | Same benchmark command. |
+| Coverage gate before sharding | The workflow run timestamps show 11 minutes 50 seconds. Pull request #2690 reports 11 minutes 47 seconds. | `gh run view 34983706229 --json jobs` |
+| Coverage gate after sharding | The longest main shard was `root-units` at 4 minutes 48 seconds. | `gh run view 35020159627 --json jobs` |
+
+The two performance-package values differ because they came from different runs.
+Report the host, interpreter, and raw samples with the value that you cite.
+
+Use `scripts/benchmarks/bench_flatten_dict.py` when the export-flattening path is
+the candidate. It measures 500 synthetic Mist records through the real
+`DataProcessingUtils.flatten_nested_fields` path. Label the result exploratory
+until a real sanitized export confirms it.
+
 ## 1. Define the contract and environment
 
 Record these fields before editing application code.

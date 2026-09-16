@@ -4,6 +4,32 @@ Use this checklist to investigate measured candidates, not to start an automatic
 rewrite. Benchmark typical, worst-case, cold, and warm workloads where relevant.
 Preserve behavior and explain the memory and maintenance costs of each change.
 
+## MistHelper limits that speed must obey
+
+Do not keep a faster change that violates a repository rule.
+Use this order when speed and a house rule conflict.
+
+1. Preserve correctness, authorization, validation, cleanup, and required logs.
+2. Keep the 5-Item Rule: at most five parameters, five logical blocks, five
+   operations per block, and 25 lines per function.
+3. Keep class-based design. Do not add a wrapper that only delegates.
+4. Keep the public API, file formats, and stored data shape unless the issue
+   explicitly permits a migration.
+5. Run the quality gates that still apply after the change.
+
+The required gates include Ruff, Black, mypy, Pylint at 9.5, Radon at 10,
+Vulture at confidence 70, pydocstyle, interrogate at 90 percent, and coverage at
+80 percent.
+
+If a fast loop needs more code than the target function can hold, extract a
+small method with a clear name. Then benchmark the end-to-end path again.
+Do not paste the loop into a 60-line function to reduce call overhead.
+
+Warning: do not hide a slow or failing path with a broad `except Exception`.
+The handler can make the measured path look faster while the real operation
+failed. Issue #1794 recorded 412 broad handlers, and issue #2717 recorded five
+call sites that hid errors.
+
 ## 1. Algorithms and repeated work
 
 - Find growing nested loops, repeated linear scans, repeated sorting, and

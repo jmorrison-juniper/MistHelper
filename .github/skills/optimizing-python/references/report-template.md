@@ -134,6 +134,16 @@ Record unit, integration, property, and end-to-end tests where relevant. Record
 the required syntax, lint, format, type, and security checks. Separate passed,
 failed, skipped, and blocked checks. A skipped check is not a pass.
 
+For MistHelper, record Ruff, Black, mypy, Pylint, Radon, Vulture, pydocstyle,
+interrogate, and coverage evidence when the change touches Python. Confirm that
+Radon stays at complexity 10 or less, Pylint stays at 9.5 or higher, Vulture
+uses confidence 70, interrogate stays at 90 percent or higher, and coverage
+stays at 80 percent or higher.
+
+If the change touches an error path, state how broad exception handling affects
+the measurement. A broad `except Exception` can hide the path under test, so the
+report must show the observed exception or the narrowed handler.
+
 Explain regressions outside the target path and how the final result resolves
 them. State which supported Python versions and platforms you actually tested.
 
