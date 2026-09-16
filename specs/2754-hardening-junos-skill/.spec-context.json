@@ -1,0 +1,56 @@
+{
+  "workflow": "speckit",
+  "specName": "Hardening Junos Skill",
+  "branch": "docs/2754-hardening-junos-skill",
+  "decisions": [
+    {
+      "decision": "Corpus scope: index the 757 security relevant unique documents, and keep the full set of 4,007 unique documents as a second search area.",
+      "why": "The security subset covers the skill domain. The remainder answers an adjacent question."
+    },
+    {
+      "decision": "Storage split: the repository holds the skill only, within a budget of 400 KB across 10 files or less. The 744 MB of converted Markdown stays outside the repository at the corpus root.",
+      "why": "The largest existing skill is 140 KB. The repository is OneDrive synced. The converted text is also copyrighted."
+    },
+    {
+      "decision": "Retrieval: a router SKILL.md, a curated reference set, one index file, and a written search procedure. No helper script is committed.",
+      "why": "This mirrors managing-mist-api. An agent reads a small router first, then opens only the reference that the task needs."
+    },
+    {
+      "decision": "Conversion quality: ten acceptance rules, a floor of 200 characters per page, and a manual audit of 30 documents.",
+      "why": "The converter has a known weakness on cover pages."
+    },
+    {
+      "decision": "Deduplication: the newest readable train wins, with fallback to the next newest readable train. The index records the train used, the newest train available, and a supersedes field.",
+      "why": "A document repeats across trains 21.1 to 26.2, and the newest copy is not always readable."
+    }
+  ],
+  "currentStep": "specify",
+  "status": "specified",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-09-16T18:03:50.308Z"
+    }
+  ],
+  "telemetryInstanceId": "ad2c2ae0-32a5-4e62-b224-493e2d613680",
+  "verified": [
+    {
+      "what": "Requirements checklist for the spec",
+      "result": "All items pass.",
+      "command": "specs/2754-hardening-junos-skill/checklists/requirements.md"
+    },
+    {
+      "what": "Repository STE linter score for spec.md",
+      "result": "96 out of 100, which is above the floor of 80."
+    }
+  ],
+  "step_summaries": {
+    "specify": {
+      "summary": "The spec for the hardening-junos project skill is written and validated. It settles the corpus scope, the storage split, the retrieval design, the conversion quality criteria, and the deduplication rule.",
+      "key_finding": "The corpus is too large for the repository, so the skill holds curated guidance plus one index, and the bulk text stays on disk outside the repository."
+    }
+  }
+}
