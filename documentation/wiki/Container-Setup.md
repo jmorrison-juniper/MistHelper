@@ -13,34 +13,30 @@ Warning: the commands in this section start the production local stack. If you
 start a container for a test, for a debug session, or for an end-to-end run,
 obey the "Test and debug containers" section below instead.
 
-### Docker Compose (interactive shell)
-
-```bash
-docker compose build
-docker compose run --rm misthelper python MistHelper.py
-```
-
-### Podman (direct)
+### Start the supported stack
 
 ```powershell
-podman build -t misthelper -f Containerfile .
-podman run -it --rm -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" misthelper python MistHelper.py
+.\scripts\compose.ps1 up -d
 ```
+
+The command starts the application, the document store, and the site lock store on `misthelper-network`. The application resolves `misthelper-arangodb` and `misthelper-redis` by name.
+
+### Build from the working tree
+
+```powershell
+.\scripts\compose.ps1 build
+.\scripts\compose.ps1 up -d --no-deps misthelper
+```
+
+Caution: use a local build only when you need the code in your checkout. A checkout that is behind `main` can start old code.
 
 ## Container with SSH + Web Portal
 
 ```powershell
-# Build and start with SSH server and web portal
-podman build -t misthelper -f Containerfile .
-
-# IMPORTANT: Ensure data directory has proper permissions
-chmod -R 777 data/
-
-# Start container with SSH (port 2200) and web portal (port 8055)
-podman run -d --name misthelper -p 2200:2200 -p 8055:8055 \
-  -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" \
-  misthelper
+.\scripts\compose.ps1 up -d
 ```
+
+The application container starts the SSH server on port 2200, the web portal on port 8055, and the upgrade capture portal on port 8056.
 
 ## Test and debug containers
 
@@ -73,11 +69,12 @@ and its log file.
 .\scripts\compose.ps1 rm -s -f <the test service>
 podman rm -f misthelper-tmp-<issue|pr><number>-<slug>
 podman volume rm misthelper-tmp-<issue|pr><number>-<slug>
+podman network rm misthelper-tmp-<issue|pr><number>-<slug>
 podman ps -a --filter "name=misthelper-tmp-" --format "{{.Names}} {{.Status}}"
+podman volume ls --filter "name=misthelper-tmp-" --format "{{.Name}}"
 ```
 
-The last command confirms the cleanup. An empty result means the cleanup
-finished.
+The last two commands confirm the cleanup. Empty results mean the cleanup finished.
 
 Warning: never run `podman volume prune`, and never pass `-v` to a compose
 `down` command. Both remove `misthelper-arangodb-data` and
@@ -104,10 +101,7 @@ container entrypoint adds the certificate to the system trust store at start
 time, and it writes the result to `data/ssh.log`.
 
 ```powershell
-podman run -d --name misthelper -p 2200:2200 -p 8055:8055 `
-  -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" `
-  -v "${PWD}/zscaler-root-ca.crt:/usr/local/share/ca-certificates/corp-root-ca.crt:ro" `
-  ghcr.io/jmorrison-juniper/misthelper:latest
+.\scripts\compose.ps1 up-corporate-ca -d
 ```
 
 Confirm the result:
@@ -139,9 +133,8 @@ Pre-built images are available from GitHub Container Registry:
 
 ```powershell
 podman pull ghcr.io/jmorrison-juniper/misthelper:latest
-podman run -d --name misthelper -p 2200:2200 -p 8055:8055 \
-  -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" \
-  ghcr.io/jmorrison-juniper/misthelper:latest
+podman rm -f misthelper-app
+.\scripts\compose.ps1 up -d --no-deps misthelper
 ```
 
 ## Data Directory Permissions

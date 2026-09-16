@@ -129,7 +129,7 @@ class TestCheckDependency:
         ):
             reading = check_dependency(ONE, allow_start=True)
         assert reading.state is DependencyState.DOWN
-        assert "podman compose up -d misthelper-one" in reading.detail
+        assert ".\\scripts\\compose.ps1 up -d misthelper-one" in reading.detail
         start_spy.assert_not_called()  # WHY: the portal never creates a container.
 
     def test_reports_a_running_container_that_answers_nothing(self) -> None:

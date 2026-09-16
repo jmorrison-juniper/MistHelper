@@ -31,12 +31,14 @@ anything.
 
 ## Start the stack
 
-Use the helper script. It picks a compose provider that works on every platform.
+Use the helper script. It picks the native compose provider that works on Windows. It also keeps all services on `misthelper-network`, so the application resolves `misthelper-arangodb` and `misthelper-redis` by name.
 
 ```powershell
-.\scripts\compose.ps1 up -d     # Start the stack
-.\scripts\compose.ps1 down      # Stop the stack
+.\scripts\compose.ps1 up -d     # Start the application, ArangoDB, and Redis
+.\scripts\compose.ps1 down      # Stop the stack without removing volumes
 ```
+
+Warning: do not pass `-v` to the `down` command. That option removes the production store volumes, and the upgrade records are not recoverable.
 
 Warning: do not run `podman compose` on Windows, because that command can stop
 the whole portal. It starts the stack without its application service, so the
@@ -118,12 +120,13 @@ layers, its volume, and its log file.
 .\scripts\compose.ps1 rm -s -f <the test service>
 podman rm -f misthelper-tmp-<issue|pr><number>-<slug>
 podman volume rm misthelper-tmp-<issue|pr><number>-<slug>
+podman network rm misthelper-tmp-<issue|pr><number>-<slug>
 podman ps -a --filter "name=misthelper-tmp-" --format "{{.Names}} {{.Status}}"
+podman volume ls --filter "name=misthelper-tmp-" --format "{{.Name}}"
 podman system df
 ```
 
-The fourth command confirms the cleanup. An empty result means the cleanup
-finished. The fifth command reports the reclaimed space.
+The `ps` and `volume ls` commands confirm the cleanup. Empty results mean the cleanup finished. The final command reports the reclaimed space.
 
 Warning: never run `podman volume prune`, and never pass `-v` to a compose
 `down` command. Both remove `misthelper-arangodb-data` and
@@ -230,14 +233,10 @@ Warning: do not set `PYTHONHTTPSVERIFY=0`, and do not set a CA bundle variable t
 an empty value. Without the check, an attacker on the network path can read your
 Mist API token.
 
-If you sit behind a TLS-inspecting proxy such as Zscaler, mount the proxy root
-certificate. The container adds it to the system trust store at start time.
+If you sit behind a TLS-inspecting proxy such as Zscaler, save the proxy root certificate as `zscaler-root-ca.crt` in the repository root. Then start the stack with the compose overlay. The container adds the certificate to the system trust store at start time.
 
 ```powershell
-podman run -d --name misthelper -p 2200:2200 -p 8055:8055 `
-  -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" `
-  -v "${PWD}/zscaler-root-ca.crt:/usr/local/share/ca-certificates/corp-root-ca.crt:ro" `
-  ghcr.io/jmorrison-juniper/misthelper:latest
+.\scripts\compose.ps1 up-corporate-ca -d
 ```
 
 To build behind the same proxy, add the root certificate at build time:

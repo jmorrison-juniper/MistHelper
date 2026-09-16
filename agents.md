@@ -85,8 +85,8 @@ run the tests again. See issue #1866.
   end-to-end run joins the compose group. Never start a one-off container with a
   bare `podman run`. Name an ephemeral container
   `misthelper-tmp-<issue|pr><number>-<slug>`. Publish a port in the range 9600
-  through 9699. Never publish a production local port. Remove the container when
-  the test ends. See `documentation/container-deployment.md`
+  through 9699. Never publish a production local port. Remove the container,
+  its volume, and its network when the test ends. See `documentation/container-deployment.md`
   § "Test and debug containers".
 - **Zscaler**: Zscaler blocks a `podman push` to `ghcr.io`. Build the image
   locally with `podman build`, and start it with `.\scripts\compose.ps1`. Use

@@ -124,17 +124,9 @@ class DataDirectoryChecker:
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\nThen restart the container:")  # Explain next step
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logger.info("    podman stop misthelper && podman rm misthelper")  # Show stop and remove command
+        logger.info("    podman rm -f misthelper-app")  # Remove only the application container before restart
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logger.info(
-            "    podman run -d --name misthelper -p 2200:2200 -p 8050:8050 \\"
-        )  # Show container restart with port mapping
-        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logger.info(
-            '        -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" \\'
-        )  # Show volume mount with correct permissions
-        # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logger.info("        ghcr.io/jmorrison-juniper/misthelper:latest")  # Show container image URI
+        logger.info("    .\\scripts\\compose.ps1 up -d --no-deps misthelper")  # Restart the app through compose
 
     def _print_local_guidance(self) -> None:  # Display local environment remediation
         """Print guidance for local (non-container) environments."""

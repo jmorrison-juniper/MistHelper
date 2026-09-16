@@ -370,11 +370,12 @@ that started the container.
 .\scripts\compose.ps1 rm -s -f <the test service>
 podman rm -f misthelper-tmp-<issue|pr><number>-<slug>
 podman volume rm misthelper-tmp-<issue|pr><number>-<slug>
+podman network rm misthelper-tmp-<issue|pr><number>-<slug>
 podman ps -a --filter "name=misthelper-tmp-" --format "{{.Names}} {{.Status}}"
 podman volume ls --filter "name=misthelper-tmp-" --format "{{.Name}}"
 ```
 
-The last two commands confirm the cleanup. An empty result from each one means
+The two list commands confirm the cleanup. An empty result from each one means
 the cleanup finished. Read `podman system df` when you want the reclaimed space.
 
 Warning: never run `podman volume prune`, and never pass `-v` to a compose

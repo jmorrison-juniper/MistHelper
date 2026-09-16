@@ -5,16 +5,8 @@ MistHelper supports SSH server deployment for remote access with automatic sessi
 ## Quick Start
 
 ```powershell
-# Build and start SSH server container
-podman build -t misthelper -f Containerfile .
-
-# Ensure data directory is writable
-chmod -R 777 data/
-
-# Start container
-podman run -d --name misthelper -p 2200:2200 -p 8055:8055 \
-  -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" \
-  misthelper
+# Start the SSH server, the web portal, and the data stores
+.\scripts\compose.ps1 up -d
 
 # Connect from any SSH client
 ssh -p 2200 misthelper@localhost
