@@ -2,6 +2,7 @@
 
 from __future__ import annotations  # WHY: Defer annotation evaluation for cheap forward references
 
+import importlib  # WHY: lazy MistHelper import avoids a module cycle for organization lookup.
 import logging  # WHY: Standard logging keeps ops-visible trace + error output aligned with legacy behaviour
 from dataclasses import dataclass  # WHY: Frozen slotted bundle keeps helper signatures under STRUCT-PARAMS limit
 
@@ -101,12 +102,23 @@ class SiteMetricOperation:
     ) -> str:  # WHY: Best-effort name lookup keeps execute path narrative clean
         """Best-effort site-name lookup. Fall back to site_id when API call fails."""
         try:
-            response = self.mistapi.api.v1.sites.listSites(  # WHY: API call may raise on auth / network
-                self.apisession, site_id
+            misthelper_module = importlib.import_module("MistHelper")  # WHY: reuse the configured org resolver.
+            try:
+                org_id = (
+                    misthelper_module.ConfigUtils.get_cached_or_prompted_org_id()
+                )  # WHY: listOrgSites needs org scope.
+            except SystemExit:
+                org_id = site_id  # WHY: offline tests and degraded sessions must keep the old fallback.
+            logging.info("Fetching site list for site insights site name lookup")  # WHY: trace the SDK call.
+            response = self.mistapi.api.v1.orgs.sites.listOrgSites(  # WHY: API call may raise on auth / network
+                self.apisession, org_id
             )
             sites = self.mistapi.get_all(  # WHY: Materialize paged result list
                 response=response, mist_session=self.apisession
             )
+            logging.debug(
+                "Received %d site row(s) for site insights lookup", len(sites)
+            )  # WHY: summarize lookup input.
             return next(  # WHY: Match by id. Fall back to id on miss
                 (site["name"] for site in sites if site["id"] == site_id), site_id
             )

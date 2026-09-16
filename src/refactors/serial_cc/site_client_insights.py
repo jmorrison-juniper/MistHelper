@@ -132,8 +132,17 @@ class SiteClientInsightsService:
     def _resolve_site_name(deps: SimpleNamespace, site_id: str) -> str:
         """Resolve the human-readable site name, falling back to the site id on failure."""
         try:  # WHY: Site name lookup is best-effort. Any failure falls back to the id
-            response = deps.mistapi.api.v1.sites.listSites(deps.apisession, site_id)  # WHY: Fetch site metadata
+            mh = importlib.import_module(_MIST_MODULE)  # WHY: late import provides the existing org resolver.
+            try:
+                org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # WHY: listOrgSites needs organization scope.
+            except SystemExit:
+                org_id = site_id  # WHY: offline tests and degraded sessions must keep the old fallback.
+            logging.info("Fetching site list for client insights site name lookup")  # WHY: trace the SDK call.
+            response = deps.mistapi.api.v1.orgs.sites.listOrgSites(deps.apisession, org_id)  # WHY: Fetch site metadata.
             sites = deps.mistapi.get_all(response=response, mist_session=deps.apisession)  # WHY: Page all sites
+            logging.debug(
+                "Received %d site row(s) for client insights lookup", len(sites)
+            )  # WHY: summarize lookup input.
             return next((site[_KEY_NAME] for site in sites if site[_KEY_ID] == site_id), site_id)  # WHY: Match id->name
         except Exception:  # WHY: Any API/shape error - fall back to the raw id
             return site_id  # WHY: Use the id as the display name

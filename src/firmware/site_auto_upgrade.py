@@ -430,7 +430,9 @@ class SiteAutoUpgradeConfigurator:
         try:
             import mistapi.api.v1.sites.setting as sites_setting_api  # WHY: lazy import to avoid cycles.
 
-            response = sites_setting_api.getSiteSettings(self.apisession, site_id)  # WHY: fetch the site settings.
+            response = sites_setting_api.getSiteSetting(
+                self.apisession, site_id
+            )  # WHY: fetch the site settings with the current SDK name.
             return self._extract_auto_upgrade_from_response(response)  # WHY: extract block via helper.
         except Exception as exc:  # WHY: settings read may raise mistapi errors - non-fatal.
             logging.debug("Could not fetch current site settings: %s", exc)  # WHY: trace and continue.

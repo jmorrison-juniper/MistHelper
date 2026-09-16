@@ -240,8 +240,18 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
         """Resolve the human-readable site name for a site_id, falling back to the id on lookup failure."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of mistapi + apisession.
         try:  # The site-name lookup is best-effort. The id is an acceptable fallback for the filename.
-            response = mh.mistapi.api.v1.sites.listSites(mh.apisession, site_id)  # List the site.
-            sites = mh.mistapi.get_all(response=response, mist_session=mh.apisession)  # Page all rows.
+            try:
+                org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # WHY: listOrgSites needs organization scope.
+            except SystemExit:
+                org_id = site_id  # WHY: offline tests and degraded sessions must keep the old fallback.
+            logging.info("Fetching site list for anomaly site name lookup")  # WHY: trace the replacement SDK call.
+            response = mh.mistapi.api.v1.orgs.sites.listOrgSites(
+                mh.apisession, org_id
+            )  # WHY: use the current SDK path.
+            sites = mh.mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page all rows.
+            logging.debug(
+                "Received %d site row(s) for anomaly site name lookup", len(sites)
+            )  # WHY: summarize lookup input.
             return next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Resolve site name.
         except Exception:  # Lookup failed.
             return site_id  # Fall back to the id.

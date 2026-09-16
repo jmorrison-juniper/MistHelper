@@ -351,23 +351,23 @@ class TestGetSiteName:
         with patch.dict(sys.modules, {"mistapi": _mock_mistapi}):
             session = MagicMock()
             resp = MagicMock()
-            resp.data = {"name": "MySite"}
-            _mock_mistapi.api.v1.sites.getSite.return_value = resp
+            _mock_mistapi.api.v1.orgs.sites.listOrgSites.return_value = resp
+            _mock_mistapi.get_all.return_value = [{"id": "s1", "name": "MySite"}]
             name = VirtualChassisManager._get_site_name(session, "s1")
             assert name == "MySite"
 
     def test_exception(self):
         with patch.dict(sys.modules, {"mistapi": _mock_mistapi}):
-            _mock_mistapi.api.v1.sites.getSite.side_effect = RuntimeError("err")
+            _mock_mistapi.api.v1.orgs.sites.listOrgSites.side_effect = RuntimeError("err")
             name = VirtualChassisManager._get_site_name(MagicMock(), "s1")
             assert name == "Unknown Site"
-            _mock_mistapi.api.v1.sites.getSite.side_effect = None
+            _mock_mistapi.api.v1.orgs.sites.listOrgSites.side_effect = None
 
     def test_no_data(self):
         with patch.dict(sys.modules, {"mistapi": _mock_mistapi}):
             resp = MagicMock()
-            resp.data = None
-            _mock_mistapi.api.v1.sites.getSite.return_value = resp
+            _mock_mistapi.api.v1.orgs.sites.listOrgSites.return_value = resp
+            _mock_mistapi.get_all.return_value = []
             name = VirtualChassisManager._get_site_name(MagicMock(), "s1")
             assert name == "Unknown Site"
 

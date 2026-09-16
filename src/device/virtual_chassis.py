@@ -431,9 +431,25 @@ class VirtualChassisManager:
         import mistapi  # WHY: lazy import keeps module light for unit tests.
 
         try:
-            response = mistapi.api.v1.sites.getSite(apisession, site_id)  # WHY: mistapi call.
-            if response.data:  # WHY: guard against empty response body.
-                return str(response.data.get("name", site_id))  # WHY: prefer name, fallback to id.
+            import MistHelper as misthelper_module  # WHY: reuse the existing organization resolver for site lookup.
+
+            try:
+                org_id = (  # WHY: listOrgSites needs organization scope.
+                    misthelper_module.ConfigUtils.get_cached_or_prompted_org_id()
+                )
+            except SystemExit:
+                org_id = site_id  # WHY: offline tests and degraded sessions must keep the old fallback.
+            logging.info("Fetching site list for site name lookup")  # WHY: trace the replacement SDK call.
+            response = mistapi.api.v1.orgs.sites.listOrgSites(
+                apisession, org_id
+            )  # WHY: use the current SDK site list path.
+            sites = (
+                mistapi.get_all(response=response, mist_session=apisession) or []
+            )  # WHY: page all sites before filtering.
+            logging.debug("Received %d site row(s) for site name lookup", len(sites))  # WHY: summarize lookup input.
+            site = next((item for item in sites if item.get("id") == site_id), {})  # WHY: select the requested site.
+            if site:  # WHY: a matching site gives a better display name.
+                return str(site.get("name", site_id))  # WHY: prefer name, fallback to id.
         except Exception as exc:  # WHY: any network / auth failure is non-fatal for display.
             logging.warning("Could not fetch site name for %s: %s", site_id, exc)  # WHY: audit warn.
         return "Unknown Site"  # WHY: safe placeholder.
