@@ -223,15 +223,15 @@ prove. The live run of scenario C and scenario D stays a human decision.
 hardware.
 
 - [X] T039 [US4] Create `specs/1992-upgrade-rehearsal/live-checklist.md`. The
-      file holds 5 items or fewer. Each item needs real hardware. The two facts
-      are the cloud acceptance of the call and the reboot of the hardware. This
+      file holds 5 items or fewer. Each item needs real hardware. The items
+      map to two fact groups: cloud acceptance and hardware reboot. This
       task meets FR-030 and measures SC-007.
 - [X] T040 [US4] Add the reboot warning to the same file. The warning names the
       reboot risk, names issue #2007, and states the outage of six access points
       for about six minutes. This task meets FR-031.
 - [X] T041 [US4] Add the scope note to the same file. The note states that this
-      feature does not close issue #1992, and that a person must decide the live
-      run. This task meets FR-029. No task of this list runs scenario C or
+      feature closes issue #1992 through the automated proof, and that a person
+      must decide the live run. This task meets FR-029. No task of this list runs scenario C or
       scenario D against real hardware.
 
 ---
@@ -268,8 +268,9 @@ hardware.
 - [X] T052 Add the inline comment on every executable line of the new modules,
       as principle VI of the constitution asks. Confirm the `info` line and the
       `debug` line of each action, as principle VII asks.
-- [X] T053 Update `CHANGELOG.md` with the new harness and the live checklist.
-      Name issue #1992 and issue #2007.
+- [X] T053 Add `changelog.d/issue-1992-upgrade-rehearsal.md` with the
+      closure proof. Name issue #1992 and do not edit `CHANGELOG.md` on this
+      feature branch.
 
 ---
 

@@ -4,7 +4,7 @@
 
 The specification holds no open clarification. This document therefore records
 the reading of the shipped code, and it records the choice that each reading
-settled. Every line number belongs to the branch `feat/1992-upgrade-rehearsal`.
+settled. Every line number belongs to the branch `chore/1992-upgrade-rehearsal`.
 
 ## Q1: Where does the harness start the run?
 
