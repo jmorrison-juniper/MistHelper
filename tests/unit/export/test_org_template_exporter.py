@@ -3,7 +3,7 @@
 Why: Exercises every branch of the 9 static methods so that un-omitting the
 module in ``[tool.coverage.run].omit`` keeps overall coverage above the 90%
 gate. The module resolves cross-class collaborators lazily via
-``importlib.import_module("MistHelper")``; tests inject a fake ``MistHelper``
+``SourceDependencyResolver``; tests inject a fake ``MistHelper``
 module via ``sys.modules`` monkeypatching to control those interactions.
 """
 
@@ -20,7 +20,7 @@ import pytest
 def fake_mh(monkeypatch):
     """Install a fake MistHelper module for lazy importlib resolution.
 
-    Why: OrgTemplateExporter uses ``importlib.import_module("MistHelper")``
+    Why: OrgTemplateExporter uses ``SourceDependencyResolver``
     inside each method to fetch APIDataFetcher, OrgExportUtils, ConfigUtils,
     DataExporter, and apisession. Replacing the module lets tests observe and
     control these interactions without importing the real monolith.

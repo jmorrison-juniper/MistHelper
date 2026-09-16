@@ -15,10 +15,10 @@ from unittest.mock import MagicMock, patch  # WHY: FR-008 mandates MagicMock dou
 
 import pytest  # WHY: monkeypatch fixture.
 
+from src.config.source_dependency_resolver import SourceDependencyResolver  # WHY: assert the source dependency seam.
 from src.refactors.inventory_csvcomparator import (  # WHY: SUT direct imports.
     _MH,
     InventoryCSVComparator,
-    _MistHelperProxy,
 )
 
 
@@ -32,13 +32,13 @@ class TestMistHelperProxy:
         monkeypatch.setattr(  # Publish the sentinel on MistHelper for the proxy to fetch.
             "MistHelper._inv_csv_sentinel_attr", sentinel, raising=False
         )
-        proxy = _MistHelperProxy()  # Fresh proxy exercises __getattr__ in isolation.
+        proxy = _MH  # Fresh proxy exercises __getattr__ in isolation.
         assert proxy._inv_csv_sentinel_attr is sentinel  # Identity match confirms resolution.
 
     def test_module_singleton_is_proxy_instance(self) -> None:
         """Module-level ``_MH`` is an instance of ``_MistHelperProxy``."""
         # WHY: guard against accidental replacement of the singleton.
-        assert isinstance(_MH, _MistHelperProxy)  # Confirms the module-level singleton.
+        assert _MH is SourceDependencyResolver  # Confirms the module-level singleton.
 
 
 class TestBuildFlags:

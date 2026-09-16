@@ -31,7 +31,7 @@ def fake_mh(monkeypatch):
 
     Why:
         ConstDefinitionsExporter reaches ``DataExporter`` and
-        ``DataProcessingUtils`` via ``importlib.import_module("MistHelper")`` at
+        ``DataProcessingUtils`` via ``SourceDependencyResolver`` at
         call time. Registering a synthetic module in ``sys.modules`` lets each
         test verify write-side behavior without depending on real MistHelper.
     """

@@ -28,7 +28,7 @@ def fake_mh(monkeypatch):
 
     Why:
         ``OrgExportUtils`` reaches out to many ``mh.*`` helpers through a
-        lazy ``importlib.import_module("MistHelper")`` call: ``apisession``,
+        lazy ``SourceDependencyResolver`` call: ``apisession``,
         ``APIDataFetcher``, ``ProgressContext``, ``PROGRESS_EMITTER``,
         ``InsightMetricsUtils``, ``ConfigUtils``, ``DataExporter``,
         ``DEFAULT_API_PAGE_LIMIT``, ``InputUtils``, and

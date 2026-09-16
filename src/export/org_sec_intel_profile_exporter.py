@@ -26,12 +26,14 @@ Shape of the response:
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on the project toolchain.
 
-import importlib  # WHY: lazy MistHelper import avoids a circular load at module init.
 import logging  # WHY: structured trace for export lifecycle events.
 from typing import Any  # WHY: raw profile rows are duck-typed dicts from mistapi.
 
 import mistapi  # WHY: direct SDK access for the two SecIntel profile endpoints.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: canonical flatten and escape helpers keep CSV output consistent with peers.
@@ -63,7 +65,7 @@ class OrgSecIntelProfileExporter:
         Returns:
             One dict for each profile. The list is empty when the org holds none.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the apisession global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Calling listOrgSecIntelProfiles for org_id=%s", org_id)  # Pre-call log.
         response = mistapi.api.v1.orgs.secintelprofiles.listOrgSecIntelProfiles(
             mh.apisession, org_id
@@ -87,7 +89,7 @@ class OrgSecIntelProfileExporter:
         Returns:
             The chosen profile, or ``None`` when the operator cancels.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the shared input helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         for index, profile in enumerate(profiles, start=1):  # Number the rows from one.
             name = profile.get("name") or "(unnamed)"  # A profile without a name still needs a label.
             print(f"  [{index}] {name}  id={profile.get('id', 'unknown')}")  # Operator-facing choice row.
@@ -123,7 +125,7 @@ class OrgSecIntelProfileExporter:
         Returns:
             The profile body as a dict, or an empty dict when the body is absent.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the apisession global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info(
             "Calling getOrgSecIntelProfile for org_id=%s profile_id=%s", org_id, secintelprofile_id
         )  # Pre-call log.
@@ -169,7 +171,7 @@ class OrgSecIntelProfileExporter:
             rows: The flattened rows to write. May be empty.
             filename: The output filename, used as the CSV name or the table name.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the DataExporter helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rows:  # No rows, so inform the operator and return.
             logging.info("! No security intelligence profile data found")  # ASCII-only user notice.
             return
@@ -188,7 +190,7 @@ class OrgSecIntelProfileExporter:
             Interactive menu entry point. The method owns the prompts, the two
             API calls, and the write, and it keeps every failure inside the menu.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the org resolver.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Organization Security Intelligence Profile:")  # Menu header echoed to the operator.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve which org to read.
         if not org_id:  # The resolver already logged the cancellation.

@@ -9,17 +9,19 @@ Direct imports cover stdlib (importlib, logging, os.path). Every
 live-global read (``InputUtils``, ``ConfigUtils``, ``mistapi``,
 ``apisession``, ``APIDataFetcher``, ``DataExporter``,
 ``DataProcessingUtils``) is resolved via lazy
-``mh = importlib.import_module("MistHelper")`` inside the methods that
+``mh = the source dependency resolver`` inside the methods that
 need them. Callers continue to reach the class through the
 ``MistHelper.OrgTicketManager`` re-export alias.
 """
 
 from __future__ import annotations  # WHY: PEP 604 unions for future annotations.
 
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured trace + info/warn/error logging.
 import os  # WHY: os.path.isfile() to detect attachments before multipart upload.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -42,7 +44,7 @@ class OrgTicketManager:  # Support ticket operations.
     @staticmethod
     def list_tickets() -> None:  # List org support tickets.
         """Menu 188: Export all organization support tickets to CSV/SQLite."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of APIDataFetcher + mistapi.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Menu 188: Starting organization ticket list export")  # Log operation entry
         logging.debug("ENTRY: OrgTicketManager.list_tickets()")  # Debug trace
         try:
@@ -63,7 +65,7 @@ class OrgTicketManager:  # Support ticket operations.
     @staticmethod
     def create_ticket() -> None:  # Create a support ticket.
         """Menu 189: Create a new support ticket in the organization."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils + InputUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Menu 189: Starting support ticket creation")  # Log operation entry
         logging.debug("ENTRY: OrgTicketManager.create_ticket()")  # Debug trace
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org from cache or user prompt
@@ -87,7 +89,7 @@ class OrgTicketManager:  # Support ticket operations.
     @staticmethod
     def add_comment() -> None:  # Add a comment to a ticket.
         """Menu 190: Add a comment (with optional attachment) to an existing ticket."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Menu 190: Starting add comment to ticket")  # Log operation entry
         logging.debug("ENTRY: OrgTicketManager.add_comment()")  # Debug trace
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org from cache or user prompt
@@ -111,7 +113,7 @@ class OrgTicketManager:  # Support ticket operations.
     @staticmethod
     def update_ticket() -> None:  # Update a support ticket.
         """Menu 191: Update fields on an existing support ticket."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Menu 191: Starting ticket update")  # Log operation entry
         logging.debug("ENTRY: OrgTicketManager.update_ticket()")  # Debug trace
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org from cache or user prompt
@@ -134,7 +136,7 @@ class OrgTicketManager:  # Support ticket operations.
     @staticmethod
     def _prompt_subject() -> str:  # Prompt for ticket subject.
         """Prompt user for ticket subject line."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         return mh.InputUtils.safe_input(  # Use EOF-safe input wrapper
             "  Enter ticket subject: ",  # Prompt text for ticket title
             default_value="",  # No default -- user must provide subject
@@ -145,7 +147,7 @@ class OrgTicketManager:  # Support ticket operations.
     @staticmethod
     def _prompt_ticket_type() -> str:  # Prompt for ticket type.
         """Prompt user to select a ticket type from valid options."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.warning("\n  Ticket types:")  # Section header for type selection
         for index, ticket_type in enumerate(OrgTicketManager.TICKET_TYPES, 1):  # Number each type for selection
             logging.warning("    %d. %s", index, ticket_type)  # Display numbered option
@@ -166,7 +168,7 @@ class OrgTicketManager:  # Support ticket operations.
     @staticmethod
     def _prompt_ticket_id() -> str:  # Prompt for ticket id.
         """Prompt user for ticket UUID."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         return mh.InputUtils.safe_input(  # Use EOF-safe input wrapper
             "  Enter ticket ID: ",  # Prompt text for ticket UUID
             default_value="",  # No default -- user must provide ID
@@ -191,7 +193,7 @@ class OrgTicketManager:  # Support ticket operations.
     @staticmethod
     def _submit_create_ticket(org_id: str, body: dict, subject: str, ticket_type: str) -> None:
         """Send createOrgTicket API + print summary (or print + raise on error)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of mistapi + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Creating ticket '%s' (type=%s) in org %s", subject, ticket_type, org_id)
         try:
             response = mh.mistapi.api.v1.orgs.tickets.createOrgTicket(mh.apisession, org_id, body)
@@ -204,7 +206,7 @@ class OrgTicketManager:  # Support ticket operations.
     @staticmethod
     def _build_update_body() -> dict[str, str]:  # Build ticket update body.
         """Collect optional update fields (subject, status, type) from user prompts."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         body: dict[str, str] = {}  # Accumulate changed fields in a dict
         fields = (  # (api_key, prompt_text, eof_context) tuples for each updatable field
             ("subject", "  New subject (leave blank to skip): ", "update_ticket_subject"),
@@ -229,7 +231,7 @@ class OrgTicketManager:  # Support ticket operations.
     @staticmethod
     def _update_via_api(org_id: str, ticket_id: str, body: dict[str, str]) -> None:
         """Send updateOrgTicket API call and print + log results."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of mistapi + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Updating ticket %s with fields: %s", ticket_id, list(body.keys()))  # Log before API call
         try:
             response = mh.mistapi.api.v1.orgs.tickets.updateOrgTicket(  # Call Mist API to update ticket
@@ -251,7 +253,7 @@ class OrgTicketManager:  # Support ticket operations.
     @staticmethod
     def _prompt_comment_and_file() -> tuple[str, str]:
         """Prompt for comment text and optional attachment path."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         comment_text = mh.InputUtils.safe_input(  # Prompt user for comment body text
             "  Enter comment text: ",
             default_value="",
@@ -269,7 +271,7 @@ class OrgTicketManager:  # Support ticket operations.
     @staticmethod
     def _submit_comment(org_id: str, ticket_id: str, comment_text: str, file_path: str) -> None:
         """Submit comment with optional file attachment to ticket."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of mistapi + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         has_file = bool(file_path and os.path.isfile(file_path))  # Check if valid file was specified
 
         if has_file:  # Use multipart upload API when file is attached
@@ -295,7 +297,7 @@ class OrgTicketManager:  # Support ticket operations.
     @staticmethod
     def _submit_text_comment(org_id: str, ticket_id: str, comment_text: str) -> None:  # Submit a text-only comment.
         """Submit a text-only comment to a ticket."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of mistapi + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Adding text comment to ticket %s", ticket_id)  # Log before API call
         body = {"comment": comment_text}  # Build comment request body
         mh.mistapi.api.v1.orgs.tickets.addOrgTicketComment(  # Call Mist API to add comment
@@ -314,7 +316,7 @@ class OrgTicketManager:  # Support ticket operations.
     @staticmethod
     def view_ticket() -> None:  # View a single ticket.
         """Menu 192: View a single ticket with full comments and history."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Menu 192: Starting ticket detail viewer")  # Log operation entry
         logging.debug("ENTRY: OrgTicketManager.view_ticket()")  # Debug trace
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org from cache or user prompt
@@ -336,7 +338,7 @@ class OrgTicketManager:  # Support ticket operations.
     @staticmethod
     def export_ticket_details() -> None:  # Export ticket details to file.
         """Menu 193: Export all tickets with full details and comments to CSV/SQLite."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils + DataExporter.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Menu 193: Starting full ticket detail export")  # Log operation entry
         logging.debug("ENTRY: OrgTicketManager.export_ticket_details()")  # Debug trace
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org from cache or user prompt
@@ -363,7 +365,7 @@ class OrgTicketManager:  # Support ticket operations.
     @staticmethod
     def _select_ticket(org_id: str) -> str:  # Prompt to select a ticket.
         """List tickets and let user pick by index, or enter ID manually."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         tickets = OrgTicketManager._fetch_tickets_for_selection(org_id)  # Fetch + handle empty
         if not tickets:  # No tickets or fetch error
             return ""  # Signal cancellation to caller
@@ -384,7 +386,7 @@ class OrgTicketManager:  # Support ticket operations.
     @staticmethod
     def _fetch_tickets_for_selection(org_id: str) -> list:
         """Fetch ticket summaries for selection. Print + return [] on error/empty."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of mistapi + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Fetching ticket list for selection (org %s)", org_id)  # Log before API call
         try:
             response = mh.mistapi.api.v1.orgs.tickets.listOrgTickets(  # Fetch ticket summaries
@@ -438,7 +440,7 @@ class OrgTicketManager:  # Support ticket operations.
     @staticmethod
     def _fetch_ticket_detail(org_id: str, ticket_id: str) -> dict:  # Fetch one ticket detail.
         """Fetch full ticket data including comments via getOrgTicket."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of mistapi + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Fetching detail for ticket %s", ticket_id)  # Log before API call
         try:
             response = mh.mistapi.api.v1.orgs.tickets.getOrgTicket(  # Call SDK for full ticket detail
@@ -458,7 +460,7 @@ class OrgTicketManager:  # Support ticket operations.
     @staticmethod
     def _fetch_all_ticket_summaries(org_id: str) -> list:
         """Fetch ticket-summary list via listOrgTickets, raise on failure."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of mistapi + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Fetching ticket list for org %s", org_id)  # Log before API call
         try:
             response = mh.mistapi.api.v1.orgs.tickets.listOrgTickets(  # Fetch all ticket summaries

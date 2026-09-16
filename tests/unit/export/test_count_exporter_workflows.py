@@ -10,7 +10,6 @@ Why:
 
 from __future__ import annotations
 
-import importlib
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -28,7 +27,7 @@ def fake_mh() -> Any:
     Why:
         The exporter resolves ``apisession``, ``InputUtils``, ``ConfigUtils``,
         ``SiteDeviceExporter``, and ``DataExporter`` through a lazy
-        ``importlib.import_module("MistHelper")`` call. One stub covers all of
+        ``SourceDependencyResolver`` call. One stub covers all of
         them and records what the exporter wrote.
     """
     module = MagicMock()  # WHY: a MagicMock auto-creates each attribute the exporter reads.
@@ -43,7 +42,7 @@ class TestRunErrorHandling:
         """An unresolvable operation must abort before any API call."""
         # WHY: a module path that does not exist forces _resolve to return None.
         missing = _CountOp("countNothing", "mistapi.api.v1.not_a_real_module")
-        with patch.object(importlib, "import_module", return_value=fake_mh):
+        with patch("src.export.count_exporter.SourceDependencyResolver", fake_mh):
             CountExporter._run(missing, "org-1", "org-1")  # WHY: exercise the guard branch.
         # WHY: the guard must return before the exporter writes anything.
         fake_mh.DataExporter.write_with_format_selection.assert_not_called()
@@ -52,7 +51,7 @@ class TestRunErrorHandling:
         """Every count operation takes the session and one identifier positionally."""
         sdk_callable = MagicMock(return_value={"result": []})  # WHY: stand in for the SDK function.
         with (
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.count_exporter.SourceDependencyResolver", fake_mh),
             patch.object(CountExporter, "_resolve", return_value=sdk_callable),
             patch.object(mistapi, "get_all", return_value=[{"count": 2}]),
         ):
@@ -64,7 +63,7 @@ class TestRunErrorHandling:
         """A label with a space must not produce a filename with a space."""
         sdk_callable = MagicMock(return_value={"result": []})  # WHY: stand in for the SDK function.
         with (
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.count_exporter.SourceDependencyResolver", fake_mh),
             patch.object(CountExporter, "_resolve", return_value=sdk_callable),
             patch.object(mistapi, "get_all", return_value=[{"count": 2}]),
         ):
@@ -79,7 +78,7 @@ class TestRunErrorHandling:
         # WHY: raise from the SDK callable to drive the except branch.
         sdk_callable = MagicMock(side_effect=RuntimeError("connection reset"))
         with (
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.count_exporter.SourceDependencyResolver", fake_mh),
             patch.object(CountExporter, "_resolve", return_value=sdk_callable),
         ):
             CountExporter._run(_ORG_OPS[0], "org-1", "Org One")  # WHY: must not raise.
@@ -91,7 +90,7 @@ class TestRunErrorHandling:
         caplog.set_level("ERROR")  # WHY: the handler reports the failure at ERROR level.
         sdk_callable = MagicMock(return_value={"result": []})  # WHY: the first call succeeds.
         with (
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.count_exporter.SourceDependencyResolver", fake_mh),
             patch.object(CountExporter, "_resolve", return_value=sdk_callable),
             # WHY: paging is a second network hop, so it fails independently of the call.
             patch.object(mistapi, "get_all", side_effect=ValueError("bad page")),
@@ -107,7 +106,7 @@ class TestOrgCounts:
     def test_org_counts_returns_when_the_operator_declines_the_operation(self, fake_mh: Any) -> None:
         """A declined operation must abort before the org prompt runs."""
         with (
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.count_exporter.SourceDependencyResolver", fake_mh),
             patch.object(CountExporter, "_choose", return_value=None),
             patch.object(CountExporter, "_run") as run_spy,
         ):
@@ -120,7 +119,7 @@ class TestOrgCounts:
         """An empty org identifier must abort before the API call."""
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = ""  # WHY: empty means declined.
         with (
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.count_exporter.SourceDependencyResolver", fake_mh),
             patch.object(CountExporter, "_choose", return_value=_ORG_OPS[0]),
             patch.object(CountExporter, "_run") as run_spy,
         ):
@@ -131,7 +130,7 @@ class TestOrgCounts:
         """A resolved org must reach ``_run`` as both the identifier and the label."""
         fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-42"  # WHY: resolved org.
         with (
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.count_exporter.SourceDependencyResolver", fake_mh),
             patch.object(CountExporter, "_choose", return_value=_ORG_OPS[0]),
             patch.object(CountExporter, "_run") as run_spy,
         ):
@@ -146,7 +145,7 @@ class TestSiteCounts:
     def test_site_counts_returns_when_the_operator_declines_the_operation(self, fake_mh: Any) -> None:
         """A declined operation must abort before the shared site resolver runs."""
         with (
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.count_exporter.SourceDependencyResolver", fake_mh),
             patch.object(CountExporter, "_choose", return_value=None),
             patch.object(CountExporter, "_run") as run_spy,
         ):
@@ -159,7 +158,7 @@ class TestSiteCounts:
         """A ``None`` from the shared site resolver must abort before the API call."""
         fake_mh.SiteDeviceExporter._resolve_site_for_stats.return_value = None  # WHY: declined site.
         with (
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.count_exporter.SourceDependencyResolver", fake_mh),
             patch.object(CountExporter, "_choose", return_value=_SITE_OPS[0]),
             patch.object(CountExporter, "_run") as run_spy,
         ):
@@ -171,7 +170,7 @@ class TestSiteCounts:
         # WHY: the shared resolver returns the identifier and the friendly name together.
         fake_mh.SiteDeviceExporter._resolve_site_for_stats.return_value = ("site-7", "Branch Two")
         with (
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.count_exporter.SourceDependencyResolver", fake_mh),
             patch.object(CountExporter, "_choose", return_value=_SITE_OPS[0]),
             patch.object(CountExporter, "_run") as run_spy,
         ):
@@ -191,7 +190,7 @@ class TestMspCounts:
     def test_msp_counts_returns_when_the_operator_declines_the_operation(self, fake_mh: Any) -> None:
         """A declined operation must abort before the identifier prompt runs."""
         with (
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.count_exporter.SourceDependencyResolver", fake_mh),
             patch.object(CountExporter, "_choose", return_value=None),
             patch.object(InputUtils, "prompt_msp_id") as prompt_spy,
             patch.object(CountExporter, "_run") as run_spy,
@@ -203,7 +202,7 @@ class TestMspCounts:
     def test_msp_counts_returns_when_the_identifier_prompt_aborts(self, fake_mh: Any) -> None:
         """A ``None`` identifier must abort before the API call."""
         with (
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.count_exporter.SourceDependencyResolver", fake_mh),
             patch.object(CountExporter, "_choose", return_value=_MSP_OPS[0]),
             patch.object(InputUtils, "prompt_msp_id", return_value=None),
             patch.object(CountExporter, "_run") as run_spy,
@@ -214,7 +213,7 @@ class TestMspCounts:
     def test_msp_counts_runs_the_chosen_operation(self, fake_mh: Any) -> None:
         """A supplied identifier must reach ``_run`` as both the identifier and the label."""
         with (
-            patch.object(importlib, "import_module", return_value=fake_mh),
+            patch("src.export.count_exporter.SourceDependencyResolver", fake_mh),
             patch.object(CountExporter, "_choose", return_value=_MSP_OPS[0]),
             patch.object(InputUtils, "prompt_msp_id", return_value="msp-9"),
             patch.object(CountExporter, "_run") as run_spy,

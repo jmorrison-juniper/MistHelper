@@ -16,4 +16,5 @@ API_REQUEST_MAX_RETRIES: int = int(os.getenv("API_REQUEST_MAX_RETRIES", "3"))  #
 API_REQUEST_RETRY_DELAY: float = float(os.getenv("API_REQUEST_RETRY_DELAY", "5.0"))  # Keep API retry delay in src.
 DATABASE_PATH: str = os.getenv("MISTHELPER_DB_PATH", "data/mist_data.db")  # Keep the SQLite path with settings.
 IS_TEST_MODE: bool = False  # Keep the default test mode state out of MistHelper.
+LAST_SELECTED_SITE_ID: str | None = None  # Keep prompt selection state available to source packages.
 api_usage_cache: dict[str, Any] = {}  # Share one quota cache across source packages.

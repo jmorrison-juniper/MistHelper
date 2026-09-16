@@ -4,7 +4,7 @@ Why: Un-omitting this module in ``[tool.coverage.run].omit`` requires 100%
 line + branch coverage on the 13 static methods that ship site-level device
 inventory, stats, port stats, and virtual chassis exports. The module resolves
 its cross-class collaborators lazily through
-``importlib.import_module("MistHelper")``; tests inject a fake ``MistHelper``
+``SourceDependencyResolver``; tests inject a fake ``MistHelper``
 module via ``sys.modules`` to observe and control those interactions without
 importing the monolith.
 """

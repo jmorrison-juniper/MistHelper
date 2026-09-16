@@ -9,19 +9,21 @@ keep working.
 Cross-class references (``APIDataFetcher``, ``ConfigUtils``, ``APICoreFetchUtils``,
 ``DataProcessingUtils``, ``DataExporter``, ``ProgressContext``) and module-level
 globals (``apisession``, ``PROGRESS_EMITTER``, ``OUTPUT_FORMAT``) are resolved
-lazily via ``importlib.import_module("MistHelper")`` inside method bodies to keep
+lazily via the source dependency resolver inside method bodies to keep
 FR-028 IG-health clean (no top-level MistHelper import statement).
 """
 
 from __future__ import annotations  # WHY: PEP 604 unions in annotations.
 
-import importlib  # WHY: lazy MistHelper fetch of cross-class refs + globals.
 import logging  # WHY: structured trace + failure reporting.
 import os  # WHY: cache-file existence checks for sites_list_api.
 import time  # WHY: epoch math for historical guest window + progress timing.
 
 import mistapi  # WHY: dotted-path Mist API resolution + pagination helper.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -41,9 +43,7 @@ class OrgSiteExporter:  # Org site exporters.
         Output format determined by global OUTPUT_FORMAT setting.
         Uses APIDataFetcher to handle API call and output writing.
         """
-        mh = importlib.import_module(
-            "MistHelper"
-        )  # WHY: lazy fetch of APIDataFetcher + PROGRESS_EMITTER + OUTPUT_FORMAT.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Starting export of organization site list...")  # Log site export start.
         emitter = mh.PROGRESS_EMITTER  # Capture progress emitter.
         if emitter:  # Branch: emitter present.
@@ -64,9 +64,7 @@ class OrgSiteExporter:  # Org site exporters.
     @staticmethod
     def sites_list_api():  # Export sites via list API.
         """Export all sites via 'list' endpoint to SiteList_ListAPI.csv (skip if cached file exists)."""
-        mh = importlib.import_module(
-            "MistHelper"
-        )  # WHY: lazy fetch of ConfigUtils/APICoreFetchUtils/DataProcessingUtils/DataExporter.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         output_file = "SiteList_ListAPI.csv"  # Define output filename.
         if os.path.exists(output_file):  # Branch: cached file exists.
             logging.info("! Using cached %s (already exists)", output_file)  # Log cache reuse.
@@ -96,9 +94,7 @@ class OrgSiteExporter:  # Org site exporters.
     @staticmethod
     def sites_with_location():  # Export sites with location.
         """Export a list of sites with all available fields to SitesWithLocations.csv."""
-        mh = importlib.import_module(
-            "MistHelper"
-        )  # WHY: lazy fetch of ConfigUtils/APICoreFetchUtils/DataProcessingUtils/DataExporter.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("Sites with Location and Timezone Info:")
         logging.info("Listing Sites with Full Info:")  # Log listing start.
@@ -118,9 +114,7 @@ class OrgSiteExporter:  # Org site exporters.
     @staticmethod
     def current_guests() -> None:  # Export current guest users.
         """Export all current guest users in the org to OrgCurrentGuests.csv."""
-        mh = importlib.import_module(
-            "MistHelper"
-        )  # WHY: lazy fetch of ConfigUtils/DataProcessingUtils/DataExporter + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("Current and Historical Guest Users:")
         logging.info("Exporting all current guest users in the org...")  # Log guest export start.
@@ -141,9 +135,7 @@ class OrgSiteExporter:  # Org site exporters.
     @staticmethod
     def historical_guests() -> None:  # Export 7-day guest history.
         """Export all guest users from the last 7 days to OrgHistoricalGuests.csv."""
-        mh = importlib.import_module(
-            "MistHelper"
-        )  # WHY: lazy fetch of ConfigUtils/DataProcessingUtils/DataExporter + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Exporting all guest users from the last 7 days...")  # Log historical export start.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
         end_time = int(time.time())  # Capture end time as now.

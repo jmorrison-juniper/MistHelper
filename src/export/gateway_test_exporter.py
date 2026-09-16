@@ -12,14 +12,13 @@ extracted ``ValidationUtils`` (1014 P5). Live-global reads
 ``GatewayExportUtils``, ``ConnectionPoolExecutor``,
 ``RateLimitingUtils``, ``DataProcessingUtils``, ``DataExporter``,
 ``FAST_MODE_*``, ``FastModeBackoffMultiplier``, ``FastModeSequentialMaxRetries``,
-``_api_usage_cache``) are resolved via lazy ``mh = importlib.import_module("MistHelper")``
+``_api_usage_cache``) are resolved via lazy ``mh = the source dependency resolver``
 inside each helper. Callers continue to reach the class through the
 ``MistHelper.GatewayTestExporter`` re-export alias.
 """
 
 from __future__ import annotations  # WHY: PEP 604 unions for return types.
 
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured trace for synthetic-test lifecycle events.
 import time  # WHY: op_start timing + inter-call sleep pacing.
 from concurrent.futures import ThreadPoolExecutor, as_completed  # WHY: retry pool for failed devices.
@@ -29,6 +28,9 @@ import mistapi  # WHY: direct call to getSiteDeviceSyntheticTest endpoint.
 from tqdm import tqdm  # WHY: progress bar for sequential + retry loops.
 
 from src.api import api_usage_cache  # WHY: share quota state without reading MistHelper.
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -46,9 +48,7 @@ class GatewayTestExporter:
     @staticmethod
     def _resolve_misthelper_runtime() -> Any:
         """Load MistHelper and wire gateway dependencies before a gateway-test export begins."""
-        mh = importlib.import_module(
-            "MistHelper"
-        )  # WHY: lazy import preserves the extracted module's circular-import boundary.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Configuring gateway dependencies for gateway test export")  # WHY: record the required DI setup.
         mh._configure_gateway_module()  # WHY: gateway inventory needs its APICoreFetchUtils dependency.
         logging.debug(
@@ -90,7 +90,7 @@ class GatewayTestExporter:
         """Emit final progress-complete signal if an emitter is configured."""
         if not emitter:  # No emitter — nothing to emit.
             return  # Skip silently.
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ProgressContext.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         emitter.emit_progress_complete(  # Signal progress complete.
             mh.ProgressContext("16", "synthetic_tests", len(gateway_devices)),
             len(all_stats),
@@ -115,7 +115,7 @@ class GatewayTestExporter:
         connection_semaphore: Any = None,
     ) -> dict[str, Any] | None:
         """Fetch synthetic test stats for one gateway with retry + optional connection pool gating."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FastModeBackoffMultiplier.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         max_retries, retry_delay = GatewayTestExporter._resolve_retry_defaults(
             max_retries, retry_delay
         )  # Defaults via helper
@@ -174,7 +174,7 @@ class GatewayTestExporter:
     @staticmethod
     def _call_synthetic_endpoint(site_id: str, device_id: str, connection_semaphore: Any) -> Any:
         """Call ``getSiteDeviceSyntheticTest`` with optional semaphore-gated concurrency."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession live global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if connection_semaphore:  # Pool present.
             with connection_semaphore:  # Acquire a slot.
                 return mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest(mh.apisession, site_id, device_id).data
@@ -185,7 +185,7 @@ class GatewayTestExporter:
     @staticmethod
     def _run_synthetic_fast_path(gateway_devices: list[Any], all_stats: list[Any]) -> None:
         """Concurrent pool execution with retry on failures + summary instrumentation."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConnectionPoolExecutor.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         start_time = time.time()  # Start the timer.
 
         def fetch_device_stats(device_info: tuple[str, str, str, str], connection_semaphore: Any) -> Any:
@@ -278,9 +278,7 @@ class GatewayTestExporter:
     @staticmethod
     def _run_synthetic_sequential_path(gateway_devices: list[Any], all_stats: list[Any]) -> None:
         """Sequential processing with adaptive rate limiting (original behavior)."""
-        mh = importlib.import_module(
-            "MistHelper"
-        )  # WHY: lazy fetch of FastModeSequentialMaxRetries + RateLimitingUtils + apisession + _api_usage_cache.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         smoothed = None  # No smoothed delay yet.
         for device_info in tqdm(  # type: ignore[no-untyped-call]
             gateway_devices, desc="Gateway Devices", unit="device"
@@ -299,7 +297,7 @@ class GatewayTestExporter:
     @staticmethod
     def _export_synthetic_results(all_stats: list[Any], gateway_devices: list[Any]) -> None:
         """Write the aggregated stats to CSV + log totals (or warn when empty)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not all_stats:  # No results.
             logging.warning(" No synthetic test results found. CSV not created.")  # Warn.
             logging.warning("! No synthetic test results found. CSV not created.")  # Tell the user.

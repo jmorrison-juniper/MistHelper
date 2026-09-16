@@ -85,7 +85,7 @@ def test_display_config_prints_dry_run_and_debug_banners(capsys: pytest.CaptureF
     manager = _make_manager()
     manager.dry_run = True
     fake = _make_mh(debug=True)
-    with patch.object(brwcm.importlib, "import_module", return_value=fake):
+    with patch.object(brwcm, "SourceDependencyResolver", fake):
         manager._display_config()
     out = capsys.readouterr().out
     assert "DRY-RUN MODE" in out
@@ -98,7 +98,7 @@ def test_display_config_no_banners_when_disabled(capsys: pytest.CaptureFixture[s
     manager = _make_manager()
     manager.dry_run = False
     fake = _make_mh(debug=False)
-    with patch.object(brwcm.importlib, "import_module", return_value=fake):
+    with patch.object(brwcm, "SourceDependencyResolver", fake):
         manager._display_config()
     out = capsys.readouterr().out
     assert "DRY-RUN MODE" not in out
@@ -116,7 +116,7 @@ def test_get_org_id_success() -> None:
     manager.org_id = ""
     fake = _make_mh()
     fake.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-abc"
-    with patch.object(brwcm.importlib, "import_module", return_value=fake):
+    with patch.object(brwcm, "SourceDependencyResolver", fake):
         assert manager._get_org_id() is True
     assert manager.org_id == "org-abc"
 
@@ -126,7 +126,7 @@ def test_get_org_id_failure(capsys: pytest.CaptureFixture[str]) -> None:
     manager = _make_manager()
     fake = _make_mh()
     fake.ConfigUtils.get_cached_or_prompted_org_id.return_value = ""
-    with patch.object(brwcm.importlib, "import_module", return_value=fake):
+    with patch.object(brwcm, "SourceDependencyResolver", fake):
         assert manager._get_org_id() is False
     assert "Unable to determine organization ID" in capsys.readouterr().out
 
@@ -142,7 +142,7 @@ def test_scan_org_wlans_success(capsys: pytest.CaptureFixture[str]) -> None:
     fake = _make_mh(debug=True)  # Also exercise the debug-dump path
     response = SimpleNamespace(status_code=200, data=[{"id": "w1"}, {"id": "w2"}])
     with (
-        patch.object(brwcm.importlib, "import_module", return_value=fake),
+        patch.object(brwcm, "SourceDependencyResolver", fake),
         patch.object(brwcm.mistapi.api.v1.orgs.wlans, "listOrgWlans", return_value=response),
     ):
         assert manager._scan_org_wlans() is True
@@ -156,7 +156,7 @@ def test_scan_org_wlans_http_error(capsys: pytest.CaptureFixture[str]) -> None:
     fake = _make_mh()
     response = SimpleNamespace(status_code=403, data=None)
     with (
-        patch.object(brwcm.importlib, "import_module", return_value=fake),
+        patch.object(brwcm, "SourceDependencyResolver", fake),
         patch.object(brwcm.mistapi.api.v1.orgs.wlans, "listOrgWlans", return_value=response),
     ):
         assert manager._scan_org_wlans() is False
@@ -168,7 +168,7 @@ def test_scan_org_wlans_exception(capsys: pytest.CaptureFixture[str]) -> None:
     manager = _make_manager()
     fake = _make_mh()
     with (
-        patch.object(brwcm.importlib, "import_module", return_value=fake),
+        patch.object(brwcm, "SourceDependencyResolver", fake),
         patch.object(brwcm.mistapi.api.v1.orgs.wlans, "listOrgWlans", side_effect=RuntimeError("boom")),
     ):
         assert manager._scan_org_wlans() is False
@@ -245,7 +245,7 @@ def test_log_classification_no_op_when_debug_off() -> None:
     """Debug-off path returns without logging (branch coverage)."""
     manager = _make_manager()
     fake = _make_mh(debug=False)
-    with patch.object(brwcm.importlib, "import_module", return_value=fake):
+    with patch.object(brwcm, "SourceDependencyResolver", fake):
         manager._log_radius_wlan_classification("COMPLIANT", {"ssid": "X"})
 
 
@@ -254,7 +254,7 @@ def test_log_classification_emits_when_debug_on() -> None:
     manager = _make_manager()
     fake = _make_mh(debug=True)
     with (
-        patch.object(brwcm.importlib, "import_module", return_value=fake),
+        patch.object(brwcm, "SourceDependencyResolver", fake),
         patch.object(brwcm.logging, "debug") as mock_debug,
     ):
         manager._log_radius_wlan_classification("NEEDS_UPDATE", {"ssid": "Y"})
@@ -286,7 +286,7 @@ def test_classify_and_filter_split_buckets() -> None:
     non_radius = {"id": "x1", "ssid": "PSK", "auth": {"type": "psk"}}
     manager.all_wlans = [compliant, needs_update, non_radius]
     fake = _make_mh(debug=False)
-    with patch.object(brwcm.importlib, "import_module", return_value=fake):
+    with patch.object(brwcm, "SourceDependencyResolver", fake):
         manager._filter_radius_wlans()
     assert [w["id"] for w in manager.compliant_wlans] == ["c1"]
     assert [w["id"] for w in manager.radius_wlans] == ["n1"]
@@ -532,7 +532,7 @@ def test_simulate_wlan_update_success_debug_off(capsys: pytest.CaptureFixture[st
     """Simulated update prints DRY-RUN, records a change, returns True."""
     manager = _make_manager()
     fake = _make_mh(debug=False)
-    with patch.object(brwcm.importlib, "import_module", return_value=fake):
+    with patch.object(brwcm, "SourceDependencyResolver", fake):
         assert manager._simulate_wlan_update({"id": "w", "ssid": "SS"}, {"k": "v"}) is True
     assert "DRY-RUN" in capsys.readouterr().out
     assert manager.change_records[0]["status"] == "DRY-RUN"
@@ -543,7 +543,7 @@ def test_simulate_wlan_update_debug_on_logs_payload() -> None:
     manager = _make_manager()
     fake = _make_mh(debug=True)
     with (
-        patch.object(brwcm.importlib, "import_module", return_value=fake),
+        patch.object(brwcm, "SourceDependencyResolver", fake),
         patch.object(brwcm.logging, "debug") as mock_debug,
     ):
         manager._simulate_wlan_update({"id": "w", "ssid": "SS"}, {"k": "v"})
@@ -561,7 +561,7 @@ def test_call_wlan_update_api_success(capsys: pytest.CaptureFixture[str]) -> Non
     fake = _make_mh(debug=True)  # exercise debug-dump branch
     response = SimpleNamespace(status_code=200, data={"ok": True})
     with (
-        patch.object(brwcm.importlib, "import_module", return_value=fake),
+        patch.object(brwcm, "SourceDependencyResolver", fake),
         patch.object(brwcm.mistapi.api.v1.orgs.wlans, "updateOrgWlan", return_value=response),
     ):
         assert manager._call_wlan_update_api({"id": "w", "ssid": "SS"}, {"k": "v"}) is True
@@ -575,7 +575,7 @@ def test_call_wlan_update_api_http_error(capsys: pytest.CaptureFixture[str]) -> 
     fake = _make_mh()
     response = SimpleNamespace(status_code=500, data=None)
     with (
-        patch.object(brwcm.importlib, "import_module", return_value=fake),
+        patch.object(brwcm, "SourceDependencyResolver", fake),
         patch.object(brwcm.mistapi.api.v1.orgs.wlans, "updateOrgWlan", return_value=response),
     ):
         assert manager._call_wlan_update_api({"id": "w", "ssid": "SS"}, {"k": "v"}) is False
@@ -588,7 +588,7 @@ def test_call_wlan_update_api_exception(capsys: pytest.CaptureFixture[str]) -> N
     manager = _make_manager()
     fake = _make_mh()
     with (
-        patch.object(brwcm.importlib, "import_module", return_value=fake),
+        patch.object(brwcm, "SourceDependencyResolver", fake),
         patch.object(brwcm.mistapi.api.v1.orgs.wlans, "updateOrgWlan", side_effect=RuntimeError("kaboom")),
     ):
         assert manager._call_wlan_update_api({"id": "w", "ssid": "SS"}, {"k": "v"}) is False
@@ -615,7 +615,7 @@ def test_update_one_wlan_dry_run_path() -> None:
     manager.selected_wlans = [{"id": "w", "ssid": "SS"}]
     manager.dry_run = True
     fake = _make_mh(debug=False)
-    with patch.object(brwcm.importlib, "import_module", return_value=fake):
+    with patch.object(brwcm, "SourceDependencyResolver", fake):
         assert manager._update_one_wlan(1, {"id": "w", "ssid": "SS"}) is True
     assert manager.change_records[0]["status"] == "DRY-RUN"
 
@@ -628,7 +628,7 @@ def test_update_one_wlan_real_path() -> None:
     fake = _make_mh(debug=False)
     response = SimpleNamespace(status_code=200, data={"ok": True})
     with (
-        patch.object(brwcm.importlib, "import_module", return_value=fake),
+        patch.object(brwcm, "SourceDependencyResolver", fake),
         patch.object(brwcm.mistapi.api.v1.orgs.wlans, "updateOrgWlan", return_value=response),
     ):
         assert manager._update_one_wlan(1, {"id": "w", "ssid": "SS"}) is True
@@ -652,7 +652,7 @@ def test_apply_changes_counts_success_and_failure(capsys: pytest.CaptureFixture[
         ]
     )
     with (
-        patch.object(brwcm.importlib, "import_module", return_value=fake),
+        patch.object(brwcm, "SourceDependencyResolver", fake),
         patch.object(brwcm.mistapi.api.v1.orgs.wlans, "updateOrgWlan", side_effect=lambda *a, **k: next(responses)),
         patch.object(brwcm.AdaptivePacer, "pace", return_value=0.0),
     ):
@@ -668,7 +668,7 @@ def test_apply_changes_dry_run_label(capsys: pytest.CaptureFixture[str]) -> None
     manager.dry_run = True
     fake = _make_mh()
     with (
-        patch.object(brwcm.importlib, "import_module", return_value=fake),
+        patch.object(brwcm, "SourceDependencyResolver", fake),
         patch.object(brwcm.AdaptivePacer, "pace", return_value=0.0),
     ):
         manager._apply_changes()
@@ -763,7 +763,7 @@ def test_scan_and_prepare_aborts_on_missing_org(capsys: pytest.CaptureFixture[st
     manager = _make_manager()
     fake = _make_mh()
     fake.ConfigUtils.get_cached_or_prompted_org_id.return_value = ""
-    with patch.object(brwcm.importlib, "import_module", return_value=fake):
+    with patch.object(brwcm, "SourceDependencyResolver", fake):
         assert manager._scan_and_prepare() is False
     assert "Unable to determine organization ID" in capsys.readouterr().out
 
@@ -774,7 +774,7 @@ def test_scan_and_prepare_aborts_on_scan_failure() -> None:
     fake = _make_mh()
     response = SimpleNamespace(status_code=500, data=None)
     with (
-        patch.object(brwcm.importlib, "import_module", return_value=fake),
+        patch.object(brwcm, "SourceDependencyResolver", fake),
         patch.object(brwcm.mistapi.api.v1.orgs.wlans, "listOrgWlans", return_value=response),
     ):
         assert manager._scan_and_prepare() is False
@@ -786,7 +786,7 @@ def test_scan_and_prepare_empty_returns_false(capsys: pytest.CaptureFixture[str]
     fake = _make_mh()
     response = SimpleNamespace(status_code=200, data=[{"id": "x", "ssid": "PSK", "auth": {"type": "psk"}}])
     with (
-        patch.object(brwcm.importlib, "import_module", return_value=fake),
+        patch.object(brwcm, "SourceDependencyResolver", fake),
         patch.object(brwcm.mistapi.api.v1.orgs.wlans, "listOrgWlans", return_value=response),
     ):
         assert manager._scan_and_prepare() is False
@@ -805,7 +805,7 @@ def test_scan_and_prepare_success_returns_true() -> None:
     }
     response = SimpleNamespace(status_code=200, data=[wlan])
     with (
-        patch.object(brwcm.importlib, "import_module", return_value=fake),
+        patch.object(brwcm, "SourceDependencyResolver", fake),
         patch.object(brwcm.mistapi.api.v1.orgs.wlans, "listOrgWlans", return_value=response),
     ):
         assert manager._scan_and_prepare() is True
@@ -845,7 +845,7 @@ def test_prompt_and_parse_empty_input(capsys: pytest.CaptureFixture[str]) -> Non
     manager.radius_wlans = [{"id": "n"}]
     fake = _make_mh()
     fake.InputUtils.safe_input.return_value = "   "
-    with patch.object(brwcm.importlib, "import_module", return_value=fake):
+    with patch.object(brwcm, "SourceDependencyResolver", fake):
         assert manager._prompt_and_parse_selection() is None
     assert "No selection made" in capsys.readouterr().out
 
@@ -856,7 +856,7 @@ def test_prompt_and_parse_cancel_keyword(capsys: pytest.CaptureFixture[str]) -> 
     manager.radius_wlans = [{"id": "n"}]
     fake = _make_mh()
     fake.InputUtils.safe_input.return_value = "q"
-    with patch.object(brwcm.importlib, "import_module", return_value=fake):
+    with patch.object(brwcm, "SourceDependencyResolver", fake):
         assert manager._prompt_and_parse_selection() is None
     assert "cancelled by user" in capsys.readouterr().out
 
@@ -867,7 +867,7 @@ def test_prompt_and_parse_invalid_selection(capsys: pytest.CaptureFixture[str]) 
     manager.radius_wlans = [{"id": "n"}]
     fake = _make_mh()
     fake.InputUtils.safe_input.return_value = "nonsense"
-    with patch.object(brwcm.importlib, "import_module", return_value=fake):
+    with patch.object(brwcm, "SourceDependencyResolver", fake):
         assert manager._prompt_and_parse_selection() is None
     assert "Invalid selection" in capsys.readouterr().out
 
@@ -878,7 +878,7 @@ def test_prompt_and_parse_success() -> None:
     manager.radius_wlans = [{"id": "a"}, {"id": "b"}]
     fake = _make_mh()
     fake.InputUtils.safe_input.return_value = "1,2"
-    with patch.object(brwcm.importlib, "import_module", return_value=fake):
+    with patch.object(brwcm, "SourceDependencyResolver", fake):
         assert manager._prompt_and_parse_selection() == [0, 1]
 
 
@@ -893,7 +893,7 @@ def test_confirm_and_apply_cancelled(capsys: pytest.CaptureFixture[str]) -> None
     manager.selected_wlans = [{"id": "w", "ssid": "S"}]
     fake = _make_mh()
     fake.InputUtils.safe_input.return_value = "no"
-    with patch.object(brwcm.importlib, "import_module", return_value=fake):
+    with patch.object(brwcm, "SourceDependencyResolver", fake):
         manager._confirm_and_apply()
     out = capsys.readouterr().out
     assert "cancelled by user" in out
@@ -908,7 +908,7 @@ def test_confirm_and_apply_proceeds_on_apply(capsys: pytest.CaptureFixture[str])
     fake = _make_mh()
     fake.InputUtils.safe_input.return_value = "APPLY"
     with (
-        patch.object(brwcm.importlib, "import_module", return_value=fake),
+        patch.object(brwcm, "SourceDependencyResolver", fake),
         patch.object(brwcm.AdaptivePacer, "pace", return_value=0.0),
     ):
         manager._confirm_and_apply()
@@ -936,7 +936,7 @@ def _run_manage(
     fake.InputUtils.safe_input = MagicMock(side_effect=[selection, confirm])
     response = SimpleNamespace(status_code=200, data=wlans)
     with (
-        patch.object(brwcm.importlib, "import_module", return_value=fake),
+        patch.object(brwcm, "SourceDependencyResolver", fake),
         patch.object(brwcm.mistapi.api.v1.orgs.wlans, "listOrgWlans", return_value=response),
         patch.object(
             brwcm.mistapi.api.v1.orgs.wlans,
@@ -953,7 +953,7 @@ def test_manage_scan_prepare_failure_short_circuits() -> None:
     manager = _make_manager()
     fake = _make_mh()
     fake.ConfigUtils.get_cached_or_prompted_org_id.return_value = ""
-    with patch.object(brwcm.importlib, "import_module", return_value=fake):
+    with patch.object(brwcm, "SourceDependencyResolver", fake):
         manager.manage(dry_run=False)
     # No selection was made -> no changes recorded
     assert manager.change_records == []

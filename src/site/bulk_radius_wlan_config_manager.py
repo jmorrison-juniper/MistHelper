@@ -17,7 +17,6 @@ FR-008 remediation applied during extraction:
 from __future__ import annotations  # WHY: PEP 604 unions on Python 3.9+.
 
 import csv  # WHY: audit-trail CSV writer.
-import importlib  # WHY: lazy MistHelper import to reach live helper classes without circular load.
 import logging  # WHY: structured lifecycle + audit logging.
 import os  # WHY: env-var config + path helpers for the audit CSV.
 from datetime import UTC, datetime  # WHY: timestamps for scan snapshot + audit trail rows.
@@ -25,6 +24,9 @@ from typing import Any  # WHY: raw WLAN rows are duck-typed dicts from mistapi.
 
 import mistapi  # WHY: direct SDK access for listOrgWlans + updateOrgWlan endpoints.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.utils.rate_limiting import AdaptivePacer  # WHY: quota-aware pacing for the bulk WLAN timer PUT loop.
 
 
@@ -101,7 +103,7 @@ class BulkRadiusWLANConfigManager:
 
     def _display_config(self) -> None:
         """Display loaded .env configuration values at startup."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of IsDebugMode helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         print("\n" + "=" * 70)
         print("  BULK RADIUS WLAN CONFIGURATION (Menu 122)")
         print("=" * 70)
@@ -120,7 +122,7 @@ class BulkRadiusWLANConfigManager:
 
     def _get_org_id(self) -> bool:
         """Get organization ID from cache or prompt."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         self.org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()
         if not self.org_id:
             logging.error("Could not determine organization ID")
@@ -130,7 +132,7 @@ class BulkRadiusWLANConfigManager:
 
     def _scan_org_wlans(self) -> bool:
         """Fetch all WLANs in the organization using listOrgWlans API."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession + IsDebugMode.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         print("[*] Scanning organization for WLANs...")
         logging.info("Fetching org WLANs for org_id: %s", self.org_id)
         try:
@@ -173,7 +175,7 @@ class BulkRadiusWLANConfigManager:
 
     def _log_radius_wlan_classification(self, status: str, wlan: dict[str, Any]) -> None:
         """Emit debug log explaining why a WLAN landed in compliant vs needs-update bucket."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of IsDebugMode helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not mh.IsDebugMode.check():  # Only emit when verbose mode is on
             return
         logging.debug(
@@ -365,7 +367,7 @@ class BulkRadiusWLANConfigManager:
         print(f"\n[*] {mode_label} configuration to {len(self.selected_wlans)} WLANs...")  # Announce.
         success_count = 0  # WLANs updated successfully.
         fail_count = 0  # WLANs that failed.
-        mh = importlib.import_module("MistHelper")  # WHY: reach the live session and the shared quota cache.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         pacer = AdaptivePacer(  # WHY: quota-aware pacing replaces the fixed 0.3 second sleep.
             getattr(mh, "apisession", None),  # WHY: the PID pipeline reads the quota through this session.
             getattr(mh, "_api_usage_cache", None),  # WHY: share one quota view with every other menu.
@@ -412,7 +414,7 @@ class BulkRadiusWLANConfigManager:
 
     def _simulate_wlan_update(self, wlan: dict[str, Any], payload: dict[str, Any]) -> bool:
         """Record a dry-run change and print the simulated outcome. Always returns True."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of IsDebugMode helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         ssid = wlan.get("ssid", "Unknown")  # SSID for user-facing messages.
         print("DRY-RUN (would update)")  # Show that no real change was made.
         self._record_change(wlan, "DRY-RUN", "")  # Record the simulated change.
@@ -422,7 +424,7 @@ class BulkRadiusWLANConfigManager:
 
     def _call_wlan_update_api(self, wlan: dict[str, Any], payload: dict[str, Any]) -> bool:
         """Call updateOrgWlan, log + audit the outcome, return True iff HTTP 200."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession + IsDebugMode.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         wlan_id = wlan["id"]  # ID was validated upstream.
         ssid = wlan.get("ssid", "Unknown")  # SSID for user-facing messages.
         try:
@@ -466,7 +468,7 @@ class BulkRadiusWLANConfigManager:
 
     def _export_scan_snapshot(self) -> None:
         """Persist every pulled RADIUS WLAN's settings to disk so they can be examined after the run."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         all_radius = self.radius_wlans + self.compliant_wlans  # Every RADIUS WLAN discovered this scan
         if not all_radius:  # Nothing was pulled -> nothing to snapshot
             logging.debug("No RADIUS WLANs to snapshot; skipping scan export")  # Trace the empty case
@@ -598,7 +600,7 @@ class BulkRadiusWLANConfigManager:
 
     def _prompt_and_parse_selection(self) -> list[int] | None:
         """Prompt for WLAN selection, parse it, return indices or None on cancel/invalid."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         print("  Enter selection (e.g., 'all', '1', '1,3,5', '1-5') or 'q' to cancel:")  # Syntax.
         # Issue #431: inlined self._safe_input -> canonical InputUtils.safe_input.
         selection = mh.InputUtils.safe_input("  > ", context="wlan_selection")  # Prompt.
@@ -617,7 +619,7 @@ class BulkRadiusWLANConfigManager:
 
     def _confirm_and_apply(self) -> None:
         """Show preview, require APPLY confirmation, then apply changes + audit + completion."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         self._display_preview()  # Show a before/after preview of the pending changes.
         print("\n  WARNING: This will modify WLAN authentication settings.")  # Warn before the destructive step.
         print("  Type 'APPLY' to proceed, or anything else to cancel.")  # Explain the confirmation.

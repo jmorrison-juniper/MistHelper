@@ -19,7 +19,6 @@ Issue: initiative 1015 T-06 (Cat E fresh extraction).
 from __future__ import annotations  # PEP 604 unions for return types.
 
 import csv  # DictReader/DictWriter for weekly + master CSV IO.
-import importlib  # Lazy MistHelper import for live module globals.
 import json  # Diagnostic raw-inventory JSON dump.
 import logging  # Structured trace for API + persistence lifecycle.
 import os  # Filesystem paths + environment lookups.
@@ -36,6 +35,9 @@ from tqdm import tqdm  # Progress bars for per-device enrichment loops.
 from src.api.api_core_fetch_utils import APICoreFetchUtils  # all_sites/all_inventory helpers.
 from src.cache.cache_utils import CacheUtils  # check_and_generate_csv gate.
 from src.config.config_utils import ConfigUtils  # Cached-or-prompted org id.
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import DataProcessingUtils  # Flatten/escape helpers.
 from src.dataclasses.progress_event import ProgressContext  # Progress emitter payload shape.
 from src.export.org_site_exporter import OrgSiteExporter  # SiteList.csv generator for cache path.
@@ -73,7 +75,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
 
         Uses APIDataFetcher to handle API call, CSV writing, and table display.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PROGRESS_EMITTER + APIDataFetcher.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Starting export of organization device inventory...")  # Log inventory export start.
         emitter = mh.PROGRESS_EMITTER  # Capture progress emitter.
         if emitter:  # Branch: emitter present.
@@ -97,7 +99,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
 
         Uses APIDataFetcher to handle API call, CSV writing, and table display.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PROGRESS_EMITTER + APIDataFetcher.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Starting export of all organization devices...")  # Log devices export start.
         emitter = mh.PROGRESS_EMITTER  # Capture progress emitter.
         if emitter:  # Branch: emitter present.
@@ -116,7 +118,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
     @staticmethod
     def _resolve_combined_inventory_org_name(current_org_id: str | None, fallback_org_name: str | None) -> str:
         """Resolve organization name used for combined inventory output filenames."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         org_name_for_filename = None  # Start with no resolved org name so API lookup can fill it in.
         try:  # Resolve org name from live Mist API first so filenames follow authoritative naming.
             org_response = mistapi.api.v1.orgs.orgs.getOrg(
@@ -147,7 +149,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
         filename: str, request_kwargs: dict, current_org_id: str, output_folder: str
     ) -> int:
         """Fetch one inventory variant and persist as raw JSON. Return row count."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Fetching raw inventory variant for %s...", filename)  # Log before API call
         response = mistapi.api.v1.orgs.inventory.getOrgInventory(mh.apisession, current_org_id, **request_kwargs)
         raw_inventory = mistapi.get_all(response=response, mist_session=mh.apisession)  # Paginate all results
@@ -160,7 +162,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
     @staticmethod
     def _export_combined_inventory_raw_json(output_folder: str, current_org_id: str) -> None:
         """Export raw inventory JSON variants used for VC delta analysis."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DEFAULT_API_PAGE_LIMIT module global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Saving raw inventory JSON for delta comparison...")  # Log start of diagnostic exports
         try:  # Raw JSON export is diagnostic only and must never block the main report
             os.makedirs(output_folder, exist_ok=True)  # Ensure shared output folder exists
@@ -612,7 +614,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
     @staticmethod
     def _flatten_sort_export_devices(devices: list) -> list:  # type: ignore[type-arg]
         """Flatten, escape, sort by site name, and write the all-devices CSV. Return the processed rows for display."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter (T-08 pending).
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         devices = DataProcessingUtils.flatten_nested_fields(devices)  # Flatten enriched fields.
         devices = DataProcessingUtils.escape_multiline(devices)  # type: ignore[no-untyped-call]
         devices = sorted(devices, key=lambda x: x.get("site_name", ""))  # Sort by site name.
@@ -694,7 +696,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
     @staticmethod
     def _flatten_sort_export_gateways(gateways: list) -> list:  # type: ignore[type-arg]  # Flatten/sort/write the CSV
         """Flatten, escape, sort by site name, and write the gateways CSV. Return the processed rows for display."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter (T-08 pending).
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         gateways = DataProcessingUtils.flatten_nested_fields(gateways)  # Flatten gateway fields.
         gateways = DataProcessingUtils.escape_multiline(gateways)  # type: ignore[no-untyped-call]
         gateways = sorted(gateways, key=lambda x: x.get("site_name", ""))  # Sort by site name.

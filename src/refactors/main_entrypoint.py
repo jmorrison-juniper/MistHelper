@@ -11,17 +11,15 @@ All six pipeline dependencies (`_initialize_deferred_imports`,
 `InputUtils`, `_build_argument_parser`, `_setup_runtime_flags`,
 `_initialize_dependencies`, `_establish_mist_session`,
 `_configure_runtime_options`, `_dispatch_main_mode`) are resolved
-lazily through the `_MH` proxy so live re-bindings after interactive
-login and test monkeypatching are honoured. The MistHelper `__main__`
-guard aliases `sys.modules["MistHelper"] = sys.modules["__main__"]`
-before invoking the entrypoint, so `importlib.import_module("MistHelper")`
-returns the live script module during class execution.
+lazily through the source dependency resolver. The host module binds
+itself during startup, so the source package does not import the root
+module.
 """
 
 from __future__ import annotations  # Enable postponed evaluation for forward-ref typing
 
 import argparse  # Type the stored parse result for the bootstrap object
-import importlib  # Late-import MistHelper module to avoid circular src<->MistHelper dependency
+import importlib  # Resolve source settings modules lazily during explicit bootstrap.
 import logging  # Reproduce the original entry-point trace log
 import os  # Load the optional environment file during the explicit bootstrap step
 import sys  # Provide argv for the one command-line parse and the script module alias
@@ -30,22 +28,11 @@ from dataclasses import dataclass, field  # Build the explicit application conte
 from pathlib import Path  # Build repository paths without hardcoded separators
 from typing import Any, cast  # Loose typing for late-bound MistHelper attributes
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 
-class _MistHelperProxy:  # Attribute forwarder to MistHelper module attributes
-    """Forward attribute access to the currently-loaded MistHelper module."""
-
-    def __getattr__(self, name: str) -> Any:  # Called only when the attribute is not found normally
-        """Resolve name against the live MistHelper module (call-time lookup)."""
-        misthelper_module = importlib.import_module("MistHelper")  # Lazy import at call time
-        return getattr(misthelper_module, name)  # Fetch the current bound value from MistHelper
-
-    def __setattr__(self, name: str, value: Any) -> None:  # Forward bootstrap writes to the live module.
-        """Set name on the live MistHelper module."""
-        misthelper_module = importlib.import_module("MistHelper")  # Resolve the module that owns runtime globals.
-        setattr(misthelper_module, name, value)  # Publish the startup value where existing call sites read it.
-
-
-_MH = _MistHelperProxy()  # Sole module-level proxy handle used inside the class body
+_MH = SourceDependencyResolver  # Use the source resolver for lazy host and source dependency access.
 
 
 @dataclass
@@ -362,6 +349,11 @@ class MainEntrypoint:  # CLI main entry-point seam
     """Class-body seam for the MistHelper CLI entrypoint."""
 
     context = AppContext()  # Own the live process state without module-level session globals.
+
+    @classmethod
+    def bind_host_module(cls, module: Any) -> None:
+        """Bind the host module that owns bootstrap-only helpers."""
+        SourceDependencyResolver.bind_root_module(module)  # Share the host object without a source import.
 
     @classmethod
     def activate_context(cls, context: AppContext) -> None:

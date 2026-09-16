@@ -6,23 +6,25 @@ suppression/restore ceremony required so the TUI can take exclusive control of
 stdout while the background logging channel keeps writing to file.
 
 Runtime dependencies (``apisession`` global, ``initialize_mist_session``, and
-the runtime ``args`` namespace) are still owned by MistHelper.py. They are
-resolved lazily via ``importlib.import_module`` to keep the extracted module
-import-graph flat and to honour monkeypatched attributes in tests.
+the runtime ``args`` namespace) are resolved through the source dependency
+resolver, so this module does not import the root module.
 """
 
 from __future__ import annotations  # Enable postponed evaluation for forward-ref typing on 3.10+
 
-import importlib  # Late-import MistHelper module to avoid circular src<->MistHelper dependency
 import logging  # Structured action logging required by coding standards
 from datetime import UTC, datetime  # Timestamp string for debug-only completion breadcrumb
 from types import SimpleNamespace  # Bundle runtime dependencies without coupling to a dataclass
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
+
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:
-    """Resolve MistHelper-owned runtime dependencies without static cross-module imports."""
-    logging.info("Resolving TUILauncher runtime dependencies from MistHelper")  # Log before import
-    misthelper_module = importlib.import_module("MistHelper")  # Late import avoids circular dependency
+    """Resolve source-owned runtime dependencies without static cross-module imports."""
+    logging.info("Resolving TUILauncher runtime dependencies from the source resolver")  # Log before lookup.
+    misthelper_module = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
     logging.debug("TUILauncher runtime dependencies resolved successfully")  # Log after resolution
     return SimpleNamespace(
         misthelper_module=misthelper_module,  # Retained so apisession/args lookups honour monkeypatch
@@ -129,9 +131,9 @@ class TUILauncher:  # Launch TUI mode from interactive menu.
         logging.info("TUI_MODE: entering Rich TUI run loop")  # Log entry to TUI loop
         self.debug_mode = self._get_debug_mode()  # Latch debug flag once so exit path can reuse it
 
-        from src.ui.tui import MistHelperTUI  # PLC0415: lazy import to keep startup path light
+        from src.ui import tui as tui_module  # PLC0415: lazy import keeps the startup path light.
 
-        tui = MistHelperTUI(debug_mode=self.debug_mode)  # Rich-based TUI, typed in src.ui.tui
+        tui = tui_module.MistHelperTUI(debug_mode=self.debug_mode)  # Build the Rich TUI after session checks pass.
         tui.apisession = self._apisession()  # Hand the already-initialized apisession to the TUI
 
         if self.debug_mode:  # Only log the debug-enabled banner when caller opted in

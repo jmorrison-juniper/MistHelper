@@ -34,7 +34,8 @@ def _is_help() -> Any:
     Returns:
         The bound callable ``MistHelper._is_help_invocation``.
     """
-    module = importlib.import_module("MistHelper")  # Live import; MistHelper is a top-level script module.
+    import MistHelper as module  # WHY: inspect the root script entry.
+
     return module._is_help_invocation  # Access the helper as a module attribute.
 
 
@@ -117,7 +118,8 @@ class TestHelpSubprocessInvocation:
             We set ``DISABLE_AUTO_INSTALL=true`` as a safety belt so a *failed*
             guard would not brick the developer's environment mid-test.
         """
-        module = importlib.import_module("MistHelper")  # Locate the live script on disk.
+        import MistHelper as module  # WHY: inspect the root script entry.
+
         assert module.__file__ is not None
         script_path = Path(module.__file__)
 

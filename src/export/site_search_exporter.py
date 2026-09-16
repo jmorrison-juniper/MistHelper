@@ -41,13 +41,15 @@ resolved against the installed SDK.
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+ toolchains.
 
-import importlib  # WHY: lazy MistHelper import avoids a circular load at module init.
 import logging  # WHY: structured trace for export lifecycle events.
 from collections.abc import Callable  # WHY: the per-operation SDK callable is injected.
 from typing import Any
 
 import mistapi  # WHY: direct SDK access for the five search endpoints and get_all pagination.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: canonical flatten and escape helpers keep CSV output consistent with peers.
@@ -80,7 +82,7 @@ class SiteSearchExporter:
             operation: The operationId used to route the primary-key strategy.
             label: A human-readable noun used in the operator messages.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the DataExporter helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No rows, so inform the operator and return.
             logging.info("! No %s data found for this site", label)  # ASCII-only user notice.
             return
@@ -116,7 +118,7 @@ class SiteSearchExporter:
             extra_args: Any further positional arguments the endpoint requires
                 after the site. Only searchSiteZoneSessions needs one today.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession and the shared helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Site %s Search:", label.title())  # Menu header echoed to the operator.
         logging.info("Starting the %s export...", operation)  # Pre-call trace.
         resolved = mh.SiteDeviceExporter._resolve_site_for_stats(f"{label} search")  # Shared site prompt.
@@ -287,7 +289,7 @@ class SiteSearchExporter:
         Returns:
             The trimmed identifier, or None when the operator gave no answer.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils keeps the import acyclic.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Prompting the operator for %s", context)  # Action log before the prompt.
         value = str(  # WHY: the lazy module attribute is untyped, so pin the declared str return.
             mh.InputUtils.safe_input(  # safe_input enforces EOF-safe prompting.
@@ -348,7 +350,7 @@ class SiteSearchExporter:
             endpoint needs a site, a client MAC, and a meeting ID, so it prompts
             for the two identifiers before it calls the SDK.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession and the shared helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Site Call Troubleshoot:")  # Menu header echoed to the operator.
         logging.info("Starting the troubleshootSiteCall export...")  # Pre-call trace.
         resolved = mh.SiteDeviceExporter._resolve_site_for_stats("call troubleshoot")  # Shared site prompt.
@@ -399,7 +401,7 @@ class SiteSearchExporter:
         Returns:
             The chosen zone type, or None when the operator gave no valid answer.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils keeps the import acyclic.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Prompting the operator for the zone type")  # Action log before the prompt.
         answer = str(
             mh.InputUtils.safe_input(  # safe_input enforces EOF-safe prompting.

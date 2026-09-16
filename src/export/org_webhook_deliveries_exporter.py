@@ -2,12 +2,14 @@
 
 from __future__ import annotations  # WHY: support the project Python type syntax.
 
-import importlib  # WHY: avoid a circular import during MistHelper startup.
 import logging  # WHY: record each export action for operator diagnosis.
 from typing import Any  # WHY: Mist API rows are JSON-shaped dictionaries.
 
 import mistapi  # WHY: call the installed Mist SDK endpoint.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import DataProcessingUtils  # WHY: reuse shared CSV-safe flattening.
 from src.utils.input_utils import InputUtils  # WHY: handle EOF safely in SSH and container sessions.
 
@@ -35,7 +37,7 @@ class OrgWebhookDeliveriesExporter:
     @staticmethod
     def _select_webhook_id(org_id: str) -> tuple[str, str] | None:
         """List organization webhooks and prompt for one selection."""
-        mh = importlib.import_module("MistHelper")  # WHY: read the live authenticated session.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Listing organization webhooks for org_id=%s", org_id)  # Log before the SDK call.
         response = mistapi.api.v1.orgs.webhooks.listOrgWebhooks(mh.apisession, org_id)  # Fetch choices.
         webhooks = mistapi.get_all(response=response, mist_session=mh.apisession)  # Read all webhook pages.
@@ -55,7 +57,7 @@ class OrgWebhookDeliveriesExporter:
     @staticmethod
     def _persist(rawdata: list[Any], webhook_name: str) -> None:
         """Flatten and persist delivery rows."""
-        mh = importlib.import_module("MistHelper")  # WHY: read the shared writer without a startup cycle.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # Treat an empty search result as a valid outcome.
             logging.info("! No organization webhook delivery data found")  # Tell the operator no rows exist.
             return
@@ -73,7 +75,7 @@ class OrgWebhookDeliveriesExporter:
     @staticmethod
     def deliveries() -> None:
         """Search and export deliveries for one organization webhook."""
-        mh = importlib.import_module("MistHelper")  # WHY: read the shared organization resolver and session.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Organization Webhook Deliveries Search:")  # Show the selected operation.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the organization context.
         if not org_id:  # Stop when the operator does not select an organization.

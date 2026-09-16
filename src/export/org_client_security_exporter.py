@@ -6,7 +6,7 @@ Backs menu options 24 (security events), 27 (wireless clients), 28 (wired client
 packages (mistapi, tqdm). Live-global reads (``apisession``, ``OrgExportUtils``,
 ``TimeUtils``, ``CacheUtils``, ``OrgSiteExporter``, ``FilePathUtils``,
 ``CSV_FRESHNESS_MINUTES``, ``ConfigUtils``, ``DataProcessingUtils``,
-``DataExporter``) are resolved via lazy ``mh = importlib.import_module("MistHelper")``
+``DataExporter``) are resolved via lazy ``mh = the source dependency resolver``
 inside each helper. Callers continue to reach the class through the
 ``MistHelper.OrgClientSecurityExporter`` re-export alias.
 """
@@ -14,7 +14,6 @@ inside each helper. Callers continue to reach the class through the
 from __future__ import annotations  # WHY: PEP 604 unions for return types.
 
 import csv  # WHY: parse cached SiteList.csv into dict rows.
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured trace for rogue export lifecycle events.
 import os  # WHY: file existence + mtime check for fast-mode cache freshness.
 import time  # WHY: compute cache age vs freshness window.
@@ -23,6 +22,9 @@ from typing import Any  # WHY: mistapi response payloads + site rows are duck-ty
 import mistapi  # WHY: direct calls to orgs.clients + sites.insights list endpoints + get_all pager.
 from tqdm import tqdm  # WHY: per-site progress bar for rogue fan-out.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -39,7 +41,7 @@ class OrgClientSecurityExporter:
     @staticmethod
     def wireless_clients() -> None:  # Export wireless client security.
         """Export wireless client statistics for the entire organization to OrgWirelessClients.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of OrgExportUtils facade.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         mh.OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.clients.searchOrgWirelessClients, data_type="wireless clients", sort_key="mac"
         )
@@ -47,7 +49,7 @@ class OrgClientSecurityExporter:
     @staticmethod
     def wired_clients() -> None:  # Export wired client security.
         """Export wired client statistics for the entire organization to OrgWiredClients.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of OrgExportUtils facade.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         mh.OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients,
             data_type="wired clients",
@@ -69,7 +71,7 @@ class OrgClientSecurityExporter:
     @staticmethod
     def rogue_clients(fast: bool = False) -> None:
         """Export rogue clients to OrgRogueClients.csv with fast-mode cache reuse."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of CacheUtils/OrgSiteExporter.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         output_file = "OrgRogueClients.csv"  # Destination CSV for this export
         if OrgClientSecurityExporter._check_csv_cache_fresh(output_file, fast):  # Fast-mode cache hit short-circuits
             return  # Skip the API calls entirely
@@ -92,7 +94,7 @@ class OrgClientSecurityExporter:
     @staticmethod
     def rogue_aps(fast: bool = False) -> None:
         """Export rogue APs to OrgRogueAPs.csv with fast-mode cache reuse."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of CacheUtils/OrgSiteExporter.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         output_file = "OrgRogueAPs.csv"  # Destination CSV for this export
         if OrgClientSecurityExporter._check_csv_cache_fresh(output_file, fast):  # Fast-mode cache hit short-circuits
             return  # Skip the API calls entirely
@@ -115,7 +117,7 @@ class OrgClientSecurityExporter:
     @staticmethod
     def _check_csv_cache_fresh(output_file: str, fast: bool) -> bool:
         """Return True when fast-mode is on AND a CSV named output_file exists within the freshness window."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilePathUtils + CSV_FRESHNESS_MINUTES.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not fast:  # Cache check only matters in fast mode
             return False  # Force a fresh fetch in normal mode
         try:
@@ -139,7 +141,7 @@ class OrgClientSecurityExporter:
     @staticmethod
     def _load_site_list() -> list[dict[str, Any]] | None:
         """Load the cached SiteList.csv into a list of dict rows, or None when reading the CSV fails."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilePathUtils facade.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         site_list_path = mh.FilePathUtils.get_csv_path("SiteList.csv")  # Resolve the site list CSV path
         try:
             with open(site_list_path, encoding="utf-8") as f:  # Open the cached site list
@@ -155,7 +157,7 @@ class OrgClientSecurityExporter:
         fetch_callable: Any, site_id: str, site_name: str, rogue_duration: str, label: str
     ) -> list[dict[str, Any]]:
         """Fetch one site's rogue entries (clients or APs) and tag each with site_id and site_name."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             response = fetch_callable(
                 mh.apisession, site_id, duration=rogue_duration, limit=1000
@@ -175,7 +177,7 @@ class OrgClientSecurityExporter:
         fetch_callable: Any, rogue_duration: str, label: str
     ) -> list[dict[str, Any]] | None:
         """Aggregate rogue entries (clients or APs) across every site, returning None if the site list fails."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils facade.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         sites = OrgClientSecurityExporter._load_site_list()  # Read SiteList.csv into rows
         if sites is None:  # Failure reading the cached site list
             return None  # Signal caller to abort
@@ -196,7 +198,7 @@ class OrgClientSecurityExporter:
     @staticmethod
     def _export_rogues(rogues: list[dict[str, Any]], csv_basename: str, label: str) -> None:
         """Flatten + escape + write the aggregated rogue list, or report the empty-result case."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if rogues:  # At least one rogue was found
             flattened = DataProcessingUtils.flatten_nested_fields(rogues)  # Flatten nested JSON to CSV rows
             sanitized = DataProcessingUtils.escape_multiline(flattened)

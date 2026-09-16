@@ -11,7 +11,7 @@ Direct imports cover stdlib only (importlib, csv, logging, os, datetime,
 typing). Every live-global read (``FilePathUtils``, ``InputUtils``,
 ``CacheUtils``, ``OrgInventoryExporter``, ``OrgSiteExporter``,
 ``GatewayExportUtils``, ``mistapi``, ``apisession``) is resolved via lazy
-``mh = importlib.import_module("MistHelper")`` inside the methods that
+``mh = the source dependency resolver`` inside the methods that
 consume them. Callers continue to reach the class through the
 ``MistHelper.DeviceRebootManager`` re-export alias.
 """
@@ -19,12 +19,14 @@ consume them. Callers continue to reach the class through the
 from __future__ import annotations  # WHY: PEP 604 unions for future annotations.
 
 import csv  # WHY: CSV read/write for reboot lists, template mappings, and results export.
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured audit trail for reboot lifecycle events.
 import os  # WHY: existence check for the input reboot-list CSV.
 from datetime import UTC, datetime  # WHY: ISO timestamp payload for restartSiteDevice call body.
 from typing import Any  # WHY: response payloads and dict rows are heterogeneous.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.export.org_inventory_exporter import (
     OrgInventoryExporter,  # WHY: 1015 T-06 canonical import (eliminates mh.OrgInventoryExporter).
 )
@@ -67,7 +69,7 @@ class DeviceRebootManager:  # Device reboot manager.
     @staticmethod
     def _load_and_validate_reboot_targets() -> list[dict] | None:  # type: ignore[type-arg]
         """Load reboot list and return validated device targets."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilePathUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         reboot_list_path = mh.FilePathUtils.get_csv_path("GatewayTemplateRebootList.CSV")  # Reboot list path.
         if not os.path.exists(reboot_list_path):  # File missing.
             DeviceRebootManager._handle_missing_reboot_file(reboot_list_path)  # Handle the missing file.
@@ -87,7 +89,7 @@ class DeviceRebootManager:  # Device reboot manager.
     @staticmethod
     def _handle_missing_reboot_file(reboot_list_path: str) -> None:  # Handle the missing file.
         """Handle missing reboot list file - offer to create template."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils + FilePathUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.error(" GatewayTemplateRebootList.CSV not found.")  # Log the missing file.
         print(" GatewayTemplateRebootList.CSV not found.")  # Tell the user.
         print(f"   Please create this file at: {reboot_list_path}")  # Show the path.
@@ -112,7 +114,7 @@ class DeviceRebootManager:  # Device reboot manager.
     @staticmethod
     def _ensure_fresh_csv_cache() -> None:  # Refresh the CSV cache.
         """Ensure required CSV files are fresh."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of CacheUtils + exporters.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         mh.CacheUtils.check_and_generate_csv("OrgDevices.csv", OrgInventoryExporter.devices)  # Refresh devices CSV.
         mh.CacheUtils.check_and_generate_csv("SiteList.csv", mh.OrgSiteExporter.sites)  # Refresh sites CSV.
         mh.CacheUtils.check_and_generate_csv("OrgGatewayTemplates.csv", mh.GatewayExportUtils.templates)
@@ -124,7 +126,7 @@ class DeviceRebootManager:  # Device reboot manager.
     @staticmethod
     def _load_template_mappings() -> dict[str, str] | None:  # Load template name->id.
         """Load template name to ID mapping from OrgGatewayTemplates.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilePathUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             gateway_templates_path = mh.FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")  # Templates path.
             template_name_to_id = DeviceRebootManager._read_template_name_id_csv(gateway_templates_path)  # Parse rows.
@@ -157,7 +159,7 @@ class DeviceRebootManager:  # Device reboot manager.
     @staticmethod
     def _load_reboot_template_names() -> set[str] | None:  # Load reboot template names.
         """Load template names from reboot list file."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilePathUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             reboot_list_path = mh.FilePathUtils.get_csv_path("GatewayTemplateRebootList.CSV")  # Reboot list path.
             reboot_template_names = DeviceRebootManager._read_reboot_names_csv(reboot_list_path)  # Parse rows.
@@ -219,7 +221,7 @@ class DeviceRebootManager:  # Device reboot manager.
         site_to_template: dict[str, tuple],
     ) -> list[dict] | None:
         """Scan AllSiteGatewayConfigs.csv and collect gateway-row targets whose site uses a tracked template."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilePathUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         reboot_targets: list[dict] = []  # Collect reboot targets.
         try:
             gateway_configs_path = mh.FilePathUtils.get_csv_path("AllSiteGatewayConfigs.csv")  # Configs path.
@@ -259,7 +261,7 @@ class DeviceRebootManager:  # Device reboot manager.
     @staticmethod
     def _find_sites_using_templates(template_ids: set[str], id_to_name: dict[str, str]) -> dict[str, tuple]:  # type: ignore[type-arg]
         """Find sites that use the target gateway templates."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilePathUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         site_to_template = {}  # Map of site_id -> (template_id, template_name, site_name) for matching sites
         try:
             site_list_path = mh.FilePathUtils.get_csv_path("SiteList.csv")  # Resolve the cached site list CSV path
@@ -306,7 +308,7 @@ class DeviceRebootManager:  # Device reboot manager.
     @staticmethod
     def _prompt_reboot_confirmation(target_count: int) -> bool:
         """Read the REBOOT confirmation phrase and log the accept/cancel decision."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         print("\n  Type 'REBOOT' to confirm, or anything else to cancel:")
         print("   By typing 'REBOOT', you accept all risks and liability.")
         try:
@@ -354,7 +356,7 @@ class DeviceRebootManager:  # Device reboot manager.
     @staticmethod
     def _reboot_one_device(device: dict) -> str:  # type: ignore[type-arg]
         """Send one restartSiteDevice call and return the status string (or 'ERROR: ...')."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of mistapi + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             logging.info("Rebooting device '%s'", device["device_name"])  # Log before the call.
             print(f"! Rebooting {device['device_name']} at {device['site_name']}...")
@@ -411,7 +413,7 @@ class DeviceRebootManager:  # Device reboot manager.
     @staticmethod
     def _export_reboot_results(results: list[dict]) -> None:  # type: ignore[type-arg]
         """Export reboot results to CSV."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilePathUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             results_csv_path = mh.FilePathUtils.get_csv_path("GatewayTemplateRebootResults.CSV")
             with open(results_csv_path, "w", newline="", encoding="utf-8") as file:

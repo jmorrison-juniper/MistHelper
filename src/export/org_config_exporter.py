@@ -5,19 +5,21 @@ Backs menu options 44 (PSKs), 45 (webhooks), 46 (WLANs), 50 (MX Edges), plus
 the interactive MSP-orgs export. Direct imports cover stdlib + installed
 packages (mistapi). Live-global reads (``apisession``, ``msp_privileges``,
 ``OrgExportUtils``, ``InputUtils``, ``DataExporter``, ``DataProcessingUtils``)
-are resolved via lazy ``mh = importlib.import_module("MistHelper")`` inside
+are resolved via lazy ``mh = the source dependency resolver`` inside
 each helper. Callers continue to reach the class through the
 ``MistHelper.OrgConfigExporter`` re-export alias.
 """
 
 from __future__ import annotations  # WHY: PEP 604 unions for return types.
 
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured trace for MSP export lifecycle events.
 from typing import Any  # WHY: mistapi response payloads are duck-typed here.
 
 import mistapi  # WHY: direct calls to orgs.psks/webhooks/wlans/mxedges list endpoints.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -33,13 +35,13 @@ class OrgConfigExporter:
     @staticmethod
     def psks() -> None:  # Export PSKs.
         """Export organization PSKs to OrgPsks.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of OrgExportUtils facade.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         mh.OrgExportUtils.export_data(api_call=mistapi.api.v1.orgs.psks.listOrgPsks, data_type="psks", sort_key="name")
 
     @staticmethod
     def webhooks() -> None:  # Export webhooks.
         """Export organization webhooks to OrgWebhooks.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of OrgExportUtils facade.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         mh.OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.webhooks.listOrgWebhooks, data_type="webhooks", sort_key="name"
         )
@@ -47,7 +49,7 @@ class OrgConfigExporter:
     @staticmethod
     def wlans() -> None:  # Export WLANs.
         """Export organization WLANs to OrgWlans.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of OrgExportUtils facade.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         mh.OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.wlans.listOrgWlans, data_type="wlans", sort_key="ssid"
         )
@@ -55,7 +57,7 @@ class OrgConfigExporter:
     @staticmethod
     def mx_edges() -> None:  # Export Mist Edges (MSP flow).
         """Export MX Edge data to OrgMxEdges.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of OrgExportUtils facade.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         mh.OrgExportUtils.export_data(
             api_call=mistapi.api.v1.orgs.mxedges.listOrgMxEdges, data_type="mx edges", sort_key="name"
         )
@@ -63,7 +65,7 @@ class OrgConfigExporter:
     @staticmethod
     def msp() -> None:
         """Export MSP data -- lists organizations under the selected MSP to MspOrganizations.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of msp_privileges cache.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not mh.msp_privileges:  # No MSP-level access.
             OrgConfigExporter._show_no_msp_access_guidance()  # Print the guidance banner.
             return  # Abort -- nothing to query.
@@ -102,7 +104,7 @@ class OrgConfigExporter:
     @staticmethod
     def _select_msp_to_query() -> dict | None:  # type: ignore[type-arg]
         """Auto-pick the single MSP or prompt the user when several are available."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of msp_privileges + InputUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         print("")  # Spacer.
         print("=" * 60)  # Divider.
         print("  MSP ORGANIZATION EXPORT")  # Section title.
@@ -130,7 +132,7 @@ class OrgConfigExporter:
     @staticmethod
     def _fetch_and_export_msp_orgs(selected_msp: dict) -> None:  # type: ignore[type-arg]
         """Fetch orgs under ``selected_msp`` and write MspOrganizations.csv with the MSP tags."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         msp_id = selected_msp["msp_id"]  # MSP id.
         msp_name = selected_msp["msp_name"]  # MSP name.
         print(f"  Fetching organizations for MSP: {msp_name}...")  # Tell the user.
@@ -153,7 +155,7 @@ class OrgConfigExporter:
     @staticmethod
     def _write_msp_orgs_csv(orgs_data: list, msp_id: str, msp_name: str) -> None:  # type: ignore[type-arg]
         """Process ``orgs_data``, write MspOrganizations.csv, and print the summary."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter facade.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not orgs_data:  # No orgs.
             print("  No organizations found under this MSP")  # Tell the user.
             logging.info("MSP has no organizations")  # Log it.

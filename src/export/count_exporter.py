@@ -19,13 +19,16 @@ Why:
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on the project toolchain.
 
-import importlib  # WHY: lazy MistHelper import avoids a circular load at module init.
+import importlib  # WHY: source resolver access avoids a circular load at module init.
 import logging  # WHY: structured trace for export lifecycle events.
 from dataclasses import dataclass  # WHY: the operation table needs a named, frozen row type.
 from typing import Any  # WHY: raw count rows are duck-typed dicts from mistapi.
 
 import mistapi  # WHY: direct SDK access for every count operation.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: canonical flatten and escape helpers keep CSV output consistent with peers.
@@ -167,7 +170,7 @@ class CountExporter:
         Returns:
             The chosen operation, or None when the operator declines.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch keeps the import acyclic.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Offering %d %s count operations", len(operations), scope_label)  # Pre-prompt log.
         for index, operation in enumerate(operations, start=1):  # Number the rows from one.
             print(f"  [{index}] {operation.operation}")  # Operator-facing choice row.
@@ -197,7 +200,7 @@ class CountExporter:
             An empty count response is legitimate, for example an org with no
             alarms. We report it plainly so scheduled runs stay quiet.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the DataExporter helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No rows, so inform the operator and return.
             logging.info("! No %s data found", operation)  # ASCII-only user notice.
             return
@@ -217,7 +220,7 @@ class CountExporter:
             Every count operation takes the same two positional arguments, so a
             single caller covers all 70.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         callable_obj = CountExporter._resolve(operation)  # Resolve the SDK function.
         if callable_obj is None:  # The resolver already logged which part was missing.
             logging.info("! %s is unavailable in this SDK version.", operation.operation)  # Notice.
@@ -235,7 +238,7 @@ class CountExporter:
     @staticmethod
     def org_counts() -> None:
         """Run any org-scoped count operation (menu 235)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the org resolver.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Org Counts:")  # Menu header echoed to the operator.
         operation = CountExporter._choose(_ORG_OPS, "org")  # Ask which count to run.
         if operation is None:  # The chooser already logged the cancellation.
@@ -249,7 +252,7 @@ class CountExporter:
     @staticmethod
     def site_counts() -> None:
         """Run any site-scoped count operation (menu 236)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the shared site resolver.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Site Counts:")  # Menu header echoed to the operator.
         operation = CountExporter._choose(_SITE_OPS, "site")  # Ask which count to run.
         if operation is None:  # The chooser already logged the cancellation.

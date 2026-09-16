@@ -7,20 +7,22 @@ historical ``MistHelper.APICoreFetchUtils`` / ``mh.APICoreFetchUtils``
 callers keep working.
 
 The module-level ``apisession`` and ``DEFAULT_API_PAGE_LIMIT`` globals are
-resolved lazily via ``importlib.import_module("MistHelper")`` inside method
+resolved lazily via the source dependency resolver inside method
 bodies to keep FR-028 IG-health clean (no top-level MistHelper import
 statement).
 """
 
 from __future__ import annotations  # WHY: PEP 604 unions in annotations.
 
-import importlib  # WHY: lazy MistHelper fetch of the live API session.
 import logging  # WHY: debug trace for API-response unwrap.
 from typing import Any  # WHY: dynamic response-object annotation.
 
 import mistapi  # WHY: dotted-path Mist API resolution + pagination helper.
 
 from src.config import runtime_settings  # WHY: read the page limit from a source module.
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 
 
 class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
@@ -42,7 +44,7 @@ class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
 
         SECURITY: Read-only. No sensitive data logged.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the live API session only.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         response = mistapi.api.v1.orgs.sites.listOrgSites(
             mh.apisession, org_id, limit=runtime_settings.DEFAULT_API_PAGE_LIMIT
         )
@@ -60,7 +62,7 @@ class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
 
         SECURITY: Read-only. No secrets in inventory object fields.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the live API session only.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         response = mistapi.api.v1.orgs.inventory.getOrgInventory(
             mh.apisession, org_id, vc=True, limit=runtime_settings.DEFAULT_API_PAGE_LIMIT
         )  # vc=True includes all physical VC member devices

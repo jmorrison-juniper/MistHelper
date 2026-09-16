@@ -102,7 +102,7 @@ def test_check_stop_signal_delegates_to_config_utils() -> None:
     """Returns whatever ConfigUtils.check_stop_signal reports (coerced to bool)."""
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.check_stop_signal.return_value = True
-    with patch("src.analytics.data_collection_manager.importlib.import_module", return_value=fake_mh):
+    with patch("src.analytics.data_collection_manager.SourceDependencyResolver", fake_mh):
         assert DataCollectionManager._check_stop_signal() is True
     fake_mh.ConfigUtils.check_stop_signal.assert_called_once_with()
 
@@ -111,7 +111,7 @@ def test_check_stop_signal_false_path() -> None:
     """False result flows through."""
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.check_stop_signal.return_value = False
-    with patch("src.analytics.data_collection_manager.importlib.import_module", return_value=fake_mh):
+    with patch("src.analytics.data_collection_manager.SourceDependencyResolver", fake_mh):
         assert DataCollectionManager._check_stop_signal() is False
 
 
@@ -123,7 +123,7 @@ def test_collection_cycle_steps_returns_five_labelled_callables() -> None:
     fake_mh = _make_mh()
     with (
         patch("src.analytics.data_collection_manager.OrgInventoryExporter") as inv,
-        patch("src.analytics.data_collection_manager.importlib.import_module", return_value=fake_mh),
+        patch("src.analytics.data_collection_manager.SourceDependencyResolver", fake_mh),
     ):
         steps = DataCollectionManager._collection_cycle_steps()
     assert len(steps) == 5
@@ -224,7 +224,7 @@ def test_refresh_support_data_invokes_check_and_generate_for_each_pair() -> None
     fake_mh = _make_mh()
     with (
         patch("src.analytics.data_collection_manager.OrgInventoryExporter") as inv,
-        patch("src.analytics.data_collection_manager.importlib.import_module", return_value=fake_mh),
+        patch("src.analytics.data_collection_manager.SourceDependencyResolver", fake_mh),
     ):
         DataCollectionManager._refresh_support_data()
     call_args = fake_mh.CacheUtils.check_and_generate_csv.call_args_list
@@ -272,7 +272,7 @@ def test_load_support_data_sources_returns_all_six_groups_and_speedtest_when_pre
     fake_mh.CacheUtils.load_csv_grouped_by_key.side_effect = loader
     with (
         patch("src.analytics.data_collection_manager.os.path.exists", return_value=True),
-        patch("src.analytics.data_collection_manager.importlib.import_module", return_value=fake_mh),
+        patch("src.analytics.data_collection_manager.SourceDependencyResolver", fake_mh),
     ):
         out = DataCollectionManager._load_support_data_sources()
     assert out["site_data"] == grouped["SiteList.csv"]
@@ -291,7 +291,7 @@ def test_load_support_data_sources_speedtest_empty_when_file_missing() -> None:
     fake_mh.CacheUtils.load_csv_grouped_by_key.return_value = {}
     with (
         patch("src.analytics.data_collection_manager.os.path.exists", return_value=False),
-        patch("src.analytics.data_collection_manager.importlib.import_module", return_value=fake_mh),
+        patch("src.analytics.data_collection_manager.SourceDependencyResolver", fake_mh),
     ):
         out = DataCollectionManager._load_support_data_sources()
     assert out["speedtest_data"] == {}
@@ -314,7 +314,7 @@ def test_generate_site_packages_skips_sites_without_alarms_or_events() -> None:
         "port_stats_data": {},
         "speedtest_data": {},
     }
-    with patch("src.analytics.data_collection_manager.importlib.import_module", return_value=fake_mh):
+    with patch("src.analytics.data_collection_manager.SourceDependencyResolver", fake_mh):
         DataCollectionManager._generate_site_packages(data_sources)
     fake_mh.CacheUtils.write_support_data_to_csv.assert_not_called()
 
@@ -331,7 +331,7 @@ def test_generate_site_packages_writes_package_for_site_with_alarms() -> None:
         "port_stats_data": {"s1": [{"ps": 1}]},
         "speedtest_data": {"s1": [{"st": 1}]},
     }
-    with patch("src.analytics.data_collection_manager.importlib.import_module", return_value=fake_mh):
+    with patch("src.analytics.data_collection_manager.SourceDependencyResolver", fake_mh):
         DataCollectionManager._generate_site_packages(data_sources)
     fake_mh.CacheUtils.write_support_data_to_csv.assert_called_once()
     written_data, filename = fake_mh.CacheUtils.write_support_data_to_csv.call_args[0]
@@ -358,7 +358,7 @@ def test_generate_site_packages_writes_package_for_site_with_events_only() -> No
         "port_stats_data": {},
         "speedtest_data": {},
     }
-    with patch("src.analytics.data_collection_manager.importlib.import_module", return_value=fake_mh):
+    with patch("src.analytics.data_collection_manager.SourceDependencyResolver", fake_mh):
         DataCollectionManager._generate_site_packages(data_sources)
     fake_mh.CacheUtils.write_support_data_to_csv.assert_called_once()
     _, filename = fake_mh.CacheUtils.write_support_data_to_csv.call_args[0]

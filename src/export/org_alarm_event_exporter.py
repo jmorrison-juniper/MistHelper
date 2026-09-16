@@ -10,13 +10,15 @@ re-export alias.
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+.
 
-import importlib  # WHY: lazy MistHelper import to reach live helper globals without circular load.
 import json  # WHY: debug-dump sample device events.
 import logging  # WHY: structured trace for export lifecycle events.
 from typing import Any  # WHY: api_call is duck-typed mistapi callable.
 
 import mistapi  # WHY: direct SDK access for alarms/events endpoints.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -45,7 +47,7 @@ class OrgAlarmEventExporter:
             sort_key: Field to sort results by.
             **api_kwargs: Additional arguments for the API call.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of APIDataFetcher helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Starting export of organization %s...", data_type)  # Log export start.
         safe_data_type = data_type.replace(" ", "").replace("-", "").title()  # Sanitize data type for filename.
         filename = f"Org{safe_data_type}.csv"  # Build output CSV name.
@@ -61,7 +63,7 @@ class OrgAlarmEventExporter:
     @staticmethod
     def alarms() -> None:
         """Export open organization alarms from the past 24 hours to OrgAlarms.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of APIDataFetcher helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Menu #20: Starting organization alarms export")  # Log alarms menu start.
         logging.debug("ENTRY: OrgAlarmEventExporter.alarms()")  # Trace entry for debugging.
         hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
@@ -106,7 +108,7 @@ class OrgAlarmEventExporter:
     @staticmethod
     def device_events() -> None:
         """Export all device events from the past 24 hours to OrgDeviceEvents.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils/DataExporter + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Menu #21: Starting device events export")  # Log device events menu start.
         logging.info("Search Org Device Events:")  # Log search start.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
@@ -134,7 +136,7 @@ class OrgAlarmEventExporter:
     @staticmethod
     def device_events_52w() -> None:
         """Delegated 52-week device event export entrypoint."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils + globals for exporter deps.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         exporter = DeviceEvents52wExporter(  # Build the 52w exporter.
             apisession=mh.apisession,
             mistapi=mistapi,

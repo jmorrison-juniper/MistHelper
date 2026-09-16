@@ -8,12 +8,14 @@ is kept on the class. Callers continue to reach it through the
 
 from __future__ import annotations  # WHY: PEP 604 unions for return types.
 
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured trace for export lifecycle events.
 from typing import Any  # WHY: raw gateway rows are duck-typed dicts from mistapi.
 
 import mistapi  # WHY: direct SDK access for site device stats + HA cluster endpoints.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -55,7 +57,7 @@ class GatewayHaExporter:
     @staticmethod
     def _persist_ha_export(rows: list[Any]) -> None:
         """Flatten + write HA gateway rows to CSV/backend and log the count."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         flat_rows = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested dicts for CSV/DB.
         filename = "GatewayHaClusterInfo.csv"  # Output filename for the export.
         mh.DataExporter.write_with_format_selection(
@@ -66,7 +68,7 @@ class GatewayHaExporter:
     @staticmethod
     def _collect_ha_gateways(site_id: str) -> list[Any] | None:
         """Fetch site gateway stats and return HA-enabled gateways; ``None`` when none exist (operator notified)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of APICoreFetchUtils + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Fetching gateway device stats for site %s", site_id)  # Trace before API call
         stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(mh.apisession, site_id, type="gateway")  # API call
         all_gateways = mh.APICoreFetchUtils.get_api_response_data(stats_resp)  # Unwrap list from response
@@ -82,7 +84,7 @@ class GatewayHaExporter:
     @staticmethod
     def ha_cluster_info() -> None:  # Export HA cluster info.
         """Export HA gateway cluster info for a selected site (Menu #87)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils + PromptUtils helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Starting Gateway HA Cluster Info export (Menu #87)")  # Trace entry point
         try:
             org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve or prompt for org ID
@@ -103,7 +105,7 @@ class GatewayHaExporter:
     @staticmethod
     def _fetch_ha_pair_for_gateway(site_id: str, device_id: str) -> dict[str, Any]:
         """Call /sites/{site_id}/devices/{device_id}/ha and return node0/node1 MAC + count (empty pair on error)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of APICoreFetchUtils + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             ha_resp = mistapi.api.v1.sites.devices.GetSiteDeviceHaClusterNode(  # Get node pair.
                 mh.apisession, site_id, device_id

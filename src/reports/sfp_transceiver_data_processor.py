@@ -10,10 +10,12 @@ the ``MistHelper.SFPTransceiverDataProcessor`` re-export alias.
 from __future__ import annotations  # WHY: PEP 604 unions for return types.
 
 import csv  # WHY: DictReader for header-keyed CSV parsing of port stats + device inventory.
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured trace for merge lifecycle events.
 import os  # WHY: filesystem existence checks for prerequisite CSV files.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.export.org_inventory_exporter import (
     OrgInventoryExporter,  # WHY: 1015 T-06 canonical import (eliminates mh.OrgInventoryExporter).
 )
@@ -39,7 +41,7 @@ class SFPTransceiverDataProcessor:
     @staticmethod
     def _ensure_prerequisite_csvs(org_port_stats_path: str, devices_with_site_info_path: str) -> None:
         """Generate prerequisite CSVs (port stats and devices-with-site-info) if missing."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of exporter facades.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.debug(
             "ENTRY: _ensure_prerequisite_csvs(%s, %s)",
             org_port_stats_path,
@@ -156,7 +158,7 @@ class SFPTransceiverDataProcessor:
     @staticmethod
     def _finalize_merge_output(merged_data: list[dict[str, str]]) -> None:
         """Write merged rows to disk and emit the success-path INFO and user-facing messages."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         mh.DataExporter.write_with_format_selection(
             merged_data,
             SFPTransceiverDataProcessor.OUTPUT_FILENAME,
@@ -205,7 +207,7 @@ class SFPTransceiverDataProcessor:
             - Filter port stats to rows containing a non-empty transceiver model.
             - Write merged result to `MergedTransceiverData.csv` via DataExporter.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FilePathUtils helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.debug("ENTRY: SFPTransceiverDataProcessor.merge_transceiver_data()")  # Trace entry
         org_port_stats_path = mh.FilePathUtils.get_csv_path("OrgDevicePortStats.csv")  # Source: per-port stats CSV
         devices_with_site_info_path = mh.FilePathUtils.get_csv_path("AllDevicesWithSiteInfo.csv")  # Source: device+site

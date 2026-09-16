@@ -14,7 +14,7 @@ os, time) and third-party (tqdm). Every live-global read
 ``DataProcessingUtils``, ``DataExporter``, ``ConfigUtils``,
 ``ConnectionPoolExecutor``, ``FAST_MODE_*`` constants,
 ``FastModeBackoffMultiplier``) is resolved via lazy
-``mh = importlib.import_module("MistHelper")`` inside the methods that
+``mh = the source dependency resolver`` inside the methods that
 need them. Callers continue to reach the class through the
 ``MistHelper.OrgDeviceStatsExporter`` re-export alias.
 """
@@ -23,7 +23,6 @@ from __future__ import annotations  # WHY: PEP 604 unions for future annotations
 
 import concurrent.futures  # WHY: as_completed for retry pool.
 import csv  # WHY: parse cached SiteList.csv.
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured trace + info/warn/error logging.
 import os  # WHY: filesystem cache freshness checks.
 import time  # WHY: wall-time epoch + elapsed timing.
@@ -31,7 +30,10 @@ from concurrent.futures import ThreadPoolExecutor  # WHY: bounded retry worker p
 
 from tqdm import tqdm  # WHY: progress bar during retry pool.
 
-from src.config import runtime_settings  # WHY: read shared source settings without a MistHelper back-reference.
+from src.config import runtime_settings  # WHY: read shared source settings without a root-module back-reference.
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -71,7 +73,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
     @staticmethod
     def device_stats(fast: bool = False):  # Export org device stats.
         """Export statistics for all devices in the organization to OrgDeviceStats.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live globals.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         output_file = "OrgDeviceStats.csv"  # Output filename
         if OrgDeviceStatsExporter._device_stats_cache_hit(output_file, fast):  # Fast cache check
             return  # Skip re-fetch when cache fresh
@@ -121,7 +123,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
     @staticmethod
     def _load_port_stats_sites_from_api(org_id: str) -> list[tuple[str | None, str]]:
         """API fallback path for loading port-stats sites when cache fails."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of mistapi + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         site_response = mh.mistapi.api.v1.orgs.sites.listOrgSites(mh.apisession, org_id, limit=1000)  # API fallback
         site_data = mh.mistapi.get_all(response=site_response, mist_session=mh.apisession)  # Paginate
         sites = [
@@ -149,7 +151,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
     @staticmethod
     def _load_sites_from_cached_csv() -> list[tuple[str | None, str]] | None:
         """Read SiteList cache and return tuples, or ``None`` when the cache cannot be used."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of CacheUtils/OrgSiteExporter/FilePathUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:  # Prefer cached site CSV to avoid extra API call
             mh.CacheUtils.check_and_generate_csv("SiteList.csv", mh.OrgSiteExporter.sites)  # Ensure CSV exists
             site_list_path = mh.FilePathUtils.get_csv_path("SiteList.csv")  # Resolve path
@@ -176,7 +178,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
     @staticmethod
     def _attempt_site_port_stats_fetch(site_id, site_name, connection_semaphore):
         """Single fetch attempt for one site's port stats. Returns list or raises."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of mistapi + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         with connection_semaphore:  # Bound concurrent API calls
             response = mh.mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(mh.apisession, site_id, limit=1000)
             port_stats = mh.mistapi.get_all(response=response, mist_session=mh.apisession)  # Paginate
@@ -196,7 +198,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
     @staticmethod
     def _handle_site_port_stats_retry(attempt, site_name, exception):
         """Backoff + log retry. Return True if more attempts remain."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of FastModeBackoffMultiplier only.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if attempt < fast_mode_constants.FAST_MODE_MAX_RETRIES:  # More retries remain
             backoff_delay = (  # Build the same exponential curve with source-owned retry settings.
                 fast_mode_constants.FAST_MODE_RETRY_DELAY * (mh.FastModeBackoffMultiplier.VALUE**attempt)
@@ -310,7 +312,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
     @staticmethod
     def _save_device_port_stats_output(all_port_stats, output_file: str) -> None:  # Save device port stats output.
         """Sort, sanitize, and persist collected port-stat rows."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils/DataExporter.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not all_port_stats:  # Empty dataset should skip file creation and clearly tell the operator why.
             logging.warning(" No port statistics collected. CSV not created.")  # Log absence of exportable data.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
@@ -371,7 +373,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
     @staticmethod
     def _run_fast_device_port_stats(output_file: str) -> None:  # Run fast device port stats.
         """Execute fast-mode site-parallel port stats collection and output."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils/ConnectionPoolExecutor.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info(
             "* Fast mode: Parallelizing port stats retrieval across sites"
         )  # Announce fast-mode collection strategy.
@@ -403,7 +405,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         Fast mode caches recent CSV (CSV_FRESHNESS_MINUTES) and parallelizes site fetches with
         bounded concurrency. Non-fast mode issues one org-level paginated call. SECURITY: read-only.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of APIDataFetcher/mistapi.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         output_file = "OrgDevicePortStats.csv"  # Stable filename for cache + downstream consumers.
         if OrgDeviceStatsExporter._port_stats_cache_hit(output_file, fast):  # Honor fast cache before API.
             return  # Fresh cache satisfied the request.
@@ -449,7 +451,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
 
         Fast mode reuses recent CSV. Normal mode does an org-level paginated fetch. SECURITY: read-only.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live globals.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         output_file = "OrgVPNPeerStats.csv"  # Output filename.
         if OrgDeviceStatsExporter._vpn_peer_stats_cache_hit(output_file, fast):  # Honor fast cache.
             return  # Cache satisfied.

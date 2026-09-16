@@ -5,19 +5,22 @@ Backs client-selection UX across the CLI (capture, SSH shell, and site
 device prompts). Direct imports cover stdlib + installed packages
 (mistapi, prettytable). Live-global reads (``apisession``, ``InputUtils``,
 ``PromptUtils``, ``ConfigUtils``) are resolved via lazy
-``mh = importlib.import_module("MistHelper")`` inside each helper. Callers
+``mh = the source dependency resolver`` inside each helper. Callers
 continue to reach the class through the ``MistHelper.PromptClientUtils``
 re-export alias.
 """
 
 from __future__ import annotations  # WHY: PEP 604 unions for return types.
 
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured trace for client-selection lifecycle events.
 from typing import Any  # WHY: mistapi response payloads are duck-typed here.
 
 import mistapi  # WHY: direct calls to sites.clients + sites.wired_clients search endpoints.
 from prettytable import PrettyTable  # WHY: render the interactive client selection table.
+
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 
 
 class PromptClientUtils:
@@ -30,7 +33,7 @@ class PromptClientUtils:
     @staticmethod
     def select_client_mac(site_id: str) -> str | None:
         """Prompt the operator to select a connected client at ``site_id`` and return its MAC."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.debug("Fetching connected clients for site: %s", site_id)  # Trace start.
         try:
             all_clients = PromptClientUtils._fetch_all_clients_for_site(site_id)  # Wireless + wired tagged.
@@ -68,7 +71,7 @@ class PromptClientUtils:
     @staticmethod
     def _fetch_all_clients_for_site(site_id: str) -> list:
         """Fetch wireless and wired clients for ``site_id`` and tag each with a ``connection_type``."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         wireless = PromptClientUtils._normalize_clients_response(
             mistapi.api.v1.sites.clients.searchSiteWirelessClients(mh.apisession, site_id)
         )  # Wifi search + payload normalize
@@ -135,7 +138,7 @@ class PromptClientUtils:
     @staticmethod
     def _handle_client_selection_input(user_input: str, index_to_client: dict) -> str | None:
         """Resolve ``user_input`` to a MAC: manual entry, cancel, or numeric index lookup."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if user_input.lower() == "m":  # Manual MAC path.
             manual_mac = mh.InputUtils.safe_input("Enter client MAC address: ", context="manual_mac")  # Prompt.
             logging.info("User chose manual MAC entry: %s", manual_mac)  # Log manual choice.
@@ -194,7 +197,7 @@ class PromptClientUtils:
     @staticmethod
     def select_client(site_id: str | None = None) -> tuple[str | None, str | None, str | None]:
         """Prompt user to select a wireless/wired client. Returns (mac, type, site_id) or (None,None,None)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PromptUtils + ConfigUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY (#886 Phase 2): retire print() decorations in favor of logging.warning
         # (visible on default root-logger config while satisfying the ruff T20 ban).
         logging.warning("\n  Client Selection")
@@ -215,7 +218,7 @@ class PromptClientUtils:
         org_id: str, site_id: str | None
     ) -> tuple[str | None, str | None, str | None]:
         """Fetch all clients for org/site, render table, and prompt the user to pick one (returns selection tuple)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PromptUtils facade.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         all_clients = mh.PromptUtils._fetch_all_clients(org_id, site_id)  # Fetch all clients for org/site.
         if not all_clients:  # Handle empty client set.
             # WHY (#886 Phase 2): retire print() in favor of logging.warning (surfaces on default root-logger).
@@ -236,7 +239,7 @@ class PromptClientUtils:
         Returns:
             tuple: (site_id, device_id) or (None, None) if selection failed
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PromptUtils facade.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not site_id:  # Resolve site when not supplied.
             site_id = mh.PromptUtils.select_site_id_from_csv()  # Prompt site from CSV.
             if not site_id:  # Handle no-site selection.

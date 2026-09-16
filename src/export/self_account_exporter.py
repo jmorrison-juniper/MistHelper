@@ -25,12 +25,15 @@ Security:
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on the project toolchain.
 
-import importlib  # WHY: lazy MistHelper import avoids a circular load at module init.
 import logging  # WHY: structured trace for the verification lifecycle.
 from datetime import UTC, datetime  # WHY: a timezone-aware UTC audit timestamp.
 from typing import Any  # WHY: the API payload is untyped.
 
 import mistapi  # WHY: the SDK provides the verifySelfEmail call.
+
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 
 # The operationId that selects the primary-key strategy for the written row.
 _OPERATION = "verifySelfEmail"
@@ -53,7 +56,7 @@ class SelfAccountExporter:
             The token is a credential, so the prompt never echoes it, and the
             safe_input helper keeps the EOF path inside the menu.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the shared input helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         token = str(  # WHY: the lazy module attribute is untyped, so pin the declared str return.
             mh.InputUtils.safe_input(
                 "Paste the email change token from the Mist email: ",
@@ -82,7 +85,7 @@ class SelfAccountExporter:
             The call applies the email change, so the caller reports by status
             code and never retries.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the apisession global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Calling verifySelfEmail for the configured account")  # Pre-call log, no token.
         response = mistapi.api.v1.self.update.verifySelfEmail(mh.apisession, token)  # The single SDK call.
         detail = SelfAccountExporter._detail(response.data)  # WHY: a 400 body carries the reason.
@@ -115,7 +118,7 @@ class SelfAccountExporter:
             The shared pipeline keeps CSV, SQLite, and ArangoDB writes in one
             place, and the operationId selects the primary-key strategy.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the DataExporter helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         mh.DataExporter.write_with_format_selection(  # Persist through the CSV, SQLite, or Arango selector.
             [row], filename, api_function_name=_OPERATION
         )
@@ -130,7 +133,7 @@ class SelfAccountExporter:
             single API call, and the write, and it keeps every failure inside
             the menu.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the org resolver.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Email Change Token Verification:")  # Menu header echoed to the operator.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve which org to scope to.
         if not org_id:  # The resolver already logged the cancellation.

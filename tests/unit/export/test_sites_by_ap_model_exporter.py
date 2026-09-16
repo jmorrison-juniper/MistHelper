@@ -4,7 +4,7 @@ Why: Un-omitting this module from ``[tool.coverage.run].omit`` requires 100%
 line + branch coverage across the 12 static methods that back menu 88 -- the
 Sites by AP Model CSV export. Cross-class collaborators (APICoreFetchUtils,
 InputUtils, ConfigUtils, DataExporter) are resolved lazily through
-``importlib.import_module("MistHelper")``. Tests inject a fake ``MistHelper``
+``SourceDependencyResolver``. Tests inject a fake ``MistHelper``
 module via ``sys.modules`` to observe and control those interactions without
 importing the monolith.
 """

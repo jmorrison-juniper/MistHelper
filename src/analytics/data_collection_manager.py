@@ -8,13 +8,15 @@ through the ``MistHelper.DataCollectionManager`` re-export alias.
 
 from __future__ import annotations  # WHY: PEP 604 unions for return types.
 
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured trace for collection lifecycle events.
 import os  # WHY: filesystem existence check for optional speedtest CSV.
 import time  # WHY: pace API calls between exporters and back off on failure.
 from datetime import UTC, datetime  # WHY: timestamp banner per loop iteration.
 from typing import Any  # WHY: callable/step tuple lists are duck-typed.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.export.org_inventory_exporter import (
     OrgInventoryExporter,  # WHY: 1015 T-06 canonical import (eliminates mh.OrgInventoryExporter).
 )
@@ -69,13 +71,13 @@ class DataCollectionManager:
     @staticmethod
     def _check_stop_signal() -> bool:  # Check the stop signal.
         """Check for stop file signal and remove if found."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         return bool(mh.ConfigUtils.check_stop_signal())  # Delegate to config utils.
 
     @staticmethod
     def _collection_cycle_steps() -> list[tuple[str, Any]]:
         """Return the ordered (label, callable) pairs invoked each iteration of continuous_loop."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of exporter facades.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         return [  # Each tuple = printed banner + exporter function.
             ("  Collecting site list...", mh.OrgSiteExporter.sites),
             ("  Collecting organization inventory...", OrgInventoryExporter.inventory),
@@ -130,7 +132,7 @@ class DataCollectionManager:
     @staticmethod
     def _refresh_support_data() -> None:  # Refresh required CSV files.
         """Refresh all required CSV files for support package generation."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of exporter facades + CacheUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         required_files = [  # Required files and fetchers.
             ("OrgAlarms.csv", mh.OrgAlarmEventExporter.alarms),
             ("OrgDeviceEvents.csv", mh.OrgAlarmEventExporter.device_events),
@@ -147,7 +149,7 @@ class DataCollectionManager:
     @staticmethod
     def _load_support_data_sources() -> dict:  # type: ignore[type-arg]
         """Load all CSV data sources for support package assembly."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of CacheUtils + FilePathUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         sources = {  # Load the data sources.
             "site_data": mh.CacheUtils.load_csv_grouped_by_key("SiteList.csv", "id"),
             "alarms_data": mh.CacheUtils.load_csv_grouped_by_key("OrgAlarms.csv", "site_id"),
@@ -168,7 +170,7 @@ class DataCollectionManager:
     @staticmethod
     def _generate_site_packages(data_sources: dict) -> None:  # type: ignore[type-arg]
         """Generate support package for each site with alarms or events."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of CacheUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         site_data = data_sources["site_data"]  # Read the site data.
 
         for site_id in site_data:  # Walk sites. Values are looked up per-site as needed.

@@ -31,12 +31,14 @@ Why two files:
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on the project toolchain.
 
-import importlib  # WHY: lazy MistHelper import avoids a circular load at module init.
 import logging  # WHY: structured trace for export lifecycle events.
 from typing import Any  # WHY: raw license rows are duck-typed dicts from mistapi.
 
 import mistapi  # WHY: direct SDK access for listMspLicenses.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: canonical flatten and escape helpers keep CSV output consistent with peers.
@@ -73,7 +75,7 @@ class MSPLicenseExporter:
         Returns:
             The response body as a dict, or an empty dict when the body is absent.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Calling listMspLicenses for msp_id=%s", msp_id)  # Pre-call log.
         response = mistapi.api.v1.msps.licenses.listMspLicenses(mh.apisession, msp_id)  # SDK call.
         payload = getattr(response, "data", None)  # The SDK exposes the body on .data.
@@ -149,7 +151,7 @@ class MSPLicenseExporter:
             api_function_name: The key that selects the primary-key strategy.
             noun: The word shown to the operator, for example ``license summary``.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the DataExporter helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rows:  # No rows, so inform the operator and return.
             logging.info("! No MSP %s data found", noun)  # ASCII-only user notice.
             return

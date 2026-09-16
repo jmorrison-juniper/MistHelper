@@ -38,21 +38,27 @@ logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print
 
 def _get_config_utils() -> Any:  # WHY: module-level factory for deferred ConfigUtils access.
     """Lazy import ConfigUtils to avoid circular imports."""
-    import MistHelper as _mh  # pylint: disable=import-outside-toplevel  # WHY: break capture<->MistHelper cycle.
+    from src.config.source_dependency_resolver import (
+        SourceDependencyResolver as _mh,  # WHY: resolve source dependencies without importing the root module.
+    )
 
     return _mh.ConfigUtils  # WHY: exposes cached org-id lookup helpers.
 
 
 def _get_input_utils() -> Any:  # WHY: module-level factory for deferred InputUtils access.
     """Lazy import InputUtils to avoid circular imports."""
-    import MistHelper as _mh  # pylint: disable=import-outside-toplevel  # WHY: break capture<->MistHelper cycle.
+    from src.config.source_dependency_resolver import (
+        SourceDependencyResolver as _mh,  # WHY: resolve source dependencies without importing the root module.
+    )
 
     return _mh.InputUtils  # WHY: exposes safe_input EOF-safe wrapper.
 
 
 def _get_prompt_utils() -> Any:  # WHY: module-level factory for deferred PromptUtils access.
     """Lazy import PromptUtils to avoid circular imports."""
-    import MistHelper as _mh  # pylint: disable=import-outside-toplevel  # WHY: break capture<->MistHelper cycle.
+    from src.config.source_dependency_resolver import (
+        SourceDependencyResolver as _mh,  # WHY: resolve source dependencies without importing the root module.
+    )
 
     return _mh.PromptUtils  # WHY: exposes select_site_with_logging helper.
 

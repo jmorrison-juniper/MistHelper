@@ -1,12 +1,12 @@
 """Switch VC stats orchestration extracted from MistHelper high-CC offender."""
 
 import csv  # Read cached OrgInventory.csv rows for switch selection
-import importlib  # Resolve MistHelper runtime dependencies lazily
 import logging  # Emit operator-visible progress and diagnostics
 from concurrent.futures import ThreadPoolExecutor, as_completed  # Parallelize per-switch VC API calls in fast mode
 from types import SimpleNamespace  # Bundle resolved runtime dependencies
 from typing import Any  # Runtime dependency surface is dynamic from MistHelper module
 
+from src.config.source_dependency_resolver import SourceDependencyResolver  # WHY: resolve source dependencies.
 from src.refactors.fast_mode_constants import (
     FAST_MODE_MAX_CONCURRENT_CONNECTIONS,
 )  # Post-T-02 direct import of the fast-mode concurrent-connection cap
@@ -26,7 +26,7 @@ _VC_PREVIEW_FIELDS = (  # Summary columns kept aligned with prior in-method Pret
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:
     """Resolve MistHelper runtime dependencies without static cross-module imports."""
-    misthelper_module = importlib.import_module("MistHelper")  # Import at runtime to avoid circular imports
+    misthelper_module = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
     return SimpleNamespace(
         CacheUtils=misthelper_module.CacheUtils,  # Ensure OrgInventory cache file exists before reading
         OrgInventoryExporter=misthelper_module.OrgInventoryExporter,  # Cache regeneration callback for OrgInventory

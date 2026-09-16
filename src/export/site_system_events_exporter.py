@@ -16,12 +16,14 @@ module is ``mistapi.api.v1.sites.events``. See issue #1757.
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+ toolchains.
 
-import importlib  # WHY: lazy MistHelper import avoids a circular load at module init.
 import logging  # WHY: structured trace for export lifecycle events.
 from typing import Any  # WHY: raw event rows are duck-typed dicts from mistapi.
 
 import mistapi  # WHY: direct SDK access for searchSiteSystemEvents and get_all pagination.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: canonical flatten and escape helpers keep CSV output consistent with peers.
@@ -48,7 +50,7 @@ class SiteSystemEventsExporter:
             rawdata: The raw rows returned by the event search. May be empty.
             site_name: The human-readable site name used to name the output file.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the DataExporter helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No events, so inform the operator and return.
             logging.info("! No system event data found for this site")  # ASCII-only user notice.
             return
@@ -71,7 +73,7 @@ class SiteSystemEventsExporter:
             Interactive menu entry point. Site resolution is delegated to the
             shared helper so behavior matches the peer site-scoped exports.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession and the shared helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Site System Event Search:")  # Menu header echoed to the operator.
         logging.info("Starting the searchSiteSystemEvents export...")  # Pre-call trace.
         resolved = mh.SiteDeviceExporter._resolve_site_for_stats("system event search")  # Shared site prompt.

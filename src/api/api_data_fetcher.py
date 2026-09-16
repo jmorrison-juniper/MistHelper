@@ -9,7 +9,6 @@ DataExporter.  Callers continue to reach it through the
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+.
 
-import importlib  # WHY: lazy MistHelper import to reach live helper globals without circular load.
 import logging  # WHY: structured trace for fetch lifecycle events.
 import time  # WHY: sleep between retry attempts + rate-limit throttling.
 from typing import Any  # WHY: api_call/response are duck-typed mistapi callables/objects.
@@ -18,8 +17,11 @@ import mistapi  # WHY: direct SDK access for mistapi.get_all pagination.
 from prettytable import PrettyTable  # WHY: render result rows for logging.
 from tqdm import tqdm  # WHY: progress bar during table build.
 
-from src.api import api_usage_cache  # WHY: share API quota state without a MistHelper back-reference.
+from src.api import api_usage_cache  # WHY: share API quota state without a root-module back-reference.
 from src.config import runtime_settings  # WHY: read API retry settings from the source settings module.
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -58,7 +60,7 @@ class APIDataFetcher:
 
     def execute(self) -> None:  # Run fetch/export/display.
         """Execute the complete API fetch workflow."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         self._log_entry()  # Log the run start.
         self.org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
 
@@ -102,7 +104,7 @@ class APIDataFetcher:
 
     def _fetch_api_data(self) -> None:  # Call the API and store rows.
         """Make API call and retrieve paginated results with retry on timeout."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession module global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         api_name = self.api_call.__name__  # API callable name.
         logging.debug("Making API call: %s with kwargs: %s", api_name, self.kwargs)  # Trace the call.
 
@@ -121,7 +123,7 @@ class APIDataFetcher:
 
     def _call_api_with_retry(self, api_name: str) -> Any:  # Retry the API call.
         """Call API with retry/backoff (mistapi swallows timeouts as status_code=None)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the live API session only.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         max_retries = runtime_settings.API_REQUEST_MAX_RETRIES  # Read retry ceiling from the source settings module.
         retry_delay = runtime_settings.API_REQUEST_RETRY_DELAY  # Read backoff delay from the source settings module.
         last_response = None  # Track the last response.
@@ -167,7 +169,7 @@ class APIDataFetcher:
 
     def _apply_rate_limiting(self) -> None:  # Sleep to respect rate limits.
         """Apply rate limiting delay between API calls."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of RateLimitingUtils and live session.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         self.smoothed, delay = mh.RateLimitingUtils.get_rate_limited_delay(
             self.smoothed, mh.apisession, api_usage_cache.api_usage_cache
         )
@@ -232,7 +234,7 @@ class APIDataFetcher:
 
     def _save_recovered_data(self) -> None:  # Persist recovered rows.
         """Save recovered data and notify user."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY (#886 Phase 2): promoted print() + logging.info to WARNING so the recovery notice
         # remains operator-visible without duplicate terminal output.
         logging.warning("API returned unexpected structure. Recovered %s records.", len(self.rawdata))
@@ -268,7 +270,7 @@ class APIDataFetcher:
 
     def _handle_rate_limit(self) -> None:  # Save partial on rate limit.
         """Handle HTTP 429 rate limit error."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.warning("API rate limit (HTTP 429) reached. Saving partial results and exiting.")  # warn rate limit.
 
         if self.rawdata:  # Have partial data?
@@ -282,7 +284,7 @@ class APIDataFetcher:
 
     def _emergency_save_and_raise(self, error: Exception) -> None:  # Save partial then re-raise.
         """Save partial data before re-raising exception."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if self.rawdata:  # Have partial data?
             try:
                 api_name = self.api_call.__name__  # API callable name.
@@ -312,7 +314,7 @@ class APIDataFetcher:
 
     def _save_partial_data_on_error(self, error: Exception) -> None:  # Persist partial rows on error.
         """Save partial data when outer exception occurs."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             api_name = self.api_call.__name__  # API callable name.
             mh.DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)
@@ -339,7 +341,7 @@ class APIDataFetcher:
 
     def _export_and_display_data(self) -> None:  # Export then show a table.
         """Export data and display in table format."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Fetched %s raw records from API.", len(self.rawdata))  # log raw count.
 
         api_name = self.api_call.__name__  # API callable name.

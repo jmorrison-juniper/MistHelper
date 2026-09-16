@@ -5,7 +5,7 @@ defined at MistHelper.py:2232, and the six private helpers that made up
 its call chain (``_msp_fetch_user_data``, ``_msp_extract_from_user_data``,
 ``_msp_parse_one_privilege``, ``_msp_resolve_name``, ``_fetch_msp_name``,
 ``_extract_msp_name``). The entire chain now lives here so this module
-is fully self-contained: no ``import MistHelper``, no ``mh.*`` reach-back,
+is fully self-contained: no the source dependency resolver, no ``mh.*`` reach-back,
 no dependency on any MistHelper module-global.
 
 ``detect_msp_privileges(session)`` now takes ``session`` as a REQUIRED

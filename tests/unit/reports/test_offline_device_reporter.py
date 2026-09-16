@@ -82,10 +82,7 @@ def test_parse_threshold_attempt_returns_none_on_value_error(caplog: pytest.LogC
 def test_prompt_threshold_returns_default_in_test_mode() -> None:
     """IS_TEST_MODE short-circuits interactive prompting."""
     fake_mh = _make_mh(IS_TEST_MODE=True)
-    with patch(
-        "src.reports.offline_device_reporter.importlib.import_module",
-        return_value=fake_mh,
-    ):
+    with patch("src.reports.offline_device_reporter.SourceDependencyResolver", fake_mh):
         assert R._prompt_threshold() == R.DEFAULT_THRESHOLD_HOURS
 
 
@@ -93,10 +90,7 @@ def test_prompt_threshold_returns_first_valid_attempt() -> None:
     """First safe_input value parses cleanly -> returned immediately."""
     fake_mh = _make_mh()
     fake_mh.InputUtils.safe_input.return_value = "24"
-    with patch(
-        "src.reports.offline_device_reporter.importlib.import_module",
-        return_value=fake_mh,
-    ):
+    with patch("src.reports.offline_device_reporter.SourceDependencyResolver", fake_mh):
         assert R._prompt_threshold() == 24
 
 
@@ -105,10 +99,7 @@ def test_prompt_threshold_retries_then_succeeds(caplog: pytest.LogCaptureFixture
     caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     fake_mh = _make_mh()
     fake_mh.InputUtils.safe_input.side_effect = ["bad", "72"]
-    with patch(
-        "src.reports.offline_device_reporter.importlib.import_module",
-        return_value=fake_mh,
-    ):
+    with patch("src.reports.offline_device_reporter.SourceDependencyResolver", fake_mh):
         assert R._prompt_threshold() == 72
     assert "attempt(s) remaining" in caplog.text
 
@@ -118,10 +109,7 @@ def test_prompt_threshold_falls_back_when_max_retries_exceeded(caplog: pytest.Lo
     caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     fake_mh = _make_mh()
     fake_mh.InputUtils.safe_input.side_effect = ["bad"] * R.MAX_INPUT_RETRIES
-    with patch(
-        "src.reports.offline_device_reporter.importlib.import_module",
-        return_value=fake_mh,
-    ):
+    with patch("src.reports.offline_device_reporter.SourceDependencyResolver", fake_mh):
         assert R._prompt_threshold() == R.DEFAULT_THRESHOLD_HOURS
     assert "Using default threshold" in caplog.text
 
@@ -140,10 +128,7 @@ def test_fetch_data_builds_site_lookup_and_returns_devices() -> None:
     stats_resp = MagicMock(name="statsResp")
     fake_mh.mistapi.api.v1.orgs.stats.listOrgDevicesStats.return_value = stats_resp
     fake_mh.mistapi.get_all.return_value = [{"mac": "aa"}, {"mac": "bb"}]
-    with patch(
-        "src.reports.offline_device_reporter.importlib.import_module",
-        return_value=fake_mh,
-    ):
+    with patch("src.reports.offline_device_reporter.SourceDependencyResolver", fake_mh):
         site_lookup, devices = R._fetch_data("org-uuid")
     assert site_lookup == {"site-a": "Alpha", "site-b": "Unknown Site"}
     assert devices == [{"mac": "aa"}, {"mac": "bb"}]
@@ -346,10 +331,7 @@ def test_save_offline_csv_strips_helper_keys_and_writes(caplog: pytest.LogCaptur
             "_sort_key": "3600.0",
         }
     ]
-    with patch(
-        "src.reports.offline_device_reporter.importlib.import_module",
-        return_value=fake_mh,
-    ):
+    with patch("src.reports.offline_device_reporter.SourceDependencyResolver", fake_mh):
         R._save_offline_csv(records, 1)
     written = fake_mh.DataExporter.write_with_format_selection.call_args
     csv_records = written.kwargs["data"]
@@ -394,10 +376,7 @@ def test_gather_offline_inputs_aborts_when_no_org(caplog: pytest.LogCaptureFixtu
     caplog.set_level(logging.INFO, logger="src.utils.console")  # 1031: echo() logs INFO on src.utils.console.
     fake_mh = _make_mh()
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = ""
-    with patch(
-        "src.reports.offline_device_reporter.importlib.import_module",
-        return_value=fake_mh,
-    ):
+    with patch("src.reports.offline_device_reporter.SourceDependencyResolver", fake_mh):
         assert R._gather_offline_inputs() == (None, 0)
     assert "No organization selected" in caplog.text
 
@@ -409,10 +388,7 @@ def test_gather_offline_inputs_returns_org_and_threshold(caplog: pytest.LogCaptu
     fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-x"
     with (
         patch.object(R, "_prompt_threshold", return_value=24),
-        patch(
-            "src.reports.offline_device_reporter.importlib.import_module",
-            return_value=fake_mh,
-        ),
+        patch("src.reports.offline_device_reporter.SourceDependencyResolver", fake_mh),
     ):
         assert R._gather_offline_inputs() == ("org-x", 24)
     assert "Threshold: 24 hours" in caplog.text

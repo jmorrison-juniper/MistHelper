@@ -558,6 +558,7 @@ target-version = ["py313"]
 # --- Pylint ---
 [tool.pylint.main]
 fail-under = 9.5
+init-hook = "import sys; from pathlib import Path; sys.path.insert(0, str(Path.cwd()))"
 
 # Pylint exclusion counts live in quality_gate_exclusions.json.
 # Run scripts/check_exclusion_drift.py to measure them without blocking CI.

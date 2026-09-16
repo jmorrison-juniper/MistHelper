@@ -9,13 +9,16 @@ the ``MistHelper.LicenseExportUtils`` re-export alias.
 
 from __future__ import annotations  # WHY: PEP 604 unions for return types.
 
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured trace for export lifecycle events.
 from datetime import UTC, datetime  # WHY: timezone-aware poll timestamps.
 from typing import Any  # WHY: raw payload rows are duck-typed dicts from mistapi.
 from uuid import UUID  # WHY: validate org_id shape before any API call.
 
 import mistapi  # WHY: direct SDK access for async-claim endpoint.
+
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 
 
 class LicenseExportUtils:
@@ -78,7 +81,7 @@ class LicenseExportUtils:
     @staticmethod
     def _prompt_async_claim_include_detail() -> bool:
         """Prompt user for per-device detail preference. Returns parsed boolean."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Prompting for include_detail in async-claim export")  # Log before detail prompt.
         detail_answer = mh.InputUtils.safe_input(  # Collect detail preference from user.
             "Include per-device detail? (y/N): ",  # Prompt text with safe default.
@@ -92,7 +95,7 @@ class LicenseExportUtils:
     @staticmethod
     def _call_async_claim_api(org_id: str, include_detail: bool) -> tuple[int, dict]:
         """Invoke the async-claim SDK endpoint and return (status_code, payload)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         detail_query_value = True if include_detail else None  # Omit query param when detail is false.
         logging.info("Calling async-claim API for org %s", org_id)  # Log before SDK call.
         response = mistapi.api.v1.orgs.claim.GetOrgLicenseAsyncClaimStatus(  # Call SDK endpoint.
@@ -125,7 +128,7 @@ class LicenseExportUtils:
     @staticmethod
     def _write_async_claim_summary(org_id: str, payload: dict) -> None:
         """Flatten and persist the single-row async-claim summary for the org."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Preparing summary rows for org %s", org_id)  # Log before summary transform.
         summary_rows: list[Any] = (  # Build summary rows list from payload.
             [LicenseExportUtils._flatten_org_license_async_claim_status_summary(org_id, payload)]  # Wrap flattened row.
@@ -145,7 +148,7 @@ class LicenseExportUtils:
     @staticmethod
     def _write_async_claim_details(org_id: str, payload: dict) -> None:
         """Flatten and persist per-device async-claim detail rows for the org."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Preparing detail rows for org %s", org_id)  # Log before detail transform.
         detail_rows: list[Any] = (  # Build detail rows list from payload.
             LicenseExportUtils._flatten_org_license_async_claim_status_details(org_id, payload)  # Flatten details.
@@ -172,7 +175,7 @@ class LicenseExportUtils:
     @staticmethod
     def export_org_license_async_claim_status(org_id: str | None = None, include_detail: bool | None = None) -> None:
         """Fetch and export async claim status summary plus optional details."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Resolving org_id for async-claim export")  # Log before org resolution.
         resolved_org_id = (
             org_id or mh.ConfigUtils.get_cached_or_prompted_org_id()

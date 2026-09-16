@@ -649,6 +649,9 @@ from src.refactors.keyboard_listener import (
     KeyboardListener,  # Re-exported for src.ssh.cli_shell_manager.CLIShellManager lazy `mh.KeyboardListener` access
 )
 from src.refactors.main_entrypoint import MainEntrypoint  # Extracted CLI main entrypoint (SC-026)
+
+MainEntrypoint.bind_host_module(sys.modules[__name__])  # Give source packages a bound host without root imports.
+
 from src.refactors.maps_manager_launcher import MapsManagerLauncher  # Extracted Maps Manager launcher (SC-006)
 from src.refactors.marvis_data_utils import (
     MarvisDataUtilsFactory,  # Cat B (1013 SC-001 position 39) -- re-export for lazy access in troubleshoot_utils.py

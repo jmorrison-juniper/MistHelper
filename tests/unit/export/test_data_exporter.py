@@ -54,7 +54,7 @@ def fake_mh(monkeypatch):
 
     Why:
         ``write_with_format_selection`` reads the OUTPUT_FORMAT global from
-        MistHelper via ``importlib.import_module("MistHelper")``. Injecting a
+        MistHelper via ``SourceDependencyResolver``. Injecting a
         synthetic module isolates tests from the real project bootstrap.
     """
     module = types.ModuleType("MistHelper")

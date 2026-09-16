@@ -8,13 +8,15 @@ through the ``MistHelper.SiteClientExporter`` re-export alias.
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+.
 
-import importlib  # WHY: lazy MistHelper import to reach live helper classes without circular load.
 import logging  # WHY: structured trace for export lifecycle events.
 import time  # WHY: adaptive retry backoff sleep for rate-limited endpoint calls.
 from typing import Any  # WHY: raw client rows are duck-typed dicts from mistapi.
 
 import mistapi  # WHY: direct SDK access for listSiteWirelessClientsStats + beacons endpoints.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -42,7 +44,7 @@ class SiteClientExporter:
     @staticmethod
     def _persist_site_clients(rawdata: list[Any], site_name: str) -> None:
         """Flatten + persist site-clients rows to a per-site CSV (or tell the user when empty)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No clients -- tell the user and return.
             # WHY: user notice.
             logging.info("! No client data found for this site")
@@ -59,7 +61,7 @@ class SiteClientExporter:
     @staticmethod
     def clients() -> None:
         """Export client data for a site to SiteClients.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of SiteDeviceExporter + apisession module global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Site Client Statistics:")  # WHY: header.
         logging.info("Starting export of site client statistics...")  # Trace start.
         resolved = mh.SiteDeviceExporter._resolve_site_for_stats(  # Prompt + org/site resolution (shared).
@@ -88,7 +90,7 @@ class SiteClientExporter:
     @staticmethod
     def _normalize_client_mac_or_none(client_mac: str) -> str | None:
         """Validate and normalize client MAC for site insights endpoints."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PacketCaptureManager helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not client_mac:  # Empty input.
             return None
         if not mh.PacketCaptureManager.validate_mac_address(client_mac):  # Invalid MAC.
@@ -98,7 +100,7 @@ class SiteClientExporter:
     @staticmethod
     def wifi_clients(site_id: str | None = None) -> None:
         """Compatibility facade that delegates WiFi client export to extracted exporter."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live helper globals + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info(
             "Delegating wifi_clients to WifiClientsExporter"
         )  # Log before constructing extracted exporter dependencies.
@@ -133,7 +135,7 @@ class SiteClientExporter:
             site_id: Optional preselected site UUID; ``None`` prompts the
                 operator for a site via the injected ``PromptUtils``.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of MistHelper globals to avoid circular import.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info(
             "Delegating wan_client_events to WanClientEventsExporter"
         )  # WHY: trace facade dispatch for the WAN client event exporter.
@@ -158,7 +160,7 @@ class SiteClientExporter:
     @staticmethod
     def beacons() -> None:
         """Export beacons for a site to SiteBeacons.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: fetch live dep symbols for SiteExportUtils construction.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         SiteExportUtils(
             apisession=mh.apisession,
             PromptUtils=mh.PromptUtils,
@@ -181,7 +183,7 @@ class SiteClientExporter:
     @staticmethod
     def _prompt_site_beacon_identifiers() -> tuple[str, str] | None:
         """Prompt for site/beacon IDs through safe_input and reject empty responses."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils keeps module import acyclic.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Prompting operator for site_id required by getSiteBeacon")  # WHY: action log before first prompt.
         site_id = mh.InputUtils.safe_input(  # WHY: safe_input enforces EOF/interrupt-safe prompting semantics.
             "Enter Site ID for getSiteBeacon: ",  # WHY: explicit site-id prompt.
@@ -247,7 +249,7 @@ class SiteClientExporter:
     @staticmethod
     def _fetch_site_beacon_with_retry(site_id: str, beacon_id: str) -> list[dict[str, Any]]:
         """Fetch one site beacon with adaptive delay retries on 429-style failures."""
-        mh = importlib.import_module("MistHelper")  # WHY: fetch runtime retry/delay globals lazily.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         retry_limit = getattr(  # WHY: resolve configured retry cap while preserving behavior when setting is absent.
             getattr(mh, "FastModeSequentialMaxRetries", None),  # WHY: tolerate missing retry config.
             "VALUE",  # WHY: project standard stores retry count on VALUE class attribute.
@@ -308,7 +310,7 @@ class SiteClientExporter:
     @staticmethod
     def get_site_beacon() -> None:
         """Run getSiteBeacon prompt -> fetch -> export workflow."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of runtime deps.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Export Site Beacon Detail:")  # WHY: operator-facing header for new menu operation.
         logging.info("Starting getSiteBeacon workflow...")  # WHY: start boundary log for observability timelines.
         identifiers = SiteClientExporter._prompt_site_beacon_identifiers()  # WHY: gather validated identifiers.

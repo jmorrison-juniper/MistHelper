@@ -8,17 +8,20 @@ callers keep working.
 
 Cross-class references (``ConstDefinitionsExporter``) and the module-level
 ``apisession`` global are resolved lazily via
-``importlib.import_module("MistHelper")`` inside method bodies to keep
+the source dependency resolver inside method bodies to keep
 FR-028 IG-health clean (no top-level MistHelper import statement).
 """
 
 from __future__ import annotations  # WHY: PEP 604 unions in annotations.
 
 import csv  # WHY: CSV parsing for ConstInsightMetrics.csv.
-import importlib  # WHY: lazy MistHelper fetch of ConstDefinitionsExporter + apisession.
 import logging  # WHY: debug/trace + failure reporting.
 import os  # WHY: path join + existence checks for cache CSV.
 from typing import Any  # WHY: dynamic payload annotations.
+
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 
 
 class InsightMetricsUtils:  # Insight-metrics helpers.
@@ -34,7 +37,7 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
 
         Refreshes data/ConstInsightMetrics.csv so scope-filtering helpers can read it.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConstDefinitionsExporter + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: Preserve user-facing banner. Emit via logging for structured output.
         logging.info("Export Available Insight Metrics:")
         # WHY: Preserve user-facing note verbatim.

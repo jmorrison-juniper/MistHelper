@@ -17,10 +17,10 @@ from unittest.mock import MagicMock, patch  # WHY: MagicMock builds the doubles,
 
 import pytest  # WHY: the fixtures and the raises helper come from pytest.
 
+from src.config.source_dependency_resolver import SourceDependencyResolver as _MH  # WHY: test the source resolver.
 from src.refactors import wlanradius_timer_manager as wrtm  # WHY: patch the module globals.
 from src.refactors.wlanradius_timer_manager import (  # WHY: the module under test.
     WLANRadiusTimerManager,
-    _MistHelperProxy,
 )
 
 
@@ -40,6 +40,7 @@ def fake_mh() -> Any:
     fake.InputUtils = MagicMock()  # WHY: the prompts call InputUtils.safe_input.
     fake.InputUtils.safe_input = MagicMock(return_value="")  # WHY: a real string supports strip.
     with patch.dict(sys.modules, {"MistHelper": fake}):  # WHY: the proxy imports by name.
+        _MH.bind_root_module(fake)  # WHY: source packages read the injected host instead of importing it.
         yield fake  # WHY: the test body runs with the fake in place.
 
 
@@ -67,11 +68,11 @@ class TestProxy:
     def test_the_proxy_forwards_an_attribute_to_the_live_module(self, fake_mh: Any) -> None:
         """A broken proxy would resolve a stale session after an interactive login."""
         fake_mh.apisession = "the-session"  # WHY: a unique value proves the forward happened.
-        assert _MistHelperProxy().apisession == "the-session"  # WHY: the proxy must read it live.
+        assert _MH.apisession == "the-session"  # WHY: the proxy must read it live.
 
     def test_the_proxy_reads_the_value_at_call_time(self, fake_mh: Any) -> None:
         """A cached value would ignore a re-login, so every later write would fail."""
-        proxy = _MistHelperProxy()  # WHY: build the proxy before the value changes.
+        proxy = _MH  # WHY: build the proxy before the value changes.
         fake_mh.apisession = "first"  # WHY: the first bound value.
         assert proxy.apisession == "first"  # WHY: read it once to prime any accidental cache.
         fake_mh.apisession = "second"  # WHY: simulate a re-login rebinding the session.

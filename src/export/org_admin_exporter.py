@@ -8,12 +8,14 @@ the ``MistHelper.OrgAdminExporter`` re-export alias.
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+.
 
-import importlib  # WHY: lazy MistHelper import to reach live helper globals without circular load.
 import logging  # WHY: structured trace for export lifecycle events.
 from typing import Any  # WHY: raw license rows are duck-typed dicts from mistapi.
 
 import mistapi  # WHY: direct SDK access for org admin/license endpoints.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -29,7 +31,7 @@ class OrgAdminExporter:
     @staticmethod
     def api_tokens() -> None:
         """Export organization API tokens to OrgApiTokens.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of APIDataFetcher helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Starting export of organization api tokens...")  # Log start.
         mh.APIDataFetcher(  # Fetch and write tokens.
             title="Organization Api Tokens:",
@@ -41,7 +43,7 @@ class OrgAdminExporter:
     @staticmethod
     def admins() -> None:
         """Export organization admins to OrgAdmins.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of APIDataFetcher helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Starting export of organization admins...")  # Log start.
         mh.APIDataFetcher(  # Fetch and write admins.
             title="Organization Admins:",
@@ -53,7 +55,7 @@ class OrgAdminExporter:
     @staticmethod
     def sso() -> None:
         """Export organization SSO configuration to OrgSso.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of OrgExportUtils helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         mh.OrgExportUtils.export_data(  # Delegate to shared org exporter scaffolding.
             api_call=mistapi.api.v1.orgs.ssos.listOrgSsos, data_type="sso", sort_key="name"
         )
@@ -61,7 +63,7 @@ class OrgAdminExporter:
     @staticmethod
     def _fetch_license_payload(current_org_id: str) -> list[Any]:
         """Fetch license rows via the wrapper, or fall back to a raw GET when the wrapper is absent."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of apisession module global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         list_func = getattr(mistapi.api.v1.orgs.licenses, "listOrgLicenses", None)  # Locate the wrapper if shipped.
         if list_func is None:  # Wrapper missing -> fall back to raw GET.
             logging.debug("listOrgLicenses wrapper not present in mistapi library; performing direct GET /licenses")
@@ -85,9 +87,7 @@ class OrgAdminExporter:
     @staticmethod
     def licenses() -> None:
         """Export organization licenses to OrgLicenses.csv."""
-        mh = importlib.import_module(
-            "MistHelper"
-        )  # WHY: lazy fetch of ConfigUtils/DataProcessingUtils/DataExporter helpers.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Starting export of organization licenses (canonical endpoint)...")  # Log start.
         filename = "OrgLicenses.csv"  # Build the CSV name.
         current_org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
@@ -114,7 +114,7 @@ class OrgAdminExporter:
     @staticmethod
     def usage() -> None:
         """Export organization usage data to OrgUsage.csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of APIDataFetcher helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Starting export of organization license usage...")  # Log start.
         mh.APIDataFetcher(  # Fetch and write usage.
             title="Organization License Usage:",

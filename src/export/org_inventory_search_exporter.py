@@ -7,12 +7,14 @@ menu 248 behaves like the other search exports.
 
 from __future__ import annotations
 
-import importlib
 import logging
 from typing import Any
 
 import mistapi
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import DataProcessingUtils
 
 _OPERATION = "searchOrgInventory"
@@ -65,7 +67,7 @@ class OrgInventorySearchExporter:
     @staticmethod
     def inventory() -> None:
         """Search organization inventory and export the result (menu 248)."""
-        mh = importlib.import_module("MistHelper")
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Organization Inventory Search:")
         logging.info("Starting the %s export...", _OPERATION)
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()

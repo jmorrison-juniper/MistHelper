@@ -6,15 +6,18 @@ implementation modules ``src.inventory.org_device_inventory_summary``
 (single-org core) and ``src.inventory.org_device_inventory_msp`` (MSP
 orchestrator). Live-global reads (``apisession``, ``mistapi``, ``DataExporter``,
 ``org_id``, ``InputUtils``, ``msp_privileges``) are resolved via lazy
-``mh = importlib.import_module("MistHelper")`` inside each helper. Callers
+``mh = the source dependency resolver`` inside each helper. Callers
 continue to reach the class through the ``MistHelper.OrgDeviceInventorySummary``
 re-export alias.
 """
 
 from __future__ import annotations  # WHY: PEP 604 unions for return types.
 
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 from typing import Any, cast  # WHY: raw impl classes are duck-typed. Cast org_id str for the checker.
+
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 
 
 class OrgDeviceInventorySummary:
@@ -25,7 +28,7 @@ class OrgDeviceInventorySummary:
     @staticmethod
     def _get_summary_impl() -> Any:  # Build the summary core.
         """Configure and return extracted single-org summary implementation."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession/mistapi/DataExporter/org_id.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         from src.inventory.org_device_inventory_summary import (
             OrgDeviceInventorySummaryCore,
             configure_org_device_inventory_summary_dependencies,
@@ -42,7 +45,7 @@ class OrgDeviceInventorySummary:
     @staticmethod
     def _get_msp_impl() -> Any:  # Build the MSP orchestrator.
         """Configure and return extracted MSP orchestration implementation."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of live apisession/InputUtils/DataExporter/msp.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         from src.inventory.org_device_inventory_msp import (
             OrgDeviceInventoryMSPOrchestrator,
             configure_org_device_inventory_msp_dependencies,

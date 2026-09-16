@@ -11,17 +11,19 @@ read (``apisession``, ``mistapi``, ``ConfigUtils``, ``PromptClientUtils``,
 ``PromptUtils``, ``DataExporter``, ``MarvisDataUtilsFactory``,
 ``DataProcessingUtils``, ``MarvisTroubleshootDeps``,
 ``ExtractedMarvisTroubleshootUtils``, ``InputUtils``) is resolved via lazy
-``mh = importlib.import_module("MistHelper")`` inside the methods that need
+``mh = the source dependency resolver`` inside the methods that need
 them. Callers continue to reach the class through the
 ``MistHelper.TroubleshootUtils`` re-export alias.
 """
 
 from __future__ import annotations  # WHY: PEP 604 unions for future annotations.
 
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured trace for menu-dispatch lifecycle events.
 from typing import Any  # WHY: MarvisTroubleshootDeps is resolved lazily. Annotate as Any.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -33,7 +35,7 @@ class TroubleshootUtils:  # Marvis troubleshoot delegators.
     @staticmethod
     def _build_deps() -> Any:  # Build the deps bundle.
         """Build dependency container for extracted troubleshooting logic."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of all deps + MarvisTroubleshootDeps class.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         return mh.MarvisTroubleshootDeps(  # Assemble the deps.
             apisession=mh.apisession,
             mistapi=mh.mistapi,
@@ -48,7 +50,7 @@ class TroubleshootUtils:  # Marvis troubleshoot delegators.
     @staticmethod
     def client_connectivity() -> None:  # Troubleshoot client connectivity.
         """Delegated client connectivity troubleshooting implementation."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ExtractedMarvisTroubleshootUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         mh.ExtractedMarvisTroubleshootUtils.client_connectivity(
             TroubleshootUtils._build_deps()
         )  # Delegate to the impl.
@@ -56,13 +58,13 @@ class TroubleshootUtils:  # Marvis troubleshoot delegators.
     @staticmethod
     def device_performance() -> None:  # Diagnose device performance.
         """Delegated device performance troubleshooting implementation."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ExtractedMarvisTroubleshootUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         mh.ExtractedMarvisTroubleshootUtils.device_performance(TroubleshootUtils._build_deps())  # Delegate to the impl.
 
     @staticmethod
     def network_connectivity() -> None:  # Analyze network connectivity.
         """Delegated network connectivity troubleshooting implementation."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ExtractedMarvisTroubleshootUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         mh.ExtractedMarvisTroubleshootUtils.network_connectivity(
             TroubleshootUtils._build_deps()
         )  # Delegate to the impl.
@@ -168,7 +170,7 @@ class TroubleshootUtils:  # Marvis troubleshoot delegators.
     @staticmethod
     def launch_interactive() -> None:  # Launch interactive Marvis.
         """Interactive Marvis (VNA) troubleshooting menu -- prompt + dispatch."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils + apisession + InputUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Entering TroubleshootUtils.launch_interactive")  # Entry envelope for logging compliance
         logging.debug("MARVIS DEBUG: Entering launch_interactive() method")  # Trace the entry.
         TroubleshootUtils._print_marvis_menu()  # Header + divider.
@@ -184,11 +186,11 @@ class TroubleshootUtils:  # Marvis troubleshoot delegators.
     @staticmethod
     def view_insights() -> None:  # View Marvis insights.
         """Delegated Marvis insights and capabilities view implementation."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ExtractedMarvisTroubleshootUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         mh.ExtractedMarvisTroubleshootUtils.view_insights(TroubleshootUtils._build_deps())  # Delegate to the impl.
 
     @staticmethod
     def _display_usage_guide() -> None:  # Show the usage guide.
         """Delegated helper for usage guide display."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ExtractedMarvisTroubleshootUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         mh.ExtractedMarvisTroubleshootUtils._display_usage_guide()  # Delegate to the impl.

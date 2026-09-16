@@ -35,10 +35,10 @@ def test_synthetic_tests_wires_gateway_dependencies_before_inventory_lookup(monk
         ConfigUtils=SimpleNamespace(get_cached_or_prompted_org_id=MagicMock(return_value="org-1")),
         GatewayExportUtils=SimpleNamespace(_get_devices_with_sites=get_devices_with_sites),
     )
-    monkeypatch.setattr(  # WHY: avoid importing the real application runtime during this isolated unit test.
-        exporter_module.importlib,
-        "import_module",
-        MagicMock(return_value=runtime),
+    monkeypatch.setattr(  # WHY: replace the source resolver during this isolated unit test.
+        exporter_module,
+        "SourceDependencyResolver",
+        runtime,
     )
 
     GatewayTestExporter.synthetic_tests()  # WHY: execute the formerly failing menu-33 export entry point.
@@ -58,10 +58,10 @@ def test_site_results_wires_gateway_dependencies_before_delegating(monkeypatch) 
         assert fast is True  # WHY: preserve the caller's fast-mode argument.
 
     runtime = SimpleNamespace(_configure_gateway_module=configure_gateway_module)  # WHY: only setup is read here.
-    monkeypatch.setattr(  # WHY: replace lazy MistHelper import with the minimal runtime double.
-        exporter_module.importlib,
-        "import_module",
-        MagicMock(return_value=runtime),
+    monkeypatch.setattr(  # WHY: replace the source resolver with the minimal runtime double.
+        exporter_module,
+        "SourceDependencyResolver",
+        runtime,
     )
     monkeypatch.setattr(  # WHY: prevent live API work while observing delegation order.
         GatewayTestResultsService,

@@ -9,7 +9,7 @@ timestamp columns to every generated table.
 Direct imports cover stdlib only (inspect, logging, re, datetime). The
 strategy catalog (``ENDPOINT_PRIMARY_KEY_STRATEGIES``) is imported directly
 from ``src.refactors.endpoint_primary_key_strategies`` after initiative 1015
-T-04 -- the previous ``importlib.import_module("MistHelper")`` bypass is no
+T-04 -- the previous the source dependency resolver bypass is no
 longer necessary because the catalog lives in a leaf module with no circular
 edge back into MistHelper. Callers continue to reach the class through the
 ``MistHelper.DatabaseSchemaUtils`` re-export alias.

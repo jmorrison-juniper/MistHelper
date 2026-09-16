@@ -7,12 +7,15 @@ menus, capture modules, and export utilities.
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+.
 
-import importlib  # WHY: lazy MistHelper import to avoid circular load.
 import logging  # WHY: emit structured trace for API + fallback warnings.
 import re  # WHY: parse port-range prefixes like ``ge-0/0/0-2``.
 from typing import Any  # WHY: duck-typed device dicts + Mist API responses.
 
 import mistapi  # WHY: dotted-path API resolution for site device list.
+
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 
 
 class DeviceUtils:  # Device helper utilities.
@@ -31,7 +34,7 @@ class DeviceUtils:  # Device helper utilities.
         logging.debug("Fetching all AP MACs for site: %s", site_id)  # Log before AP fetch.
 
         try:
-            apisession = importlib.import_module("MistHelper").apisession  # WHY: lazy fetch of live session
+            apisession = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
             rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap").data
             if not rawdata:  # Handle empty AP set.
                 logging.warning("No APs found for site_id: %s", site_id)  # Log no APs found.

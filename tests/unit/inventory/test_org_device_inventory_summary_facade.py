@@ -2,7 +2,7 @@
 
 Why: Un-omitting this delegation facade from ``[tool.coverage.run].omit`` requires 100%
 line + branch coverage across the 7 static methods that back menu operation 13. The
-facade uses lazy ``importlib.import_module("MistHelper")`` reads plus function-local
+facade uses lazy ``SourceDependencyResolver`` reads plus function-local
 imports of the two extracted implementation modules
 (``src.inventory.org_device_inventory_summary`` and
 ``src.inventory.org_device_inventory_msp``). Tests inject fake modules via

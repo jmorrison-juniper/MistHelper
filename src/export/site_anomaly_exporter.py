@@ -10,7 +10,7 @@ Direct imports cover stdlib (functools, importlib, logging) plus typing
 ``EnhancedSSHRunner``, ``AnomalyMetricsDiscovery``, ``mistapi``,
 ``apisession``, ``DataProcessingUtils``, ``DataExporter``,
 ``PromptClientUtils``) is resolved via lazy ``mh =
-importlib.import_module("MistHelper")`` inside the methods that need
+the source dependency resolver`` inside the methods that need
 them. Callers continue to reach the class through the
 ``MistHelper.SiteAnomalyExporter`` re-export alias.
 """
@@ -18,11 +18,13 @@ them. Callers continue to reach the class through the
 from __future__ import annotations  # WHY: PEP 604 unions for future annotations.
 
 import functools  # WHY: partial-bind per-metric fetch callables in builder lambdas.
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured trace + mistapi logger suppression by name.
 from collections.abc import Callable  # WHY: fetch_builder is Callable[[str], Callable].
 from typing import Any  # WHY: row rows are dict[str, Any].
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
@@ -40,7 +42,7 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
     @staticmethod
     def anomaly_events():
         """Export comprehensive anomaly events for a selected site to SiteAnomalyEvents_[SiteName].csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PromptUtils + EnhancedSSHRunner.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Export Site Anomaly Events:")  # User-visible header.
         logger.info("Starting export of site anomaly events...")  # Trace start of export.
@@ -65,7 +67,7 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
     @staticmethod
     def device_anomaly_events():
         """Export device anomaly events to SiteDeviceAnomalyEvents_[Site]_[Device].csv."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PromptUtils.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Export Site Device Anomaly Events:")  # User-visible header.
         logger.info("Starting export of site device anomaly events...")  # Trace start of export.
@@ -96,7 +98,7 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
     @staticmethod
     def _build_device_filename(site_name: str, device_name: str) -> str:
         """Build the device anomaly CSV filename from sanitized site + device names."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of EnhancedSSHRunner.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         sanitized_site = mh.EnhancedSSHRunner.sanitize_filename(site_name)  # Sanitize the site name.
         sanitized_device = mh.EnhancedSSHRunner.sanitize_filename(device_name)  # Sanitize the device name.
         return f"SiteDeviceAnomalyEvents_{sanitized_site}_{sanitized_device}.csv"  # Compose CSV name.
@@ -104,7 +106,7 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
     @staticmethod
     def _discover_site_anomaly_metrics() -> list[str]:
         """Discover potential site anomaly metric names, announce them, return [] when none found."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of AnomalyMetricsDiscovery.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! Discovering potential anomaly metrics from Mist API definitions...")  # Tell the user.
         potential = mh.AnomalyMetricsDiscovery.discover()  # Pull discovery list from CSV.
@@ -174,7 +176,7 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
         site_id: str, site_name: str, metrics: list[str]
     ) -> tuple[list[dict[str, Any]], int]:
         """Loop site anomaly metrics with mistapi loggers silenced. Return (rows, success_count)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of mistapi + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         tags = {"site_id": site_id, "site_name": site_name}  # Tags attached to every row.
         scope = ("anomaly events", "site_anomaly_events")  # Display label + data_type tag.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
@@ -189,7 +191,7 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
         site_id: str, site_name: str, device_mac: str, device_name: str, metrics: list[str]
     ) -> tuple[list[dict[str, Any]], int]:
         """Loop device anomaly metrics with mistapi loggers silenced. Return (rows, success_count)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of mistapi + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         tags = {  # Tags attached to every row.
             "site_id": site_id,
             "site_name": site_name,
@@ -215,7 +217,7 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
         data_list: list[dict[str, Any]], filename: str, label: str, success_count: int, scope_name: str
     ) -> None:
         """Flatten + escape + write the aggregated anomaly rows, or write an empty CSV when there is no data."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if data_list:  # At least one metric returned data.
             processed = DataProcessingUtils.flatten_nested_fields(data_list)  # Flatten nested fields.
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
@@ -238,7 +240,7 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
     @staticmethod
     def _anomaly_resolve_site_name(site_id: str) -> str:
         """Resolve the human-readable site name for a site_id, falling back to the id on lookup failure."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of mistapi + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             logger.info("Resolving anomaly site name for site %s", site_id)  # WHY: trace the single-site lookup.
             response = mh.mistapi.api.v1.sites.sites.getSiteInfo(
@@ -275,7 +277,7 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
     @staticmethod
     def _anomaly_lookup_client_hostname(site_id: str, client_mac: str) -> str:
         """Look up a client's hostname from its wireless stats, falling back to the MAC on failure."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of mistapi + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:  # Hostname enrichment is best-effort. The MAC is an acceptable fallback.
             response = mh.mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(  # List client stats.
                 mh.apisession, site_id, limit=100, duration="1d"
@@ -317,7 +319,7 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
         site_id: str, client_mac: str, site_name: str, client_hostname: str, metric: str
     ) -> dict | None:  # type: ignore[type-arg]
         """Fetch one client anomaly metric and tag it with site/client metadata. Return the record, or None if empty."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of mistapi + apisession.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # Get client anomalies for this metric.
         response = mh.mistapi.api.v1.sites.anomaly.getSiteAnomalyEventsForClient(
             mh.apisession, site_id, client_mac, metric
@@ -380,7 +382,7 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
     @staticmethod
     def _anomaly_export(all_data: list, metrics_retrieved: int, client_mac: str, filename: str) -> None:  # type: ignore[type-arg]
         """Flatten and write the collected client anomaly rows to CSV (writes an empty file when there is no data)."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataProcessingUtils + DataExporter.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if all_data:  # At least one metric returned data.
             processed = DataProcessingUtils.flatten_nested_fields(all_data)  # Flatten nested fields.
             processed = DataProcessingUtils.escape_multiline(processed)  # type: ignore[no-untyped-call]
@@ -407,7 +409,7 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
         Returns (site_id, site_name, client_mac, client_hostname, filename), or None when the
         operator cancels at the site or client selection prompt.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of PromptUtils + PromptClientUtils + SSH.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         site_id = mh.PromptUtils.select_site()  # Select a site.
         if not site_id:  # No site selected.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.

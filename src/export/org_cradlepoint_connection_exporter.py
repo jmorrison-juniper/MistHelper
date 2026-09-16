@@ -20,12 +20,14 @@ Shape of the response:
 
 from __future__ import annotations  # WHY: enable PEP 604 unions on the project toolchain.
 
-import importlib  # WHY: lazy MistHelper import avoids a circular load at module init.
 import logging  # WHY: structured trace for export lifecycle events.
 from typing import Any  # WHY: the raw status body is a duck-typed dict from mistapi.
 
 import mistapi  # WHY: direct SDK access for the Cradlepoint status endpoint.
 
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: canonical flatten and escape helpers keep CSV output consistent with peers.
@@ -57,7 +59,7 @@ class OrgCradlepointConnectionExporter:
         Returns:
             The status body as a dict, or an empty dict when the body is absent.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the apisession global.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Calling testOrgCradlepointConnection for org_id=%s", org_id)  # Pre-call log.
         response = mistapi.api.v1.orgs.setting.testOrgCradlepointConnection(
             mh.apisession, org_id
@@ -103,7 +105,7 @@ class OrgCradlepointConnectionExporter:
             rows: The flattened rows to write. May be empty.
             filename: The output filename, used as the CSV name or the table name.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the DataExporter helper.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rows:  # No rows, so inform the operator and return.
             logging.info("! No Cradlepoint connection status found")  # ASCII-only user notice.
             return
@@ -122,7 +124,7 @@ class OrgCradlepointConnectionExporter:
             Interactive menu entry point. The method owns the org prompt, the
             API call, and the write, and it keeps every failure inside the menu.
         """
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of the org resolver.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logging.info("Organization Cradlepoint Connection Status:")  # Menu header echoed to the operator.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve which org to read.
         if not org_id:  # The resolver already logged the cancellation.

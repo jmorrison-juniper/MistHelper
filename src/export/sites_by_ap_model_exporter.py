@@ -9,10 +9,13 @@ reach it through the ``MistHelper.SitesByAPModelExporter`` re-export alias.
 
 from __future__ import annotations  # WHY: PEP 604 unions for return types.
 
-import importlib  # WHY: lazy MistHelper import avoids circular load at module init.
 import logging  # WHY: structured trace for export lifecycle events.
 import re  # WHY: slugify AP model names into filesystem-safe filenames.
 from typing import Any  # WHY: raw device / site dicts from mistapi are duck-typed.
+
+from src.config.source_dependency_resolver import (
+    SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
+)
 
 
 class SitesByAPModelExporter:
@@ -27,7 +30,7 @@ class SitesByAPModelExporter:
     @staticmethod
     def _get_ap_models(org_id: str) -> tuple[list[dict], list[str]]:  # type: ignore[type-arg]
         """Return (ap_inventory, sorted_unique_models) for the organisation."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of APICoreFetchUtils facade.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         inventory = mh.APICoreFetchUtils.all_inventory_with_limit(org_id)  # Fetch org inventory.
         aps = [d for d in inventory if d.get("type") == "ap"]  # Keep only APs.
         models = sorted({d.get("model", "") for d in aps if d.get("model")})  # Distinct sorted models.
@@ -57,7 +60,7 @@ class SitesByAPModelExporter:
     @staticmethod
     def _prompt_model_selection(models: list[str], aps: list[dict]) -> str | None:  # type: ignore[type-arg]
         """Prompt user to select an AP model from the numbered list."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of InputUtils facade.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         SitesByAPModelExporter._print_model_options(models, aps)  # Render numbered options
         choice = mh.InputUtils.safe_input(  # Read the choice
             "\nSelect model number (or Enter to cancel): ",
@@ -132,7 +135,7 @@ class SitesByAPModelExporter:
     @staticmethod
     def _finalize_ap_model_export(rows: list, model: str) -> None:  # type: ignore[type-arg]
         """Slugify model, build per-model filename, write CSV, and log + print summary."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of DataExporter facade.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         safe_model = re.sub(r"[^a-zA-Z0-9_-]", "_", model)  # Slugify the model.
         filename = f"SitesByAPModel_{safe_model}.csv"  # Build the CSV name.
         mh.DataExporter.write_with_format_selection(rows, filename, api_function_name="getSitesByAPModel")  # Persist.
@@ -148,7 +151,7 @@ class SitesByAPModelExporter:
     @staticmethod
     def export_sites_by_ap_model() -> None:  # Export sites by AP model.
         """Export CSV of sites containing APs of a selected model with site address info."""
-        mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of ConfigUtils + APICoreFetchUtils facades.
+        mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logging.info("Export Sites by AP Model:")
         logging.info("Starting export of sites by AP model...")  # Trace start

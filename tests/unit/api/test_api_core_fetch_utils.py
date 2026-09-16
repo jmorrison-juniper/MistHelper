@@ -27,7 +27,7 @@ def test_all_sites_with_limit_calls_list_org_sites_and_paginates() -> None:
 
     with (
         patch("src.api.api_core_fetch_utils.mistapi", fake_mistapi),
-        patch("src.api.api_core_fetch_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.api.api_core_fetch_utils.SourceDependencyResolver", fake_mh),
         patch.object(runtime_settings, "DEFAULT_API_PAGE_LIMIT", 500),
     ):
         result = APICoreFetchUtils.all_sites_with_limit("org-uuid")
@@ -51,7 +51,7 @@ def test_all_inventory_with_limit_requests_vc_members_and_paginates() -> None:
 
     with (
         patch("src.api.api_core_fetch_utils.mistapi", fake_mistapi),
-        patch("src.api.api_core_fetch_utils.importlib.import_module", return_value=fake_mh),
+        patch("src.api.api_core_fetch_utils.SourceDependencyResolver", fake_mh),
         patch.object(runtime_settings, "DEFAULT_API_PAGE_LIMIT", 250),
     ):
         result = APICoreFetchUtils.all_inventory_with_limit("org-uuid")

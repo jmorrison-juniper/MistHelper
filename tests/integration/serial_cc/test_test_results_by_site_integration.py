@@ -5,7 +5,8 @@ import importlib
 
 def test_misthelper_test_results_by_site_delegates_to_serial_cc_service(monkeypatch):
     """Legacy test_results_by_site method delegates to extracted serial_cc service."""
-    misthelper_module = importlib.import_module("MistHelper")  # Import MistHelper module under test
+    import MistHelper as misthelper_module  # WHY: integration test verifies the root delegator.
+
     called = {"count": 0, "fast": None}  # Invocation counter and fast-flag recorder
 
     def fake_execute(fast=False):
@@ -25,7 +26,8 @@ def test_misthelper_test_results_by_site_delegates_to_serial_cc_service(monkeypa
 
 def test_misthelper_test_results_by_site_forwards_fast_flag(monkeypatch):
     """Delegator forwards fast=True to extracted service without modification."""
-    misthelper_module = importlib.import_module("MistHelper")  # Import MistHelper module under test
+    import MistHelper as misthelper_module  # WHY: integration test verifies the root delegator.
+
     called = {"count": 0, "fast": None}  # Invocation counter and fast-flag recorder
 
     def fake_execute(fast=False):

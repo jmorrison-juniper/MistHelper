@@ -16,12 +16,12 @@ from unittest.mock import MagicMock, call  # WHY: FR-008 mandates MagicMock(spec
 import pytest  # WHY: monkeypatch fixture for MistHelper attribute overrides.
 
 import MistHelper  # WHY: cache tests exercise the runtime menu and mode dispatch tables.
-from src.refactors.main_entrypoint import (  # WHY: SUT + proxy direct imports.
+from src.config.source_dependency_resolver import SourceDependencyResolver  # WHY: assert the source dependency seam.
+from src.refactors.main_entrypoint import (  # WHY: SUT direct imports.
     _MH,
     AppContext,
     ApplicationBootstrap,
     MainEntrypoint,
-    _MistHelperProxy,
 )
 from src.utils.menu_entry import MenuEntry  # WHY: menu cache fixtures use the production row model.
 
@@ -32,7 +32,7 @@ def wired_misthelper(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     Returns a dict of {attribute_name: mock} so tests can assert on call ordering
     and argument bindings. The `_MistHelperProxy.__getattr__` path resolves each
-    attribute against `importlib.import_module("MistHelper")`, so monkeypatching
+    attribute against `SourceDependencyResolver`, so monkeypatching
     the module attribute is sufficient to intercept every proxy access.
     """
     parser_mock = MagicMock(spec=argparse.ArgumentParser)  # WHY: entrypoint calls parser.parse_args() only.
@@ -70,12 +70,12 @@ class TestMistHelperProxy:
         """A published attribute on MistHelper is returned by the proxy's __getattr__."""
         sentinel_value = MagicMock(name="sentinel")  # WHY: unique object we can identity-compare below.
         monkeypatch.setattr("MistHelper._sentinel_proxy_attr", sentinel_value, raising=False)  # WHY: publish attr.
-        proxy = _MistHelperProxy()  # WHY: fresh proxy instance to exercise the getattr path in isolation.
+        proxy = _MH  # WHY: fresh proxy instance to exercise the getattr path in isolation.
         assert proxy._sentinel_proxy_attr is sentinel_value  # WHY: identity check confirms zero-copy passthrough.
 
     def test_getattr_reflects_late_rebinding(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Rebinding the attribute after proxy creation is honoured at the next access."""
-        proxy = _MistHelperProxy()  # WHY: create proxy first so the test proves the lookup is call-time.
+        proxy = _MH  # WHY: create proxy first so the test proves the lookup is call-time.
         first = MagicMock(name="first")  # WHY: initial published value.
         monkeypatch.setattr("MistHelper._sentinel_rebind_attr", first, raising=False)  # WHY: initial publication.
         assert proxy._sentinel_rebind_attr is first  # WHY: baseline: proxy sees the first value.
@@ -171,7 +171,7 @@ class TestMainEntrypointRun:
 
     def test_run_uses_module_level_proxy_singleton(self) -> None:
         """The module-level `_MH` singleton is an instance of `_MistHelperProxy`."""
-        assert isinstance(_MH, _MistHelperProxy)  # WHY: guard against accidental replacement with a plain module.
+        assert _MH is SourceDependencyResolver  # WHY: guard against accidental replacement with a plain module.
 
 
 class TestMistHelperMenuAndModeCaches:
