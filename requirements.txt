@@ -3,73 +3,73 @@
 
 # Core API and networking
 mistapi>=0.64.0,<0.65
-requests
-websocket-client>=1.8.0
-urllib3
-packaging>=26.3
+requests>=2.34.2,<3
+websocket-client>=1.8.0,<2
+urllib3>=2.8.0,<3
+packaging>=26.3,<27
 
 # SSH and remote access
-paramiko
+paramiko>=5.0.0,<6
 
 # Secure credential storage (required by mistapi)
-keyring
+keyring>=25.7.0,<26
 
 # CLI and user interface
-prettytable
-tqdm
-sshkeyboard
-rich
-tabulate
+prettytable>=3.18.0,<4
+tqdm>=4.70.1,<5
+sshkeyboard>=2.3.1,<3
+rich>=15.0.0,<16
+tabulate>=0.10.0,<1
 
 # Data processing and configuration
-numpy
-python-dotenv
-PyYAML
+numpy>=2.5.3,<3
+python-dotenv>=1.2.3,<2
+PyYAML>=6.0.3,<7
 
 # AI analysis (Mist Ideas Analyzer)
-openai>=3.13.0
+openai>=3.13.0,<4
 
 # Terminal emulation for SSH operations
-pyte
+pyte>=0.8.2,<1
 
 # Address parsing and fuzzy matching
-usaddress-scourgify
-rapidfuzz
+usaddress-scourgify>=0.6.0,<1
+rapidfuzz>=3.14.3,<4
 
 # Web portal (Flask + Gunicorn)
-Flask
-gunicorn
-flask-wtf
+Flask>=3.1.3,<4
+gunicorn>=26.2.0,<27
+flask-wtf>=1.3.0,<2
 
 # Windows cannot run Gunicorn, because `gunicorn.util` imports `fcntl` and
 # Windows ships no `fcntl`. The upgrade capture portal therefore starts Waitress
 # on Windows. The marker keeps Waitress out of a Linux install, where Gunicorn
 # runs. Without this line, menu 238 has no server it can start on Windows.
-waitress>=3.0.2 ; sys_platform == 'win32'
+waitress>=3.0.2,<4 ; sys_platform == 'win32'
 
 # Interactive visualization (Maps Manager uses Dash for interactive view, Plotly for static)
-dash
-plotly
-matplotlib
-pillow
-kaleido
+dash>=4.4.1,<5
+plotly>=7.1.0,<8
+matplotlib>=3.11.2,<4
+pillow>=12.3.0,<13
+kaleido>=1.4.0,<2
 
 # Polyglot database backends (ArangoDB + Redis TimeSeries)
-python-arango>=8.3.2
-redis[hiredis]>=7.4.0
+python-arango>=8.3.2,<9
+redis[hiredis]>=7.4.0,<9
 
 # Structured logging for database modules
-structlog
+structlog>=26.1.0,<27
 
 # Pygments: CVE-2026-4539 has no fix available yet - ignored in CI pip-audit
-Pygments>=2.21.0
+Pygments>=2.21.0,<3
 
 # Testing (dev dependency - not needed at runtime)
-pytest
-hypothesis>=6.151.12
+pytest>=9.1.1,<10
+hypothesis>=6.151.12,<7
 
 # Codemod tooling for issue #429 logging f-string sweep (dev-only but listed for parity)
-libcst>=1.9.0
+libcst>=1.9.0,<2
 
 # Note: The following are transitive dependencies installed automatically:
 # bcrypt, certifi, cffi, charset_normalizer, click, contourpy, cryptography,
