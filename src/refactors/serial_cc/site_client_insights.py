@@ -131,12 +131,36 @@ class SiteClientInsightsService:
     @staticmethod
     def _resolve_site_name(deps: SimpleNamespace, site_id: str) -> str:
         """Resolve the human-readable site name, falling back to the site id on failure."""
-        try:  # WHY: Site name lookup is best-effort. Any failure falls back to the id
-            response = deps.mistapi.api.v1.sites.listSites(deps.apisession, site_id)  # WHY: Fetch site metadata
-            sites = deps.mistapi.get_all(response=response, mist_session=deps.apisession)  # WHY: Page all sites
-            return next((site[_KEY_NAME] for site in sites if site[_KEY_ID] == site_id), site_id)  # WHY: Match id->name
-        except Exception:  # WHY: Any API/shape error - fall back to the raw id
-            return site_id  # WHY: Use the id as the display name
+        try:
+            logging.info("Resolving client insight site name for site %s", site_id)  # WHY: trace the single-site lookup
+            response = deps.mistapi.api.v1.sites.sites.getSiteInfo(
+                deps.apisession, site_id
+            )  # WHY: call installed SDK route
+            site_data = (
+                response.data if isinstance(response.data, dict) else {}
+            )  # WHY: getSiteInfo returns one site object
+            status_code = getattr(
+                response, "status_code", None
+            )  # WHY: APIResponse uses None when no HTTP response exists
+            if (
+                isinstance(status_code, int) and status_code >= 400
+            ):  # WHY: report API faults without MagicMock comparison errors
+                logging.error("Mist API returned status %s for site %s", status_code, site_id)  # WHY: expose fault
+                return site_id  # WHY: keep export filenames stable when lookup fails
+            site_name = str(site_data.get(_KEY_NAME, site_id)) if site_data else site_id  # WHY: prefer API name
+            logging.debug("Resolved client insight site %s to name %s", site_id, site_name)  # WHY: record result
+            return site_name  # WHY: caller needs the site label for output files
+        except AttributeError:
+            logging.exception("Mist SDK site lookup is not available for site %s", site_id)  # WHY: expose SDK drift
+            raise  # WHY: a programming fault must not look like an empty API result
+        except (KeyError, TypeError) as exception:  # WHY: only malformed response shape can use the id fallback
+            logging.exception(
+                "Mist API returned malformed site data for site %s: %s", site_id, exception
+            )  # WHY: report
+            return site_id  # WHY: use the id after the fault is logged
+        except Exception as exception:
+            logging.exception("Mist API site lookup failed for site %s: %s", site_id, exception)  # WHY: report fault
+            raise  # WHY: unexpected faults must not look like empty data
 
     @staticmethod
     def _list_and_display_clients(deps: SimpleNamespace, site_id: str, site_name: str) -> list[dict[str, Any]]:

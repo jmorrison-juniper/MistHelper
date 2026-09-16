@@ -81,8 +81,9 @@ class TestExecuteEmptyMetricsBranch:
         deps = _make_deps()  # WHY: baseline
         deps["PromptUtils"].select_site.return_value = "site-xyz"  # WHY: valid site
         deps["InsightMetricsUtils"].get_by_scope.return_value = []  # WHY: force empty branch
-        deps["mistapi"].api.v1.sites.listSites.return_value = MagicMock()  # WHY: minimal API stub
-        deps["mistapi"].get_all.return_value = [{"id": "site-xyz", "name": "HQ Site"}]  # WHY: name lookup
+        deps["mistapi"].api.v1.sites.sites.getSiteInfo.return_value = MagicMock(
+            data={"id": "site-xyz", "name": "HQ Site"}, status_code=200
+        )  # WHY: single-site lookup response
         op = SiteMetricOperation(**deps)  # WHY: build SUT
         with caplog.at_level(logging.INFO, logger="root"):  # WHY: SUT uses root logging.info
             op.execute()  # WHY: exercise empty-metrics branch
@@ -103,8 +104,9 @@ class TestExecuteHappyPath:
         deps = _make_deps()  # WHY: baseline
         deps["PromptUtils"].select_site.return_value = "site-xyz"  # WHY: valid site
         deps["InsightMetricsUtils"].get_by_scope.return_value = ["metric-a", "metric-b"]  # WHY: two metrics
-        deps["mistapi"].api.v1.sites.listSites.return_value = MagicMock()  # WHY: minimal API stub
-        deps["mistapi"].get_all.return_value = [{"id": "site-xyz", "name": "HQ Site"}]  # WHY: name lookup
+        deps["mistapi"].api.v1.sites.sites.getSiteInfo.return_value = MagicMock(
+            data={"id": "site-xyz", "name": "HQ Site"}, status_code=200
+        )  # WHY: single-site lookup response
 
         # WHY: each per-metric call must return a *fresh* dict since _annotate_row mutates in place
         def _fresh_response(*_args, **_kwargs) -> MagicMock:
@@ -169,28 +171,34 @@ class TestFetchOneMetricBranches:
 class TestResolveSiteName:
     """Cover the best-effort site-name lookup helper's fallback branch."""
 
-    def test_list_sites_exception_falls_back_to_site_id(self) -> None:
-        # WHY: any exception in listSites/get_all falls back to site_id
+    def test_api_fault_is_reported(self, caplog: pytest.LogCaptureFixture) -> None:
+        # WHY: a fault response must log and fall back to site_id
         deps = _make_deps()  # WHY: baseline
-        deps["mistapi"].api.v1.sites.listSites.side_effect = RuntimeError("api down")  # WHY: force exception
+        deps["mistapi"].api.v1.sites.sites.getSiteInfo.return_value = MagicMock(
+            data={"error": "api down"}, status_code=503
+        )  # WHY: status value drives handler
         op = SiteMetricOperation(**deps)  # WHY: build SUT
-        result = op._resolve_site_name("site-abc")  # WHY: exercise fallback branch
+        with caplog.at_level(logging.ERROR):  # WHY: capture repaired fault report
+            result = op._resolve_site_name("site-abc")  # WHY: exercise fallback branch
         assert result == "site-abc"  # WHY: fallback returns the input id
+        assert "Mist API returned status 503 for site site-abc" in caplog.text  # WHY: fault is not silent
 
-    def test_list_sites_no_match_falls_back_to_site_id(self) -> None:
-        # WHY: when no site in the list matches, the generator expression yields the site_id fallback
+    def test_get_site_info_no_name_falls_back_to_site_id(self) -> None:
+        # WHY: when the site object has no name, the helper yields the site_id fallback
         deps = _make_deps()  # WHY: baseline
-        deps["mistapi"].api.v1.sites.listSites.return_value = MagicMock()  # WHY: minimal stub
-        deps["mistapi"].get_all.return_value = [{"id": "other-site", "name": "Other"}]  # WHY: no match
+        deps["mistapi"].api.v1.sites.sites.getSiteInfo.return_value = MagicMock(
+            data={"id": "site-abc"}, status_code=200
+        )  # WHY: no name field tests fallback
         op = SiteMetricOperation(**deps)  # WHY: build SUT
         result = op._resolve_site_name("site-abc")  # WHY: exercise no-match branch
         assert result == "site-abc"  # WHY: fallback to the input id
 
-    def test_list_sites_match_returns_name(self) -> None:
+    def test_get_site_info_match_returns_name(self) -> None:
         # WHY: happy path returns the matched site name
         deps = _make_deps()  # WHY: baseline
-        deps["mistapi"].api.v1.sites.listSites.return_value = MagicMock()  # WHY: minimal stub
-        deps["mistapi"].get_all.return_value = [{"id": "site-abc", "name": "Alpha"}]  # WHY: match
+        deps["mistapi"].api.v1.sites.sites.getSiteInfo.return_value = MagicMock(
+            data={"id": "site-abc", "name": "Alpha"}, status_code=200
+        )  # WHY: getSiteInfo returns one site object
         op = SiteMetricOperation(**deps)  # WHY: build SUT
         result = op._resolve_site_name("site-abc")  # WHY: exercise happy path
         assert result == "Alpha"  # WHY: matched name returned

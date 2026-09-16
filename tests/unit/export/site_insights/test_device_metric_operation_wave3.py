@@ -281,23 +281,27 @@ class TestResolveSiteName:
     def test_match_returns_site_name(self) -> None:
         """When mistapi returns the site, its name is used."""
         op = _make_op()  # WHY: fresh SUT.
-        op.mistapi.get_all.return_value = [  # WHY: canned paged sites result.
-            {"id": "site-xyz", "name": "Corp HQ"},
-            {"id": "other", "name": "Other Site"},
-        ]
+        response = MagicMock(data={"id": "site-xyz", "name": "Corp HQ"}, status_code=200)  # WHY: getSiteInfo shape.
+        op.mistapi.api.v1.sites.sites.getSiteInfo.return_value = response  # WHY: installed SDK route.
         assert op._resolve_site_name("site-xyz") == "Corp HQ"  # WHY: match extracts name.
+        op.mistapi.api.v1.sites.listSites.assert_not_called()  # WHY: phantom SDK route must stay unused.
 
-    def test_no_match_returns_site_id(self) -> None:
-        """When no sites match the id, the helper falls back to the site_id string."""
+    def test_no_name_returns_site_id(self) -> None:
+        """When the site object has no name, the helper falls back to the site_id string."""
         op = _make_op()  # WHY: fresh SUT.
-        op.mistapi.get_all.return_value = [{"id": "not-me", "name": "Other"}]  # WHY: no matching id.
+        response = MagicMock(data={"id": "site-xyz"}, status_code=200)  # WHY: no name field tests fallback.
+        op.mistapi.api.v1.sites.sites.getSiteInfo.return_value = response  # WHY: installed SDK route.
         assert op._resolve_site_name("site-xyz") == "site-xyz"  # WHY: fallback to input id.
 
-    def test_api_exception_returns_site_id(self) -> None:
-        """A raising mistapi call falls back to the site_id string (silent legacy behaviour)."""
+    def test_api_fault_is_reported(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A fault response falls back to the site_id string and logs the fault."""
         op = _make_op()  # WHY: fresh SUT.
-        op.mistapi.api.v1.sites.listSites.side_effect = RuntimeError("boom")  # WHY: force except path.
-        assert op._resolve_site_name("site-xyz") == "site-xyz"  # WHY: silent fallback.
+        response = MagicMock(data={"error": "down"}, status_code=503)  # WHY: status value drives handler.
+        op.mistapi.api.v1.sites.sites.getSiteInfo.return_value = response  # WHY: installed SDK route.
+        with caplog.at_level(logging.ERROR):  # WHY: capture the repaired fault report.
+            result = op._resolve_site_name("site-xyz")  # WHY: exercise fault branch.
+        assert result == "site-xyz"  # WHY: fault path keeps filename stable.
+        assert "Mist API returned status 503 for site site-xyz" in caplog.text  # WHY: fault is no longer silent.
 
 
 # ---------------------------------------------------------------------------

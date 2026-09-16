@@ -169,19 +169,17 @@ def test_client_insights_uses_metrics_keyword(monkeypatch, tmp_path):
     monkeypatch.setattr(MistHelper.InsightMetricsUtils, "get_by_scope", lambda scope: ["metric-one"])
     monkeypatch.setattr(MistHelper.EnhancedSSHRunner, "sanitize_filename", lambda value: value.replace(" ", "_"))
 
-    site_response = [{"id": "site-1", "name": "Site One"}]
+    site_info_response = type("Response", (), {"data": {"id": "site-1", "name": "Site One"}, "status_code": 200})()
     client_response = [{"mac": "00:11:22:33:44:55", "hostname": "Client One", "last_seen": "now"}]
-    get_all_calls = {"count": 0}
 
     def get_all_stub(*_args, **_kwargs):
-        get_all_calls["count"] += 1
-        return site_response if get_all_calls["count"] == 1 else client_response
+        return client_response
 
     monkeypatch.setattr(MistHelper.mistapi, "get_all", get_all_stub)
     monkeypatch.setattr(
-        MistHelper.mistapi.api.v1.sites,
-        "listSites",
-        lambda *_args, **_kwargs: object(),
+        MistHelper.mistapi.api.v1.sites.sites,
+        "getSiteInfo",
+        lambda *_args, **_kwargs: site_info_response,
         raising=False,
     )
     monkeypatch.setattr(

@@ -39,9 +39,10 @@ def test_no_site_selected_returns_early(mock_resolve_runtime_dependencies):
 def test_invalid_client_mac_returns_early(mock_resolve_runtime_dependencies):
     deps = _deps_bundle()
     deps.PromptUtils.select_site.return_value = "site-1"
-    deps.mistapi.api.v1.sites.listSites.return_value = MagicMock()
+    deps.mistapi.api.v1.sites.sites.getSiteInfo.return_value = MagicMock(
+        data={"id": "site-1", "name": "My Site"}, status_code=200
+    )  # WHY: getSiteInfo returns one site object.
     deps.mistapi.get_all.side_effect = [
-        [{"id": "site-1", "name": "My Site"}],
         [{"mac": "aa:bb:cc:dd:ee:ff", "hostname": "h1", "last_seen": "now"}],
     ]
     deps.InputUtils.safe_input.return_value = "aa:bb:cc:dd:ee:ff"
@@ -57,11 +58,12 @@ def test_invalid_client_mac_returns_early(mock_resolve_runtime_dependencies):
 def test_happy_path_exports_rows(mock_resolve_runtime_dependencies):
     deps = _deps_bundle()
     deps.PromptUtils.select_site.return_value = "site-1"
-    deps.mistapi.api.v1.sites.listSites.return_value = MagicMock()
+    deps.mistapi.api.v1.sites.sites.getSiteInfo.return_value = MagicMock(
+        data={"id": "site-1", "name": "My Site"}, status_code=200
+    )  # WHY: getSiteInfo returns one site object.
     deps.mistapi.api.v1.sites.stats.listSiteWirelessClientsStats.return_value = MagicMock()
     deps.mistapi.api.v1.sites.insights.getSiteInsightMetricsForClient.return_value = MagicMock(data={"score": 99})
     deps.mistapi.get_all.side_effect = [
-        [{"id": "site-1", "name": "My Site"}],
         [{"mac": "aa:bb:cc:dd:ee:ff", "hostname": "h1", "last_seen": "now"}],
     ]
     deps.InputUtils.safe_input.return_value = "0"
@@ -72,3 +74,16 @@ def test_happy_path_exports_rows(mock_resolve_runtime_dependencies):
     SiteClientInsightsService.execute()
 
     deps.DataExporter.write_with_format_selection.assert_called_once()
+
+
+def test_resolve_site_name_uses_get_site_info() -> None:
+    """The helper returns a known site name from the installed SDK route."""
+    deps = _deps_bundle()  # WHY: build isolated dependencies for the helper.
+    deps.mistapi.api.v1.sites.sites.getSiteInfo.return_value = MagicMock(
+        data={"id": "site-1", "name": "My Site"}, status_code=200
+    )  # WHY: getSiteInfo returns one site object.
+
+    result = SiteClientInsightsService._resolve_site_name(deps, "site-1")  # WHY: exercise repaired call site.
+
+    assert result == "My Site"  # WHY: known site name proves response-shape handling.
+    deps.mistapi.api.v1.sites.listSites.assert_not_called()  # WHY: phantom SDK route must stay unused.

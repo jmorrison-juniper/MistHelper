@@ -101,17 +101,35 @@ class SiteMetricOperation:
     ) -> str:  # WHY: Best-effort name lookup keeps execute path narrative clean
         """Best-effort site-name lookup. Fall back to site_id when API call fails."""
         try:
-            response = self.mistapi.api.v1.sites.listSites(  # WHY: API call may raise on auth / network
+            logging.info("Resolving site insight name for site %s", site_id)  # WHY: trace the single-site lookup
+            response = self.mistapi.api.v1.sites.sites.getSiteInfo(  # WHY: call the installed SDK route
                 self.apisession, site_id
             )
-            sites = self.mistapi.get_all(  # WHY: Materialize paged result list
-                response=response, mist_session=self.apisession
-            )
-            return next(  # WHY: Match by id. Fall back to id on miss
-                (site["name"] for site in sites if site["id"] == site_id), site_id
-            )
-        except Exception:
-            return site_id  # WHY: Silent fallback preserves legacy behaviour for offline / degraded API
+            site_data = (
+                response.data if isinstance(response.data, dict) else {}
+            )  # WHY: getSiteInfo returns one site object
+            status_code = getattr(
+                response, "status_code", None
+            )  # WHY: APIResponse uses None when no HTTP response exists
+            if (
+                isinstance(status_code, int) and status_code >= 400
+            ):  # WHY: report API faults without MagicMock comparison errors
+                logging.error("Mist API returned status %s for site %s", status_code, site_id)  # WHY: expose fault
+                return site_id  # WHY: keep export filenames stable when lookup fails
+            site_name = str(site_data.get("name", site_id)) if site_data else site_id  # WHY: prefer API name
+            logging.debug("Resolved site insight %s to name %s", site_id, site_name)  # WHY: record result
+            return site_name  # WHY: caller needs the site label for output files
+        except AttributeError:
+            logging.exception("Mist SDK site lookup is not available for site %s", site_id)  # WHY: expose SDK drift
+            raise  # WHY: a programming fault must not look like an empty API result
+        except (KeyError, TypeError) as exception:  # WHY: only malformed response shape can use the id fallback
+            logging.exception(
+                "Mist API returned malformed site data for site %s: %s", site_id, exception
+            )  # WHY: report
+            return site_id  # WHY: fall back to the id after the fault is logged
+        except Exception as exception:
+            logging.exception("Mist API site lookup failed for site %s: %s", site_id, exception)  # WHY: report fault
+            raise  # WHY: unexpected faults must not look like empty data
 
     def _build_filename(self, context: SiteRunContext) -> str:  # WHY: Single-arg helper mirrors the DeviceMetric peer
         """Build the sanitized output filename used by both CSV and DB exports."""

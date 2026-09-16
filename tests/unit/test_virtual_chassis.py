@@ -349,27 +349,34 @@ class TestGetSiteName:
 
     def test_success(self):
         with patch.dict(sys.modules, {"mistapi": _mock_mistapi}):
-            session = MagicMock()
-            resp = MagicMock()
-            resp.data = {"name": "MySite"}
-            _mock_mistapi.api.v1.sites.getSite.return_value = resp
-            name = VirtualChassisManager._get_site_name(session, "s1")
-            assert name == "MySite"
+            session = MagicMock()  # WHY: mocked session proves no live Mist API call occurs.
+            resp = MagicMock()  # WHY: mocked APIResponse carries the single-site payload.
+            resp.data = {"id": "s1", "name": "MySite"}  # WHY: getSiteInfo returns one site object.
+            resp.status_code = 200  # WHY: success status must not trigger the API fault handler.
+            _mock_mistapi.api.v1.sites.sites.getSiteInfo.return_value = resp  # WHY: installed SDK route.
+            name = VirtualChassisManager._get_site_name(session, "s1")  # WHY: exercise the repaired call site.
+            assert name == "MySite"  # WHY: the known site name proves response-shape handling.
+            _mock_mistapi.api.v1.sites.getSite.assert_not_called()  # WHY: phantom SDK route must stay unused.
 
-    def test_exception(self):
+    def test_api_fault_is_reported(self, caplog):
         with patch.dict(sys.modules, {"mistapi": _mock_mistapi}):
-            _mock_mistapi.api.v1.sites.getSite.side_effect = RuntimeError("err")
-            name = VirtualChassisManager._get_site_name(MagicMock(), "s1")
-            assert name == "Unknown Site"
-            _mock_mistapi.api.v1.sites.getSite.side_effect = None
+            resp = MagicMock()  # WHY: mocked APIResponse lets the handler see a real status value.
+            resp.data = {"error": "unavailable"}  # WHY: fault response carries no usable site name.
+            resp.status_code = 503  # WHY: non-success status must be reported.
+            _mock_mistapi.api.v1.sites.sites.getSiteInfo.return_value = resp  # WHY: installed SDK route.
+            with caplog.at_level("ERROR"):  # WHY: capture the repaired fault report.
+                name = VirtualChassisManager._get_site_name(MagicMock(), "s1")  # WHY: exercise API fault branch.
+            assert name == "Unknown Site"  # WHY: status output keeps a safe placeholder.
+            assert "Mist API returned status 503 for site s1" in caplog.text  # WHY: fault is no longer silent.
 
     def test_no_data(self):
         with patch.dict(sys.modules, {"mistapi": _mock_mistapi}):
-            resp = MagicMock()
-            resp.data = None
-            _mock_mistapi.api.v1.sites.getSite.return_value = resp
-            name = VirtualChassisManager._get_site_name(MagicMock(), "s1")
-            assert name == "Unknown Site"
+            resp = MagicMock()  # WHY: mocked APIResponse covers an empty body.
+            resp.data = None  # WHY: getSiteInfo can return no usable site object.
+            resp.status_code = 200  # WHY: no HTTP fault occurred.
+            _mock_mistapi.api.v1.sites.sites.getSiteInfo.return_value = resp  # WHY: installed SDK route.
+            name = VirtualChassisManager._get_site_name(MagicMock(), "s1")  # WHY: exercise no-data branch.
+            assert name == "Unknown Site"  # WHY: empty site data uses a safe placeholder.
 
 
 # ===================================================================
