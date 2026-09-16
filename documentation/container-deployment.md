@@ -53,6 +53,60 @@ The script needs the native provider. Install it one time with this command:
 .venv\Scripts\python.exe -m pip install podman-compose
 ```
 
+## Docker deployment parity status
+
+Docker is compatible in the source files, but this document does not make
+Docker a verified deployment method. Issue #2721 checked the repository files
+on a Windows host where `docker` was not installed. No local Docker start, DNS
+test, health test, or data folder write test ran on that host.
+
+Use Podman and `scripts\compose.ps1` for production until a Docker host passes
+the verification list below.
+
+| Area | Status | Parity statement |
+| - | - | - |
+| Compose services | Analysis only | `compose.yml` defines the same application, ArangoDB, Redis, and optional Observium services for any Compose provider. |
+| Service DNS | Analysis only | The application uses `misthelper-arangodb` and `misthelper-redis` on `misthelper-network`. A Docker host must still prove those names resolve. |
+| Published ports | Analysis only | `compose.yml` publishes the same host ports for Docker and Podman. A Docker host must still prove no local process holds them. |
+| Data folder ownership | Analysis only | The image runs as `misthelper`, so a Docker host must still prove that `data` accepts writes from that user. |
+| Health checks | Analysis only | Compose health checks exist for the three required services. A Docker image build should also keep the Containerfile `HEALTHCHECK`. |
+| Image health check in OCI format | Verified Podman difference | A Podman OCI image build can drop the Containerfile `HEALTHCHECK`, so the Quadlet unit states the probe again. Docker image health-check behavior was not tested here. |
+| Helper script | Verified Podman-only path | `scripts\compose.ps1` calls `podman_compose` and uses `podman inspect` for `check-revision`. It is not a Docker helper. |
+| Systemd Quadlet | Verified Podman-only path | `deploy\misthelper.container` is a Podman Quadlet unit. This repository provides no Docker systemd unit. |
+| Host systemd service | Verified separate path | `deploy\misthelper.service` runs Python on the host without a container runtime. It is not Docker or Podman parity. |
+| `--no-deps` update | Analysis only | The documented Podman update leaves ArangoDB and Redis running. A Docker host must still prove the same behavior. |
+
+The analysis above comes from these files.
+
+- `compose.yml` defines service names, ports, volumes, health checks,
+  `depends_on`, and `misthelper-network`.
+- `Containerfile` and `Dockerfile` define the non-root user, `/app/data`, the
+  exposed ports, and the image health check.
+- `scripts\compose.ps1` selects `podman_compose`, merges build overlays, and
+  runs `podman inspect` for the revision check.
+- `deploy\misthelper.container` defines Podman Quadlet health and restart
+  settings.
+- `deploy\misthelper.service` defines the host Python service.
+- `tests\guardrails\test_compose_naming_policy.py` proves the service names,
+  network name, project subnet, store addresses, and published port policy.
+
+Before you document Docker as a supported deployment method, run these checks
+on a host with Docker installed.
+
+1. Run `docker --version` and record the result.
+2. Run `docker compose config` and confirm that every service joins
+   `misthelper-network`.
+3. Start the stack with Docker Compose in a clean test environment.
+4. Confirm that `misthelper-app` resolves `misthelper-arangodb` and
+   `misthelper-redis`.
+5. Confirm that the three required services report healthy.
+6. Confirm that `/app/data` can write `script.log` through the mounted `data`
+   folder.
+7. Confirm that `docker compose up -d --no-deps misthelper` does not recreate
+   ArangoDB or Redis.
+8. Confirm that a Docker build keeps the image `HEALTHCHECK`.
+9. Add Docker guardrail tests before you publish Docker commands for operators.
+
 ## Test and debug containers
 
 This section covers every container that you start for a test, for a debug
