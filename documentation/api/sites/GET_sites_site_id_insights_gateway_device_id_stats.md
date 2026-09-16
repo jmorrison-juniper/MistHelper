@@ -4,12 +4,11 @@
 
 ## HTTP
 
-`GET /api/v1/sites/{site_id}/insights/gateway/{device_id}/stats/{metric}`
+`GET /api/v1/sites/{site_id}/insights/gateway/{device_id}/stats`
 
 ## Description
 
 Get Gateway Insight Metrics
-See metrics possibilities at [List Insight Metrics](/#operations/listInsightMetrics)
 
 ## Authentication
 
@@ -17,24 +16,18 @@ Requires API token authentication (`Authorization: Token {api_token}` header or 
 
 ## Parameters
 
-### Path Parameters
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| site_id | string | Yes |  |
-| metric | string | Yes | See [List Insight Metrics]($e/Constants%20Definitions/listInsightMetrics) for available metrics |
-| device_id | string | Yes |  |
-
 ### Query Parameters
 
 | Name | Type | Required | Default | Enum | Description |
 |------|------|----------|---------|------|-------------|
-| start | string | No |  |  | Start time (epoch timestamp in seconds, or relative string like "-1d", "-1w") |
-| end | string | No |  |  | End time (epoch timestamp in seconds, or relative string like "-1d", "-2h", "now") |
-| duration | string | No | 1d |  | Duration like 7d, 2w |
-| interval | string | No |  |  | Aggregation works by giving a time range plus interval (e.g. 1d, 1h, 10m) where aggregation function would be applied to. |
-| limit | integer | No | 100 |  |  |
-| page | integer | No | 1 |  |  |
+| metrics | string | Yes |  |  | Comma separated Metric names, e.g. `tx_bps,rx_bps`. See possible values at [List Insight Metrics](/#operations/listInsightMetrics) |
+| port_id | string | No |  |  | Port ID of the gateway device, e.g. `ge-0/0/1` |
+|  | string | No |  |  |  |
+|  | string | No |  |  |  |
+|  | string | No |  |  |  |
+|  | string | No |  |  |  |
+|  | string | No |  |  |  |
+|  | string | No |  |  |  |
 
 ## Request Body
 
@@ -48,50 +41,51 @@ OK
 
 ```json
 {
-  "type": "object",
+  "additionalProperties": false,
+  "description": "Time-series insight metric response for a device",
   "properties": {
     "end": {
-      "type": "integer",
-      "contentEncoding": "int32"
+      "description": "Epoch timestamp for the end of the metric query window",
+      "type": "integer"
     },
     "interval": {
-      "type": "integer",
-      "contentEncoding": "int32"
+      "description": "Aggregation interval in seconds for each metric sample",
+      "type": "integer"
     },
     "limit": {
-      "type": "integer",
-      "contentEncoding": "int32"
+      "description": "Maximum number of metric samples returned in this page",
+      "type": "integer"
     },
     "page": {
-      "type": "integer",
-      "contentEncoding": "int32"
+      "description": "Returned page number for paginated metric samples",
+      "type": "integer"
     },
     "results": {
-      "type": "array",
+      "description": "Device metric result values aligned with the response timestamps",
       "items": {
+        "description": "Device metric result value, returned as a string or integer",
         "oneOf": [
           {
             "type": "string"
           },
           {
-            "type": "integer",
-            "contentEncoding": "int32"
+            "type": "integer"
           }
         ]
       },
-      "description": ""
+      "type": "array"
     },
     "rt": {
-      "uniqueItems": true,
-      "type": "array",
+      "description": "Unique string values returned or accepted by this schema",
       "items": {
         "type": "string"
       },
-      "description": ""
+      "type": "array",
+      "uniqueItems": true
     },
     "start": {
-      "type": "integer",
-      "contentEncoding": "int32"
+      "description": "Epoch timestamp for the start of the metric query window",
+      "type": "integer"
     }
   },
   "required": [
@@ -99,7 +93,8 @@ OK
     "interval",
     "results",
     "start"
-  ]
+  ],
+  "type": "object"
 }
 ```
 
@@ -115,7 +110,7 @@ OK
 
 ## Pagination
 
-Supports pagination. Use `limit` and `page` query parameters.
+Not paginated.
 
 ## Rate Limiting
 

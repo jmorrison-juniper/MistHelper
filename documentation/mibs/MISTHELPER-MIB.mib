@@ -57,7 +57,7 @@ IMPORTS
         FROM SNMPv2-TC;
 
 mistHelperMIB MODULE-IDENTITY
-    LAST-UPDATED "202609042050Z"
+    LAST-UPDATED "202609160310Z"
     ORGANIZATION "MistHelper project"
     CONTACT-INFO
         "MistHelper project maintainers
@@ -67,7 +67,7 @@ mistHelperMIB MODULE-IDENTITY
          MistHelper metrics gateway collects from the Mist REST API.
          The gateway reads Mist Cloud on a timer and answers every
          request from memory, so a poll never waits for Mist Cloud."
-    REVISION "202609042050Z"
+    REVISION "202609160310Z"
     DESCRIPTION
         "The generator writes this module. Run it again after Mist ships
          a new OpenAPI file:  python MistHelper.py --mib-generate
@@ -106,7 +106,7 @@ mistOrgSites OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The count of sites in the organization. The gateway names this
+        "Number of sites in the organization The gateway names this
          reading mist_org_sites."
     ::= { mistOrg 2 }
 
@@ -117,8 +117,8 @@ mistOrgDevices OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The count of devices the organization has assigned to a site.
-         The gateway names this reading mist_org_devices."
+        "Number of managed devices in the site The gateway names this
+         reading mist_org_devices."
     ::= { mistOrg 3 }
 
 
@@ -128,8 +128,8 @@ mistOrgInventory OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The count of devices in the organization inventory, assigned
-         or not. The gateway names this reading mist_org_inventory."
+        "Number of devices in the organization's inventory The gateway
+         names this reading mist_org_inventory."
     ::= { mistOrg 4 }
 
 
@@ -139,7 +139,7 @@ mistOrgDevicesConnected OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The count of devices that are connected to Mist Cloud. The
+        "Number of managed devices currently connected in the site The
          gateway names this reading mist_org_devices_connected."
     ::= { mistOrg 5 }
 
@@ -150,8 +150,9 @@ mistOrgDevicesDisconnected OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The count of devices that are not connected to Mist Cloud. The
-         gateway names this reading mist_org_devices_disconnected."
+        "Number of organization devices currently disconnected from
+         Mist The gateway names this reading
+         mist_org_devices_disconnected."
     ::= { mistOrg 6 }
 
 
@@ -481,8 +482,8 @@ mistSiteAps OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The count of access points the site holds. The gateway names
-         this reading mist_site_aps."
+        "Number of access points in the site The gateway names this
+         reading mist_site_aps."
     ::= { mistSiteEntry 2 }
 
 
@@ -492,9 +493,8 @@ mistSiteApsConnected OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The count of access points at the site that are connected to
-         Mist Cloud. The gateway names this reading
-         mist_site_aps_connected."
+        "Number of access points currently connected in the site The
+         gateway names this reading mist_site_aps_connected."
     ::= { mistSiteEntry 3 }
 
 
@@ -504,8 +504,8 @@ mistSiteSwitches OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The count of switches the site holds. The gateway names this
-         reading mist_site_switches."
+        "Number of switches in the site The gateway names this reading
+         mist_site_switches."
     ::= { mistSiteEntry 4 }
 
 
@@ -515,9 +515,8 @@ mistSiteSwitchesConnected OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The count of switches at the site that are connected to Mist
-         Cloud. The gateway names this reading
-         mist_site_switches_connected."
+        "Number of switches currently connected in the site The gateway
+         names this reading mist_site_switches_connected."
     ::= { mistSiteEntry 5 }
 
 
@@ -527,8 +526,8 @@ mistSiteGateways OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The count of gateways the site holds. The gateway names this
-         reading mist_site_gateways."
+        "Number of gateways in the site The gateway names this reading
+         mist_site_gateways."
     ::= { mistSiteEntry 6 }
 
 
@@ -538,9 +537,8 @@ mistSiteGatewaysConnected OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The count of gateways at the site that are connected to Mist
-         Cloud. The gateway names this reading
-         mist_site_gateways_connected."
+        "Number of gateways currently connected in the site The gateway
+         names this reading mist_site_gateways_connected."
     ::= { mistSiteEntry 7 }
 
 
@@ -550,8 +548,8 @@ mistSiteDevices OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The count of devices the site holds, of every type. The
-         gateway names this reading mist_site_devices."
+        "Number of managed devices in the site The gateway names this
+         reading mist_site_devices."
     ::= { mistSiteEntry 8 }
 
 
@@ -561,9 +559,8 @@ mistSiteDevicesConnected OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The count of devices at the site that are connected to Mist
-         Cloud. The gateway names this reading
-         mist_site_devices_connected."
+        "Number of managed devices currently connected in the site The
+         gateway names this reading mist_site_devices_connected."
     ::= { mistSiteEntry 9 }
 
 
@@ -573,8 +570,9 @@ mistSiteClients OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "Number of Wi-Fi clients (unconnected + connected) The gateway
-         names this reading mist_site_clients."
+        "Number of Wi-Fi clients currently counted in the zone,
+         including connected and unconnected clients The gateway names
+         this reading mist_site_clients."
     ::= { mistSiteEntry 10 }
 
 
@@ -1161,8 +1159,8 @@ mistDeviceLastSeenTimestamp OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "Last seen timestamp The gateway names this reading
-         mist_device_last_seen_timestamp_seconds."
+        "Timestamp indicating when the entity was last seen The gateway
+         names this reading mist_device_last_seen_timestamp_seconds."
     ::= { mistDeviceEntry 4 }
 
 
@@ -1261,8 +1259,8 @@ mistDeviceCertificateExpiryTimestamp OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The moment the device certificate expires, in seconds since
-         the epoch. The gateway names this reading
+        "Certificate expiry timestamp for the AP, in epoch seconds The
+         gateway names this reading
          mist_device_certificate_expiry_timestamp_seconds."
     ::= { mistDeviceEntry 13 }
 
@@ -1325,9 +1323,8 @@ mistSleUserMinutesTotal OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The total user minutes that the service level expectation
-         measured. The gateway names this reading
-         mist_org_sle_user_minutes_total."
+        "Observed total user minutes for the SLE path The gateway names
+         this reading mist_org_sle_user_minutes_total."
     ::= { mistSleEntry 1 }
 
 
@@ -1336,8 +1333,8 @@ mistSleUserMinutesOk OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "The user minutes that met the service level expectation. The
-         gateway names this reading mist_org_sle_user_minutes_ok."
+        "User minutes that met the SLE target The gateway names this
+         reading mist_org_sle_user_minutes_ok."
     ::= { mistSleEntry 2 }
 
 
