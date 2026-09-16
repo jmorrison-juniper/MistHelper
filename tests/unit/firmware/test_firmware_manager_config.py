@@ -4,15 +4,14 @@ Why:
     ``FirmwareManagerConfig`` is the frozen value object every downstream
     helper depends on. Its ``__post_init__`` validation is the only guard
     against silent None-propagation into the HTTP layer, so every branch
-    must be pinned. ``_MistHelperProxy`` and ``_bind_module_globals``
-    likewise carry hidden module-scope side effects that break in subtle
-    ways if refactored without a test net.
+    must be pinned. ``_bind_module_globals`` likewise carries hidden
+    module-scope side effects that break in subtle ways if refactored
+    without a test net.
 """
 
 from __future__ import annotations
 
 import logging
-import sys
 import types
 from typing import Any
 
@@ -23,7 +22,6 @@ from src.firmware.firmware_manager import (
     FirmwareManager,
     FirmwareManagerConfig,
     _bind_module_globals,
-    _MistHelperProxy,
 )
 
 
@@ -134,49 +132,6 @@ class TestFirmwareManagerConfigImmutability:
             cfg.new_field = "nope"  # type: ignore[attr-defined]
 
 
-class TestMistHelperProxy:
-    """``_MistHelperProxy`` late-binding attribute forwarding.
-
-    Why:
-        Direct import of ``MistHelper`` at module load creates a cycle;
-        the proxy exists to defer resolution until call time so tests
-        can swap the module out via monkey-patching.
-    """
-
-    def test_forwards_to_import_module(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        fake_module = types.SimpleNamespace(SomeSingleton="live-value")
-
-        def fake_import(name: str) -> Any:
-            assert name == "MistHelper"
-            return fake_module
-
-        monkeypatch.setattr(fm_mod.importlib, "import_module", fake_import)
-        proxy = _MistHelperProxy()
-        assert proxy.SomeSingleton == "live-value"
-
-    def test_forwarding_is_late_bound(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        counter = {"n": 0}
-        fake_module = types.SimpleNamespace(dynamic_value="a")
-
-        def fake_import(_name: str) -> Any:
-            counter["n"] += 1
-            return fake_module
-
-        monkeypatch.setattr(fm_mod.importlib, "import_module", fake_import)
-        proxy = _MistHelperProxy()
-        _ = proxy.dynamic_value
-        fake_module.dynamic_value = "b"  # mutate after first access
-        assert proxy.dynamic_value == "b"
-        assert counter["n"] == 2  # both lookups hit importlib
-
-    def test_missing_attr_raises_attribute_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        fake_module = types.SimpleNamespace()
-        monkeypatch.setattr(fm_mod.importlib, "import_module", lambda _n: fake_module)
-        proxy = _MistHelperProxy()
-        with pytest.raises(AttributeError):
-            _ = proxy.definitely_absent
-
-
 class TestBindModuleGlobals:
     """``_bind_module_globals`` module-scope side effects.
 
@@ -205,11 +160,13 @@ class TestBindModuleGlobals:
         finally:
             self._restore_globals(snap)
 
-    def test_pulls_from_main_module_when_available(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_pulls_from_dependency_host_when_available(self, monkeypatch: pytest.MonkeyPatch) -> None:
         snap = self._snapshot_globals()
         try:
-            fake_main = types.SimpleNamespace(msp_privileges=["priv-a"], PROGRESS_EMITTER="emit-sentinel")
-            monkeypatch.setitem(sys.modules, "__main__", fake_main)
+            fake_host = types.SimpleNamespace(msp_privileges=["priv-a"], PROGRESS_EMITTER="emit-sentinel")
+            monkeypatch.setattr(
+                type(fm_mod.SourceDependencyResolver), "active_dependency_host", lambda _self: fake_host
+            )
             cfg = _make_config()
             _bind_module_globals(cfg)
             assert fm_mod.msp_privileges == ["priv-a"]
@@ -217,36 +174,19 @@ class TestBindModuleGlobals:
         finally:
             self._restore_globals(snap)
 
-    def test_falls_back_to_misthelper_module(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_missing_dependency_host_values_use_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
         snap = self._snapshot_globals()
         try:
-            fake_mh = types.SimpleNamespace(msp_privileges=["fallback"], PROGRESS_EMITTER=None)
-            # Remove __main__ so the fallback branch runs (real sys.modules key is __main__).
-            monkeypatch.setitem(sys.modules, "__main__", types.SimpleNamespace())
-            monkeypatch.setitem(sys.modules, "MistHelper", fake_mh)
-            # Also strip attributes from fake main so getattr fallback triggers
-            # when both modules are present.
-            cfg = _make_config()
-            _bind_module_globals(cfg)
-            # __main__ present but lacks attrs -> defaults from getattr are used.
-            assert fm_mod.msp_privileges == []
-            assert fm_mod.PROGRESS_EMITTER is None
-        finally:
-            self._restore_globals(snap)
-
-    def test_no_main_or_misthelper_leaves_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        snap = self._snapshot_globals()
-        try:
-            # Simulate no host module present.
-            monkeypatch.delitem(sys.modules, "__main__", raising=False)
-            monkeypatch.delitem(sys.modules, "MistHelper", raising=False)
+            fake_host = types.SimpleNamespace()
+            monkeypatch.setattr(
+                type(fm_mod.SourceDependencyResolver), "active_dependency_host", lambda _self: fake_host
+            )
             fm_mod.msp_privileges = ["untouched"]
             fm_mod.PROGRESS_EMITTER = "untouched"
             cfg = _make_config()
             _bind_module_globals(cfg)
-            # Globals stay because the outer if guard prevented the rebind.
-            assert fm_mod.msp_privileges == ["untouched"]
-            assert fm_mod.PROGRESS_EMITTER == "untouched"
+            assert fm_mod.msp_privileges == []
+            assert fm_mod.PROGRESS_EMITTER is None
         finally:
             self._restore_globals(snap)
 

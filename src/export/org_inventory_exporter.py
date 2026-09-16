@@ -9,9 +9,9 @@ delegator) following the T-09 / T-10 / T-13 precedent.
 Direct imports cover stdlib + installed packages + canonical ``src/``
 utility homes. Live-module globals with no ``src/`` home yet
 (``apisession``, ``PROGRESS_EMITTER``, ``DEFAULT_API_PAGE_LIMIT``,
-``DataExporter``) are resolved via lazy ``mh = importlib.import_module(
-"MistHelper")`` inside each helper. Callers continue to reach the class
-through the ``MistHelper.OrgInventoryExporter`` re-export alias.
+``DataExporter``) are resolved through ``SourceDependencyResolver``
+inside each helper. Callers continue to reach the class through the
+root ``OrgInventoryExporter`` re-export alias.
 
 Issue: initiative 1015 T-06 (Cat E fresh extraction).
 """

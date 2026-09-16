@@ -7463,13 +7463,6 @@ def _has_meaningful_cli_args(args: argparse.Namespace) -> bool:
 
 if __name__ == "__main__":
     try:
-        # When run as a script the interpreter registers this module as "__main__", so a later
-        # importlib.import_module("MistHelper") (used by the src/refactors/serial_cc/* services to
-        # resolve runtime deps) would load a SECOND, uninitialized copy whose mistapi/apisession
-        # globals are still None -- causing "'NoneType' object has no attribute 'api'" failures.
-        # Alias "MistHelper" to this live __main__ instance before main() runs so those late imports
-        # resolve to the authenticated module. No-op when imported normally (__name__ == "MistHelper").
-        sys.modules["MistHelper"] = sys.modules["__main__"]  # Point both names at the live module
         logging.info("=== MistHelper application starting ===")
         # Single explicit banner for test mode to clarify reduced lookbacks
         try:

@@ -9,17 +9,18 @@ Mist organization sites.
 from __future__ import annotations
 
 import csv  # WHY: CSV read/write for firmware plan artifacts
-import importlib  # WHY: lazy import of MistHelper for _MistHelperProxy late-binding
 import json  # WHY: read stored ActiveUpgrades.json tracker in FirmwareUpgradeStatusChecker
 import logging  # WHY: emit info/debug audit trail per Constitution VII
 import os  # WHY: filesystem existence check for ActiveUpgrades.json tracker
-import sys  # WHY: needed for _bind_module_globals to rebind module attrs
 import time  # WHY: polling delays for continuous monitoring mode
 from collections.abc import Callable  # WHY: type hints for injected dependency callables
 from dataclasses import dataclass  # WHY: FirmwareManagerConfig frozen value object
 from datetime import UTC, datetime  # WHY: UTC-aware ISO timestamps and CSV filenames
 from typing import Any, cast  # WHY: Any for opaque API objects. Cast narrows mypy return types
 
+from src.config.source_dependency_resolver import (  # WHY: Resolve host-owned helpers without importing MistHelper.
+    SourceDependencyResolver,
+)
 from src.firmware.running_version import (  # WHY: one reader holds the running-version endpoint rule
     RunningFirmwareVersionResolver,
 )
@@ -34,7 +35,7 @@ GeneratorFn = Callable[..., Any]  # WHY: streaming generator for templates / sit
 # Module-level stubs for globals declared in method bodies.
 # Methods use 'global <name>' to read/write these at runtime.
 # apisession and org_id are set per-instance in __init__ via _bind_module_globals.
-# msp_privileges and PROGRESS_EMITTER are sourced from the main module.
+# msp_privileges and PROGRESS_EMITTER are sourced from the bound dependency host.
 msp_privileges: list[Any] = []  # WHY: cached MSP privilege records for cross-flow reuse
 apisession: Any = None  # WHY: module-scope api session read by legacy helpers
 org_id: str = ""  # WHY: module-scope org id read by legacy helpers
@@ -62,59 +63,7 @@ except ImportError:  # pragma: no cover
 mistapi: Any = _mistapi_module
 
 
-_MISTHELPER_MODULE_NAME = "MistHelper"  # WHY: single spelling of the module name the proxy resolves
-# WHY: `tests/conftest.py` records the real import failure under this name when
-# WHY: `MistHelper.py` stops part way through its module body. Issue #1923.
-_IMPORT_ERROR_ATTRIBUTE = "__misthelper_import_error__"
-
-
-def _describe_partial_import(name: str, cause: BaseException) -> str:
-    """Build one message that names the real cause of an unbound attribute."""
-    logging.info("Building the partial-import report for the attribute %s", name)  # Log before the build.
-    cause_text = f"{type(cause).__name__}: {cause}"  # Name the class and the text, so the reader sees both.
-    message = (  # Return one block, because an AttributeError carries a single string.
-        f"MistHelper stopped part way through its import, so the attribute "
-        f"'{name}' never bound. The import failed with:\n"
-        f"    {cause_text}\n"
-        f"This is an environment gap, not a missing declaration. Install the "
-        f"project dependencies with 'python scripts/bootstrap_worktree.py'. "
-        f"See issue #1866 for the empty worktree case."
-    )
-    logging.debug("Built a partial-import report of %d characters", len(message))  # Log the result size.
-    return message  # Give the caller the finished message.
-
-
-class _MistHelperProxy:  # WHY: attribute forwarder to live MistHelper module
-    """Forward attribute access to the currently-loaded MistHelper module.
-
-    Enables the co-located FirmwareUpgradeStatusChecker class to reference
-    MistHelper-owned utility singletons (ConfigUtils, PromptUtils, and so on)
-    without importing MistHelper at module load time (which would create a
-    circular import). Attributes are resolved at call time so test
-    monkey-patches applied to MistHelper are honoured.
-
-    When `MistHelper.py` stops part way through its module body, the half-built
-    module stays in `sys.modules`. A plain `getattr` then reports a missing
-    attribute and hides the real cause. This proxy reports the recorded cause
-    instead. See issue #1923.
-    """
-
-    def __getattr__(self, name: str) -> Any:  # WHY: only invoked when the attr is missing normally
-        """Resolve name against the live MistHelper module (call-time lookup)."""
-        try:  # Guard the import, because an absent dependency raises here.
-            misthelper_module = importlib.import_module(_MISTHELPER_MODULE_NAME)  # WHY: lazy import at call time
-        except ImportError as import_error:  # The module cannot load at all.
-            raise AttributeError(_describe_partial_import(name, import_error)) from import_error  # Name the real cause.
-        try:  # Guard the lookup, because a half-built module has no such name.
-            return getattr(misthelper_module, name)  # WHY: fetch current bound value from MistHelper
-        except AttributeError:  # The name did not bind on this module.
-            cause = getattr(misthelper_module, _IMPORT_ERROR_ATTRIBUTE, None)  # Read the recorded import failure.
-            if cause is None:  # No record exists, so the module loaded and the name is truly absent.
-                raise  # Keep the original error, because it already states the truth.
-            raise AttributeError(_describe_partial_import(name, cause)) from cause  # Name the real cause.
-
-
-_MH = _MistHelperProxy()  # WHY: sole module-level proxy handle used by FirmwareUpgradeStatusChecker
+_MH = SourceDependencyResolver  # WHY: Resolve legacy host helpers through the bound source resolver.
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -176,10 +125,9 @@ def _bind_module_globals(config: FirmwareManagerConfig) -> None:
     logging.info("Rebinding firmware_manager module globals for org %s", config.org_id)  # WHY: audit trail
     apisession = config.apisession  # WHY: rebinds module-scope api session for legacy helpers
     org_id = config.org_id  # WHY: rebinds module-scope org id for legacy helpers
-    main_module = sys.modules.get("__main__") or sys.modules.get("MistHelper")  # WHY: locate host module
-    if main_module is not None:  # WHY: only sync when a host module is loaded
-        msp_privileges = getattr(main_module, "msp_privileges", [])  # WHY: preserve msp cache visibility
-        PROGRESS_EMITTER = getattr(main_module, "PROGRESS_EMITTER", None)  # WHY: hook up progress emitter
+    dependency_host = SourceDependencyResolver.active_dependency_host()  # WHY: avoid importing the root module by name.
+    msp_privileges = getattr(dependency_host, "msp_privileges", [])  # WHY: preserve MSP cache visibility.
+    PROGRESS_EMITTER = getattr(dependency_host, "PROGRESS_EMITTER", None)  # WHY: hook up progress emitter.
     logging.debug("firmware_manager module globals rebound for org %s", config.org_id)  # WHY: confirm side effects
 
 
@@ -723,21 +671,18 @@ class FirmwareManager:
         """Print a formatted table of devices currently upgrading."""
         if not active_upgrades:  # WHY: skip render when nothing to show
             return
-        import sys as _sys
-
-        _main_d = _sys.modules.get("__main__") or _sys.modules.get("MistHelper")  # WHY: resolve MistHelper module
+        dependency_host = (
+            SourceDependencyResolver.active_dependency_host()
+        )  # WHY: resolve display helpers without a root import.
         print("\n  Devices Currently Upgrading:")  # WHY: section header
         print("  " + "=" * 86)  # WHY: top divider
         header = f"  {'Device Name':<25} {'Type':<10} {'Model':<15} {'Status':<12} {'Progress':<20}"  # WHY: header row
         print(header)  # WHY: column headers
         print("  " + "-" * 86)  # WHY: header/body separator
         for upgrade in active_upgrades:  # WHY: emit one row per active upgrade
-            if _main_d is None:
-                progress_bar = ""  # WHY: MistHelper unavailable. Render blank bar
-            else:
-                progress_bar = _main_d.DisplayUtils.create_progress_bar(  # WHY: ASCII bar
-                    upgrade["progress"], bar_length=15
-                )
+            progress_bar = dependency_host.DisplayUtils.create_progress_bar(  # WHY: Use the bound display helper.
+                upgrade["progress"], bar_length=15
+            )
             print(
                 f"  {upgrade['name']:<25} {upgrade['type']:<10} {upgrade['model']:<15} "
                 f"{upgrade['status']:<12} {progress_bar}"

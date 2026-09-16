@@ -758,10 +758,10 @@ class TestPrintActiveUpgradesTable:
     def test_with_display_utils_renders_progress_bar(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        fake_main = types.SimpleNamespace(
+        fake_host = types.SimpleNamespace(
             DisplayUtils=types.SimpleNamespace(create_progress_bar=lambda pct, bar_length: f"[BAR-{pct}]")
         )
-        monkeypatch.setitem(sys.modules, "__main__", fake_main)
+        monkeypatch.setattr(type(fm_mod.SourceDependencyResolver), "active_dependency_host", lambda _self: fake_host)
         rec = [{"name": "ap1", "type": "ap", "model": "AP32", "progress": 55, "status": "upgrading"}]
         _make_manager()._print_active_upgrades_table(rec)
         out = capsys.readouterr().out
