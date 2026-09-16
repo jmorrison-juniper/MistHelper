@@ -46,7 +46,7 @@ typed confirmation from a person. An automated test pass never runs one.
 The container is the supported way to run MistHelper. It carries Python, every
 dependency, the two data stores, and both portals.
 
-You need a container runtime. Podman is the primary runtime, and Docker works.
+You need a container runtime. Podman is the documented runtime for this guide. Docker parity is tracked in issue #2721.
 
 ### Step 1: Get the files
 
@@ -121,12 +121,12 @@ end-to-end run follows four rules.
 2. Name it for the issue or the pull request that it serves. Use the format
    `misthelper-tmp-<issue|pr><number>-<slug>`.
 3. Publish a port in the range 9600 through 9699. Never publish a production
-   local port, such as 2200, 8055, 8056, or 9529.
-4. Remove it when the test ends. Never leave a test container running.
+   local port. Read `compose.yml` for the current production ports.
+4. Remove the container, its volume, and its network when the test ends.
 
 Read [the container deployment
 page](documentation/container-deployment.md) for the full policy and the
-cleanup commands.
+cleanup commands. The cleanup proof must show no `misthelper-tmp-` containers or volumes.
 
 ## Use
 

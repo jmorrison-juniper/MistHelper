@@ -103,6 +103,7 @@ authoritative.
 3. Publish a port in the range 9600 through 9699. Never publish a production
    local port. Read `compose.yml` for the current set.
 4. Remove the container, its volume, and its network when the test ends. Never
-   leave a test container running.
+   leave a test container running. Confirm that no `misthelper-tmp-` container
+   or volume remains.
 
 <!-- MANUAL ADDITIONS END -->

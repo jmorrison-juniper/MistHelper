@@ -9,9 +9,7 @@ MistHelper includes a Flask-based web portal for browser access to data, operati
 python MistHelper.py --web-portal
 
 # Container (runs automatically alongside SSH)
-podman run -d --name misthelper -p 2200:2200 -p 8055:8055 \
-  -v "${PWD}/data:/app/data:rw" -v "${PWD}/.env:/app/.env:ro" \
-  ghcr.io/jmorrison-juniper/misthelper:latest
+.\scripts\compose.ps1 up -d
 ```
 
 Open http://localhost:8055 in your browser.

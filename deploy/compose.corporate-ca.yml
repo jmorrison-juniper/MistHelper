@@ -1,0 +1,12 @@
+# Compose overlay for an operator-supplied corporate root certificate.
+# Use this file only through `scripts\compose.ps1 up-corporate-ca`.
+# The helper checks that `zscaler-root-ca.crt` exists before it starts the stack.
+
+services:
+  misthelper:
+    volumes:
+      # Mount the proxy root certificate into the trust-store input directory.
+      - type: bind
+        source: ../zscaler-root-ca.crt
+        target: /usr/local/share/ca-certificates/corp-root-ca.crt
+        read_only: true

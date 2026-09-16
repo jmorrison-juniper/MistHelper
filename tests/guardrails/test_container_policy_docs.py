@@ -18,6 +18,7 @@ Why:
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
 
@@ -28,6 +29,11 @@ yaml = pytest.importorskip("yaml")  # PyYAML ships with the project requirements
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_PATH = REPOSITORY_ROOT / "compose.yml"
 POLICY_PATH = REPOSITORY_ROOT / ".github" / "copilot-instructions.md"
+COMPOSE_HELPER_PATH = REPOSITORY_ROOT / "scripts" / "compose.ps1"
+CORPORATE_CA_COMPOSE_PATH = (
+    REPOSITORY_ROOT / "deploy" / "compose.corporate-ca.yml"
+)  # Read the deployment overlay from the existing deployment folder.
+LOGGER = logging.getLogger(__name__)
 
 EPHEMERAL_FIRST_PORT = 9600  # The policy tells a reader to start here.
 EPHEMERAL_LAST_PORT = 9699  # The policy tells a reader to stop here.
@@ -39,6 +45,10 @@ NAME_MARKER = "misthelper-tmp-"
 # A command that removes every unused volume, including the two that hold every
 # capture and every upgrade run. Neither one may sit in a copy-pasteable block.
 DESTRUCTIVE_PATTERNS = ("volume prune", "down -v")
+PRODUCTION_STORE_VOLUMES = frozenset(
+    {"misthelper-arangodb-data", "misthelper-redis-data"}
+)  # These volumes hold production data and must never appear in cleanup commands.
+VOLUME_RM_PATTERN = re.compile(r"\bpodman\s+volume\s+rm\s+([^\r\n]+)")  # Match each documented volume cleanup command.
 
 # Every document that states the policy or links to it. A code block in one of
 # these files is a command that a reader copies.
@@ -141,3 +151,66 @@ class TestNoDestructiveCommandInABlock:
         for block in code_blocks(document.read_text(encoding="utf-8")):  # Read each fenced block.
             for pattern in DESTRUCTIVE_PATTERNS:  # Check both destructive forms.
                 assert pattern not in block, f"{relative_path} offers `{pattern}` in a code block"
+
+    @pytest.mark.parametrize("relative_path", POLICY_DOCUMENTS, ids=lambda path: str(path))
+    def test_no_code_block_removes_a_production_store_volume(self, relative_path: Path) -> None:
+        """A cleanup block must not name a volume that stores production records."""
+        LOGGER.info("Checking cleanup blocks in %s", relative_path)  # Log the document under test.
+        document = REPOSITORY_ROOT / relative_path  # Resolve the document path for a stable read.
+        if not document.exists():  # Treat an absent optional document as outside the policy set.
+            pytest.skip(f"{relative_path} is absent")  # Skip the document that is not in this checkout.
+        blocks = code_blocks(document.read_text(encoding="utf-8"))  # Read each copy-paste command block.
+        LOGGER.debug("Found %s code blocks in %s", len(blocks), relative_path)  # Record the block count.
+        for block in blocks:  # Check each command block because a reader can copy any one block.
+            for volume in PRODUCTION_STORE_VOLUMES:  # Check each protected production store volume.
+                unsafe = f"podman volume rm {volume}"  # Build the exact unsafe command form.
+                assert unsafe not in block, f"{relative_path} removes {volume}"
+
+    @pytest.mark.parametrize("relative_path", POLICY_DOCUMENTS, ids=lambda path: str(path))
+    def test_volume_cleanup_commands_target_ephemeral_volumes(self, relative_path: Path) -> None:
+        """A volume cleanup command must target only the issue-scoped test volume."""
+        LOGGER.info("Checking volume cleanup targets in %s", relative_path)  # Log the document under test.
+        document = REPOSITORY_ROOT / relative_path  # Resolve the document path for a stable read.
+        if not document.exists():  # Treat an absent optional document as outside the policy set.
+            pytest.skip(f"{relative_path} is absent")  # Skip the document that is not in this checkout.
+        blocks = code_blocks(document.read_text(encoding="utf-8"))  # Read each copy-paste command block.
+        LOGGER.debug("Found %s code blocks in %s", len(blocks), relative_path)  # Record the block count.
+        for block in blocks:  # Check each command block because a reader can copy any one block.
+            for match in VOLUME_RM_PATTERN.finditer(block):  # Read each documented volume removal.
+                target = match.group(1).strip()  # Extract the target name from the command line.
+                assert NAME_MARKER in target, f"{relative_path} removes non-ephemeral volume {target}"
+
+    def test_authoritative_cleanup_includes_empty_container_and_volume_checks(self, policy_text: str) -> None:
+        """The proof must show that no temporary container or volume remains."""
+        LOGGER.info("Checking authoritative cleanup proof commands")  # Log the policy proof check.
+        section = policy_text.split("### Test and Debug Containers")[1]  # Limit the check to the policy.
+        LOGGER.debug("Authoritative policy section length is %s", len(section))  # Record the checked size.
+        assert 'podman ps -a --filter "name=misthelper-tmp-"' in section
+        assert 'podman volume ls --filter "name=misthelper-tmp-"' in section
+
+
+class TestCorporateCaAutomation:
+    """The TLS proxy workflow must use the compose helper, not a direct run."""
+
+    def test_compose_helper_supports_the_corporate_ca_overlay(self) -> None:
+        """The helper command keeps the certificate workflow inside compose."""
+        LOGGER.info("Checking compose helper corporate CA support")  # Log the helper script check.
+        script_text = COMPOSE_HELPER_PATH.read_text(encoding="utf-8")  # Read the helper script once.
+        LOGGER.debug("Compose helper script length is %s", len(script_text))  # Record the checked size.
+        assert "up-corporate-ca" in script_text
+        assert "deploy\\compose.corporate-ca.yml" in script_text
+
+    def test_corporate_ca_overlay_mounts_only_the_certificate(self) -> None:
+        """The overlay must add the certificate mount and leave store volumes alone."""
+        LOGGER.info("Checking corporate CA compose overlay")  # Log the overlay validation.
+        document = yaml.safe_load(CORPORATE_CA_COMPOSE_PATH.read_text(encoding="utf-8"))  # Parse the overlay.
+        volumes = document["services"]["misthelper"]["volumes"]  # Read the application mounts only.
+        LOGGER.debug("Corporate CA overlay has %s mounts", len(volumes))  # Record the mount count.
+        assert volumes == [
+            {
+                "type": "bind",
+                "source": "../zscaler-root-ca.crt",
+                "target": "/usr/local/share/ca-certificates/corp-root-ca.crt",
+                "read_only": True,
+            }
+        ]

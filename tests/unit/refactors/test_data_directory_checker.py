@@ -111,7 +111,8 @@ class TestCheckPermissionError:
             checker.check()  # WHY: exercise container-guidance branch.
 
         assert "[CONTAINER DETECTED]" in caplog.text  # WHY: container banner logged.
-        assert "podman stop misthelper" in caplog.text  # WHY: container remediation shown.
+        assert "podman rm -f misthelper-app" in caplog.text  # WHY: container remediation removes only the app.
+        assert ".\\scripts\\compose.ps1 up -d --no-deps misthelper" in caplog.text  # WHY: restart uses compose.
         assert "chmod -R 755 data/" not in caplog.text  # WHY: local guidance suppressed in container branch.
 
     def test_containerenv_marker_also_detects_container(

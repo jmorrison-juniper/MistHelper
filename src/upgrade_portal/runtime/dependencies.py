@@ -286,7 +286,9 @@ def _missing_container_detail(dependency: Dependency, state: ContainerState) -> 
         The sentence that names the next action.
     """
     if state is ContainerState.MISSING:  # No container exists, so the operator creates one.
-        return f"No container is named {dependency.container}. Run: podman compose up -d {dependency.container}"
+        return (  # Tell a Windows operator to use the supported compose helper.
+            f"No container is named {dependency.container}. Run: .\\scripts\\compose.ps1 up -d {dependency.container}"
+        )
     if state is ContainerState.RUNNING:  # The container runs, so the fault is inside it or on the port.
         return f"The container {dependency.container} runs but answers no client. Read its log."
     return f"The portal could not read the state of {dependency.container}."  # No runtime answered.

@@ -75,12 +75,14 @@ if ($LASTEXITCODE -ne 0) {
     throw "podman-compose is required on Windows. See issue #2184."
 }
 
-# Two subcommands run here instead of passing through to the provider.
+# Three subcommands run here instead of passing through to the provider.
 #
 # "build" merges compose.build.yml, so the build section reaches the provider.
 # A plain "up" reads compose.yml only, and that file carries no build section.
 # That split is the repair of issue #2272: a plain "up" can never build the
 # image and never overwrite the published tag with a local build.
+#
+# "up-corporate-ca" merges the certificate overlay only when requested.
 #
 # "check-revision" reads the commit label of the running container and
 # compares it against origin/main. An empty label names a local build,
@@ -93,6 +95,27 @@ if ($ComposeArguments.Count -gt 0 -and $ComposeArguments[0] -eq "build") {
     Write-Host "Building the image from the working tree. Update the checkout first if it is behind main." -ForegroundColor Yellow
     & $Interpreter -m podman_compose -f $ComposeFile -f $BuildFile build
     exit $LASTEXITCODE  # Report the status of the provider, so a script that calls this one sees a failure.
+}
+
+if ($ComposeArguments.Count -gt 0 -and $ComposeArguments[0] -eq "up-corporate-ca") {
+    $DeployDirectory = Join-Path $RepositoryRoot "deploy"  # Keep deployment-only compose files out of the root.
+    $CorporateCaFile = Join-Path $DeployDirectory "compose.corporate-ca.yml"  # Add the overlay only for the certificate workflow.
+    $CorporateCaPath = Join-Path $RepositoryRoot "zscaler-root-ca.crt"  # Use the documented certificate file name.
+    if (-not (Test-Path $CorporateCaFile)) {  # Stop if the overlay is absent, because the mount would not apply.
+        throw "No deploy\compose.corporate-ca.yml exists at $CorporateCaFile. Restore the deployment overlay."  # Name the missing file.
+    }
+    if (-not (Test-Path $CorporateCaPath)) {  # Stop if the certificate is absent, because compose would fail later.
+        throw "No zscaler-root-ca.crt exists at $CorporateCaPath. Add the proxy root certificate first."  # Tell the operator how to repair it.
+    }
+    $CorporateArguments = @("up")  # Convert the helper command into the compose subcommand.
+    if ($ComposeArguments.Count -gt 1) {  # Preserve flags such as -d after the helper command.
+        $CorporateArguments += $ComposeArguments[1..($ComposeArguments.Count - 1)]  # Keep the operator flags word for word.
+    } else {  # Use the safe default when the operator gives no flags.
+        $CorporateArguments += "-d"  # Start detached so the terminal returns to the operator.
+    }
+    Write-Host "Starting the stack with the corporate CA overlay." -ForegroundColor Green  # Tell the operator which path runs.
+    & $Interpreter -m podman_compose -f $ComposeFile -f $CorporateCaFile @CorporateArguments  # Run the native provider with both compose files.
+    exit $LASTEXITCODE  # Report the provider status to the caller.
 }
 
 if ($ComposeArguments.Count -gt 0 -and $ComposeArguments[0] -eq "check-revision") {
