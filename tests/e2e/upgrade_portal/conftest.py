@@ -1479,6 +1479,7 @@ def _register_operator(email: str, browser_id: str) -> None:
 FAILED_RUN_ID = "e2e-failed-run-0001"  # The seeded run that the retry test opens. One fixed key, so no test guesses.
 STOPPED_RUN_ID = "e2e-stopped-run-0001"  # The seeded run that proves a cancelled attempt can restart.
 PREPARED_RUN_ID = "e2e-prepared-run-0001"  # The seeded run that proves the confirmation link works.
+START_READY_RUN_ID = "e2e-start-ready-run-0001"  # The seeded run that proves the firmware start call.
 STALE_PRE_CLOUD_RUN_ID = "e2e-stale-precloud-0001"
 STALE_STOPPING_RUN_ID = "e2e-stale-stopping-0001"
 BULK_RETRY_RUN_ID = "e2e-bulk-retry-run-0001"
@@ -1486,6 +1487,7 @@ BULK_RETRY_SITE_ID = "55555555-5555-5555-5555-555555555555"
 LIFECYCLE_RUN_ID = "e2e-lifecycle-run-0001"
 LIFECYCLE_SITE_ID = "66666666-6666-6666-6666-666666666666"
 PREPARED_SITE_ID = "e2e-confirm-site"  # A separate site keeps this live run from blocking other E2E journeys.
+START_READY_SITE_ID = "e2e-start-site"  # A separate site keeps the start proof from changing another test.
 
 
 def _failed_run_record() -> dict[str, Any]:
@@ -1542,6 +1544,15 @@ def _prepared_run_record() -> dict[str, Any]:
         ],
         "options": {"strategy": "big_bang", "reboot": True},
     }
+
+
+def _start_ready_run_record() -> dict[str, Any]:
+    """Build one prepared run that the start journey can mutate."""
+    record = _prepared_run_record()  # Reuse the validated ready-run shape for the start-only fixture.
+    record["run_id"] = START_READY_RUN_ID  # Give the start test its own record so order cannot change another test.
+    record["site_id"] = START_READY_SITE_ID  # Give the start test its own site so no live-run guard hides the path.
+    record["message"] = "The stand-in plan is ready for a measured firmware start."  # State the test purpose.
+    return record  # Return a mutable copy that the start route may advance.
 
 
 def _stale_precloud_run_record() -> dict[str, Any]:
@@ -1608,7 +1619,13 @@ def _seed_fixture_runs(built: Any, upgrade: Any) -> None:
     background thread lets the portal bind first; each test waits for its seeded
     run before it asserts the related control.
     """
-    logger.info("Seeding browser fixture runs %s, %s, and %s", FAILED_RUN_ID, STOPPED_RUN_ID, PREPARED_RUN_ID)
+    logger.info(
+        "Seeding browser fixture runs %s, %s, %s, and %s",
+        FAILED_RUN_ID,
+        STOPPED_RUN_ID,
+        PREPARED_RUN_ID,
+        START_READY_RUN_ID,
+    )
     writer = threading.Thread(target=_write_fixture_runs, args=(built, upgrade), daemon=True)
     writer.start()
     logger.debug("The browser fixture run seed runs on its own thread")
@@ -1621,6 +1638,7 @@ def _write_fixture_runs(built: Any, upgrade: Any) -> None:
             failed_written = upgrade.save_run(_failed_run_record())
             stopped_written = upgrade.save_run(_stopped_run_record())
             prepared_written = upgrade.save_run(_prepared_run_record())
+            start_ready_written = upgrade.save_run(_start_ready_run_record())
             stale_precloud_written = upgrade.save_run(_stale_precloud_run_record())
             stale_stopping_written = upgrade.save_run(_stale_stopping_run_record())
             bulk_retry_written = upgrade.save_run(_bulk_retry_run_record())
@@ -1634,11 +1652,12 @@ def _write_fixture_runs(built: Any, upgrade: Any) -> None:
     logger.info(
         (
             "Browser fixture run seeds reported failed=%s stopped=%s prepared=%s "
-            "stale_precloud=%s stale_stopping=%s bulk_retry=%s lifecycle=%s"
+            "start_ready=%s stale_precloud=%s stale_stopping=%s bulk_retry=%s lifecycle=%s"
         ),
         failed_written,
         stopped_written,
         prepared_written,
+        start_ready_written,
         stale_precloud_written,
         stale_stopping_written,
         bulk_retry_written,

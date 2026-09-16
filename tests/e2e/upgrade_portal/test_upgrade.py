@@ -28,6 +28,7 @@ Why the helpers repeat `test_capture.py`:
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 import pytest
@@ -88,6 +89,8 @@ PHASE_PROGRESS_PREFIX = "upgrade-phase-progress-"
 # FR-053 settles the four families in this order, and `data-model.md` repeats it.
 PHASE_NAMES = ("gateways", "switches", "aps", "clients")
 
+logger = logging.getLogger(__name__)  # Use this module name in browser start proof logs.
+
 CONFIRM_WORD = "CONFIRM"  # FR-033 fixes this exact text and this exact letter case.
 NEAR_MISS_WORD = "confirm"  # The same word in lower case, which must not unlock the start.
 
@@ -110,6 +113,7 @@ VERIFIED_STATE = "verified"  # The state that FR-035 reads before it allows a st
 VERIFY_TRIES = 40  # Twenty seconds in all, which covers a slow workstation.
 VERIFY_PAUSE_MS = 500  # The collection thread holds the progress guard for a moment only.
 PREPARED_RUN_ID = "e2e-prepared-run-0001"  # `conftest.py` seeds this awaiting-confirmation run.
+START_READY_RUN_ID = "e2e-start-ready-run-0001"  # `conftest.py` seeds this run for the start proof.
 SEED_TIMEOUT_MS = 30000  # A cold store can take several seconds to write the seeded browser fixture.
 
 # WHY: The server fixture states its own fault and its own skip, so this module
@@ -667,6 +671,43 @@ class TestUpgradeConfirm:
         field.fill(CONFIRM_WORD)
         button = confirm_page.get_by_test_id(START_BUTTON_ID)
         sync_api.expect(button).to_be_enabled(timeout=GATE_TIMEOUT_MS)
+
+
+class TestUpgradeStart:
+    """The firmware operator can complete the start journey."""
+
+    def test_firmware_operator_starts_a_prepared_run(self, firmware_operator_page: Any) -> None:
+        """The reachable test operator reaches the start route and the run page."""
+        logger.info("Open the prepared browser upgrade run with the firmware operator")  # Record the proof start.
+        run_id = START_READY_RUN_ID  # Use a seeded ready run that only this test mutates.
+        prepared_path = PROGRESS_PAGE_TEMPLATE.format(run_id=run_id)  # Poll the run page that reveals the seed.
+        confirm_link = firmware_operator_page.get_by_test_id(CONFIRM_LINK_ID)  # The link proves the run is ready.
+        for _ in range(SEED_TIMEOUT_MS // 1000):  # The seed thread can finish after the server starts listening.
+            answer = firmware_operator_page.goto(prepared_path)  # Open the run page through the browser.
+            assert answer is not None and answer.status == OK_STATUS, f"{prepared_path} did not answer {OK_STATUS}."
+            if confirm_link.count() == 1:  # The page now shows the route to the confirm step.
+                break  # Stop waiting as soon as the prepared run is visible.
+            firmware_operator_page.wait_for_timeout(1000)  # Wait before the next seed check.
+        sync_api.expect(confirm_link).to_be_visible()  # Fail if the seed never produced a prepared run.
+        logger.debug("Opened prepared browser upgrade run %s for the firmware operator", run_id)  # Record the key.
+        confirm_path = CONFIRM_PAGE_TEMPLATE.format(run_id=run_id)  # Open the page that owns the typed word.
+        _require_built_route(_page_status(firmware_operator_page, confirm_path), confirm_path)  # Fail on route gaps.
+        field = firmware_operator_page.get_by_test_id(CONFIRM_INPUT_ID)  # Select the confirmation control by contract.
+        assert not field.is_disabled(), "The confirm field is disabled, so the start path was not measured."
+        field.fill(CONFIRM_WORD)  # Type the exact word that the server also checks.
+        button = firmware_operator_page.get_by_test_id(START_BUTTON_ID)  # Select the start control by contract.
+        sync_api.expect(button).to_be_enabled(timeout=GATE_TIMEOUT_MS)  # Prove the browser gate accepted the word.
+        start_suffix = f"/api/runs/{run_id}/start"  # Match the endpoint without binding to the dynamic port.
+        logger.info("Start the browser upgrade run %s", run_id)  # Record the measured start call.
+        with firmware_operator_page.expect_response(lambda response: response.url.endswith(start_suffix)) as event:
+            button.click()  # Click the same control an operator clicks.
+        assert event.value.status == ACCEPTED_STATUS, "The start call did not answer the accepted status."
+        progress_path = PROGRESS_PAGE_TEMPLATE.format(run_id=run_id)  # The script moves to this page after success.
+        firmware_operator_page.wait_for_url(f"**{progress_path}", timeout=SAVE_TIMEOUT_MS)  # Prove navigation ended.
+        sync_api.expect(firmware_operator_page.get_by_test_id(RUN_STATE_ID)).to_have_text(
+            "upgrade_submitting"
+        )  # Prove the run page shows the state that only the start route writes.
+        logger.debug("The browser upgrade run %s reached the run page after start", run_id)  # Record success.
 
 
 class TestUpgradeProgress:
