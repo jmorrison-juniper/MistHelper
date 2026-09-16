@@ -1005,7 +1005,7 @@ class TestStep2SelectSites:
             _mist_modules(
                 **{
                     "mistapi.api.v1.sites.setting": MagicMock(
-                        getSiteSettings=MagicMock(return_value=MagicMock(data={})),
+                        getSiteSetting=MagicMock(return_value=MagicMock(data={})),
                     ),
                 }
             ),
@@ -1064,7 +1064,7 @@ class TestSelectSingleSite:
             _mist_modules(
                 **{
                     "mistapi.api.v1.sites.setting": MagicMock(
-                        getSiteSettings=MagicMock(return_value=MagicMock(data={})),
+                        getSiteSetting=MagicMock(return_value=MagicMock(data={})),
                     ),
                 }
             ),
@@ -1121,7 +1121,7 @@ class TestFetchCurrentSiteSettings:
             _mist_modules(
                 **{
                     "mistapi.api.v1.sites.setting": MagicMock(
-                        getSiteSettings=MagicMock(return_value=mock_response),
+                        getSiteSetting=MagicMock(return_value=mock_response),
                     ),
                 }
             ),
@@ -1141,7 +1141,7 @@ class TestFetchCurrentSiteSettings:
             _mist_modules(
                 **{
                     "mistapi.api.v1.sites.setting": MagicMock(
-                        getSiteSettings=MagicMock(return_value=mock_response),
+                        getSiteSetting=MagicMock(return_value=mock_response),
                     ),
                 }
             ),
@@ -1156,7 +1156,7 @@ class TestFetchCurrentSiteSettings:
             _mist_modules(
                 **{
                     "mistapi.api.v1.sites.setting": MagicMock(
-                        getSiteSettings=MagicMock(side_effect=RuntimeError("err")),
+                        getSiteSetting=MagicMock(side_effect=RuntimeError("err")),
                     ),
                 }
             ),
