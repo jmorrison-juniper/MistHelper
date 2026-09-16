@@ -1,0 +1,10 @@
+{"summary": {"candidate_capture_pool_8": {"median_cpu_ms": 31.25, "median_wall_ms": 5243.834, "result_count": 12.0}, "candidate_parallel_store": {"median_cpu_ms": 15.625, "median_wall_ms": 5318.1114, "result_count": 12.0}, "current_capture_pool_4": {"median_cpu_ms": 31.25, "median_wall_ms": 5381.7857, "result_count": 12.0}}}
+{"error_count": 0, "iteration": 0, "process_cpu_ns": 31250000, "result_count": 12, "scenario": "current_capture_pool_4", "wall_ns": 5381785700}
+{"error_count": 0, "iteration": 1, "process_cpu_ns": 31250000, "result_count": 12, "scenario": "current_capture_pool_4", "wall_ns": 5241077100}
+{"error_count": 0, "iteration": 2, "process_cpu_ns": 15625000, "result_count": 12, "scenario": "current_capture_pool_4", "wall_ns": 5498096900}
+{"error_count": 0, "iteration": 0, "process_cpu_ns": 15625000, "result_count": 12, "scenario": "candidate_capture_pool_8", "wall_ns": 5427475800}
+{"error_count": 0, "iteration": 1, "process_cpu_ns": 31250000, "result_count": 12, "scenario": "candidate_capture_pool_8", "wall_ns": 5243834000}
+{"error_count": 0, "iteration": 2, "process_cpu_ns": 46875000, "result_count": 12, "scenario": "candidate_capture_pool_8", "wall_ns": 5235875000}
+{"error_count": 0, "iteration": 0, "process_cpu_ns": 62500000, "result_count": 12, "scenario": "candidate_parallel_store", "wall_ns": 5445853300}
+{"error_count": 0, "iteration": 1, "process_cpu_ns": 0, "result_count": 12, "scenario": "candidate_parallel_store", "wall_ns": 5318111400}
+{"error_count": 0, "iteration": 2, "process_cpu_ns": 15625000, "result_count": 12, "scenario": "candidate_parallel_store", "wall_ns": 5248598400}
