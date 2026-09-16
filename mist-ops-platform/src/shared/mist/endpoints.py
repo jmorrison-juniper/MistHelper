@@ -14,11 +14,11 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-import mistapi
-
 from src.shared.mist.types import MistEndpoint, MistEntityRegistry
 
 if TYPE_CHECKING:
+    import mistapi
+
     from src.shared.mist.rate_limit import OrgRateLimiter
 
 logger = logging.getLogger(__name__)
@@ -29,6 +29,10 @@ MAX_PAGINATION_PAGES = 500
 
 # WHY: name the status code so a reader does not have to recall it. Issue #1886.
 HTTP_TOO_MANY_REQUESTS = 429
+# WHY: name the first success code so ApiResult.success has no magic number.
+HTTP_SUCCESS_MIN = 200
+# WHY: name the first non-success code so ApiResult.success has no magic number.
+HTTP_SUCCESS_MAX_EXCLUSIVE = 300
 # WHY: cap outbound 429 retries so throttling cannot hang a worker forever.
 MAX_429_RETRIES = 3
 # WHY: the first backoff wait after a 429, before it doubles.
@@ -47,7 +51,7 @@ class ApiResult:
     @property
     def success(self) -> bool:
         """True when status_code is in the 2xx range."""
-        return 200 <= self.status_code < 300
+        return HTTP_SUCCESS_MIN <= self.status_code < HTTP_SUCCESS_MAX_EXCLUSIVE
 
     @property
     def error(self) -> str | None:
@@ -188,6 +192,14 @@ class MistEndpointService:
         status = getattr(response, "status_code", 200)
         data = getattr(response, "data", response)
         if isinstance(data, str):
+            if data == "":
+                logger.warning(  # WHY: surface data loss from an empty Mist body.
+                    "Mist response body is empty. Returning an empty data object.",
+                )
+                logger.debug(  # WHY: preserve the status without logging a response body.
+                    "Empty Mist response body used status %s",
+                    status,
+                )
             data = {}
         return ApiResult(status_code=status, data=data)
 
