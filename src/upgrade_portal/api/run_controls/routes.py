@@ -6,8 +6,10 @@ import logging
 from collections.abc import Mapping, Sequence
 from typing import Any, cast  # Narrow validated request values without runtime changes.
 
+import mistapi
 from flask import Blueprint, current_app, jsonify, request, session
 
+from src.firmware.running_version import DEFAULT_STATS_PAGE_LIMIT, RunningFirmwareVersionResolver
 from src.upgrade_portal.api.run_controls.models import BulkPreviewRequest
 from src.upgrade_portal.api.run_controls.services import (
     BulkActionError,
@@ -29,6 +31,7 @@ from src.upgrade_portal.persistence.actions import (
 )
 from src.upgrade_portal.runtime import identity, lock
 from src.upgrade_portal.runtime.runs import RunRecordBuilder, RunSpec
+from src.upgrade_portal.upgrade import gate
 
 logger = logging.getLogger(__name__)
 run_controls_bp = Blueprint("run_controls", __name__)
@@ -46,6 +49,63 @@ CLOUD_EVIDENCE_KEY = "CLOUD_EVIDENCE"
 IDEMPOTENCY_HEADER = "Idempotency-Key"
 
 BulkActionFields = tuple[str, list[Any], str, str, str]  # Keep the parsed request shape in one local term.
+
+
+class SiteStatsFirmwareEvidenceReader:
+    """Read firmware reconciliation evidence from the site statistics endpoint."""
+
+    def __init__(self, cloud_session: Any) -> None:
+        """Store the signed-in Mist session without logging credentials."""
+        self._cloud_session = cloud_session  # The identity registry owns the token-bearing object.
+
+    def read(self, record: Mapping[str, Any], observed_at: str) -> list[Mapping[str, Any]]:
+        """Return one safe evidence row for each stored target."""
+        logger.info("Read site statistics for reconciliation evidence")  # Record the read before the cloud call.
+        site_id = str(record.get("site_id") or "")  # Limit the approved endpoint to the run site.
+        response = mistapi.api.v1.sites.stats.listSiteDevicesStats(  # Read the approved running-version endpoint.
+            self._cloud_session,
+            site_id,
+            type="all",
+            fields=gate.STATISTICS_FIELDS,
+            limit=DEFAULT_STATS_PAGE_LIMIT,
+        )
+        rows = [dict(row) for row in mistapi.get_all(mist_session=self._cloud_session, response=response)]
+        running = RunningFirmwareVersionResolver.index_stats_rows(rows)  # Use the shared running-version rule.
+        indexed = self._index_readings(rows, running)  # Preserve firmware status beside the running version.
+        result = [_target_evidence_row(target, indexed, observed_at) for target in self._targets(record)]
+        logger.debug("Read reconciliation evidence for %s target(s)", len(result))  # Report a safe count.
+        return result  # Give the reconciliation service only safe rows.
+
+    @staticmethod
+    def _targets(record: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+        """Return the stored target mappings of one run."""
+        return [target for target in record.get("targets", ()) if isinstance(target, Mapping)]  # Skip bad rows.
+
+    @staticmethod
+    def _index_readings(rows: Sequence[Mapping[str, Any]], running: Mapping[str, str]) -> dict[str, Mapping[str, Any]]:
+        """Index safe statistics evidence by target identifier."""
+        indexed: dict[str, Mapping[str, Any]] = {}  # Store rows under the identifiers used by run targets.
+        for row in rows:  # Convert each current statistics row into a gate reading.
+            reading = gate.reading_from_record(row)  # Reuse the firmware-status parser from the settle gate.
+            if reading is None:  # A row without a MAC cannot match a target.
+                continue
+            indexed[reading.mac] = {  # Keep only fields that reconciliation may store.
+                "running_version": running.get(reading.mac, reading.version),
+                "fwupdate_status": reading.fwupdate_status,
+                "task_state": "final",
+                "write_state": "not_writing",
+                "sources": ["device"],
+                "has_conflict": False,
+            }
+        return indexed  # Return evidence keyed by normalized MAC.
+
+    @staticmethod
+    def firmware_success(current: Mapping[str, Any]) -> bool:
+        """Report whether one evidence row proves firmware success."""
+        status = str(current.get("fwupdate_status") or "").strip().lower()  # Normalize the Mist status token.
+        target = str(current.get("version_target") or "")  # Read the requested version from the target row.
+        running = str(current.get("running_version") or "")  # Read the running version from site statistics.
+        return status == "success" and gate.version_matches(target, running)  # Use the shared comparison rule.
 
 
 def _visible(record: Mapping[str, Any], organization_id: str, history_scope: str) -> bool:
@@ -408,9 +468,13 @@ def _evidence_rows(record: Mapping[str, Any], observed_at: str) -> list[Mapping[
     """Build one current evidence row for every stored target."""
     source = current_app.config.get(CLOUD_EVIDENCE_KEY)
     read = getattr(source, "read", None)
-    if not callable(read):
-        raise RuntimeError("The cloud evidence reader is unavailable.")
-    raw = read("reconciliation", run_id=str(record.get("run_id") or ""))
+    if not callable(read):  # Production reads the approved site statistics endpoint.
+        owner = identity.current_session()  # Read the signed-in session from the identity registry.
+        cloud_session = getattr(owner, "cloud_session", None)  # Keep the credential-bearing object out of logs.
+        if cloud_session is None:  # A missing session cannot read cloud evidence.
+            raise RuntimeError("The cloud evidence reader is unavailable.")
+        return SiteStatsFirmwareEvidenceReader(cloud_session).read(record, observed_at)  # Use current cloud proof.
+    raw = read("reconciliation", run_id=str(record.get("run_id") or ""))  # Read scripted test evidence.
     indexed = _indexed_evidence(raw)  # Preserve supplied cloud evidence lookup rules.
     return [  # Preserve target order while skipping unsupported target rows.
         _target_evidence_row(target, indexed, observed_at)
@@ -457,11 +521,18 @@ def _target_evidence_row(
     current.setdefault("stored_stop_result", str(target.get("stop_result") or "unknown"))  # Keep the stored default.
     current.setdefault("task_id", str(target.get("cloud_task_id") or ""))  # Keep the stored cloud task fallback.
     current.setdefault("driver_state", target.get("driver_state"))  # Keep the stored driver state fallback.
+    current.setdefault("version_target", str(target.get("version_target") or target.get("target_version") or ""))
+    current.setdefault("running_version", str(target.get("version_after") or ""))
+    current.setdefault("fwupdate_status", "")
     current.setdefault("sources", ["stored"])  # Keep the stored-only source fallback.
     current.setdefault("observed_at", observed_at)  # Keep the caller observation time fallback.
     current.setdefault("task_state", "unknown")  # Keep the unknown task fallback.
     current.setdefault("write_state", "unknown")  # Keep the unknown write fallback.
-    current.setdefault("is_complete", False)  # Keep the incomplete evidence fallback.
+    current.setdefault(
+        "firmware_success",
+        SiteStatsFirmwareEvidenceReader.firmware_success(current),
+    )  # Reuse the gate version comparison.
+    current.setdefault("is_complete", bool(current["firmware_success"]))  # Firmware success is complete evidence.
     current.setdefault("has_conflict", False)  # Keep the no-conflict fallback.
     return current  # Return the completed evidence row.
 

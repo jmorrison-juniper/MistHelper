@@ -35,6 +35,7 @@ _SAFE_SUMMARY_FIELDS = frozenset(  # Allow only the approved reconciliation summ
         "targets",  # Hold only safe target evidence rows.
         "target_count",  # State the expected number of target rows.
         "complete_target_count",  # Count target rows with complete proof.
+        "firmware_success_count",  # Count targets with proven firmware success.
         "active_write_count",  # Count targets that still write firmware.
         "active_task_count",  # Count distinct active task digests.
         "unknown_target_count",  # Count incomplete targets without a conflict.
@@ -56,6 +57,10 @@ _SAFE_TARGET_FIELDS = frozenset(  # Allow only the approved safe target evidence
         "is_complete",  # State whether this target has sufficient proof.
         "has_conflict",  # State whether sources disagree for this target.
         "conflict_reason",  # Name the stable conflict reason.
+        "version_target",  # Store the requested version for safe reconciliation proof.
+        "running_version",  # Store the running version from an approved endpoint.
+        "fwupdate_status",  # Store the firmware update status token from current evidence.
+        "firmware_success",  # Store the final safe firmware success decision.
     }
 )  # Close the approved target field set.
 
