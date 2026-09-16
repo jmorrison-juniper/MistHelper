@@ -1,9 +1,9 @@
 {
   "workflow": "speckit",
   "specName": "The upgrade rehearsal harness",
-  "branch": "feat/1992-upgrade-rehearsal",
+  "branch": "chore/1992-upgrade-rehearsal",
   "currentStep": "implement",
-  "status": "implemented",
+  "status": "validated-for-closure",
   "history": [
     {
       "step": "specify",

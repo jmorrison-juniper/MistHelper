@@ -7,8 +7,9 @@ drives the shipped run driver against a stand-in cloud and a driven clock. It
 proves every portal rule. It cannot prove that the real cloud accepts the call,
 and it cannot prove that the hardware reboots.
 
-This feature does not close issue #1992. A person must decide the live run. No
-test of this feature runs scenario C or scenario D against real hardware.
+This feature closes issue #1992 through the automated stand-in proof. A person
+must decide the live run. No test of this feature runs scenario C or scenario D
+against real hardware.
 
 ## Warning: the live run reboots the hardware
 

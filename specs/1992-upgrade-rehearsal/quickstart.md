@@ -134,7 +134,9 @@ of this feature.
 
 ## 10. What the rehearsal cannot prove
 
-The rehearsal proves the portal logic. It cannot prove two facts.
+The rehearsal proves the portal logic. The browser suite proves the start, the
+stop, and the comparison paths against the seeded stand-in site. It cannot prove
+two fact groups.
 
 1. The cloud accepts the upgrade call and the cancel call.
 2. The hardware reboots and returns with the new firmware.
@@ -147,8 +149,9 @@ checklist holds 5 items or fewer, and it carries the reboot warning of issue
 ## 11. Known limitation
 
 The rehearsal does not replace the browser suite. The browser suite keeps the
-site lock, the reschedule, the cancel, and the retry. Issue #1992 stays open,
-because the live run of scenario C and scenario D stays a human decision.
+site lock, the reschedule, the cancel, the retry, the start route, and the
+comparison journey. Issue #1992 closes on the automated proof. The live run of
+scenario C and scenario D stays a human decision.
 
 ## 12. The measured duration
 

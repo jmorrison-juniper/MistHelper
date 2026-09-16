@@ -1,6 +1,6 @@
 # Implementation Plan: The upgrade rehearsal harness
 
-**Branch**: `feat/1992-upgrade-rehearsal` | **Date**: 2026-09-04 | **Spec**:
+**Branch**: `chore/1992-upgrade-rehearsal` | **Date**: 2026-09-04 | **Spec**:
 [spec.md](./spec.md)
 
 **Input**: Feature specification from
@@ -18,13 +18,15 @@ rule stays in the shipped code. The harness only supplies the answers of the
 cloud and the readings of the clock.
 
 The harness adds one package under `tests/support/rehearsal/` and four test
-modules under `tests/unit/upgrade_portal/`. It changes no file under `src/`.
+modules under `tests/unit/upgrade_portal/`. It changes no file under `src/`. The
+closure pass also relies on the browser start fixture from pull request #2737,
+the existing stop browser tests, and the existing comparison browser tests.
 
 ## Technical Context
 
 **Language/Version**: Python 3.13.
 
-**Primary Dependencies**: pytest, `mistapi` 0.63.3, and the shipped package
+**Primary Dependencies**: pytest, `mistapi` 0.64.0, and the shipped package
 `src/upgrade_portal/`.
 
 **Storage**: None. The harness holds the run record in memory.

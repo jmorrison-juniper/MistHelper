@@ -1,10 +1,10 @@
 # Feature Specification: The upgrade rehearsal harness
 
-**Feature Branch**: `feat/1992-upgrade-rehearsal`
+**Feature Branch**: `chore/1992-upgrade-rehearsal`
 
 **Created**: 2026-09-04
 
-**Status**: Implemented
+**Status**: Validated for closure
 
 **Input**: Prove the upgrade settle gate and the stop control of the upgrade
 capture portal without a write of firmware to production hardware. GitHub issue
@@ -26,6 +26,8 @@ scenario F now pass.
 Almost every pass condition of the two scenarios describes portal logic. The
 answers of the cloud drive that logic. The firmware itself drives very little of
 it. A rehearsal that replays those cloud answers therefore proves the logic.
+Pull request #2737 added the `firmware_operator_page` fixture, so the browser
+suite now reaches the start route with a write-approved stand-in operator.
 
 Issue #2007 records the cost of a wrong live run. One switch rebooted with the
 reboot control off. The switch took six access points down for about six
@@ -253,7 +255,8 @@ hardware. Remove any item that the rehearsal already proves.
 #### The scope guard
 
 - **FR-029**: The live run of scenario C and scenario D MUST stay a human
-  decision. This feature does not close issue #1992.
+  decision. The automated proof closes issue #1992, and it states that it does
+  not measure real cloud acceptance or real hardware reboot.
 - **FR-030**: The feature MUST record a short live checklist. The checklist names
   only the facts that the rehearsal cannot prove.
 - **FR-031**: The live checklist MUST carry a warning about the reboot. The
@@ -322,7 +325,8 @@ hardware. Remove any item that the rehearsal already proves.
   rehearsal does not add a new client rule.
 - The harness reuses the run record shape that the shipped store already writes.
 - The rehearsal does not replace the browser suite. The browser suite keeps the
-  lock, the reschedule, the cancel, and the retry.
+  lock, the reschedule, the cancel, the retry, the start route, and the
+  comparison journey.
 - The unit tests of the gate, of the phase gate, of the driver, of the events,
   and of the stop stay in place. This feature adds the composed level above
   them.
