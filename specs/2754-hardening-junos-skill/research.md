@@ -427,8 +427,39 @@ Three reasons select `pdfplumber`.
    PyMuPDF. A reader runs the rebuild once.
 
 A measurement proves that `pdfplumber` gives the needed input. A scan of 12 pages of `pki.pdf`
-returns the font sizes 9.0, 10.0, 10.3, 11.0, 12.9, 14.0, 20.0, 26.0, and 30.0. The modal size
-is 9.0, which is the body text. A larger size promotes a heading.
+returns the font sizes 9.0, 10.0, 10.3, 11.0, 12.9, 14.0, 20.0, 26.0, and 30.0. A larger size
+promotes a heading.
+
+**Correction on 2026-09-16: the body size of `pki.pdf` is 10.0, not 9.0.** The earlier record
+stated 9.0. A later measurement over the whole 168 page document supersedes it. Do not repeat
+the 12 page sample.
+
+| Range | Modal size | Characters in range |
+| - | - | - |
+| Pages 1 to 12 | 9.0 | 8,334 |
+| Pages 1 to 40 | 10.0 | 44,358 |
+| Pages 1 to 100 | 10.0 | 119,219 |
+| The whole document | 10.0 | 196,350 |
+
+The first 12 pages hold the cover, the notices, and the table of contents. Those pages set 9.0.
+They hold 8,334 of 196,350 characters, which is 4.2 percent of the document. The sample was too
+small and it was unrepresentative, so it returned the front matter size and not the body size.
+9.0 is not the correct value for a smaller range. It is wrong for the document.
+
+The error is not cosmetic. A body size that is 1 point too small promotes ordinary text,
+because body text at 10.0 points clears a threshold of 9.72 points. A measured run over the
+first 40 pages gives this result.
+
+| Body size | Level 4 threshold | Lines marked heading | Share |
+| - | - | - | - |
+| 9.0, the wrong value | 9.72 points | 659 of 1,001 | 65.8 percent |
+| 10.0, the correct value | 10.80 points | 55 of 1,001 | 5.5 percent |
+
+The failure is silent. It raises no exception, and it barely changes the file size. The
+converter must therefore accumulate the size count over every page of a document before it
+classifies any line. It must never read the body size from a sample or from a page range. The
+staged corpus does not carry this defect, because the converter that produced it counted sizes
+over every page.
 
 **Alternatives considered**:
 

@@ -555,7 +555,7 @@ A person ran each command on 2026-09-16 in the worktree at
 | pdfplumber carries an MIT license. | Read the `License` classifier of the package metadata | `License :: OSI Approved :: MIT License` |
 | The container workflow distributes the image. | Read `.github/workflows/container-build.yml` | `REGISTRY: ghcr.io` and `push: true` |
 | `pyproject.toml` already declares pdfplumber. | Search `pyproject.toml` | `"pdfplumber>=0.11.0"` |
-| pdfplumber gives the font size that the heading rule needs. | Read the `size` key of each `char` object across 12 pages of `pki.pdf` | The sizes `9.0, 10.0, 10.3, 11.0, 12.9, 14.0, 20.0, 26.0, 30.0`. The modal size is `9.0`. |
+| pdfplumber gives the font size that the heading rule needs. | Read the `size` key of each `char` object across 12 pages of `pki.pdf` | The sizes `9.0, 10.0, 10.3, 11.0, 12.9, 14.0, 20.0, 26.0, 30.0`. **Superseded on 2026-09-16.** That 12 page sample gives a modal size of `9.0`, which is the front matter size. The whole 168 page document gives `10.0`, which is the body size. Research Decision 15 holds the correction. |
 | pdfplumber is about 5 times slower. | Time both readers over the same 12 pages | `18.0` against `88.8` pages for each second. A second run gave `21.6` against `109.4`. |
 | Only 2 front matter fields are always present. | Read the front matter of a 400 file sample | `source_file` and `pages` at 100 percent. `title` at 87.8 percent. `author` at 68.0 percent. `subject` at 11.2 percent. |
 | Up to 11 index rows can move across the quality floor. | Band the character density of the selection | `8` documents between 200 and 250, and `3` between 150 and 200 |
