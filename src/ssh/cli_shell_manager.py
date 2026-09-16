@@ -46,6 +46,8 @@ class CLIShellManager:
     and terminal emulation.
     """
 
+    _DEFAULT_SHELL_BODY: dict[str, str] = {}  # WHY: The shell endpoint accepts an optional HA node only.
+
     _SHELL_KEYMAP = {  # Key-name -> escape-sequence remap table for the interactive shell.
         "enter": "\n",
         "space": " ",
@@ -88,12 +90,25 @@ class CLIShellManager:
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
-            response = mistapi.api.v1.sites.devices.createSiteDeviceShellSession(mh.apisession, site_id, device_id)
-            shell_data = response.data  # Read the URL data.
-            return shell_data.get("url")  # type: ignore[no-any-return]
-        except Exception as exception:  # Creation failed.
-            # WHY: user-visible error banner (was print()).
-            logging.warning("! Failed to create shell session: %s", exception)
+            logging.info("Creating a CLI shell session for device %s", device_id)  # WHY: audit before API call.
+            response = mistapi.api.v1.sites.devices.createSiteDeviceShellSession(  # WHY: match mistapi 0.64.0.
+                mh.apisession,
+                site_id,
+                device_id,
+                body=dict(CLIShellManager._DEFAULT_SHELL_BODY),
+            )
+            logging.debug("CLI shell session API returned status %s", getattr(response, "status_code", "unknown"))
+            shell_data = response.data if isinstance(response.data, dict) else {}  # WHY: protect URL extraction.
+            shell_url = str(shell_data.get("url") or "")  # WHY: return a stable string for the WebSocket opener.
+            logging.debug("CLI shell session URL present: %s", bool(shell_url))  # WHY: show result without the token.
+            return shell_url or None  # WHY: preserve the caller contract when the cloud returns no URL.
+        except TypeError:  # WHY: signature drift is a programming error, not an operator failure.
+            logging.exception(  # WHY: preserve the stack trace for a developer repair.
+                "The CLI shell session call does not match the installed mistapi SDK signature"
+            )
+            raise  # WHY: expose the malformed SDK call to tests and callers.
+        except (RuntimeError, OSError, ValueError, KeyError) as exception:  # Creation failed for a runtime reason.
+            logging.warning("! Failed to create shell session: %s", exception)  # WHY: user-visible failure banner.
             return None  # Return None.
 
     @staticmethod

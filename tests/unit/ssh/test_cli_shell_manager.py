@@ -196,11 +196,20 @@ class TestCreateSession:
 
         assert result == "wss://shell/1"
         m_mistapi.api.v1.sites.devices.createSiteDeviceShellSession.assert_called_once_with(
-            fake_mh.apisession, "s-1", "d-1"
+            fake_mh.apisession, "s-1", "d-1", body={}
         )
 
+    def test_signature_type_error_is_not_hidden(self, fake_mh):
+        """A malformed SDK call must fail as a programming error."""
+        with patch("src.ssh.cli_shell_manager.mistapi") as m_mistapi:  # WHY: isolate the SDK boundary.
+            m_mistapi.api.v1.sites.devices.createSiteDeviceShellSession.side_effect = TypeError(  # WHY: mimic drift.
+                "missing required argument: body"
+            )
+            with pytest.raises(TypeError, match="body"):  # WHY: the caller must learn the call is malformed.
+                CLIShellManager._create_session("s-1", "d-1")  # WHY: exercise the repaired handler.
+
     def test_returns_none_and_prints_on_exception(self, fake_mh, caplog):
-        """Any exception is swallowed, logged as WARNING, and yields None."""
+        """A runtime failure is logged as WARNING and yields None."""
         with patch("src.ssh.cli_shell_manager.mistapi") as m_mistapi:
             m_mistapi.api.v1.sites.devices.createSiteDeviceShellSession.side_effect = RuntimeError("boom")
             result = CLIShellManager._create_session("s-1", "d-1")
