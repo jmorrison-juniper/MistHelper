@@ -8,8 +8,13 @@ prove a 429 triggers a retry and that the retry limit is respected.
 
 from __future__ import annotations
 
+import json  # WHY: build a JSONDecodeError that the SDK can raise.
+import logging  # WHY: capture the empty-body warning.
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
+
+import pytest  # WHY: assert that SDK exceptions reach the caller.
+import requests  # WHY: use the same exception classes as the HTTP stack.
 
 from src.shared.mist.endpoints import (
     HTTP_TOO_MANY_REQUESTS,
@@ -33,15 +38,17 @@ EXPECTED_CALLS_AT_RETRY_LIMIT = MAX_429_RETRIES + 1  # WHY: the first attempt pl
 RETRY_AFTER_SECONDS = "5"  # WHY: the header value the mock response returns.
 RETRY_AFTER_AS_FLOAT = 5.0  # WHY: the numeric value _backoff_delay must produce from it.
 HTTP_OK = 200  # WHY: name the success status so a reader does not read a bare number.
+HTTP_SERVER_ERROR = 500  # WHY: name the server error status for failure-mode coverage.
 
 
 def _make_response(
     status_code: int,
-    data: dict | None = None,
+    data: dict | str | None = None,
     headers: dict | None = None,
 ) -> SimpleNamespace:
     """Create a mock SDK response object with an optional headers mapping."""
-    return SimpleNamespace(status_code=status_code, data=data or {}, headers=headers)
+    body = {} if data is None else data  # WHY: keep an empty string as a failure marker.
+    return SimpleNamespace(status_code=status_code, data=body, headers=headers)
 
 
 def _run_read(service: MistEndpointService, mock_func: MagicMock) -> SimpleNamespace:
@@ -86,6 +93,47 @@ class TestRetryOn429:
 
         assert mock_func.call_count == EXPECTED_CALLS_AFTER_TWO_RETRIES
         assert result.status_code == HTTP_OK  # WHY: the retries must return the eventual success.
+
+    def test_non_429_5xx_returns_without_retry(self) -> None:
+        service = MistEndpointService(MagicMock())  # WHY: no rate limiter needed for this test.
+        response = _make_response(HTTP_SERVER_ERROR)  # WHY: simulate one 500 response.
+        mock_func = MagicMock(return_value=response)  # WHY: simulate one server error response.
+
+        result = _run_read(service, mock_func)  # WHY: the call under test.
+
+        assert mock_func.call_count == 1  # WHY: only 429 is safe to retry automatically.
+        assert result.status_code == HTTP_SERVER_ERROR  # WHY: report the 500 to the caller.
+
+    def test_connection_timeout_reaches_the_caller(self) -> None:
+        service = MistEndpointService(MagicMock())  # WHY: no rate limiter needed for this test.
+        mock_func = MagicMock(side_effect=requests.exceptions.Timeout("read timed out"))
+
+        with pytest.raises(requests.exceptions.Timeout, match="read timed out"):
+            _run_read(service, mock_func)  # WHY: the timeout must not become an empty success.
+
+    def test_connection_error_reaches_the_caller(self) -> None:
+        service = MistEndpointService(MagicMock())  # WHY: no rate limiter needed for this test.
+        mock_func = MagicMock(side_effect=requests.exceptions.ConnectionError("dns failure"))
+
+        with pytest.raises(requests.exceptions.ConnectionError, match="dns failure"):
+            _run_read(service, mock_func)  # WHY: do not hide the connection failure.
+
+    def test_malformed_json_error_reaches_the_caller(self) -> None:
+        service = MistEndpointService(MagicMock())  # WHY: no rate limiter needed for this test.
+        mock_func = MagicMock(side_effect=json.JSONDecodeError("bad json", "", 0))
+
+        with pytest.raises(json.JSONDecodeError):
+            _run_read(service, mock_func)  # WHY: malformed JSON from the SDK must stay visible.
+
+    def test_empty_body_warning_reaches_the_operator(self, caplog) -> None:
+        service = MistEndpointService(MagicMock())  # WHY: no rate limiter needed for this test.
+        mock_func = MagicMock(return_value=_make_response(HTTP_OK, data=""))
+
+        with caplog.at_level(logging.WARNING):
+            result = _run_read(service, mock_func)  # WHY: test the empty-body path.
+
+        assert result.data == {}  # WHY: the caller receives a safe empty data object.
+        assert "Mist response body is empty" in caplog.text  # WHY: report the empty body.
 
 
 class TestRetryLimitIsRespected:
