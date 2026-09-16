@@ -431,11 +431,30 @@ class VirtualChassisManager:
         import mistapi  # WHY: lazy import keeps module light for unit tests.
 
         try:
-            response = mistapi.api.v1.sites.getSite(apisession, site_id)  # WHY: mistapi call.
-            if response.data:  # WHY: guard against empty response body.
-                return str(response.data.get("name", site_id))  # WHY: prefer name, fallback to id.
-        except Exception as exc:  # WHY: any network / auth failure is non-fatal for display.
-            logging.warning("Could not fetch site name for %s: %s", site_id, exc)  # WHY: audit warn.
+            logging.info("Resolving site name for site %s", site_id)  # WHY: trace the API lookup before it runs.
+            response = mistapi.api.v1.sites.sites.getSiteInfo(apisession, site_id)  # WHY: call the installed SDK route.
+            site_data = (
+                response.data if isinstance(response.data, dict) else {}
+            )  # WHY: getSiteInfo returns one site object.
+            status_code = getattr(
+                response, "status_code", None
+            )  # WHY: APIResponse uses None when no HTTP response exists.
+            if (
+                isinstance(status_code, int) and status_code >= 400
+            ):  # WHY: report API faults without MagicMock comparison errors.
+                logging.error("Mist API returned status %s for site %s", status_code, site_id)  # WHY: expose fault.
+                return "Unknown Site"  # WHY: status reports can continue with a safe placeholder.
+            site_name = str(site_data.get("name", site_id)) if site_data else "Unknown Site"  # WHY: prefer API name.
+            logging.debug("Resolved site %s to name %s", site_id, site_name)  # WHY: record the lookup result.
+            return site_name  # WHY: caller needs a display name for status output.
+        except AttributeError:
+            logging.exception("Mist SDK site lookup is not available for site %s", site_id)  # WHY: expose SDK drift.
+            raise  # WHY: a programming fault must not look like an empty API result.
+        except (KeyError, TypeError) as exc:  # WHY: only malformed response shape can use a placeholder.
+            logging.exception("Mist API returned malformed site data for site %s: %s", site_id, exc)  # WHY: report.
+        except Exception as exc:
+            logging.exception("Mist API site lookup failed for site %s: %s", site_id, exc)  # WHY: report unknown fault.
+            raise  # WHY: unexpected faults must not look like empty data.
         return "Unknown Site"  # WHY: safe placeholder.
 
     @staticmethod

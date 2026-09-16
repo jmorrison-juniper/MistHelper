@@ -336,34 +336,40 @@ class TestAnomalyResolveSiteName:
     """Cover _anomaly_resolve_site_name."""
 
     def test_returns_name_on_match(self, fake_mh):
-        """Returns the site name when the site is in the list."""
+        """Returns the site name from the single-site response."""
         from src.export.site_anomaly_exporter import SiteAnomalyExporter
 
-        fake_mh.mistapi.get_all.return_value = [{"id": "s1", "name": "MySite"}]
+        response = MagicMock(data={"id": "s1", "name": "MySite"}, status_code=200)  # WHY: getSiteInfo shape.
+        fake_mh.mistapi.api.v1.sites.sites.getSiteInfo.return_value = response  # WHY: installed SDK route.
 
         result = SiteAnomalyExporter._anomaly_resolve_site_name("s1")
 
         assert result == "MySite"
+        fake_mh.mistapi.api.v1.sites.listSites.assert_not_called()
 
-    def test_returns_id_when_no_match(self, fake_mh):
-        """Falls back to id when the site is not found."""
+    def test_returns_id_when_no_name(self, fake_mh):
+        """Falls back to id when the single-site response has no name."""
         from src.export.site_anomaly_exporter import SiteAnomalyExporter
 
-        fake_mh.mistapi.get_all.return_value = [{"id": "other", "name": "X"}]
+        response = MagicMock(data={"id": "s1"}, status_code=200)  # WHY: no name field tests shape fallback.
+        fake_mh.mistapi.api.v1.sites.sites.getSiteInfo.return_value = response  # WHY: installed SDK route.
 
         result = SiteAnomalyExporter._anomaly_resolve_site_name("s1")
 
         assert result == "s1"
 
-    def test_returns_id_on_exception(self, fake_mh):
-        """Falls back to id when the lookup raises."""
+    def test_api_fault_is_reported(self, fake_mh, caplog):
+        """Falls back to id and logs when the API response reports a fault."""
         from src.export.site_anomaly_exporter import SiteAnomalyExporter
 
-        fake_mh.mistapi.api.v1.sites.listSites.side_effect = RuntimeError("boom")
+        response = MagicMock(data={"error": "down"}, status_code=503)  # WHY: status value drives handler.
+        fake_mh.mistapi.api.v1.sites.sites.getSiteInfo.return_value = response  # WHY: installed SDK route.
 
-        result = SiteAnomalyExporter._anomaly_resolve_site_name("s1")
+        with caplog.at_level(logging.ERROR, logger="src.export.site_anomaly_exporter"):
+            result = SiteAnomalyExporter._anomaly_resolve_site_name("s1")
 
         assert result == "s1"
+        assert "Mist API returned status 503 for site s1" in caplog.text
 
 
 class TestAnomalyLookupClientHostname:

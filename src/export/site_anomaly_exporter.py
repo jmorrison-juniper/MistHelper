@@ -239,12 +239,38 @@ class SiteAnomalyExporter:  # Site anomaly exporters.
     def _anomaly_resolve_site_name(site_id: str) -> str:
         """Resolve the human-readable site name for a site_id, falling back to the id on lookup failure."""
         mh = importlib.import_module("MistHelper")  # WHY: lazy fetch of mistapi + apisession.
-        try:  # The site-name lookup is best-effort. The id is an acceptable fallback for the filename.
-            response = mh.mistapi.api.v1.sites.listSites(mh.apisession, site_id)  # List the site.
-            sites = mh.mistapi.get_all(response=response, mist_session=mh.apisession)  # Page all rows.
-            return next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Resolve site name.
-        except Exception:  # Lookup failed.
-            return site_id  # Fall back to the id.
+        try:
+            logger.info("Resolving anomaly site name for site %s", site_id)  # WHY: trace the single-site lookup.
+            response = mh.mistapi.api.v1.sites.sites.getSiteInfo(
+                mh.apisession, site_id
+            )  # WHY: call the installed SDK route.
+            site_data = (
+                response.data if isinstance(response.data, dict) else {}
+            )  # WHY: getSiteInfo returns one site object.
+            status_code = getattr(
+                response, "status_code", None
+            )  # WHY: APIResponse uses None when no HTTP response exists.
+            if (
+                isinstance(status_code, int) and status_code >= 400
+            ):  # WHY: report API faults without MagicMock comparison errors.
+                logger.error("Mist API returned status %s for site %s", status_code, site_id)  # WHY: expose fault.
+                return site_id  # WHY: keep the export filename stable when the lookup fails.
+            site_name = str(site_data.get("name", site_id)) if site_data else site_id  # WHY: prefer API name.
+            logger.debug(
+                "Resolved anomaly site %s to name %s", site_id, site_name
+            )  # WHY: record result without secrets.
+            return site_name  # WHY: caller needs the site label for output files.
+        except AttributeError:
+            logger.exception("Mist SDK site lookup is not available for site %s", site_id)  # WHY: expose SDK drift.
+            raise  # WHY: a programming fault must not look like an empty API result.
+        except (KeyError, TypeError) as exception:  # WHY: only malformed response shape can use the id fallback.
+            logger.exception(
+                "Mist API returned malformed site data for site %s: %s", site_id, exception
+            )  # WHY: report.
+            return site_id  # WHY: fall back to the id after the fault is logged.
+        except Exception as exception:
+            logger.exception("Mist API site lookup failed for site %s: %s", site_id, exception)  # WHY: report fault.
+            raise  # WHY: unexpected faults must not look like empty data.
 
     @staticmethod
     def _anomaly_lookup_client_hostname(site_id: str, client_mac: str) -> str:
