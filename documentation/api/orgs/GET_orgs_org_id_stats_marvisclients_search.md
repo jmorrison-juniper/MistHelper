@@ -228,20 +228,33 @@ Standard Mist API rate limits apply.
 
 ## mistapi SDK
 
-`mistapi.api.v1.orgs.stats_-_marvis_clients.searchOrgMarvisClientsStats()`
+`mistapi.api.v1.orgs.stats.searchOrgMarvisClientsStats()`
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to read the resource at
+`/api/v1/orgs/{org_id}/stats/marvisclients/search`.
+Common use cases:
+
+- Use it when you need to search Marvis Client stats records across the organization.
+- Use it in an audit or status workflow before you make a related change.
+- Treat this endpoint as a read-only request.
+- The installed `mistapi` 0.64.0 signature is `searchOrgMarvisClientsStats(mist_session: mistapi.__api_session.APISession, org_id: str, device_id: str | None = None, wifi_mac: str | None = None, wifi_ip: str | None = None, hostname: str | None = None, model: str | None = None, mfg: str | None = None, serial: str | None = None, os_type: str | None = None, os_version: str | None = None, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `org_id`. Use identifiers from a trusted Mist read.
+- Query parameters include `device_id`, `wifi_mac`, `wifi_ip`, `hostname`, `model`. Keep filters narrow for repeatable results.
+- Search results can be large. Set a time range and page through all required results.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [DELETE_orgs_org_id_stats_marvisclients.md](DELETE_orgs_org_id_stats_marvisclients.md) -- deleteOrgMarvisClient uses `DELETE /api/v1/orgs/{org_id}/stats/marvisclients`.
+- [GET_orgs_org_id_stats_marvisclients_count.md](GET_orgs_org_id_stats_marvisclients_count.md) -- countOrgMarvisClientsStats uses `GET /api/v1/orgs/{org_id}/stats/marvisclients/count`.
+- [GET_orgs_org_id_stats.md](GET_orgs_org_id_stats.md) -- getOrgStats uses `GET /api/v1/orgs/{org_id}/stats`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+MistHelper does not currently call `searchOrgMarvisClientsStats`.
+Verification source: `git grep -n "searchOrgMarvisClientsStats" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.

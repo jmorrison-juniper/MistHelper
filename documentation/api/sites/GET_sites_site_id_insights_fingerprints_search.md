@@ -184,20 +184,33 @@ Standard Mist API rate limits apply.
 
 ## mistapi SDK
 
-`mistapi.api.v1.sites.nac_fingerprints.searchSiteClientFingerprints()`
+`mistapi.api.v1.sites.insights.searchSiteClientFingerprints()`
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to read the resource at
+`/api/v1/sites/{site_id}/insights/fingerprints/search`.
+Common use cases:
+
+- Use it when you need to search Client Fingerprints.
+- Use it in an audit or status workflow before you make a related change.
+- Treat this endpoint as a read-only request.
+- The installed `mistapi` 0.64.0 signature is `searchSiteClientFingerprints(mist_session: mistapi.__api_session.APISession, site_id: str, family: str | None = None, client_type: str | None = None, model: str | None = None, mfg: str | None = None, os: str | None = None, os_type: str | None = None, mac: str | None = None, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, interval: str | None = None, sort: str | None = None, search_after: str | None = None) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `site_id`. Use identifiers from a trusted Mist read.
+- Query parameters include `family`, `client_type`, `model`, `mfg`, `os`. Keep filters narrow for repeatable results.
+- Search results can be large. Set a time range and page through all required results.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [GET_sites_site_id_insights_fingerprints_search.md](../orgs/GET_sites_site_id_insights_fingerprints_search.md) -- searchOrgClientFingerprints uses `GET /api/v1/sites/{site_id}/insights/fingerprints/search`.
+- [GET_sites_site_id_insights_fingerprints_count.md](../orgs/GET_sites_site_id_insights_fingerprints_count.md) -- countOrgClientFingerprints uses `GET /api/v1/sites/{site_id}/insights/fingerprints/count`.
+- [GET_sites_site_id_insights_fingerprints_count.md](GET_sites_site_id_insights_fingerprints_count.md) -- countSiteClientFingerprints uses `GET /api/v1/sites/{site_id}/insights/fingerprints/count`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+Menu Operation **261** offers this site-scoped simple read endpoint.
+Verification source: `git grep -n "searchSiteClientFingerprints" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` was also checked for endpoint family menu coverage.

@@ -78,20 +78,32 @@ Standard Mist API rate limits apply.
 
 ## mistapi SDK
 
-`mistapi.api.v1.sites.maps_-_auto-placement.acceptSiteApLocalizationData()`
+`mistapi.api.v1.sites.maps.acceptSiteApLocalizationData()`
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to start or create the resource at
+`/api/v1/sites/{site_id}/maps/{map_id}/apply_autoplacement`.
+Common use cases:
+
+- Use it when you need to accept the cached autoplacement and auto-orientation values of a map or subset of APs on a map.
+- Use it only after you read the related resource and confirm the planned change.
+- Treat this endpoint as a state-changing request.
+- The installed `mistapi` 0.64.0 signature is `acceptSiteApLocalizationData(mist_session: mistapi.__api_session.APISession, site_id: str, map_id: str, body: dict | list) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `site_id`, `map_id`. Use identifiers from a trusted Mist read.
+- This endpoint can change Mist state. Keep a recovery record before you call it.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [DELETE_sites_site_id_maps_map_id.md](DELETE_sites_site_id_maps_map_id.md) -- deleteSiteMap uses `DELETE /api/v1/sites/{site_id}/maps/{map_id}`.
+- [DELETE_sites_site_id_maps_map_id_auto_orient.md](DELETE_sites_site_id_maps_map_id_auto_orient.md) -- deleteSiteApAutoOrientation uses `DELETE /api/v1/sites/{site_id}/maps/{map_id}/auto_orient`.
+- [DELETE_sites_site_id_maps_map_id_auto_placement.md](DELETE_sites_site_id_maps_map_id_auto_placement.md) -- deleteSiteApAutoplacement uses `DELETE /api/v1/sites/{site_id}/maps/{map_id}/auto_placement`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+MistHelper does not currently call `acceptSiteApLocalizationData`.
+Verification source: `git grep -n "acceptSiteApLocalizationData" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.

@@ -121,16 +121,28 @@ Standard Mist API rate limits apply.
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to read the resource at
+`/api/v1/sites/{site_id}/insights/ap/{device_id}/stats`.
+Common use cases:
+
+- Use it when you need to get AP Insight Metrics.
+- Use it in an audit or status workflow before you make a related change.
+- Treat this endpoint as a read-only request.
+- The installed `mistapi` 0.64.0 signature is `getSiteInsightMetricsForAP(mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, metrics: str, start: str | None = None, end: str | None = None, duration: str | None = None, interval: str | None = None, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `site_id`, `device_id`. Use identifiers from a trusted Mist read.
+- Query parameters include `metrics`, `start`, `end`, `duration`, `interval`. Keep filters narrow for repeatable results.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [GET_sites_site_id_insights_fingerprints_count.md](../orgs/GET_sites_site_id_insights_fingerprints_count.md) -- countOrgClientFingerprints uses `GET /api/v1/sites/{site_id}/insights/fingerprints/count`.
+- [GET_sites_site_id_insights_fingerprints_search.md](../orgs/GET_sites_site_id_insights_fingerprints_search.md) -- searchOrgClientFingerprints uses `GET /api/v1/sites/{site_id}/insights/fingerprints/search`.
+- [GET_sites_site_id_insights.md](GET_sites_site_id_insights.md) -- getSiteInsightMetrics uses `GET /api/v1/sites/{site_id}/insights`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+MistHelper does not currently call `getSiteInsightMetricsForAP`.
+Verification source: `git grep -n "getSiteInsightMetricsForAP" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.

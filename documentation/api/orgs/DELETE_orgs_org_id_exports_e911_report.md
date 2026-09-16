@@ -79,20 +79,32 @@ Standard Mist API rate limits apply.
 
 ## mistapi SDK
 
-`mistapi.api.v1.orgs.reports.disableOrgE911Report()`
+`mistapi.api.v1.orgs.exports.disableOrgE911Report()`
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to remove or stop the resource at
+`/api/v1/orgs/{org_id}/exports/e911_report`.
+Common use cases:
+
+- Use it when you need to disable automatic E911 AP BSSID report generation for the organization.
+- Use it only after you read the related resource and confirm the planned change.
+- Treat this endpoint as a state-changing request.
+- The installed `mistapi` 0.64.0 signature is `disableOrgE911Report(mist_session: mistapi.__api_session.APISession, org_id: str) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `org_id`. Use identifiers from a trusted Mist read.
+- This endpoint can change Mist state. Keep a recovery record before you call it.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [GET_orgs_org_id_exports_e911_report.md](GET_orgs_org_id_exports_e911_report.md) -- getOrgE911Report uses `GET /api/v1/orgs/{org_id}/exports/e911_report`.
+- [POST_orgs_org_id_exports_e911_report.md](POST_orgs_org_id_exports_e911_report.md) -- enableOrgE911Report uses `POST /api/v1/orgs/{org_id}/exports/e911_report`.
+- [DELETE_orgs_org_id.md](DELETE_orgs_org_id.md) -- deleteOrg uses `DELETE /api/v1/orgs/{org_id}`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+MistHelper does not currently call `disableOrgE911Report`.
+Verification source: `git grep -n "disableOrgE911Report" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.

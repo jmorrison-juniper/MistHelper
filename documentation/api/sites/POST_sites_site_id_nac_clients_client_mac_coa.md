@@ -90,20 +90,33 @@ Standard Mist API rate limits apply.
 
 ## mistapi SDK
 
-`mistapi.api.v1.sites.clients_-_nac.sendSiteNacClientCoA()`
+`mistapi.api.v1.sites.nac_clients.sendSiteNacClientCoA()`
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to start or create the resource at
+`/api/v1/sites/{site_id}/nac_clients/{client_mac}/coa`.
+Common use cases:
+
+- Use it when you need to sends CoA (Change of Authorization) command to a NAC client.
+- Use it only after you read the related resource and confirm the planned change.
+- Treat this endpoint as a state-changing request.
+- The installed `mistapi` 0.64.0 signature is `sendSiteNacClientCoA(mist_session: mistapi.__api_session.APISession, site_id: str, client_mac: str, body: dict | list) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `site_id`, `client_mac`. Use identifiers from a trusted Mist read.
+- This endpoint can change Mist state. Keep a recovery record before you call it.
+- A CoA request changes a client session. Confirm the target client before you send it.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [GET_sites_site_id_nac_clients_count.md](GET_sites_site_id_nac_clients_count.md) -- countSiteNacClients uses `GET /api/v1/sites/{site_id}/nac_clients/count`.
+- [GET_sites_site_id_nac_clients_events_count.md](GET_sites_site_id_nac_clients_events_count.md) -- countSiteNacClientEvents uses `GET /api/v1/sites/{site_id}/nac_clients/events/count`.
+- [GET_sites_site_id_nac_clients_events_search.md](GET_sites_site_id_nac_clients_events_search.md) -- searchSiteNacClientEvents uses `GET /api/v1/sites/{site_id}/nac_clients/events/search`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+MistHelper does not currently call `sendSiteNacClientCoA`.
+Verification source: `git grep -n "sendSiteNacClientCoA" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.

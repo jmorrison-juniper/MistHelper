@@ -76,20 +76,30 @@ Standard Mist API rate limits apply.
 
 ## mistapi SDK
 
-`mistapi.api.v1.constants.definitions.listMarvisClientEventsDefinitions()`
+`mistapi.api.v1.const.marvisclient_events.listMarvisClientEventsDefinitions()`
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to read the resource at `/api/v1/const/marvisclient_events`.
+Common use cases:
+
+- Use it when you need to return Marvis Client event type definitions used by the Marvis Client event search and count APIs.
+- Use it in an audit or status workflow before you make a related change.
+- Treat this endpoint as a read-only request.
+- The installed `mistapi` 0.64.0 signature is `listMarvisClientEventsDefinitions(mist_session: mistapi.__api_session.APISession) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- No known gotchas beyond Mist API authentication and rate limits.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [GET_const_alarm_defs.md](GET_const_alarm_defs.md) -- listAlarmDefinitions uses `GET /api/v1/const/alarm_defs`.
+- [GET_const_applications.md](GET_const_applications.md) -- listApplications uses `GET /api/v1/const/applications`.
+- [GET_const_app_categories.md](GET_const_app_categories.md) -- listAppCategoryDefinitions uses `GET /api/v1/const/app_categories`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+MistHelper does not currently call `listMarvisClientEventsDefinitions`.
+Verification source: `git grep -n "listMarvisClientEventsDefinitions" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.

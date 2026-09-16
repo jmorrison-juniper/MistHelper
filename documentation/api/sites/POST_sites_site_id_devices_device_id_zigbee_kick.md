@@ -75,20 +75,33 @@ Standard Mist API rate limits apply.
 
 ## mistapi SDK
 
-`mistapi.api.v1.sites.devices_-_wireless.kickSiteDeviceZigbeeClients()`
+`mistapi.api.v1.sites.devices.kickSiteDeviceZigbeeClients()`
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to start or create the resource at
+`/api/v1/sites/{site_id}/devices/{device_id}/zigbee_kick`.
+Common use cases:
+
+- Use it when you need to kick one or more Zigbee clients from a Zigbee-enabled AP.
+- Use it only after you read the related resource and confirm the planned change.
+- Treat this endpoint as a state-changing request.
+- The installed `mistapi` 0.64.0 signature is `kickSiteDeviceZigbeeClients(mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, body: dict | list) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `site_id`, `device_id`. Use identifiers from a trusted Mist read.
+- The JSON body requires `macs`. Missing required fields return a 400 response.
+- This endpoint can change Mist state. Keep a recovery record before you call it.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [DELETE_sites_site_id_devices_device_id_ha.md](DELETE_sites_site_id_devices_device_id_ha.md) -- deleteSiteDeviceHaCluster uses `DELETE /api/v1/sites/{site_id}/devices/{device_id}/ha`.
+- [DELETE_sites_site_id_devices_device_id_image_image_number.md](DELETE_sites_site_id_devices_device_id_image_image_number.md) -- deleteSiteDeviceImage uses `DELETE /api/v1/sites/{site_id}/devices/{device_id}/image/{image_number}`.
+- [DELETE_sites_site_id_devices_device_id_local_port_config.md](DELETE_sites_site_id_devices_device_id_local_port_config.md) -- deleteSiteLocalSwitchPortConfig uses `DELETE /api/v1/sites/{site_id}/devices/{device_id}/local_port_config`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+MistHelper does not currently call `kickSiteDeviceZigbeeClients`.
+Verification source: `git grep -n "kickSiteDeviceZigbeeClients" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.

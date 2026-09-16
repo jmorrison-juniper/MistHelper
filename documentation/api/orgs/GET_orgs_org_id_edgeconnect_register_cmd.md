@@ -62,20 +62,31 @@ Standard Mist API rate limits apply.
 
 ## mistapi SDK
 
-`mistapi.api.v1.orgs.devices_-_edgeconnect.getOrgEdgeconnectRegisterCmd()`
+`mistapi.api.v1.orgs.edgeconnect.getOrgEdgeconnectRegisterCmd()`
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to read the resource at
+`/api/v1/orgs/{org_id}/edgeconnect/register_cmd`.
+Common use cases:
+
+- Use it when you need to returns a registration code for adopting an EdgeConnect device into Mist.
+- Use it in an audit or status workflow before you make a related change.
+- Treat this endpoint as a read-only request.
+- The installed `mistapi` 0.64.0 signature is `getOrgEdgeconnectRegisterCmd(mist_session: mistapi.__api_session.APISession, org_id: str) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `org_id`. Use identifiers from a trusted Mist read.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [DELETE_orgs_org_id.md](DELETE_orgs_org_id.md) -- deleteOrg uses `DELETE /api/v1/orgs/{org_id}`.
+- [DELETE_orgs_org_id_aamwprofiles_aamwprofile_id.md](DELETE_orgs_org_id_aamwprofiles_aamwprofile_id.md) -- deleteOrgAAMWProfile uses `DELETE /api/v1/orgs/{org_id}/aamwprofiles/{aamwprofile_id}`.
+- [DELETE_orgs_org_id_admins_admin_id.md](DELETE_orgs_org_id_admins_admin_id.md) -- revokeOrgAdmin uses `DELETE /api/v1/orgs/{org_id}/admins/{admin_id}`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+MistHelper does not currently call `getOrgEdgeconnectRegisterCmd`.
+Verification source: `git grep -n "getOrgEdgeconnectRegisterCmd" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.

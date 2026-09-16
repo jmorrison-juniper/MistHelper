@@ -203,20 +203,33 @@ Standard Mist API rate limits apply.
 
 ## mistapi SDK
 
-`mistapi.api.v1.utilities.lan.searchSiteDeviceFlowRecords()`
+`mistapi.api.v1.sites.devices.searchSiteDeviceFlowRecords()`
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to read the resource at
+`/api/v1/sites/{site_id}/devices/{device_id}/flow_records/search`.
+Common use cases:
+
+- Use it when you need to search network flow records for a specific device within a site.
+- Use it in an audit or status workflow before you make a related change.
+- Treat this endpoint as a read-only request.
+- The installed `mistapi` 0.64.0 signature is `searchSiteDeviceFlowRecords(mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str, start: str | None = None, end: str | None = None, limit: int | None = None, sort: str | None = None, src_ip: str | None = None, dst_ip: str | None = None, src_port: str | None = None, dst_port: str | None = None, protocol: str | None = None, state: str | None = None, direction: str | None = None, search_after: str | None = None) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `site_id`, `device_id`. Use identifiers from a trusted Mist read.
+- Query parameters include `start`, `end`, `limit`, `sort`, `src_ip`. Keep filters narrow for repeatable results.
+- Search results can be large. Set a time range and page through all required results.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [DELETE_sites_site_id_devices_device_id_ha.md](../sites/DELETE_sites_site_id_devices_device_id_ha.md) -- deleteSiteDeviceHaCluster uses `DELETE /api/v1/sites/{site_id}/devices/{device_id}/ha`.
+- [DELETE_sites_site_id_devices_device_id_image_image_number.md](../sites/DELETE_sites_site_id_devices_device_id_image_image_number.md) -- deleteSiteDeviceImage uses `DELETE /api/v1/sites/{site_id}/devices/{device_id}/image/{image_number}`.
+- [DELETE_sites_site_id_devices_device_id_local_port_config.md](../sites/DELETE_sites_site_id_devices_device_id_local_port_config.md) -- deleteSiteLocalSwitchPortConfig uses `DELETE /api/v1/sites/{site_id}/devices/{device_id}/local_port_config`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+MistHelper does not currently call `searchSiteDeviceFlowRecords`.
+Verification source: `git grep -n "searchSiteDeviceFlowRecords" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.
