@@ -149,6 +149,23 @@ class ZeroRefresher:
         return 0
 
 
+class QuietReleaser:
+    """Release a test lock without reaching Redis."""
+
+    def __call__(self, key: str, record: lock.LockRecord, client: Any = None) -> lock.ReleaseOutcome:
+        """Return a released outcome.
+
+        Args:
+            key: The lock key under test.
+            record: The lock record that carries the token.
+            client: A lock store client. This double reaches no store.
+
+        Returns:
+            The released outcome.
+        """
+        return lock.ReleaseOutcome.RELEASED  # A unit test must never reach the real Redis release path.
+
+
 class FakeStore:
     """Hold one run record in memory."""
 
@@ -369,6 +386,7 @@ def make_beat(ticker: FakeTicker, refresh: Any, progress: driver.ProgressSink | 
         refresh=refresh,
         ticker=ticker,
         progress=progress,
+        release=QuietReleaser(),
     )
     return driver.LockHeartbeat(plan)
 
@@ -532,16 +550,16 @@ class TestLostLock:
         assert stored[driver.LOCK_FIELD]["state"] == driver.LOCK_STATE_LOST
         assert stored[driver.LOCK_FIELD]["message"] == driver.LOCK_LOST_REASON
 
-    def test_a_lost_lock_does_not_end_the_run(self, parts: dict[str, Any]) -> None:
-        """Firmware already in flight cannot be recalled, so the run continues.
+    def test_a_lost_lock_fails_the_run(self, parts: dict[str, Any]) -> None:
+        """A run must not act on a site after it loses the site lock.
 
         Args:
             parts: The doubles and the driver.
         """
-        parts["refresher"].errors = [lock.LockLostError(lock.LOCK_LOST_MESSAGE)]
-        record = parts["driver"].run(make_record())
-        assert record["state"] == RunState.COMPLETE.value
-        assert record["post_capture_id"] == "cap-abc-02"
+        parts["refresher"].errors = [lock.LockLostError(lock.LOCK_LOST_MESSAGE)]  # The next beat loses ownership.
+        record = parts["driver"].run(make_record())  # The driver must fail before the next site action.
+        assert record["state"] == RunState.FAILED.value  # A lost lock can never report success.
+        assert record["post_capture_id"] is None  # The post-check would read the site without a lock.
 
     def test_the_heartbeat_asks_no_more_after_it_loses_the_lock(self, parts: dict[str, Any]) -> None:
         """A dead token cannot be renewed, so the portal stops asking.
@@ -563,16 +581,16 @@ class TestLostLock:
         assert beat.beat() is False
         assert beat.stopped is True
 
-    def test_an_error_of_another_class_never_ends_the_run(self, parts: dict[str, Any]) -> None:
-        """A beat must never end an upgrade that is writing firmware.
+    def test_an_error_of_another_class_fails_the_run(self, parts: dict[str, Any]) -> None:
+        """An unknown heartbeat fault must stop the next site action.
 
         Args:
             parts: The doubles and the driver.
         """
-        parts["refresher"].errors = [RuntimeError("The lock client broke.")]
-        record = parts["driver"].run(make_record())
-        assert record["state"] == RunState.COMPLETE.value
-        assert parts["beat"].stopped is True
+        parts["refresher"].errors = [RuntimeError("The lock client broke.")]  # The heartbeat treats this as loss.
+        record = parts["driver"].run(make_record())  # The driver must not continue after an unknown lock fault.
+        assert record["state"] == RunState.FAILED.value  # A lock fault is a run failure now.
+        assert parts["beat"].stopped is True  # The heartbeat asks no more after the fault.
 
 
 class TestBoundedHeartbeat:
@@ -619,51 +637,48 @@ class TestBoundedHeartbeat:
         assert refresher.times == [float(lock.HEARTBEAT_SECONDS)]  # Only the in-bound renewal reached the store.
 
 
-class TestALostLockIsNeverAFailedRun:
-    """A lost lock reports a lost lock, and it never reports a failed upgrade.
+class TestALostLockFailsClosed:
+    """A lost lock reports the cause and fails before the next site action.
 
     Why:
         The portal submits the upgrade to the cloud, and the cloud then owns the
-        work. A lost lock stops the portal from writing to the site. It stops no
-        download and no reboot.
-
-        An operator who reads `failed` walks away. The devices then reboot hours
-        later, and nothing on the page explains the reboot. These tests hold the
-        three fields an operator reads to the truth: the run state, the run
-        error, and the sentence of the lock report.
+        work. A lost lock stops the portal from touching the site again. The
+        run must therefore fail with a lock reason, not continue unlocked.
     """
 
-    def test_a_lost_lock_never_writes_the_failed_state(self, parts: dict[str, Any]) -> None:
-        """The run state is the first word an operator reads.
+    def test_a_lost_lock_writes_the_failed_state(self, parts: dict[str, Any]) -> None:
+        """The run state must not say complete when the lock is gone.
 
         Args:
             parts: The doubles and the driver.
         """
-        parts["refresher"].errors = [lock.LockLostError(lock.LOCK_LOST_MESSAGE)]
-        record = parts["driver"].run(make_record())
-        assert record["state"] != RunState.FAILED.value
-        assert (parts["store"].record or {}).get("state") != RunState.FAILED.value
+        parts["refresher"].errors = [lock.LockLostError(lock.LOCK_LOST_MESSAGE)]  # The beat loses the site.
+        record = parts["driver"].run(make_record())  # The driver must stop before more site reads.
+        assert record["state"] == RunState.FAILED.value  # The operator sees a failed run.
+        assert (parts["store"].record or {}).get("state") == RunState.FAILED.value  # The store agrees.
 
-    def test_a_lost_lock_writes_no_error_on_the_run(self, parts: dict[str, Any]) -> None:
-        """The error field feeds a failure banner, so a lost lock leaves it empty.
-
-        Args:
-            parts: The doubles and the driver.
-        """
-        parts["refresher"].errors = [lock.LockLostError(lock.LOCK_LOST_MESSAGE)]
-        record = parts["driver"].run(make_record())
-        assert not record["error"]
-
-    def test_a_quiet_lock_store_never_fails_the_run(self, parts: dict[str, Any]) -> None:
-        """A dead lock store says nothing about the upgrade in the cloud.
+    def test_a_lost_lock_writes_an_error_on_the_run(self, parts: dict[str, Any]) -> None:
+        """The error field must name the lost lock.
 
         Args:
             parts: The doubles and the driver.
         """
-        parts["refresher"].errors = [lock.LockStoreUnreachableError(lock.LOCK_STORE_DOWN_MESSAGE) for _ in range(20)]
-        record = parts["driver"].run(make_record())
-        assert record["state"] == RunState.COMPLETE.value
-        assert not record["error"]
+        parts["refresher"].errors = [lock.LockLostError(lock.LOCK_LOST_MESSAGE)]  # The beat loses the site.
+        record = parts["driver"].run(make_record())  # The driver writes a terminal failure.
+        assert record["error"]["message"] == driver.LOCK_LOST_REASON  # The banner states the lock cause.
+
+    def test_a_quiet_lock_store_fails_the_run_after_the_retry_window(self, parts: dict[str, Any]) -> None:
+        """A dead lock store must not let the run continue unlocked.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        parts["refresher"].errors = [
+            lock.LockStoreUnreachableError(lock.LOCK_STORE_DOWN_MESSAGE) for _ in range(20)
+        ]  # The store stays quiet past the retry window.
+        record = parts["driver"].run(make_record())  # The driver fails when the retry window closes.
+        assert record["state"] == RunState.FAILED.value  # The run must not continue without proof of the lock.
+        assert record["error"]["message"] == driver.LOCK_STORE_QUIET_REASON  # The reason names the lock store.
 
     def test_the_lost_lock_state_word_is_no_run_state(self) -> None:
         """One word must never mean a lost lock in one field and a run in another.
@@ -675,15 +690,15 @@ class TestALostLockIsNeverAFailedRun:
         """
         assert driver.LOCK_STATE_LOST not in {item.value for item in RunState}
 
-    def test_the_post_check_still_runs_after_a_lost_lock(self, parts: dict[str, Any]) -> None:
-        """The operator still needs the after picture of a site they lost.
+    def test_the_post_check_does_not_run_after_a_lost_lock(self, parts: dict[str, Any]) -> None:
+        """A post-check must not read a site after the run lost the lock.
 
         Args:
             parts: The doubles and the driver.
         """
-        parts["refresher"].errors = [lock.LockLostError(lock.LOCK_LOST_MESSAGE)]
-        record = parts["driver"].run(make_record())
-        assert record["post_capture_id"] == "cap-abc-02"
+        parts["refresher"].errors = [lock.LockLostError(lock.LOCK_LOST_MESSAGE)]  # The run loses ownership.
+        record = parts["driver"].run(make_record())  # The driver must fail before the post-check.
+        assert record["post_capture_id"] is None  # No unlocked post-check capture starts.
 
 
 class TestQuietStore:

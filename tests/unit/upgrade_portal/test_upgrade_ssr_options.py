@@ -379,7 +379,7 @@ def test_a_junos_gateway_row_names_the_other_gateway_family() -> None:
 
 @pytest.mark.parametrize(
     ("text", "seconds"),
-    [("200s", 200), ("5m", 300), ("8h", 28800), ("3d", 259200), ("0s", 0), ("5 m", 300)],
+    [("200s", 200), ("5m", 300), ("8h", 28800), ("11h", 39600), ("0s", 0), ("5 m", 300)],
 )
 def test_each_duration_reads_as_its_count_of_seconds(text: str, seconds: int) -> None:
     """The four units cover every window that a maintenance plan uses."""
@@ -407,8 +407,20 @@ def test_the_duration_reaches_the_body_as_a_moment() -> None:
 
 def test_the_stored_record_keeps_the_duration_and_not_the_moment() -> None:
     """A saved run must replay against the clock of the start, not of the save."""
-    stored = build_option_record({"start_time": "8h", "reboot_at": "3d"})
-    assert stored["schedule"] == {"start_time_after": 28800, "reboot_at_after": 259200}
+    stored = build_option_record({"start_time": "8h", "reboot_at": "11h"})  # Build a safe delayed reboot record.
+    assert stored["schedule"] == {"start_time_after": 28800, "reboot_at_after": 39600}  # Keep durations.
+
+
+def test_the_schedule_horizon_stays_below_the_site_lock_life() -> None:
+    """The accepted window leaves time for one settle gate inside the lock."""
+    assert module_options.START_TIME_HORIZON_SECONDS == 41340  # WHY: 43200 minus 1800 minus one heartbeat.
+    assert module_options.START_TIME_HORIZON_SECONDS < module_options.MAX_LOCK_LIFE_SECONDS  # WHY: Lock wins.
+
+
+def test_a_schedule_beyond_the_site_lock_window_is_refused() -> None:
+    """A schedule past the lock bound must fail before the cloud sees it."""
+    with pytest.raises(BadOptionError):  # The operator gets the options page refusal.
+        build_option_record({"reboot_at": "12h"})  # WHY: The settle phase would outlive the site lock.
 
 
 def test_a_saved_duration_resolves_against_a_later_clock() -> None:

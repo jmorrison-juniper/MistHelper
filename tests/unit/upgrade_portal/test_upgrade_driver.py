@@ -268,6 +268,64 @@ class RecordingReleaser:
         return ReleaseOutcome.RELEASED
 
 
+class JumpingTicker:
+    """Return times that make the first heartbeat renewal due."""
+
+    def __init__(self) -> None:
+        """Build one ticking clock for the lock heartbeat."""
+        self.values = iter((100.0, 100.0, 200.0, 200.0))  # The third read makes the beat due.
+
+    def __call__(self) -> float:
+        """Return the next scheduled time.
+
+        Returns:
+            The next monotonic time for the heartbeat test.
+        """
+        return next(self.values, 200.0)  # Keep later reads stable after the planned jump.
+
+
+def lost_refresh(key: str, record: LockRecord, client: Any = None) -> int:
+    """Report that the site lock no longer belongs to this run.
+
+    Args:
+        key: The lock key under test.
+        record: The lock record that carries the token.
+        client: A lock store client. The unit test passes none.
+
+    Returns:
+        Zero seconds, which is the lock module signal for a lost lock.
+    """
+    return 0  # The driver must fail before it performs another site action.
+
+
+def with_lost_lock(parts: dict[str, Any], release: RecordingReleaser) -> driver.RunDriver:
+    """Return a driver whose first heartbeat finds a lost site lock.
+
+    Args:
+        parts: The doubles of the shared fixture.
+        release: The recorder that stands in for the compare-and-delete.
+
+    Returns:
+        The driver under test.
+    """
+    plan = driver.LockHeartbeatPlan(
+        key=LOCK_KEY,
+        record=make_lock(),
+        refresh=lost_refresh,
+        ticker=JumpingTicker(),
+        release=release,
+    )  # WHY: The heartbeat must fail before the submitter touches the cloud.
+    deps = driver.RunDriverDeps(
+        store=parts["store"],
+        gate=parts["gate"],
+        capture=parts["capture"],
+        submit=parts["submitter"],
+        clock=FixedClock(),
+        heartbeat=driver.LockHeartbeat(plan),
+    )  # WHY: The only changed dependency is the lock result.
+    return driver.RunDriver(deps)  # The driver owns the fail-closed behavior.
+
+
 def refuse_refresh(key: str, record: LockRecord, client: Any = None) -> int:
     """Fail the test when a release test beats the site lock.
 
@@ -1622,6 +1680,20 @@ class TestSiteLockRelease:
             parts["driver"]._free_lock(record)
 
         assert caplog.text == ""
+
+    def test_a_lost_lock_stops_before_cloud_submission(self, parts: dict[str, Any]) -> None:
+        """A run must never submit firmware after the site lock is lost.
+
+        Args:
+            parts: The doubles and the driver.
+        """
+        release = RecordingReleaser()  # The failed run still tries a safe release.
+        final = with_lost_lock(parts, release).run(make_record())  # The first heartbeat reports lock loss.
+        assert final["state"] == RunState.FAILED.value  # The run must not report success without a lock.
+        assert "site lock" in final["error"]["message"]  # The operator sees why the run stopped.
+        assert parts["submitter"].calls == 0  # The cloud was not touched after the lock loss.
+        assert parts["gate"].calls == []  # No phase polled the site after the lock loss.
+        assert parts["capture"].requests == []  # No post-check read acted on the site after the lock loss.
 
 
 # WHY: A typo that an operator could write for the automatic mode. The seam must
