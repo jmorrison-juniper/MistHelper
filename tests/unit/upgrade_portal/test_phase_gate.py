@@ -223,13 +223,37 @@ class RecordingReporter:
         """Build one recording reporter."""
         self.reports: list[phase_gate.PhaseProgress] = []
 
-    def report(self, progress: phase_gate.PhaseProgress) -> None:
+    def report(self, progress: phase_gate.PhaseProgress) -> bool:
         """Keep one progress record.
 
         Args:
             progress: The counts after one poll round.
         """
-        self.reports.append(progress)
+        self.reports.append(progress)  # Keep the sequence so tests can prove each reported point.
+        return True  # This reporter owns no lock, so it never reports a lost lock.
+
+
+class LostLockReporter:
+    """Report a lost lock to the phase gate on the first site action."""
+
+    def beat(self) -> bool:
+        """Return False so the lock guard fails.
+
+        Returns:
+            Always False, because the test models a lost site lock.
+        """
+        return False  # A heartbeat uses this answer when the lock expired or changed hands.
+
+    def report(self, progress: phase_gate.PhaseProgress) -> bool:
+        """Return False so the phase gate fails before a cloud poll.
+
+        Args:
+            progress: The progress record that the phase gate tried to report.
+
+        Returns:
+            Always False, because the test models a lost site lock.
+        """
+        return False  # A heartbeat uses this answer when the lock expired or changed hands.
 
 
 class AlwaysSettledGate:
@@ -514,6 +538,39 @@ def test_a_future_reboot_time_extends_the_gateway_deadline() -> None:
     outcome = harness.adapter.settle(RUN_ID, "gateways", [target])  # WHY: The phase must wait to the moved limit.
     assert outcome.state == PhaseState.FAILED.value  # WHY: The test proves delay, not false success.
     assert harness.clock() == reboot_at + float(phase_gate.PHASE_DEADLINE_SECONDS)  # WHY: Failure waited past reboot.
+    assert harness.events.calls == phase_gate.polls_per_phase()  # WHY: The pre-window wait made no event calls.
+    assert harness.statistics.calls == phase_gate.polls_per_phase()  # WHY: The quiet wait made no statistics calls.
+
+
+def test_a_future_reboot_waits_without_cloud_polling_before_the_window() -> None:
+    """The gate sleeps to the scheduled reboot before it reads the cloud."""
+    reboot_at = START_TIME + float(phase_gate.PHASE_DEADLINE_SECONDS)  # WHY: The scheduled wait is one phase long.
+    target = target_entry(SWITCH_MAC, "switch")  # WHY: Switches use the delayed reboot option.
+    target["reboot_at"] = reboot_at  # WHY: The schedule must come from the run record.
+    harness = Harness(FakeReconnectReader(), FakeStatisticsReader())  # WHY: No device signal arrives in this proof.
+    outcome = harness.adapter.settle(RUN_ID, "switches", [target])  # WHY: The phase must wait and then poll.
+    assert outcome.state == PhaseState.FAILED.value  # WHY: The test proves the wait, not a successful reboot.
+    expected_waits = [float(gate.POLL_INTERVAL_SECONDS)] * 90  # WHY: The pre-window wait uses fixed quiet slices.
+    assert harness.sleeper.calls[: phase_gate.polls_per_phase()] == expected_waits  # WHY: No cloud poll occurs here.
+    assert harness.events.calls == phase_gate.polls_per_phase()  # WHY: Only the final phase window polls events.
+    assert harness.statistics.calls == phase_gate.polls_per_phase()  # WHY: Only the final phase window polls stats.
+
+
+def test_a_lost_lock_stops_before_the_first_cloud_poll() -> None:
+    """A phase must never poll the cloud after the site lock is lost."""
+    harness = Harness(FakeReconnectReader([[SWITCH_MAC]]), FakeStatisticsReader(rebooted_readings(SWITCH_MAC)))
+    harness.adapter._deps = phase_gate.PhaseGateDeps(
+        event_reader=harness.events,
+        statistics_reader=harness.statistics,
+        settle_gate=gate.SettleGate(clock=harness.clock),
+        progress=LostLockReporter(),
+        sleep=harness.sleeper,
+        stop_requested=harness.stop_requested,
+    )  # WHY: The public dependency slot must model the heartbeat result.
+    with pytest.raises(phase_gate.PhaseGateError, match="no longer holds the site lock"):
+        harness.adapter.settle(RUN_ID, "switches", [target_entry(SWITCH_MAC)])
+    assert harness.events.calls == 0  # WHY: The gate stopped before the event cloud call.
+    assert harness.statistics.calls == 0  # WHY: The gate stopped before the statistics cloud call.
 
 
 def test_a_timeout_success_status_records_settled_outcome() -> None:

@@ -216,11 +216,15 @@ class DeviceGate(Protocol):
 class ProgressReporter(Protocol):
     """The sink that shows the operator how one phase moves."""
 
-    def report(self, progress: PhaseProgress) -> None:
+    def report(self, progress: PhaseProgress) -> bool | None:
         """Take one progress record of one phase.
 
         Args:
             progress: The counts after one poll round.
+
+        Returns:
+            False when the progress sink lost the site lock. Any other answer
+            lets the phase continue.
         """
         ...  # A protocol declares the shape only
 
@@ -235,7 +239,7 @@ class LogProgressReporter:
         portal that passed no reporter still leaves a trace in the log.
     """
 
-    def report(self, progress: PhaseProgress) -> None:
+    def report(self, progress: PhaseProgress) -> bool:
         """Write one progress line.
 
         Args:
@@ -248,6 +252,7 @@ class LogProgressReporter:
             progress.settled,
             progress.total,
         )
+        return True  # A log-only reporter cannot lose a site lock.
 
 
 class CloudReconnectReader:
@@ -380,6 +385,7 @@ class _PhaseWatch:
     deadline: float
     round_limit: int
     progress: dict[str, gate.GateProgress]
+    poll_after: float
     failures: dict[str, str] = field(default_factory=dict)
     last_readings: dict[str, gate.GateReading] = field(default_factory=dict)
 
@@ -557,31 +563,36 @@ def _read_reboot_at(value: Any) -> float | None:
     return when if when > 0 else None  # WHY: Zero and negative sentinels are not future schedules.
 
 
-def _scheduled_deadline(now: float, entries: Sequence[gate.GateTarget], deadline_seconds: int) -> float:
-    """Return the deadline that honors a future scheduled reboot.
+class ScheduledRebootWindow:
+    """Compute the quiet wait and the deadline for a scheduled reboot phase."""
 
-    Args:
-        now: The current epoch seconds.
-        entries: The gate targets of one phase.
-        deadline_seconds: The settle window after the controlling moment.
+    @staticmethod
+    def poll_start(now: float, entries: Sequence[gate.GateTarget]) -> float:
+        """Return the first time that a scheduled phase should poll the cloud."""
+        schedules = [
+            target.reboot_at for target in entries if target.device_type in SCHEDULED_REBOOT_TYPES
+        ]  # WHY: Only wired infrastructure has a delayed reboot field.
+        future = [
+            moment for moment in schedules if moment is not None and moment > now
+        ]  # WHY: A stale schedule cannot delay a gate.
+        if not future:
+            return now  # WHY: An unscheduled phase must keep the current poll behavior.
+        poll_after = max(future)  # WHY: The last scheduled device controls the useful poll window.
+        logger.info("Upgrade phase gate waits without cloud polling until %s", poll_after)  # Log the wait boundary.
+        logger.debug("Upgrade phase gate found %s future reboot schedule(s)", len(future))  # Log the schedule count.
+        return poll_after  # WHY: No device can prove a return before this moment.
 
-    Returns:
-        The deadline in epoch seconds.
-    """
-    base = now + float(deadline_seconds)  # WHY: Unscheduled runs keep the documented thirty-minute window.
-    schedules = [
-        target.reboot_at for target in entries if target.device_type in SCHEDULED_REBOOT_TYPES
-    ]  # WHY: APs do not use this option.
-    future = [
-        moment for moment in schedules if moment is not None and moment > now
-    ]  # WHY: Past schedules must not add delay.
-    if not future:
-        return base  # WHY: No future reboot means the legacy deadline is correct.
-    scheduled = max(future) + float(deadline_seconds)  # WHY: The slowest scheduled device controls the phase.
-    logger.info("Upgrade phase gate honors a scheduled reboot until %s", scheduled)
-    result = max(base, scheduled)  # WHY: The wait must never shrink below the normal settle window.
-    logger.debug("Upgrade phase gate chose deadline %s from base %s and schedule %s", result, base, scheduled)
-    return result
+    @staticmethod
+    def deadline(now: float, poll_after: float, deadline_seconds: int) -> float:
+        """Return the deadline that honors a future scheduled reboot."""
+        base = now + float(deadline_seconds)  # WHY: Unscheduled runs keep the documented thirty-minute window.
+        if poll_after <= now:
+            return base  # WHY: No future reboot means the legacy deadline is correct.
+        scheduled = poll_after + float(deadline_seconds)  # WHY: The slowest scheduled device controls the phase.
+        logger.info("Upgrade phase gate honors a scheduled reboot until %s", scheduled)  # Log the extended deadline.
+        result = max(base, scheduled)  # WHY: The wait must never shrink below the normal settle window.
+        logger.debug("Upgrade phase gate chose deadline %s from base %s and schedule %s", result, base, scheduled)
+        return result  # WHY: The caller uses one deadline for the clock and the round cap.
 
 
 def _round_limit(now: float, deadline: float) -> int:
@@ -706,10 +717,15 @@ class PhaseSettleGate:
         family = phase_family(entries)
         logger.info("Run %s waits for %s %s device(s) of phase %s", run_id, len(entries), family, phase)
         now = self._deps.settle_gate.now()  # WHY: One clock anchors both the deadline and the round limit.
-        deadline = _scheduled_deadline(now, entries, self._deadline_seconds)  # WHY: Delayed reboots move the window.
-        limit = _round_limit(now, deadline)  # WHY: A clock that stops must still end the loop.
+        poll_after = ScheduledRebootWindow.poll_start(now, entries)  # WHY: Polling before reboot proves nothing.
+        deadline = ScheduledRebootWindow.deadline(
+            now,
+            poll_after,
+            self._deadline_seconds,
+        )  # WHY: Delayed reboots move the window.
+        limit = polls_per_phase(self._deadline_seconds)  # WHY: The cloud poll budget starts at the reboot window.
         progress = {target.mac: gate.GateProgress() for target in entries}  # WHY: Each device starts with no signal.
-        return _PhaseWatch(run_id, phase, entries, deadline, limit, progress)
+        return _PhaseWatch(run_id, phase, entries, deadline, limit, progress, poll_after)
 
     def _wait(self, watch: _PhaseWatch) -> PhaseOutcome:
         """Poll until the phase settles or the wait reaches its limit.
@@ -731,6 +747,9 @@ class PhaseSettleGate:
         Returns:
             The outcome of the phase.
         """
+        stopped = self._wait_for_schedule(watch)  # WHY: No cloud read helps before a future reboot can occur.
+        if stopped is not None:
+            return stopped  # WHY: A stop request during the schedule wait must end the wait cleanly.
         note = ""
         for _ in range(watch.round_limit):
             if self._deps.stop_requested(watch.run_id):
@@ -776,6 +795,7 @@ class PhaseSettleGate:
             One sentence for each source that this round could not read, joined
             by a space. Empty text after a whole round.
         """
+        self._guard_lock(watch)  # WHY: The heartbeat must prove the lock before any cloud poll.
         reconnected, event_note = self._read_reconnects(watch.family)
         self._apply_event_failures(watch)
         readings, statistics_note = self._read_statistics()
@@ -785,8 +805,50 @@ class PhaseSettleGate:
             if target.mac in watch.failures:
                 continue
             self._observe(watch, target, gate.GateSignals(target.mac in reconnected, readings.get(target.mac)))
-        self._deps.progress.report(PhaseProgress(watch.run_id, watch.phase, watch.settled, len(watch.targets)))
+        self._report_progress(watch)  # WHY: The record must show progress after each poll round.
         return " ".join(note for note in (event_note, statistics_note) if note)
+
+    def _wait_for_schedule(self, watch: _PhaseWatch) -> PhaseOutcome | None:
+        """Wait without cloud polling until a future scheduled reboot can occur."""
+        while self._deps.settle_gate.now() < watch.poll_after:  # Stay quiet until a poll can prove a return.
+            if self._deps.stop_requested(watch.run_id):  # The operator may stop during the scheduled wait.
+                logger.info("Run %s phase %s stopped during the scheduled wait", watch.run_id, watch.phase)
+                return PhaseOutcome(
+                    watch.phase,
+                    PhaseState.WAITING.value,
+                    watch.settled,
+                    len(watch.targets),
+                    watch.missing,
+                )  # WHY: The stop route owns the final stopped state.
+            self._report_progress(watch)  # WHY: The heartbeat keeps the site lock alive during the quiet wait.
+            remaining = watch.poll_after - self._deps.settle_gate.now()  # Compute the safe sleep slice.
+            nap = min(float(gate.POLL_INTERVAL_SECONDS), remaining)  # Keep the heartbeat cadence bounded.
+            self._deps.sleep(nap)  # Wait through the injected sleeper, so tests never wait in real time.
+        return None  # The scheduled window arrived, so the normal poll loop can start.
+
+    def _report_progress(self, watch: _PhaseWatch) -> None:
+        """Report phase progress and fail closed when the site lock is lost."""
+        progress = PhaseProgress(watch.run_id, watch.phase, watch.settled, len(watch.targets))  # Build one report row.
+        logger.info("Run %s reports phase %s progress before a site action", watch.run_id, watch.phase)
+        answer = self._deps.progress.report(progress)  # The heartbeat may renew the site lock here.
+        logger.debug("Run %s progress report returned %s", watch.run_id, answer)  # Record only a boolean result.
+        if answer is False:  # A heartbeat returns False after lock loss, expiry, or renewal bound.
+            raise PhaseGateError(
+                "This run no longer holds the site lock, so the phase stopped before another cloud poll."
+            )
+
+    def _guard_lock(self, watch: _PhaseWatch) -> None:
+        """Fail closed when the progress sink can prove the site lock is lost."""
+        guard = getattr(self._deps.progress, "beat", None)  # LockHeartbeat exposes this stronger proof method.
+        if not callable(guard):
+            return  # A plain progress reporter cannot test a lock, so it cannot fail this guard.
+        logger.info("Run %s verifies the site lock before a cloud poll", watch.run_id)  # Log before the guard call.
+        answer = guard()  # Ask the lock heartbeat to compare the stored lock when a beat is due.
+        logger.debug("Run %s lock guard returned %s", watch.run_id, answer)  # Log the guard result without secrets.
+        if answer is False:  # A heartbeat returns False after lock loss, expiry, or renewal bound.
+            raise PhaseGateError(
+                "This run no longer holds the site lock, so the phase stopped before another cloud poll."
+            )
 
     def _apply_event_failures(self, watch: _PhaseWatch) -> None:
         """Apply the most recent event poll failures to target devices."""
@@ -808,6 +870,7 @@ class PhaseSettleGate:
         from turning a failed upgrade into a successful run.
         """
         self._deps.sleep(float(gate.POLL_INTERVAL_SECONDS))
+        self._guard_lock(watch)  # WHY: The lock can be lost while the confirmation wait sleeps.
         _, event_note = self._read_reconnects(watch.family)
         self._apply_event_failures(watch)
         return event_note

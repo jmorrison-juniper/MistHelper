@@ -544,6 +544,7 @@ class LockHeartbeat:
         self._quiet_since: float | None = None  # Set while the lock store does not answer
         self._stopped = False  # True after a final run state, and after the lock changed hands
         self._sink: Callable[[str], None] | None = None  # The driver writes the loss into the run record
+        self._failure_reason: str | None = None  # The driver raises this reason before the next site action.
 
     @property
     def stopped(self) -> bool:
@@ -553,6 +554,15 @@ class LockHeartbeat:
             True when the run ended, or when the site lock changed hands.
         """
         return self._stopped
+
+    @property
+    def failure_reason(self) -> str | None:
+        """Return why the heartbeat stopped, when a lock fault stopped it.
+
+        Returns:
+            The operator message, or None when the heartbeat stopped normally.
+        """
+        return self._failure_reason  # The reason has no token and no plain work email address.
 
     def watch(self, sink: Callable[[str], None]) -> None:
         """Name the call that records a lost site lock on the run record.
@@ -606,7 +616,7 @@ class LockHeartbeat:
         logger.info("Run %s released the site lock", run_id)
         return True
 
-    def report(self, progress: Any) -> None:
+    def report(self, progress: Any) -> bool:
         """Beat for one poll round of the settle gate, then pass the counts on.
 
         Why:
@@ -619,9 +629,10 @@ class LockHeartbeat:
         Args:
             progress: The counts the settle gate reported.
         """
-        self.beat()  # Rate limited, so two rounds of every three spend nothing
+        held = self.beat()  # Rate limited, so two rounds of every three spend nothing.
         if self._plan.progress is not None:
             self._plan.progress.report(progress)  # The reporter behind this one still gets every round
+        return held  # The phase gate fails closed when the heartbeat lost the lock.
 
     def beat(self) -> bool:
         """Renew the site lock when the interval passed.
@@ -722,6 +733,7 @@ class LockHeartbeat:
             Always False, so every path of the caller reads one answer.
         """
         self._stopped = True  # A dead token cannot be renewed, so the portal stops asking
+        self._failure_reason = reason  # The driver needs this exact reason before the next site action.
         digest = self._plan.record.owner.email_digest  # The only form of an address a log record may hold
         logger.warning("Run %s lost the site lock of operator %s: %s", self._plan.record.run_id, digest, reason)
         if self._sink is not None:
@@ -1507,8 +1519,13 @@ class RunDriver:
             heartbeat counts the seconds itself, so a wait site adds this call
             and never a clock.
         """
-        if self._deps.heartbeat is not None:
-            self._deps.heartbeat.beat()  # Rate limited, so a call inside the interval costs nothing
+        if self._deps.heartbeat is None:
+            return  # A legacy caller has no lock object for this driver to renew.
+        if self._deps.heartbeat.beat():
+            return  # The portal still holds the site lock.
+        reason = self._deps.heartbeat.failure_reason or LOCK_LOST_REASON  # Use the recorded lock reason when present.
+        logger.warning("Run stopped before a site action because the site lock was lost")  # No token reaches the log.
+        raise RunDriverError(reason)  # The run record then fails with the lock reason.
 
     def _submit(self, record: MutableMapping[str, Any]) -> None:
         """Send the upgrade to the cloud and write the tracker.

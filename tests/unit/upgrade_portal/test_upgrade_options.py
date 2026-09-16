@@ -362,7 +362,7 @@ class TestBuildOptions:
 
     def test_a_start_time_of_digits_becomes_epoch_seconds(self) -> None:
         """The cloud reads ``start_time`` as epoch seconds."""
-        chosen = FIXED_NOW + ONE_WEEK_SECONDS
+        chosen = FIXED_NOW + 8 * 60 * 60  # WHY: The epoch must sit inside the safe site lock window.
         assert module.build_options({"start_time": str(chosen)}, now=fixed_clock).start_time == chosen
 
     @pytest.mark.parametrize("posted", ["", "   ", None])

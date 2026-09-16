@@ -53,6 +53,10 @@ from src.upgrade_portal.capture.devices import (
     normalize_device_mac,
     resolve_page_limit,
 )
+from src.upgrade_portal.runtime.lock import (  # The schedule guard must stay below the site lock bound.
+    HEARTBEAT_SECONDS,  # One renewal interval stays as a safety margin before the lock bound.
+    MAX_LOCK_LIFE_SECONDS,  # The default lock life is the hard ceiling for accepted schedules.
+)
 
 logger = logging.getLogger(__name__)
 
@@ -84,9 +88,14 @@ START_TIME_GRACE_SECONDS = 120
 
 # A millisecond epoch pasted into the field reads as a moment tens of thousands
 # of years ahead. The cloud accepts it and the upgrade never runs, so the
-# operator waits for work that can never start. One year of lead time covers
-# every real maintenance window and still refuses that mistake.
-START_TIME_HORIZON_SECONDS = 365 * 24 * 60 * 60
+# operator waits for work that can never start. The accepted span stays under
+# the site lock life, because a run must never wait past the lock that protects
+# its site. The settle window matches phase_gate.PHASE_DEADLINE_SECONDS without
+# importing that module into this option parser.
+SCHEDULE_SETTLE_WINDOW_SECONDS = 30 * 60  # The phase gate polls only inside this final settle window.
+START_TIME_HORIZON_SECONDS = (  # Keep the accepted schedule inside the renewable site lock window.
+    MAX_LOCK_LIFE_SECONDS - SCHEDULE_SETTLE_WINDOW_SECONDS - HEARTBEAT_SECONDS
+)
 
 # The units of a schedule that the operator writes, and the seconds of each one.
 # Issue #2187 replaces the epoch second with a duration, because no operator
@@ -701,14 +710,14 @@ def _guard_start_time(moment: int, now: int, field: str = "start_time") -> int:
         The chosen moment, unchanged.
 
     Raises:
-        BadOptionError: If the moment is already past, or more than one year
-            ahead.
+        BadOptionError: If the moment is already past, or beyond the safe site
+            lock window.
     """
     if moment < now - START_TIME_GRACE_SECONDS:
         logger.warning("Upgrade portal refused the field %s because the moment is already past", field)
         raise BadOptionError(field)
     if moment > now + START_TIME_HORIZON_SECONDS:
-        logger.warning("Upgrade portal refused the field %s because the moment is more than one year ahead", field)
+        logger.warning("Upgrade portal refused the field %s because the moment exceeds the site lock window", field)
         raise BadOptionError(field)
     return moment
 
@@ -987,7 +996,7 @@ def parse_duration_seconds(text: str, field: str) -> int:
     Raises:
         BadOptionError: If the text names no unit or names an unknown unit. It
             also raises if the text holds no number. It also raises if the text
-            names a span longer than one year.
+            names a span beyond the safe site lock window.
     """
     word = text.strip().lower().replace(" ", "")  # An operator may write "5 m".
     if len(word) < 2:  # One character can hold a unit or a number, and never both.
@@ -1001,7 +1010,7 @@ def parse_duration_seconds(text: str, field: str) -> int:
         raise BadOptionError(field)
     seconds = int(number) * DURATION_UNIT_SECONDS[unit]
     if seconds > START_TIME_HORIZON_SECONDS:
-        logger.warning("Upgrade portal refused the field %s because the span is more than one year", field)
+        logger.warning("Upgrade portal refused the field %s because the span exceeds the site lock window", field)
         raise BadOptionError(field)
     return seconds
 
