@@ -124,16 +124,28 @@ Standard Mist API rate limits apply.
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to read the resource at
+`/api/v1/sites/{site_id}/rrm/channel_scores/band/{band}`.
+Common use cases:
+
+- Use it when you need to get Site Channel Scores.
+- Use it in an audit or status workflow before you make a related change.
+- Treat this endpoint as a read-only request.
+- The installed `mistapi` 0.64.0 signature is `getSiteChannelScores(mist_session: mistapi.__api_session.APISession, site_id: str, band: str, start: str | None = None, end: str | None = None) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `site_id`, `band`. Use identifiers from a trusted Mist read.
+- Query parameters include `start`, `end`. Keep filters narrow for repeatable results.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [GET_sites_site_id_rrm_current.md](GET_sites_site_id_rrm_current.md) -- getSiteCurrentChannelPlanning uses `GET /api/v1/sites/{site_id}/rrm/current`.
+- [GET_sites_site_id_rrm_current_devices_device_id_band_band.md](GET_sites_site_id_rrm_current_devices_device_id_band_band.md) -- getSiteCurrentRrmConsiderations uses `GET /api/v1/sites/{site_id}/rrm/current/devices/{device_id}/band/{band}`.
+- [GET_sites_site_id_rrm_events.md](GET_sites_site_id_rrm_events.md) -- listSiteRrmEvents uses `GET /api/v1/sites/{site_id}/rrm/events`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+MistHelper does not currently call `getSiteChannelScores`.
+Verification source: `git grep -n "getSiteChannelScores" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.

@@ -128,20 +128,31 @@ Standard Mist API rate limits apply.
 
 ## mistapi SDK
 
-`mistapi.api.v1.utilities.upgrade.listSiteMxEdgeUpgrades()`
+`mistapi.api.v1.sites.mxedges.listSiteMxEdgeUpgrades()`
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to read the resource at `/api/v1/sites/{site_id}/mxedges/upgrade`.
+Common use cases:
+
+- Use it when you need to list Mist Edge upgrade operations for a site.
+- Use it in an audit or status workflow before you make a related change.
+- Treat this endpoint as a read-only request.
+- The installed `mistapi` 0.64.0 signature is `listSiteMxEdgeUpgrades(mist_session: mistapi.__api_session.APISession, site_id: str) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `site_id`. Use identifiers from a trusted Mist read.
+- Upgrade calls can interrupt service. Use an approved maintenance window.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [POST_sites_site_id_mxedges_upgrade.md](POST_sites_site_id_mxedges_upgrade.md) -- upgradeSiteMxEdges uses `POST /api/v1/sites/{site_id}/mxedges/upgrade`.
+- [DELETE_sites_site_id_mxedges_mxedge_id.md](../sites/DELETE_sites_site_id_mxedges_mxedge_id.md) -- deleteSiteMxEdge uses `DELETE /api/v1/sites/{site_id}/mxedges/{mxedge_id}`.
+- [GET_sites_site_id_mxedges.md](../sites/GET_sites_site_id_mxedges.md) -- listSiteMxEdges uses `GET /api/v1/sites/{site_id}/mxedges`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+Menu Operation **71** exports Mist Edge upgrade status for a selected site.
+Verification source: `git grep -n "listSiteMxEdgeUpgrades" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` was also checked for endpoint family menu coverage.

@@ -52,16 +52,28 @@ Standard Mist API rate limits apply.
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to remove or stop the resource at
+`/api/v1/sites/{site_id}/marvis_configs/{id}`.
+Common use cases:
+
+- Use it when you need to delete a Marvis Config Action.
+- Use it only after you read the related resource and confirm the planned change.
+- Treat this endpoint as a state-changing request.
+- The installed `mistapi` 0.64.0 signature is `deleteSiteMarvisConfigAction(mist_session: mistapi.__api_session.APISession, site_id: str, id: str) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `site_id`, `id`. Use identifiers from a trusted Mist read.
+- This endpoint can change Mist state. Keep a recovery record before you call it.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [GET_sites_site_id_marvis_configs_count.md](GET_sites_site_id_marvis_configs_count.md) -- countSiteMarvisConfigActions uses `GET /api/v1/sites/{site_id}/marvis_configs/count`.
+- [GET_sites_site_id_marvis_configs_search.md](GET_sites_site_id_marvis_configs_search.md) -- searchSiteMarvisConfigActions uses `GET /api/v1/sites/{site_id}/marvis_configs/search`.
+- [POST_sites_site_id_marvis_configs_id_feedback.md](POST_sites_site_id_marvis_configs_id_feedback.md) -- submitSiteMarvisConfigFeedback uses `POST /api/v1/sites/{site_id}/marvis_configs/{id}/feedback`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+MistHelper does not currently call `deleteSiteMarvisConfigAction`.
+Verification source: `git grep -n "deleteSiteMarvisConfigAction" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.

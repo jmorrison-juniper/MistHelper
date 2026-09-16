@@ -119,16 +119,28 @@ Standard Mist API rate limits apply.
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to start or create the resource at
+`/api/v1/sites/{site_id}/auto_map_assignment`.
+Common use cases:
+
+- Use it when you need to start the auto map assignment process for a site.
+- Use it only after you read the related resource and confirm the planned change.
+- Treat this endpoint as a state-changing request.
+- The installed `mistapi` 0.64.0 signature is `startSiteAutoMapAssignment(mist_session: mistapi.__api_session.APISession, site_id: str, body: dict | list) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `site_id`. Use identifiers from a trusted Mist read.
+- This endpoint can change Mist state. Keep a recovery record before you call it.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [DELETE_sites_site_id_auto_map_assignment.md](DELETE_sites_site_id_auto_map_assignment.md) -- cancelSiteAutoMapAssignment uses `DELETE /api/v1/sites/{site_id}/auto_map_assignment`.
+- [GET_sites_site_id_auto_map_assignment.md](GET_sites_site_id_auto_map_assignment.md) -- getSiteAutoMapAssignmentStatus uses `GET /api/v1/sites/{site_id}/auto_map_assignment`.
+- [GET_sites_site_id_insights_fingerprints_count.md](../orgs/GET_sites_site_id_insights_fingerprints_count.md) -- countOrgClientFingerprints uses `GET /api/v1/sites/{site_id}/insights/fingerprints/count`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+MistHelper does not currently call `startSiteAutoMapAssignment`.
+Verification source: `git grep -n "startSiteAutoMapAssignment" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.

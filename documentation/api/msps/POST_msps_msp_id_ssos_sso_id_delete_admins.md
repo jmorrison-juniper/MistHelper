@@ -92,20 +92,33 @@ Standard Mist API rate limits apply.
 
 ## mistapi SDK
 
-`mistapi.api.v1.msps.sso.deleteMspSsoAdmins()`
+`mistapi.api.v1.msps.ssos.deleteMspSsoAdmins()`
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to remove or stop the resource at
+`/api/v1/msps/{msp_id}/ssos/{sso_id}/delete_admins`.
+Common use cases:
+
+- Use it when you need to remove SSO-linked MSP administrator accounts by email for this SSO profile.
+- Use it only after you read the related resource and confirm the planned change.
+- Treat this endpoint as a state-changing request.
+- The installed `mistapi` 0.64.0 signature is `deleteMspSsoAdmins(mist_session: mistapi.__api_session.APISession, msp_id: str, sso_id: str, body: dict | list) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `msp_id`, `sso_id`. Use identifiers from a trusted Mist read.
+- The JSON body requires `emails`. Missing required fields return a 400 response.
+- This endpoint can change Mist state. Keep a recovery record before you call it.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [DELETE_msps_msp_id_ssos_sso_id.md](DELETE_msps_msp_id_ssos_sso_id.md) -- deleteMspSso uses `DELETE /api/v1/msps/{msp_id}/ssos/{sso_id}`.
+- [GET_msps_msp_id_ssos_sso_id.md](GET_msps_msp_id_ssos_sso_id.md) -- getMspSso uses `GET /api/v1/msps/{msp_id}/ssos/{sso_id}`.
+- [GET_msps_msp_id_ssos_sso_id_failures.md](GET_msps_msp_id_ssos_sso_id_failures.md) -- listMspSsoLatestFailures uses `GET /api/v1/msps/{msp_id}/ssos/{sso_id}/failures`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+MistHelper does not currently call `deleteMspSsoAdmins`.
+Verification source: `git grep -n "deleteMspSsoAdmins" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.

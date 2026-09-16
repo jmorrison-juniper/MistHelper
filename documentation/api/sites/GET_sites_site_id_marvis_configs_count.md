@@ -127,16 +127,29 @@ Standard Mist API rate limits apply.
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to read the resource at
+`/api/v1/sites/{site_id}/marvis_configs/count`.
+Common use cases:
+
+- Use it when you need to count Marvis Config Actions for a site by a distinct field.
+- Use it in an audit or status workflow before you make a related change.
+- Treat this endpoint as a read-only request.
+- The installed `mistapi` 0.64.0 signature is `countSiteMarvisConfigActions(mist_session: mistapi.__api_session.APISession, site_id: str, distinct: str | None = None, mac: str | None = None, type: str | None = None, src: str | None = None, admin_id: str | None = None, op: str | None = None, port_id: str | None = None, vlan_ids: int | None = None, reason: str | None = None, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `site_id`. Use identifiers from a trusted Mist read.
+- Query parameters include `distinct`, `mac`, `type`, `src`, `admin_id`. Keep filters narrow for repeatable results.
+- Count endpoints return totals, not records. Use the matching search endpoint for details.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [DELETE_sites_site_id_marvis_configs_id.md](DELETE_sites_site_id_marvis_configs_id.md) -- deleteSiteMarvisConfigAction uses `DELETE /api/v1/sites/{site_id}/marvis_configs/{id}`.
+- [GET_sites_site_id_marvis_configs_search.md](GET_sites_site_id_marvis_configs_search.md) -- searchSiteMarvisConfigActions uses `GET /api/v1/sites/{site_id}/marvis_configs/search`.
+- [POST_sites_site_id_marvis_configs_id_feedback.md](POST_sites_site_id_marvis_configs_id_feedback.md) -- submitSiteMarvisConfigFeedback uses `POST /api/v1/sites/{site_id}/marvis_configs/{id}/feedback`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+Menu Operation **236** offers this site count endpoint.
+Verification source: `git grep -n "countSiteMarvisConfigActions" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` was also checked for endpoint family menu coverage.

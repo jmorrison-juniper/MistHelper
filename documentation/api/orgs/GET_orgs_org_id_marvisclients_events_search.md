@@ -216,20 +216,33 @@ Standard Mist API rate limits apply.
 
 ## mistapi SDK
 
-`mistapi.api.v1.orgs.clients_-_marvis.searchOrgMarvisClientEvents()`
+`mistapi.api.v1.orgs.marvisclients.searchOrgMarvisClientEvents()`
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to read the resource at
+`/api/v1/orgs/{org_id}/marvisclients/events/search`.
+Common use cases:
+
+- Use it when you need to search Marvis Client events across the organization.
+- Use it in an audit or status workflow before you make a related change.
+- Treat this endpoint as a read-only request.
+- The installed `mistapi` 0.64.0 signature is `searchOrgMarvisClientEvents(mist_session: mistapi.__api_session.APISession, org_id: str, type: str | None = None, device_id: str | None = None, wifi_mac: str | None = None, wifi_ip: str | None = None, hostname: str | None = None, ssid: str | None = None, bssid: str | None = None, channel: str | None = None, pre_bssid: str | None = None, pre_channel: str | None = None, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `org_id`. Use identifiers from a trusted Mist read.
+- Query parameters include `type`, `device_id`, `wifi_mac`, `wifi_ip`, `hostname`. Keep filters narrow for repeatable results.
+- Search results can be large. Set a time range and page through all required results.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [GET_orgs_org_id_marvisclients_events_count.md](GET_orgs_org_id_marvisclients_events_count.md) -- countOrgMarvisClientEvents uses `GET /api/v1/orgs/{org_id}/marvisclients/events/count`.
+- [DELETE_orgs_org_id.md](DELETE_orgs_org_id.md) -- deleteOrg uses `DELETE /api/v1/orgs/{org_id}`.
+- [DELETE_orgs_org_id_aamwprofiles_aamwprofile_id.md](DELETE_orgs_org_id_aamwprofiles_aamwprofile_id.md) -- deleteOrgAAMWProfile uses `DELETE /api/v1/orgs/{org_id}/aamwprofiles/{aamwprofile_id}`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+MistHelper does not currently call `searchOrgMarvisClientEvents`.
+Verification source: `git grep -n "searchOrgMarvisClientEvents" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.

@@ -203,16 +203,30 @@ Standard Mist API rate limits apply.
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to read the resource at `/api/v1/orgs/{org_id}/logs/search`.
+Common use cases:
+
+- Use it when you need to get a list of change logs for the current Org.
+- Use it in an audit or status workflow before you make a related change.
+- Treat this endpoint as a read-only request.
+- The installed `mistapi` 0.64.0 signature is `listOrgAuditLogs(mist_session: mistapi.__api_session.APISession, org_id: str, site_id: str | None = None, admin_name: str | None = None, message: str | None = None, sort: str | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `org_id`. Use identifiers from a trusted Mist read.
+- Query parameters include `site_id`, `admin_name`, `message`, `sort`, `start`. Keep filters narrow for repeatable results.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [GET_orgs_org_id_logs.md](GET_orgs_org_id_logs.md) -- listOrgAuditLogs uses `GET /api/v1/orgs/{org_id}/logs`.
+- [GET_orgs_org_id_logs_count.md](GET_orgs_org_id_logs_count.md) -- countOrgAuditLogs uses `GET /api/v1/orgs/{org_id}/logs/count`.
+- [DELETE_orgs_org_id.md](DELETE_orgs_org_id.md) -- deleteOrg uses `DELETE /api/v1/orgs/{org_id}`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+Menu Operation **22** exports recent organization audit logs.
+Menu Operation **98** exports organization audit logs for 52 weeks.
+Menu Operation **25** uses this endpoint for the audit log analysis report.
+Menu Operation **153** includes this endpoint in bulk organization data collection.
+Verification source: `git grep -n "listOrgAuditLogs" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` was also checked for endpoint family menu coverage.

@@ -124,20 +124,33 @@ Standard Mist API rate limits apply.
 
 ## mistapi SDK
 
-`mistapi.api.v1.orgs.stats_-_marvis_clients.countOrgMarvisClientsStats()`
+`mistapi.api.v1.orgs.stats.countOrgMarvisClientsStats()`
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to read the resource at
+`/api/v1/orgs/{org_id}/stats/marvisclients/count`.
+Common use cases:
+
+- Use it when you need to count Marvis Client stats records by a distinct field.
+- Use it in an audit or status workflow before you make a related change.
+- Treat this endpoint as a read-only request.
+- The installed `mistapi` 0.64.0 signature is `countOrgMarvisClientsStats(mist_session: mistapi.__api_session.APISession, org_id: str, distinct: str | None = None, device_id: str | None = None, wifi_mac: str | None = None, wifi_ip: str | None = None, hostname: str | None = None, model: str | None = None, mfg: str | None = None, serial: str | None = None, os_type: str | None = None, os_version: str | None = None, limit: int | None = None, start: str | None = None, end: str | None = None, duration: str | None = None) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `org_id`. Use identifiers from a trusted Mist read.
+- Query parameters include `distinct`, `device_id`, `wifi_mac`, `wifi_ip`, `hostname`. Keep filters narrow for repeatable results.
+- Count endpoints return totals, not records. Use the matching search endpoint for details.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [DELETE_orgs_org_id_stats_marvisclients.md](DELETE_orgs_org_id_stats_marvisclients.md) -- deleteOrgMarvisClient uses `DELETE /api/v1/orgs/{org_id}/stats/marvisclients`.
+- [GET_orgs_org_id_stats_marvisclients_search.md](GET_orgs_org_id_stats_marvisclients_search.md) -- searchOrgMarvisClientsStats uses `GET /api/v1/orgs/{org_id}/stats/marvisclients/search`.
+- [GET_orgs_org_id_stats.md](GET_orgs_org_id_stats.md) -- getOrgStats uses `GET /api/v1/orgs/{org_id}/stats`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+Menu Operation **235** offers this org count endpoint.
+Verification source: `git grep -n "countOrgMarvisClientsStats" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` was also checked for endpoint family menu coverage.

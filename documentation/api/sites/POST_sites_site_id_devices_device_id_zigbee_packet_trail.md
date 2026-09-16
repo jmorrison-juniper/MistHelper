@@ -66,20 +66,32 @@ Standard Mist API rate limits apply.
 
 ## mistapi SDK
 
-`mistapi.api.v1.sites.devices_-_wireless.startSiteDeviceZigbeePacketTrail()`
+`mistapi.api.v1.sites.devices.startSiteDeviceZigbeePacketTrail()`
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to start or create the resource at
+`/api/v1/sites/{site_id}/devices/{device_id}/zigbee_packet_trail`.
+Common use cases:
+
+- Use it when you need to start a Zigbee packet trail session on an AP.
+- Use it only after you read the related resource and confirm the planned change.
+- Treat this endpoint as a state-changing request.
+- The installed `mistapi` 0.64.0 signature is `startSiteDeviceZigbeePacketTrail(mist_session: mistapi.__api_session.APISession, site_id: str, device_id: str) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `site_id`, `device_id`. Use identifiers from a trusted Mist read.
+- This endpoint can change Mist state. Keep a recovery record before you call it.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [DELETE_sites_site_id_devices_device_id_ha.md](DELETE_sites_site_id_devices_device_id_ha.md) -- deleteSiteDeviceHaCluster uses `DELETE /api/v1/sites/{site_id}/devices/{device_id}/ha`.
+- [DELETE_sites_site_id_devices_device_id_image_image_number.md](DELETE_sites_site_id_devices_device_id_image_image_number.md) -- deleteSiteDeviceImage uses `DELETE /api/v1/sites/{site_id}/devices/{device_id}/image/{image_number}`.
+- [DELETE_sites_site_id_devices_device_id_local_port_config.md](DELETE_sites_site_id_devices_device_id_local_port_config.md) -- deleteSiteLocalSwitchPortConfig uses `DELETE /api/v1/sites/{site_id}/devices/{device_id}/local_port_config`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+MistHelper does not currently call `startSiteDeviceZigbeePacketTrail`.
+Verification source: `git grep -n "startSiteDeviceZigbeePacketTrail" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.

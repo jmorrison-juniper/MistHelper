@@ -92,20 +92,32 @@ Standard Mist API rate limits apply.
 
 ## mistapi SDK
 
-`mistapi.api.v1.sites.auto_map_assignment.clearSiteAutoMapAssignment()`
+`mistapi.api.v1.sites.clear_auto_map_assignment.clearSiteAutoMapAssignment()`
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to remove or stop the resource at
+`/api/v1/sites/{site_id}/clear_auto_map_assignment`.
+Common use cases:
+
+- Use it when you need to clear (reject) auto map assignment results for a site without applying them.
+- Use it only after you read the related resource and confirm the planned change.
+- Treat this endpoint as a state-changing request.
+- The installed `mistapi` 0.64.0 signature is `clearSiteAutoMapAssignment(mist_session: mistapi.__api_session.APISession, site_id: str, body: dict | list) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `site_id`. Use identifiers from a trusted Mist read.
+- This endpoint can change Mist state. Keep a recovery record before you call it.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [GET_sites_site_id_insights_fingerprints_count.md](../orgs/GET_sites_site_id_insights_fingerprints_count.md) -- countOrgClientFingerprints uses `GET /api/v1/sites/{site_id}/insights/fingerprints/count`.
+- [GET_sites_site_id_insights_fingerprints_search.md](../orgs/GET_sites_site_id_insights_fingerprints_search.md) -- searchOrgClientFingerprints uses `GET /api/v1/sites/{site_id}/insights/fingerprints/search`.
+- [DELETE_sites_site_id.md](DELETE_sites_site_id.md) -- deleteSite uses `DELETE /api/v1/sites/{site_id}`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+MistHelper does not currently call `clearSiteAutoMapAssignment`.
+Verification source: `git grep -n "clearSiteAutoMapAssignment" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.

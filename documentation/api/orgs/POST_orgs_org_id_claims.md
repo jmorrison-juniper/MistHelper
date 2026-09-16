@@ -116,20 +116,32 @@ Standard Mist API rate limits apply.
 
 ## mistapi SDK
 
-`mistapi.api.v1.orgs.licenses.createOrgAsyncClaim()`
+`mistapi.api.v1.orgs.claims.createOrgAsyncClaim()`
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to start or create the resource at `/api/v1/orgs/{org_id}/claims`.
+Common use cases:
+
+- Use it when you need to schedules an async claim for inventory devices.
+- Use it only after you read the related resource and confirm the planned change.
+- Treat this endpoint as a state-changing request.
+- The installed `mistapi` 0.64.0 signature is `createOrgAsyncClaim(mist_session: mistapi.__api_session.APISession, org_id: str, body: dict | list) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `org_id`. Use identifiers from a trusted Mist read.
+- The JSON body requires `code`, `type`. Missing required fields return a 400 response.
+- This endpoint can change Mist state. Keep a recovery record before you call it.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [GET_orgs_org_id_claims.md](GET_orgs_org_id_claims.md) -- listOrgAsyncClaims uses `GET /api/v1/orgs/{org_id}/claims`.
+- [DELETE_orgs_org_id.md](DELETE_orgs_org_id.md) -- deleteOrg uses `DELETE /api/v1/orgs/{org_id}`.
+- [DELETE_orgs_org_id_aamwprofiles_aamwprofile_id.md](DELETE_orgs_org_id_aamwprofiles_aamwprofile_id.md) -- deleteOrgAAMWProfile uses `DELETE /api/v1/orgs/{org_id}/aamwprofiles/{aamwprofile_id}`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+MistHelper does not currently call `createOrgAsyncClaim`.
+Verification source: `git grep -n "createOrgAsyncClaim" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.

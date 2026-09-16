@@ -129,20 +129,32 @@ Standard Mist API rate limits apply.
 
 ## mistapi SDK
 
-`mistapi.api.v1.orgs.clients_-_marvis.getOrgMarvisClientInsights()`
+`mistapi.api.v1.orgs.insights.getOrgMarvisClientInsights()`
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to read the resource at
+`/api/v1/orgs/{org_id}/insights/marvisclient/{marvisclient_id}/marvisclient-metrics`.
+Common use cases:
+
+- Use it when you need to return time-series metrics for a specific Marvis Client device.
+- Use it in an audit or status workflow before you make a related change.
+- Treat this endpoint as a read-only request.
+- The installed `mistapi` 0.64.0 signature is `getOrgMarvisClientInsights(mist_session: mistapi.__api_session.APISession, org_id: str, marvisclient_id: str, duration: str | None = None, interval: str | None = None, start: str | None = None, end: str | None = None, limit: int | None = None, page: int | None = None) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `org_id`, `marvisclient_id`. Use identifiers from a trusted Mist read.
+- Query parameters include `duration`, `interval`, `start`, `end`, `limit`. Keep filters narrow for repeatable results.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [GET_orgs_org_id_insights_metric.md](GET_orgs_org_id_insights_metric.md) -- getOrgSle uses `GET /api/v1/orgs/{org_id}/insights/{metric}`.
+- [GET_orgs_org_id_insights_sites-sle.md](GET_orgs_org_id_insights_sites-sle.md) -- getOrgSitesSle uses `GET /api/v1/orgs/{org_id}/insights/sites-sle`.
+- [DELETE_orgs_org_id.md](DELETE_orgs_org_id.md) -- deleteOrg uses `DELETE /api/v1/orgs/{org_id}`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+MistHelper does not currently call `getOrgMarvisClientInsights`.
+Verification source: `git grep -n "getOrgMarvisClientInsights" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` does not list this operation as an endpoint family row.

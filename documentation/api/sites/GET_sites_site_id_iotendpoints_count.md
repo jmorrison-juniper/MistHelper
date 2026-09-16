@@ -115,20 +115,32 @@ Standard Mist API rate limits apply.
 
 ## mistapi SDK
 
-`mistapi.api.v1.sites.stats_-_iot_endpoints.countSiteIotEndpoints()`
+`mistapi.api.v1.sites.iotendpoints.countSiteIotEndpoints()`
 
 ## Usage Context
 
-*To be enriched by AI agent.*
+Use this endpoint to read the resource at `/api/v1/sites/{site_id}/iotendpoints/count`.
+Common use cases:
+
+- Use it when you need to count IoT Endpoints.
+- Use it in an audit or status workflow before you make a related change.
+- Treat this endpoint as a read-only request.
+- The installed `mistapi` 0.64.0 signature is `countSiteIotEndpoints(mist_session: mistapi.__api_session.APISession, site_id: str, distinct: str | None = None, start: str | None = None, end: str | None = None, duration: str | None = None, limit: int | None = None) -> mistapi.__api_response.APIResponse`.
 
 ## Gotchas
 
-*To be enriched by AI agent.*
+- The path requires `site_id`. Use identifiers from a trusted Mist read.
+- Query parameters include `distinct`, `start`, `end`, `duration`, `limit`. Keep filters narrow for repeatable results.
+- Count endpoints return totals, not records. Use the matching search endpoint for details.
 
 ## Related Endpoints
 
-*To be enriched by AI agent.*
+- [GET_sites_site_id_iotendpoints_search.md](GET_sites_site_id_iotendpoints_search.md) -- searchSiteIotEndpoints uses `GET /api/v1/sites/{site_id}/iotendpoints/search`.
+- [POST_sites_site_id_iotendpoints_id_zigbee_rejoin.md](POST_sites_site_id_iotendpoints_id_zigbee_rejoin.md) -- rejoinSiteIotEndpointZigbee uses `POST /api/v1/sites/{site_id}/iotendpoints/{id}/zigbee_rejoin`.
+- [GET_sites_site_id_insights_fingerprints_count.md](../orgs/GET_sites_site_id_insights_fingerprints_count.md) -- countOrgClientFingerprints uses `GET /api/v1/sites/{site_id}/insights/fingerprints/count`.
 
 ## MistHelper Notes
 
-*To be enriched by AI agent.*
+Menu Operation **236** offers this site count endpoint.
+Verification source: `git grep -n "countSiteIotEndpoints" -- src MistHelper.py`.
+`src/export/endpoint_catalog.py` was also checked for endpoint family menu coverage.
