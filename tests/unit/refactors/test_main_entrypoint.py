@@ -146,6 +146,18 @@ class TestMainEntrypointRun:
             wired_misthelper["_parsed_args"]
         )  # WHY: the test dispatcher must still run.
 
+    def test_run_skips_startup_session_for_offline_interactive_test(self, wired_misthelper: dict[str, Any]) -> None:
+        """A no-token `--testinteractive` run reaches the dispatcher for measured credential skips."""
+        wired_misthelper["_parsed_args"].testinteractive = True  # WHY: simulate the interactive-safe test command.
+        wired_misthelper["_systematic_test_has_api_token"].return_value = False  # WHY: simulate a no-token host.
+
+        MainEntrypoint.run()  # WHY: exercise the offline interactive-safe test startup path.
+
+        wired_misthelper["_establish_mist_session"].assert_not_called()  # WHY: no-token mode must not auth.
+        wired_misthelper["_dispatch_main_mode"].assert_called_once_with(
+            wired_misthelper["_parsed_args"]
+        )  # WHY: the runner must emit credential skips and fail zero exercise.
+
     def test_run_keeps_startup_session_when_safe_test_has_token(self, wired_misthelper: dict[str, Any]) -> None:
         """A token-backed `--test` run still performs the original Mist session startup."""
         wired_misthelper["_parsed_args"].test = True  # WHY: simulate --test with credentials present.

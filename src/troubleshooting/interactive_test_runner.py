@@ -26,6 +26,14 @@ class TestSiteSelectorUnresolved(RuntimeError):
     """
 
 
+class PromptResolutionError(RuntimeError):
+    """Raised when unattended interactive testing cannot derive a safe answer."""
+
+
+class InteractiveTestSafetyError(RuntimeError):
+    """Raised when an option crosses the ``--testinteractive`` safety boundary."""
+
+
 _THIRD_PARTY_LOGGER_ROOTS = frozenset(
     {"mistapi", "websocket", "urllib3", "requests", "paramiko"}
 )  # WHY: #1786 -- these libraries log a transport condition the caller may treat as normal.
@@ -69,6 +77,53 @@ class _LoggedErrorObserver(logging.Handler):
         self.error_count += 1
 
 
+class UnattendedInteractiveInputProvider:
+    """Generate deterministic prompt answers for the unattended interactive suite."""
+
+    _ALL_KEYWORD_RULES = (
+        (("zones", "rssizones"), "zones"),
+        (("duration",), "60"),
+        (("time range",), "7d"),
+    )  # WHY: exact-keyword rules keep prompt matching data-driven and low-complexity.
+    _ANY_KEYWORD_RULES = (
+        (("(y/n", "(y/", "yes/no"), "n"),
+        (("index", "choice", "select"), "0"),
+    )  # WHY: synonym groups cover existing prompt wording without extra branches.
+
+    def __init__(self, option: str) -> None:
+        """Store the menu option so prompt errors identify their source."""
+        logging.info("Creating unattended input provider for option %s", option)  # WHY: log provider setup.
+        self.option = option  # WHY: bind prompt decisions to the active menu option for diagnostics.
+        self.answers: list[tuple[str, str]] = []  # WHY: keep an auditable prompt-to-answer trace.
+        logging.debug("Unattended input provider ready for option %s", option)  # WHY: log setup result.
+
+    def answer(self, prompt: str, default_value: str = "", allow_empty: bool = True, context: str = "unknown") -> str:
+        """Return a deterministic answer or raise a prompt-resolution error."""
+        logging.info("Resolving unattended answer for option %s context=%s", self.option, context)  # WHY: trace prompt.
+        prompt_key = f"{prompt} {context}".lower()  # WHY: merge text and context for robust prompt matching.
+        answer = default_value or self._answer_without_default(prompt_key, allow_empty)  # WHY: defaults are safest.
+        self.answers.append((context, answer))  # WHY: preserve the generated answer for diagnostics.
+        logging.debug(
+            "Resolved unattended answer for option %s context=%s answer_present=%s",
+            self.option,
+            context,
+            bool(answer),
+        )  # WHY: log prompt result without exposing sensitive values.
+        return answer  # WHY: feed the handler so no human prompt blocks the suite.
+
+    def _answer_without_default(self, prompt_key: str, allow_empty: bool) -> str:
+        """Resolve common MistHelper prompt shapes when no default exists."""
+        for keywords, answer in self._ALL_KEYWORD_RULES:  # WHY: resolve prompts whose required words all appear.
+            if all(keyword in prompt_key for keyword in keywords):  # WHY: avoid matching partial zone prompts.
+                return answer  # WHY: return the deterministic answer tied to the matched rule.
+        for keywords, answer in self._ANY_KEYWORD_RULES:  # WHY: resolve prompts with alternate wording.
+            if any(keyword in prompt_key for keyword in keywords):  # WHY: one known word identifies the prompt kind.
+                return answer  # WHY: return the deterministic answer tied to the matched rule.
+        if allow_empty:  # WHY: callers explicitly allow no answer for optional filters.
+            return ""  # WHY: an empty optional answer avoids fabricating identifiers.
+        raise PromptResolutionError(f"No unattended answer rule for option {self.option}")  # WHY: fail instead of hang.
+
+
 @dataclass(frozen=True, slots=True)
 class SuiteTallies:  # WHY: bundle counts+timing so summary/finalize signatures stay within 5-param limit.
     """Tallies produced by the interactive-safe option execution loop."""
@@ -77,6 +132,7 @@ class SuiteTallies:  # WHY: bundle counts+timing so summary/finalize signatures 
     error_count: int  # WHY: failed option invocations reported in the summary block.
     skip_count: int  # WHY: options skipped as non-interactive-safe.
     total_time: float  # WHY: wall-clock seconds elapsed running the entire suite.
+    prompt_error_count: int = 0  # WHY: separate harness prompt defects from operation defects.
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +160,8 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
     apisession: Any  # WHY: authenticated Mist API session passed to listOrgSites.
     org_id_getter: Any  # WHY: cached org id lookup callable.
     org_id_setter: Any  # WHY: cached org id persistence callable.
+    input_utils: Any | None = None  # WHY: injectable prompt seam preserves EOF-safe InputUtils in normal runs.
+    prompt_error_count: int = 0  # WHY: tally prompt harness defects separately from operation defects.
 
     def _fetch_selector_sites(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch full org site list for selector-based test-site resolution."""
@@ -260,6 +318,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         interactive_options = self.operation_registry.interactive_safe_options(
             all_options
         )  # WHY: filter to interactive-safe options via registry.
+        self._validate_interactive_options(interactive_options)  # WHY: refuse any unsafe option before execution.
         skip_list = [
             option for option in all_options if not self.operation_registry.is_interactive_safe(option)
         ]  # WHY: build skip list mirroring legacy negative filter.
@@ -267,6 +326,27 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             "Built option lists: %d interactive, %d skipped", len(interactive_options), len(skip_list)
         )  # WHY: log list-build result for diagnostics.
         return all_options, interactive_options, skip_list  # WHY: return triple consumed by execute().
+
+    def _validate_interactive_options(self, interactive_options: list[str]) -> None:
+        """Refuse any option that is not explicitly classified as interactive-safe."""
+        logging.info("Validating interactive-test safety boundary")  # WHY: log before safety check.
+        for option in interactive_options:  # WHY: inspect each candidate before any handler can run.
+            category = self.operation_registry.skip_category(option)  # WHY: read the canonical safety class.
+            if category != "interactive_safe":  # WHY: only interactive_safe may run unattended.
+                raise InteractiveTestSafetyError(
+                    f"Refusing menu option {option}: category {category} is outside --testinteractive"
+                )  # WHY: fail closed before a destructive or long-running handler can execute.
+        logging.debug("Validated %d interactive-test candidate operations", len(interactive_options))  # WHY: count.
+
+    def _skip_reason_for_option(self, option: str) -> str:
+        """Return a non-empty skip reason for an option outside the interactive-safe set."""
+        reason = self.operation_registry.skip_reason(option)  # WHY: prefer the registry's specific reason.
+        if reason:  # WHY: a specific reason gives the operator the missing capability.
+            return reason  # WHY: preserve the exact registry text for telemetry and logs.
+        category = self.operation_registry.skip_category(option)  # WHY: derive a fallback reason from classification.
+        if category == "safe":  # WHY: safe operations run under --test, not --testinteractive.
+            return "Covered by --test because this operation needs no interactive input"
+        return f"Requires capability category {category} outside --testinteractive"  # WHY: never emit a blank skip.
 
     def _print_tested_options(self, interactive_options: list[str]) -> None:
         """Emit the tested-options listing via a single ``logging.warning``.
@@ -293,7 +373,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         lines = [" Skipping non-interactive-safe operations:"]
         for option in skip_list:
             if option in self.menu_actions:
-                reason = self.operation_registry.skip_reason(option)  # WHY: resolve registry skip reason.
+                reason = self._skip_reason_for_option(option)  # WHY: every skip must name a missing capability.
                 if reason:
                     lines.append(f"   {option:>3}: {reason}")  # WHY: preserve per-option skip-reason listing.
         logging.warning("%s", "\n".join(lines))
@@ -329,10 +409,11 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             if option in self.menu_actions:
                 op_name = self.menu_actions[option].title  # WHY: read menu text from the named row.
                 logging.info("Emitting telemetry skip event for option %s", option)  # WHY: log before skip emission.
+                reason = self._skip_reason_for_option(option)  # WHY: telemetry skip reason must never be blank.
                 emitter.emit_test_skip(
                     option,
                     op_name,
-                    self.operation_registry.skip_reason(option),
+                    reason,
                     self.operation_registry.skip_category(option),
                     "interactive",
                 )  # WHY: emit skip event capturing option identity + skip metadata.
@@ -388,7 +469,22 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         logging.debug(
             "Invoking option %s with kwargs=%s", option, invoke_kwargs
         )  # WHY: log invocation kwargs for diagnostics.
-        function(**invoke_kwargs)  # WHY: execute target interactive-safe operation.
+        self._invoke_with_input_provider(option, function, invoke_kwargs)  # WHY: prevent blocking prompts.
+
+    def _invoke_with_input_provider(self, option: str, function: Any, invoke_kwargs: dict[str, Any]) -> None:
+        """Invoke one handler while the unattended input provider is installed."""
+        if self.input_utils is None:  # WHY: unit tests may omit the prompt seam when no prompt is used.
+            function(**invoke_kwargs)  # WHY: execute target operation without patching an absent input utility.
+            return  # WHY: no prompt seam exists to restore.
+        provider = UnattendedInteractiveInputProvider(option)  # WHY: create option-scoped prompt answers.
+        original_safe_input = self.input_utils.safe_input  # WHY: preserve EOF-safe behavior after this option.
+        logging.info("Installing unattended input provider for option %s", option)  # WHY: log before patch.
+        self.input_utils.safe_input = provider.answer  # WHY: replace only the prompt seam during the option run.
+        try:
+            function(**invoke_kwargs)  # WHY: execute target interactive-safe operation with deterministic prompts.
+        finally:
+            self.input_utils.safe_input = original_safe_input  # WHY: restore normal EOF-safe prompting.
+            logging.debug("Restored EOF-safe input provider after option %s", option)  # WHY: log restoration.
 
     def _classify_site_context(self, option: str) -> str:
         """Return the per-option test_mode label reflecting whether the handler accepts ``site_id``.
@@ -496,8 +592,15 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             return self._emit_option_pass(
                 option, description, time.time() - op_start, emitter, test_mode
             )  # WHY: delegate success emission.
+        except PromptResolutionError as error:
+            root_logger.removeHandler(observer)  # WHY: idempotent guard on the prompt-failure path.
+            self.prompt_error_count += 1  # WHY: report prompt harness defects separately in the summary.
+            return self._emit_option_fail(
+                option, description, time.time() - op_start, error, emitter, "interactive-prompt"
+            )  # WHY: distinguish a missing answer rule from an operation defect.
         except EOFError as error:
             root_logger.removeHandler(observer)  # WHY: idempotent guard on the cancellation path.
+            self.prompt_error_count += 1  # WHY: EOF during unattended mode is a prompt harness failure.
             return self._emit_option_fail(
                 option, description, time.time() - op_start, error, emitter, "interactive-cancelled"
             )  # WHY: #1638 — distinguish prompt cancellation from a completed run or generic error.
@@ -558,6 +661,8 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             "\n%s\n Interactive Test Summary:\n"
             "   Successful operations: %d\n"
             "   Failed operations: %d\n"
+            "   Prompt harness failures: %d\n"
+            "   Exercised operations: %d\n"
             "   Skipped operations: %d\n"
             "   Total interactive read-only coverage: %d/%d (%.1f%%)\n"
             "   Total execution time: %.2f seconds\n"
@@ -566,6 +671,8 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             "=" * 80,
             tallies.success_count,
             tallies.error_count,
+            tallies.prompt_error_count,
+            tallies.success_count + tallies.error_count,
             tallies.skip_count,
             tallies.success_count,
             interactive_total,
@@ -576,6 +683,10 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
 
     def _print_summary_verdict(self, tallies: SuiteTallies, interactive_total: int) -> bool:
         """Print final verdict banner and return suite pass/fail status."""
+        exercised_count = tallies.success_count + tallies.error_count  # WHY: zero exercise must fail loudly.
+        if exercised_count == 0:
+            logging.error("INTERACTIVE_TEST: zero operations exercised; refusing green result")  # WHY: guard proof.
+            return False  # WHY: a run that measured nothing must not pass.
         if tallies.error_count == 0:
             logging.warning("   All tested interactive operations completed successfully!")  # WHY: #886 s18.
             logging.info(
@@ -605,7 +716,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             ctx.interactive_options, ctx.test_site_id, ctx.emitter
         )  # WHY: execute option loop.
         tallies = SuiteTallies(
-            success_count, error_count, ctx.skip_count, time.time() - ctx.start_time
+            success_count, error_count, ctx.skip_count, time.time() - ctx.start_time, self.prompt_error_count
         )  # WHY: bundle tallies for downstream reporting.
         self._finalize_telemetry(
             ctx.emitter, tallies, len(ctx.all_options)
@@ -614,15 +725,48 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             tallies, len(ctx.interactive_options), ctx.telemetry_path
         )  # WHY: print summary and return suite status.
 
+    def _emit_credential_skip_events(self, emitter: Any, interactive_options: list[str]) -> int:
+        """Emit skip events for interactive-safe options when no API token exists."""
+        reason = "Requires MIST_APITOKEN or MIST_API_TOKEN because this interactive test calls the Mist API"
+        logging.warning(" Skipping interactive-safe operations that need Mist API credentials:")  # WHY: visible list.
+        for option in interactive_options:  # WHY: emit one skip record for each candidate that cannot run.
+            description = self.menu_actions[option].title  # WHY: use the same title as normal test events.
+            logging.warning("   %3s: %s", option, reason)  # WHY: print the missing capability for this operation.
+            emitter.emit_test_skip(option, description, reason, "credential_required", "interactive")  # WHY: record.
+        logging.debug("Emitted %d credential skip events", len(interactive_options))  # WHY: log exact skip count.
+        return len(interactive_options)  # WHY: include credential skips in summary skipped count.
+
+    def _finalize_without_api(self, ctx: SuiteContext) -> bool:
+        """Finalize an interactive test run that cannot create a Mist API session."""
+        credential_skips = self._emit_credential_skip_events(ctx.emitter, ctx.interactive_options)  # WHY: no token.
+        tallies = SuiteTallies(
+            0, 0, ctx.skip_count + credential_skips, time.time() - ctx.start_time, self.prompt_error_count
+        )  # WHY: zero exercised operations must be visible and fail the suite.
+        self._finalize_telemetry(ctx.emitter, tallies, len(ctx.all_options))  # WHY: close telemetry cleanly.
+        return self._print_summary(tallies, len(ctx.interactive_options), ctx.telemetry_path)  # WHY: fail via zero.
+
     def execute(self) -> bool:
         """Run the interactive-safe systematic test suite."""
         logging.info("Starting interactive-safe systematic test suite")  # WHY: log suite entry boundary.
+        self.prompt_error_count = 0  # WHY: reset prompt-failure tally for this suite invocation.
         start_time = time.time()  # WHY: capture suite start timestamp.
         self._print_suite_header()  # WHY: emit legacy header block.
-        all_options, interactive_options, skip_list = self._build_option_lists()  # WHY: build option lists.
+        try:
+            all_options, interactive_options, skip_list = self._build_option_lists()  # WHY: build option lists.
+        except InteractiveTestSafetyError as error:
+            logging.error("INTERACTIVE_TEST: %s", error)  # WHY: surface the safety refusal without a traceback.
+            return False  # WHY: fail closed when the registry offers an unsafe operation.
+        if not interactive_options:
+            logging.error("INTERACTIVE_TEST: zero interactive-safe operations selected")  # WHY: guard proof.
+            return False  # WHY: a run that would measure nothing must fail.
         self._print_option_listings(interactive_options, skip_list)  # WHY: emit option listings.
         emitter, telemetry_path = self._create_emitter()  # WHY: initialize telemetry emitter. Capture path.
         skip_count = self._emit_skip_events(emitter, skip_list)  # WHY: emit skip events and tally count.
+        ctx = SuiteContext(
+            all_options, interactive_options, None, emitter, telemetry_path, skip_count, start_time
+        )  # WHY: prepare a context early so no-token runs still finalize telemetry.
+        if self.apisession is None:  # WHY: no startup session means no API token was available.
+            return self._finalize_without_api(ctx)  # WHY: emit credential skips and fail the zero-exercise run.
         org_id = self._ensure_org_id()  # WHY: resolve org_id with cache fallback.
         test_site_id, _site_name = self._resolve_site_or_close(org_id, emitter)  # WHY: resolve site context or abort.
         if not test_site_id:

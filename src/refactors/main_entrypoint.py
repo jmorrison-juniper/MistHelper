@@ -366,8 +366,11 @@ class MainEntrypoint:  # CLI main entry-point seam
     def _needs_startup_session(cls, args: Any) -> bool:
         """Return whether this invocation must build a Mist API session before dispatch."""
         logging.info("Checking whether startup needs a Mist API session")  # Explain the branch decision before it runs.
-        is_offline_test = bool(  # Detect plain --test, because --login still needs interactive authentication.
-            getattr(args, "test", False) and not getattr(args, "login", False)
+        is_systematic_test = bool(  # Detect both test modes because both can report credential skips.
+            getattr(args, "test", False) or getattr(args, "testinteractive", False)
+        )
+        is_offline_test = bool(  # Detect no-login test modes because --login still needs authentication.
+            is_systematic_test and not getattr(args, "login", False)
         )
         has_token = bool(_MH._systematic_test_has_api_token())  # Use the same token test as the test runner.
         needs_session = not (is_offline_test and not has_token)  # Keep every token-backed path unchanged.

@@ -3319,7 +3319,7 @@ def _build_ssh_runner_deps() -> SSHRunnerManagerDeps:  # Build the deps bundle f
         args=cli_args,
         progress_emitter=MainEntrypoint.context.progress_emitter,
         enhanced_ssh_runner=EnhancedSSHRunner,
-        input_utils=InputUtils,
+        input_utils=InputUtils,  # WHY: inject the EOF-safe prompt seam for unattended interactive tests.
         cache_utils=CacheUtils,
         gateway_export_utils=GatewayExportUtils,
         file_path_utils=FilePathUtils,
@@ -6221,6 +6221,7 @@ def _build_interactive_test_runner(get_org_id: Any, set_org_id: Any) -> Any:
         apisession=MainEntrypoint.context.apisession,
         org_id_getter=get_org_id,
         org_id_setter=set_org_id,
+        input_utils=InputUtils,
     )
     logging.debug("InteractiveTestRunner initialized successfully")  # Confirm construction
     return runner
