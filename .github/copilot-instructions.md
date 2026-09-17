@@ -116,6 +116,17 @@ python -m ruff check MistHelper.py    # Lint check. Must pass clean.
 python -m black --check MistHelper.py # Format check. Drop --check to auto-fix.
 ```
 
+On Windows, use the bounded local shard runner for full local test evidence.
+It splits the large portal test trees and prints one final summary line.
+Measured on 2026-09-17 in the OneDrive worktree, the unit shard took
+1179.3 seconds and the contract, guardrail, and integration shard took
+366.3 seconds.
+
+```powershell
+python scripts\run_local_test_shard.py unit --chunk-timeout 900 --test-timeout 120
+python scripts\run_local_test_shard.py other --chunk-timeout 900 --test-timeout 120
+```
+
 Build and run the container on your own machine. Podman builds the same
 image that the registry builds.
 
@@ -211,7 +222,7 @@ python scripts/bootstrap_worktree.py   # Creates .venv and installs the requirem
 .venv\Scripts\Activate.ps1
 python MistHelper.py --test
 ```
-**Skip List**: `OperationRegistry` decides. `--test` runs only `safe`, and `--testinteractive` adds `interactive_safe`. Every other category is skipped, which covers `resource_intensive` (14, 18-19, 59, 97-101, 153), `destructive` (154-187, 189-191, 194, 206-208), `interactive`, `websocket`, and `continuous_loop`.
+**Skip List**: `OperationRegistry` decides. `--test` runs only `safe`, and `--testinteractive` adds `interactive_safe`. Every other category is skipped, which covers `resource_intensive` (14, 18-19, 59, 97-101, 153), `destructive` (154-187, 189-191, 194, 206-208, 239), `interactive`, `websocket`, and `continuous_loop`.
 
 **Warning**: `git worktree add` copies the tracked files only. `.venv` is not tracked, so a new
 worktree has no virtual environment. The activation line then fails, and the tests run against the
@@ -419,17 +430,19 @@ is_running_in_container()  # Checks /.dockerenv, /run/.containerenv
 
 ## Menu System & Operations
 
-### Menu Categories (Full Range: 0-234)
+### Menu Categories (Full Range: 0-268)
 
 `src/utils/operation_registry.py` is the single source of truth. Read it before
-you trust this table. Counts were measured on 2026-08-05. Run
+you trust this table. Counts were measured on 2026-09-17. Run
 `python scripts/generate_menu_wiki.py` to regenerate the full reference.
+`tests/guardrails/test_destructive_menu_docs.py` proves that this table matches
+the registry, so a stale count now fails the gate.
 
 | Category | Count | Menu numbers |
 | - | - | - |
-| `interactive_safe` | 67 | 60-96, 195-203, 209-229 |
-| `safe` | 64 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234 |
-| `destructive` | 41 | 154-187, 189-191, 194, 206-208 |
+| `interactive_safe` | 92 | 60-96, 195-203, 209-229, 235-238, 240-242, 244-247, 254, 256-268 |
+| `safe` | 72 | 1-13, 15-17, 20-58, 188, 193, 204-205, 230-234, 243, 248-253, 255 |
+| `destructive` | 42 | 154-187, 189-191, 194, 206-208, 239 |
 | `interactive` | 29 | 0, 124-150, 192 |
 | `websocket` | 22 | 102-123 |
 | `resource_intensive` | 10 | 14, 18-19, 59, 97-101, 153 |
@@ -437,12 +450,17 @@ you trust this table. Counts were measured on 2026-08-05. Run
 
 Warning: A `destructive` operation changes the Mist cloud configuration. Never
 automate one without explicit user confirmation. The destructive set is
-154-187, 189-191, 194, and 206-208. It is not a single block, so do not treat
-any range boundary as a shortcut.
+154-187, 189-191, 194, 206-208, and 239. It is not a single block, so do not
+treat any range boundary as a shortcut.
 
-The newest operations are 195 through 209. Three of them are destructive: 206
-manages Zscaler synthetic probes, 207 migrates access points between device
-profiles, and 208 reverts that migration.
+Warning: menu 239 sits far from the other destructive numbers. It starts the
+upgrade capture portal on port 8056, and it drives a firmware upgrade for the
+selected site. An earlier version of this table stopped at 208, so a reader
+could treat 239 as safe. Issue #2825 records that gap.
+
+Operations 195 through 209 were the newest set in the 2026-08 measurement.
+Three of them are destructive: 206 manages Zscaler synthetic probes, 207
+migrates access points between device profiles, and 208 reverts that migration.
 
 ### Interactive vs Direct Invocation
 - **Interactive**: No args = menu-driven selection with safe navigation
@@ -827,7 +845,7 @@ Triggered by tag push (`v*.*.*`) via `.github/workflows/release.yml`:
 - AI must tick all conformance checklist boxes in the PR template.
 - AI must **wait for CodeQL to pass** before adding the `auto-merge` label.
   Use `gh pr checks <pr-number> --watch` to confirm all checks are green.
-- Destructive operations (154-187, 189-191, 194, 206-208) require explicit human review regardless of AI authorship.
+- Destructive operations (154-187, 189-191, 194, 206-208, 239) require explicit human review regardless of AI authorship.
 
 ---
 
@@ -863,7 +881,7 @@ See [git-flow-multi-agent.instructions.md](instructions/git-flow-multi-agent.ins
 § Part 7 for the full decision table.
 
 **MistHelper-specific escalation triggers**:
-- Any change to a destructive operation (154-187, 189-191, 194, 206-208)
+- Any change to a destructive operation (154-187, 189-191, 194, 206-208, 239)
 - Database schema or primary key strategy changes
 - Changes touching 3+ files or 2+ classes
 

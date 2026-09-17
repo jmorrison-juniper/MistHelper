@@ -56,6 +56,9 @@ from src.site.address_audit.perf import PhaseTimer  # Per-phase timing to expose
 from src.site.address_audit.suite_patterns import HASH_UNIT_PATTERN, SUITE_PHRASE_PATTERN  # Shared suite regexes.
 from src.utils.input_utils import InputUtils  # EOF-safe operator prompts.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+_PRIVATE_LOG_VALUE = "<redacted>"  # Keep private address data out of logs while preserving message text.
+
 try:  # Optional dependency: Playwright may not be installed in every environment.
     from playwright.sync_api import sync_playwright  # Sync browser-automation entry point.
 except ImportError:  # pragma: no cover -- exercised only on hosts without Playwright.
@@ -124,25 +127,25 @@ class MistUIGeocoder:
         self._spawned_proc: Any = None  # Popen handle when we spawned a debuggable Edge (auto mode).
         self._spawned_profile_dir: str | None = None  # Throwaway profile to remove once the spawned Edge stops.
         self._lookups_done: int = 0  # Counter enforcing the per-run max-lookups cap.
-        logging.debug("MistUIGeocoder initialized (mode=%s)", self._config.connect_mode)  # Trace init.
+        logger.debug("MistUIGeocoder initialized (mode=%s)", self._config.connect_mode)  # Trace init.
 
     def is_available(self) -> bool:
         """Return True only when the optional Playwright dependency is importable."""
         available = sync_playwright is not None  # Sentinel set at import time.
-        logging.debug("MistUIGeocoder.is_available -> %s", available)  # Trace capability check.
+        logger.debug("MistUIGeocoder.is_available -> %s", available)  # Trace capability check.
         return available  # Callers gate Tier-3 on this before connect().
 
     def connect(self) -> bool:
         """Establish the browser per ``connect_mode``. Return success (never raises)."""
         if not self.is_available():  # Playwright missing -> Tier-3 is simply unavailable.
-            logging.warning("Playwright not installed; Tier-3 UI geocoding unavailable")  # Inform operator.
+            logger.warning("Playwright not installed; Tier-3 UI geocoding unavailable")  # Inform operator.
             return False  # Audit continues on Tier-1/Tier-2 results.
-        logging.info("Connecting browser in '%s' mode", self._config.connect_mode)  # Action-log start.
+        logger.info("Connecting browser in '%s' mode", self._config.connect_mode)  # Action-log start.
         try:
             self._playwright = sync_playwright().start()  # Start the Playwright driver process.
             ok = self._dispatch_connect()  # Branch to attach/launch.
             self._connected = ok  # Record state for the geocode_via_ui guard.
-            logging.debug("Browser connect result=%s", ok)  # Action-log outcome.
+            logger.debug("Browser connect result=%s", ok)  # Action-log outcome.
             return ok  # True when a usable context was established.
         except Exception as exc:  # never crash the audit on connect failure.
             logging.warning("Browser connect failed: %s", exc)  # Surface the cause.
@@ -162,10 +165,10 @@ class MistUIGeocoder:
         """Take over a debuggable browser if present. Otherwise spawn one and take it over."""
         if self._try_attach():  # A debuggable browser is already running -> reuse it.
             return True  # Attached to the operator's existing session.
-        logging.info("No debuggable browser found; spawning one for login")  # Action-log the spawn path.
+        logger.info("No debuggable browser found; spawning one for login")  # Action-log the spawn path.
         spawned = MistUIGeocoder.spawn_debuggable_browser(self._cdp_port(), self._config.dashboard_url)  # Spawn Edge.
         if spawned is None:  # Edge not installed -> fall back to a Playwright launch.
-            logging.info("Edge unavailable to spawn; falling back to launch mode")  # Inform operator.
+            logger.info("Edge unavailable to spawn; falling back to launch mode")  # Inform operator.
             return self._connect_launch()  # Last-resort interactive launch.
         self._spawned_proc = spawned.process  # Own the spawned browser's lifecycle (terminated on close()).
         self._spawned_profile_dir = spawned.profile_dir  # Own the profile so close() can remove the session material.
@@ -193,28 +196,28 @@ class MistUIGeocoder:
             "'Location Search' box is visible, then press Enter to continue: ",
             context="ui_geocoder_spawn_login",
         )
-        logging.info("Operator confirmed spawned-browser login; taking over via CDP")  # Action-log gate pass.
+        logger.info("Operator confirmed spawned-browser login; taking over via CDP")  # Action-log gate pass.
 
     def _connect_attach(self) -> bool:
         """Take over a debuggable browser over CDP and reuse its first context."""
         endpoint = self._config.cdp_endpoint  # DevTools URL of the operator's browser.
-        logging.info("Attaching over CDP at %s", endpoint)  # Action-log the takeover target.
+        logger.info("Attaching over CDP at %s", endpoint)  # Action-log the takeover target.
         self._browser = self._playwright.chromium.connect_over_cdp(endpoint)  # Attach to the session.
         if not self._browser.contexts:  # A debuggable browser should expose >=1 context.
-            logging.warning("No browser context found at CDP endpoint %s", endpoint)  # Nothing to drive.
+            logger.warning("No browser context found at CDP endpoint %s", endpoint)  # Nothing to drive.
             return False  # Cannot proceed without a context.
         self._context = self._browser.contexts[0]  # Reuse the operator's context (cookies/SSO intact).
-        logging.debug("CDP attach succeeded; %d context(s) present", len(self._browser.contexts))  # Trace.
+        logger.debug("CDP attach succeeded; %d context(s) present", len(self._browser.contexts))  # Trace.
         return True  # Ready to geocode against the operator's logged-in tab.
 
     def _connect_launch(self) -> bool:
         """Launch the system Edge channel and pause for interactive login."""
         channel = self._config.browser_channel  # System channel (msedge) -- no Chromium download needed.
-        logging.info("Launching system browser channel '%s'", channel)  # Action-log launch.
+        logger.info("Launching system browser channel '%s'", channel)  # Action-log launch.
         self._browser = self._playwright.chromium.launch(channel=channel, headless=self._config.headless)  # Open.
         self._context = self._browser.new_context()  # Fresh context for the interactive session.
         self._await_interactive_login()  # Block until the operator authenticates to Mist.
-        logging.debug("Launch-mode context ready after interactive login")  # Trace readiness.
+        logger.debug("Launch-mode context ready after interactive login")  # Trace readiness.
         return True  # Ready to geocode.
 
     def _await_interactive_login(self) -> None:
@@ -226,7 +229,7 @@ class MistUIGeocoder:
             "Log into the Mist dashboard in the opened browser, then press Enter to continue: ",
             context="ui_geocoder_login",
         )
-        logging.info("Operator confirmed dashboard login; proceeding with UI geocoding")  # Action-log gate pass.
+        logger.info("Operator confirmed dashboard login; proceeding with UI geocoding")  # Action-log gate pass.
 
     def ensure_location_field_ready(self, max_prompts: int = 3) -> bool:
         """Probe for the Location Search field. Guide the operator until it appears (fail-soft).
@@ -240,14 +243,14 @@ class MistUIGeocoder:
         for attempt in range(1, max_prompts + 1):  # Bounded retries so we never loop forever.
             page = self._active_page()  # Current tab in the operator's context.
             if page is not None and self._field_present(page):  # Location Search input is visible.
-                logging.info("Location Search field detected on attempt %d; Tier-3 ready", attempt)  # Ready.
+                logger.info("Location Search field detected on attempt %d; Tier-3 ready", attempt)  # Ready.
                 return True  # Proceed to the per-row lookups.
             InputUtils.safe_input(  # Guide the operator to the correct page, then re-probe.
                 "Could not see the 'Location Search' box. In the browser, open a "
                 "SITE's settings page where that box is visible, then press Enter: ",
                 context="ui_geocoder_navigate",
             )
-        logging.info("Location Search field not found after %d prompts; Tier-3 will fail-soft", max_prompts)
+        logger.info("Location Search field not found after %d prompts; Tier-3 will fail-soft", max_prompts)
         return False  # Lookups will return None. The audit still completes on Tier 1/2.
 
     def _field_present(self, page: Any) -> bool:
@@ -263,13 +266,13 @@ class MistUIGeocoder:
     def geocode_via_ui(self, query: str) -> ResolverResult | None:
         """Resolve one address via the dashboard autocomplete. Fail-soft to ``None``."""
         if not self._connected:  # Guard: connect() must succeed first.
-            logging.warning("geocode_via_ui called before a successful connect(); returning None")  # Misuse.
+            logger.warning("geocode_via_ui called before a successful connect(); returning None")  # Misuse.
             return None  # Nothing to drive.
         if self._lookups_done >= self._config.max_lookups:  # Respect the per-run cap.
-            logging.warning("UI geocode cap reached (%d); skipping lookup", self._config.max_lookups)  # Capped.
+            logger.warning("UI geocode cap reached (%d); skipping lookup", self._config.max_lookups)  # Capped.
             return None  # Row falls back to its Tier-1/Tier-2 outcome.
         self._lookups_done += 1  # Count this attempt against the cap.
-        logging.info("UI geocode lookup %d for query: %s", self._lookups_done, query)  # Action-log start.
+        logger.info("UI geocode lookup %d for query: %s", self._lookups_done, _PRIVATE_LOG_VALUE)  # Action-log start.
         try:
             page = self._active_page()  # Obtain a usable browser tab.
             if page is None:  # No context/page -> cannot proceed.
@@ -285,7 +288,7 @@ class MistUIGeocoder:
     def _active_page(self) -> Any:
         """Return a usable page from the active context, or ``None``."""
         if self._context is None:  # No context established.
-            logging.debug("No active context for UI geocoding")  # Trace the miss.
+            logger.debug("No active context for UI geocoding")  # Trace the miss.
             return None  # Caller treats as fail-soft.
         pages = self._context.pages  # Existing tabs in the context.
         if pages:  # Reuse the operator's current tab (attach mode) when present.
@@ -303,7 +306,7 @@ class MistUIGeocoder:
         expected_suite = self._suite_id(query)  # Unit id we typed (for example "200"). "" skips the suite wait.
         with self._perf.phase("ui.read_suggestions"):  # Time the fresh-result poll incl. the suite grace.
             texts = self._read_fresh_suggestions(page, expected, timeout_ms, expected_suite)  # Wait for THIS query.
-        logging.debug("UI autocomplete returned %d fresh suggestion(s)", len(texts))  # Action-log count.
+        logger.debug("UI autocomplete returned %d fresh suggestion(s)", len(texts))  # Action-log count.
         return texts  # May be empty -> NO_RESULT (never a stale, wrong answer).
 
     def _enter_query(self, page: Any, field: Any, query: str) -> None:
@@ -402,7 +405,9 @@ class MistUIGeocoder:
         if house_ok_at is None:  # WHY: first fresh house-number sighting -- start the grace clock.
             return None, time.monotonic()  # Keep polling. Anchor the suite grace at now.
         if time.monotonic() - house_ok_at >= grace:  # WHY: grace expired -- accept the base street.
-            logging.info("Suite '%s' not shown within grace; using base street", expected_suite)  # Action-log fallback.
+            logger.info(
+                "Suite '%s' not shown within grace; using base street", _PRIVATE_LOG_VALUE
+            )  # Action-log fallback.
             return texts, house_ok_at  # _build_result re-appends the unit we typed.
         return None, house_ok_at  # WHY: still within grace window -- keep polling for the suite.
 
@@ -411,7 +416,9 @@ class MistUIGeocoder:
         """Return the best fresh list seen before timeout, or [] when nothing fresh was seen."""
         if fresh_fallback:  # WHY: prefer the fresh street over NO_RESULT.
             return fresh_fallback  # Timed out mid-grace but the street/number were correct.
-        logging.info("No fresh suggestion for house number '%s' within timeout; skipping (stale-guard)", expected)
+        logger.info(
+            "No fresh suggestion for house number '%s' within timeout; skipping (stale-guard)", _PRIVATE_LOG_VALUE
+        )  # Log the timeout without exposing address data.
         return []  # Fail-soft to NO_RESULT.
 
     def _current_suggestions(self, page: Any) -> list[str]:
@@ -501,13 +508,13 @@ class MistUIGeocoder:
     def _build_result(self, query: str, suggestions: list[str]) -> ResolverResult:
         """Turn ranked Google suggestions into a ``ResolverResult`` (cleaned address)."""
         if not suggestions:  # No autocomplete suggestions at all.
-            logging.debug("No UI suggestions for query: %s", query)  # Trace the empty result.
+            logger.debug("No UI suggestions for query: %s", _PRIVATE_LOG_VALUE)  # Trace the empty result.
             return ResolverResult(query=query, canonical_address=None, source="mist_ui", confidence=0.0)
         top = self._clean_address(suggestions[0])  # Strip the glued business name + trailing country.
         top = self._preserve_query_suite(query, top)  # Keep the unit we typed if Google returned the bare street.
         ambiguous = len(suggestions) > 1  # Multiple hits => mall/strip-center ambiguity.
         confidence = 0.6 if ambiguous else 0.9  # Lower confidence when several candidates exist.
-        logging.info("UI geocode top suggestion: %s (ambiguous=%s)", top, ambiguous)  # Action-log result.
+        logger.info("UI geocode top suggestion: %s (ambiguous=%s)", _PRIVATE_LOG_VALUE, ambiguous)  # Action-log result.
         return ResolverResult(
             query=query,  # Echo the query for cache keying.
             canonical_address=top,  # Best suite-corrected, shippable address.
@@ -533,7 +540,9 @@ class MistUIGeocoder:
             return suggestion  # Nothing to preserve, already complete, Google authoritative, or different building.
         phrase = self._suite_phrase(query)  # The full 'Unit 200' / '#3' token to restore.
         restored = self._insert_suite(suggestion, phrase)  # Append it to the street segment.
-        logging.info("Preserved typed unit '%s' Google omitted: %s", phrase, restored)  # Action-log the restore.
+        logger.info(
+            "Preserved typed unit '%s' Google omitted: %s", _PRIVATE_LOG_VALUE, _PRIVATE_LOG_VALUE
+        )  # Action-log the restore.
         return restored  # Street from Google, unit preserved from the customer data.
 
     def _skip_suite_preservation(self, query: str, suggestion: str, suite_id: str) -> bool:
@@ -596,7 +605,7 @@ class MistUIGeocoder:
 
     def close(self) -> None:
         """Tear down browser and driver handles. Never raises."""
-        logging.debug("Closing MistUIGeocoder browser resources")  # Action-log teardown.
+        logger.debug("Closing MistUIGeocoder browser resources")  # Action-log teardown.
         try:
             if self._browser is not None:  # Disconnect/close the browser if open.
                 self._browser.close()  # In attach mode this only drops our CDP connection.
@@ -619,7 +628,7 @@ class MistUIGeocoder:
     def _stop_spawned_process(self) -> None:
         """Terminate the spawned Edge and wait for its exit (never raises)."""
         proc = self._spawned_proc  # Local handle keeps the log lines readable after we clear the field.
-        logging.info("Stopping the spawned debuggable Edge (pid=%s)", proc.pid)  # Action-log the stop request.
+        logger.info("Stopping the spawned debuggable Edge (pid=%s)", proc.pid)  # Action-log the stop request.
         try:
             proc.terminate()  # Ask the spawned Edge to exit.
             proc.wait(timeout=_SPAWNED_EXIT_TIMEOUT_S)  # Wait, because Edge holds a lock on the profile directory.
@@ -629,18 +638,18 @@ class MistUIGeocoder:
         except Exception as exc:  # teardown must not raise.
             logging.debug("Spawned Edge terminate error (ignored): %s", exc)  # Trace and continue.
         self._spawned_proc = None  # Drop the handle so close() is idempotent.
-        logging.debug("Stopped the spawned debuggable Edge (pid=%s)", proc.pid)  # Action-log the result.
+        logger.debug("Stopped the spawned debuggable Edge (pid=%s)", proc.pid)  # Action-log the result.
 
     @staticmethod
     def _kill_spawned_process(proc: Any) -> None:
         """Kill a spawned browser that ignored the terminate request (never raises)."""
-        logging.info("Killing the spawned debuggable Edge (pid=%s)", proc.pid)  # Action-log the forced stop.
+        logger.info("Killing the spawned debuggable Edge (pid=%s)", proc.pid)  # Action-log the forced stop.
         try:
             proc.kill()  # Force the exit so the profile directory lock is released.
             proc.wait(timeout=_SPAWNED_EXIT_TIMEOUT_S)  # Reap the process before the profile removal runs.
         except Exception as exc:  # teardown must not raise.
             logging.debug("Spawned Edge kill error (ignored): %s", exc)  # Trace and continue.
-        logging.debug("Killed the spawned debuggable Edge (pid=%s)", proc.pid)  # Action-log the result.
+        logger.debug("Killed the spawned debuggable Edge (pid=%s)", proc.pid)  # Action-log the result.
 
     def _remove_spawned_profile(self) -> None:
         """Remove the throwaway profile directory of the spawned Edge (never raises)."""
@@ -648,16 +657,16 @@ class MistUIGeocoder:
         if profile is None:  # Attach mode and launch mode never create a throwaway profile.
             return  # Nothing to remove, so a second close() call does nothing.
         self._spawned_profile_dir = None  # Clear the path first, so a second close() call does nothing.
-        logging.info("Removing the spawned browser profile directory")  # Action-log without the session material.
+        logger.info("Removing the spawned browser profile directory")  # Action-log without the session material.
         try:
             shutil.rmtree(profile, ignore_errors=True)  # Drop the cache, the cookies, and the local storage.
         except Exception as exc:  # teardown must not raise.
             logging.warning("Could not remove the browser profile directory %s: %s", profile, exc)  # Inform.
             return  # The audit continues, because a leftover directory does not stop it.
         if os.path.isdir(profile):  # The ignore_errors flag hides a failure, so confirm the removal.
-            logging.warning("The browser profile directory remains on disk: %s", profile)  # Inform the operator.
+            logger.warning("The browser profile directory remains on disk: %s", profile)  # Inform the operator.
             return  # The audit continues, because a leftover directory does not stop it.
-        logging.debug("Removed the browser profile directory %s", profile)  # Confirm the cleanup for an operator.
+        logger.debug("Removed the browser profile directory %s", profile)  # Confirm the cleanup for an operator.
 
     @staticmethod
     def spawn_debuggable_browser(
@@ -675,14 +684,14 @@ class MistUIGeocoder:
         """
         edge = MistUIGeocoder._edge_executable()  # Locate the system Edge binary.
         if edge is None:  # No Edge -> cannot offer a takeover target.
-            logging.warning("Microsoft Edge not found; cannot spawn a debuggable browser")  # Inform operator.
+            logger.warning("Microsoft Edge not found; cannot spawn a debuggable browser")  # Inform operator.
             return None  # Caller should fall back to launch mode.
         profile = tempfile.mkdtemp(prefix=_PROFILE_PREFIX)  # WHY: dedicated dir so the operator's profile is untouched.
         args = MistUIGeocoder._debuggable_edge_args(edge, cdp_port, profile, dashboard_url)  # Build the CLI flags.
-        logging.info("Spawning debuggable Edge on port %d (profile=%s)", cdp_port, profile)  # Action-log spawn.
+        logger.info("Spawning debuggable Edge on port %d (profile=%s)", cdp_port, profile)  # Action-log spawn.
         # WHY: launch Edge now. The operator logs into Mist in this window, then the audit attaches over CDP.
         proc = subprocess.Popen(args)  # nosec B603 - _edge_executable resolved the path and the flags are literals.
-        logging.debug("Debuggable Edge started (pid=%s)", proc.pid)  # Trace the PID.
+        logger.debug("Debuggable Edge started (pid=%s)", proc.pid)  # Trace the PID.
         return SpawnedBrowser(process=proc, profile_dir=profile)  # Caller stops the process and removes the profile.
 
     @staticmethod
@@ -706,8 +715,8 @@ class MistUIGeocoder:
         ]
         for path in candidates:  # Probe each known location.
             if path and os.path.isfile(path):  # First existing binary wins.
-                logging.debug("Edge located at %s", path)  # Trace the hit.
+                logger.debug("Edge located at %s", path)  # Trace the hit.
                 return path  # Return the absolute path.
         found = shutil.which("msedge")  # Fall back to a PATH lookup.
-        logging.debug("Edge PATH lookup -> %s", found)  # Trace the fallback result.
+        logger.debug("Edge PATH lookup -> %s", found)  # Trace the fallback result.
         return found  # May be None if Edge is absent.

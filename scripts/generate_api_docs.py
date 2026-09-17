@@ -433,7 +433,7 @@ class MistapiLibraryScanner:
         """Walk mistapi.api.v1 and return a dict keyed by function name."""
         import mistapi.api.v1 as v1  # installed mistapi SDK root package
 
-        logging.info("Scanning mistapi.api.v1 for library functions ...")  # log before scan
+        logger.info("Scanning mistapi.api.v1 for library functions ...")  # log before scan
         functions: dict[str, LibraryFunction] = {}  # accumulator for all discovered functions
 
         for module_info in pkgutil.walk_packages(v1.__path__, v1.__name__ + "."):
@@ -441,7 +441,7 @@ class MistapiLibraryScanner:
             discovered = self._scan_module(module_info.name)
             functions.update(discovered)  # merge; last-write wins on name collision
 
-        logging.debug("Found %d library functions total", len(functions))  # log result count
+        logger.debug("Found %d library functions total", len(functions))  # log result count
         return functions  # return complete function inventory
 
     def _scan_module(self, module_name: str) -> dict[str, LibraryFunction]:
@@ -517,7 +517,7 @@ class GapAnalyzer:
 
     def analyze(self) -> GapReport:
         """Compute matched, spec-only, and library-only sets and return a GapReport."""
-        logging.info(
+        logger.info(
             "Gap analysis: %d spec ops vs %d library functions",
             len(self.spec_ids),
             len(self.lib_ids),
@@ -525,7 +525,7 @@ class GapAnalyzer:
         matched = sorted(self.spec_ids & self.lib_ids)  # intersection: both sources agree
         spec_only = sorted(self.spec_ids - self.lib_ids)  # in spec but no SDK wrapper
         library_only = sorted(self.lib_ids - self.spec_ids)  # in SDK but absent from spec
-        logging.debug(
+        logger.debug(
             "Matched: %d  |  Spec-only: %d  |  Library-only: %d",
             len(matched),
             len(spec_only),
@@ -741,7 +741,7 @@ def main() -> None:
     operations = spec_parser.operations  # flat list of all spec operations
     category_counts: dict[str, int] = {}  # track per-category file count for logging
 
-    logging.info("Writing spec-derived operation files ...")  # log before bulk file write
+    logger.info("Writing spec-derived operation files ...")  # log before bulk file write
     for operation in operations:
         category = operation["category"]
         filename = operation["filename"]
@@ -762,7 +762,7 @@ def main() -> None:
     index_gen = IndexGenerator(operations, library_only_funcs)  # pass stubs to index generator
     index_content = index_gen.generate()  # build full INDEX.md content
     (OUTPUT_DIR / "INDEX.md").write_text(index_content, encoding="utf-8")  # write index to disk
-    logging.info(
+    logger.info(
         "Generated INDEX.md: %d spec ops + %d library-only stubs",
         len(operations),
         len(library_only_funcs),
@@ -776,17 +776,17 @@ def _run_library_gap_analysis(operations: list[dict]) -> list[LibraryFunction]:
     """Scan the mistapi library, analyse gaps, write stubs, return library-only list."""
     try:
         scanner = MistapiLibraryScanner()  # create library scanner instance
-        logging.info("Starting mistapi library scan ...")  # log before slow scan
+        logger.info("Starting mistapi library scan ...")  # log before slow scan
         library_funcs = scanner.scan()  # introspect all mistapi.api.v1 funcs
-        logging.info("Library scan complete: %d functions found", len(library_funcs))
+        logger.info("Library scan complete: %d functions found", len(library_funcs))
     except ImportError as exc:
         logging.warning("mistapi not importable, skipping library scan: %s", exc)
         return []  # gracefully degrade if library is not installed
 
     analyzer = GapAnalyzer(operations, library_funcs)  # build comparator
-    logging.info("Running gap analysis ...")  # log before comparison
+    logger.info("Running gap analysis ...")  # log before comparison
     report = analyzer.analyze()  # compute matched/spec-only/lib-only
-    logging.info(
+    logger.info(
         "Gap report -- matched: %d  spec-only: %d  library-only: %d",
         len(report.matched),
         len(report.spec_only),
@@ -794,20 +794,20 @@ def _run_library_gap_analysis(operations: list[dict]) -> list[LibraryFunction]:
     )  # log gap report summary for operator visibility
 
     if report.spec_only:
-        logging.info(
+        logger.info(
             "%d spec operationIds have no mistapi wrapper (spec-only).", len(report.spec_only)
         )  # inform operator about SDK coverage gap
 
     stub_renderer = LibraryStubRenderer()  # renderer for SDK-only stubs
     library_only_funcs: list[LibraryFunction] = []  # accumulate written stubs
 
-    logging.info("Writing %d library-only stub files ...", len(report.library_only))
+    logger.info("Writing %d library-only stub files ...", len(report.library_only))
     for func_name in report.library_only:
         func = library_funcs[func_name]  # retrieve LibraryFunction record
         _write_library_stub(func, stub_renderer)  # write stub markdown to disk
         library_only_funcs.append(func)  # add to index list
 
-    logging.debug("Wrote %d library-only stub files", len(library_only_funcs))
+    logger.debug("Wrote %d library-only stub files", len(library_only_funcs))
     return library_only_funcs  # return list for IndexGenerator
 
 
@@ -828,9 +828,9 @@ def _safe_write(output_path: "Path", content: str) -> None:  # noqa: F821
     if output_path.exists():  # only check existing files — new files are always written
         existing = output_path.read_text(encoding="utf-8")  # read current file content
         if _ENRICHMENT_PLACEHOLDER not in existing:  # placeholder absent → file has been enriched
-            logging.debug("Skipping enriched file: %s", output_path.name)  # log skip for traceability
+            logger.debug("Skipping enriched file: %s", output_path.name)  # log skip for traceability
             return  # leave enriched content untouched
-        logging.debug("Overwriting placeholder file: %s", output_path.name)  # log intentional overwrite
+        logger.debug("Overwriting placeholder file: %s", output_path.name)  # log intentional overwrite
     output_path.write_text(content, encoding="utf-8")  # write fresh or placeholder-only file to disk
 
 
@@ -843,7 +843,7 @@ def _write_library_stub(func: LibraryFunction, renderer: LibraryStubRenderer) ->
     output_path = category_dir / filename
     content = renderer.render(func)  # render stub markdown from LibraryFunction
     _safe_write(output_path, content)  # preserve enriched stubs; only write if placeholder or new
-    logging.debug("Wrote library stub: %s/%s", category, filename)
+    logger.debug("Wrote library stub: %s/%s", category, filename)
 
 
 if __name__ == "__main__":

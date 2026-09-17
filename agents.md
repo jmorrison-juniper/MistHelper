@@ -35,7 +35,7 @@ python -m black --check MistHelper.py
 # If no MIST_APITOKEN or MIST_API_TOKEN exists, --test runs local safe checks
 # and skips Mist API checks with a credential reason. --testinteractive adds
 # `interactive_safe`. Every other category is skipped, including destructive
-# (154-187, 189-191, 194, 206-208).
+# (154-187, 189-191, 194, 206-208, 239).
 python MistHelper.py --test
 
 # Worktree setup for feature work

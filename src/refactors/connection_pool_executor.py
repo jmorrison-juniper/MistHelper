@@ -27,6 +27,8 @@ from tqdm import tqdm  # Progress bar for per-batch operator feedback
 from src.dataclasses.batch_worker import BatchWorkerConfig  # Frozen bundle for the 4 constant worker params
 from src.refactors.fast_mode_devices_per_thread import FastModeDevicesPerThread  # Devices-per-thread scaling constant
 
+logger = logging.getLogger(__name__)  # Keep refactor logs tied to this module.
+
 
 def _resolve_fast_mode_env() -> tuple[bool, int, int]:  # Late-bind MistHelper module-level fast-mode env values
     """Return (use_connection_aware, max_concurrent_connections, fallback_threads) from MistHelper globals.
@@ -57,13 +59,13 @@ class ConnectionPoolExecutor:  # Class-body seam for the connection-pool-managed
         if use_conn_aware:  # Connection-aware mode limits threads to API connection pool size
             max_threads = max_conn  # Cap threads at configured pool capacity
             threading_mode = "connection-aware"  # Strategy label for log identification
-            logging.info(  # Announce connection-aware sizing decision
+            logger.info(  # Announce connection-aware sizing decision
                 "! Connection-aware threading: Using %s threads (respects connection pool limit)", max_threads
             )
             return max_threads, threading_mode  # Bundle for caller
         max_threads = os.cpu_count() or fallback_threads  # CPU-aware fallback when cpu_count unavailable
         threading_mode = "CPU-aware"  # Strategy label for log identification
-        logging.info(  # Announce CPU-aware sizing decision
+        logger.info(  # Announce CPU-aware sizing decision
             "! CPU-aware threading: Using %s threads (maximum CPU utilization)", max_threads
         )
         return max_threads, threading_mode  # Bundle for caller
@@ -71,7 +73,7 @@ class ConnectionPoolExecutor:  # Class-body seam for the connection-pool-managed
     @staticmethod
     def _pool_configure(work_items: list[Any], batch_description: str) -> tuple[int, threading.Semaphore, int, str]:
         """Determine threading strategy, semaphore, and batch size for a pool run."""
-        logging.debug(  # BEFORE: log entry into pool-configure helper
+        logger.debug(  # BEFORE: log entry into pool-configure helper
             "[POOL-CONFIG] Configuring pool for %s items (%s)", len(work_items), batch_description
         )
         use_conn_aware, max_conn, fallback_threads = _resolve_fast_mode_env()  # Late-bind fast-mode env
@@ -79,12 +81,12 @@ class ConnectionPoolExecutor:  # Class-body seam for the connection-pool-managed
             use_conn_aware, max_conn, fallback_threads
         )
         connection_semaphore = threading.Semaphore(max_conn)  # Bound simultaneous API calls
-        logging.info("* Connection pool protection: Maximum %s concurrent API calls", max_conn)  # Announce cap
+        logger.info("* Connection pool protection: Maximum %s concurrent API calls", max_conn)  # Announce cap
         batch_size = max_threads * FastModeDevicesPerThread.VALUE  # Scale batch size to thread count/per-thread setting
-        logging.info(  # Announce batch dispatch plan
+        logger.info(  # Announce batch dispatch plan
             "* Processing %s %s with connection pool management...", len(work_items), batch_description
         )
-        logging.debug(  # AFTER: log resolved pool config
+        logger.debug(  # AFTER: log resolved pool config
             "[POOL-CONFIG] Resolved max_threads=%s batch_size=%s mode=%s", max_threads, batch_size, threading_mode
         )
         return (max_threads, connection_semaphore, batch_size, threading_mode)  # Bundle pool config values
@@ -120,7 +122,7 @@ class ConnectionPoolExecutor:  # Class-body seam for the connection-pool-managed
         if outcome == "success":  # Worker returned usable data
             accumulator["successful"].append(payload)  # Collect successful result
             if not accumulator["first_logged"]:  # First-result one-shot debug log
-                logging.debug("! First future result type: %s", type(payload))  # One-shot shape debug log
+                logger.debug("! First future result type: %s", type(payload))  # One-shot shape debug log
                 accumulator["first_logged"] = True  # Prevent repeated debug log
             return
         accumulator["failed"].append(payload)  # Empty result or worker exception -- track for retry
@@ -156,7 +158,7 @@ class ConnectionPoolExecutor:  # Class-body seam for the connection-pool-managed
         config: BatchWorkerConfig,
     ) -> tuple[list[Any], list[Any]]:
         """Submit one batch to a thread pool and collect results via a wait loop (Issue #431 config dataclass)."""
-        logging.info(  # Log batch progress before dispatching to the thread pool
+        logger.info(  # Log batch progress before dispatching to the thread pool
             "! Processing batch %s/%s (%s %s, ~%.0f per thread)",
             batch_number,
             total_batches,
@@ -184,7 +186,7 @@ class ConnectionPoolExecutor:  # Class-body seam for the connection-pool-managed
                 _tb2.format_exception(type(batch_exc), batch_exc, batch_exc.__traceback__)
             )
             for line in formatted.rstrip().splitlines():  # One record per traceback line for log-aggregation tools
-                logging.error(line)  # Emit one traceback line per log record
+                logger.error(line)  # Emit one traceback line per log record
         except Exception as trace_log_err:  # Traceback serialization failure must not suppress the re-raise
             logging.error("! Failed to log batch exception traceback: %s", trace_log_err)
 
@@ -193,10 +195,10 @@ class ConnectionPoolExecutor:  # Class-body seam for the connection-pool-managed
         batch_exc: Exception, batch_index: int, batch_size: int, max_threads: int, threading_mode: str
     ) -> None:
         """Log a batch-level exception with full context then re-raise it."""
-        logging.error(  # Preserve legacy log prefix verbatim per Constitution VII (grep-searchable)
+        logger.error(  # Preserve legacy log prefix verbatim per Constitution VII (grep-searchable)
             "! Batch-level exception in execute_with_connection_pool_management: %s", batch_exc
         )
-        logging.error(  # Log batch configuration context for post-mortem analysis
+        logger.error(  # Log batch configuration context for post-mortem analysis
             "! Batch context: batch_index=%s, batch_size=%s, max_threads=%s, threading_mode=%s",
             batch_index,
             batch_size,
@@ -241,7 +243,7 @@ class ConnectionPoolExecutor:  # Class-body seam for the connection-pool-managed
         batch_description: str,
     ) -> list[Any]:
         """Run the caller-provided retry function on failed items, merging recoveries into successful_results."""
-        logging.info("! Retrying %s failed %s...", len(failed_items), batch_description)  # Announce the retry phase
+        logger.info("! Retrying %s failed %s...", len(failed_items), batch_description)  # Announce the retry phase
         retry_results, still_failed = retry_function(  # Run caller-provided retry logic with the semaphore constraint
             failed_items, connection_semaphore
         )
@@ -288,13 +290,13 @@ class ConnectionPoolExecutor:  # Class-body seam for the connection-pool-managed
     ) -> tuple[list[Any], list[Any]]:
         """Emit final pool-run tally logs and return the (successful, failed) tuple."""
         # WHY: extracted so execute() drops from 39 lines to <25 per STRUCT-LENGTH.
-        logging.info(  # Log final success/failure tally for the whole pool run
+        logger.info(  # Log final success/failure tally for the whole pool run
             "! Processed %s %s successfully, %s failed",
             len(successful_results),
             batch_description,
             len(failed_items),
         )
-        logging.debug(  # AFTER: pool run finished. Log final counts
+        logger.debug(  # AFTER: pool run finished. Log final counts
             "[POOL-EXECUTE] Pool execution finished: %s successful, %s failed",
             len(successful_results),
             len(failed_items),
@@ -309,11 +311,11 @@ class ConnectionPoolExecutor:  # Class-body seam for the connection-pool-managed
         retry_function: Any | None = None,
     ) -> tuple[list[Any], list[Any]]:
         """Execute work_items via pool-managed threading with semaphore limits, batching, retry, and progress."""
-        logging.info(  # BEFORE: announce pool run entry with item count
+        logger.info(  # BEFORE: announce pool run entry with item count
             "[POOL-EXECUTE] Starting pool execution: %s items (%s)", len(work_items), batch_description
         )
         if not work_items:  # Empty work list is a valid fast-exit condition
-            logging.info("* No %s to process.", batch_description)  # Tell caller why nothing ran
+            logger.info("* No %s to process.", batch_description)  # Tell caller why nothing ran
             return [], []  # Return empty results without configuring a thread pool
         batch_config, batch_size, total_batches, threading_mode = ConnectionPoolExecutor._pool_prepare_execution(
             work_items, batch_description, worker_function

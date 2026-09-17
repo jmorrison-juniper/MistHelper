@@ -8,6 +8,8 @@ import os  # Filesystem path composition and directory creation.
 from datetime import UTC, datetime  # Timestamp source for filename and payload metadata.
 from typing import Any  # Generic typing for opaque API result values.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 DEBUG_DIR = os.path.join("data", "tui_debug_results")  # Where debug artifacts land
 _SECRET_TOKENS = ("pass", "token", "key", "secret")  # Substrings flagging secret-like keys
 
@@ -21,13 +23,13 @@ class DebugResultSaver:  # Owns the debug artifact write path for one API result
 
     def save(self, func_name: str, raw_result: Any, parsed_data: Any) -> None:  # Public entry point.
         """Persist the debug artifact for one API call. Logs on failure only."""
-        logging.info("TUI: saving debug artifact for %s", func_name)  # Action log before write
+        logger.info("TUI: saving debug artifact for %s", func_name)  # Action log before write
         try:
             filepath = self._build_filepath(func_name)  # Compose artifact path under DEBUG_DIR
             payload = self._build_payload(func_name, raw_result, parsed_data)  # Compose JSON body
             with open(filepath, "w", encoding="utf-8") as handle:  # Open + dump in one transaction
                 json.dump(payload, handle, indent=2, default=str)  # Persist artifact as pretty JSON.
-            logging.debug("TUI_DEBUG: Raw result saved to %s", filepath)  # Action log after write
+            logger.debug("TUI_DEBUG: Raw result saved to %s", filepath)  # Action log after write
         except Exception as error:  # Never let debug saving raise
             logging.exception("TUI_DEBUG: Failed to save debug result: %s", error)  # Swallow + log.
 

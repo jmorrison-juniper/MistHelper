@@ -392,7 +392,7 @@ class _MapsWizard:  # WHY: wrapper class hosting extracted wizard flow methods.
             return  # WHY: nothing to scale.
         scaled_nodes = self._wizard_scale_path_nodes(nodes, factors.x_factor, factors.y_factor)  # WHY: reuse scaler.
         map_update[path_key] = {"nodes": scaled_nodes}  # WHY: mirror Mist's nested shape.
-        logging.debug("Scaled %d %s nodes", len(scaled_nodes), path_key)  # WHY: trace scaling counts.
+        logger.debug("Scaled %d %s nodes", len(scaled_nodes), path_key)  # WHY: trace scaling counts.
 
     def _wizard_scale_devices(
         self, site_id: str, devices: list[Any], scale_x: float, scale_y: float, errors: list[Any]
@@ -415,7 +415,7 @@ class _MapsWizard:  # WHY: wrapper class hosting extracted wizard flow methods.
             },
         )
         if resp.status_code != HTTP_OK:  # WHY: non-OK counts as failure for the summary.
-            logging.warning("Device update failed for %s: HTTP %d", record.get("id"), resp.status_code)
+            logger.warning("Device update failed for %s: HTTP %d", record.get("id"), resp.status_code)
             return False  # WHY: increment failed counter in shared loop.
         return True  # WHY: increment updated counter in shared loop.
 
@@ -440,7 +440,7 @@ class _MapsWizard:  # WHY: wrapper class hosting extracted wizard flow methods.
             self.apisession, site_id=params.site_id, zone_id=record.get("id"), body={"vertices": scaled_vertices}
         )
         if resp.status_code != HTTP_OK:  # WHY: non-OK counts as failure for the summary.
-            logging.warning("Zone update failed for %s: HTTP %d", record.get("id"), resp.status_code)
+            logger.warning("Zone update failed for %s: HTTP %d", record.get("id"), resp.status_code)
             return False  # WHY: increment failed counter.
         return True  # WHY: increment updated counter.
 
@@ -595,17 +595,17 @@ class _MapsWizard:  # WHY: wrapper class hosting extracted wizard flow methods.
             new_dims,
             new_factors,
         )
-        logging.info(  # WHY: structured completion log for post-run debugging.
+        logger.info(  # WHY: structured completion log for post-run debugging.
             "wizard completed for %s: mode=%s errors=%d", stage.map_id, new_factors.mode, len(bundle.errors)
         )
 
     def intelligent_map_replacement_wizard(self) -> None:
         """Intelligent Map Replacement Wizard entry point."""
-        logging.info("intelligent_map_replacement_wizard initiated")  # WHY: trace wizard start.
+        logger.info("intelligent_map_replacement_wizard initiated")  # WHY: trace wizard start.
         self._print_wizard_banner()  # WHY: uniform banner across every wizard invocation.
         site_id, site_name = self.get_current_site()  # WHY: MapsManager exposes the active site tuple.
         if not site_id:  # WHY: no site == nothing to do.
-            logging.warning("Map replacement wizard aborted: No site selected")  # WHY: trace abort reason.
+            logger.warning("Map replacement wizard aborted: No site selected")  # WHY: trace abort reason.
             return  # WHY: caller may still show the menu again.
         self._run_wizard_guarded(site_id, site_name)  # WHY: wrap _wizard_run in the shared error guard.
 
@@ -637,7 +637,7 @@ class _MapsWizard:  # WHY: wrapper class hosting extracted wizard flow methods.
         self._print_step_header(1, "Select Map to Replace")  # WHY: uniform step banner.
         map_id = self._select_map_from_site(site_id, site_name)  # WHY: MapsManager helper prompts the user.
         if not map_id:  # WHY: no map == abort.
-            logging.info("Map replacement wizard aborted: No map selected")  # WHY: trace abort.
+            logger.info("Map replacement wizard aborted: No map selected")  # WHY: trace abort.
             return None  # WHY: explicit None keeps return type strict.
         return str(map_id)  # WHY: cast Any→str so signature stays str|None strictly.
 

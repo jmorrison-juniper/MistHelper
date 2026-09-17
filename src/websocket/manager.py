@@ -50,7 +50,7 @@ def log_ws_error(error_message: str, debug_mode: bool) -> None:
     """Print and log a WebSocket operation error with optional debug traceback."""
     # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
     logger.error("! %s", error_message)  # WHY: User-visible error banner via logger.
-    logging.error(error_message)  # WHY: Persist error to configured logging sinks.
+    logger.error(error_message)  # WHY: Persist error to configured logging sinks.
     if debug_mode:  # WHY: Only emit stack trace when the operator asked for detail.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.debug("[DEBUG] Exception details:")  # WHY: Marker line preceding the traceback dump.

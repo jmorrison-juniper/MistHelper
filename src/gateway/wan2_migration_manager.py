@@ -11,6 +11,9 @@ from typing import Any  # WHY: opaque types for injected utility modules.
 
 from tqdm import tqdm  # WHY: progress bar over per-site update loop.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
+
 apisession: Any = None  # WHY: Mist API session slot populated at wiring time.
 ConfigUtils: Any = None  # WHY: config helpers (org id + stop-signal check).
 CacheUtils: Any = None  # WHY: CSV cache generator for exported data.
@@ -65,7 +68,7 @@ class WAN2MigrationDependencies:  # WHY: frozen bundle avoids 10-arg configure s
 
 def configure_wan2_migration_dependencies(dependencies: WAN2MigrationDependencies) -> None:  # WHY: wire slots.
     """Configure runtime dependencies from MistHelper orchestration layer."""
-    logging.info("Wiring WAN2 migration dependencies (prefix=%r)", dependencies.site_exclude_prefix)  # WHY: log entry.
+    logger.info("Wiring WAN2 migration dependencies (prefix=%r)", dependencies.site_exclude_prefix)  # WHY: log entry.
     globals().update(  # WHY: bulk-assign module slots without listing 10 explicit globals.
         {
             "apisession": dependencies.apisession,  # WHY: expose API session at module scope.
@@ -80,7 +83,7 @@ def configure_wan2_migration_dependencies(dependencies: WAN2MigrationDependencie
             "MIST_SITE_EXCLUDE_PREFIX": dependencies.site_exclude_prefix,  # WHY: expose exclude prefix.
         }
     )
-    logging.debug("WAN2 migration dependencies wired successfully")  # WHY: exit-log for observability.
+    logger.debug("WAN2 migration dependencies wired successfully")  # WHY: exit-log for observability.
 
 
 def _is_meaningful_override_value(raw: str) -> bool:  # WHY: filter null/blank overrides.
@@ -182,7 +185,7 @@ class WAN2MigrationManager:  # WHY: consolidated Menu 103/104 flow into a single
         print("  This operation will set the 'wan2_interface' site variable to 'ge-0/0/1'")  # WHY: describe action.
         print("  across selected sites, preparing them for template-based WAN migration.")  # WHY: describe scope.
         print("=" * 70)  # WHY: banner closing divider.
-        logging.info("Menu #149: Set WAN2 Interface Site Variable operation started")  # WHY: audit-log entry.
+        logger.info("Menu #149: Set WAN2 Interface Site Variable operation started")  # WHY: audit-log entry.
 
     def _load_required_data(self) -> bool:
         """Load site and gateway configuration data. Returns True on success."""
@@ -199,17 +202,17 @@ class WAN2MigrationManager:  # WHY: consolidated Menu 103/104 flow into a single
             self.sites = list(csv.DictReader(file_handle))  # WHY: hydrate self.sites for downstream selectors.
         if not self.sites:  # WHY: empty cache aborts the flow.
             print(" No sites found in organization.")  # WHY: operator feedback.
-            logging.warning("No sites available for WAN2 variable assignment")  # WHY: log warning.
+            logger.warning("No sites available for WAN2 variable assignment")  # WHY: log warning.
             return False
         return True  # WHY: signal success to caller.
 
     def _get_site_selection(self) -> list[dict[str, Any]]:
         """Prompt user for site selection. Returns selected sites or empty list."""
-        logging.info("Entering _get_site_selection: %s sites available", len(self.sites))  # WHY: entry log.
+        logger.info("Entering _get_site_selection: %s sites available", len(self.sites))  # WHY: entry log.
         self._print_selection_menu()  # WHY: display selection options.
         choice = self._prompt_selection_method()  # WHY: capture operator choice.
         result = self._dispatch_selection_choice(choice)  # WHY: convert choice into a site list.
-        logging.info("Exiting _get_site_selection: %s sites returned", len(result))  # WHY: exit log.
+        logger.info("Exiting _get_site_selection: %s sites returned", len(result))  # WHY: exit log.
         return result
 
     def _print_selection_menu(self) -> None:
@@ -234,7 +237,7 @@ class WAN2MigrationManager:  # WHY: consolidated Menu 103/104 flow into a single
         if choice == "2":  # WHY: whole-org selection path.
             return self.sites.copy()  # WHY: defensive copy to avoid mutation.
         print(" Operation cancelled.")  # WHY: any other input cancels.
-        logging.info("Menu #149 cancelled by user")  # WHY: audit-log cancellation.
+        logger.info("Menu #149 cancelled by user")  # WHY: audit-log cancellation.
         return []  # WHY: empty list signals cancellation.
 
     def _select_individual_sites(self) -> list[dict[str, Any]]:
@@ -285,20 +288,20 @@ class WAN2MigrationManager:  # WHY: consolidated Menu 103/104 flow into a single
             print(
                 f"\n  !? SECURITY: Excluded {removed} '{MIST_SITE_EXCLUDE_PREFIX}*' sites from configuration"
             )  # WHY: msg.
-            logging.info(
+            logger.info(
                 "Menu #149: Excluded %s sites matching prefix '%s'", removed, MIST_SITE_EXCLUDE_PREFIX
             )  # WHY: log.
         if filtered_count == 0:  # WHY: everything dropped -> abort message.
             print(
                 f" No sites remaining after filtering '{MIST_SITE_EXCLUDE_PREFIX}*' sites."
             )  # WHY: operator feedback.
-            logging.warning(
+            logger.warning(
                 "Menu #149: all selected sites matched exclude prefix '%s'", MIST_SITE_EXCLUDE_PREFIX
             )  # WHY: log.
 
     def _confirm_site_variable_operation(self, site_count: int) -> bool:
         """Confirm the site variable operation with user."""
-        logging.info("Entering _confirm_site_variable_operation: %s sites pending", site_count)  # WHY: entry log.
+        logger.info("Entering _confirm_site_variable_operation: %s sites pending", site_count)  # WHY: entry log.
         print(f"\n  Will configure {site_count} sites with wan2_interface variable.")  # WHY: operator summary.
         confirm = self._prompt_operator_confirmation()  # WHY: capture safe_input value.
         confirmed = confirm in CONFIRM_YES_TOKENS  # WHY: normalise into boolean gate.
@@ -321,11 +324,11 @@ class WAN2MigrationManager:  # WHY: consolidated Menu 103/104 flow into a single
     def _log_confirmation_result(confirmed: bool, site_count: int) -> None:
         """Emit both operator print and audit log lines for confirmation outcome."""
         if confirmed:  # WHY: log confirmation branch.
-            logging.info("Exiting _confirm_site_variable_operation: confirmed for %s sites", site_count)  # WHY: audit.
+            logger.info("Exiting _confirm_site_variable_operation: confirmed for %s sites", site_count)  # WHY: audit.
             return
         print(" Operation cancelled.")  # WHY: cancel branch operator feedback.
-        logging.info("Menu #149 cancelled by user at confirmation prompt")  # WHY: audit-log.
-        logging.info("Exiting _confirm_site_variable_operation: result=cancelled")  # WHY: audit-log.
+        logger.info("Menu #149 cancelled by user at confirmation prompt")  # WHY: audit-log.
+        logger.info("Exiting _confirm_site_variable_operation: result=cancelled")  # WHY: audit-log.
 
     def _build_override_detection_map(self) -> None:
         """Build map of sites with WAN2 port overrides for analysis."""
@@ -354,7 +357,7 @@ class WAN2MigrationManager:  # WHY: consolidated Menu 103/104 flow into a single
             template_id = site.get("gatewaytemplate_id", "").strip()  # WHY: normalise template id.
             if site_id and template_id:  # WHY: only map when both fields present.
                 self.site_to_template_id[site_id] = template_id  # WHY: record mapping.
-        logging.info("Mapped %s sites to gateway templates", len(self.site_to_template_id))  # WHY: audit.
+        logger.info("Mapped %s sites to gateway templates", len(self.site_to_template_id))  # WHY: audit.
 
     def _extract_template_port_configs(self) -> None:
         """Extract IP configuration type from templates for ge-0/0/1 port."""
@@ -363,7 +366,7 @@ class WAN2MigrationManager:  # WHY: consolidated Menu 103/104 flow into a single
             if not template_id:  # WHY: skip malformed rows without ids.
                 continue
             self.template_port_configs[template_id] = self._parse_template_ip_config(template_row)  # WHY: cache config.
-        logging.info("Loaded port IP configs for %s templates", len(self.template_port_configs))  # WHY: audit.
+        logger.info("Loaded port IP configs for %s templates", len(self.template_port_configs))  # WHY: audit.
 
     @staticmethod
     def _parse_template_ip_config(template_row: dict[str, Any]) -> dict[str, str]:
@@ -596,7 +599,7 @@ class WAN2MigrationManager:  # WHY: consolidated Menu 103/104 flow into a single
     @staticmethod
     def _fetch_current_site_settings(site_id: str, site_name: str) -> dict[str, Any]:
         """Fetch and normalise the current site settings dictionary."""
-        logging.debug("Fetching current settings for site %s (%s)", site_name, site_id)  # WHY: debug log.
+        logger.debug("Fetching current settings for site %s (%s)", site_name, site_id)  # WHY: debug log.
         settings_resp = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id)  # WHY: pull from API.
         current_settings = settings_resp.data if hasattr(settings_resp, "data") else {}  # WHY: guard against SDK shape.
         return current_settings if isinstance(current_settings, dict) else {}  # WHY: normalise to dict.
@@ -618,18 +621,18 @@ class WAN2MigrationManager:  # WHY: consolidated Menu 103/104 flow into a single
         result: dict[str, Any],
     ) -> None:
         """Push updated site settings to the API and record outcome in result."""
-        logging.debug("Updating site settings for %s with wan2_interface variable", site_name)  # WHY: pre-call log.
+        logger.debug("Updating site settings for %s with wan2_interface variable", site_name)  # WHY: pre-call log.
         update_resp = mistapi.api.v1.sites.setting.updateSiteSettings(
             apisession, site_id, body=current_settings
         )  # WHY: PUT.
         if update_resp.status_code == HTTP_OK:  # WHY: success branch.
             result["variable_set"] = True  # WHY: mark applied flag.
             result["status"] = "SUCCESS"  # WHY: expose success token.
-            logging.info("Successfully set wan2_interface variable for site %s", site_name)  # WHY: audit log.
+            logger.info("Successfully set wan2_interface variable for site %s", site_name)  # WHY: audit log.
             return
         result["status"] = "FAILED"  # WHY: expose failure token.
         result["error"] = f"API returned status {update_resp.status_code}"  # WHY: capture status text.
-        logging.error("Failed to set variable for site %s: status %s", site_name, update_resp.status_code)  # WHY: log.
+        logger.error("Failed to set variable for site %s: status %s", site_name, update_resp.status_code)  # WHY: log.
 
     def _generate_site_variable_report(self, results: list[dict[str, Any]]) -> None:
         """Generate and save the site variable report."""
@@ -704,7 +707,7 @@ class WAN2MigrationManager:  # WHY: consolidated Menu 103/104 flow into a single
 
     def _compute_severity_counts(self, results: list[dict[str, Any]]) -> dict[str, int]:
         """Compute per-severity site counts from per-site result records."""
-        logging.debug("Computing severity counts from %d result records", len(results))  # WHY: pre-scan debug log.
+        logger.debug("Computing severity counts from %d result records", len(results))  # WHY: pre-scan debug log.
         success_count = sum(1 for r in results if r["variable_set"])  # WHY: sites where variable was set.
         severity = self._count_override_severities(results)  # WHY: single-pass override tallies.
         return {"success": success_count, **severity}  # WHY: merge success into severity dict.
@@ -730,8 +733,8 @@ class WAN2MigrationManager:  # WHY: consolidated Menu 103/104 flow into a single
         self._print_severity_warnings(
             counts["critical"], counts["warning"], counts["info"]
         )  # WHY: contextual warnings.
-        logging.info("Menu #149 complete: %s/%s sites configured", counts["success"], len(results))  # WHY: audit-log.
-        logging.info(  # WHY: audit-log severity breakdown.
+        logger.info("Menu #149 complete: %s/%s sites configured", counts["success"], len(results))  # WHY: audit-log.
+        logger.info(  # WHY: audit-log severity breakdown.
             "Override breakdown - CRITICAL: %s, WARNING: %s, INFO: %s",
             counts["critical"],
             counts["warning"],

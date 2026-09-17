@@ -16,6 +16,8 @@ from prettytable import PrettyTable  # Terminal table formatting (project depend
 from src.site.address_audit.models import AuditResult  # Per-row audit record.
 from src.utils.input_utils import InputUtils  # EOF-safe operator prompts.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 _COLUMN_NAMES = [  # The seven table columns, in display order.
     "Site Name",  # Mist site name (or - when unmatched).
     "Current Mist Address",  # Address currently on the Mist site record.
@@ -33,7 +35,7 @@ class ComparisonTableRenderer:
 
     def render(self, results: list[AuditResult]) -> str:
         """Build, print, and return the comparison table for ``results``."""
-        logging.info("Rendering comparison table for %d row(s)", len(results))  # Action-log start.
+        logger.info("Rendering comparison table for %d row(s)", len(results))  # Action-log start.
         table = PrettyTable()  # Fresh table instance.
         table.field_names = _COLUMN_NAMES  # Apply the seven column headers.
         table.align = "l"  # Left-align all cells for readability.
@@ -41,8 +43,8 @@ class ComparisonTableRenderer:
             table.add_row(self._build_row(result))  # Append the (truncated) row cells.
         rendered = table.get_string()  # Materialize the table as a string.
         # WHY: preserve operator-facing table render. Route through logger for capture/redirection.
-        logging.info("%s", rendered)
-        logging.debug("Comparison table rendered (%d rows)", len(results))  # Action-log completion.
+        logger.info("%s", rendered)
+        logger.debug("Comparison table rendered (%d rows)", len(results))  # Action-log completion.
         return rendered  # Return for tests/callers.
 
     def _build_row(self, result: AuditResult) -> list[str]:
@@ -75,21 +77,21 @@ class ComparisonTableRenderer:
 
     def prompt_post_table(self, results: list[AuditResult]) -> str:
         """Print a one-line summary, then loop until the operator picks save/quit."""
-        logging.info("Prompting operator for post-table action")  # Action-log start.
+        logger.info("Prompting operator for post-table action")  # Action-log start.
         # WHY: preserve operator-facing summary + menu. Route through logger for capture/redirection.
-        logging.info("%s", self._summary_line(results))
-        logging.info("\n[1] Save comparison as CSV to data/ for review")
-        logging.info("[q] Quit without saving")
+        logger.info("%s", self._summary_line(results))
+        logger.info("\n[1] Save comparison as CSV to data/ for review")
+        logger.info("[q] Quit without saving")
         while True:  # Re-prompt until a valid choice is entered.
             choice = InputUtils.safe_input("Choice: ", context="address_audit_post_table").strip().lower()
             if choice == "1":  # Operator chose to save.
-                logging.debug("Operator selected save")  # Trace the choice.
+                logger.debug("Operator selected save")  # Trace the choice.
                 return "save"  # Engine will invoke the reporter.
             if choice == "q":  # Operator chose to quit.
-                logging.debug("Operator selected quit")  # Trace the choice.
+                logger.debug("Operator selected quit")  # Trace the choice.
                 return "quit"  # Engine exits without saving.
             # WHY: preserve invalid-choice feedback verbatim. Route through logger for capture/redirection.
-            logging.warning("Invalid choice. Enter 1 to save or q to quit.")
+            logger.warning("Invalid choice. Enter 1 to save or q to quit.")
 
     def _summary_line(self, results: list[AuditResult]) -> str:
         """Build the 'N sites processed: ...' per-state summary string."""

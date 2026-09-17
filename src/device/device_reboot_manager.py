@@ -31,6 +31,8 @@ from src.export.org_inventory_exporter import (
     OrgInventoryExporter,  # WHY: 1015 T-06 canonical import (eliminates mh.OrgInventoryExporter).
 )
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class DeviceRebootManager:  # Device reboot manager.
     """Manage device reboot operations with comprehensive safety checks and audit logging.
@@ -49,7 +51,7 @@ class DeviceRebootManager:  # Device reboot manager.
 
         Logs results to GatewayTemplateRebootResults.CSV.
         """
-        logging.info("[Menu 91] Starting DeviceRebootManager.by_gateway_template_list")  # Log start.
+        logger.info("[Menu 91] Starting DeviceRebootManager.by_gateway_template_list")  # Log start.
 
         # Step 1: Validate reboot list file exists
         reboot_targets = DeviceRebootManager._load_and_validate_reboot_targets()  # Load reboot targets.
@@ -90,7 +92,7 @@ class DeviceRebootManager:  # Device reboot manager.
     def _handle_missing_reboot_file(reboot_list_path: str) -> None:  # Handle the missing file.
         """Handle missing reboot list file - offer to create template."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.error(" GatewayTemplateRebootList.CSV not found.")  # Log the missing file.
+        logger.error(" GatewayTemplateRebootList.CSV not found.")  # Log the missing file.
         print(" GatewayTemplateRebootList.CSV not found.")  # Tell the user.
         print(f"   Please create this file at: {reboot_list_path}")  # Show the path.
         print("   This file should contain template names to reboot, one per line.")  # Explain the format.
@@ -130,14 +132,14 @@ class DeviceRebootManager:  # Device reboot manager.
         try:
             gateway_templates_path = mh.FilePathUtils.get_csv_path("OrgGatewayTemplates.csv")  # Templates path.
             template_name_to_id = DeviceRebootManager._read_template_name_id_csv(gateway_templates_path)  # Parse rows.
-            logging.info("Loaded %s gateway templates", len(template_name_to_id))  # Log the count.
+            logger.info("Loaded %s gateway templates", len(template_name_to_id))  # Log the count.
         except Exception as error:  # Load failed.
             logging.error("! Failed to load gateway templates: %s", error)  # Log the error.
             print(f"! Failed to load gateway templates: {error}")  # Tell the user.
             return None  # Abort.
 
         if not template_name_to_id:  # No templates.
-            logging.warning(" No gateway templates found in OrgGatewayTemplates.csv")  # Warn none.
+            logger.warning(" No gateway templates found in OrgGatewayTemplates.csv")  # Warn none.
             print(" No gateway templates found in OrgGatewayTemplates.csv")  # Tell the user.
             return None  # Abort.
 
@@ -163,7 +165,7 @@ class DeviceRebootManager:  # Device reboot manager.
         try:
             reboot_list_path = mh.FilePathUtils.get_csv_path("GatewayTemplateRebootList.CSV")  # Reboot list path.
             reboot_template_names = DeviceRebootManager._read_reboot_names_csv(reboot_list_path)  # Parse rows.
-            logging.info("Loaded %s template names from reboot list", len(reboot_template_names))  # Log the count.
+            logger.info("Loaded %s template names from reboot list", len(reboot_template_names))  # Log the count.
         except Exception as error:  # Load failed.
             logging.error("! Failed to load reboot template list: %s", error)  # Log the error.
             print(f"! Failed to load reboot template list: {error}")  # Tell the user.
@@ -188,13 +190,13 @@ class DeviceRebootManager:  # Device reboot manager.
         for name in names:  # Walk names.
             if name in mapping:  # Name found.
                 reboot_template_ids.add(mapping[name])  # Collect the id.
-                logging.info("! Found template '%s' with ID '%s'", name, mapping[name])  # Log the match.
+                logger.info("! Found template '%s' with ID '%s'", name, mapping[name])  # Log the match.
             else:
-                logging.warning("! Template '%s' not found in OrgGatewayTemplates.csv", name)  # Warn not found.
+                logger.warning("! Template '%s' not found in OrgGatewayTemplates.csv", name)  # Warn not found.
                 print(f"! Template '{name}' not found in available templates")  # Tell the user.
 
         if not reboot_template_ids:  # No matches.
-            logging.error(" No matching template IDs found for reboot")  # Log none.
+            logger.error(" No matching template IDs found for reboot")  # Log none.
             print(" No matching template IDs found for reboot")  # Tell the user.
             print("Available templates:")  # List available.
             for name, tid in mapping.items():  # Walk templates.
@@ -232,7 +234,7 @@ class DeviceRebootManager:  # Device reboot manager.
                         continue  # Skip non-matching rows.
                     target = DeviceRebootManager._build_gateway_reboot_target(row, site_to_template[device_site_id])
                     reboot_targets.append(target)  # Collect the target.
-                    logging.info("Found gateway '%s' at site '%s'", target["device_name"], target["site_name"])
+                    logger.info("Found gateway '%s' at site '%s'", target["device_name"], target["site_name"])
         except Exception as error:  # Load failed.
             logging.error("! Failed to load gateway configs: %s", error)  # Log the error.
             print(f"! Failed to load gateway configs: {error}")  # Tell the user.
@@ -245,17 +247,17 @@ class DeviceRebootManager:  # Device reboot manager.
         template_id_to_name = {tid: name for name, tid in mapping.items()}  # Invert the map.
         site_to_template = DeviceRebootManager._find_sites_using_templates(template_ids, template_id_to_name)
         if not site_to_template:  # No sites.
-            logging.warning(" No sites found using the specified gateway templates")  # Warn none.
+            logger.warning(" No sites found using the specified gateway templates")  # Warn none.
             print(" No sites found using the specified gateway templates")  # Tell the user.
             return None  # Abort.
         reboot_targets = DeviceRebootManager._scan_csv_for_gateway_targets(site_to_template)  # Collect targets.
         if reboot_targets is None:  # Hard error in CSV load.
             return None  # Propagate abort.
         if not reboot_targets:
-            logging.warning(" No gateway devices found in sites using the specified templates")
+            logger.warning(" No gateway devices found in sites using the specified templates")
             print(" No gateway devices found in sites using the specified templates")
             return None
-        logging.info("Found %s gateway devices to reboot", len(reboot_targets))
+        logger.info("Found %s gateway devices to reboot", len(reboot_targets))
         return reboot_targets
 
     @staticmethod
@@ -276,7 +278,7 @@ class DeviceRebootManager:  # Device reboot manager.
                         site_name = row.get("name", "").strip()  # The site's display name
                         template_name = id_to_name.get(gateway_template_id, "Unknown")  # Resolve the template's name
                         site_to_template[site_id] = (gateway_template_id, template_name, site_name)  # Record the match
-                        logging.info("Found site '%s' using template '%s'", site_name, template_name)  # Log the match
+                        logger.info("Found site '%s' using template '%s'", site_name, template_name)  # Log the match
         except Exception as error:  # Reading or parsing the site list failed
             logging.error("! Failed to load site list: %s", error)  # Log the failure detail
             print(f"! Failed to load site list: {error}")  # Inform the user
@@ -315,10 +317,10 @@ class DeviceRebootManager:  # Device reboot manager.
             user_input = mh.InputUtils.safe_input(">>> ", context="gateway_reboot_confirmation").strip()
             if user_input != "REBOOT":
                 print(" Reboot operation cancelled.")
-                logging.info("Gateway reboot cancelled by user")
+                logger.info("Gateway reboot cancelled by user")
                 return False
             print(" User confirmed reboot operation. Proceeding...")
-            logging.info("LIABILITY WAIVER ACCEPTED: User confirmed reboot for %s devices", target_count)
+            logger.info("LIABILITY WAIVER ACCEPTED: User confirmed reboot for %s devices", target_count)
             return True
         except (KeyboardInterrupt, EOFError):
             print("\n Reboot operation cancelled.")
@@ -358,7 +360,7 @@ class DeviceRebootManager:  # Device reboot manager.
         """Send one restartSiteDevice call and return the status string (or 'ERROR: ...')."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
-            logging.info("Rebooting device '%s'", device["device_name"])  # Log before the call.
+            logger.info("Rebooting device '%s'", device["device_name"])  # Log before the call.
             print(f"! Rebooting {device['device_name']} at {device['site_name']}...")
             response = mh.mistapi.api.v1.sites.devices.restartSiteDevice(  # Send the reboot.
                 mh.apisession,
@@ -368,7 +370,7 @@ class DeviceRebootManager:  # Device reboot manager.
             )
             status = DeviceRebootManager._parse_reboot_response(response)  # Parse the result.
             print("   Reboot command sent successfully")
-            logging.info("! Reboot sent for '%s': %s", device["device_name"], status)  # Log after the call.
+            logger.info("! Reboot sent for '%s': %s", device["device_name"], status)  # Log after the call.
             return status  # Return the parsed status.
         except RuntimeError as error:  # API runtime failure.
             print(f"   Failed to send reboot: {error}")
@@ -433,7 +435,7 @@ class DeviceRebootManager:  # Device reboot manager.
             print("\n  Operation completed!")
             print(f"   Reboot commands sent to {len(results)} devices")
             print("   Results logged to GatewayTemplateRebootResults.CSV")
-            logging.info("! Reboot results exported (%s entries)", len(results))
+            logger.info("! Reboot results exported (%s entries)", len(results))
         except Exception as error:
             logging.error("! Failed to write results to CSV: %s", error)
             print(f"! Failed to write results to CSV: {error}")

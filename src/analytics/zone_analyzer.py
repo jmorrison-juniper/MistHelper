@@ -13,6 +13,8 @@ from collections.abc import Callable  # WHY: PEP 585 Callable type alias source
 from datetime import UTC, datetime  # WHY: timestamp export filenames
 from typing import Any, TypeGuard  # WHY: heterogeneous dict payloads + narrow bundle checks
 
+logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
+
 # ---------------------------------------------------------------------------
 # Type aliases for injected dependencies
 # ---------------------------------------------------------------------------
@@ -68,7 +70,7 @@ class ZoneConfigurationAnalyzer:
     ) -> None:
         """Run zone and engagement/occupancy configuration analysis across all sites."""
         _print_intro_banner()  # WHY: user-visible header for the analyzer
-        logging.info("Starting zone and engagement configuration analysis across all sites...")  # WHY: audit trail
+        logger.info("Starting zone and engagement configuration analysis across all sites...")  # WHY: audit trail
         current_org_id = get_org_id_fn()  # WHY: resolve active org id via injected callback
         if not _validate_org_id(current_org_id):  # WHY: cannot analyze without an org selection
             return  # WHY: precondition failed. Abort
@@ -79,7 +81,7 @@ class ZoneConfigurationAnalyzer:
             check_stop_fn=check_stop_fn,
         )
         ZoneConfigurationAnalyzer._run_and_export(collected, save_data_fn)  # WHY: pattern analysis + CSV output
-        logging.debug("analyze completed successfully")  # WHY: after-action trace for observability
+        logger.debug("analyze completed successfully")  # WHY: after-action trace for observability
 
     @staticmethod
     def _run_and_export(
@@ -90,7 +92,7 @@ class ZoneConfigurationAnalyzer:
         site_zones, site_settings = collected  # WHY: unpack the two independent accumulators
         if not site_zones and not site_settings:  # WHY: bail if the API returned nothing usable
             print("! No data collected. Please verify sites exist.")  # WHY: guide the user
-            logging.debug("analyze aborted: empty zone and settings collections")  # WHY: after-action trace
+            logger.debug("analyze aborted: empty zone and settings collections")  # WHY: after-action trace
             return  # WHY: no data means nothing to analyze or export
         combined = _run_all_analyses(site_zones, site_settings)  # WHY: compute the three pattern analyses
         ZoneConfigurationAnalyzer._display_results(combined)  # WHY: render results to console
@@ -122,7 +124,7 @@ class ZoneConfigurationAnalyzer:
         print(f"! Scanning engagement/occupancy settings for {len(sites)} sites...")  # WHY: progress banner
         site_settings = _scan_site_settings(apisession, mistapi, sites, check_stop_fn)  # WHY: loop extracted
         print(f"! Collected settings from {len(site_settings)} sites.")  # WHY: completion banner
-        logging.debug("_collect_all_site_settings collected %d site records", len(site_settings))  # WHY: trace
+        logger.debug("_collect_all_site_settings collected %d site records", len(site_settings))  # WHY: trace
         return site_settings  # WHY: hand collected settings back to caller
 
     @staticmethod
@@ -143,7 +145,7 @@ class ZoneConfigurationAnalyzer:
         counter = _ZoneCounter()  # WHY: track cumulative zone count for the summary print
         site_zones = _scan_site_zones(apisession, mistapi, sites, check_stop_fn, counter)  # WHY: loop extracted
         print(f"! Collected {counter.total} zones from {len(site_zones)} sites.")  # WHY: completion banner
-        logging.debug("_collect_all_site_zones collected %d sites, %d zones", len(site_zones), counter.total)  # WHY
+        logger.debug("_collect_all_site_zones collected %d sites, %d zones", len(site_zones), counter.total)  # WHY
         return site_zones  # WHY: hand collected zones back to caller
 
     # ------------------------------------------------------------------
@@ -154,7 +156,7 @@ class ZoneConfigurationAnalyzer:
         site_zones: dict[str, Any],
     ) -> dict[str, Any]:
         """Analyze zone patterns to identify deviations from the norm."""
-        logging.info("Analyzing zone patterns...")  # WHY: audit trail
+        logger.info("Analyzing zone patterns...")  # WHY: audit trail
         zone_frequency, all_zone_names, zone_counts = _accumulate_zone_frequency(site_zones)  # WHY: reduce inputs
         total_sites = len(site_zones)  # WHY: denominator for percent calculations
         sites_with_zones = sum(1 for c in zone_counts if c > 0)  # WHY: only count sites that reported any zone
@@ -170,7 +172,7 @@ class ZoneConfigurationAnalyzer:
             "sites_with_zones": sites_with_zones,  # WHY: denominator for unique lookup
         }
         parts = _build_zone_pattern_parts(ctx)  # WHY: extracted deviations/missing/unique lookups keep this short
-        logging.debug("_analyze_zone_patterns produced %d common", len(common_zones))  # WHY: trace pattern volume
+        logger.debug("_analyze_zone_patterns produced %d common", len(common_zones))  # WHY: trace pattern volume
         return _build_zone_analysis_result(parts)  # WHY: bundle parts into caller's expected result shape
 
     @staticmethod
@@ -178,7 +180,7 @@ class ZoneConfigurationAnalyzer:
         site_settings: dict[str, Any],
     ) -> dict[str, Any]:
         """Analyze engagement dwell tag patterns to identify deviations."""
-        logging.info("Analyzing engagement patterns...")  # WHY: audit trail
+        logger.info("Analyzing engagement patterns...")  # WHY: audit trail
         accum = _EngagementAccumulator()  # WHY: encapsulate the four independent accumulator dicts
 
         for site_id, data in site_settings.items():  # WHY: single pass over each site's settings
@@ -188,7 +190,7 @@ class ZoneConfigurationAnalyzer:
         most_common = sorted_configs[0] if sorted_configs else (None, [])  # WHY: guard empty input
         dwell_deviations = _find_dwell_deviations(accum.dwell_tag_configs, most_common)  # WHY: sites off the norm
 
-        logging.debug("_analyze_engagement_patterns produced %d configs", len(accum.dwell_tag_configs))  # WHY: trace
+        logger.debug("_analyze_engagement_patterns produced %d configs", len(accum.dwell_tag_configs))  # WHY: trace
         return {  # WHY: bundled engagement analysis for downstream display/export
             "dwell_tag_configs": accum.dwell_tag_configs,  # WHY: config-key -> site list
             "most_common_config": most_common,  # WHY: (key, sites) of the dominant config
@@ -204,7 +206,7 @@ class ZoneConfigurationAnalyzer:
         site_settings: dict[str, Any],
     ) -> dict[str, Any]:
         """Analyze occupancy settings to identify deviations."""
-        logging.info("Analyzing occupancy patterns...")  # WHY: audit trail
+        logger.info("Analyzing occupancy patterns...")  # WHY: audit trail
         accum = _OccupancyAccumulator()  # WHY: encapsulate the four accumulator fields
 
         for site_id, data in site_settings.items():  # WHY: single pass over each site's settings
@@ -214,7 +216,7 @@ class ZoneConfigurationAnalyzer:
         most_common = sorted_configs[0] if sorted_configs else (None, [])  # WHY: guard empty input
         occ_deviations = _find_occupancy_deviations(accum.occ_configs, most_common)  # WHY: sites off the norm
 
-        logging.debug("_analyze_occupancy_patterns produced %d configs", len(accum.occ_configs))  # WHY: trace
+        logger.debug("_analyze_occupancy_patterns produced %d configs", len(accum.occ_configs))  # WHY: trace
         return {  # WHY: bundled occupancy analysis for downstream display/export
             "occupancy_configs": accum.occ_configs,  # WHY: config-key -> site list
             "most_common_config": most_common,  # WHY: (key, sites) of the dominant config
@@ -304,7 +306,7 @@ class ZoneConfigurationAnalyzer:
         _export_zone_frequency(analyses["zones"], timestamp, save_data_fn)  # WHY: frequency CSV
         _export_dwell_configs(analyses["engagement"], timestamp, save_data_fn)  # WHY: dwell config CSV
         _export_occupancy_configs(analyses["occupancy"], timestamp, save_data_fn)  # WHY: occupancy config CSV
-        logging.info(  # WHY: audit trail with the shared timestamp used across every CSV
+        logger.info(  # WHY: audit trail with the shared timestamp used across every CSV
             "Site configuration analysis complete. Exported CSV files with timestamp %s",
             timestamp,
         )
@@ -398,7 +400,7 @@ def _validate_org_id(current_org_id: str | None) -> bool:
     if current_org_id:  # WHY: any truthy id lets the analyzer proceed
         return True  # WHY: precondition satisfied
     print("! No organization selected. Exiting.")  # WHY: user-friendly abort message
-    logging.debug("analyze aborted: no org id available")  # WHY: after-action trace
+    logger.debug("analyze aborted: no org id available")  # WHY: after-action trace
     return False  # WHY: signal caller to abort
 
 
@@ -457,9 +459,9 @@ def _collect_one_setting(
         response = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id=site_id)  # WHY: fetch settings
         if response.status_code == 200:  # WHY: only trust successful HTTP responses
             site_settings[site_id] = _build_settings_entry(site_name, response.data)  # WHY: store good entry
-            logging.debug("Site %s: settings collected", site_name)  # WHY: after-action trace
+            logger.debug("Site %s: settings collected", site_name)  # WHY: after-action trace
             return  # WHY: successful path complete
-        logging.warning("Failed to fetch settings for %s: HTTP %s", site_name, response.status_code)  # WHY: log fail
+        logger.warning("Failed to fetch settings for %s: HTTP %s", site_name, response.status_code)  # WHY: log fail
     except Exception as error:  # WHY: any exception must be captured so the batch continues
         logging.warning("Error fetching settings for %s: %s", site_name, error)  # WHY: log with context
     site_settings[site_id] = _empty_settings_entry(site_name)  # WHY: placeholder entry for failed site
@@ -506,9 +508,9 @@ def _collect_one_zone(
         if response.status_code == 200:  # WHY: only trust successful HTTP responses
             zones = response.data if isinstance(response.data, list) else []  # WHY: defensive default
             _store_zone_result(site_id, site_name, zones, site_zones, counter)  # WHY: normalize + accumulate
-            logging.debug("Site %s: %d zones", site_name, len(zones))  # WHY: after-action trace
+            logger.debug("Site %s: %d zones", site_name, len(zones))  # WHY: after-action trace
             return  # WHY: successful path complete
-        logging.warning("Failed to fetch zones for %s: HTTP %s", site_name, response.status_code)  # WHY: log fail
+        logger.warning("Failed to fetch zones for %s: HTTP %s", site_name, response.status_code)  # WHY: log fail
     except Exception as error:  # WHY: any exception must be captured so the batch continues
         logging.warning("Error fetching zones for %s: %s", site_name, error)  # WHY: log with context
     site_zones[site_id] = _empty_zone_entry(site_name)  # WHY: placeholder entry for failed site
@@ -551,10 +553,10 @@ def _progress(items: list[Any], desc: str, unit: str) -> Any:
 
 def _fetch_sites_or_warn(all_sites_fn: AllSitesFn, org_id: str, info_msg: str) -> list[dict[str, Any]]:
     """Log ``info_msg``, fetch sites, warn when empty, and return the site list."""
-    logging.info(info_msg)  # WHY: audit trail before hitting the API
+    logger.info(info_msg)  # WHY: audit trail before hitting the API
     sites = all_sites_fn(org_id)  # WHY: pull the site list via injected helper
     if not sites:  # WHY: empty org means no work downstream
-        logging.warning("No sites found in organization.")  # WHY: surface the empty case
+        logger.warning("No sites found in organization.")  # WHY: surface the empty case
     return sites or []  # WHY: normalize to list for caller iteration
 
 
@@ -565,7 +567,7 @@ def _scan_site_settings(
     site_settings: dict[str, Any] = {}  # WHY: accumulator for per-site payloads
     for site in _progress(sites, "Fetching site settings", "site"):  # WHY: iterate with tqdm progress
         if check_stop_fn():  # WHY: honor cooperative cancellation between sites
-            logging.debug("_scan_site_settings stopping on user request")  # WHY: after-action trace
+            logger.debug("_scan_site_settings stopping on user request")  # WHY: after-action trace
             break  # WHY: skip remaining sites when stop was requested
         _collect_one_setting(apisession, mistapi_mod, site, site_settings)  # WHY: delegate per-site fetch
     return site_settings  # WHY: return accumulated settings map
@@ -582,7 +584,7 @@ def _scan_site_zones(
     site_zones: dict[str, Any] = {}  # WHY: accumulator for per-site zone payloads
     for site in _progress(sites, "Scanning sites", "site"):  # WHY: iterate with tqdm progress
         if check_stop_fn():  # WHY: honor cooperative cancellation between sites
-            logging.debug("_scan_site_zones stopping on user request")  # WHY: after-action trace
+            logger.debug("_scan_site_zones stopping on user request")  # WHY: after-action trace
             break  # WHY: skip remaining sites when stop was requested
         _collect_one_zone(apisession, mistapi_mod, site, site_zones, counter)  # WHY: delegate per-site fetch
     return site_zones  # WHY: return accumulated zone map
@@ -1093,7 +1095,7 @@ def _export_summary(
     filename = f"SiteConfigAnalysis_Summary_{timestamp}.csv"  # WHY: canonical timestamped filename
     save_data_fn(rows, filename, api_function_name="site_config_analysis_summary")  # WHY: hand off to writer
     print(f"! Summary exported to {filename}")  # WHY: user-visible confirmation
-    logging.debug("_export_summary wrote %d rows", len(rows))  # WHY: after-action trace
+    logger.debug("_export_summary wrote %d rows", len(rows))  # WHY: after-action trace
 
 
 def _unpack_export_args(args: tuple[Any, ...]) -> tuple[dict[str, dict[str, Any]], str, SaveDataFn]:
@@ -1303,7 +1305,7 @@ def _export_all_zones(
     filename = f"SiteConfigAnalysis_AllZones_{timestamp}.csv"  # WHY: canonical timestamped filename
     save_data_fn(rows, filename, api_function_name="site_config_all_zones")  # WHY: hand off to writer
     print(f"! All zones exported to {filename}")  # WHY: user-visible confirmation
-    logging.debug("_export_all_zones wrote %d rows", len(rows))  # WHY: after-action trace
+    logger.debug("_export_all_zones wrote %d rows", len(rows))  # WHY: after-action trace
 
 
 def _build_all_zone_rows(site_zones: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1346,7 +1348,7 @@ def _export_zone_frequency(
     filename = f"SiteConfigAnalysis_ZoneFrequency_{timestamp}.csv"  # WHY: canonical timestamped filename
     save_data_fn(rows, filename, api_function_name="site_config_zone_frequency")  # WHY: hand off to writer
     print(f"! Zone frequency exported to {filename}")  # WHY: user-visible confirmation
-    logging.debug("_export_zone_frequency wrote %d rows", len(rows))  # WHY: after-action trace
+    logger.debug("_export_zone_frequency wrote %d rows", len(rows))  # WHY: after-action trace
 
 
 def _build_freq_rows(
@@ -1382,7 +1384,7 @@ def _export_dwell_configs(
     filename = f"SiteConfigAnalysis_DwellConfigs_{timestamp}.csv"  # WHY: canonical timestamped filename
     save_data_fn(rows, filename, api_function_name="site_config_dwell_configs")  # WHY: hand off to writer
     print(f"! Dwell configurations exported to {filename}")  # WHY: user-visible confirmation
-    logging.debug("_export_dwell_configs wrote %d rows", len(rows))  # WHY: after-action trace
+    logger.debug("_export_dwell_configs wrote %d rows", len(rows))  # WHY: after-action trace
 
 
 def _build_dwell_config_rows(configs: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
@@ -1418,7 +1420,7 @@ def _export_occupancy_configs(
     filename = f"SiteConfigAnalysis_OccupancyConfigs_{timestamp}.csv"  # WHY: canonical timestamped filename
     save_data_fn(rows, filename, api_function_name="site_config_occupancy_configs")  # WHY: hand off to writer
     print(f"! Occupancy configurations exported to {filename}")  # WHY: user-visible confirmation
-    logging.debug("_export_occupancy_configs wrote %d rows", len(rows))  # WHY: after-action trace
+    logger.debug("_export_occupancy_configs wrote %d rows", len(rows))  # WHY: after-action trace
 
 
 def _build_occupancy_config_rows(configs: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:

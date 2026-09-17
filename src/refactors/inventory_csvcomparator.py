@@ -22,6 +22,7 @@ from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 
+logger = logging.getLogger(__name__)  # Keep refactor logs tied to this module.
 _MH = SourceDependencyResolver  # Use the source resolver for lazy dependency access.
 
 
@@ -31,7 +32,7 @@ class InventoryCSVComparator:  # Inventory CSV comparator.
     @staticmethod
     def _build_flags(fast: bool, address_check: bool, debug: bool, skip_ssl_verify: bool) -> Any:
         """Return a ComparatorFlags bundle for the extracted impl."""
-        logging.info(
+        logger.info(
             "Building ComparatorFlags (fast=%s, address_check=%s, debug=%s, skip_ssl_verify=%s)",
             fast,
             address_check,
@@ -48,13 +49,13 @@ class InventoryCSVComparator:  # Inventory CSV comparator.
             debug=debug,  # Debug logging flag.
             skip_ssl_verify=skip_ssl_verify,  # SSL verify flag.
         )
-        logging.debug("ComparatorFlags built")  # Trace successful construction
+        logger.debug("ComparatorFlags built")  # Trace successful construction
         return flags  # Consumed by the impl constructor.
 
     @staticmethod
     def _build_deps() -> Any:
         """Return a ComparatorDependencies bundle wired to MistHelper runtime objects."""
-        logging.info("Building ComparatorDependencies from MistHelper runtime")  # Trace deps construction
+        logger.info("Building ComparatorDependencies from MistHelper runtime")  # Trace deps construction
         from src.inventory.csv_comparator import (  # pylint: disable=import-outside-toplevel
             ComparatorDependencies,  # Bundle of injected callables + classes
         )
@@ -71,7 +72,7 @@ class InventoryCSVComparator:  # Inventory CSV comparator.
             nominatim_validator_cls=_MH.NominatimValidator,  # External validator class.
             address_validation_config_cls=_MH.AddressValidationConfig,  # Validation config class.
         )
-        logging.debug("ComparatorDependencies built")  # Trace successful construction
+        logger.debug("ComparatorDependencies built")  # Trace successful construction
         return deps  # Consumed by the impl constructor.
 
     def __init__(  # Capture comparison inputs.
@@ -82,7 +83,7 @@ class InventoryCSVComparator:  # Inventory CSV comparator.
         skip_ssl_verify: bool = False,
     ) -> None:
         """Initialize the inventory comparator (fast/address_check/debug/skip_ssl_verify flags)."""
-        logging.info("Initializing InventoryCSVComparator adapter")  # Announce construction
+        logger.info("Initializing InventoryCSVComparator adapter")  # Announce construction
         from src.inventory.csv_comparator import (
             InventoryCSVComparator as _Impl,  # pylint: disable=import-outside-toplevel
         )
@@ -90,10 +91,10 @@ class InventoryCSVComparator:  # Inventory CSV comparator.
         flags = InventoryCSVComparator._build_flags(fast, address_check, debug, skip_ssl_verify)  # Toggles bundle.
         deps = InventoryCSVComparator._build_deps()  # Runtime dependency bundle.
         self._impl = _Impl(flags=flags, deps=deps)  # Build the impl.
-        logging.debug("InventoryCSVComparator adapter ready")  # Trace ready state
+        logger.debug("InventoryCSVComparator adapter ready")  # Trace ready state
 
     def execute(self) -> None:  # Run the comparison.
         """Execute the complete inventory comparison workflow."""
-        logging.info("Executing InventoryCSVComparator workflow")  # Announce start of comparison
+        logger.info("Executing InventoryCSVComparator workflow")  # Announce start of comparison
         self._impl.execute()  # Delegate to the impl.
-        logging.debug("InventoryCSVComparator workflow finished")  # Trace completion
+        logger.debug("InventoryCSVComparator workflow finished")  # Trace completion

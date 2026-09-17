@@ -8,6 +8,8 @@ from typing import Any
 
 from src.capture.packet_capture_download import PacketCaptureDownloadManager
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 @dataclass
 class OrgPcapWaitDownloadWorkflow:
@@ -19,19 +21,19 @@ class OrgPcapWaitDownloadWorkflow:
 
     def execute(self, org_id: str, capture_id: str, duration: int) -> None:
         """Execute legacy-equivalent wait/download flow for organization captures."""
-        logging.info(
+        logger.info(
             "Starting org PCAP wait/download workflow for org_id=%s capture_id=%s", org_id, capture_id
         )  # Log workflow entry with identifiers to support troubleshooting.
-        logging.info(
+        logger.info(
             "Initializing packet-capture download manager"
         )  # Log before constructing helper manager used by polling flow.
         download_manager = (
             PacketCaptureDownloadManager()
         )  # Create helper manager that handles polling and file persistence.
-        logging.debug(
+        logger.debug(
             "Packet-capture download manager initialized successfully"
         )  # Log successful helper initialization for observability.
-        logging.info(
+        logger.info(
             "Invoking poll_and_download_pcap for org capture_id=%s", capture_id
         )  # Log before entering polling/download state machine.
 
@@ -55,16 +57,16 @@ class OrgPcapWaitDownloadWorkflow:
             prefix="org_",
             save_pcap_file_fn=save_callback,  # Reuse prepared save callback.
         )
-        logging.debug(
+        logger.debug(
             "Completed poll_and_download_pcap for org capture_id=%s", capture_id
         )  # Log workflow completion after polling/download returns.
 
     def run(self, org_id: str, capture_id: str, duration: int) -> None:
         """Backward-compatible alias for existing unit tests."""
-        logging.info(
+        logger.info(
             "Running org PCAP wait/download compatibility alias"
         )  # Log alias entry so compatibility facade path is explicit.
         self.execute(org_id, capture_id, duration)  # Delegate to canonical execute method to keep behavior centralized.
-        logging.debug(
+        logger.debug(
             "Completed org PCAP wait/download compatibility alias"
         )  # Log alias completion to bracket compatibility execution.

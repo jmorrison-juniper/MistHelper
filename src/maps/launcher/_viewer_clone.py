@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any  # WHY: opaque manager + type-permissive D
 
 import requests  # WHY: module-level HTTP client used by image download helper
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 if TYPE_CHECKING:  # WHY: keep dash imports lazy at runtime
     from dash import Dash  # WHY: annotation reference for register(app)
 
@@ -88,10 +89,10 @@ def _create_temp_image_path(image_url: str) -> str:  # WHY: encapsulate temp-fil
 
 def _download_bytes(image_url: str) -> bytes | None:  # WHY: HTTP call isolated for testability
     """Fetch ``image_url`` and return response bytes or ``None`` on non-200."""
-    logging.info("Downloading source map image from %s", image_url)  # WHY: audit trail
+    logger.info("Downloading source map image from %s", image_url)  # WHY: audit trail
     response = requests.get(image_url, timeout=_HTTP_TIMEOUT_SECS)  # WHY: shared timeout constant
     if response.status_code != 200:  # WHY: only 200 counts as a successful image fetch
-        logging.warning("Failed to download image: HTTP %s", response.status_code)  # WHY: diagnostic
+        logger.warning("Failed to download image: HTTP %s", response.status_code)  # WHY: diagnostic
         return None  # WHY: signal failure without raising
     return response.content  # WHY: return raw bytes for the caller to persist
 
@@ -123,7 +124,7 @@ class _ViewerClone:  # WHY: wrapper class hosting the clone-map callback cluster
         if len(validation) != 3:  # WHY: validation error tuple has length 2
             return validation  # WHY: forward error tuple unchanged
         new_name_clean, site_id_local, source_map_id = validation  # WHY: unpack validated inputs
-        logging.info(  # WHY: audit start of clone op
+        logger.info(  # WHY: audit start of clone op
             "Clone operation started - source: %s, new name: %s", source_map_id, new_name_clean
         )
         return self._run_clone_pipeline(  # WHY: single delegating call keeps this body short
@@ -184,7 +185,7 @@ class _ViewerClone:  # WHY: wrapper class hosting the clone-map callback cluster
     def _backup_before_clone(self, site_id: str, source_map_id: str, config: dict[str, Any]) -> None:
         """Create a pre-clone geometry backup of the source map (best-effort)."""
         source_map_name = config.get("map_name", "Unknown")  # WHY: display name for the backup file
-        logging.info("Creating backup of source map '%s' before cloning", source_map_name)  # WHY: audit trail
+        logger.info("Creating backup of source map '%s' before cloning", source_map_name)  # WHY: audit trail
         backup_path = self._state.maps_manager_ref._backup_map_geometry(  # WHY: call MapsManager helper
             api_session=self._state.api_session_ref,  # WHY: authenticated Mist session
             site_id=site_id,  # WHY: scope the backup to this site
@@ -193,19 +194,17 @@ class _ViewerClone:  # WHY: wrapper class hosting the clone-map callback cluster
             backup_reason="pre_clone",  # WHY: tag reason for audit
         )
         if backup_path:  # WHY: backup succeeded
-            logging.info("Pre-clone backup saved: %s", backup_path)  # WHY: path for operator recovery
+            logger.info("Pre-clone backup saved: %s", backup_path)  # WHY: path for operator recovery
 
     def _fetch_source_map(self, site_id: str, source_map_id: str) -> dict[str, Any] | None:
         """Fetch the source map record from Mist. Return None on failure."""
-        logging.info("Fetching source map %s for clone", source_map_id)  # WHY: audit start
+        logger.info("Fetching source map %s for clone", source_map_id)  # WHY: audit start
         source_response = self._state.mistapi_ref.api.v1.sites.maps.getSiteMap(  # WHY: Mist API read
             self._state.api_session_ref, site_id=site_id, map_id=source_map_id
         )
-        logging.debug(
-            "Source map fetch status_code=%s", getattr(source_response, "status_code", "?")
-        )  # WHY: diagnostic
+        logger.debug("Source map fetch status_code=%s", getattr(source_response, "status_code", "?"))  # WHY: diagnostic
         if source_response.status_code != 200:  # WHY: non-200 means we cannot proceed
-            logging.error(
+            logger.error(
                 "Clone failed: Could not fetch source map - HTTP %s", source_response.status_code
             )  # WHY: audit
             return None  # WHY: signal failure without raising
@@ -240,7 +239,7 @@ class _ViewerClone:  # WHY: wrapper class hosting the clone-map callback cluster
         for prop in _CLONE_PROPS:  # WHY: table-driven copy replaces four separate branches
             if prop in source_map:  # WHY: only copy properties actually present on source
                 clone_payload[prop] = source_map[prop]  # WHY: preserve original value verbatim
-        logging.debug("Clone payload prepared with %d properties", len(clone_payload))  # WHY: diagnostic
+        logger.debug("Clone payload prepared with %d properties", len(clone_payload))  # WHY: diagnostic
         return clone_payload  # WHY: caller passes to createSiteMap
 
     @staticmethod
@@ -258,7 +257,7 @@ class _ViewerClone:  # WHY: wrapper class hosting the clone-map callback cluster
                 return None  # WHY: signal failure
             with open(image_temp_path, "wb") as fh:  # WHY: persist bytes to temp file
                 fh.write(image_bytes)  # WHY: write fetched payload
-            logging.info("Downloaded source map image (%.1f KB)", len(image_bytes) / 1024)  # WHY: audit success
+            logger.info("Downloaded source map image (%.1f KB)", len(image_bytes) / 1024)  # WHY: audit success
             return image_temp_path  # WHY: hand path to caller for later upload
         except Exception as img_err:  # noqa: BLE001 - preserve broad-except behavior
             logging.error("Error downloading image: %s", img_err)  # WHY: audit failure
@@ -272,18 +271,18 @@ class _ViewerClone:  # WHY: wrapper class hosting the clone-map callback cluster
         image_temp_path: str | None,  # WHY: temp file cleaned up on failure
     ) -> str | None:
         """Call createSiteMap. Clean up temp image on failure. Return new map_id or None."""
-        logging.info("Creating cloned map '%s' at site %s", clone_payload.get("name"), site_id)  # WHY: audit
+        logger.info("Creating cloned map '%s' at site %s", clone_payload.get("name"), site_id)  # WHY: audit
         clone_response = self._state.mistapi_ref.api.v1.sites.maps.createSiteMap(  # WHY: Mist API write
             self._state.api_session_ref, site_id=site_id, body=clone_payload
         )
-        logging.debug("createSiteMap status_code=%s", getattr(clone_response, "status_code", "?"))  # WHY: diagnostic
+        logger.debug("createSiteMap status_code=%s", getattr(clone_response, "status_code", "?"))  # WHY: diagnostic
         if clone_response.status_code not in _OK_STATUSES:  # WHY: accept 200 or 201
-            logging.error("Clone failed: Could not create map - HTTP %s", clone_response.status_code)  # WHY: audit
+            logger.error("Clone failed: Could not create map - HTTP %s", clone_response.status_code)  # WHY: audit
             _safe_unlink(image_temp_path)  # WHY: cleanup orphaned temp file
             return None  # WHY: signal failure
         cloned_map = clone_response.data  # WHY: parsed payload of the new map
         cloned_map_id: str | None = cloned_map.get("id")  # WHY: new map's UUID
-        logging.info("Cloned map created: %s", cloned_map_id)  # WHY: audit success
+        logger.info("Cloned map created: %s", cloned_map_id)  # WHY: audit success
         return cloned_map_id  # WHY: hand ID to caller
 
     def _upload_clone_image(self, site_id: str, cloned_map_id: str, image_temp_path: str | None) -> bool:
@@ -298,20 +297,20 @@ class _ViewerClone:  # WHY: wrapper class hosting the clone-map callback cluster
     def _do_image_upload(self, site_id: str, cloned_map_id: str, image_temp_path: str) -> bool:
         """Invoke Mist ``addSiteMapImageFile`` and log outcome. Return True on success."""
         try:
-            logging.info("Uploading image to cloned map %s", cloned_map_id)  # WHY: audit start
+            logger.info("Uploading image to cloned map %s", cloned_map_id)  # WHY: audit start
             upload_response = self._state.mistapi_ref.api.v1.sites.maps.addSiteMapImageFile(  # WHY: Mist write
                 self._state.api_session_ref,  # WHY: authenticated session
                 site_id=site_id,  # WHY: scope to this site
                 map_id=cloned_map_id,  # WHY: target the new map
                 file=image_temp_path,  # WHY: upload the downloaded temp file
             )
-            logging.debug(
+            logger.debug(
                 "addSiteMapImageFile status_code=%s", getattr(upload_response, "status_code", "?")
             )  # WHY: diag
             if upload_response.status_code in _OK_STATUSES:  # WHY: accept 200 or 201
-                logging.info("Image uploaded to cloned map %s", cloned_map_id)  # WHY: audit success
+                logger.info("Image uploaded to cloned map %s", cloned_map_id)  # WHY: audit success
                 return True  # WHY: success path
-            logging.warning("Image upload failed: HTTP %s", upload_response.status_code)  # WHY: audit non-200
+            logger.warning("Image upload failed: HTTP %s", upload_response.status_code)  # WHY: audit non-200
             return False  # WHY: signal failure without raising
         except Exception as upload_err:  # noqa: BLE001 - preserve broad-except behavior
             logging.error("Error uploading image: %s", upload_err)  # WHY: audit failure
@@ -330,15 +329,15 @@ class _ViewerClone:  # WHY: wrapper class hosting the clone-map callback cluster
 
     def _fetch_source_zones(self, site_id: str, source_map_id: str) -> list[dict[str, Any]]:
         """List zones at ``site_id`` and return only those attached to ``source_map_id``."""
-        logging.info("Listing zones at site %s to clone for map %s", site_id, source_map_id)  # WHY: audit
+        logger.info("Listing zones at site %s to clone for map %s", site_id, source_map_id)  # WHY: audit
         zones_response = self._state.mistapi_ref.api.v1.sites.zones.listSiteZones(  # WHY: Mist API read
             self._state.api_session_ref, site_id=site_id
         )
         if zones_response.status_code != 200:  # WHY: cannot list zones => skip cloning silently
-            logging.warning("Zone listing failed: HTTP %s", zones_response.status_code)  # WHY: audit
+            logger.warning("Zone listing failed: HTTP %s", zones_response.status_code)  # WHY: audit
             return []  # WHY: empty list produces zero clones
         source_zones = [z for z in zones_response.data if z.get("map_id") == source_map_id]  # WHY: filter
-        logging.debug("Found %d source zones to clone", len(source_zones))  # WHY: diagnostic
+        logger.debug("Found %d source zones to clone", len(source_zones))  # WHY: diagnostic
         return source_zones  # WHY: hand filtered list to caller
 
     def _clone_single_zone(self, site_id: str, cloned_map_id: str, zone: dict[str, Any]) -> bool:
@@ -381,7 +380,7 @@ class _ViewerClone:  # WHY: wrapper class hosting the clone-map callback cluster
             result_parts.append("Image: uploaded")  # WHY: user-visible summary line
         if zones_cloned > 0:  # WHY: append optional zone facet
             result_parts.append(f"Zones: {zones_cloned} cloned")  # WHY: user-visible summary line
-        logging.info(  # WHY: audit final summary
+        logger.info(  # WHY: audit final summary
             "Clone complete: %s (ID: %s), image=%s, zones=%s",
             new_name,
             cloned_map_id,

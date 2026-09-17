@@ -24,6 +24,8 @@ from typing import Any  # WHY: injected callables + duck-typed API responses.
 
 import mistapi  # WHY: dotted-path API resolution + pagination helper.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class OrgConfigMigrationManager:  # Org config migration manager.
     # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -100,16 +102,16 @@ class OrgConfigMigrationManager:  # Org config migration manager.
 
     def export_config(self) -> None:  # Export the org config.
         """Menu 176: Export org WAN/gateway config to a JSON bundle."""
-        logging.info("Menu 176: Starting org config export")  # Log operation start for traceability
+        logger.info("Menu 176: Starting org config export")  # Log operation start for traceability
         self.org_id = self.org_id_fn()  # Resolve current org ID from cache or user prompt
         org_name = self._get_org_name()  # Fetch human-readable org name for bundle metadata
-        logging.warning("\n  Exporting WAN/Gateway config from org: %s", org_name)  # User feedback
+        logger.warning("\n  Exporting WAN/Gateway config from org: %s", org_name)  # User feedback
 
         results = self._fetch_all_types()  # Fetch all 6 config types from the API
         bundle = self._build_export_bundle(results, org_name)  # Wrap results with metadata
         filepath = self._save_bundle_to_file(bundle, org_name)  # Write bundle to data/ directory
         self._display_export_summary(bundle, filepath)  # Show summary table to user
-        logging.info("Menu 176: Export complete, saved to %s", filepath)  # Log completion
+        logger.info("Menu 176: Export complete, saved to %s", filepath)  # Log completion
 
     def _fetch_all_types(self) -> dict[str, list]:  # type: ignore[type-arg]
         """Fetch all 6 config types and return as a keyed dictionary."""
@@ -121,7 +123,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
 
     def import_config(self) -> None:  # Import the org config.
         """Menu 177: Import a JSON bundle into the current org."""
-        logging.info("Menu 177: Starting org config import")  # Log operation start for traceability
+        logger.info("Menu 177: Starting org config import")  # Log operation start for traceability
         self.org_id = self.org_id_fn()  # Resolve destination org ID from cache or user prompt
         filepath = self._select_import_file()  # Let user pick from available export bundles
         if not filepath:  # User cancelled or no files found
@@ -139,7 +141,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         self._fetch_existing_objects()  # Cache destination org objects for conflict detection
         results = self._execute_import(bundle, dry_run)  # Run the dependency-ordered import
         self._display_import_report(results)  # Show final summary of what happened
-        logging.info("Menu 177: Import complete, %s objects processed", len(results))  # Log completion
+        logger.info("Menu 177: Import complete, %s objects processed", len(results))  # Log completion
 
     # ------------------------------------------------------------------
     # Export helpers
@@ -147,12 +149,12 @@ class OrgConfigMigrationManager:  # Org config migration manager.
 
     def _get_org_name(self) -> str:  # Resolve the org name.
         """Fetch organization name from the API."""
-        logging.info("Fetching org name for org %s", self.org_id)  # Log before API call
+        logger.info("Fetching org name for org %s", self.org_id)  # Log before API call
         try:
             response = mistapi.api.v1.orgs.orgs.getOrg(self.session, self.org_id)  # Query Mist API for org details
             if hasattr(response, "data") and response.data:  # Verify response has data attribute
                 name = response.data.get("name", "Unknown")  # Extract org name from response
-                logging.debug("Org name resolved: %s", name)  # Log resolved name
+                logger.debug("Org name resolved: %s", name)  # Log resolved name
                 return name  # type: ignore[no-any-return] # Return org name string
         except Exception as error:  # Catch network/auth errors gracefully
             logging.warning("Could not fetch org name: %s", error)  # Log warning with error details
@@ -169,14 +171,14 @@ class OrgConfigMigrationManager:  # Org config migration manager.
     def _fetch_config_type(self, config_type: dict) -> list:  # type: ignore[type-arg]
         """Fetch all objects of a single config type from the API."""
         display_name = config_type["display_name"]  # Human-readable name for logging
-        logging.info("Fetching %s from org %s", display_name, self.org_id)  # Log before API call
+        logger.info("Fetching %s from org %s", display_name, self.org_id)  # Log before API call
         try:
             list_fn = self._resolve_api_fn(config_type["list_fn"])  # Resolve dotted path to callable
             kwargs = config_type.get("list_kwargs", {})  # Extra kwargs like type=gateway for device profiles
             response = list_fn(self.session, self.org_id, limit=1000, **kwargs)  # Call Mist API with pagination limit
             items = self._extract_response_data(response)  # Extract list data from response wrapper
-            logging.warning("    %s: %d objects", display_name, len(items))  # User feedback showing count
-            logging.debug("Fetched %s %s objects", len(items), display_name)  # Log result count
+            logger.warning("    %s: %d objects", display_name, len(items))  # User feedback showing count
+            logger.debug("Fetched %s %s objects", len(items), display_name)  # Log result count
             return items  # Return list of config objects
         except Exception as error:  # Catch API errors without crashing the entire export
             logging.error("  X %s: Error - %s", display_name, error)  # User feedback showing failure
@@ -212,25 +214,25 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")  # UTC timestamp for uniqueness
         filename = f"OrgConfig_Export_{safe_name}_{timestamp}.json"  # Construct descriptive filename
         filepath = os.path.join("data", filename)  # Use os.path.join for cross-platform paths
-        logging.info("Saving export bundle to %s", filepath)  # Log before file write
+        logger.info("Saving export bundle to %s", filepath)  # Log before file write
         with open(filepath, "w", encoding="utf-8") as output_file:  # Open file with UTF-8 encoding
             json.dump(bundle, output_file, indent=2, default=str)  # Write indented JSON for readability
-        logging.debug("Export bundle saved, %s bytes", os.path.getsize(filepath))  # Log file size after write
+        logger.debug("Export bundle saved, %s bytes", os.path.getsize(filepath))  # Log file size after write
         return filepath  # Return path for summary display
 
     def _display_export_summary(self, bundle: dict, filepath: str) -> None:  # type: ignore[type-arg]
         """Print a summary table of the export results."""
         counts = bundle["metadata"]["object_counts"]  # Extract per-type counts from metadata
         total = sum(counts.values())  # Calculate total objects across all types
-        logging.warning(
+        logger.warning(
             "\n  Export Summary - saved to %s\n  %s",
             filepath,
             "-" * 40,
         )  # Show output file location + separator
         for config_type in self.CONFIG_TYPES:  # Iterate types in registry order
             key = config_type["key"]  # Get the bundle key for this type
-            logging.warning("    %-25s %5d", config_type["display_name"], counts.get(key, 0))  # Aligned count column
-        logging.warning("  %s\n    %-25s %5d", "-" * 40, "TOTAL", total)  # Separator + grand total
+            logger.warning("    %-25s %5d", config_type["display_name"], counts.get(key, 0))  # Aligned count column
+        logger.warning("  %s\n    %-25s %5d", "-" * 40, "TOTAL", total)  # Separator + grand total
 
     # ------------------------------------------------------------------
     # Import helpers
@@ -240,25 +242,25 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         """List available export bundles and let the user pick one."""
         pattern = os.path.join("data", "OrgConfig_Export_*.json")  # Glob pattern for export bundles
         files = sorted(glob.glob(pattern), reverse=True)  # Most recent files first
-        logging.debug("Found %s export bundles in data/", len(files))  # Log discovery count
+        logger.debug("Found %s export bundles in data/", len(files))  # Log discovery count
         if not files:  # No export bundles exist yet
-            logging.warning(
+            logger.warning(
                 "\n  No export bundles found in data/ directory."
                 "\n  Run Menu 176 first to export config from a source org."
             )  # User feedback + guidance
             return ""  # Signal no selection made
 
         if len(files) == 1:  # Auto-select when only one file exists
-            logging.warning("\n  Found 1 export bundle: %s", os.path.basename(files[0]))  # Confirm auto-selection
+            logger.warning("\n  Found 1 export bundle: %s", os.path.basename(files[0]))  # Confirm auto-selection
             return files[0]  # Return the only available file
 
         return self._prompt_file_selection(files)  # Multiple files -- let user choose
 
     def _prompt_file_selection(self, files: list) -> str:  # type: ignore[type-arg]
         """Display numbered file list and get user selection."""
-        logging.warning("\n  Available export bundles:")  # Section header
+        logger.warning("\n  Available export bundles:")  # Section header
         for index, filepath in enumerate(files, 1):  # Number each file starting at 1
-            logging.warning("    %d. %s", index, os.path.basename(filepath))  # Show filename only, not full path
+            logger.warning("    %d. %s", index, os.path.basename(filepath))  # Show filename only, not full path
 
         choice = self.safe_input_fn(  # EOF-safe input for SSH/container contexts
             f"\n  Select bundle [1-{len(files)}]: ",
@@ -270,12 +272,12 @@ class OrgConfigMigrationManager:  # Org config migration manager.
                 return files[selected]  # Return the selected file path
         except (ValueError, IndexError):  # Handle non-numeric or out-of-range input
             pass  # Ignore and continue.
-        logging.warning("  Invalid selection.")  # User feedback for bad input
+        logger.warning("  Invalid selection.")  # User feedback for bad input
         return ""  # Signal no valid selection
 
     def _load_and_validate_bundle(self, filepath: str) -> dict | None:  # type: ignore[type-arg]
         """Parse and validate the export bundle JSON file."""
-        logging.info("Loading bundle from %s", filepath)  # Log before file read
+        logger.info("Loading bundle from %s", filepath)  # Log before file read
         try:
             with open(filepath, encoding="utf-8") as bundle_file:  # Open with UTF-8 for JSON
                 bundle = json.load(bundle_file)  # Parse JSON into Python dict
@@ -284,7 +286,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
             logging.error("Failed to load bundle %s: %s", filepath, error)  # Log error details
             return None  # Signal invalid bundle
 
-        logging.debug("Bundle loaded, validating structure")  # Log validation start
+        logger.debug("Bundle loaded, validating structure")  # Log validation start
         if not self._validate_bundle_structure(bundle):  # Check required keys exist
             return None  # Signal failed validation
         return bundle  # type: ignore[no-any-return] # Return validated bundle
@@ -292,18 +294,18 @@ class OrgConfigMigrationManager:  # Org config migration manager.
     def _validate_bundle_structure(self, bundle: dict) -> bool:  # type: ignore[type-arg]
         """Check that the bundle has required metadata and type keys."""
         if "metadata" not in bundle:  # Metadata section is mandatory
-            logging.error("  X Invalid bundle: missing 'metadata' section.")  # User feedback
+            logger.error("  X Invalid bundle: missing 'metadata' section.")  # User feedback
             return False  # Fail validation
 
         required_keys = {ct["key"] for ct in self.CONFIG_TYPES}  # Build set of expected type keys
         missing = required_keys - set(bundle.keys())  # Find any missing config type sections
         if missing:  # Some config types are not in the bundle
-            logging.error("  X Invalid bundle: missing config types: %s", ", ".join(sorted(missing)))  # Show which
+            logger.error("  X Invalid bundle: missing config types: %s", ", ".join(sorted(missing)))  # Show which
             return False  # Fail validation
 
         source_org = bundle["metadata"].get("source_org_id", "unknown")  # Check source org identity
         if source_org == self.org_id:  # Source matches destination -- likely a mistake
-            logging.warning(
+            logger.warning(
                 "  ! WARNING: Source org (%s...) matches destination org."
                 "\n  This will likely result in all objects being detected as conflicts.",
                 source_org[:8],
@@ -314,7 +316,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
     def _display_bundle_preview(self, bundle: dict) -> None:  # type: ignore[type-arg]
         """Show a preview of what the bundle contains before importing."""
         metadata = bundle["metadata"]  # Extract metadata section for display
-        logging.warning(
+        logger.warning(
             "\n  Bundle from: %s\n  Exported at: %s\n  Source org:  %s...",
             metadata.get("source_org_name", "Unknown"),
             metadata.get("export_timestamp", "Unknown"),
@@ -322,7 +324,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         )  # Bundle preview trio
         counts = metadata.get("object_counts", {})  # Per-type object counts
         total = sum(counts.values())  # Total across all types
-        logging.warning("  Total objects: %d", total)  # Grand total for user awareness
+        logger.warning("  Total objects: %d", total)  # Grand total for user awareness
 
     def _prompt_dry_run(self) -> bool:  # Prompt for dry-run.
         """Ask if the user wants a dry-run (preview only)."""
@@ -335,7 +337,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
 
     def _confirm_import(self) -> bool:  # Confirm the import.
         """Require typed 'IMPORT' confirmation for actual import."""
-        logging.warning(
+        logger.warning(
             "\n  WARNING: This will create configuration objects in the destination org."
             "\n  This operation cannot be automatically undone."
         )  # Safety warning + irreversibility notice
@@ -344,7 +346,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
             context="import_confirmation",
         )
         if confirmation != "IMPORT":  # Exact match required -- no partial or lowercase
-            logging.warning("  Import cancelled.")  # User feedback
+            logger.warning("  Import cancelled.")  # User feedback
             return False  # Signal cancellation
         return True  # User explicitly confirmed
 
@@ -354,12 +356,12 @@ class OrgConfigMigrationManager:  # Org config migration manager.
 
     def _fetch_existing_objects(self) -> None:  # Fetch existing objects.
         """Fetch current objects from destination org for conflict detection."""
-        logging.warning("\n  Fetching existing config from destination org...")  # User feedback
-        logging.info("Fetching existing objects from destination org for conflict detection")  # Log operation
+        logger.warning("\n  Fetching existing config from destination org...")  # User feedback
+        logger.info("Fetching existing objects from destination org for conflict detection")  # Log operation
         for config_type in self.CONFIG_TYPES:  # Iterate all 6 config types
             items = self._fetch_config_type(config_type)  # Reuse same fetch logic as export
             self._existing[config_type["key"]] = items  # Cache for conflict checks
-        logging.debug("Cached %s total existing objects", sum(len(v) for v in self._existing.values()))  # Log count
+        logger.debug("Cached %s total existing objects", sum(len(v) for v in self._existing.values()))  # Log count
 
     def _needs_subnet_check(self, type_key: str) -> bool:
         """Return True when this type's config entry has conflict_check enabled."""
@@ -491,7 +493,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
     def _build_remap_entry(self, source_id: str, dest_id: str) -> None:  # Record an id remap.
         """Record a source-to-destination ID mapping."""
         self._remap_table[source_id] = dest_id  # Store mapping for cross-reference remapping
-        logging.debug("ID remap: %s -> %s", source_id[:8], dest_id[:8])  # Log truncated IDs for tracing
+        logger.debug("ID remap: %s -> %s", source_id[:8], dest_id[:8])  # Log truncated IDs for tracing
 
     def _remap_object_references(self, obj: dict, type_key: str) -> dict:  # type: ignore[type-arg]
         """Remap foreign ID references in an object using the remap table."""
@@ -556,7 +558,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         results: list = []  # type: ignore[type-arg] # Accumulates import results for final report
         sorted_types = sorted(self.CONFIG_TYPES, key=lambda ct: ct["import_order"])  # Dependency order
         action_label = "[DRY RUN] " if dry_run else ""  # Prefix for user output in dry-run mode
-        logging.warning("\n  %sImporting configuration objects...", action_label)  # User feedback
+        logger.warning("\n  %sImporting configuration objects...", action_label)  # User feedback
 
         for config_type in sorted_types:  # Process each type in dependency order
             objects = bundle.get(config_type["key"], [])  # Get objects of this type from bundle
@@ -575,8 +577,8 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         """Import a batch of objects for a single config type."""
         display = config_type["display_name"]  # Human-readable type name for output
         label = "[DRY RUN] " if dry_run else ""  # Prefix for dry-run output
-        logging.warning("\n    %s%s (%d objects):", label, display, len(objects))  # User feedback with count
-        logging.info("Importing %s %s objects (dry_run=%s)", len(objects), display, dry_run)  # Log batch start
+        logger.warning("\n    %s%s (%d objects):", label, display, len(objects))  # User feedback with count
+        logger.info("Importing %s %s objects (dry_run=%s)", len(objects), display, dry_run)  # Log batch start
 
         for obj in objects:  # Process each object in the batch
             self._process_import_object(config_type, obj, dry_run, results)  # Delegate per-object logic
@@ -601,7 +603,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
             return  # Skip it.
         cleaned = self._clean_and_remap(obj, type_key)  # Strip + remap.
         if dry_run:  # Preview mode -- do not make API calls
-            logging.warning("      %sWould import: %s", label, obj_name)  # Show what would happen
+            logger.warning("      %sWould import: %s", label, obj_name)  # Show what would happen
             results.append({"type": type_key, "name": obj_name, "status": "would_import"})  # Record for report
             return  # Abort.
         self._create_and_record(config_type, cleaned, obj_name, source_id, results)  # Create via API
@@ -615,7 +617,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         results: list,
     ) -> None:
         """Record a skipped object due to conflict and update remap table."""
-        logging.warning("      SKIP: %s - %s", name, conflict["detail"])  # User feedback showing skip reason
+        logger.warning("      SKIP: %s - %s", name, conflict["detail"])  # User feedback showing skip reason
         results.append({"type": type_key, "name": name, "status": "skipped", "reason": conflict["detail"]})  # Record
         existing_id = conflict.get("existing_id")  # Get destination org's matching object ID
         if existing_id and source_id:  # Both IDs available -- record mapping for cross-references
@@ -631,15 +633,15 @@ class OrgConfigMigrationManager:  # Org config migration manager.
     ) -> None:
         """Create a single object via the API and record the result."""
         type_key = config_type["key"]  # Bundle key for logging
-        logging.info("Creating %s '%s' in destination org", type_key, name)  # Log before API call
+        logger.info("Creating %s '%s' in destination org", type_key, name)  # Log before API call
         try:
             create_fn = self._resolve_api_fn(config_type["create_fn"])  # Resolve create endpoint
             response = create_fn(self.session, self.org_id, body=cleaned)  # Call Mist API to create
             new_id = self._extract_created_id(response)  # Extract new object ID from response
             if source_id and new_id:  # Record mapping for downstream cross-references
                 self._build_remap_entry(source_id, new_id)  # Remap to new id.
-            logging.warning("      OK: %s", name)  # User feedback showing success
-            logging.debug("Created %s '%s' with ID %s", type_key, name, new_id[:8] if new_id else "n/a")  # Log result
+            logger.warning("      OK: %s", name)  # User feedback showing success
+            logger.debug("Created %s '%s' with ID %s", type_key, name, new_id[:8] if new_id else "n/a")  # Log result
             results.append({"type": type_key, "name": name, "status": "imported"})  # Record success
         except Exception as error:  # Catch API errors without stopping the entire import
             logging.error("      FAIL: %s - %s", name, error)  # User feedback showing failure
@@ -659,7 +661,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
     def _display_import_report(self, results: list) -> None:  # type: ignore[type-arg]
         """Print a summary report of the import operation."""
         buckets = self._partition_import_results(results)  # Group result rows by status into 4 buckets
-        logging.warning(
+        logger.warning(
             "\n  %s\n  IMPORT REPORT\n  %s",
             "=" * 55,
             "=" * 55,
@@ -671,13 +673,13 @@ class OrgConfigMigrationManager:  # Org config migration manager.
 
     def _partition_import_results(self, results: list) -> dict:  # type: ignore[type-arg]
         """Group import results by status into a stable four-bucket dict."""
-        logging.debug("Partitioning %s import results into status buckets", len(results))  # Trace start
+        logger.debug("Partitioning %s import results into status buckets", len(results))  # Trace start
         buckets: dict = {"imported": [], "skipped": [], "failed": [], "would_import": []}  # Stable section ordering
         for result in results:  # Walk every result row
             bucket = buckets.get(result.get("status"))  # Look up the matching bucket (None for unknown statuses)
             if bucket is not None:  # Drop any result whose status is not one of the four expected values
                 bucket.append(result)  # Collect into its bucket
-        logging.debug(
+        logger.debug(
             "Partitioned buckets: imported=%s skipped=%s failed=%s would_import=%s",
             len(buckets["imported"]),
             len(buckets["skipped"]),
@@ -701,24 +703,24 @@ class OrgConfigMigrationManager:  # Org config migration manager.
 
     def _print_report_section(self, title: str, items: list) -> None:  # type: ignore[type-arg]
         """Print a single section of the import report."""
-        logging.warning("\n  %s (%d):", title, len(items))  # Section header with count
+        logger.warning("\n  %s (%d):", title, len(items))  # Section header with count
         for item in items:  # Iterate each result in this section
             reason = item.get("reason", "")  # Get conflict/error reason if present
             suffix = f" -- {reason}" if reason else ""  # Append reason as suffix
-            logging.warning("    %-20s %-30s%s", item["type"], item["name"], suffix)  # Aligned columns
+            logger.warning("    %-20s %-30s%s", item["type"], item["name"], suffix)  # Aligned columns
 
     def _print_report_totals(  # type: ignore[type-arg]
         self, imported: list, skipped: list, failed: list, would_import: list
     ) -> None:
         """Print the totals row of the import report."""
-        logging.warning("\n  %s", "-" * 55)  # Separator before totals
+        logger.warning("\n  %s", "-" * 55)  # Separator before totals
         total = len(imported) + len(skipped) + len(failed) + len(would_import)  # Grand total
-        logging.warning("  Total: %d objects processed", total)  # Total line
+        logger.warning("  Total: %d objects processed", total)  # Total line
         if would_import:  # Show dry-run count
-            logging.warning("    Would import: %d", len(would_import))  # Show would-import count.
+            logger.warning("    Would import: %d", len(would_import))  # Show would-import count.
         if imported:  # Show imported count
-            logging.warning("    Imported:     %d", len(imported))  # Show imported count.
+            logger.warning("    Imported:     %d", len(imported))  # Show imported count.
         if skipped:  # Show skipped count
-            logging.warning("    Skipped:      %d", len(skipped))  # Show skipped count.
+            logger.warning("    Skipped:      %d", len(skipped))  # Show skipped count.
         if failed:  # Show failed count
-            logging.warning("    Failed:       %d", len(failed))  # Show failed count.
+            logger.warning("    Failed:       %d", len(failed))  # Show failed count.

@@ -156,7 +156,7 @@ def _read_csv_rows(name: str) -> list[dict[str, Any]]:  # WHY: shared CSV reader
 def _log_management_ip_row(gateway_name: str, mgmt_ip: str, status: str, template_name: str) -> None:
     """Emit per-device debug log preserving legacy formatting."""
     if mgmt_ip:  # WHY: with-IP path keeps the mgmt IP in the log line.
-        logging.debug(
+        logger.debug(
             "Gateway %s: Management IP %s, Status: %s (Template: %s)",
             gateway_name,
             mgmt_ip,
@@ -164,7 +164,7 @@ def _log_management_ip_row(gateway_name: str, mgmt_ip: str, status: str, templat
             template_name,
         )  # WHY: preserve legacy per-device debug log with mgmt IP.
         return
-    logging.debug(  # WHY: no-IP path preserves the legacy "no management IP configured" phrase.
+    logger.debug(  # WHY: no-IP path preserves the legacy "no management IP configured" phrase.
         "Gateway %s: No management IP configured, Status: %s (Template: %s)",
         gateway_name,
         status,
@@ -225,9 +225,9 @@ def _row_has_port_data(row: dict, port_columns: list[str]) -> bool:  # WHY: filt
 
 def _write_empty_filtered_port_marker() -> None:  # WHY: preserve legacy empty-file fallback behaviour.
     """Write the legacy empty-marker file when no rows matched the port filter."""
-    logging.warning(" No rows matched the port config filter. FilteredGatewayPortConfigs.csv will be empty.")
+    logger.warning(" No rows matched the port config filter. FilteredGatewayPortConfigs.csv will be empty.")
     filtered_csv_path = FilePathUtils.get_csv_path("FilteredGatewayPortConfigs.csv")  # WHY: resolve target path.
-    logging.info("Writing empty marker file to %s", filtered_csv_path)  # WHY: log before disk write.
+    logger.info("Writing empty marker file to %s", filtered_csv_path)  # WHY: log before disk write.
     with open(filtered_csv_path, "w", newline="", encoding="utf-8") as csvfile:  # WHY: newline='' per csv docs.
         csvfile.write("No matching data found.\n")  # WHY: preserve legacy empty marker content.
 
@@ -299,7 +299,7 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
     @staticmethod
     def _load_management_ip_csv_inputs() -> tuple[list[dict], list[dict], list[dict], list[dict]] | None:
         """Load the four CSV inputs required for gateway management-IP correlation."""
-        logging.info("Loading CSV inputs for gateway management IP correlation")  # WHY: log before disk reads.
+        logger.info("Loading CSV inputs for gateway management IP correlation")  # WHY: log before disk reads.
         try:
             loaded = tuple(_read_csv_rows(name) for name in MANAGEMENT_IP_INPUT_CSVS)  # WHY: table-driven reads.
         except FileNotFoundError as exception:
@@ -308,7 +308,7 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
             logger.error("! Error: Required CSV file not found: %s", exception)
             return None
         sites, templates, gateway_devices, gateway_configs = loaded  # WHY: unpack into named locals.
-        logging.debug(
+        logger.debug(
             "Loaded sites=%d templates=%d devices=%d configs=%d",
             len(sites),
             len(templates),
@@ -401,7 +401,7 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
         logger.info("  - Gateways without management IPs: %d", gateways_processed - gateways_with_mgmt_ip)
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  - Output CSV: GatewayManagementIPs.csv")
-        logging.info(
+        logger.info(
             "Gateway management IP export completed. %d gateways processed, %d with management IPs.",
             gateways_processed,
             gateways_with_mgmt_ip,
@@ -410,7 +410,7 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
     @staticmethod
     def management_ips(fast: bool = False) -> None:
         """Export gateway management overlay IPs correlated with templates and site status."""
-        logging.info("Menu #31: Starting gateway management IPs export")  # WHY: audit log for menu entry.
+        logger.info("Menu #31: Starting gateway management IPs export")  # WHY: audit log for menu entry.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Gateway Management IP Export:")
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
@@ -438,7 +438,7 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
         base_columns = ["mac", "name"]  # WHY: preserve legacy identifier columns.
         port_columns = _select_wan_port_columns(sanitized[0])  # WHY: derive WAN column list from sample row.
         columns_to_keep = base_columns + port_columns  # WHY: build final column projection list.
-        logging.debug("Built port-column projection: %d port columns", len(port_columns))  # WHY: log count.
+        logger.debug("Built port-column projection: %d port columns", len(port_columns))  # WHY: log count.
         return [
             _project_row_to_columns(row, columns_to_keep)  # WHY: project each row via reusable helper.
             for row in sanitized  # WHY: iterate full sanitized set.
@@ -452,31 +452,31 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
             _write_empty_filtered_port_marker()  # WHY: delegate legacy fallback write.
             return
         if debug:  # WHY: only emit sample row when operator asked for debug output.
-            logging.debug("Sample filtered row: %s", filtered_rows[0])
-        logging.info("Saving filtered gateway port configs to FilteredGatewayPortConfigs.csv")  # WHY: pre-log.
+            logger.debug("Sample filtered row: %s", filtered_rows[0])
+        logger.info("Saving filtered gateway port configs to FilteredGatewayPortConfigs.csv")  # WHY: pre-log.
         DataExporter.write_with_format_selection(
             filtered_rows,
             "FilteredGatewayPortConfigs.csv",
             api_function_name="searchSiteSwOrGwPorts",
         )  # WHY: persist filtered set through configured exporter.
-        logging.info(" Filtered gateway port configs saved to FilteredGatewayPortConfigs.csv")  # WHY: post-log.
+        logger.info(" Filtered gateway port configs saved to FilteredGatewayPortConfigs.csv")  # WHY: post-log.
 
     @staticmethod
     def device_configs(debug: bool = False, fast: bool = False) -> None:
         """Fetch and export all gateway device configuration details."""
-        logging.info("Starting export of all gateway device configurations...")  # WHY: audit log for entry.
+        logger.info("Starting export of all gateway device configurations...")  # WHY: audit log for entry.
         org_id = ConfigUtils.get_cached_or_prompted_org_id()  # WHY: resolve org_id via standard pathway.
         data = APIFetchUtils.gateway_device_configs(apisession, org_id, fast=fast)  # WHY: fetch configs.
         if not data:  # WHY: abort when nothing was returned by the API.
-            logging.warning(" No device configs found.")
+            logger.warning(" No device configs found.")
             return
         flattened = DataProcessingUtils.flatten_nested_fields(data)  # WHY: flatten nested JSON to flat cells.
         sanitized = DataProcessingUtils.escape_multiline(flattened)  # WHY: escape multiline cells for CSV.
-        logging.info("Saving sanitized gateway configs to AllSiteGatewayConfigs.csv")  # WHY: pre-write log.
+        logger.info("Saving sanitized gateway configs to AllSiteGatewayConfigs.csv")  # WHY: pre-write log.
         DataExporter.write_with_format_selection(
             sanitized, "AllSiteGatewayConfigs.csv", api_function_name="listSiteDevices"
         )  # WHY: persist full.
-        logging.info(" Device configs saved to AllSiteGatewayConfigs.csv")  # WHY: post-write log.
+        logger.info(" Device configs saved to AllSiteGatewayConfigs.csv")  # WHY: post-write log.
         filtered_rows = GatewayExportUtils._build_filtered_port_rows(sanitized)  # WHY: build port-config subset.
         GatewayExportUtils._save_filtered_port_configs(filtered_rows, debug)  # WHY: persist filtered subset.
 
@@ -485,12 +485,12 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
         """Export gateway templates for the selected organization."""
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Gateway Templates:")
-        logging.info("Exporting gateway templates for the organization...")  # WHY: audit log for entry.
+        logger.info("Exporting gateway templates for the organization...")  # WHY: audit log for entry.
         current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # WHY: resolve org_id via standard path.
         response = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(apisession, current_org_id)
         templates = getattr(response, "data", [])  # WHY: defensive — response may lack .data attribute.
         if not templates:  # WHY: nothing to export — emit diagnostics and return.
-            logging.warning("No gateway templates found for this organization.")
+            logger.warning("No gateway templates found for this organization.")
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("No gateway templates found for this organization.")
             return
@@ -501,19 +501,19 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
         )  # WHY: persist output.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! %d gateway templates exported to OrgGatewayTemplates.csv", len(templates))
-        logging.info(" Gateway templates exported to OrgGatewayTemplates.csv")  # WHY: audit log for exit.
+        logger.info(" Gateway templates exported to OrgGatewayTemplates.csv")  # WHY: audit log for exit.
 
     @staticmethod
     def with_wan_overrides(fast: bool = False) -> None:
         """Run the WAN override compliance report via the WanOverrideWalker orchestrator."""
-        logging.info("Starting WAN override compliance report (fast=%s)", fast)  # WHY: before-action log.
+        logger.info("Starting WAN override compliance report (fast=%s)", fast)  # WHY: before-action log.
         WanOverrideWalker.walk(fast=fast)  # WHY: orchestrate cache/classify/fetch/report end-to-end.
-        logging.debug("WAN override compliance report finished (fast=%s)", fast)  # WHY: after-action log.
+        logger.debug("WAN override compliance report finished (fast=%s)", fast)  # WHY: after-action log.
 
     @staticmethod
     def _get_devices_with_sites(org_id: str, fast: bool = False) -> list[tuple[str, str, str, str]]:
         """Fetch all gateway devices with site metadata for downstream gateway exports."""
-        logging.info("[INFO] Fetching gateway devices with site information...")  # WHY: pre-fetch log.
+        logger.info("[INFO] Fetching gateway devices with site information...")  # WHY: pre-fetch log.
         if fast:  # WHY: fast mode reads from cached CSVs to avoid API cost.
             return GatewayExportUtils._get_devices_from_cache()
         return GatewayExportUtils._get_devices_from_api(org_id)  # WHY: default path hits API endpoints.
@@ -527,7 +527,7 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
             gateways = _load_gateways_from_inventory_csv()  # WHY: load gateway rows from inventory CSV.
             site_name_lookup = _load_site_name_lookup_from_csv()  # WHY: build site id->name lookup.
             gateway_devices = _project_gateway_devices(gateways, site_name_lookup)  # WHY: shape output tuples.
-            logging.info("! Fast mode: Loaded %s gateway devices from cached data", len(gateway_devices))
+            logger.info("! Fast mode: Loaded %s gateway devices from cached data", len(gateway_devices))
             return gateway_devices
         except Exception as exception:  # pylint: disable=broad-exception-caught  # WHY: fall back on any error.
             logging.warning("! Fast mode failed, falling back to API calls: %s", exception)  # WHY: log fallback.
@@ -537,26 +537,26 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
     @staticmethod
     def _get_devices_from_api(org_id: str) -> list[tuple[str, str, str, str]]:
         """Get gateway devices from API inventory and site list endpoints."""
-        logging.info("[INFO] Fetching org inventory to find gateway devices...")  # WHY: pre-fetch log.
+        logger.info("[INFO] Fetching org inventory to find gateway devices...")  # WHY: pre-fetch log.
         devices = APICoreFetchUtils.all_inventory_with_limit(org_id)  # WHY: paged org inventory fetch.
-        logging.info("[INFO] Retrieved %s devices from org inventory.", len(devices))  # WHY: post-fetch log.
+        logger.info("[INFO] Retrieved %s devices from org inventory.", len(devices))  # WHY: post-fetch log.
         site_name_lookup = _fetch_site_name_lookup_from_api(org_id)  # WHY: build site id->name lookup via API.
         gateway_devices = _project_api_gateway_devices(devices, site_name_lookup)  # WHY: filter+shape tuples.
-        logging.info("[INFO] Found %s gateway devices across the organization.", len(gateway_devices))
+        logger.info("[INFO] Found %s gateway devices across the organization.", len(gateway_devices))
         return gateway_devices
 
     @staticmethod
     def _get_site_ids_with_devices(org_id: str) -> list[str]:
         """Get site IDs that currently contain at least one gateway device."""
-        logging.info("[INFO] Fetching org inventory to find sites with gateways...")  # WHY: pre-fetch log.
+        logger.info("[INFO] Fetching org inventory to find sites with gateways...")  # WHY: pre-fetch log.
         devices = APICoreFetchUtils.all_inventory_with_limit(org_id)  # WHY: paged org inventory fetch.
-        logging.info("[INFO] Retrieved %s devices from org inventory.", len(devices))  # WHY: post-fetch log.
+        logger.info("[INFO] Retrieved %s devices from org inventory.", len(devices))  # WHY: post-fetch log.
         gateway_sites = {
             device["site_id"]
             for device in devices
             if device.get("type") == "gateway" and device.get("site_id") and str(device.get("site_id")).strip()
         }  # WHY: dedupe site ids for gateway-type rows only.
-        logging.info("[INFO] Found %s sites with at least one gateway.", len(gateway_sites))  # WHY: post-log.
+        logger.info("[INFO] Found %s sites with at least one gateway.", len(gateway_sites))  # WHY: post-log.
         return list(gateway_sites)  # WHY: caller expects a list rather than a set.
 
     @staticmethod

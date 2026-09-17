@@ -40,6 +40,8 @@ from typing import Any, ClassVar  # ClassVar for cached state. Any for the mista
 
 import mistapi  # Third-party API SDK used only for interactive org selection.
 
+logger = logging.getLogger(__name__)  # Use this module name in log records.
+
 
 class ConfigUtils:
     """Centralized configuration utilities.
@@ -54,14 +56,14 @@ class ConfigUtils:
     @classmethod
     def _runtime_context(cls) -> Any | None:
         """Return the application context when the entry point is available."""
-        logging.info("Resolving the application context for ConfigUtils")  # Log before the optional context read.
+        logger.info("Resolving the application context for ConfigUtils")  # Log before the optional context read.
         if os.environ.get("PYTEST_CURRENT_TEST"):  # Unit tests own the class cache directly.
-            logging.debug("ConfigUtils skipped the application context during a unit test")  # Log the test fallback.
+            logger.debug("ConfigUtils skipped the application context during a unit test")  # Log the test fallback.
             return None  # Keep existing ConfigUtils tests isolated from prior context state.
         try:  # The module can run in tests before MistHelper finishes importing.
             entrypoint = importlib.import_module("src.refactors.main_entrypoint")  # Avoid a MistHelper import cycle.
             context = entrypoint.MainEntrypoint.context  # Read the process context owned by the entry point.
-            logging.debug("ConfigUtils resolved the application context")  # Log the successful context read.
+            logger.debug("ConfigUtils resolved the application context")  # Log the successful context read.
             return context  # Give callers the state owner when it exists.
         except Exception as error:  # A partial import must not break the old local cache path.
             logging.debug("ConfigUtils could not resolve the application context: %s", error)  # Log the safe fallback.
@@ -79,7 +81,7 @@ class ConfigUtils:
         if context is not None:  # A live entry point means AppContext owns the session.
             context.apisession = session  # Store the session on the context instead of a module global.
         cls._apisession = session  # Store the authenticated session reference for isolated tests.
-        logging.debug("ConfigUtils.set_apisession: session %s", "<set>" if session is not None else "None")
+        logger.debug("ConfigUtils.set_apisession: session %s", "<set>" if session is not None else "None")
 
     @classmethod
     def set_cached_org_id(cls, value: str | None) -> None:
@@ -93,7 +95,7 @@ class ConfigUtils:
         if context is not None:  # A live entry point means AppContext owns the organization.
             context.org_id = value  # Store the organization on the context instead of a module global.
         cls._org_id_cache = value  # Overwrite whatever was cached before for isolated tests.
-        logging.debug("ConfigUtils.set_cached_org_id: cache primed (%s)", "<set>" if value else "None")
+        logger.debug("ConfigUtils.set_cached_org_id: cache primed (%s)", "<set>" if value else "None")
 
     @classmethod
     def get_cached_org_id(cls) -> str | None:
@@ -130,28 +132,28 @@ class ConfigUtils:
         # inspection (preserving this module's "no source resolver access" self-containment) and exit with an
         # actionable message naming the real variable (org_id, not MIST_ORG_ID) before any network call.
         if "--test" in sys.argv or "--testinteractive" in sys.argv:  # Non-interactive systematic test mode.
-            logging.error("Cannot resolve org_id non-interactively for --test/--testinteractive: none configured.")
+            logger.error("Cannot resolve org_id non-interactively for --test/--testinteractive: none configured.")
             # WHY (#886 Phase 2): retiring print() in favor of logging.error so operators still see the
             # actionable guidance on the default root-logger config (ERROR is always emitted).
-            logging.error("No organization id configured for --test/--testinteractive.")
-            logging.error("Set 'org_id' (or 'ORG_ID') in your environment, or add an 'org_id=' line to .env.")
-            logging.error(
+            logger.error("No organization id configured for --test/--testinteractive.")
+            logger.error("Set 'org_id' (or 'ORG_ID') in your environment, or add an 'org_id=' line to .env.")
+            logger.error(
                 "Copy deploy/.env.example to .env for the full variable list (note: org_id, "
                 "not MIST_ORG_ID, is read by this path)."
             )
             sys.exit(1)  # Fail closed before mistapi.cli.select_org() can issue a malformed-URL request.
-        logging.info("* No org_id found in .env or CLI. Prompting user...")  # Prompt the user as last resort.
+        logger.info("* No org_id found in .env or CLI. Prompting user...")  # Prompt the user as last resort.
         if cls._apisession is None:  # No session was ever injected.
-            logging.error("Cannot prompt for org selection: no mistapi session injected via set_apisession().")
+            logger.error("Cannot prompt for org selection: no mistapi session injected via set_apisession().")
             # WHY (#886 Phase 2): retire print() in favor of logging.error (surfaces on default root-logger).
-            logging.error("Cannot select an organization without an authenticated API session.")
+            logger.error("Cannot select an organization without an authenticated API session.")
             sys.exit(1)  # Abort: prompt path is unreachable without a session.
         org_id_list = mistapi.cli.select_org(cls._apisession)  # Interactive org selection using injected session.
         if not org_id_list:  # Selection returned nothing.
-            logging.error("Failed to retrieve org list. Check your API token and authentication.")
+            logger.error("Failed to retrieve org list. Check your API token and authentication.")
             # WHY (#886 Phase 2): retire print() in favor of logging.error (surfaces on default root-logger).
-            logging.error("Unable to retrieve organizations. Your API token may be invalid or expired.")
-            logging.error("Please update MIST_API_TOKEN in your .env file and try again.")
+            logger.error("Unable to retrieve organizations. Your API token may be invalid or expired.")
+            logger.error("Please update MIST_API_TOKEN in your .env file and try again.")
             sys.exit(1)  # Abort: no org to proceed with.
         return str(org_id_list[0])  # Use the first selected org (explicit str cast: mistapi returns Any).
 
@@ -167,20 +169,20 @@ class ConfigUtils:
         """
         context = cls._runtime_context()  # Check the context before the old local cache.
         if context is not None and context.org_id:  # Reuse the value that the application context owns.
-            logging.info("! Using org_id from application context: %s", context.org_id)  # Log the selected source.
+            logger.info("! Using org_id from application context: %s", context.org_id)  # Log the selected source.
             return str(context.org_id)  # Return the runtime context value.
         if cls._org_id_cache:  # Reuse an already-resolved id.
-            logging.info("! Using org_id from class cache: %s", cls._org_id_cache)
+            logger.info("! Using org_id from class cache: %s", cls._org_id_cache)
             return cls._org_id_cache
         org_id_env = os.environ.get("org_id") or os.environ.get("ORG_ID")  # Try environment variables next.
         if org_id_env:  # Environment provided the id.
             cls.set_cached_org_id(org_id_env)  # Cache the env value in the context when available.
-            logging.info("! Loaded org_id from environment: %s", cls._org_id_cache)
+            logger.info("! Loaded org_id from environment: %s", cls._org_id_cache)
             return org_id_env  # Return the verified non-empty environment value.
         dotenv_org = cls._resolve_org_id_from_dotenv()  # Try the .env file fallback.
         if dotenv_org:  # .env file provided the id.
             cls.set_cached_org_id(dotenv_org)  # Cache the .env value in the context when available.
-            logging.info("! Loaded org_id from .env: %s", cls._org_id_cache)
+            logger.info("! Loaded org_id from .env: %s", cls._org_id_cache)
             return dotenv_org  # Return the verified non-empty .env value.
         prompted_org = cls._resolve_org_id_via_prompt()  # Last resort: interactive prompt.
         cls.set_cached_org_id(prompted_org)  # Cache the prompted value in the context when available.
@@ -204,6 +206,6 @@ class ConfigUtils:
                 pass  # Best-effort cleanup only.
             # WHY (#886 Phase 2): consolidate print+info into single WARNING so operator sees stop
             # notification on the default root-logger config (INFO is suppressed by default).
-            logging.warning("Stop signal (stop_loop.txt) detected - operation stopped by user.")
+            logger.warning("Stop signal (stop_loop.txt) detected - operation stopped by user.")
             return True  # Signal callers to stop.
         return False  # No stop requested.

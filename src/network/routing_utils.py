@@ -26,6 +26,8 @@ from src.network._routing_utils_payload import _RoutingUtilsPayload  # WHY: HTTP
 from src.network._routing_utils_routing import _RoutingUtilsRouting  # WHY: routing table orchestrator
 from src.network._routing_utils_ssr import _RoutingUtilsSSR  # WHY: SSR orchestrator
 
+logger = logging.getLogger(__name__)  # Use this module name in log records.
+
 logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
 
 
@@ -213,7 +215,7 @@ class RoutingUtils:
 
     def _log_device_info_error(self, error: Exception, debug_mode: bool) -> None:
         """Emit user-facing warning and optional debug trace for device lookup failure."""
-        logging.warning("Could not verify device compatibility: %s", error)  # WHY: audit trail
+        logger.warning("Could not verify device compatibility: %s", error)  # WHY: audit trail
         if debug_mode:  # WHY: extra visibility when troubleshooting
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.debug("[DEBUG] Device check failed: %s", error)  # WHY: expose exception message
@@ -320,7 +322,7 @@ class RoutingUtils:
         device_context = f"device {device_id}"  # WHY: fallback when no metadata
         if device_info:  # WHY: prefer human-friendly type+name
             device_context = f"{device_info.get('type', 'unknown')} {device_info.get('name', device_id[:8])}"
-        logging.info("WebSocket %s completed successfully for %s", operation, device_context)  # WHY: audit trail
+        logger.info("WebSocket %s completed successfully for %s", operation, device_context)  # WHY: audit trail
 
     def _handle_routing_error(
         self,
@@ -332,7 +334,7 @@ class RoutingUtils:
         error_message = f"WebSocket {operation_name} operation failed: {error}"  # WHY: formatted context
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.error("! %s", error_message)  # WHY: user-facing failure
-        logging.error(error_message)  # WHY: persist in log
+        logger.error(error_message)  # WHY: persist in log
         if debug_mode:  # WHY: dump traceback only under debug
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.debug("[DEBUG] Exception details:")  # WHY: banner

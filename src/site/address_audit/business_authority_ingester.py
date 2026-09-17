@@ -20,6 +20,8 @@ from src.site.address_audit.suite_patterns import (
     SUITE_PATTERN_CAPTURE as _SUITE_PATTERN,
 )  # Shared suite detector for no-suite key normalization.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 @dataclass(frozen=True)
 class BusinessAuthorityRow:
@@ -37,14 +39,14 @@ class BusinessAuthorityIngester:
 
     def load(self, path: str) -> list[BusinessAuthorityRow]:
         """Load ``path`` and return normalized authority rows (empty on malformed body)."""
-        logging.info("Loading business-authoritative CSV from %s", path)  # Action-log the selected authority file.
+        logger.info("Loading business-authoritative CSV from %s", path)  # Action-log the selected authority file.
         if not os.path.isfile(path):  # Guard: prompt-selected path might still be missing on disk.
-            logging.error("Business-authoritative CSV not found: %s", path)  # Log the hard failure clearly.
+            logger.error("Business-authoritative CSV not found: %s", path)  # Log the hard failure clearly.
             raise FileNotFoundError(f"Business-authoritative CSV not found: {path}")  # Controlled caller-visible error.
         with open(path, encoding="utf-8-sig", newline="") as handle:  # utf-8-sig tolerates Excel/BOM exports.
             reader = csv.DictReader(handle)  # Header-aware parser for T-Builder-like exports.
             rows = [parsed for raw in reader if (parsed := self._parse_row(raw)) is not None]  # Normalize valid rows.
-        logging.debug("Loaded %d authoritative rows from %s", len(rows), os.path.basename(path))  # Action-log totals.
+        logger.debug("Loaded %d authoritative rows from %s", len(rows), os.path.basename(path))  # Action-log totals.
         return rows  # Return normalized authority rows for indexing.
 
     def build_index(self, rows: list[BusinessAuthorityRow]) -> dict[str, dict[str, list[BusinessAuthorityRow]]]:

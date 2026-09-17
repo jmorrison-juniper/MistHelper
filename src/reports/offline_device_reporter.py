@@ -29,6 +29,8 @@ from src.config.source_dependency_resolver import (
 )
 from src.utils.console import echo  # WHY: 1031 stdout + INFO log helper replaces legacy WARNING-channel echoes.
 
+logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
+
 
 class OfflineDeviceReporter:  # Offline device inventory report.
     """Offline Device Report (Menu 158).
@@ -56,7 +58,7 @@ class OfflineDeviceReporter:  # Offline device inventory report.
             max_h = OfflineDeviceReporter.MAX_THRESHOLD_HOURS  # Local alias for line length.
             if min_h <= hours <= max_h:
                 return hours  # Valid -- accept.
-            logging.warning(
+            logger.warning(
                 "! Threshold must be between %s and %s hours.", min_h, max_h
             )  # Out-of-range echo via logger.
         except ValueError:
@@ -68,7 +70,7 @@ class OfflineDeviceReporter:  # Offline device inventory report.
         """Prompt user for offline threshold in hours, with validation."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if mh.IS_TEST_MODE:  # Test mode skips interactive prompt.
-            logging.debug("Test mode: using default threshold 48 hours")  # Log shortcut.
+            logger.debug("Test mode: using default threshold 48 hours")  # Log shortcut.
             return OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS  # Default value.
         for attempt in range(OfflineDeviceReporter.MAX_INPUT_RETRIES):  # Bounded retry loop.
             raw = mh.InputUtils.safe_input(
@@ -82,7 +84,7 @@ class OfflineDeviceReporter:  # Offline device inventory report.
             remaining = OfflineDeviceReporter.MAX_INPUT_RETRIES - attempt - 1  # Attempts left.
             if remaining > 0:
                 echo("  (%s attempt(s) remaining)", remaining)
-        logging.warning("Max retries exceeded for threshold input, using default 48 hours")  # Log fallback.
+        logger.warning("Max retries exceeded for threshold input, using default 48 hours")  # Log fallback.
         echo("  Using default threshold: %s hours", OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS)
         return OfflineDeviceReporter.DEFAULT_THRESHOLD_HOURS
 
@@ -90,7 +92,7 @@ class OfflineDeviceReporter:  # Offline device inventory report.
     def _fetch_data(current_org_id: str) -> tuple[dict[str, str], list[dict[str, Any]]]:
         """Fetch site lookup and device stats from Mist API."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Fetching site information for offline device report...")
+        logger.info("Fetching site information for offline device report...")
         echo("  Fetching site information...")
         all_sites = mh.APICoreFetchUtils.all_sites_with_limit(current_org_id)
         site_lookup: dict[str, str] = {}
@@ -99,13 +101,13 @@ class OfflineDeviceReporter:  # Offline device inventory report.
             if site_id:
                 site_lookup[site_id] = site.get("name", "Unknown Site")
 
-        logging.info("Fetching device stats for offline device report...")
+        logger.info("Fetching device stats for offline device report...")
         echo("  Fetching device statistics...")
         stats_resp = mh.mistapi.api.v1.orgs.stats.listOrgDevicesStats(
             mh.apisession, current_org_id, type="all", status="all", fields="*", limit=1000
         )
         all_devices: list[dict[str, Any]] = mh.mistapi.get_all(response=stats_resp, mist_session=mh.apisession)
-        logging.info("Retrieved stats for %s devices", len(all_devices))
+        logger.info("Retrieved stats for %s devices", len(all_devices))
         echo("  Retrieved %s devices from API", len(all_devices))
         return site_lookup, all_devices
 
@@ -243,7 +245,7 @@ class OfflineDeviceReporter:  # Offline device inventory report.
         mh.DataExporter.write_with_format_selection(
             data=csv_records, filename_or_table=filename, api_function_name="listOrgDevicesStats"
         )  # Persist.
-        logging.info("CSV saved: data/%s (%s devices)", filename, total_count)  # Log save.
+        logger.info("CSV saved: data/%s (%s devices)", filename, total_count)  # Log save.
         echo("\nCSV saved: data/%s (%s devices)", filename, total_count)
 
     @staticmethod
@@ -280,14 +282,14 @@ class OfflineDeviceReporter:  # Offline device inventory report.
         OfflineDeviceReporter._display_summary(total_count, offline_records, threshold_hours)  # Summary section.
         OfflineDeviceReporter._present_results(offline_records)  # Detail table + CSV.
         elapsed = time.time() - start_time  # Elapsed wall time.
-        logging.info("Offline device report completed in %.1f seconds", elapsed)  # Log duration.
+        logger.info("Offline device report completed in %.1f seconds", elapsed)  # Log duration.
         echo("\nReport completed in %.1f seconds", elapsed)
 
     @staticmethod
     def execute() -> None:  # Run the offline report.
         """Main entry point for offline device report (Menu 158)."""
         echo("\n=== Offline Device Report ===")
-        logging.info("Starting offline device report...")  # Log start.
+        logger.info("Starting offline device report...")  # Log start.
         start_time = time.time()  # Start timer.
         current_org_id, threshold_hours = OfflineDeviceReporter._gather_offline_inputs()  # Org + threshold.
         if not current_org_id:  # Abort signaled.
@@ -299,12 +301,12 @@ class OfflineDeviceReporter:  # Offline device inventory report.
             echo("! Failed to fetch data. Please check your API credentials and network connection.")
             return
         if not all_devices:  # No devices in org.
-            logging.info("No devices found in organization")  # Log it.
+            logger.info("No devices found in organization")  # Log it.
             echo("No devices found in this organization.")
             return
         offline_records = OfflineDeviceReporter._process_devices(all_devices, site_lookup, threshold_hours)  # Filter.
         if not offline_records:  # Nothing offline.
             echo("No devices found offline for more than %s hours. All clear!", threshold_hours)
-            logging.info("No devices offline beyond %sh threshold", threshold_hours)  # Log all-clear.
+            logger.info("No devices offline beyond %sh threshold", threshold_hours)  # Log all-clear.
             return
         OfflineDeviceReporter._finalize_offline_report(len(all_devices), offline_records, threshold_hours, start_time)

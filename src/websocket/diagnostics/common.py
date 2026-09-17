@@ -19,9 +19,9 @@ logger = logging.getLogger(__name__)  # WHY: Module-scoped logger routes former 
 
 def detect_debug_mode() -> bool:
     """Return True when the user passed --debug or -d on the CLI."""
-    logging.debug("Inspecting sys.argv for WebSocket diagnostic debug flag")  # Action log before scan
+    logger.debug("Inspecting sys.argv for WebSocket diagnostic debug flag")  # Action log before scan
     debug_flag_present = "--debug" in sys.argv or "-d" in sys.argv  # Match either accepted flag spelling
-    logging.debug("Debug mode flag detected: %s", debug_flag_present)  # Action log after scan
+    logger.debug("Debug mode flag detected: %s", debug_flag_present)  # Action log after scan
     return debug_flag_present  # Tell caller whether to enable verbose printing
 
 
@@ -40,9 +40,9 @@ def post_device_command(
         logger.info(  # Print headers but never the real token value (security)
             "[DEBUG] Headers = {'Authorization': 'Token [REDACTED]', 'Content-Type': 'application/json'}"
         )
-    logging.info("Issuing %s POST to %s", command_label, url)  # Action log before HTTP call
+    logger.info("Issuing %s POST to %s", command_label, url)  # Action log before HTTP call
     response = requests.post(url, headers=headers, json=payload, timeout=30)  # Fire HTTP request
-    logging.debug(  # Action log after HTTP call with status only (body may contain sensitive data)
+    logger.debug(  # Action log after HTTP call with status only (body may contain sensitive data)
         "%s POST completed with status=%s", command_label, response.status_code
     )
     if debug_mode:  # Mirror legacy debug prints of full response
@@ -65,7 +65,7 @@ def extract_command_session(
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning("! Response: %s", response.text)  # Show body for operator triage
         websocket_manager.disconnect()  # Free the WS since we will not consume results
-        logging.warning(  # Action log after failure path
+        logger.warning(  # Action log after failure path
             "%s command failed; status=%s", command_label, response.status_code
         )
         return None  # Signal caller to abort
@@ -75,9 +75,9 @@ def extract_command_session(
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning("! No session ID returned from %s command", command_label)  # User-facing error
         websocket_manager.disconnect()  # Free the WS since we cannot demux results
-        logging.warning("%s command returned no session id", command_label)  # Action log
+        logger.warning("%s command returned no session id", command_label)  # Action log
         return None  # Signal caller to abort
-    logging.debug(  # Action log after success path
+    logger.debug(  # Action log after success path
         "%s command session established (len=%d)", command_label, len(session_id)
     )
     return session_id  # Caller awaits results on this session id
@@ -89,15 +89,15 @@ def prepare_command_credentials(
     debug_mode: bool,
 ) -> tuple[str, str] | None:
     """Pull Mist host/token, validate, or disconnect+None on missing credentials."""
-    logging.debug("Fetching Mist host+token for diagnostic command")  # Action log before lookup
+    logger.debug("Fetching Mist host+token for diagnostic command")  # Action log before lookup
     mist_host, mist_apitoken = get_mist_credentials(deps_apisession)  # Pull cloud + API token
-    logging.debug("Validating Mist credentials for diagnostic command")  # Action log before check
+    logger.debug("Validating Mist credentials for diagnostic command")  # Action log before check
     if not check_mist_credentials(  # check_mist_credentials prints its own error + disconnects on fail
         websocket_manager, mist_host, mist_apitoken, debug_mode
     ):
-        logging.warning("Mist credential validation failed for diagnostic command")  # After log
+        logger.warning("Mist credential validation failed for diagnostic command")  # After log
         return None  # Caller aborts the diagnostic
-    logging.debug("Mist credentials accepted for diagnostic command")  # Action log after success
+    logger.debug("Mist credentials accepted for diagnostic command")  # Action log after success
     return mist_host, mist_apitoken  # Caller uses these to build the POST URL+headers
 
 

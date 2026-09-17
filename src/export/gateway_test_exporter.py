@@ -37,6 +37,8 @@ from src.data.data_processing_utils import (
 from src.refactors import fast_mode_constants  # WHY: read fast-mode settings from source.
 from src.validation.validation_utils import ValidationUtils  # WHY: 1014 P5 direct import (FR-005).
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class GatewayTestExporter:
     """Gateway Synthetic Test Exports.
@@ -49,9 +51,9 @@ class GatewayTestExporter:
     def _resolve_misthelper_runtime() -> Any:
         """Load MistHelper and wire gateway dependencies before a gateway-test export begins."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Configuring gateway dependencies for gateway test export")  # WHY: record the required DI setup.
+        logger.info("Configuring gateway dependencies for gateway test export")  # WHY: record the required DI setup.
         mh._configure_gateway_module()  # WHY: gateway inventory needs its APICoreFetchUtils dependency.
-        logging.debug(
+        logger.debug(
             "Gateway dependencies configured for gateway test export"
         )  # WHY: confirm DI completed before API work.
         return mh  # WHY: callers also need MistHelper's session and runtime configuration.
@@ -62,10 +64,10 @@ class GatewayTestExporter:
         mh = (
             GatewayTestExporter._resolve_misthelper_runtime()
         )  # WHY: wire GatewayExportUtils before its inventory lookup.
-        logging.debug("[DEBUG] GatewayTestExporter.synthetic_tests invoked with fast=%s", fast)  # Entry trace.
-        logging.info("[INFO] Collecting synthetic test stats for all gateways in the org...")  # Log start.
+        logger.debug("[DEBUG] GatewayTestExporter.synthetic_tests invoked with fast=%s", fast)  # Entry trace.
+        logger.info("[INFO] Collecting synthetic test stats for all gateways in the org...")  # Log start.
         if fast:  # Fast mode.
-            logging.info(" Fast mode enabled: Using cached data and concurrent processing (synthetic tests)")
+            logger.info(" Fast mode enabled: Using cached data and concurrent processing (synthetic tests)")
         emitter = mh.PROGRESS_EMITTER  # Progress emitter.
         if emitter:  # Emitter present.
             emitter.emit_progress_start("16", "synthetic_tests", 1)  # Signal progress start.
@@ -73,7 +75,7 @@ class GatewayTestExporter:
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         gateway_devices = mh.GatewayExportUtils._get_devices_with_sites(org_id, fast=fast)  # List gateways.
         if not gateway_devices:  # No gateways.
-            logging.warning("[WARN] No gateway devices found. Exiting synthetic tests export.")  # Warn.
+            logger.warning("[WARN] No gateway devices found. Exiting synthetic tests export.")  # Warn.
             return  # Abort.
         all_stats: list[Any] = []  # Accumulate stats.
         if fast:  # Concurrent path.
@@ -127,10 +129,10 @@ class GatewayTestExporter:
             if stats is not None:  # Success.
                 return stats  # Return tagged stats.
             if attempt >= max_retries:  # Out of retries.
-                logging.error("! Final attempt failed for device %s at site %s", device_id, site_id)  # Final failure.
+                logger.error("! Final attempt failed for device %s at site %s", device_id, site_id)  # Final failure.
                 return None  # Give up.
             backoff_delay = retry_delay * (mh.FastModeBackoffMultiplier.VALUE**attempt)  # Exponential backoff.
-            logging.info(  # Log the retry.
+            logger.info(  # Log the retry.
                 "! Fast retry in %.1fs (attempt %s/%s)", backoff_delay, attempt + 2, max_retries + 1
             )
             time.sleep(backoff_delay)  # Wait before retry.
@@ -167,9 +169,9 @@ class GatewayTestExporter:
         stats["device_id"] = device_id  # Tag the device.
         stats["device_name"] = device_name  # Tag the device name.
         if attempt > 0:  # After a retry.
-            logging.info("! Retry %s successful for device %s at site %s", attempt, device_name, site_name)
+            logger.info("! Retry %s successful for device %s at site %s", attempt, device_name, site_name)
         else:
-            logging.info("! Collected synthetic test stats for device %s at site %s", device_name, site_name)
+            logger.info("! Collected synthetic test stats for device %s at site %s", device_name, site_name)
 
     @staticmethod
     def _call_synthetic_endpoint(site_id: str, device_id: str, connection_semaphore: Any) -> Any:
@@ -202,7 +204,7 @@ class GatewayTestExporter:
         )
         duration = time.time() - start_time  # Compute the duration.
         all_stats.extend(successful_results)  # Collect the results.
-        logging.info(  # Log the totals.
+        logger.info(  # Log the totals.
             " FAST MODE SUMMARY (synthetic tests): ok=%s fail=%s total=%s elapsed=%.2fs",
             len(successful_results),
             len(failed_devices),
@@ -225,7 +227,7 @@ class GatewayTestExporter:
             max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2),
         )
         if retry_threads <= 0:  # No threads available.
-            logging.warning(" FAST MODE: No available threads for retry; skipping retries")
+            logger.warning(" FAST MODE: No available threads for retry; skipping retries")
             return [], failed_devices  # Return original failures.
         retry_results: list[Any] = []  # Collect retry results.
         still_failed: list[Any] = []  # Track still-failed devices.
@@ -267,10 +269,10 @@ class GatewayTestExporter:
             result = future.result()  # Read the result.
             if result:  # Have a result.
                 retry_results.append(result)  # Collect it.
-                logging.info(" FAST RETRY OK: %s", device_info[2])  # Log retry success.
+                logger.info(" FAST RETRY OK: %s", device_info[2])  # Log retry success.
             else:
                 still_failed.append(device_info)  # Still failed.
-                logging.error(" FAST RETRY FAIL: %s", device_info[2])  # Log retry failure.
+                logger.error(" FAST RETRY FAIL: %s", device_info[2])  # Log retry failure.
         except Exception as exception:  # Retry raised.
             still_failed.append(device_info)  # Still failed.
             logging.error(" FAST RETRY EXC: %s -> %s", device_info[2], exception)  # Log exception.
@@ -291,7 +293,7 @@ class GatewayTestExporter:
             smoothed, delay = mh.RateLimitingUtils.get_rate_limited_delay(  # type: ignore[no-untyped-call]
                 smoothed, mh.apisession, api_usage_cache.api_usage_cache
             )
-            logging.info("[INFO] Sleeping for %.2fs.", delay)  # Log the sleep.
+            logger.info("[INFO] Sleeping for %.2fs.", delay)  # Log the sleep.
             time.sleep(delay)  # Pace the API.
 
     @staticmethod
@@ -299,16 +301,16 @@ class GatewayTestExporter:
         """Write the aggregated stats to CSV + log totals (or warn when empty)."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not all_stats:  # No results.
-            logging.warning(" No synthetic test results found. CSV not created.")  # Warn.
-            logging.warning("! No synthetic test results found. CSV not created.")  # Tell the user.
+            logger.warning(" No synthetic test results found. CSV not created.")  # Warn.
+            logger.warning("! No synthetic test results found. CSV not created.")  # Tell the user.
             return  # Nothing to write.
         filename = "AllGatewaySyntheticTests.csv"  # Build the CSV name.
         flattened = DataProcessingUtils.flatten_nested_fields(all_stats)  # Flatten nested fields.
         sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]
         mh.DataExporter.write_with_format_selection(sanitized, filename, api_function_name="getSiteDeviceSyntheticTest")  # type: ignore[no-untyped-call]
-        logging.info("! %s gateway synthetic test results exported to %s", len(all_stats), filename)  # Tell user.
-        logging.info("! Synthetic test results saved to %s (%s records).", filename, len(all_stats))
-        logging.info(  # Log the optimization summary.
+        logger.info("! %s gateway synthetic test results exported to %s", len(all_stats), filename)  # Tell user.
+        logger.info("! Synthetic test results saved to %s (%s records).", filename, len(all_stats))
+        logger.info(  # Log the optimization summary.
             "! API Optimization: Saved %s listSiteDevices calls by using cached inventory",
             len(gateway_devices),
         )

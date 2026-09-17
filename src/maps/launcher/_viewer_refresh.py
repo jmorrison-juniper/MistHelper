@@ -19,6 +19,7 @@ from dataclasses import dataclass  # WHY: frozen bundles collapse >5-param call 
 from datetime import datetime  # WHY: human-readable audit timestamps on refresh completion
 from typing import TYPE_CHECKING, Any  # WHY: opaque manager + type-permissive Dash callback args
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 if TYPE_CHECKING:  # WHY: keep dash imports lazy at runtime
     from dash import Dash  # WHY: annotation reference for register(app)
 
@@ -185,7 +186,7 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
             return False  # WHY: propagate skip-signal to caller so it can emit no_update
         trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]  # WHY: component id that fired
         if trigger_id == _MANUAL_REFRESH_TRIGGER:  # WHY: preserve original manual-refresh audit
-            logging.info("Live data refresh: Manual refresh requested")  # WHY: audit log parity
+            logger.info("Live data refresh: Manual refresh requested")  # WHY: audit log parity
         return True  # WHY: caller proceeds with the full refresh flow
 
     @staticmethod
@@ -205,10 +206,10 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
         site_id_local = config.get("site_id") if config else None  # WHY: required by every API call below
         map_id_local = config.get("map_id") if config else None  # WHY: filter clients/zones/walls by map
         if not site_id_local:  # WHY: missing site_id is a misconfiguration
-            logging.warning("Live data refresh: site_id is None, skipping refresh. Config: %s", config)  # WHY: audit
+            logger.warning("Live data refresh: site_id is None, skipping refresh. Config: %s", config)  # WHY: audit
             return None  # WHY: signal caller to short-circuit without API side effects
         if not map_id_local:  # WHY: missing map_id is a misconfiguration
-            logging.warning("Live data refresh: map_id is None, skipping refresh")  # WHY: audit
+            logger.warning("Live data refresh: map_id is None, skipping refresh")  # WHY: audit
             return None  # WHY: signal caller to short-circuit without API side effects
         return _MapContext(site_id=site_id_local, map_id=map_id_local)  # WHY: frozen ctx groups validated ids
 
@@ -243,7 +244,7 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
     ) -> None:
         """Emit the parity audit log line summarizing WiFi/Wired counts."""
         timestamp = datetime.now().strftime(_TIMESTAMP_FMT)  # WHY: human-readable timestamp
-        logging.info(  # WHY: preserve original completion audit message
+        logger.info(  # WHY: preserve original completion audit message
             "Live data refresh: Client positions updated at %s - WiFi: %s, Wired: %s",
             timestamp,  # WHY: formatted local wall-clock stamp
             len(wifi_data["x"]),  # WHY: WiFi client count is derived from X-coord bucket length
@@ -256,14 +257,14 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
 
     def _fetch_fresh_clients(self, site_id: str, map_id: str) -> list[dict[str, Any]] | None:  # WHY: bounded fetch
         """Fetch site wireless clients and filter for this map (returns None on API error)."""
-        logging.info(  # WHY: preserve original "fetching" audit log
+        logger.info(  # WHY: preserve original "fetching" audit log
             "Live data refresh: Fetching client positions for map %s (site: %s)", map_id, site_id
         )
         clients_response = self._state.mistapi_ref.api.v1.sites.stats.listSiteWirelessClientsStats(  # WHY: API call
             self._state.api_session_ref, site_id=site_id, limit=_CLIENT_FETCH_LIMIT
         )
         if clients_response.status_code != _HTTP_OK:  # WHY: HTTP failure => caller short-circuits
-            logging.warning(  # WHY: audit failure with HTTP status
+            logger.warning(  # WHY: audit failure with HTTP status
                 "Live data refresh: Failed to fetch clients - HTTP %s", clients_response.status_code
             )
             return None  # WHY: sentinel tells caller to preserve figure unchanged
@@ -271,10 +272,10 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
             response=clients_response, mist_session=self._state.api_session_ref
         )
         fresh_clients = [c for c in all_clients if self._is_client_positioned_on_map(c, map_id)]  # WHY: filter
-        logging.info(  # WHY: preserve original "found" audit log
+        logger.info(  # WHY: preserve original "found" audit log
             "Live data refresh: Found %s clients on map (total: %s)", len(fresh_clients), len(all_clients)
         )
-        logging.debug("Live data refresh: client fetch complete count=%d", len(fresh_clients))  # WHY: detail trace
+        logger.debug("Live data refresh: client fetch complete count=%d", len(fresh_clients))  # WHY: detail trace
         return fresh_clients  # WHY: caller partitions the filtered list into WiFi/Wired buckets
 
     @staticmethod
@@ -378,7 +379,7 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
     @staticmethod
     def _log_wifi_trace_update(wifi: dict[str, list[Any]]) -> None:
         """Emit the parity WiFi audit log with a sample of X coordinates."""
-        logging.info(  # WHY: preserve original audit log
+        logger.info(  # WHY: preserve original audit log
             "Live data refresh: Updated WiFi clients trace with %s clients, coords sample: %s",
             len(wifi["x"]),
             wifi["x"][:3] if wifi["x"] else "empty",
@@ -387,14 +388,14 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
     @staticmethod
     def _log_wired_trace_update(wired: dict[str, list[Any]]) -> None:
         """Emit the parity Wired audit log."""
-        logging.info(  # WHY: preserve original audit log
+        logger.info(  # WHY: preserve original audit log
             "Live data refresh: Updated Wired clients trace with %s clients", len(wired["x"])
         )
 
     @staticmethod
     def _log_missing_client_trace(current_fig: dict[str, Any]) -> None:
         """Warn (with available trace names) when no WiFi trace was found."""
-        logging.warning(  # WHY: preserve original warning identifying available trace names
+        logger.warning(  # WHY: preserve original warning identifying available trace names
             "Live data refresh: Could not find 'Clients' trace to update. Available traces: %s",
             [t.get("name", "unnamed") for t in current_fig["data"]],
         )
@@ -408,7 +409,7 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
         preserved = cls._preserve_non_client_annotations(layout["annotations"])  # WHY: keep foreign labels
         new_labels = [cls._build_client_label(x, y, name) for x, y, name in cls._iter_client_labels(wifi)]
         layout["annotations"] = preserved + new_labels  # WHY: commit the replacement
-        logging.info("Live data refresh: Updated %s client label annotations", len(wifi["names"]))  # WHY: audit
+        logger.info("Live data refresh: Updated %s client label annotations", len(wifi["names"]))  # WHY: audit
 
     @staticmethod
     def _extract_annotation_layout(current_fig: dict[str, Any]) -> dict[str, Any] | None:
@@ -469,7 +470,7 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
             response=zones_response, mist_session=self._state.api_session_ref
         )
         zones_on_map = [z for z in all_zones if z.get("map_id") == map_id]  # WHY: filter to this map
-        logging.info("Live data refresh: Found %s zones on map", len(zones_on_map))  # WHY: audit
+        logger.info("Live data refresh: Found %s zones on map", len(zones_on_map))  # WHY: audit
 
     def _refresh_walls_silent(self, site_id: str, map_id: str, current_fig: dict[str, Any]) -> None:
         """Fetch map walls for logging visibility only. Swallow errors per original behavior."""
@@ -488,7 +489,7 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
         payload = map_data_fresh if isinstance(map_data_fresh, dict) else {}  # WHY: defensive default
         wall_path = payload.get("wall_path", {})  # WHY: walls live under wall_path
         wall_nodes = wall_path.get("nodes", [])  # WHY: node list (may be empty)
-        logging.info("Live data refresh: Map has %s wall nodes", len(wall_nodes))  # WHY: audit
+        logger.info("Live data refresh: Map has %s wall nodes", len(wall_nodes))  # WHY: audit
         if wall_nodes:  # WHY: preserve the original 'walls' trace touch loop
             cls._touch_walls_trace(current_fig)  # WHY: parity no-op preserved via helper
 
@@ -536,12 +537,12 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
         """Validate the config store and return a ``_CoverageContext`` or None on failure."""
         site_id_local, map_id_local, ppm_local = _ViewerRefresh._read_coverage_config(config)  # WHY: 1 helper
         if not site_id_local:  # WHY: missing site_id is a misconfiguration
-            logging.warning(  # WHY: preserve original audit warning
+            logger.warning(  # WHY: preserve original audit warning
                 "Live data refresh: RF coverage - site_id is None, skipping. Config: %s", config
             )
             return None
         if not map_id_local:  # WHY: missing map_id is a misconfiguration
-            logging.warning("Live data refresh: RF coverage - map_id is None, skipping")  # WHY: audit
+            logger.warning("Live data refresh: RF coverage - map_id is None, skipping")  # WHY: audit
             return None
         return _CoverageContext(site_id=site_id_local, map_id=map_id_local, ppm=float(ppm_local))
 
@@ -583,7 +584,7 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
     def _log_coverage_completion(point_count: int) -> None:
         """Emit the parity audit log for a completed coverage refresh."""
         timestamp = datetime.now().strftime(_TIMESTAMP_FMT)  # WHY: human-readable timestamp
-        logging.info(  # WHY: preserve original completion audit log
+        logger.info(  # WHY: preserve original completion audit log
             "Live data refresh: RF coverage updated at %s - %s points", timestamp, point_count
         )
 
@@ -593,7 +594,7 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
 
     def _fetch_coverage_results(self, site_id: str, map_id: str) -> tuple[list[Any], list[str]] | None:
         """Call the coverage endpoint and validate the payload. Return (results, result_def) or None."""
-        logging.info(  # WHY: preserve original audit log
+        logger.info(  # WHY: preserve original audit log
             "Live data refresh: Fetching RF coverage data for map %s (site: %s)", map_id, site_id
         )
         coverage_url = _COVERAGE_URL_TEMPLATE.format(site_id=site_id)  # WHY: interpolated endpoint path
@@ -615,13 +616,13 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
     def _extract_coverage_payload(coverage_response: Any) -> dict[str, Any] | None:
         """Return the coverage JSON payload dict, or None on HTTP failure / API error envelope."""
         if coverage_response.status_code != _HTTP_OK:  # WHY: HTTP failure
-            logging.warning(  # WHY: preserve original warning text
+            logger.warning(  # WHY: preserve original warning text
                 "Live data refresh: Failed to fetch RF coverage - HTTP %s", coverage_response.status_code
             )
             return None
         coverage_data = coverage_response.data  # WHY: parsed JSON payload
         if isinstance(coverage_data, dict) and "exception" in coverage_data:  # WHY: API-level error envelope
-            logging.warning("Live data refresh: Coverage API returned error")  # WHY: audit
+            logger.warning("Live data refresh: Coverage API returned error")  # WHY: audit
             return None
         return coverage_data if isinstance(coverage_data, dict) else None  # WHY: defensive default
 
@@ -631,9 +632,9 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
         result_def = payload.get("result_def", [])  # WHY: field-name array
         results = payload.get("results", [])  # WHY: per-cell measurement array
         if not results or not result_def:  # WHY: empty payload => nothing to render
-            logging.info("Live data refresh: No coverage data available")  # WHY: audit
+            logger.info("Live data refresh: No coverage data available")  # WHY: audit
             return None
-        logging.info("Live data refresh: Processing %s coverage grid points", len(results))  # WHY: audit
+        logger.info("Live data refresh: Processing %s coverage grid points", len(results))  # WHY: audit
         return results, result_def
 
     @staticmethod
@@ -725,7 +726,7 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
         x_idx, y_idx, rssi_idx = indices  # WHY: unpack index triple
         grid_data = cls._aggregate_grid_cells(results, x_idx, y_idx, rssi_idx)  # WHY: rows -> cells
         if not grid_data:  # WHY: coverage payload was non-empty but yielded no cells
-            logging.info("Live data refresh: No coverage grid data to visualize")  # WHY: audit
+            logger.info("Live data refresh: No coverage grid data to visualize")  # WHY: audit
             return None
         return cls._build_z_matrix(grid_data, ppm_local)  # WHY: project into Plotly heatmap shape
 
@@ -755,7 +756,7 @@ class _ViewerRefresh:  # WHY: wrapper class hosting the live-refresh callback cl
         trace["zmin"] = grid_info.min_rssi  # WHY: color scale lower bound
         trace["zmax"] = grid_info.max_rssi  # WHY: color scale upper bound
         trace["visible"] = _RF_LAYER_KEY in (layer_values or [])  # WHY: visibility follows toggle
-        logging.debug(  # WHY: preserve original debug audit
+        logger.debug(  # WHY: preserve original debug audit
             "Live data refresh: Updated RF coverage heatmap with %s cells", grid_info.cell_count
         )
 

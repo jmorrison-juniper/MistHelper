@@ -25,6 +25,8 @@ from typing import Any, cast  # WHY: opaque manager plus typed cast for untyped 
 from src.capture.packet_capture_download import PacketCaptureDownloadManager  # WHY: shared parser/downloader
 from src.capture.site_capture_loop import SiteCaptureLoopRunner  # WHY: shared loop-runner
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 # WHY: a dropped WebSocket never delivers the Mist end-of-capture signal. The cap turns a permanent hang into a
 # reported timeout. One hour covers the longest supported Mist capture window with room to spare.
 _STREAM_MAX_SECONDS = 3600
@@ -62,7 +64,7 @@ class PacketCaptureExec:
         """Execute site-level packet capture via API."""
         try:  # WHY: broad guard so unexpected failures do not crash the CLI
             print(f"\n> Starting packet capture for site {site_id}...")  # WHY: user progress banner
-            logging.info("Initiating site capture with payload: %s", payload)  # WHY: audit request
+            logger.info("Initiating site capture with payload: %s", payload)  # WHY: audit request
             response = _pc().mistapi.api.v1.sites.pcaps.startSitePacketCapture(  # WHY: start capture
                 self.mist_session, site_id, payload
             )
@@ -87,7 +89,7 @@ class PacketCaptureExec:
         print(f"  Format: {capture_format}")  # WHY: expose format so user knows expected flow
         print(f"  Duration: {result.get('duration', 0)} seconds")  # WHY: show capture window
         print(f"  Expires: {result.get('expiry', 'unknown')}")  # WHY: show expiry hint
-        logging.info("Site capture started: capture_id=%s, format=%s", capture_id, capture_format)  # WHY: audit
+        logger.info("Site capture started: capture_id=%s, format=%s", capture_id, capture_format)  # WHY: audit
         self._route_monitor(site_id, capture_id, capture_format, result)  # WHY: format-dependent path
         self._export_capture_info_to_csv(result, "site", site_id)  # WHY: persist metadata to CSV
 
@@ -111,11 +113,11 @@ class PacketCaptureExec:
             print("\n! Capture already in progress on this AP")  # WHY: explicit conflict message
             print("  Only one capture per AP is allowed at a time")  # WHY: educate user
             print("  Wait for the existing capture to complete or check the Mist portal to stop it")  # WHY: remediate
-            logging.error("Capture conflict: Recording already in progress on AP")  # WHY: audit conflict
+            logger.error("Capture conflict: Recording already in progress on AP")  # WHY: audit conflict
             return  # WHY: do not print generic error over specialized one
         print(f"\n! Failed to start capture: {response.status_code}")  # WHY: generic failure
         print(f"  Error details: {error_details}")  # WHY: surface API detail
-        logging.error("Capture failed: %s - %s", response.status_code, error_details)  # WHY: audit failure
+        logger.error("Capture failed: %s - %s", response.status_code, error_details)  # WHY: audit failure
 
     @staticmethod
     def _is_recording_conflict(status: int, details: Any) -> bool:
@@ -144,7 +146,7 @@ class PacketCaptureExec:
     def attempt_loop_capture(self, site_id: str, payload: dict[str, Any], iteration: int) -> float | None:
         """Attempt to start a new capture and return the capture start time."""
         print("\n  Starting new packet capture...")  # WHY: user status
-        logging.info("Loop iteration %s: Starting new capture with payload: %s", iteration, payload)  # WHY: audit
+        logger.info("Loop iteration %s: Starting new capture with payload: %s", iteration, payload)  # WHY: audit
         response = self._loop_start_call(site_id, payload, iteration)  # WHY: isolated API call w/ error handling
         if response is None:  # WHY: caller signal that the API call failed
             return None  # WHY: skip this iteration
@@ -171,7 +173,7 @@ class PacketCaptureExec:
         error_details = response.data if hasattr(response, "data") else "No error details"  # WHY: safe extract
         print(f"  Failed to start capture: HTTP {response.status_code}")  # WHY: user-facing status
         print(f"    Error: {error_details}")  # WHY: expose API detail
-        logging.error(  # WHY: audit trail for failed iteration
+        logger.error(  # WHY: audit trail for failed iteration
             "Loop iteration %s capture failed: %s - %s", iteration, response.status_code, error_details
         )
         if PacketCaptureExec._is_recording_conflict(response.status_code, error_details):  # WHY: extra hint
@@ -184,7 +186,7 @@ class PacketCaptureExec:
         print("  Capture started successfully!")  # WHY: user confirmation
         print(f"    Capture ID: {capture_id}")  # WHY: expose id
         print(f"    Duration: {duration} seconds")  # WHY: expose duration
-        logging.info("Loop iteration %s: Capture started - ID=%s", iteration, capture_id)  # WHY: audit
+        logger.info("Loop iteration %s: Capture started - ID=%s", iteration, capture_id)  # WHY: audit
         self._export_capture_info_to_csv(result, "site", site_id)  # WHY: persist metadata
         now: float = _pc().time.time()  # WHY: caller uses this as last_capture_time
         return now
@@ -269,10 +271,10 @@ class PacketCaptureExec:
         timestamp = capture.get("timestamp", 0)  # WHY: capture start epoch
         time_running = _pc().time.time() - timestamp if timestamp else elapsed  # WHY: fall back to local elapsed
         if not enabled:  # WHY: primary completion signal
-            logging.debug("Capture %s completed (enabled=False)", capture_id)  # WHY: audit
+            logger.debug("Capture %s completed (enabled=False)", capture_id)  # WHY: audit
             return True  # WHY: complete
         if time_running >= expected_duration:  # WHY: secondary signal (duration reached)
-            logging.debug("Capture %s completed (duration reached)", capture_id)  # WHY: audit
+            logger.debug("Capture %s completed (duration reached)", capture_id)  # WHY: audit
             return True  # WHY: complete
         self._report_in_progress(capture_id, expected_duration, time_running, poll_attempt)  # WHY: status line
         return None  # WHY: still running
@@ -283,15 +285,15 @@ class PacketCaptureExec:
         remaining = int(expected_duration - time_running)  # WHY: countdown value
         if poll_attempt % 5 == 0:  # WHY: throttle console output
             print(f"  ...capture in progress (~{remaining}s remaining)", end="\r")  # WHY: single-line update
-        logging.debug("Capture %s still running (%ss remaining)", capture_id, remaining)  # WHY: audit
+        logger.debug("Capture %s still running (%ss remaining)", capture_id, remaining)  # WHY: audit
 
     @staticmethod
     def _report_not_found(capture_id: str, elapsed: float) -> bool:
         """Log 'not found' at debug or warning level based on elapsed time."""
         if elapsed < 10:  # WHY: normal startup delay
-            logging.debug("Capture %s not found yet (elapsed=%ss)", capture_id, elapsed)  # WHY: audit
+            logger.debug("Capture %s not found yet (elapsed=%ss)", capture_id, elapsed)  # WHY: audit
         else:  # WHY: past startup grace period
-            logging.warning("Capture %s not found in list (elapsed=%ss)", capture_id, elapsed)  # WHY: warn
+            logger.warning("Capture %s not found in list (elapsed=%ss)", capture_id, elapsed)  # WHY: warn
         return False  # WHY: caller treats False as "not found"
 
     def poll_capture_once(
@@ -326,7 +328,7 @@ class PacketCaptureExec:
             if self._safe_poll(site_id, capture_id, expected_duration, start_time, poll_attempt):  # WHY: check
                 return True  # WHY: capture confirmed complete
             _pc().time.sleep(poll_interval)  # WHY: back off between polls to reduce API load
-        logging.warning("Capture %s completion check timed out after %ss", capture_id, max_wait)  # WHY: audit
+        logger.warning("Capture %s completion check timed out after %ss", capture_id, max_wait)  # WHY: audit
         return False  # WHY: caller treats False as timeout
 
     def _safe_poll(
@@ -385,17 +387,17 @@ class PacketCaptureExec:
     def read_stream_packets(self, channel: str, capture_id: str) -> None:
         """Read and count packets from WebSocket stream until the end signal or the deadline."""
         if self.websocket_manager is None:  # WHY: guard against uninitialized stream
-            logging.error("WebSocket manager not available for stream reading")  # WHY: audit
+            logger.error("WebSocket manager not available for stream reading")  # WHY: audit
             return  # WHY: nothing to read
         state = {"count": 0, "start": _pc().time.time()}  # WHY: mutable state shared with helper
         # WHY: a dropped socket or a lost end-of-capture signal never returns True from the drain helper. Without a
         # deadline the loop spins until the operator sends Ctrl-C, and an SSH session with no terminal cannot.
         deadline = state["start"] + _STREAM_MAX_SECONDS  # WHY: hard wall-clock cap on the whole stream.
-        logging.info("Reading capture stream %s with a %s second cap", capture_id, _STREAM_MAX_SECONDS)  # WHY: audit.
+        logger.info("Reading capture stream %s with a %s second cap", capture_id, _STREAM_MAX_SECONDS)  # WHY: audit.
         try:  # WHY: catch Ctrl-C to print summary
             while _pc().time.time() < deadline:  # WHY: bounded drain. The helper returns True when capture ends.
                 if self._drain_stream_batch(channel, capture_id, state):  # WHY: batch drain returns True on end
-                    logging.debug("Capture stream %s ended with %s packets", capture_id, state["count"])  # WHY: result
+                    logger.debug("Capture stream %s ended with %s packets", capture_id, state["count"])  # WHY: result
                     return  # WHY: capture ended cleanly
                 _pc().time.sleep(0.1)  # WHY: gentle CPU yield between batches
             self._report_stream_timeout(capture_id, state)  # WHY: the deadline expired, so tell the operator why.
@@ -408,7 +410,7 @@ class PacketCaptureExec:
         """Tell the operator that the stream reached the time cap before the end signal arrived."""
         print(f"\n! Capture stream stopped after {_STREAM_MAX_SECONDS} seconds with no end signal")  # WHY: notice.
         print(f"  Total packets received: {state['count']}")  # WHY: expose the partial result.
-        logging.warning(  # WHY: audit the timeout so a support bundle shows the cause.
+        logger.warning(  # WHY: audit the timeout so a support bundle shows the cause.
             "Capture stream %s hit the %s second cap after %s packets", capture_id, _STREAM_MAX_SECONDS, state["count"]
         )
 
@@ -485,14 +487,14 @@ class PacketCaptureExec:
     ) -> None:
         """Poll for PCAP readiness and download the file."""
         self._print_poll_banner(capture_id, duration)  # WHY: user status
-        logging.info("Polling for PCAP availability for capture %s", capture_id)  # WHY: audit
+        logger.info("Polling for PCAP availability for capture %s", capture_id)  # WHY: audit
         pcap_url: str | None = None  # WHY: pre-declare for exception branches
         try:  # WHY: broad guard so keyboard interrupt shows a friendly message
             pcap_url = self._download_manager.poll_for_pcap_url(  # WHY: delegate polling to helper
                 list_captures_fn, capture_id, duration
             )
             if not pcap_url:  # WHY: polling ended without a URL
-                logging.debug("Polling finished for %s without a downloadable URL", capture_id)  # WHY: audit
+                logger.debug("Polling finished for %s without a downloadable URL", capture_id)  # WHY: audit
                 return  # WHY: nothing to download
             self._finalize_pcap_save(pcap_url, capture_id, prefix)  # WHY: save the file
         except KeyboardInterrupt:  # WHY: user aborted the wait
@@ -511,9 +513,9 @@ class PacketCaptureExec:
     @staticmethod
     def _finalize_pcap_save(pcap_url: str, capture_id: str, prefix: str) -> None:
         """Save the resolved pcap URL to disk and log the outcome."""
-        logging.info("PCAP URL resolved for %s; starting file save", capture_id)  # WHY: audit
+        logger.info("PCAP URL resolved for %s; starting file save", capture_id)  # WHY: audit
         PacketCaptureDownloadManager.save_pcap_file(pcap_url, capture_id, prefix)  # WHY: delegate save
-        logging.debug("PCAP save callback completed for %s", capture_id)  # WHY: audit
+        logger.debug("PCAP save callback completed for %s", capture_id)  # WHY: audit
 
     @staticmethod
     def _handle_pcap_interrupt(capture_id: str, pcap_url: str | None) -> None:
@@ -527,6 +529,6 @@ class PacketCaptureExec:
     def _handle_pcap_error(capture_id: str, pcap_url: str | None, error: Exception) -> None:
         """User-friendly message when a pcap download raises an exception."""
         print(f"\n! Error downloading PCAP file: {error}")  # WHY: surface to user
-        logging.exception("Exception in poll_and_download_pcap for %s: %s", capture_id, error)  # WHY: audit
+        logger.exception("Exception in poll_and_download_pcap for %s: %s", capture_id, error)  # WHY: audit
         if pcap_url:  # WHY: only print URL if we already resolved one
             print(f"  Try downloading manually from: {pcap_url}")  # WHY: expose recovery path

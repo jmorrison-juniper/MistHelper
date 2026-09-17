@@ -27,6 +27,8 @@ from src.refactors.endpoint_primary_key_strategies import (  # WHY: PK catalog l
     ENDPOINT_PRIMARY_KEY_STRATEGIES,  # Direct import replaces the lazy `mh.ENDPOINT_PRIMARY_KEY_STRATEGIES` bypass.
 )
 
+logger = logging.getLogger(__name__)  # WHY: name each record for this module, not the root logger.
+
 
 class DatabaseSchemaUtils:  # Build SQLite DDL from data.
     """Centralized database schema utilities for SQLite operations.
@@ -46,7 +48,7 @@ class DatabaseSchemaUtils:  # Build SQLite DDL from data.
                     pattern in function_name
                     for pattern in ["getOrg", "listOrg", "searchOrg", "getSite", "listSite", "searchSite"]
                 ):
-                    logging.debug("Detected API function name from stack: %s", function_name)  # Trace detected name.
+                    logger.debug("Detected API function name from stack: %s", function_name)  # Trace detected name.
                     return function_name  # Use the detected API name.
                 frame = frame.f_back  # Step to the caller frame.
         except Exception as error:  # Stack inspection failed.
@@ -69,7 +71,7 @@ class DatabaseSchemaUtils:  # Build SQLite DDL from data.
         # First check if we have a specific strategy for this endpoint
         if api_function_name in ENDPOINT_PRIMARY_KEY_STRATEGIES:  # Use a configured strategy.
             strategy = ENDPOINT_PRIMARY_KEY_STRATEGIES[api_function_name].copy()  # Copy to avoid mutation.
-            logging.debug("Using configured strategy for %s: %s", api_function_name, strategy["type"])  # Trace pick.
+            logger.debug("Using configured strategy for %s: %s", api_function_name, strategy["type"])  # Trace pick.
             return strategy  # Return configured strategy.
 
         return DatabaseSchemaUtils._build_default_strategy(api_function_name, data_fields)  # Derive from data shape
@@ -82,14 +84,14 @@ class DatabaseSchemaUtils:  # Build SQLite DDL from data.
         if "id" in data_fields:  # Data carries an 'id' -- use it as the unique key
             strategy["unique_constraints"] = ["id"]  # Enforce unique id.
             strategy["indexes"] = ["id"]  # Index id for lookups.
-            logging.debug("Default strategy for %s: unique constraint on 'id'", api_function_name)  # Trace id keying
+            logger.debug("Default strategy for %s: unique constraint on 'id'", api_function_name)  # Trace id keying
 
         common_index_fields = ["org_id", "site_id", "device_id", "timestamp", "mac", "serial"]  # Common index columns.
         for field_name in common_index_fields:  # Add indexes when present.
             if field_name in data_fields and field_name not in strategy["indexes"]:  # Avoid duplicate indexes.
                 strategy["indexes"].append(field_name)  # Index this present field
 
-        logging.debug("Using enhanced default strategy for %s: %s", api_function_name, strategy)  # Trace strategy.
+        logger.debug("Using enhanced default strategy for %s: %s", api_function_name, strategy)  # Trace strategy.
         return strategy  # Return enhanced strategy.
 
     @staticmethod
@@ -189,7 +191,7 @@ class DatabaseSchemaUtils:  # Build SQLite DDL from data.
         }
         builder = builders.get(strategy["type"], DatabaseSchemaUtils._build_autoincrement_sql)  # Auto-incr fallback
         create_sql = builder(safe_table_name, fields, strategy)  # Dispatch to the strategy-specific builder
-        logging.debug("Generated CREATE TABLE SQL for %s: %s...", safe_table_name, create_sql[:100])  # Trace DDL
+        logger.debug("Generated CREATE TABLE SQL for %s: %s...", safe_table_name, create_sql[:100])  # Trace DDL
         return create_sql  # Return the CREATE TABLE
 
     @staticmethod

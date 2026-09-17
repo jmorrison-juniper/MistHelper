@@ -13,6 +13,8 @@ from typing import Any  # WHY: template rows are heterogenous dicts
 
 from ._wan2_variable_cluster import _ClusterBase  # WHY: parent-proxy pattern shared with peers
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class _Wan2VariableSelection(_ClusterBase):
     """Template selection and operation-direction helpers."""
@@ -73,7 +75,7 @@ class _Wan2VariableSelection(_ClusterBase):
     def _log_selection_cancel() -> None:
         """Print cancel confirmation and audit-log the abort."""
         print(" Operation cancelled.")  # WHY: user feedback
-        logging.info("Menu #104 cancelled by user at template selection")  # WHY: audit line
+        logger.info("Menu #104 cancelled by user at template selection")  # WHY: audit line
 
     def _resolve_selection(
         self,
@@ -120,7 +122,7 @@ class _Wan2VariableSelection(_ClusterBase):
         if result is not None:  # WHY: valid choice
             return result  # WHY: caller unpacks triple
         print(" Invalid selection. Operation cancelled.")  # WHY: user feedback on invalid token
-        logging.info("Menu #104 cancelled - invalid operation direction")  # WHY: audit trail
+        logger.info("Menu #104 cancelled - invalid operation direction")  # WHY: audit trail
         return None  # WHY: signal cancel to caller
 
     @staticmethod
@@ -135,18 +137,18 @@ class _Wan2VariableSelection(_ClusterBase):
     def _log_direction_cancel() -> None:
         """Print cancel confirmation and audit-log the abort."""
         print(" Operation cancelled.")  # WHY: user feedback
-        logging.info("Menu #104 cancelled by user at operation direction selection")  # WHY: audit line
+        logger.info("Menu #104 cancelled by user at operation direction selection")  # WHY: audit line
 
     @staticmethod
     def _direction_for_choice(choice: str) -> tuple[str, str, str] | None:
         """Return the (mode, search, replace) tuple for a valid choice, else None."""
         if choice == "2":  # WHY: revert path replaces variable -> hardcoded
             print("\n  !? REVERT MODE: Will replace {{wan2_interface}}" " with hardcoded 'ge-0/0/1'")
-            logging.info("Menu #104: User selected REVERT mode (variable -> hardcoded)")  # WHY: audit
+            logger.info("Menu #104: User selected REVERT mode (variable -> hardcoded)")  # WHY: audit
             return ("revert", "{{wan2_interface}}", "ge-0/0/1")  # WHY: reverse direction
         if choice == "1":  # WHY: apply path replaces hardcoded -> variable
             print("\n  APPLY MODE: Will replace hardcoded 'ge-0/0/1'" " with {{wan2_interface}} variable")
-            logging.info("Menu #104: User selected APPLY mode (hardcoded -> variable)")  # WHY: audit
+            logger.info("Menu #104: User selected APPLY mode (hardcoded -> variable)")  # WHY: audit
             return ("apply", "ge-0/0/1", "{{wan2_interface}}")  # WHY: forward direction
         return None  # WHY: signal invalid choice
 
@@ -190,6 +192,6 @@ class _Wan2VariableSelection(_ClusterBase):
         confirmation = self._input_fn("\n  Confirmation: ").strip()  # WHY: normalize input
         if confirmation != "MIGRATE":  # WHY: strict-string gate
             print(" Operation cancelled.")  # WHY: user feedback
-            logging.info("Menu #104 cancelled by user at final confirmation")  # WHY: audit trail
+            logger.info("Menu #104 cancelled by user at final confirmation")  # WHY: audit trail
             return False  # WHY: caller aborts
         return True  # WHY: gate passed, caller proceeds

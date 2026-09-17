@@ -39,15 +39,17 @@ from src.utils.zscaler_catalogue import (  # WHY: menu 206 consumes refreshed Zs
     promote_cache_document,
 )
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 _DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"  # WHY: catalogue files live under data.
 _PROBE_SOURCE_FILE = "zscaler_client_connector_probes.json"  # WHY: static ZCC role data lives in this file.
 _CENR_SOURCE_FILE = "zscaler_cenr_hostnames.json"  # WHY: refreshed CENR host data lives in this file.
 _TOOL_NAME_PREFIX = "zcc-"  # WHY: tool-authored probes need a stable name prefix.
-_TUNNEL_ZEN_ROLE = "tunnel_zen"  # Only role that expands via CENR hostnames.
+_TUNNEL_ZEN_ROLE = "tunnel_zen"  # WHY: Only this role expands through CENR hostnames.
 _VLAN_MIN = 1  # WHY: IEEE 802.1Q user VLAN identifiers start at 1.
 _VLAN_MAX = 4094  # WHY: IEEE 802.1Q user VLAN identifiers end at 4094.
-_CRITICAL_AGGRESSIVENESS = "high"
-_AUTO_AGGRESSIVENESS = "auto"
+_CRITICAL_AGGRESSIVENESS = "high"  # WHY: Mist UI writes high for a critical custom probe.
+_AUTO_AGGRESSIVENESS = "auto"  # WHY: Region-only probes stay unscheduled unless selected per site.
 # Priority tiers recognised on READ (schedule/demote decisions). The Mist UI's
 # per-probe "Critical" checkbox writes ``"high"`` (verified 2026-07-25 by
 # toggling a probe in the UI and dumping the org setting). Older versions of
@@ -65,7 +67,7 @@ _PRIORITY_AGGRESSIVENESS: frozenset[str] = frozenset({"critical", "high"})
 # operators. Instead the org PUT skips them entirely (see ``_build_probe_set``)
 # and the site-override flow injects the one matching region based on each
 # picked site's ``country_code``.
-_SAMSUNG_ELM_ROLE_PREFIX = "samsung_elm_activation_"
+_SAMSUNG_ELM_ROLE_PREFIX = "samsung_elm_activation_"  # WHY: The prefix identifies regional Samsung ELM roles.
 _COUNTRY_CODE_TO_REGION: dict[str, str] = {
     # North America -- pre-1025 baseline.
     "US": "americas",  # United States
@@ -142,15 +144,100 @@ _COUNTRY_CODE_TO_REGION: dict[str, str] = {
 _DEFAULT_REGION = "emea"
 
 
+class SyntheticProbeSettingApplier:
+    """Build, write, and report one org synthetic probe setting change."""
+
+    @staticmethod
+    def build_body(
+        setting: dict[str, Any],
+        combined_probes: dict[str, dict[str, Any]],
+        vlan_ids: list[int],
+    ) -> dict[str, Any]:
+        """Return the org setting body with the refreshed probe set."""
+        logger.info("Building the org synthetic-probe setting body")  # Record the payload build boundary.
+        body: dict[str, Any] = json.loads(json.dumps(setting)) if setting else {}  # Deep-copy settings before mutation.
+        synthetic = SyntheticProbeSettingApplier._synthetic_section(body)  # Get or create the synthetic_test block.
+        existing_tests = SyntheticProbeSettingApplier._existing_tests(synthetic)  # Preserve valid existing tests.
+        synthetic["custom_probes"] = combined_probes  # Replace only the managed custom-probes section.
+        tests = _merge_zcc_criticals_into_tests(existing_tests, combined_probes, vlan_ids)  # Refresh schedules.
+        synthetic["tests"] = tests  # Attach the refreshed schedule rows.
+        logger.debug("Built org setting body with probe_count=%s", len(combined_probes))  # Record payload size.
+        return body  # Return the PUT body for the caller.
+
+    @staticmethod
+    def _synthetic_section(body: dict[str, Any]) -> dict[str, Any]:
+        """Return a mutable synthetic_test section from the org setting body."""
+        synthetic = body.get("synthetic_test")  # Reuse the fetched section when it has the expected shape.
+        if isinstance(synthetic, dict):  # Preserve sibling keys in a valid synthetic_test block.
+            return synthetic  # Return the existing section so caller mutations persist.
+        synthetic = {}  # Create the section when Mist returned no object.
+        body["synthetic_test"] = synthetic  # Attach the new section to the PUT body.
+        return synthetic  # Return the new mutable section.
+
+    @staticmethod
+    def _existing_tests(synthetic: dict[str, Any]) -> list[dict[str, Any]]:
+        """Return the existing tests list when Mist supplied one."""
+        existing_tests = synthetic.get("tests")  # Read current tests so foreign rows can survive.
+        if isinstance(existing_tests, list):  # Preserve only the list shape accepted by the merge helper.
+            return existing_tests  # Return the caller-owned list to preserve prior behavior.
+        return []  # Use an empty list when the setting lacks a valid tests array.
+
+    @staticmethod
+    def write_setting(mist_session: Any, org_id: str, body: dict[str, Any]) -> Any:
+        """Write one org setting update through the Mist SDK."""
+        logger.info("Calling updateOrgSettings for org_id=%s", org_id)  # Record the outbound Mist write.
+        response = _mist_setting.updateOrgSettings(mist_session, org_id, body)  # Send the exact updated setting body.
+        status = getattr(response, "status_code", None)  # Read the status for safe logging.
+        logger.debug("updateOrgSettings returned status=%s", status)  # Record the status.
+        return response  # Return the SDK response for status handling.
+
+    @staticmethod
+    def report_result(response: Any, org_id: str, combined_probes: dict[str, dict[str, Any]]) -> None:
+        """Print the existing update result text for the operator."""
+        status = getattr(response, "status_code", None)  # Read the SDK status safely.
+        if status is not None and (status < 200 or status >= 300):  # Preserve the previous non-2xx refusal branch.
+            logger.error("updateOrgSettings HTTP %s", status)  # Record the failed Mist write status.
+            print(f"  updateOrgSettings failed with HTTP {status}")  # Preserve the operator-visible failure text.
+            return  # Return before printing success rows.
+        probe_count = len(combined_probes)  # Reuse the count in output and logs.
+        print(f"  updateOrgSettings succeeded ({probe_count} probes written)")  # Preserve the success summary text.
+        SyntheticProbeSettingApplier._print_probe_names(combined_probes)  # Preserve the sorted per-probe output.
+        logger.info("Wrote %d probes via updateOrgSettings", probe_count)  # Record the successful write count.
+        logger.debug("Completed updateOrgSettings report for org_id=%s", org_id)  # Record report completion.
+
+    @staticmethod
+    def _print_probe_names(combined_probes: dict[str, dict[str, Any]]) -> None:
+        """Print each written probe name in stable order."""
+        for probe_name in sorted(combined_probes):  # Sort names so output stays deterministic.
+            print(f"    - {probe_name}")  # Preserve the existing row text.
+
+    @staticmethod
+    def append_scheduled_rows(
+        surviving: list[dict[str, Any]],
+        scheduled_names: list[str],
+        vlan_ids: list[int],
+    ) -> list[dict[str, Any]]:
+        """Append refreshed scheduled probe rows to the surviving tests."""
+        template_vlan_ids, template_lan_networks = _derive_test_row_template(surviving)  # Preserve row scoping.
+        effective_vlans = template_vlan_ids if template_vlan_ids is not None else list(vlan_ids)  # Keep fallback VLANs.
+        for name in scheduled_names:  # Add one Mist-native tests row per scheduled probe.
+            new_row: dict[str, Any] = {"probes": [name], "vlan_ids": list(effective_vlans)}  # Preserve row shape.
+            if template_lan_networks:  # Carry a LAN network template when a surviving row supplied one.
+                new_row["lan_networks"] = list(template_lan_networks)  # Copy LAN network IDs into the new row.
+            surviving.append(new_row)  # Append in stable scheduled-name order.
+        logger.debug("Appended %d synthetic probe test rows", len(scheduled_names))  # Record emitted row count.
+        return surviving  # Return the caller-owned list to preserve behavior.
+
+
 class SyntheticProbePromptReader:
     """Read menu 206 prompts through the shared EOF-safe input helper."""
 
     @staticmethod
     def read(prompt: str, context: str) -> str:
         """Return one trimmed operator answer for a named menu 206 prompt."""
-        logging.info("Prompting the operator for %s", context)  # Record the prompt boundary for SSH sessions.
+        logger.info("Prompting the operator for %s", context)  # Record the prompt boundary for SSH sessions.
         answer = InputUtils.safe_input(prompt, context=context)  # Use the shared EOF-safe prompt helper.
-        logging.debug("Completed prompt for %s with answer_present=%s", context, bool(answer))  # Avoid logging values.
+        logger.debug("Completed prompt for %s with answer_present=%s", context, bool(answer))  # Avoid logging values.
         return answer  # Return the trimmed answer so existing prompt behavior stays unchanged.
 
 
@@ -397,63 +484,32 @@ _VPN_DEFAULT_PORT = 500
 
 
 def _fqdn_in_vpn_bag(bag: Any, fqdn: str) -> bool:
-    """Return True when ``fqdn`` appears as a host entry inside ``bag``.
+    """Return True when ``fqdn`` appears as a host entry inside ``bag``."""
+    if not isinstance(bag, list):  # Non-list bags cannot hold host entries.
+        return False  # Preserve the existing tolerant false result.
+    return any(_vpn_bag_entry_matches(entry, fqdn) for entry in bag)  # Stop at the first matching host.
 
-    Why:
-        Extracted from :func:`_is_vpn_host` so the outer classifier stays
-        under Radon CC>10. Tolerates both the v2 flat-string bags and the v3
-        dict bags because the fallback path fires precisely when the loader
-        could not enrich entries with observation metadata.
 
-    Args:
-        bag: Candidate list from either the top-level ``vpn_hostnames`` or a
-            per-city variant. Non-list values return ``False``.
-        fqdn: Hostname to match, case-sensitive.
-
-    Returns:
-        ``True`` when any entry (v2 string or v3 ``{"host": str}`` dict)
-        matches ``fqdn``; ``False`` otherwise.
-    """
-    if not isinstance(bag, list):
-        return False
-    for entry in bag:
-        host = entry.get("host") if isinstance(entry, dict) else entry
-        if isinstance(host, str) and host == fqdn:
-            return True
-    return False
+def _vpn_bag_entry_matches(entry: Any, fqdn: str) -> bool:
+    """Return True when one VPN bag entry names ``fqdn``."""
+    host = entry.get("host") if isinstance(entry, dict) else entry  # Support v3 dicts and legacy strings.
+    return isinstance(host, str) and host == fqdn  # Match only exact string hostnames.
 
 
 def _is_vpn_host(fqdn: str, cenr_source: dict[str, Any]) -> bool:
-    """Return True iff ``fqdn`` appears in any ``vpn_hostnames`` bag.
+    """Return True iff ``fqdn`` appears in any ``vpn_hostnames`` bag."""
+    top_level_match = _fqdn_in_vpn_bag(cenr_source.get("vpn_hostnames"), fqdn)  # Check the common bag first.
+    city_slots = _cenr_city_slots(cenr_source)  # Normalize city slots before the membership scan.
+    city_match = any(_fqdn_in_vpn_bag(slot.get("vpn_hostnames"), fqdn) for slot in city_slots)  # Check cities.
+    return top_level_match or city_match  # Preserve top-level or city membership semantics.
 
-    Why:
-        The CENR file classifies every ZEN hostname as either proxy (HTTPS
-        service plane) or vpn (IKE/IPsec service plane). When Branch 3's
-        fallback fires because no live observation exists yet, the bag
-        that the host lives in tells us the correct default port/scheme
-        without needing a probe cycle. This is the deterministic, no-
-        heuristic classifier -- no ``-vpn.`` string matching, no role
-        peek -- so a hostname is treated as VPN iff the operator or the
-        CENR feed said so.
 
-    Args:
-        fqdn: Hostname to classify.
-        cenr_source: Loaded CENR document (v2 flat strings or v3 dicts;
-            both are unwrapped by ``_fqdn_in_vpn_bag`` below).
-
-    Returns:
-        True when the FQDN appears anywhere in a ``vpn_hostnames`` list
-        (top-level or under ``by_city[*]``). False otherwise.
-    """
-    if _fqdn_in_vpn_bag(cenr_source.get("vpn_hostnames"), fqdn):
-        return True
-    by_city = cenr_source.get("by_city")
-    if not isinstance(by_city, dict):
-        return False
-    for city_slot in by_city.values():
-        if isinstance(city_slot, dict) and _fqdn_in_vpn_bag(city_slot.get("vpn_hostnames"), fqdn):
-            return True
-    return False
+def _cenr_city_slots(cenr_source: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return valid city dictionaries from a CENR document."""
+    by_city = cenr_source.get("by_city")  # Read the optional by-city container.
+    if not isinstance(by_city, dict):  # Treat missing or malformed containers as no city entries.
+        return []  # Preserve the prior false result for malformed by_city values.
+    return [slot for slot in by_city.values() if isinstance(slot, dict)]  # Keep only city dictionaries.
 
 
 def _probe_type_for_target(target: str, _role_type: str | None = None) -> str:
@@ -511,69 +567,47 @@ def _probe_type_for_target(target: str, _role_type: str | None = None) -> str:
 
 
 def _find_host_in_bags(container: dict[str, Any], fqdn: str) -> dict[str, Any] | None:
-    """Scan ``proxy_hostnames`` / ``vpn_hostnames`` bags on ``container`` for ``fqdn``.
+    """Scan CENR host bags on ``container`` for ``fqdn``."""
+    for bag in _host_bags(container):  # Preserve proxy-before-VPN bag search order.
+        match = _find_host_in_bag(bag, fqdn)  # Search one normalized list.
+        if match is not None:  # Return the first matching v3 host object.
+            return match  # Preserve the prior first-match result.
+    return None  # Preserve the prior miss result.
 
-    Why:
-        Extracted from ``_lookup_v3_observation`` so top-level and by_city
-        walks share one predicate. Keeps the dispatcher below Radon CC=10
-        and encapsulates the v2-string guard (bare strings return ``None``
-        so the caller can trigger the fallback branch).
 
-    Args:
-        container: v3-shaped CENR node with ``proxy_hostnames`` and
-            ``vpn_hostnames`` bags (top-level document or per-city slot).
-        fqdn: Fully-qualified hostname to match on ``entry["host"]``.
+def _host_bags(container: dict[str, Any]) -> list[list[Any]]:
+    """Return valid host bags from a CENR container."""
+    bags: list[list[Any]] = []  # Collect valid bags in prior search order.
+    for bag_key in ("proxy_hostnames", "vpn_hostnames"):  # Preserve the original bag order.
+        bag = container.get(bag_key) or []  # Treat missing bags as empty.
+        if isinstance(bag, list):  # Ignore malformed bags exactly as before.
+            bags.append(bag)  # Add the valid bag to the search list.
+    return bags  # Return normalized bags to the caller.
 
-    Returns:
-        The matching v3 entry dict, or ``None`` when absent.
-    """
-    for bag_key in ("proxy_hostnames", "vpn_hostnames"):
-        bag = container.get(bag_key) or []
-        if not isinstance(bag, list):
-            continue
-        for entry in bag:
-            if isinstance(entry, dict) and entry.get("host") == fqdn:
-                return entry
-    return None
+
+def _find_host_in_bag(bag: list[Any], fqdn: str) -> dict[str, Any] | None:
+    """Return the first v3 host entry in one CENR bag."""
+    for entry in bag:  # Preserve the existing in-bag order.
+        if isinstance(entry, dict) and entry.get("host") == fqdn:  # Legacy strings cannot carry observations.
+            return entry  # Return the matching v3 observation object.
+    return None  # Return None when no v3 entry matches.
 
 
 def _lookup_v3_observation(fqdn: str, cenr_source: dict[str, Any]) -> dict[str, Any] | None:
-    """Locate the v3 host-entry for ``fqdn`` in every CENR bag.
+    """Locate the v3 host-entry for ``fqdn`` in every CENR bag."""
+    hit = _find_host_in_bags(cenr_source, fqdn)  # Search top-level bags first for the common case.
+    if hit is not None:  # Preserve the top-level-first result order.
+        return hit  # Return the matching top-level observation.
+    return _lookup_v3_city_observation(fqdn, cenr_source)  # Search city bags only after top-level miss.
 
-    Why:
-        Contract ``probe_target_url_builder.md`` Preconditions require
-        the URL builder to consult the v3 per-host observation object
-        wherever the FQDN lives -- top-level ``proxy_hostnames`` /
-        ``vpn_hostnames`` or nested under ``by_city[*]``. Centralising
-        the lookup keeps the dispatch in ``_probe_target`` short and
-        guarantees identical semantics across bags (contract Non-Goals:
-        never mutate ``cenr_source``).
 
-    Args:
-        fqdn: Fully-qualified hostname to look up.
-        cenr_source: Loaded CENR document, post v2->v3 loader adapter.
-
-    Returns:
-        The v3 entry dict when found (``{"host": ..., "observed_protocol":
-        ..., "observed_port": ..., "last_probed": ...}``), otherwise
-        ``None`` when the FQDN is absent from every bag.
-    """
-    # Top-level bags are the common case. Iterate them first so the fast
-    # path exits before descending into by_city.
-    hit = _find_host_in_bags(cenr_source, fqdn)
-    if hit is not None:
-        return hit
-    # by_city bags carry the same shape (per cenr_cache_schema_v3.md). Walk
-    # them last because the top-level bags dominate the hit rate.
-    by_city = cenr_source.get("by_city")
-    if isinstance(by_city, dict):
-        for city_slot in by_city.values():
-            if not isinstance(city_slot, dict):
-                continue
-            hit = _find_host_in_bags(city_slot, fqdn)
-            if hit is not None:
-                return hit
-    return None
+def _lookup_v3_city_observation(fqdn: str, cenr_source: dict[str, Any]) -> dict[str, Any] | None:
+    """Locate a v3 host-entry for ``fqdn`` under CENR city slots."""
+    for city_slot in _cenr_city_slots(cenr_source):  # Search only valid city dictionaries.
+        hit = _find_host_in_bags(city_slot, fqdn)  # Search the city proxy and VPN bags.
+        if hit is not None:  # Preserve the first city match.
+            return hit  # Return the matching city observation.
+    return None  # Preserve the prior miss result.
 
 
 def _extract_observed_protocol_port(
@@ -844,15 +878,15 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
             from ``_load_probe_sources``).
         ValueError: If either curated JSON file is malformed.
     """
-    logging.info("Menu 206: starting org Zscaler synthetic-probe manager")
-    logging.debug("ENTRY: manage_org_synthetic_probes(org_id=%s)", org_id)
+    logger.info("Menu 206: starting org Zscaler synthetic-probe manager")
+    logger.debug("ENTRY: manage_org_synthetic_probes(org_id=%s)", org_id)
 
     sources = _load_probe_sources(_DEFAULT_DATA_DIR)
     # NOTE(1025-US1): dedup state for the load-time CENR WARNING lives here so
     # its lifetime is bounded by the invocation (data-model.md §3 INV-D1;
     # FR-012 requires re-emission across back-to-back operator runs).
     warned_cenr_hosts: set[str] = set()  # mutable dedup set, empty per run
-    logging.info(  # Constitution VII: BEFORE the load-time diff
+    logger.info(  # Constitution VII: BEFORE the load-time diff
         "computing load-time CENR missing-host set for org_id=%s",
         org_id,
     )
@@ -863,7 +897,7 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
         ),
         warned_cenr_hosts,  # dedup state -- mutated in place
     )
-    logging.debug(  # Constitution VII: AFTER the load-time emission
+    logger.debug(  # Constitution VII: AFTER the load-time emission
         "load-time CENR check complete; warned_cenr_hosts=%s",
         len(warned_cenr_hosts),
     )
@@ -893,7 +927,7 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
                 # other synced field are already aligned. If a probe lost
                 # critical status upstream we still need to write.
                 print("  No changes required -- newly-entered VLANs already covered.")
-                logging.info("Merge no-op: entered VLANs already covered by all probes")
+                logger.info("Merge no-op: entered VLANs already covered by all probes")
                 return
             resulting_tool = merged_tool
         else:
@@ -905,7 +939,7 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
     summary = _summarise(resulting_tool, tool_authored, demoted_foreign, foreign)
     if not _prompt_confirm(summary):
         print("  Operation cancelled -- no changes were made.")
-        logging.info("Operator declined final confirmation; no PUT issued")
+        logger.info("Operator declined final confirmation; no PUT issued")
         return
 
     # Foreign demotions are merged with the tool-authored set so demoted
@@ -925,7 +959,7 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
         warned_unmapped_codes,  # threaded from load-time scope so lifetime is bounded by this invocation
     )
 
-    logging.debug("EXIT: manage_org_synthetic_probes - success")
+    logger.debug("EXIT: manage_org_synthetic_probes - success")
 
 
 def _load_probe_sources(data_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -1092,13 +1126,13 @@ def _compute_missing_cenr_hosts(
         set when every catalogue host has an observation (FR-001 zero-emission
         edge case).
     """
-    logging.info(  # Constitution VII action-logging: BEFORE the diff
+    logger.info(  # Constitution VII action-logging: BEFORE the diff
         "computing missing CENR hosts: catalogue=%s observed=%s",
         len(catalogue_hosts),
         len(cenr_observations),
     )
     missing = frozenset(catalogue_hosts - cenr_observations)  # set difference -> frozen
-    logging.debug(  # Constitution VII action-logging: AFTER with result summary
+    logger.debug(  # Constitution VII action-logging: AFTER with result summary
         "computed missing CENR hosts: %s missing",
         len(missing),
     )
@@ -1126,14 +1160,14 @@ def _emit_load_time_cenr_warning(
         warned_cenr_hosts: Per-invocation dedup set. Hosts added here are
             skipped on any subsequent call within the same invocation.
     """
-    logging.info(  # Constitution VII: BEFORE the emission decision
+    logger.info(  # Constitution VII: BEFORE the emission decision
         "evaluating CENR load-time warning: missing=%s already_warned=%s",
         len(missing_hosts),
         len(warned_cenr_hosts),
     )
     unwarned = missing_hosts - warned_cenr_hosts  # subtract already-emitted hosts
     if not unwarned:  # zero-emission edge case (FR-001) or repeat call within run
-        logging.debug(  # Constitution VII: AFTER, no-op branch
+        logger.debug(  # Constitution VII: AFTER, no-op branch
             "CENR load-time warning: no unwarned missing hosts; skipping emission",
         )
         return  # nothing to warn about
@@ -1143,13 +1177,13 @@ def _emit_load_time_cenr_warning(
     # Single WARNING record naming every host, matching log_record_shape.md §1.3.
     # ASCII-only tokens (CENR, using-catalogue-default-URLs) so ``grep -c CENR``
     # in the operator smoke sequence stays deterministic (SC-001).
-    logging.warning(  # exactly-one-per-run WARNING per contract §1.3
+    logger.warning(  # exactly-one-per-run WARNING per contract §1.3
         "CENR observations missing for %s catalogue host(s); using catalogue-default URLs: %s",
         len(ordered),
         ", ".join(ordered),
     )
     warned_cenr_hosts.update(unwarned)  # mark as warned so a duplicate call is a no-op
-    logging.debug(  # Constitution VII: AFTER, emission branch
+    logger.debug(  # Constitution VII: AFTER, emission branch
         "CENR load-time warning emitted for %s hosts; warned_cenr_hosts now %s",
         len(ordered),
         len(warned_cenr_hosts),
@@ -1194,7 +1228,7 @@ def _compute_unmapped_country_codes(
         code is classified (FR-005 zero-emission edge case for the LATAM
         fixture after T020).
     """
-    logging.info(  # Constitution VII action-logging: BEFORE the scan
+    logger.info(  # Constitution VII action-logging: BEFORE the scan
         "computing unmapped country codes: sites=%s region_map=%s gap_set=%s",
         len(sites),
         len(region_map),
@@ -1214,7 +1248,7 @@ def _compute_unmapped_country_codes(
             continue
         seen.add(code)  # genuinely unclassified -> record for warning
     unmapped = frozenset(seen)  # freeze so callers cannot smuggle in extras
-    logging.debug(  # Constitution VII: AFTER with unique-code count
+    logger.debug(  # Constitution VII: AFTER with unique-code count
         "computed unmapped country codes: %s unique code(s)",
         len(unmapped),
     )
@@ -1246,14 +1280,14 @@ def _emit_load_time_country_code_warning(
             same invocation. FR-012: caller supplies a fresh empty set per
             run. State MUST NOT persist across runs.
     """
-    logging.info(  # Constitution VII: BEFORE the emission decision
+    logger.info(  # Constitution VII: BEFORE the emission decision
         "evaluating country_code load-time warning: unmapped=%s already_warned=%s",
         len(unmapped_codes),
         len(warned_unmapped_codes),
     )
     unwarned = unmapped_codes - warned_unmapped_codes  # subtract codes already emitted this run
     if not unwarned:  # zero-emission (FR-005 LATAM path) or repeat call within run
-        logging.debug(  # Constitution VII: AFTER, no-op branch
+        logger.debug(  # Constitution VII: AFTER, no-op branch
             "country_code load-time warning: no unwarned unmapped codes; skipping emission",
         )
         return  # nothing to warn about
@@ -1264,13 +1298,13 @@ def _emit_load_time_country_code_warning(
     # so the operator knows exactly which routing decision was made. ASCII
     # tokens only (``country_code``, ``defaulting to region``) so the grep
     # anchor stays deterministic (SC-002, log_record_shape.md §2.4).
-    logging.warning(  # exactly-one-per-run WARNING per contract §2.4
+    logger.warning(  # exactly-one-per-run WARNING per contract §2.4
         "country_code(s) %s not mapped; defaulting to region %r",
         ", ".join(ordered),
         _DEFAULT_REGION,
     )
     warned_unmapped_codes.update(unwarned)  # mark as warned so a duplicate call is a no-op
-    logging.debug(  # Constitution VII: AFTER, emission branch
+    logger.debug(  # Constitution VII: AFTER, emission branch
         "country_code load-time warning emitted for %s code(s); warned_unmapped_codes now %s",
         len(ordered),
         len(warned_unmapped_codes),
@@ -1388,11 +1422,11 @@ def _fetch_setting(mist_session: Any, org_id: str) -> dict[str, Any]:
         The parsed JSON payload of ``getOrgSettings`` (defensively an
         empty dict if the API returned no body).
     """
-    logging.debug("Calling getOrgSettings(org_id=%s)", org_id)
+    logger.debug("Calling getOrgSettings(org_id=%s)", org_id)
     response = _mist_setting.getOrgSettings(mist_session, org_id)
     data = getattr(response, "data", None)
     if not isinstance(data, dict):
-        logging.warning("getOrgSettings returned non-dict payload; treating as empty")
+        logger.warning("getOrgSettings returned non-dict payload; treating as empty")
         return {}
     return data
 
@@ -1625,7 +1659,7 @@ def _promote_first_probe_to_critical(
     for probe_name, probe in result.items():
         if probe_name.startswith(slug_prefix):
             probe["aggressiveness"] = _CRITICAL_AGGRESSIVENESS
-            logging.warning(
+            logger.warning(
                 "Role %s: critical_fqdn %r not found; promoted %s to critical",
                 role_name,
                 critical_target,
@@ -1811,67 +1845,44 @@ _ZEN_NEAREST_COUNT = 2
 
 
 def _site_latlng(site: dict[str, Any]) -> tuple[float, float] | None:
-    """Extract ``(lat, lon)`` from a Mist site dict, or ``None`` if absent.
+    """Extract ``(lat, lon)`` from a Mist site dict, or ``None`` if absent."""
+    latlng = site.get("latlng")  # Read the Mist location object.
+    if not isinstance(latlng, dict):  # Treat missing or malformed coordinates as absent.
+        return None  # Preserve the existing absent-coordinate result.
+    lat = latlng.get("lat")  # Read the latitude value.
+    lon = latlng.get("lng")  # Read the longitude value.
+    return _finite_latlng(lat, lon)  # Validate and normalize the coordinate pair.
 
-    Why:
-        Mist sites report position under ``latlng: {lat, lng}``. Some sites
-        (never-configured stubs, imported inventory) lack the field or ship
-        it as null. Callers must handle the None branch, so returning None
-        (rather than raising) keeps the resolver flow linear.
 
-    Args:
-        site: The site dict as returned by ``_list_org_sites``.
-
-    Returns:
-        ``(lat, lon)`` tuple when both floats are present and finite;
-        ``None`` otherwise.
-    """
-    latlng = site.get("latlng")
-    if not isinstance(latlng, dict):
-        return None
-    lat = latlng.get("lat")
-    lon = latlng.get("lng")
-    if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
-        return None
-    if not math.isfinite(float(lat)) or not math.isfinite(float(lon)):
-        return None
-    return (float(lat), float(lon))
+def _finite_latlng(lat: Any, lon: Any) -> tuple[float, float] | None:
+    """Return finite coordinates, or ``None`` when a value is invalid."""
+    if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):  # Require numeric coordinates.
+        return None  # Preserve the prior invalid-coordinate result.
+    if not math.isfinite(float(lat)) or not math.isfinite(float(lon)):  # Reject NaN and infinite values.
+        return None  # Preserve the prior non-finite-coordinate result.
+    return (float(lat), float(lon))  # Return normalized float coordinates.
 
 
 def _distinct_zen_locations(city_metadata: dict[str, dict[str, Any]]) -> dict[str, list[str]]:
-    """Group city_metadata entries by unique ``(country_code, lat, lon)``.
+    """Group city metadata entries by unique ``(country_code, lat, lon)``."""
+    groups: dict[str, list[str]] = {}  # Collect city names by physical ZEN location.
+    for city, meta in city_metadata.items():  # Preserve the input metadata traversal.
+        key = _zen_location_key(meta)  # Build the rounded location key when coordinates are valid.
+        if key is not None:  # Skip malformed metadata exactly as before.
+            groups.setdefault(key, []).append(city)  # Group all ZEN names at the same location.
+    for names in groups.values():  # Sort each location group for deterministic selection.
+        names.sort()  # Preserve stable output for tests and audits.
+    return groups  # Return the grouped ZEN location map.
 
-    Why:
-        Zscaler frequently ships multiple named ZENs at identical coords
-        (for example ``Frankfurt IV`` and ``Frankfurt VI`` at the same lat/lon).
-        For compression-rule counting ("does this country have <= N ZEN
-        locations?") we must dedupe on physical location, not on name --
-        otherwise a country with two co-located same-city peers gets
-        double-counted and misses the "probe them all" fast path. Names
-        within a group are alphabetically ordered so the caller's picks
-        are deterministic.
 
-    Args:
-        city_metadata: The ``city_metadata`` map from the CENR JSON file.
-
-    Returns:
-        ``{"CC:lat:lon" -> [city_name, ...]}`` where each entry lists the
-        Zscaler city display names sharing that location, sorted.
-    """
-    groups: dict[str, list[str]] = {}
-    for city, meta in city_metadata.items():
-        country = meta.get("country_code")
-        lat = meta.get("lat")
-        lon = meta.get("lon")
-        if not isinstance(country, str) or not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
-            continue
-        # Round to 4 decimal places (~11 m precision) so trivial floating
-        # noise does not split a genuine same-coord pair into two groups.
-        key = f"{country.upper()}:{round(float(lat), 4)}:{round(float(lon), 4)}"
-        groups.setdefault(key, []).append(city)
-    for names in groups.values():
-        names.sort()
-    return groups
+def _zen_location_key(meta: dict[str, Any]) -> str | None:
+    """Return a rounded location key for one ZEN metadata record."""
+    country = meta.get("country_code")  # Read the country code from the metadata record.
+    lat = meta.get("lat")  # Read the ZEN latitude.
+    lon = meta.get("lon")  # Read the ZEN longitude.
+    if not isinstance(country, str) or _finite_latlng(lat, lon) is None:  # Require country and finite coordinates.
+        return None  # Preserve the previous malformed-record skip.
+    return f"{country.upper()}:{round(float(lat), 4)}:{round(float(lon), 4)}"  # Preserve the rounded key shape.
 
 
 def _zens_in_country(
@@ -1931,7 +1942,7 @@ def _pick_zens_from_in_country(
         return sorted(in_country.keys())
     if site_coords is not None:
         return _nearest_zens_from_pool(in_country, site_coords, _ZEN_NEAREST_COUNT)
-    logging.info(
+    logger.info(
         "Site missing latlng but has country %s with %d ZEN locations; " "scheduling all in-country ZENs",
         normalised_cc,
         len(location_groups),
@@ -1976,7 +1987,7 @@ def _resolve_zen_cities_for_site(
     if not isinstance(city_metadata, dict) or not city_metadata:
         # No metadata available -- fail closed (skip ZEN scheduling)
         # rather than emit undefined probes.
-        logging.warning("ZEN scheduling skipped: city_metadata missing from CENR file")
+        logger.warning("ZEN scheduling skipped: city_metadata missing from CENR file")
         return []
     country_code = site.get("country_code")
     normalised_cc = country_code.strip().upper() if isinstance(country_code, str) else ""
@@ -1988,7 +1999,7 @@ def _resolve_zen_cities_for_site(
 
     if site_coords is not None:
         # Rule 4: no country match but we know where the site is.
-        logging.info(
+        logger.info(
             "Site country %r has no ZEN presence; falling back to nearest " "%d global ZENs by geodesic distance",
             country_code,
             _ZEN_NEAREST_COUNT,
@@ -1996,7 +2007,7 @@ def _resolve_zen_cities_for_site(
         return _nearest_zens_from_pool(city_metadata, site_coords, _ZEN_NEAREST_COUNT)
 
     # Rule 5: nothing to work with.
-    logging.warning(
+    logger.warning(
         "ZEN scheduling skipped for site id=%r: no country_code match and " "no latlng",
         site.get("id"),
     )
@@ -2084,45 +2095,33 @@ def _zen_probe_names_for_cities(
     cities: list[str],
     cenr: dict[str, Any],
 ) -> list[str]:
-    """Map ZEN city names -> the ``zcc-tunnel_zen-<slug>`` probe names.
+    """Map ZEN city names to the matching tool-authored probe names."""
+    city_metadata = _city_metadata(cenr)  # Normalize the optional CENR city metadata map.
+    result: list[str] = []  # Collect probe names in selected-city order.
+    for city in cities:  # Preserve the caller's selected ZEN order.
+        result.extend(_zen_probe_names_for_city(city, city_metadata))  # Add each city's representative probes.
+    return result  # Return the complete probe-name list.
 
-    Why:
-        Org-scope ``_build_probe_set`` already emitted a probe definition
-        for every proxy/vpn hostname in the CENR file, named
-        ``zcc-tunnel_zen-<fqdn_slug>``. Site-scope scheduling reuses those
-        definitions by name -- this helper picks the representative probe
-        hostnames for each ZEN city (recorded in ``city_metadata`` by the
-        build script) and formats the matching probe names. Proxy
-        (``*.sme.zscaler.net``) and VPN (``*-vpn.zscaler.net``) endpoints
-        share the same PoP but are distinct service planes, so we emit
-        one probe name per hostname listed for the city -- both get
-        pinned as site-scope critical by the caller.
 
-    Args:
-        cities: ZEN city display names picked by
-            ``_resolve_zen_cities_for_site``.
-        cenr: Parsed CENR JSON. Reads ``city_metadata`` for each city's
-            ``probe_hostnames`` list (falling back to the legacy
-            ``probe_hostname`` scalar if the list form is not present, so
-            an unrefreshed CENR file keeps working).
+def _city_metadata(cenr: dict[str, Any]) -> dict[str, Any]:
+    """Return CENR city metadata when it has the expected dict shape."""
+    city_metadata = cenr.get("city_metadata") or {}  # Read the optional metadata mapping.
+    if isinstance(city_metadata, dict):  # Preserve valid metadata for city lookups.
+        return city_metadata  # Return the existing metadata mapping.
+    return {}  # Preserve the previous empty result for malformed metadata.
 
-    Returns:
-        List of probe names (``zcc-tunnel_zen-<slug>`` shape). Cities
-        with neither ``probe_hostnames`` nor a legacy ``probe_hostname``
-        are silently skipped -- they'd have no defined probe on the org
-        anyway.
-    """
-    city_metadata = cenr.get("city_metadata") or {}
-    if not isinstance(city_metadata, dict):
-        return []
-    result: list[str] = []
-    for city in cities:
-        meta = city_metadata.get(city)
-        if not isinstance(meta, dict):
-            continue
-        for hostname in _probe_hostnames_for_city(meta):
-            result.append(f"{_TOOL_NAME_PREFIX}{_TUNNEL_ZEN_ROLE}-{_fqdn_slug(hostname)}")
-    return result
+
+def _zen_probe_names_for_city(city: str, city_metadata: dict[str, Any]) -> list[str]:
+    """Return tool-authored probe names for one ZEN city."""
+    meta = city_metadata.get(city)  # Read the metadata for the requested city.
+    if not isinstance(meta, dict):  # Skip cities that have no valid metadata.
+        return []  # Preserve the previous skipped-city behavior.
+    return [_zen_probe_name(hostname) for hostname in _probe_hostnames_for_city(meta)]  # Format each probe name.
+
+
+def _zen_probe_name(hostname: str) -> str:
+    """Return the tool-authored ZEN probe name for one hostname."""
+    return f"{_TOOL_NAME_PREFIX}{_TUNNEL_ZEN_ROLE}-{_fqdn_slug(hostname)}"  # Preserve the existing name shape.
 
 
 def _merge_probes(
@@ -2338,7 +2337,7 @@ def _demote_stale_critical(
             demoted = dict(probe)
             demoted["aggressiveness"] = _AUTO_AGGRESSIVENESS
             result[name] = demoted
-            logging.info(
+            logger.info(
                 "Demoting foreign critical probe %r (aggressiveness -> auto)",
                 name,
             )
@@ -2374,79 +2373,62 @@ def _compute_scheduled_probe_names(
     combined_probes: dict[str, dict[str, Any]],
     extra_regular_names: list[str] | None,
 ) -> tuple[list[str], list[str]]:
-    """Return ``(critical_names, regular_names)`` for injection.
+    """Return ``(critical_names, regular_names)`` for injection."""
+    critical_names = _critical_scheduled_probe_names(combined_probes)  # Select priority probes first.
+    regular_names = _regular_scheduled_probe_names(extra_regular_names, set(critical_names))  # Remove duplicates.
+    return critical_names, regular_names  # Preserve the existing tuple shape.
 
-    Why:
-        Extracted so the parent stays under the CC gate. Sorted output
-        gives us stable row ordering across re-injections (Mist compares
-        setting blocks by value on PUT, so drift-free sort keeps diffs
-        clean). Regular names are deduplicated against the critical set
-        so a Samsung ELM probe promoted to critical does not get two
-        scheduled rows.
 
-    Args:
-        combined_probes: Union of foreign + tool-authored probes about
-            to be written to ``synthetic_test.custom_probes``.
-        extra_regular_names: Optional additional ``zcc-*`` names to
-            schedule at regular (non-critical) priority.
-
-    Returns:
-        Tuple ``(critical_names, regular_names)``. Both lists are
-        sorted; ``regular_names`` excludes any name already in
-        ``critical_names``.
-    """
-    critical_names = sorted(
+def _critical_scheduled_probe_names(combined_probes: dict[str, dict[str, Any]]) -> list[str]:
+    """Return sorted probe names that need priority scheduling."""
+    return sorted(  # Sort for stable row ordering across repeated runs.
         name
         for name, probe in combined_probes.items()
         if isinstance(probe, dict) and probe.get("aggressiveness") in _PRIORITY_AGGRESSIVENESS
     )
-    critical_set = set(critical_names)
-    regular_names = sorted(
-        {name for name in (extra_regular_names or []) if isinstance(name, str) and name not in critical_set}
-    )
-    return critical_names, regular_names
+
+
+def _regular_scheduled_probe_names(extra_regular_names: list[str] | None, critical_set: set[str]) -> list[str]:
+    """Return sorted non-priority probe names that need scheduling."""
+    names = extra_regular_names or []  # Treat a missing optional list as empty.
+    selected = {name for name in names if isinstance(name, str) and name not in critical_set}  # Remove duplicates.
+    return sorted(selected)  # Preserve deterministic output order.
 
 
 def _clean_test_row(row: Any) -> dict[str, Any] | None:
-    """Return a cleaned row copy, or ``None`` if the row should be dropped.
+    """Return a cleaned row copy, or ``None`` if the row should be dropped."""
+    if not isinstance(row, dict):  # Non-dict entries cannot become valid Mist test rows.
+        return None  # Preserve the previous skip behavior.
+    if _is_prior_zcc_test_row(row):  # Drop aggregate rows written by earlier tool versions.
+        return None  # Preserve authoritative re-injection behavior.
+    cleaned = dict(row)  # Copy the row so the fetched setting is not mutated.
+    probes_field = cleaned.get("probes")  # Read the optional probes list.
+    if isinstance(probes_field, list):  # Only list-shaped probes need cleanup.
+        return _clean_test_row_probes(cleaned, probes_field)  # Strip stale ZCC probe names.
+    return cleaned  # Preserve non-list probes fields unchanged.
 
-    Why:
-        Extracted from ``_filter_surviving_test_rows`` so both loop and
-        drop rules stay under the CC gate. Encapsulates the two drop
-        reasons (legacy aggregate row / row that only held ``zcc-*``
-        names) so callers see one predicate.
 
-    Args:
-        row: A raw entry from the fetched ``tests[]`` list. Non-dict
-            entries are accepted and yield ``None``.
+def _is_prior_zcc_test_row(row: dict[str, Any]) -> bool:
+    """Return True when a tests row is a prior ZCC aggregate row."""
+    row_name = row.get("name")  # Read the optional row name.
+    if not isinstance(row_name, str) or not row_name.startswith(_TOOL_NAME_PREFIX):  # Keep foreign rows.
+        return False  # Preserve the row when it is not tool-authored.
+    logger.info("Dropping legacy tool-authored tests[] row %r (aggregate-row migration)", row_name)  # Record drop.
+    return True  # Drop the legacy aggregate row.
 
-    Returns:
-        A shallow-copied dict with ``zcc-*`` names stripped from its
-        ``probes`` list, or ``None`` when the row should be dropped
-        entirely.
-    """
-    if not isinstance(row, dict):
-        return None
-    row_name = row.get("name")
-    # Drop legacy tool-authored aggregate rows (name="zcc-critical-probes")
-    # written by earlier versions -- they diverge from Mist's one-row-per-probe
-    # convention and re-injection below is authoritative.
-    if isinstance(row_name, str) and row_name.startswith(_TOOL_NAME_PREFIX):
-        logging.info(
-            "Dropping legacy tool-authored tests[] row %r (aggregate-row migration)",
-            row_name,
-        )
-        return None
-    cleaned = dict(row)
-    probes_field = cleaned.get("probes")
-    if isinstance(probes_field, list):
-        filtered = [p for p in probes_field if not (isinstance(p, str) and p.startswith(_TOOL_NAME_PREFIX))]
-        # Row that only held zcc-* names is a prior injection. Drop so
-        # re-injection is authoritative.
-        if probes_field and not filtered:
-            return None
-        cleaned["probes"] = filtered
-    return cleaned
+
+def _clean_test_row_probes(cleaned: dict[str, Any], probes_field: list[Any]) -> dict[str, Any] | None:
+    """Strip stale ZCC probe names from a copied tests row."""
+    filtered = [probe for probe in probes_field if not _is_tool_probe_name(probe)]  # Keep only foreign probe names.
+    if probes_field and not filtered:  # Drop rows that only held prior ZCC probe names.
+        return None  # Preserve authoritative re-injection behavior.
+    cleaned["probes"] = filtered  # Store the filtered foreign probe list.
+    return cleaned  # Return the cleaned row to the caller.
+
+
+def _is_tool_probe_name(probe: Any) -> bool:
+    """Return True when a probe field value is a ZCC probe name."""
+    return isinstance(probe, str) and probe.startswith(_TOOL_NAME_PREFIX)  # Match only string ZCC probe names.
 
 
 def _filter_surviving_test_rows(existing_tests: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -2546,63 +2528,18 @@ def _merge_zcc_criticals_into_tests(
     vlan_ids: list[int],
     extra_regular_names: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Emit one ``tests[]`` row per critical (and opt-in regular) zcc probe.
-
-    Why:
-        Mist itself emits one ``tests[]`` row per probe -- each row's
-        ``probes`` list holds exactly one name and the row carries its
-        own ``vlan_ids`` / ``lan_networks`` copy. Both the system
-        ``mini-*`` rows and operator-scheduled probes follow this
-        convention, so injected rows must match to look native. Rows
-        inherit ``vlan_ids`` / ``lan_networks`` from the first surviving
-        foreign row (so operator scoping applies) and fall back to the
-        supplied ``vlan_ids`` arg when no template exists. The
-        ``extra_regular_names`` opt-in schedules region-specific Samsung
-        ELM probes -- these carry ``auto`` aggressiveness so they would
-        otherwise never receive a scheduled row and would exist in
-        ``custom_probes`` but never run.
-
-    Args:
-        existing_tests: The ``tests[]`` list read from the fetched
-            setting (may be empty).
-        combined_probes: Union of foreign + tool-authored probes about
-            to be written to ``synthetic_test.custom_probes``. Only
-            probes with ``aggressiveness=critical`` are auto-scheduled.
-        vlan_ids: VLAN ids to attach to injected rows when no foreign
-            row is available as a template. Ignored when a template row
-            with its own ``vlan_ids`` exists.
-        extra_regular_names: Optional additional ``zcc-*`` probe names
-            to schedule at regular (non-critical) priority. Deduplicated
-            against the critical set. Ordering-stable via sort. Rows are
-            emitted with the same shape/template as critical rows -- the
-            tests[] row itself carries no aggressiveness (that lives on
-            the probe body in ``custom_probes``).
-
-    Returns:
-        A new list. Foreign rows are preserved (with stale ``zcc-*``
-        names stripped from their ``probes`` list). Rows that only ever
-        contained ``zcc-*`` probes are dropped so re-injection is
-        authoritative. Legacy aggregate rows whose ``name`` starts with
-        ``zcc-`` are also dropped. One nameless row is appended per
-        scheduled ``zcc-*`` probe, each carrying only that probe's name
-        plus inherited ``vlan_ids`` / ``lan_networks``.
-    """
-    critical_names, regular_names = _compute_scheduled_probe_names(combined_probes, extra_regular_names)
-    surviving = _filter_surviving_test_rows(existing_tests)
-
-    if not critical_names and not regular_names:
-        return surviving
-
-    template_vlan_ids, template_lan_networks = _derive_test_row_template(surviving)
-    effective_vlans = template_vlan_ids if template_vlan_ids is not None else list(vlan_ids)
-
-    for name in critical_names + regular_names:
-        new_row: dict[str, Any] = {"probes": [name], "vlan_ids": list(effective_vlans)}
-        if template_lan_networks:
-            new_row["lan_networks"] = list(template_lan_networks)
-        surviving.append(new_row)
-
-    return surviving
+    """Emit one ``tests[]`` row per scheduled ZCC probe."""
+    logger.info("Merging scheduled ZCC probes into synthetic tests")  # Record the schedule merge boundary.
+    schedule = _compute_scheduled_probe_names(combined_probes, extra_regular_names)  # Select probes.
+    critical_names, regular_names = schedule  # Name each scheduled group for existing order.
+    surviving = _filter_surviving_test_rows(existing_tests)  # Preserve foreign rows after cleanup.
+    scheduled_names = critical_names + regular_names  # Preserve the existing critical-before-regular order.
+    if not scheduled_names:  # Return the preserved foreign rows when no ZCC probe needs scheduling.
+        logger.debug("No scheduled ZCC probe rows were needed")  # Record the no-op schedule result.
+        return surviving  # Preserve the existing no-op return value.
+    result = SyntheticProbeSettingApplier.append_scheduled_rows(surviving, scheduled_names, vlan_ids)  # Append rows.
+    logger.debug("Merged %d scheduled ZCC probes into tests", len(scheduled_names))  # Record scheduled count.
+    return result  # Return the merged test rows.
 
 
 def _apply(
@@ -2612,50 +2549,12 @@ def _apply(
     combined_probes: dict[str, dict[str, Any]],
     vlan_ids: list[int],
 ) -> None:
-    """PUT the updated setting block via ``updateOrgSettings``.
-
-    Why:
-        Wrapper enforces exactly-one-PUT and sibling preservation: we
-        deep-copy the fetched ``setting`` block and only overwrite
-        ``synthetic_test.custom_probes`` plus regenerate
-        ``synthetic_test.tests[]`` for critical probes so the emitted
-        probes are actually scheduled to run.
-
-    Args:
-        mist_session: Authenticated ``mistapi`` session.
-        org_id: Mist organisation UUID.
-        setting: The setting block previously returned by
-            ``_fetch_setting`` (used as the base for the PUT body so any
-            sibling fields under ``synthetic_test`` survive round-trip).
-        combined_probes: Union of foreign and (merged/swapped)
-            tool-authored probes.
-        vlan_ids: VLAN ids to attach to each generated test row.
-    """
-    body: dict[str, Any] = json.loads(json.dumps(setting)) if setting else {}
-    synthetic = body.get("synthetic_test")
-    if not isinstance(synthetic, dict):
-        synthetic = {}
-        body["synthetic_test"] = synthetic
-    synthetic["custom_probes"] = combined_probes
-    existing_tests = synthetic.get("tests")
-    if not isinstance(existing_tests, list):
-        existing_tests = []
-    synthetic["tests"] = _merge_zcc_criticals_into_tests(existing_tests, combined_probes, vlan_ids)
-    logging.debug(
-        "Calling updateOrgSettings(org_id=%s, probe_count=%d)",
-        org_id,
-        len(combined_probes),
-    )
-    response = _mist_setting.updateOrgSettings(mist_session, org_id, body)
-    status = getattr(response, "status_code", None)
-    if status is not None and (status < 200 or status >= 300):
-        logging.error("updateOrgSettings HTTP %s", status)
-        print(f"  updateOrgSettings failed with HTTP {status}")
-        return
-    print(f"  updateOrgSettings succeeded ({len(combined_probes)} probes written)")
-    for probe_name in sorted(combined_probes):
-        print(f"    - {probe_name}")
-    logging.info("Wrote %d probes via updateOrgSettings", len(combined_probes))
+    """PUT the updated setting block via ``updateOrgSettings``."""
+    logger.info("Preparing org synthetic-probe update for org_id=%s", org_id)  # Record the write workflow start.
+    body = SyntheticProbeSettingApplier.build_body(setting, combined_probes, vlan_ids)  # Build the PUT body.
+    response = SyntheticProbeSettingApplier.write_setting(mist_session, org_id, body)  # Send one Mist setting update.
+    SyntheticProbeSettingApplier.report_result(response, org_id, combined_probes)  # Print the existing result text.
+    logger.debug("Completed org synthetic-probe update for org_id=%s", org_id)  # Record the write workflow end.
 
 
 def _prompt_and_apply_site_overrides(
@@ -2718,7 +2617,7 @@ def _prompt_and_apply_site_overrides(
         "menu_206_site_override_offer",
     ).lower()
     if answer not in ("y", "yes"):
-        logging.info("Operator declined site overrides")
+        logger.info("Operator declined site overrides")
         return
     sites = _list_org_sites(mist_session, org_id)
     if not sites:
@@ -2730,7 +2629,7 @@ def _prompt_and_apply_site_overrides(
     # ``_build_region_probes``. Emitting here (rather than per-site in the
     # resolver) collapses N warnings into 1 (or K, one per distinct
     # unmapped code) and satisfies FR-004 / FR-010 / SC-002.
-    logging.info(  # Constitution VII: BEFORE the load-time country_code diff
+    logger.info(  # Constitution VII: BEFORE the load-time country_code diff
         "computing load-time country_code unmapped set for %d sites",
         len(sites),
     )
@@ -2742,7 +2641,7 @@ def _prompt_and_apply_site_overrides(
         ),
         warned_unmapped_codes,  # dedup state -- mutated in place
     )
-    logging.debug(  # Constitution VII: AFTER the load-time emission
+    logger.debug(  # Constitution VII: AFTER the load-time emission
         "load-time country_code check complete; warned_unmapped_codes=%s",
         len(warned_unmapped_codes),
     )
@@ -2817,7 +2716,7 @@ def _sort_sites_for_picker(sites: list[dict[str, Any]]) -> list[dict[str, Any]]:
             s.get("id") or "",
         ),
     )
-    logging.debug("Sorted %d site(s) for the menu 206 picker", len(sorted_sites))  # Record picker list size.
+    logger.debug("Sorted %d site(s) for the menu 206 picker", len(sorted_sites))  # Record picker list size.
     return sorted_sites  # Return the sorted copy for the interactive picker.
 
 
@@ -2843,7 +2742,7 @@ def _pick_site_by_index(
             operator input order is preserved.
     """
     if idx < 1 or idx > len(sorted_sites):
-        logging.warning("Ignoring out-of-range site index: %d", idx)
+        logger.warning("Ignoring out-of-range site index: %d", idx)
         return
     candidate = sorted_sites[idx - 1]
     site_id = candidate.get("id")
@@ -2881,7 +2780,7 @@ def _expand_range_token(
         logging.warning("Ignoring unparseable site index range token: %r", part)
         return
     if lo > hi:
-        logging.warning("Ignoring reversed site index range: %r", part)
+        logger.warning("Ignoring reversed site index range: %r", part)
         return
     for idx in range(lo, hi + 1):
         _pick_site_by_index(idx, sorted_sites, picked_by_id)
@@ -3004,7 +2903,7 @@ def _put_site_setting(mist_session: Any, site_id: str, body: dict[str, Any]) -> 
     status = getattr(put_response, "status_code", None)
     if status is not None and not 200 <= status < 300:
         print(f"  Site {site_id}: updateSiteSettings HTTP {status}")
-        logging.error("updateSiteSettings(%s) HTTP %s", site_id, status)
+        logger.error("updateSiteSettings(%s) HTTP %s", site_id, status)
         return False
     return True
 
@@ -3081,10 +2980,10 @@ def _apply_to_site(
     """
     site_id = site.get("id")
     if not isinstance(site_id, str) or not site_id:
-        logging.error("Site override skipped: site dict missing id (%r)", site)
+        logger.error("Site override skipped: site dict missing id (%r)", site)
         return
     country_code = site.get("country_code")
-    logging.info(
+    logger.info(
         "Applying site override to site_id=%s country_code=%r",
         site_id,
         country_code,
@@ -3121,7 +3020,7 @@ def _apply_to_site(
         extra_regular_names=[*region_probes.keys(), *zen_probe_names],
     )
 
-    logging.debug(
+    logger.debug(
         "Calling updateSiteSettings(site_id=%s, probe_count=%d)",
         site_id,
         len(combined),

@@ -20,6 +20,8 @@ from typing import Any  # Loose typing for Mist device/site record dicts.
 
 from src.site.address_audit.models import MatchedSite  # Match-outcome dataclass.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 try:  # Optional dependency: rapidfuzz powers the fuzzy fallback.
     from rapidfuzz import fuzz, process  # Fast fuzzy string matching.
 except ImportError:  # pragma: no cover -- exercised only when rapidfuzz is absent.
@@ -43,26 +45,26 @@ class SiteMatchingEngine:
         self._sites_by_id = sites_by_id  # site_id -> site record (has address/name/vars).
         self._fuzzy_threshold = fuzzy_threshold  # rapidfuzz cutoff for the fallback.
         if process is None:  # rapidfuzz missing -> fuzzy fallback disabled.
-            logging.warning("rapidfuzz not installed; address fuzzy fallback disabled")  # One-time warning.
+            logger.warning("rapidfuzz not installed; address fuzzy fallback disabled")  # One-time warning.
 
     def match_serial(self, serial: str) -> MatchedSite:
         """Resolve a device serial to its Mist site (high-confidence golden key)."""
-        logging.info("Matching serial %s against device inventory", serial)  # Action-log start.
+        logger.info("Matching serial %s against device inventory", serial)  # Action-log start.
         device = self._inventory_by_serial.get(serial)  # Exact serial lookup in inventory.
         if device is None:  # Serial not present in inventory at all.
-            logging.debug("Serial %s not found in inventory", serial)  # Trace the miss.
+            logger.debug("Serial %s not found in inventory", serial)  # Trace the miss.
             return MatchedSite(match_strategy="unmatched")  # Caller may try fuzzy next.
         site_id = device.get("site_id")  # Device's assigned site (may be null/unassigned).
         if not site_id:  # Device exists but is not assigned to a site.
-            logging.debug("Serial %s found but device is unassigned", serial)  # Trace unassigned device.
+            logger.debug("Serial %s found but device is unassigned", serial)  # Trace unassigned device.
             return MatchedSite(match_strategy="unmatched")  # Reason: device unassigned.
         return self._build_matched_site(site_id, strategy="serial", confidence=1.0)  # Exact match.
 
     def match_fuzzy(self, address: str, sites: list[dict[str, Any]]) -> MatchedSite:
         """Fall back to a rapidfuzz address match across the provided sites."""
-        logging.info("Attempting fuzzy address match for: %s", address)  # Action-log start.
+        logger.info("Attempting fuzzy address match for: %s", address)  # Action-log start.
         if process is None or fuzz is None or not address:  # No rapidfuzz or no address to match.
-            logging.debug("Fuzzy match skipped (rapidfuzz unavailable or empty address)")  # Trace skip.
+            logger.debug("Fuzzy match skipped (rapidfuzz unavailable or empty address)")  # Trace skip.
             return MatchedSite(match_strategy="unmatched")  # Degrade to unmatched.
         choices = self._build_choice_map(sites)  # site_id -> normalized "address city state".
         best = process.extractOne(  # Find the single best candidate above the cutoff.
@@ -72,7 +74,7 @@ class SiteMatchingEngine:
             score_cutoff=self._fuzzy_threshold,  # Reject anything below the threshold.
         )
         if best is None:  # No candidate cleared the cutoff.
-            logging.debug("No fuzzy match >= %.0f for: %s", self._fuzzy_threshold, address)  # Trace miss.
+            logger.debug("No fuzzy match >= %.0f for: %s", self._fuzzy_threshold, address)  # Trace miss.
             return MatchedSite(match_strategy="unmatched")  # Below threshold -> unmatched.
         _matched_text, score, site_id = best  # extractOne returns (value, score, key).
         return self._build_matched_site(site_id, strategy="fuzzy", confidence=score / 100.0)  # Scaled.
@@ -91,7 +93,7 @@ class SiteMatchingEngine:
     def _build_matched_site(self, site_id: str, strategy: str, confidence: float) -> MatchedSite:
         """Assemble a ``MatchedSite`` from a resolved site_id and match metadata."""
         site = self._sites_by_id.get(site_id, {})  # Look up the full site record.
-        logging.debug("Matched site %s via %s (confidence=%.2f)", site_id, strategy, confidence)  # Trace.
+        logger.debug("Matched site %s via %s (confidence=%.2f)", site_id, strategy, confidence)  # Trace.
         return MatchedSite(  # Build the populated match result.
             site_id=site_id,  # Resolved Mist site UUID.
             site_name=site.get("name"),  # Human-readable site name.

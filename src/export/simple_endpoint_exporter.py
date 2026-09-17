@@ -24,6 +24,8 @@ from src.data.data_processing_utils import (
 from src.export.endpoint_catalog import menu_text  # WHY: one source for the description and the safety flag.
 from src.utils.input_utils import InputUtils  # WHY: MSP selection must use the EOF-safe prompt.
 
+logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
+
 
 @dataclass(frozen=True)
 class _SimpleEndpointOp:
@@ -215,14 +217,14 @@ class SimpleEndpointExporter:
             return None
         callable_obj = getattr(module, operation.operation, None)  # Read the selected function from the module.
         if callable_obj is None:
-            logging.error("SDK module %s does not define %s", operation.module, operation.operation)  # Record drift.
+            logger.error("SDK module %s does not define %s", operation.module, operation.operation)  # Record drift.
         return callable_obj
 
     @staticmethod
     def _choose(operations: tuple[_SimpleEndpointOp, ...], scope_label: str) -> _SimpleEndpointOp | None:
         """Prompt the operator to select one operation from a scope table."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Offering %d %s simple endpoint operations", len(operations), scope_label)  # Log the prompt.
+        logger.info("Offering %d %s simple endpoint operations", len(operations), scope_label)  # Log the prompt.
         for index, operation in enumerate(operations, start=1):
             print(f"  [{index}] {menu_text(operation.operation)}")  # Show the name, the description, and the flag.
         answer = str(
@@ -232,14 +234,14 @@ class SimpleEndpointExporter:
                 context=f"simple_endpoint_exporter.{scope_label}.selection",
             )
         ).strip()  # Normalize the prompt result for validation.
-        logging.debug("Operator answered %r for the %s simple endpoint selection", answer, scope_label)  # Trace input.
+        logger.debug("Operator answered %r for the %s simple endpoint selection", answer, scope_label)  # Trace input.
         if not answer.isdigit():
-            logging.info("! No operation selected. Returning to the menu.")  # Explain the safe cancel path.
+            logger.info("! No operation selected. Returning to the menu.")  # Explain the safe cancel path.
             return None
         position = int(answer)  # Convert after the numeric guard to avoid ValueError.
         if not 1 <= position <= len(operations):
-            logging.error("Selection %d is outside 1-%d", position, len(operations))  # Record the bad bound.
-            logging.info("! That number is not on the list. Returning to the menu.")  # Explain the safe cancel path.
+            logger.error("Selection %d is outside 1-%d", position, len(operations))  # Record the bad bound.
+            logger.info("! That number is not on the list. Returning to the menu.")  # Explain the safe cancel path.
             return None
         return operations[position - 1]  # Map the one-based menu row to the tuple index.
 
@@ -261,17 +263,17 @@ class SimpleEndpointExporter:
         """Flatten and persist endpoint rows through the shared exporter."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         rows = SimpleEndpointExporter._normalize(rawdata)  # Convert single-object responses to one row.
-        logging.debug("%s returned %d normalized rows", operation, len(rows))  # Record the normalized size.
+        logger.debug("%s returned %d normalized rows", operation, len(rows))  # Record the normalized size.
         if not rows:
-            logging.info("! No %s data found", operation)  # Empty read results are valid.
+            logger.info("! No %s data found", operation)  # Empty read results are valid.
             return
         flattened_data = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested JSON for tabular output.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # Keep line breaks safe in CSV cells.
         mh.DataExporter.write_with_format_selection(
             sanitized_data, filename, api_function_name=operation
         )  # Persist data.
-        logging.debug("%s persisted %d rows to %s", operation, len(rows), filename)  # Record the write result.
-        logging.info("! %d %s records exported to %s", len(rows), operation, filename)  # Tell the operator.
+        logger.debug("%s persisted %d rows to %s", operation, len(rows), filename)  # Record the write result.
+        logger.info("! %d %s records exported to %s", len(rows), operation, filename)  # Tell the operator.
 
     @staticmethod
     def _run(operation: _SimpleEndpointOp, identifier: str | None, label: str) -> None:
@@ -279,10 +281,10 @@ class SimpleEndpointExporter:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         callable_obj = SimpleEndpointExporter._resolve(operation)  # Resolve the SDK function before the API call.
         if callable_obj is None:
-            logging.info("! %s is unavailable in this SDK version.", operation.operation)  # Explain SDK drift.
+            logger.info("! %s is unavailable in this SDK version.", operation.operation)  # Explain SDK drift.
             return
         try:
-            logging.info("Calling %s for %s", operation.operation, label)  # Log before the SDK call.
+            logger.info("Calling %s for %s", operation.operation, label)  # Log before the SDK call.
             if identifier is None:
                 response = callable_obj(mh.apisession)  # No-scope endpoints take only the session.
             else:
@@ -297,7 +299,7 @@ class SimpleEndpointExporter:
     @staticmethod
     def global_endpoints() -> None:
         """Run any endpoint that needs no identifier."""
-        logging.info("Global Simple Endpoints:")  # Show the menu header.
+        logger.info("Global Simple Endpoints:")  # Show the menu header.
         operation = SimpleEndpointExporter._choose(_NONE_OPS, "global")  # Ask which endpoint to run.
         if operation is None:
             return
@@ -307,13 +309,13 @@ class SimpleEndpointExporter:
     def org_endpoints() -> None:
         """Run any org-scoped simple endpoint."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Org Simple Endpoints:")  # Show the menu header.
+        logger.info("Org Simple Endpoints:")  # Show the menu header.
         operation = SimpleEndpointExporter._choose(_ORG_OPS, "org")  # Ask which endpoint to run.
         if operation is None:
             return
         org_id = str(mh.ConfigUtils.get_cached_or_prompted_org_id())  # Reuse the cached org prompt.
         if not org_id:
-            logging.info("! No org selected. Returning to the menu.")  # Explain the safe cancel path.
+            logger.info("! No org selected. Returning to the menu.")  # Explain the safe cancel path.
             return
         SimpleEndpointExporter._run(operation, org_id, org_id)  # Execute the org endpoint.
 
@@ -321,7 +323,7 @@ class SimpleEndpointExporter:
     def site_endpoints() -> None:
         """Run any site-scoped simple endpoint."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Site Simple Endpoints:")  # Show the menu header.
+        logger.info("Site Simple Endpoints:")  # Show the menu header.
         operation = SimpleEndpointExporter._choose(_SITE_OPS, "site")  # Ask which endpoint to run.
         if operation is None:
             return
@@ -334,7 +336,7 @@ class SimpleEndpointExporter:
     @staticmethod
     def msp_endpoints() -> None:
         """Run any MSP-scoped simple endpoint."""
-        logging.info("MSP Simple Endpoints:")  # Show the menu header.
+        logger.info("MSP Simple Endpoints:")  # Show the menu header.
         operation = SimpleEndpointExporter._choose(_MSP_OPS, "msp")  # Ask which endpoint to run.
         if operation is None:
             return

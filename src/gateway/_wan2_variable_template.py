@@ -18,6 +18,8 @@ from tqdm import tqdm  # WHY: progress bars over template lists
 
 from ._wan2_variable_cluster import _ClusterBase  # WHY: parent-proxy pattern shared with peers
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class _Wan2VariableTemplate(_ClusterBase):
     """Template analysis + application helpers."""
@@ -42,11 +44,11 @@ class _Wan2VariableTemplate(_ClusterBase):
 
     def _get_template_config_dict(self, mistapi_mod: Any, tid: str, name: str) -> dict[str, Any] | None:
         """Fetch template config and return only if it is a valid dict."""
-        logging.debug("Fetching template configuration for %s", name)  # WHY: trace call site
+        logger.debug("Fetching template configuration for %s", name)  # WHY: trace call site
         resp = mistapi_mod.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(self._apisession, self._org_id, tid)
         config = resp.data if hasattr(resp, "data") else {}  # WHY: guard missing .data attr
         if not isinstance(config, dict):  # WHY: only dict-shaped configs are actionable
-            logging.warning("Template %s returned invalid data structure", name)  # WHY: audit malformed row
+            logger.warning("Template %s returned invalid data structure", name)  # WHY: audit malformed row
             return None  # WHY: caller returns no change record
         return config  # WHY: pass through to change-record builder
 
@@ -59,7 +61,7 @@ class _Wan2VariableTemplate(_ClusterBase):
         """Return a change-record dict if template needs edits, else None."""
         port_config = config.get("port_config", {})  # WHY: attribute we intend to mutate
         if not isinstance(port_config, dict):  # WHY: skip malformed port_config shapes
-            logging.debug("Template %s has no port_config", name)  # WHY: trace no-op path
+            logger.debug("Template %s has no port_config", name)  # WHY: trace no-op path
             return None  # WHY: no work needed
         ports_to_replace = self._find_matching_ports(port_config, name)  # WHY: filter to matching keys
         if not ports_to_replace:  # WHY: nothing to migrate on this template
@@ -100,21 +102,21 @@ class _Wan2VariableTemplate(_ClusterBase):
         if key.startswith(f"{search}."):  # WHY: subinterface variant
             suffix = key[len(search) :]  # WHY: preserve subinterface tail
             new_key = f"{replace}{suffix}"  # WHY: rebuild key under new prefix
-            logging.info("Found subinterface in template %s: %s -> %s", template_name, key, new_key)  # WHY: audit
+            logger.info("Found subinterface in template %s: %s -> %s", template_name, key, new_key)  # WHY: audit
             return (key, new_key)  # WHY: rename with suffix retained
         if search in key:  # WHY: complex pattern needs manual review
-            logging.warning("Found complex port pattern in template %s: %s", template_name, key)  # WHY: audit
+            logger.warning("Found complex port pattern in template %s: %s", template_name, key)  # WHY: audit
             # WHY: preserve legacy operator warnings verbatim. Operators rely on the "!?" prefix.
-            logging.warning("\n  !? Template '%s' uses complex port pattern: '%s'", template_name, key)
-            logging.warning("     This requires manual review - cannot automatically replace")
+            logger.warning("\n  !? Template '%s' uses complex port pattern: '%s'", template_name, key)
+            logger.warning("     This requires manual review - cannot automatically replace")
         return None  # WHY: unmatched or complex - no automatic edit
 
     def _analyze_templates_parallel(self, templates_to_modify: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Fetch and analyze templates in parallel."""
         # WHY: preserve legacy operator-facing analysis banner verbatim.
-        logging.info("\n  Analyzing templates for %s port configurations...", self._search_pattern)
+        logger.info("\n  Analyzing templates for %s port configurations...", self._search_pattern)
         max_workers = min(10, len(templates_to_modify))  # WHY: cap concurrency to protect API
-        logging.info(
+        logger.info(
             "Fetching %s template configurations in parallel (max %s workers)",
             len(templates_to_modify),
             max_workers,
@@ -146,7 +148,7 @@ class _Wan2VariableTemplate(_ClusterBase):
         import mistapi  # pylint: disable=import-outside-toplevel  # WHY: lazy import breaks cycle
 
         # WHY: preserve legacy operator-facing apply banner verbatim.
-        logging.info("\n  Applying template modifications...")
+        logger.info("\n  Applying template modifications...")
         results: list[dict[str, Any]] = []  # WHY: accumulator for return
         for tmpl in tqdm(
             templates_with_changes,
@@ -213,7 +215,7 @@ class _Wan2VariableTemplate(_ClusterBase):
             if old_key in port_config:  # WHY: guard concurrent template mutation
                 port_config[new_key] = port_config.pop(old_key)  # WHY: rename preserves value
                 changes_list.append(f"'{old_key}' -> '{new_key}'")  # WHY: diff line
-                logging.debug("Template %s: Replaced %s with %s", name, old_key, new_key)  # WHY: trace
+                logger.debug("Template %s: Replaced %s with %s", name, old_key, new_key)  # WHY: trace
         return changes_list  # WHY: caller stores on result
 
     def _commit_template_or_dry_run(
@@ -225,11 +227,11 @@ class _Wan2VariableTemplate(_ClusterBase):
         """Send API update or mark dry-run. Populates result status/error."""
         if self._dry_run:  # WHY: dry-run bypasses API mutation
             result["status"] = "DRY-RUN"  # WHY: report path
-            logging.info(
+            logger.info(
                 "DRY-RUN: Would update template %s with changes: %s", tmpl["name"], result["changes_made"]
             )  # WHY: audit
             return  # WHY: no API call in dry-run
-        logging.debug("Updating template %s via API", tmpl["name"])  # WHY: trace call site
+        logger.debug("Updating template %s via API", tmpl["name"])  # WHY: trace call site
         resp = mistapi_mod.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(
             self._apisession,
             self._org_id,
@@ -243,8 +245,8 @@ class _Wan2VariableTemplate(_ClusterBase):
         """Populate result status/error from a template update response."""
         if resp.status_code == 200:  # WHY: 200 == success per Mist API
             result["status"] = "SUCCESS"  # WHY: report path
-            logging.info("Successfully updated template %s", name)  # WHY: audit success
+            logger.info("Successfully updated template %s", name)  # WHY: audit success
             return  # WHY: no error data to record
         result["status"] = "FAILED"  # WHY: any non-200 is a failure
         result["error"] = f"API returned status {resp.status_code}"  # WHY: capture code
-        logging.error("Failed to update template %s: status %s", name, resp.status_code)  # WHY: audit
+        logger.error("Failed to update template %s: status %s", name, resp.status_code)  # WHY: audit

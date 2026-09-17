@@ -28,6 +28,8 @@ from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: canonical flatten and escape helpers keep CSV output consistent with peers.
 
+logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
+
 
 class SiteSystemEventsExporter:
     """Site system event search exporter.
@@ -52,7 +54,7 @@ class SiteSystemEventsExporter:
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No events, so inform the operator and return.
-            logging.info("! No system event data found for this site")  # ASCII-only user notice.
+            logger.info("! No system event data found for this site")  # ASCII-only user notice.
             return
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested dicts for CSV.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # Make multiline values CSV-safe.
@@ -60,10 +62,10 @@ class SiteSystemEventsExporter:
         mh.DataExporter.write_with_format_selection(  # Persist through the CSV, SQLite, or Arango selector.
             sanitized_data, filename, api_function_name="searchSiteSystemEvents"
         )
-        logging.debug(  # Post-call count trace per the action-logging rule.
+        logger.debug(  # Post-call count trace per the action-logging rule.
             "searchSiteSystemEvents persisted %d rows to %s", len(rawdata), filename
         )
-        logging.info("! %d system event records exported to %s", len(rawdata), filename)  # User notice with count.
+        logger.info("! %d system event records exported to %s", len(rawdata), filename)  # User notice with count.
 
     @staticmethod
     def system_events() -> None:
@@ -74,14 +76,14 @@ class SiteSystemEventsExporter:
             shared helper so behavior matches the peer site-scoped exports.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Site System Event Search:")  # Menu header echoed to the operator.
-        logging.info("Starting the searchSiteSystemEvents export...")  # Pre-call trace.
+        logger.info("Site System Event Search:")  # Menu header echoed to the operator.
+        logger.info("Starting the searchSiteSystemEvents export...")  # Pre-call trace.
         resolved = mh.SiteDeviceExporter._resolve_site_for_stats("system event search")  # Shared site prompt.
         if resolved is None:  # The operator declined, and the shared helper already logged the reason.
             return
         site_id, site_name = resolved  # Unpack the resolved identifiers for the API call.
         try:
-            logging.info("Calling searchSiteSystemEvents for site_id=%s (%s)", site_id, site_name)  # Pre-call log.
+            logger.info("Calling searchSiteSystemEvents for site_id=%s (%s)", site_id, site_name)  # Pre-call log.
             response = mistapi.api.v1.sites.events.searchSiteSystemEvents(  # SDK call with default filters.
                 mh.apisession, site_id
             )

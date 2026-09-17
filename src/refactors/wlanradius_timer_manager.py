@@ -23,6 +23,7 @@ from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 
+logger = logging.getLogger(__name__)  # Keep refactor logs tied to this module.
 _MH = SourceDependencyResolver  # Use the source resolver for lazy dependency access.
 
 
@@ -87,7 +88,7 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
 
     def manage(self) -> None:  # Public menu entrypoint invoked by MistHelper menu action 148
         """Main entry point - orchestrates the WLAN timer management workflow."""
-        logging.info("Starting WLAN RADIUS authentication timer management")  # Announce the workflow start
+        logger.info("Starting WLAN RADIUS authentication timer management")  # Announce the workflow start
         self._enable_debug_if_requested()  # Start verbose logging if the user asked for it
         if not self._discover_radius_wlans():  # Site + org + WLAN discovery. Bail on abort.
             return  # Discovery aborted -- nothing further to do
@@ -110,7 +111,7 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
             return  # Leave the existing log level untouched
         self.original_log_level = logging.getLogger().level  # Remember the current level so it can be restored later
         logging.getLogger().setLevel(logging.DEBUG)  # Raise verbosity to DEBUG for troubleshooting
-        logging.debug(
+        logger.debug(
             "Debug mode enabled - verbose output active for WLAN template troubleshooting"
         )  # Confirm debug is on
 
@@ -119,7 +120,7 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
         # Show the interactive site picker and capture the choice
         self.site_id = _MH.PromptUtils.select_site_with_logging()
         if not self.site_id:  # The user did not select a site
-            logging.warning("No site selected for WLAN management")  # Log the empty selection
+            logger.warning("No site selected for WLAN management")  # Log the empty selection
             print("\n[!] No site selected. Exiting.")  # Inform the user and bail out
             return False  # Signal the caller to abort
         return True  # A site was selected -- continue
@@ -128,19 +129,19 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
         """Get organization ID from cache or prompt."""
         self.org_id = _MH.ConfigUtils.get_cached_or_prompted_org_id()  # Reuse a cached org ID or prompt for one
         if not self.org_id:  # The org ID could not be determined
-            logging.error("Could not determine organization ID")  # Log the failure
+            logger.error("Could not determine organization ID")  # Log the failure
             print("\n[!] Unable to determine organization ID. Exiting.")  # Inform the user and bail out
             return False  # Signal the caller to abort
         return True  # An org ID is available -- continue
 
     def _fetch_site_info(self) -> bool:  # Fetch site information from API
         """Fetch site information from API."""
-        logging.info("Fetching site information for site ID: %s", self.site_id)  # Log before the API call
+        logger.info("Fetching site information for site ID: %s", self.site_id)  # Log before the API call
         try:
             # Request the site's details
             response = mistapi.api.v1.sites.sites.getSiteInfo(_MH.apisession, self.site_id)
             if response.status_code != 200:  # The API returned a non-success status
-                logging.error("Failed to fetch site info: HTTP %s", response.status_code)  # Log the HTTP error
+                logger.error("Failed to fetch site info: HTTP %s", response.status_code)  # Log the HTTP error
                 print("\n[!] Failed to fetch site information. Exiting.")  # Inform the user
                 return False  # Abort -- we cannot proceed without site info
             self.site_info = response.data  # Cache the decoded site record
@@ -155,11 +156,11 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
 
     def _log_site_info(self) -> None:  # Log site information details
         """Log site information details."""
-        logging.info("Site: %s", self.site_name)  # Record the resolved site name
+        logger.info("Site: %s", self.site_name)  # Record the resolved site name
         if self.site_template_id:  # A site template is assigned
-            logging.info("Site Template ID: %s", self.site_template_id)  # Log the template ID for traceability
+            logger.info("Site Template ID: %s", self.site_template_id)  # Log the template ID for traceability
         else:  # No template is assigned to this site
-            logging.info("No site template assigned")  # Note the absence of a template
+            logger.info("No site template assigned")  # Note the absence of a template
 
     def _fetch_all_wlans(self) -> None:  # Fetch WLANs from all sources (site, template, org)
         """Fetch WLANs from all sources (site, template, org)."""
@@ -169,15 +170,15 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
 
     def _fetch_site_wlans(self) -> None:  # Fetch WLANs configured at site level
         """Fetch WLANs configured at site level."""
-        logging.info("Fetching WLANs configured at site level...")  # Log before the API call
+        logger.info("Fetching WLANs configured at site level...")  # Log before the API call
         try:
             # Request site-level WLANs
             response = mistapi.api.v1.sites.wlans.listSiteWlans(_MH.apisession, self.site_id)
             if response.status_code == 200:  # The request succeeded
                 self.site_wlans = response.data  # Cache the returned WLAN list
-                logging.info("Found %s site-level WLANs", len(self.site_wlans))  # Report how many were found
+                logger.info("Found %s site-level WLANs", len(self.site_wlans))  # Report how many were found
             else:  # Non-success status
-                logging.warning("Failed to fetch site WLANs: HTTP %s", response.status_code)  # Warn but continue
+                logger.warning("Failed to fetch site WLANs: HTTP %s", response.status_code)  # Warn but continue
         except Exception as error:  # Network or parsing failure
             logging.error("Error fetching site WLANs: %s", error)  # Log the exception detail
 
@@ -191,20 +192,20 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
     def _apply_site_template_response(self, response) -> None:  # type: ignore[no-untyped-def]
         """Persist site-template name + WLANs from a getOrgSiteTemplate response."""
         if response.status_code != 200:  # Non-success status
-            logging.warning("Failed to fetch site template: HTTP %s", response.status_code)  # Warn but continue
+            logger.warning("Failed to fetch site template: HTTP %s", response.status_code)  # Warn but continue
             return
         template_data = response.data  # Decode the template record
         self.template_name = template_data.get("name", "Unknown Template")  # Capture a display name
         wlans = WLANRadiusTimerManager._extract_template_wlans(template_data)  # Delegate wlan extraction
         if wlans:  # Only persist when the template actually had WLANs
             self.site_template_wlans = wlans  # Record on instance
-            logging.info("Found %s site template-level WLANs", len(self.site_template_wlans))  # Report the count
+            logger.info("Found %s site template-level WLANs", len(self.site_template_wlans))  # Report the count
 
     def _fetch_site_template_wlans(self) -> None:  # Fetch WLANs from site template if assigned
         """Fetch WLANs from site template if assigned."""
         if not self.site_template_id:  # No site template is assigned
             return  # Nothing to fetch from a template
-        logging.info("Fetching WLANs from site template...")  # Log before the API call
+        logger.info("Fetching WLANs from site template...")  # Log before the API call
         try:
             response = mistapi.api.v1.orgs.sitetemplates.getOrgSiteTemplate(  # Request the assigned site template
                 _MH.apisession, self.org_id, self.site_template_id  # Scope the lookup to this org and template
@@ -215,7 +216,7 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
 
     def _fetch_org_wlans(self) -> None:  # Fetch org-level WLANs using templates assigned to this site
         """Fetch org-level WLANs using templates assigned to this site."""
-        logging.info("Fetching org-level WLANs to check for template-based configurations...")  # Log before the work
+        logger.info("Fetching org-level WLANs to check for template-based configurations...")  # Log before the work
         try:
             self._fetch_wlan_templates()  # Load every WLAN template in the org
             self._determine_assigned_templates()  # Work out which templates apply to this site
@@ -226,21 +227,21 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
     def _fetch_wlan_templates(self) -> None:  # Fetch all WLAN templates from the organization
         """Fetch all WLAN templates from the organization."""
         # Log before the API call
-        logging.debug("Fetching WLAN templates to determine which are assigned to this site")
+        logger.debug("Fetching WLAN templates to determine which are assigned to this site")
         # Request all org templates
         response = mistapi.api.v1.orgs.templates.listOrgTemplates(_MH.apisession, self.org_id)
         if response.status_code == 200:  # The request succeeded
             self.wlan_templates = response.data  # Cache the template list
-            logging.info("Found %s org-level WLAN templates", len(self.wlan_templates))  # Report the count
+            logger.info("Found %s org-level WLAN templates", len(self.wlan_templates))  # Report the count
         else:  # Non-success status
-            logging.warning("Failed to fetch WLAN templates: HTTP %s", response.status_code)  # Warn but continue
+            logger.warning("Failed to fetch WLAN templates: HTTP %s", response.status_code)  # Warn but continue
 
     def _determine_assigned_templates(self) -> None:  # Determine which templates are assigned to the selected site
         """Determine which templates are assigned to the selected site."""
         for wlan_template in self.wlan_templates:  # Examine every org template
             if self._is_template_assigned_to_site(wlan_template):  # The template applies to this site
                 self.assigned_template_ids.add(wlan_template.get("id"))  # Remember its ID for WLAN filtering
-        logging.info(
+        logger.info(
             "Found %s WLAN templates assigned to this site", len(self.assigned_template_ids)
         )  # Report the count
 
@@ -291,14 +292,14 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
         """Fetch org WLANs and filter to those using assigned templates."""
         response = mistapi.api.v1.orgs.wlans.listOrgWlans(_MH.apisession, self.org_id)  # Request every WLAN in the org
         if response.status_code != 200:  # The request failed
-            logging.warning("Failed to fetch org WLANs: HTTP %s", response.status_code)  # Warn but continue
+            logger.warning("Failed to fetch org WLANs: HTTP %s", response.status_code)  # Warn but continue
             return  # Nothing to filter without data
         all_org_wlans = response.data  # Decode the full org WLAN list
-        logging.info("Found %s total org WLANs", len(all_org_wlans))  # Report the total count
+        logger.info("Found %s total org WLANs", len(all_org_wlans))  # Report the total count
         for wlan in all_org_wlans:  # Examine each org WLAN
             self._collect_assigned_org_wlan(wlan)  # Delegate per-WLAN match + keep
         if self.org_wlans:  # At least one relevant org WLAN was kept
-            logging.info(
+            logger.info(
                 "Found %s org WLANs using templates assigned to this site", len(self.org_wlans)
             )  # Report the count
 
@@ -374,7 +375,7 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
         """Print message when no RADIUS/RadSec WLANs are found."""
         print("\n[!] No WLANs using RADIUS or RadSec authentication found at this site.")
         print("[!] Only WLANs with RADIUS auth servers or RadSec configuration are shown.")
-        logging.info("No RADIUS/RadSec WLANs found")
+        logger.info("No RADIUS/RadSec WLANs found")
 
     def _display_wlans(self) -> None:  # Display all RADIUS/RadSec WLANs with current configuration
         """Display all RADIUS/RadSec WLANs with current configuration."""
@@ -700,7 +701,7 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
         ).strip()  # Require an explicit typed keyword
         if confirmation != "APPLY":  # The user did not type the exact confirmation word
             print("\n[*] Changes cancelled. No modifications made.")  # Inform the user nothing changed
-            logging.info("User cancelled WLAN authentication timer changes")  # Log the cancellation
+            logger.info("User cancelled WLAN authentication timer changes")  # Log the cancellation
             return False  # Signal the caller to abort
         return True  # Confirmation received -- proceed with the update
 
@@ -726,7 +727,7 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
                 self._update_org_wlan()  # Update via the org WLAN endpoint
             else:  # The inheritance level is unrecognized
                 print(f"[!] Unknown inheritance level: {inheritance}")  # Report the unexpected value
-                logging.error("Unknown inheritance level for WLAN")  # Log the error for diagnosis
+                logger.error("Unknown inheritance level for WLAN")  # Log the error for diagnosis
         except Exception as error:  # Any API failure during the write
             print(f"\n[!] Error applying changes: {error}")  # Inform the user of the failure
             logging.exception("Error applying WLAN authentication timer changes: %s", error)  # Log with traceback
@@ -736,16 +737,16 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
         wlan = self._get_selected_wlan()  # Fetch the WLAN being edited
         print("\n[*] Updating site-level WLAN...")  # Inform the user the write is starting
         payload = self._build_update_payload()  # Build the timer-only update body
-        logging.info("Updating site WLAN %s with payload: %s", wlan.get("id"), payload)  # Log before the API call
+        logger.info("Updating site WLAN %s with payload: %s", wlan.get("id"), payload)  # Log before the API call
         response = mistapi.api.v1.sites.wlans.updateSiteWlan(
             _MH.apisession, self.site_id, wlan.get("id"), payload
         )  # Push the update
         if response.status_code == 200:  # The update succeeded
             print(f"[+] Successfully updated WLAN: {wlan.get('ssid')}")  # Confirm success to the user
-            logging.info("Successfully updated site WLAN %s", wlan.get("id"))  # Log the success
+            logger.info("Successfully updated site WLAN %s", wlan.get("id"))  # Log the success
         else:  # The update failed
             print(f"[!] Failed to update WLAN: HTTP {response.status_code}")  # Report the HTTP error
-            logging.error(
+            logger.error(
                 "Failed to update site WLAN: HTTP %s, Response: %s", response.status_code, response.data
             )  # Log the detail
 
@@ -758,12 +759,12 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
         )  # Fetch current template
         if template_response.status_code != 200:  # Could not load the template to modify
             print(f"[!] Failed to fetch site template: HTTP {template_response.status_code}")
-            logging.error("Failed to fetch site template for update: HTTP %s", template_response.status_code)
+            logger.error("Failed to fetch site template for update: HTTP %s", template_response.status_code)
             return None  # Abort -- cannot safely update without the current state
         template_data = template_response.data  # The full template document to mutate
         if "wlans" not in template_data or not isinstance(template_data["wlans"], dict):
             print("[!] Site template does not contain wlans data structure")
-            logging.error("Site template missing wlans dictionary")
+            logger.error("Site template missing wlans dictionary")
             return None  # Abort -- nothing to update
         return cast("dict[str, Any]", template_data)  # Caller may now mutate the WLAN map in place
 
@@ -788,10 +789,10 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
         if update_response.status_code == 200:  # The template write succeeded
             print(f"[+] Successfully updated site template WLAN: {wlan.get('ssid')}")
             print("[+] All sites using this template will inherit these changes")
-            logging.info("Successfully updated site template WLAN %s in template %s", wlan_id, template_id)
+            logger.info("Successfully updated site template WLAN %s in template %s", wlan_id, template_id)
         else:  # The template write failed
             print(f"[!] Failed to update site template: HTTP {update_response.status_code}")
-            logging.error(
+            logger.error(
                 "Failed to update site template: HTTP %s, Response: %s",
                 update_response.status_code,
                 update_response.data,
@@ -804,15 +805,15 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
         template_id = wlan.get("_template_id")  # The template that owns this WLAN
         wlan_id = wlan.get("id")  # The WLAN's unique ID within the template
         if not template_id or not wlan_id:  # Both are required for a template-level update
-            logging.error("Missing template_id or wlan_id for site template WLAN update")
+            logger.error("Missing template_id or wlan_id for site template WLAN update")
             return
-        logging.info("Updating site template WLAN %s in template %s", wlan_id, template_id)
+        logger.info("Updating site template WLAN %s in template %s", wlan_id, template_id)
         template_data = self._fetch_site_template_for_update(template_id)  # Load + validate
         if template_data is None:  # Fetch or shape-check failed (already reported by helper)
             return
         if not self._apply_wlan_update_to_template(template_data, wlan_id):  # WLAN missing in template
             print("[!] WLAN not found in site template")
-            logging.error("WLAN %s not found in site template %s", wlan_id, template_id)
+            logger.error("WLAN %s not found in site template %s", wlan_id, template_id)
             return
         self._write_site_template_update(template_id, template_data, wlan)  # Write back + report
 
@@ -823,11 +824,11 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
         wlan_id = wlan.get("id")  # The org WLAN's unique ID
         if not wlan_id:  # Defensive: the WLAN record lacks an ID
             print("[!] Missing WLAN ID - cannot update")  # Report the missing identifier
-            logging.error("Missing WLAN id for org WLAN update")  # Log the failure
+            logger.error("Missing WLAN id for org WLAN update")  # Log the failure
             # Abort -- cannot target the update
             return
         payload = self._build_update_payload()  # Build the timer-only update body
-        logging.info("Updating org WLAN %s with payload: %s", wlan_id, payload)  # Log before the API call
+        logger.info("Updating org WLAN %s with payload: %s", wlan_id, payload)  # Log before the API call
         # Push the update
         response = mistapi.api.v1.orgs.wlans.updateOrgWlan(_MH.apisession, self.org_id, wlan_id, payload)
         self._report_org_wlan_update_result(response, wlan, wlan_id)  # Print + log success/failure
@@ -842,10 +843,10 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
             print(
                 f"[+] WLAN uses template '{template_name}' for its base configuration"
             )  # Clarify the template relationship
-            logging.info("Successfully updated org WLAN %s", wlan_id)  # Log the success
+            logger.info("Successfully updated org WLAN %s", wlan_id)  # Log the success
         else:  # The update failed
             print(f"[!] Failed to update org WLAN: HTTP {response.status_code}")  # Report the HTTP error
-            logging.error(
+            logger.error(
                 "Failed to update org WLAN: HTTP %s, Response: %s", response.status_code, response.data
             )  # Log the detail
 
@@ -854,4 +855,4 @@ class WLANRadiusTimerManager:  # Menu 148 entrypoint for WLAN RADIUS timer edits
         print(
             "\n[+] WLAN authentication timer management completed successfully"
         )  # Tell the user the workflow finished
-        logging.info("WLAN authentication timer management completed")  # Log the completion
+        logger.info("WLAN authentication timer management completed")  # Log the completion

@@ -29,12 +29,14 @@ from src.config.source_dependency_resolver import (
 )
 from src.refactors.is_debug_mode import IsDebugMode  # Debug-mode predicate now owned by extracted seam (1012 SC-002)
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:
     """Resolve source-owned runtime dependencies without static cross-module imports."""
-    logging.info("Resolving ServicePingLauncher runtime dependencies from MistHelper")  # Log before import
+    logger.info("Resolving ServicePingLauncher runtime dependencies from MistHelper")  # Log before import
     misthelper_module = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-    logging.debug("ServicePingLauncher runtime dependencies resolved successfully")  # Log after resolution
+    logger.debug("ServicePingLauncher runtime dependencies resolved successfully")  # Log after resolution
     return SimpleNamespace(
         misthelper_module=misthelper_module,  # Retained so global lookups honour monkeypatch in tests
     )
@@ -57,9 +59,9 @@ class ServicePingLauncher:
 
     def __init__(self) -> None:
         """Initialize launcher with late-bound MistHelper handles."""
-        logging.info("ServicePingLauncher init: starting new launcher instance")  # Log construction start
+        logger.info("ServicePingLauncher init: starting new launcher instance")  # Log construction start
         self._deps: SimpleNamespace = _resolve_runtime_dependencies()  # Late-bound MistHelper handles
-        logging.debug("ServicePingLauncher init complete")  # Log after construction
+        logger.debug("ServicePingLauncher init complete")  # Log after construction
 
     def _misthelper(self) -> Any:
         """Return the current MistHelper module so monkeypatched attributes are honoured."""
@@ -67,18 +69,18 @@ class ServicePingLauncher:
 
     def launch(self) -> None:
         """Main entry point - wire dependencies and run Service Ping."""
-        logging.info("Menu #120: Starting WebSocket Service Ping")  # User-visible launch marker
+        logger.info("Menu #120: Starting WebSocket Service Ping")  # User-visible launch marker
         try:  # Wrap the full flow so any runtime error is funneled through the fatal-error handler
             self._wire_dependencies()  # Publish MistHelper globals into the extracted manager module
             manager = self._build_manager()  # Instantiate the canonical ServicePingManager
             manager.execute()  # Run the interactive ping flow (blocks until user exits)
-            logging.debug("Menu #120: Service Ping session returned cleanly")  # Log clean session close
+            logger.debug("Menu #120: Service Ping session returned cleanly")  # Log clean session close
         except Exception as error:  # runtime errors must never crash the numbered menu
             self._handle_fatal_error(error)  # Log traceback and surface user-visible error
 
     def _wire_dependencies(self) -> None:
         """Configure the extracted service_ping_manager module with MistHelper runtime globals."""
-        logging.info("ServicePingLauncher: wiring runtime dependencies into service_ping_manager")  # Log wire start
+        logger.info("ServicePingLauncher: wiring runtime dependencies into service_ping_manager")  # Log wire start
         misthelper = self._misthelper()  # Cache module handle for the nine attribute lookups below
         from src.websocket.service_ping_manager import (  # PLC0415: lazy import to keep startup path light
             configure_service_ping_manager_dependencies,
@@ -95,21 +97,21 @@ class ServicePingLauncher:
             config_utils=misthelper.ConfigUtils,  # Config utility helper class
             api_fetch_utils=misthelper.APIFetchUtils,  # API fetch utility class
         )
-        logging.debug("ServicePingLauncher: runtime dependencies wired successfully")  # Log wire completion
+        logger.debug("ServicePingLauncher: runtime dependencies wired successfully")  # Log wire completion
 
     def _build_manager(self) -> Any:
         """Instantiate the canonical ServicePingManager with dependencies already wired."""
-        logging.info("ServicePingLauncher: instantiating canonical ServicePingManager")  # Log build start
+        logger.info("ServicePingLauncher: instantiating canonical ServicePingManager")  # Log build start
         from src.websocket.service_ping_manager import (  # PLC0415: lazy import mirrors _wire_dependencies pattern
             ServicePingManager as ExternalServicePingManager,
         )
 
         manager = ExternalServicePingManager()  # Canonical class. Constructor pulls wired module globals
-        logging.debug("ServicePingLauncher: ServicePingManager instantiated successfully")  # Log build finish
+        logger.debug("ServicePingLauncher: ServicePingManager instantiated successfully")  # Log build finish
         return manager  # Return the ready-to-run manager to launch()
 
     def _handle_fatal_error(self, error: Exception) -> None:
         """Log and display fatal error message."""
-        logging.error("Error running Service Ping: %s", error, exc_info=True)  # Log with traceback for postmortem
+        logger.error("Error running Service Ping: %s", error, exc_info=True)  # Log with traceback for postmortem
         # WHY: operator-visible error surface (replaces prior print()).
-        logging.warning("ERROR: %s", error)
+        logger.warning("ERROR: %s", error)

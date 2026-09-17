@@ -24,6 +24,8 @@ from tqdm import tqdm  # WHY: progress bar over device iteration.
 
 from src.utils.input_utils import InputUtils  # WHY: EOF-safe input wrapper (issue #452).
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class AddressComparisonCounters:
     """Track comprehensive metrics for address comparison operations."""
@@ -70,18 +72,18 @@ class AddressComparisonCounters:
 
     def log_summary(self) -> None:
         """Log a comprehensive summary of all counter metrics."""
-        logging.info("Address comparison operation completed successfully")  # WHY: anchor log for tailers.
-        logging.info("Total devices processed: %s", self.total_devices)  # WHY: capacity/perf reference.
-        logging.info("Devices enriched: %s", self.devices_enriched)  # WHY: analysed subset size.
-        logging.info("Devices skipped: %s", self.devices_skipped)  # WHY: measures data gap.
-        logging.info("Perfect matches: %s", self.perfect_matches)  # WHY: baseline "clean" count.
-        logging.info("Mismatches found: %s", self.mismatches_found)  # WHY: main output signal.
-        logging.info("Auto corrections: %s", self.auto_corrections)  # WHY: measures skip-list impact.
-        logging.info("Comparison failures: %s", self.comparison_failures)  # WHY: reliability signal.
-        logging.info("Parse failures: %s", self.parse_failures)  # WHY: data-quality signal.
+        logger.info("Address comparison operation completed successfully")  # WHY: anchor log for tailers.
+        logger.info("Total devices processed: %s", self.total_devices)  # WHY: capacity/perf reference.
+        logger.info("Devices enriched: %s", self.devices_enriched)  # WHY: analysed subset size.
+        logger.info("Devices skipped: %s", self.devices_skipped)  # WHY: measures data gap.
+        logger.info("Perfect matches: %s", self.perfect_matches)  # WHY: baseline "clean" count.
+        logger.info("Mismatches found: %s", self.mismatches_found)  # WHY: main output signal.
+        logger.info("Auto corrections: %s", self.auto_corrections)  # WHY: measures skip-list impact.
+        logger.info("Comparison failures: %s", self.comparison_failures)  # WHY: reliability signal.
+        logger.info("Parse failures: %s", self.parse_failures)  # WHY: data-quality signal.
         if self.parse_failure_reasons:  # WHY: only log breakdown when non-empty.
-            logging.info("Parse failure breakdown: %s", self.parse_failure_reasons)  # WHY: reason histogram.
-        logging.info("Processing duration: %.2f seconds", self.get_duration())  # WHY: perf reference.
+            logger.info("Parse failure breakdown: %s", self.parse_failure_reasons)  # WHY: reason histogram.
+        logger.info("Processing duration: %.2f seconds", self.get_duration())  # WHY: perf reference.
 
 
 @dataclass
@@ -337,9 +339,9 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
             print("* Fast mode enabled: Using optimized data generation" " and caching")  # WHY: user visibility.
         if self.debug:  # WHY: debug-only diagnostics.
             print(" Debug mode enabled: Detailed comparison logging active")  # WHY: user visibility.
-            logging.debug("ENTRY: InventoryCSVComparator.execute()")  # WHY: trace entry point.
-            logging.debug("  Parameters: fast=%s, address_check=%s", self.fast, self.address_check)  # WHY: params.
-            logging.debug("  ADDRESS_MATCH_THRESHOLD=%s", self.address_threshold)  # WHY: threshold trace.
+            logger.debug("ENTRY: InventoryCSVComparator.execute()")  # WHY: trace entry point.
+            logger.debug("  Parameters: fast=%s, address_check=%s", self.fast, self.address_check)  # WHY: params.
+            logger.debug("  ADDRESS_MATCH_THRESHOLD=%s", self.address_threshold)  # WHY: threshold trace.
 
     def _determine_validation_mode(self) -> None:
         """Determine if external address validation is enabled."""
@@ -356,7 +358,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         print(f"! External address validation enabled via {source}")  # WHY: user visibility.
         print("   Address conflicts will be validated using" " Nominatim API")  # WHY: user visibility.
         if self.debug:  # WHY: debug-only trace.
-            logging.debug("Address validation enabled via %s", source)  # WHY: trace source.
+            logger.debug("Address validation enabled via %s", source)  # WHY: trace source.
         _ = env_enabled  # WHY: retained arg documents callsite intent even if unused after refactor.
 
     def _announce_validation_disabled(self) -> None:
@@ -364,7 +366,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         print("  External address validation disabled")  # WHY: user visibility.
         print("   Use --address-check flag or set" " ENABLE_ADDRESS_VALIDATION=true")  # WHY: hint.
         if self.debug:  # WHY: debug-only trace.
-            logging.debug("Address validation disabled")  # WHY: trace disabled state.
+            logger.debug("Address validation disabled")  # WHY: trace disabled state.
 
     # =================================================================
     # DATA LOADING METHODS
@@ -388,7 +390,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         if not csv_files:  # WHY: nothing to compare against.
             print(" No CSV files found in the data directory" " for comparison.")  # WHY: user visibility.
             print("   Please place comparison CSV files in the" " 'data' folder.")  # WHY: guidance.
-            logging.error("No CSV files found for comparison in data directory.")  # WHY: log record.
+            logger.error("No CSV files found for comparison in data directory.")  # WHY: log record.
             return False  # WHY: cannot proceed.
         self._display_csv_file_list(csv_files)  # WHY: numbered menu.
         return self._get_user_csv_selection(csv_files)  # WHY: capture selection.
@@ -416,11 +418,11 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
             selected_index = int(user_input)  # WHY: numeric index.
             if selected_index < 0 or selected_index >= len(csv_files):  # WHY: range check.
                 print(" Invalid index selected.")  # WHY: user visibility.
-                logging.error("Invalid CSV file index selected: %s", selected_index)  # WHY: log record.
+                logger.error("Invalid CSV file index selected: %s", selected_index)  # WHY: log record.
                 return False  # WHY: cannot proceed.
             self.comparison_file = csv_files[selected_index]  # WHY: persist choice.
             print(f"! Selected comparison file:" f" {self.comparison_file}")  # WHY: echo choice.
-            logging.info("User selected comparison file: %s", self.comparison_file)  # WHY: log record.
+            logger.info("User selected comparison file: %s", self.comparison_file)  # WHY: log record.
             return True  # WHY: success.
         except ValueError:  # WHY: non-numeric input.
             print(" Invalid input. Please enter a numeric index.")  # WHY: user visibility.
@@ -453,7 +455,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
                 self.skip_addresses = list(csv.DictReader(file_handle))  # WHY: eager load.
             print(f"! Loaded {len(self.skip_addresses)} skip" " addresses from AddressSkip.csv")  # WHY: user info.
             if self.debug:  # WHY: debug detail.
-                logging.debug("Loaded %s addresses to skip", len(self.skip_addresses))  # WHY: trace count.
+                logger.debug("Loaded %s addresses to skip", len(self.skip_addresses))  # WHY: trace count.
         except FileNotFoundError:  # WHY: optional file.
             print("  AddressSkip.csv not found - no addresses" " will be automatically skipped")  # WHY: user info.
             if self.debug:  # WHY: debug detail.
@@ -515,13 +517,13 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
             print(" Could not find serial number field" " in comparison CSV.")  # WHY: user visibility.
             print("   Looked for fields containing:" " 'serial', 'sn', 'system serial'")  # WHY: hint.
             print(f"   Available fields: {list(headers)}")  # WHY: debug help.
-            logging.error("Serial field not found. Available fields: %s", list(headers))  # WHY: log record.
+            logger.error("Serial field not found. Available fields: %s", list(headers))  # WHY: log record.
             return False  # WHY: cannot proceed.
         if not self.zip_field:  # WHY: cannot compare without zip.
             print(" Could not find zip code field" " in comparison CSV.")  # WHY: user visibility.
             print("   Looked for fields containing:" " 'zip', 'postal', 'zip code', 'postal code'")  # WHY: hint.
             print(f"   Available fields: {list(headers)}")  # WHY: debug help.
-            logging.error("Zip field not found. Available fields: %s", list(headers))  # WHY: log record.
+            logger.error("Zip field not found. Available fields: %s", list(headers))  # WHY: log record.
             return False  # WHY: cannot proceed.
         return True  # WHY: mandatory fields present.
 
@@ -716,7 +718,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         print(f"     Found {mist_count} Mist address duplications" f" affecting {mist_sites} sites")  # WHY: user info.
         print(f"     Found {ref_count} reference address" f" duplications affecting {ref_sites} sites")  # WHY.
         if self.debug:  # WHY: only log when debug.
-            logging.info("DUPLICATE_CHECK: Found %s Mist and %s reference duplicates", mist_count, ref_count)  # WHY.
+            logger.info("DUPLICATE_CHECK: Found %s Mist and %s reference duplicates", mist_count, ref_count)  # WHY.
 
     # =================================================================
     # DEVICE PROCESSING METHODS (Step 1)
@@ -762,7 +764,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         if device_serial not in self.comparison_serials:  # WHY: nothing to compare against.
             self.counters.devices_skipped += 1  # WHY: skip metric.
             if self.debug:  # WHY: only log when debugging.
-                logging.debug("DEVICE_SKIP [%s]: Not found in comparison CSV", device_serial)  # WHY: trace.
+                logger.debug("DEVICE_SKIP [%s]: Not found in comparison CSV", device_serial)  # WHY: trace.
             return first_missing_name_warned  # WHY: preserve caller state.
         self.counters.devices_enriched += 1  # WHY: matched device metric.
         self._process_single_device(device, device_serial, device_identifier)  # WHY: perform compare.
@@ -811,7 +813,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         device_error: Exception,
     ) -> None:
         """Log per-device failure and register a parse-failure row."""
-        logging.warning("! Error processing device %s: %s", device_serial, device_error)  # WHY: log record.
+        logger.warning("! Error processing device %s: %s", device_serial, device_error)  # WHY: log record.
         self.counters.comparison_failures += 1  # WHY: reliability metric.
         self._record_device_parse_failure(
             device,  # WHY: retained on failure record.
@@ -834,7 +836,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
             debug=self.debug,  # WHY: propagate debug for detailed logging.
         )
         if self.debug:  # WHY: only trace when debug.
-            logging.debug("DEVICE_COMPARISON [%s]: Result: %s", device_serial, comparison_result)  # WHY: trace.
+            logger.debug("DEVICE_COMPARISON [%s]: Result: %s", device_serial, comparison_result)  # WHY: trace.
         return comparison_result  # type: ignore[no-any-return]  # WHY: dict typed via injected class.
 
     def _record_comparison_result(self, inputs: RecordComparisonInputs) -> None:
@@ -915,7 +917,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         """Emit a DEVICE_SKIP trace when debug is enabled."""
         if not self.debug:  # WHY: keep prod logs quiet.
             return  # WHY: bail early.
-        logging.debug("DEVICE_SKIP [%s]: %s", device_serial, reason)  # WHY: trace skip reason.
+        logger.debug("DEVICE_SKIP [%s]: %s", device_serial, reason)  # WHY: trace skip reason.
 
     def _record_mist_parse_failure(
         self,
@@ -984,7 +986,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
                 seen_addresses.add(address_key)  # WHY: mark as seen.
                 unique_conflicts.append(conflict)  # WHY: retain unique.
             elif self.debug:  # WHY: log dropped duplicates in debug only.
-                logging.debug("DUPLICATE_REMOVED [%s]", conflict["device_serial"])  # WHY: trace.
+                logger.debug("DUPLICATE_REMOVED [%s]", conflict["device_serial"])  # WHY: trace.
         duplicates_removed = len(self.all_conflicts) - len(unique_conflicts)  # WHY: metric.
         print(
             f"! Step 2 Complete: Removed {duplicates_removed}"  # WHY: user info line.
@@ -1040,7 +1042,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         self.counters.perfect_matches += 1  # WHY: treat skip as match for headline metric.
         self.counters.auto_corrections += 1  # WHY: separate auto-correct metric.
         if self.debug:  # WHY: debug-only trace.
-            logging.debug("ADDRESS_SKIP [%s]: %s", device_serial, skip_reason)  # WHY: trace skip reason.
+            logger.debug("ADDRESS_SKIP [%s]: %s", device_serial, skip_reason)  # WHY: trace skip reason.
         print(f"    Auto-corrected: {device_serial}" f" (Skip reason: {skip_reason})")  # WHY: user visibility.
 
     # =================================================================
@@ -1096,7 +1098,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
     def _fetch_org_response(self) -> Any:
         """Call mistapi to fetch the org record for the current session."""
         if self.debug:  # WHY: debug-only trace.
-            logging.debug("Fetching organization information" " for tiebreaker logic...")  # WHY: trace entry.
+            logger.debug("Fetching organization information" " for tiebreaker logic...")  # WHY: trace entry.
         import mistapi  # pylint: disable=import-outside-toplevel  # WHY: import lazily to avoid cycle.
 
         org_id = self._get_org_id()  # WHY: cached/prompted org id.
@@ -1107,10 +1109,10 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         if org_response.status_code == 200:  # WHY: only 200 responses have payload.
             org_name: str = org_response.data.get("name", "").strip()  # WHY: strip padding.
             if self.debug:  # WHY: debug-only trace.
-                logging.debug("Organization name retrieved: '%s'", org_name)  # WHY: trace value.
+                logger.debug("Organization name retrieved: '%s'", org_name)  # WHY: trace value.
             return org_name  # WHY: usable tiebreaker string.
         if self.debug:  # WHY: debug-only trace.
-            logging.warning("Failed to retrieve org info: HTTP %s", org_response.status_code)  # WHY: trace.
+            logger.warning("Failed to retrieve org info: HTTP %s", org_response.status_code)  # WHY: trace.
         return None  # WHY: caller treats None as "no tiebreaker".
 
     def _validate_single_conflict(
@@ -1155,9 +1157,9 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
     def _log_validator_failure(self, device_serial: str, error: Exception) -> None:
         """Emit user-visible + logged traces for a validation failure."""
         print(f"    Validation failed: {error!s}")  # WHY: user visibility.
-        logging.warning("ADDRESS_VALIDATION [%s]: Validation failed: %s", device_serial, error)  # WHY: log record.
+        logger.warning("ADDRESS_VALIDATION [%s]: Validation failed: %s", device_serial, error)  # WHY: log record.
         if self.debug:  # WHY: only capture traceback in debug.
-            logging.debug("ADDRESS_VALIDATION [%s]: %s", device_serial, traceback.format_exc())  # WHY: full trace.
+            logger.debug("ADDRESS_VALIDATION [%s]: %s", device_serial, traceback.format_exc())  # WHY: full trace.
 
     def _build_validator(self, device: dict[str, Any], org_name: str | None) -> Any:
         """Construct the Nominatim validator with per-run configuration."""
@@ -1187,9 +1189,9 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         print(f"! [{current}/{total}]" f" Validating {device_serial}...")  # WHY: user visibility.
         print(f"    Mist:       {mist_str}")  # WHY: user visibility.
         print(f"    Reference:  {comp_str}")  # WHY: user visibility.
-        logging.info("ADDRESS_VALIDATION [%s]: Starting validation", device_serial)  # WHY: log record.
-        logging.info("ADDRESS_VALIDATION [%s]: Mist: %s", device_serial, mist_str)  # WHY: log record.
-        logging.info("ADDRESS_VALIDATION [%s]: Comparison: %s", device_serial, comp_str)  # WHY: log record.
+        logger.info("ADDRESS_VALIDATION [%s]: Starting validation", device_serial)  # WHY: log record.
+        logger.info("ADDRESS_VALIDATION [%s]: Mist: %s", device_serial, mist_str)  # WHY: log record.
+        logger.info("ADDRESS_VALIDATION [%s]: Comparison: %s", device_serial, comp_str)  # WHY: log record.
 
     def _format_address_string(self, address: dict[str, str]) -> str:
         """Format address dictionary as display string."""
@@ -1263,19 +1265,19 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         result: dict[str, Any],
     ) -> None:
         """Emit structured log records for the validation summary."""
-        logging.info(
+        logger.info(
             "ADDRESS_VALIDATION [%s]: Mist valid=%s, conf=%s",  # WHY: log Mist verdict.
             device_serial,
             formatted["mist_valid"],
             formatted["mist_conf"],
         )
-        logging.info(
+        logger.info(
             "ADDRESS_VALIDATION [%s]: Comp valid=%s, conf=%s",  # WHY: log comparison verdict.
             device_serial,
             formatted["comp_valid"],
             formatted["comp_conf"],
         )
-        logging.info("ADDRESS_VALIDATION [%s]: Recommendation: %s", device_serial, result["recommendation"])  # WHY.
+        logger.info("ADDRESS_VALIDATION [%s]: Recommendation: %s", device_serial, result["recommendation"])  # WHY.
 
     # =================================================================
     # MISMATCH RECORD GENERATION METHODS
@@ -1586,7 +1588,7 @@ class InventoryCSVComparator:  # pylint: disable=too-many-instance-attributes
         else:
             print("    No external validation performed")  # WHY: user info.
             print("   Run with --address-check for intelligent" " recommendations")  # WHY: hint.
-        logging.info("Saved %s address conflicts to %s", len(self.diff_report_items), output_file)  # WHY: log record.
+        logger.info("Saved %s address conflicts to %s", len(self.diff_report_items), output_file)  # WHY: log record.
 
     def _print_success_message(self) -> None:
         """Print success message when no conflicts found."""

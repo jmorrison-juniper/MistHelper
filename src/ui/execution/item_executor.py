@@ -19,6 +19,8 @@ from typing import Any  # WHY: TUI back-ref and parameter payloads are opaque
 from src.ui.execution.function_executor import _redact  # WHY: shared redactor masks secret args in call logs
 from src.utils.input_utils import InputUtils  # WHY: EOF-safe input wrapper (issue #452)
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 # --- Module-level constants --------------------------------------------------
 _LARGE_RESULT_HINT_THRESHOLD = 10  # WHY: results above this size get a CSV/SQLite export tip
 _SESSION_PARAM_NAMES: tuple[str, ...] = ("mist_session", "apisession")  # WHY: names that autofill from tui.apisession
@@ -76,7 +78,7 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
             self._on_error(selection.name, error)  # WHY: expose error and log traceback
         finally:
             self._wait_and_restore_raw()  # WHY: always restore raw mode for the TUI
-        logging.debug(_LOG_DONE, selection.name)  # WHY: post-run breadcrumb
+        logger.debug(_LOG_DONE, selection.name)  # WHY: post-run breadcrumb
 
     def _prepared_selection(self) -> _Selection | None:  # WHY: validate + prep gathered in one place
         """Validate the current selection, clear state, log start, and prep stdin for input()."""
@@ -102,7 +104,7 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
     def _begin_run(self, func_name: str) -> None:  # WHY: pre-run state reset + terminal switch
         """Log run start, clear last-run state, and switch stdin to cooked mode."""
         tui = self._tui  # WHY: local alias for repeated access
-        logging.info(_LOG_START, func_name)  # WHY: action-log before any input()
+        logger.info(_LOG_START, func_name)  # WHY: action-log before any input()
         tui.last_result = None  # WHY: clear previous result to avoid stale render
         tui.last_error = None  # WHY: clear previous error to avoid stale render
         self._restore_terminal_for_prompt()  # WHY: cooked mode required for input()
@@ -118,15 +120,15 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
         """Print the cancel banner and log the cancelled run."""
         # WHY (#886 Phase 2): retire print() in favor of logging.warning so the cancel banner
         # reaches the operator on the default root-logger config (INFO is suppressed by default).
-        logging.warning(_MSG_CANCEL_BANNER)  # User-visible banner
-        logging.info(_LOG_CANCEL, func_name)  # WHY: action-log the cancellation
+        logger.warning(_MSG_CANCEL_BANNER)  # User-visible banner
+        logger.info(_LOG_CANCEL, func_name)  # WHY: action-log the cancellation
 
     def _on_error(self, func_name: str, error: BaseException) -> None:  # WHY: generic exception path
         """Capture the error on the TUI, print a banner, and log with traceback."""
         self._tui.last_error = str(error)  # WHY: expose to caller for render
         # WHY (#886 Phase 2): retire print() in favor of logging.exception which already emits the
         # error string plus traceback via the shared handler chain (banner + triage in one call).
-        logging.exception(_LOG_FAIL, func_name, error)  # WHY: include traceback for triage
+        logger.exception(_LOG_FAIL, func_name, error)  # WHY: include traceback for triage
 
     def _validated_selection(self) -> dict[str, Any] | None:  # WHY: bounds + type guard
         """Return the selected item iff it is a function. Otherwise ``None``."""
@@ -155,8 +157,8 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
         params: dict[str, Any] = {}  # WHY: accumulator for collected values
         # WHY (#886 Phase 2): retire print() in favor of logging.warning so the pre-prompt banners
         # reach the operator on the default root-logger config (INFO is suppressed by default).
-        logging.warning("\n[Executing] %s", func_name)  # Banner before prompts
-        logging.warning("Signature: %s%s\n", func_name, sig)  # Show signature for user context
+        logger.warning("\n[Executing] %s", func_name)  # Banner before prompts
+        logger.warning("Signature: %s%s\n", func_name, sig)  # Show signature for user context
         for param_name, param in sig.parameters.items():  # WHY: walk each parameter
             if param_name == "self":  # WHY: skip implicit self
                 continue
@@ -193,7 +195,7 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
         params[param_name] = env_value  # WHY: store env value on accumulator
         # WHY (#886 Phase 2): retire print() in favor of logging.warning so the autofill provenance
         # reaches the operator on the default root-logger config (INFO is suppressed by default).
-        logging.warning("  %s: [from .env] %s", param_name, env_value)  # Show autofill provenance to user
+        logger.warning("  %s: [from .env] %s", param_name, env_value)  # Show autofill provenance to user
         return _OUTCOME_OK
 
     def _prompt_outcome(
@@ -205,7 +207,7 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
         if not value and not has_default:  # WHY: required-but-empty - hard error
             # WHY (#886 Phase 2): retire print() in favor of logging.error so the required-param
             # banner reaches the operator on the default root-logger config.
-            logging.error("[ERROR] %s is required", param_name)  # User-visible error banner
+            logger.error("[ERROR] %s is required", param_name)  # User-visible error banner
             self._tui.last_error = f"Missing required parameter: {param_name}"  # WHY: expose to caller for render
             return _OUTCOME_ABORT
         if value:  # WHY: store user-provided value only when supplied
@@ -220,7 +222,7 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
         if getattr(tui, "apisession", None) is None:  # WHY: guard - no session available
             # WHY (#886 Phase 2): retire print() in favor of logging.error so the missing-session
             # banner reaches the operator on the default root-logger config.
-            logging.error(_MSG_SESSION_PRINT)  # User-visible banner
+            logger.error(_MSG_SESSION_PRINT)  # User-visible banner
             tui.last_error = _MSG_SESSION_ERROR  # WHY: expose to caller for render
             return False
         params[param_name] = tui.apisession  # WHY: inject the session reference
@@ -240,16 +242,16 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
         """Invoke ``func`` with ``params``. Render a safe preview to stdout."""
         tui = self._tui  # WHY: local alias
         redacted = {k: _redact(k, v) for k, v in params.items()}  # WHY: redact secrets before logging
-        logging.info(_LOG_CALL, func_name, redacted)  # WHY: log the redacted call site
+        logger.info(_LOG_CALL, func_name, redacted)  # WHY: log the redacted call site
         # WHY (#886 Phase 2): retire print() in favor of logging.warning so the executing/success/
         # preview banners reach the operator on the default root-logger config.
-        logging.warning(_MSG_EXECUTING)  # Status line for user
+        logger.warning(_MSG_EXECUTING)  # Status line for user
         result = func(**params)  # WHY: the actual API call
         tui.last_result = result  # WHY: stash for caller / details panel
-        logging.warning(_MSG_SUCCESS)  # Success banner
-        logging.warning("\n%s", _ResultPreview.build(result))  # Smart preview (no full repr)
+        logger.warning(_MSG_SUCCESS)  # Success banner
+        logger.warning("\n%s", _ResultPreview.build(result))  # Smart preview (no full repr)
         self._maybe_print_export_hint(result)  # WHY: hint when result is large enough
-        logging.info(_LOG_SUCCESS, func_name)  # WHY: action-log after success
+        logger.info(_LOG_SUCCESS, func_name)  # WHY: action-log after success
 
     @staticmethod
     def _maybe_print_export_hint(result: Any) -> None:  # WHY: guarded tip extracted for CC
@@ -260,7 +262,7 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
             return
         # WHY (#886 Phase 2): retire print() in favor of logging.warning so the export tip reaches
         # the operator on the default root-logger config (INFO is suppressed by default).
-        logging.warning(  # User-visible tip banner
+        logger.warning(  # User-visible tip banner
             "\n[TIP] Result has %d items. Consider using main menu options " "to save full data to CSV/SQLite.",
             len(result),
         )
@@ -270,7 +272,7 @@ class ItemExecutor:  # WHY: extracted from MistHelperTUI to own the synchronous 
         tui = self._tui  # WHY: local alias
         # WHY (#886 Phase 2): retire print() in favor of logging.warning so the press-key cue
         # reaches the operator on the default root-logger config.
-        logging.warning(_MSG_PRESS_KEY)  # User cue
+        logger.warning(_MSG_PRESS_KEY)  # User cue
         self._read_single_keypress(tui)  # WHY: platform-specific single-char read
         if not tui.IS_WINDOWS:  # WHY: restore raw mode for the TUI on Unix
             tui.tty.setcbreak(sys.stdin.fileno())

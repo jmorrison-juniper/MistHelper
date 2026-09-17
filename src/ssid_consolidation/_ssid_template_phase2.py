@@ -30,6 +30,7 @@ from typing import Any  # WHY: broad typing for opaque cache / row payloads
 
 from ._ssid_template_cluster import _ClusterBase  # WHY: shared parent-proxy wrapper
 
+logger = logging.getLogger(__name__)  # WHY: Use the module logger for non-exception log entries.
 # WHY: module constants centralize magic values referenced by the pure helpers.
 _MISTHELPER_PREFIX = "MISTHELPER_"  # WHY: canonical prefix for generated site var names
 _CONFLICT_DISPLAY_LIMIT = 10  # WHY: bound console noise to first N conflicts
@@ -154,11 +155,11 @@ def _count_statuses(plan: list[dict[str, Any]]) -> dict[str, int]:  # WHY: extra
 def _display_variable_summary(plan: list[dict[str, Any]]) -> None:  # WHY: user-facing summary output
     """Display variable assignment summary table."""
     counts = _count_statuses(plan)  # WHY: single-pass tally keeps this function CC low
-    logging.warning("Variable Assignment Plan:")  # WHY: header aligns with parent phases
-    logging.warning("Pending:            %d", counts[_STATUS_PENDING])  # WHY: entries queued for write
-    logging.warning("Already configured: %d", counts[_STATUS_CONFIGURED])  # WHY: no-op count
-    logging.warning("Conflicts:          %d", counts[_STATUS_CONFLICT])  # WHY: needs operator attention
-    logging.warning("Skipped:            %d", counts[_STATUS_SKIPPED])  # WHY: PSK/anomaly rows
+    logger.warning("Variable Assignment Plan:")  # WHY: header aligns with parent phases
+    logger.warning("Pending:            %d", counts[_STATUS_PENDING])  # WHY: entries queued for write
+    logger.warning("Already configured: %d", counts[_STATUS_CONFIGURED])  # WHY: no-op count
+    logger.warning("Conflicts:          %d", counts[_STATUS_CONFLICT])  # WHY: needs operator attention
+    logger.warning("Skipped:            %d", counts[_STATUS_SKIPPED])  # WHY: PSK/anomaly rows
     if counts[_STATUS_CONFLICT]:  # WHY: only pay for the details table when needed
         conflicts = [e for e in plan if e["status"] == _STATUS_CONFLICT]  # WHY: filter for detail rows
         _print_conflicts(conflicts)  # WHY: render bounded conflict detail table
@@ -166,15 +167,15 @@ def _display_variable_summary(plan: list[dict[str, Any]]) -> None:  # WHY: user-
 
 def _print_conflicts(conflicts: list[dict[str, Any]]) -> None:  # WHY: bounded conflict output
     """Print conflict details for variable summary."""
-    logging.warning("Conflicts (existing value differs from proposed):")  # WHY: section header
+    logger.warning("Conflicts (existing value differs from proposed):")  # WHY: section header
     for entry in conflicts[:_CONFLICT_DISPLAY_LIMIT]:  # WHY: bound console noise to first N
         site = entry["site_name"]  # WHY: readable local for f-string
         var_name = entry["variable_name"]  # WHY: readable local for f-string
         current = entry["current_value"]  # WHY: readable local for f-string
         proposed = entry["proposed_value"]  # WHY: readable local for f-string
-        logging.warning("%s: %s = %s -> %s", site, var_name, current, proposed)  # WHY: one line per conflict
+        logger.warning("%s: %s = %s -> %s", site, var_name, current, proposed)  # WHY: one line per conflict
     if len(conflicts) > _CONFLICT_DISPLAY_LIMIT:  # WHY: signal that output was truncated
-        logging.warning("... and %d more", len(conflicts) - _CONFLICT_DISPLAY_LIMIT)  # WHY: overflow count
+        logger.warning("... and %d more", len(conflicts) - _CONFLICT_DISPLAY_LIMIT)  # WHY: overflow count
 
 
 def _group_entries_by_site(entries: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
@@ -212,15 +213,15 @@ class _SsidTemplatePhase2Cluster(_ClusterBase):
 
     def phase2_site_variables(self) -> None:  # WHY: user-facing Phase 2 entry point
         """Phase 2 orchestrator - compute variable plan, write to sites."""
-        logging.warning("=== Phase 2: Write Site Variables ===")  # WHY: banner marks phase boundary
+        logger.warning("=== Phase 2: Write Site Variables ===")  # WHY: banner marks phase boundary
         # WHY (#886 Phase 2): module already imports `logging` at module top. Local re-import removed.
 
-        logging.info("Phase 2: Starting site variable configuration")  # WHY: audit trail
+        logger.info("Phase 2: Starting site variable configuration")  # WHY: audit trail
         if not self._load_cache_or_bail():  # WHY: cache preamble aborts on missing Phase 1
             return
         plan = _compute_variable_plan(self._mm.cache)  # WHY: derive plan from cached deviations
         if not plan:  # WHY: nothing to configure means we exit cleanly
-            logging.warning("No site variables to configure (no deviations detected).")
+            logger.warning("No site variables to configure (no deviations detected).")
             return
         _display_variable_summary(plan)  # WHY: show operator the counts + conflicts
         if not self._confirm_phase2_write(plan):  # WHY: confirmation is user-blocking

@@ -16,6 +16,8 @@ from collections.abc import Callable  # WHY: precise callable typing without run
 from dataclasses import dataclass  # WHY: frozen dataclasses collapse parameter groups (STRUCT-PARAMS).
 from typing import Any  # WHY: mistapi session and response payloads are dynamically shaped.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 # ---------------------------------------------------------------------------
 # Type aliases for dependency injection
 # ---------------------------------------------------------------------------
@@ -93,7 +95,7 @@ def _deps() -> VirtualChassisDependencies:  # WHY: single accessor used by every
 def configure_virtual_chassis_dependencies(deps: VirtualChassisDependencies) -> None:
     """Wire runtime collaborators from the MistHelper orchestration layer (Menus 92/93/94)."""
     global _DEPS  # WHY: rebind the module-level holder used by every launch method.
-    logging.info("configure_virtual_chassis_dependencies: wiring MistHelper globals for VC menus")  # WHY.
+    logger.info("configure_virtual_chassis_dependencies: wiring MistHelper globals for VC menus")  # WHY.
     _DEPS = deps  # WHY: single assignment ensures atomic swap of collaborators.
 
 
@@ -112,7 +114,7 @@ class VirtualChassisManager:
     @classmethod
     def launch_convert_single(cls, dry_run: bool = False) -> None:
         """Menu 92 launcher: build IO deps from `_deps()` and delegate to `convert_single`."""
-        logging.info("VirtualChassisManager.launch_convert_single: wiring VCIODeps (dry_run=%s)", dry_run)  # WHY.
+        logger.info("VirtualChassisManager.launch_convert_single: wiring VCIODeps (dry_run=%s)", dry_run)  # WHY.
         deps = _deps()  # WHY: pull the shared dependency container populated at menu wire-up.
         io_deps = VCIODeps(  # WHY: bundle IO/cache dependencies to satisfy the 5-param limit.
             get_csv_path_fn=deps.file_path_utils.get_csv_path,  # WHY: resolve cache paths.
@@ -131,7 +133,7 @@ class VirtualChassisManager:
     @classmethod
     def launch_convert_by_site_list(cls) -> None:
         """Menu 93 launcher: build IO deps from `_deps()` and delegate to `convert_by_site_list`."""
-        logging.info("VirtualChassisManager.launch_convert_by_site_list: wiring VCIODeps for bulk")  # WHY.
+        logger.info("VirtualChassisManager.launch_convert_by_site_list: wiring VCIODeps for bulk")  # WHY.
         deps = _deps()  # WHY: pull the shared dependency container populated at menu wire-up.
         io_deps = VCIODeps(  # WHY: bundle IO/cache dependencies for the bulk path.
             get_csv_path_fn=deps.file_path_utils.get_csv_path,  # WHY: cache path resolver.
@@ -149,7 +151,7 @@ class VirtualChassisManager:
     @classmethod
     def launch_check_status(cls) -> None:
         """Menu 94 launcher: build IO+export deps from `_deps()` and delegate to `check_status`."""
-        logging.info("VirtualChassisManager.launch_check_status: wiring VCIODeps + VCExportDeps")  # WHY.
+        logger.info("VirtualChassisManager.launch_check_status: wiring VCIODeps + VCExportDeps")  # WHY.
         deps = _deps()  # WHY: pull the shared dependency container populated at menu wire-up.
         io_deps = VCIODeps(  # WHY: bundle IO/cache dependencies for status check.
             get_csv_path_fn=deps.file_path_utils.get_csv_path,  # WHY: cache path resolver.
@@ -202,7 +204,7 @@ class VirtualChassisManager:
         safe_input_fn: SafeInputFn,
     ) -> None:
         """Bulk convert VC switches from sites in VCConvert.CSV (Menu 93)."""
-        logging.info("Starting bulk VC to virtual MAC conversion by site list...")  # WHY: audit start.
+        logger.info("Starting bulk VC to virtual MAC conversion by site list...")  # WHY: audit start.
         target_ids, site_name_to_id = VirtualChassisManager._prepare_bulk_targets(  # WHY: resolve sites.
             io_deps, safe_input_fn
         )
@@ -213,7 +215,7 @@ class VirtualChassisManager:
         )
         if not switches:  # WHY: nothing to convert.
             print(" No virtual chassis switches found in the specified sites.")  # WHY: operator note.
-            logging.warning("No virtual chassis switches found in target sites.")  # WHY: audit.
+            logger.warning("No virtual chassis switches found in target sites.")  # WHY: audit.
             return  # WHY: exit cleanly.
         VirtualChassisManager._display_switches_for_conversion(switches)  # WHY: show what will convert.
         if not VirtualChassisManager._confirm_bulk(safe_input_fn):  # WHY: destructive-op double-check.
@@ -228,7 +230,7 @@ class VirtualChassisManager:
     ) -> None:
         """Check conversion status of all VC switches in the org (Menu 94)."""
         VirtualChassisManager._print_status_banner()  # WHY: header + explanation of prefix.
-        logging.info("Starting virtual chassis conversion status check...")  # WHY: audit entry.
+        logger.info("Starting virtual chassis conversion status check...")  # WHY: audit entry.
         io_deps.check_and_generate_csv_fn("OrgInventory.csv", io_deps.inventory_generator)  # WHY: refresh.
         vc_switches = VirtualChassisManager._load_vc_switches(io_deps.get_csv_path_fn)  # WHY: load subset.
         if not vc_switches:  # WHY: no VC switches to classify.
@@ -288,7 +290,7 @@ class VirtualChassisManager:
         if not switches:  # WHY: no eligible switches at this site.
             print(f"! No virtual chassis switches found at site '{site_name}'.")  # WHY: operator note.
             print(" Virtual chassis switches must have a device ID assigned.")  # WHY: eligibility hint.
-            logging.warning("No virtual chassis switches found at site %s.", site_id)  # WHY: audit.
+            logger.warning("No virtual chassis switches found at site %s.", site_id)  # WHY: audit.
             return None  # WHY: nothing to pick.
         return VirtualChassisManager._prompt_switch_selection(switches, site_name, safe_input_fn)
 
@@ -323,7 +325,7 @@ class VirtualChassisManager:
         device_id = selected.get("id")  # WHY: mistapi requires an id to convert.
         if not device_id:  # WHY: defensive guard against malformed inventory rows.
             print(" Missing device_id for selected switch.")  # WHY: surface operator-visible error.
-            logging.warning("Missing device_id for selected switch.")  # WHY: audit trail.
+            logger.warning("Missing device_id for selected switch.")  # WHY: audit trail.
             return None  # WHY: caller aborts on None.
         if not VirtualChassisManager._preflight_check(selected, safe_input_fn):  # WHY: eligibility.
             return None  # WHY: preflight failed or operator declined.
@@ -366,7 +368,7 @@ class VirtualChassisManager:
                 print(f"   - {site}")  # WHY: indented for readability.
         if not target_ids:  # WHY: no valid targets == fatal for bulk.
             print(" No valid sites found. Exiting.")  # WHY: clear operator feedback.
-            logging.error("No valid sites found for VC conversion.")  # WHY: audit failure.
+            logger.error("No valid sites found for VC conversion.")  # WHY: audit failure.
 
     @staticmethod
     def _confirm_bulk(safe_input_fn: SafeInputFn) -> bool:
@@ -377,7 +379,7 @@ class VirtualChassisManager:
         )
         if confirm != "CONVERT":  # WHY: only literal CONVERT proceeds.
             print(" Conversion cancelled by user.")  # WHY: visible cancellation.
-            logging.info("Virtual chassis conversion cancelled by user.")  # WHY: audit cancellation.
+            logger.info("Virtual chassis conversion cancelled by user.")  # WHY: audit cancellation.
             return False  # WHY: caller bails out.
         return True  # WHY: proceed with bulk execution.
 
@@ -398,7 +400,7 @@ class VirtualChassisManager:
         """Emit operator-visible message when no VC switches are found."""
         print(" No switches with vc_mac found in the organization.")  # WHY: primary message.
         print(" Only virtual chassis switches have vc_mac assigned.")  # WHY: educational hint.
-        logging.warning("No switches with vc_mac found.")  # WHY: audit warning.
+        logger.warning("No switches with vc_mac found.")  # WHY: audit warning.
 
     @staticmethod
     def _classify_status(
@@ -431,7 +433,7 @@ class VirtualChassisManager:
         import mistapi  # WHY: lazy import keeps module light for unit tests.
 
         try:
-            logging.info("Resolving site name for site %s", site_id)  # WHY: trace the API lookup before it runs.
+            logger.info("Resolving site name for site %s", site_id)  # WHY: trace the API lookup before it runs.
             response = mistapi.api.v1.sites.sites.getSiteInfo(apisession, site_id)  # WHY: call the installed SDK route.
             site_data = (
                 response.data if isinstance(response.data, dict) else {}
@@ -442,10 +444,10 @@ class VirtualChassisManager:
             if (
                 isinstance(status_code, int) and status_code >= 400
             ):  # WHY: report API faults without MagicMock comparison errors.
-                logging.error("Mist API returned status %s for site %s", status_code, site_id)  # WHY: expose fault.
+                logger.error("Mist API returned status %s for site %s", status_code, site_id)  # WHY: expose fault.
                 return "Unknown Site"  # WHY: status reports can continue with a safe placeholder.
             site_name = str(site_data.get("name", site_id)) if site_data else "Unknown Site"  # WHY: prefer API name.
-            logging.debug("Resolved site %s to name %s", site_id, site_name)  # WHY: record the lookup result.
+            logger.debug("Resolved site %s to name %s", site_id, site_name)  # WHY: record the lookup result.
             return site_name  # WHY: caller needs a display name for status output.
         except AttributeError:
             logging.exception("Mist SDK site lookup is not available for site %s", site_id)  # WHY: expose SDK drift.
@@ -503,7 +505,7 @@ class VirtualChassisManager:
         if hasattr(response, "status_code") and response.status_code >= 400:  # WHY: HTTP error path.
             data = getattr(response, "data", "")  # WHY: include payload for context.
             print(f"! Conversion failed (HTTP {response.status_code}): {data}")  # WHY: operator.
-            logging.error(  # WHY: audit the failure with structured fields.
+            logger.error(  # WHY: audit the failure with structured fields.
                 "Conversion failed for %s at %s. HTTP %s",
                 switch_name,
                 site_name,
@@ -518,7 +520,7 @@ class VirtualChassisManager:
         resp_data = getattr(response, "data", None)  # WHY: normalize access to payload.
         if isinstance(resp_data, dict) and "detail" in resp_data:  # WHY: mistapi body error shape.
             print(f"! Conversion failed: {resp_data['detail']}")  # WHY: operator feedback.
-            logging.error(  # WHY: audit with the returned detail message.
+            logger.error(  # WHY: audit with the returned detail message.
                 "Conversion failed for %s at %s. Detail: %s",
                 switch_name,
                 site_name,
@@ -536,7 +538,7 @@ class VirtualChassisManager:
         print("   If the conversion causes issues, contact Juniper TAC.")  # WHY: escalation path.
         print("   The device may need a factory reset and re-adoption to revert.")  # WHY: recovery note.
         print("   Use Menu 94 to verify conversion status after the device reboots.")  # WHY: verification.
-        logging.info(  # WHY: audit successful trigger with correlation ids.
+        logger.info(  # WHY: audit successful trigger with correlation ids.
             "Conversion triggered for device %s at site %s. Response: %s",
             device_id,
             site_id,
@@ -585,7 +587,7 @@ class VirtualChassisManager:
             if VirtualChassisManager._is_conversion_error(response):  # WHY: HTTP or body error.
                 return False  # WHY: caller counts failure.
             print("! Conversion triggered successfully.")  # WHY: success message.
-            logging.info("Conversion triggered for %s at %s.", switch_name, site_name)  # WHY: audit.
+            logger.info("Conversion triggered for %s at %s.", switch_name, site_name)  # WHY: audit.
             return True  # WHY: caller counts success.
         except Exception as exc:  # WHY: guard against network/mistapi exceptions.
             print(f"! Exception during conversion: {exc}")  # WHY: operator-visible.
@@ -657,7 +659,7 @@ class VirtualChassisManager:
         answer = VirtualChassisManager._prompt_yes_no(safe_input_fn)  # WHY: extract prompt for length.
         if answer in ("y", "yes"):  # WHY: accept y / yes as affirmative.
             VirtualChassisManager._create_vc_template(create_csv_template_fn)  # WHY: attempt write.
-        logging.error("VCConvert.CSV file not found.")  # WHY: audit the missing-file case.
+        logger.error("VCConvert.CSV file not found.")  # WHY: audit the missing-file case.
 
     @staticmethod
     def _prompt_yes_no(safe_input_fn: SafeInputFn) -> str:
@@ -804,16 +806,16 @@ class VirtualChassisManager:
         device_type = switch.get("type", "")  # WHY: mistapi requires type == switch.
         if device_type != "switch":  # WHY: reject anything else.
             print(f"! Preflight FAILED: Device type is '{device_type}', expected 'switch'.")  # WHY: msg.
-            logging.error("Preflight: wrong device type '%s' for VC conversion", device_type)  # WHY: audit.
+            logger.error("Preflight: wrong device type '%s' for VC conversion", device_type)  # WHY: audit.
             return False  # WHY: fail preflight.
         device_id = switch.get("id", "").strip()  # WHY: id is required for API call.
         if not device_id:  # WHY: no id == cannot convert.
             print("! Preflight FAILED: Device has no assigned device ID.")  # WHY: operator note.
-            logging.error("Preflight: missing device_id for VC conversion")  # WHY: audit.
+            logger.error("Preflight: missing device_id for VC conversion")  # WHY: audit.
             return False  # WHY: fail preflight.
         if not VirtualChassisManager._check_already_converted(switch, safe_input_fn):  # WHY: subhelper.
             return False  # WHY: operator declined to re-convert.
-        logging.info(  # WHY: audit successful preflight.
+        logger.info(  # WHY: audit successful preflight.
             "Preflight passed for switch '%s' (id=%s)", switch.get("name", ""), device_id
         )
         return True  # WHY: eligible for conversion.
@@ -929,12 +931,12 @@ class VirtualChassisManager:
         if hasattr(response, "status_code") and response.status_code >= 400:  # WHY: HTTP failure path.
             data = getattr(response, "data", "")  # WHY: include payload for context.
             print(f"! Conversion failed (HTTP {response.status_code}): {data}")  # WHY: operator.
-            logging.error("Conversion failed. HTTP %s", response.status_code)  # WHY: audit.
+            logger.error("Conversion failed. HTTP %s", response.status_code)  # WHY: audit.
             return True  # WHY: caller treats as failure.
         resp_data = getattr(response, "data", None)  # WHY: check body-level detail error.
         if isinstance(resp_data, dict) and "detail" in resp_data:  # WHY: mistapi body error shape.
             print(f"! Conversion failed: {resp_data['detail']}")  # WHY: operator.
-            logging.error("Conversion failed. Detail: %s", resp_data["detail"])  # WHY: audit.
+            logger.error("Conversion failed. Detail: %s", resp_data["detail"])  # WHY: audit.
             return True  # WHY: caller treats as failure.
         return False  # WHY: no error detected.
 
@@ -949,7 +951,7 @@ class VirtualChassisManager:
         print(f"  [DRY RUN] Device ID: {device_id}")  # WHY: echo device id.
         print(f"  [DRY RUN] MAC: {selected.get('mac', '')}")  # WHY: echo mac.
         print("  [DRY RUN] No API call made. Use without --dry-run to execute.")  # WHY: closing note.
-        logging.info("DRY RUN: Would convert %s at site %s", device_id, site_id)  # WHY: audit.
+        logger.info("DRY RUN: Would convert %s at site %s", device_id, site_id)  # WHY: audit.
 
     @staticmethod
     def _display_switches_for_conversion(
@@ -1014,7 +1016,7 @@ class VirtualChassisManager:
         if successful > 0:  # WHY: only nudge when at least one succeeded.
             print("\n  Note: Successful conversions may take a few minutes to complete.")  # WHY: hint.
             print("   Monitor the devices in the Mist portal to confirm the conversion status.")  # WHY: hint.
-        logging.info(  # WHY: audit final totals with structured fields.
+        logger.info(  # WHY: audit final totals with structured fields.
             "Bulk VC conversion completed: %d successful, %d failed", successful, failed
         )
 
@@ -1034,7 +1036,7 @@ class VirtualChassisManager:
             save_data_fn(sanitized, filename)  # WHY: physical write to disk.
             print(f"\n  Results exported to: {filename}")  # WHY: confirm success.
             print(f"   Location: {get_csv_path_fn(filename)}")  # WHY: show absolute path.
-            logging.info("Virtual chassis conversion status exported to %s", filename)  # WHY: audit.
+            logger.info("Virtual chassis conversion status exported to %s", filename)  # WHY: audit.
         except Exception as exc:  # WHY: any transformer / writer error is non-fatal.
             print(f"! Error exporting results: {exc}")  # WHY: operator-visible error.
             logging.error("Error exporting conversion status results: %s", exc)  # WHY: audit failure.

@@ -10,6 +10,8 @@ from src.inventory import (  # Parent module exposes DataExporter global
     org_device_inventory_summary as _parent,
 )
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class PivotRenderer:  # Decomposed replacement for the original `_display_pivot_and_export` helper
     """Decomposed replacement for the original `_display_pivot_and_export` helper."""
@@ -17,7 +19,7 @@ class PivotRenderer:  # Decomposed replacement for the original `_display_pivot_
     @staticmethod
     def render(rows: list[dict], filename: str) -> None:  # Public entrypoint
         """Render the combined version-per-model pivot table and export it."""
-        logging.info(
+        logger.info(
             "Rendering version-per-model pivot for %d rows -> %s", len(rows), filename
         )  # Trace orchestrator entry
         models, versions, model_type, pivot = PivotRenderer._compute_pivot(rows)  # Build pivot
@@ -31,7 +33,7 @@ class PivotRenderer:  # Decomposed replacement for the original `_display_pivot_
         PivotRenderer._emit_export(
             export_rows, versions, filename
         )  # Hand off to DataExporter with stable field ordering
-        logging.debug(
+        logger.debug(
             "Pivot rendered: %d models x %d versions, grand_total=%d",
             len(models),
             len(versions),
@@ -127,13 +129,13 @@ class PivotRenderer:  # Decomposed replacement for the original `_display_pivot_
     def _print_table(table: PrettyTable) -> None:  # Renders the legacy ASCII banner + table
         """Print the rendered table with the original banner verbatim."""
         # WHY: Top banner preserved exactly from the legacy implementation.
-        logging.info("\n%s", "=" * 62)
+        logger.info("\n%s", "=" * 62)
         # WHY: Header label preserved verbatim for NOC familiarity.
-        logging.info("  Version Distribution per Model (All Device Types)")
+        logger.info("  Version Distribution per Model (All Device Types)")
         # WHY: Bottom of top banner preserved exactly from the legacy implementation.
-        logging.info("%s", "=" * 62)
+        logger.info("%s", "=" * 62)
         # WHY: PrettyTable renders to its built-in ASCII grid format.
-        logging.info("%s", table)
+        logger.info("%s", table)
 
     @staticmethod
     def _emit_export(  # Delegates persistence to DataExporter with stable column order
@@ -143,7 +145,7 @@ class PivotRenderer:  # Decomposed replacement for the original `_display_pivot_
         ordered_fields = (
             ["Model", "Device Type"] + versions + ["Total"]
         )  # Preserve column order in CSV exactly as it appeared in legacy
-        logging.info(
+        logger.info(
             "Exporting %d pivot rows to %s", len(export_rows), filename
         )  # Log before potentially slow disk / database write
         # Delegate format selection (CSV/SQLite/Arango) to the parent exporter
@@ -153,4 +155,4 @@ class PivotRenderer:  # Decomposed replacement for the original `_display_pivot_
             api_function_name="orgDeviceVersionPerModel",  # PK strategy registered under this synthetic endpoint name
             fieldnames=ordered_fields,
         )
-        logging.debug("Pivot export complete: %s", filename)  # Trace successful disk / DB write
+        logger.debug("Pivot export complete: %s", filename)  # Trace successful disk / DB write

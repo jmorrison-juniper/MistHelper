@@ -20,12 +20,14 @@ from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:
     """Resolve source-owned runtime dependencies without static cross-module imports."""
-    logging.info("Resolving TUILauncher runtime dependencies from the source resolver")  # Log before lookup.
+    logger.info("Resolving TUILauncher runtime dependencies from the source resolver")  # Log before lookup.
     misthelper_module = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-    logging.debug("TUILauncher runtime dependencies resolved successfully")  # Log after resolution
+    logger.debug("TUILauncher runtime dependencies resolved successfully")  # Log after resolution
     return SimpleNamespace(
         misthelper_module=misthelper_module,  # Retained so apisession/args lookups honour monkeypatch
     )
@@ -45,11 +47,11 @@ class TUILauncher:  # Launch TUI mode from interactive menu.
 
     def __init__(self) -> None:
         """Initialize TUI launcher with console handler tracking."""
-        logging.info("TUILauncher init: starting new launcher instance")  # Log construction start
+        logger.info("TUILauncher init: starting new launcher instance")  # Log construction start
         self.console_handlers: list = []  # type: ignore[type-arg]  # Track suppressed handlers to restore later
         self.debug_mode: bool = False  # Populated from MistHelper args namespace at launch time
         self._deps: SimpleNamespace = _resolve_runtime_dependencies()  # Late-bound MistHelper handles
-        logging.debug("TUILauncher init complete")  # Log after construction
+        logger.debug("TUILauncher init complete")  # Log after construction
 
     def _apisession(self) -> object | None:
         """Return the current MistHelper apisession so monkeypatched values are honoured."""
@@ -57,11 +59,11 @@ class TUILauncher:  # Launch TUI mode from interactive menu.
 
     def launch(self) -> None:
         """Main entry point: launch TUI mode from menu."""
-        logging.info("TUI_MODE: Starting Terminal User Interface mode from menu")  # Log launch entry
+        logger.info("TUI_MODE: Starting Terminal User Interface mode from menu")  # Log launch entry
         self._print_welcome()  # Announce TUI activation on stdout
 
         if not self._ensure_api_session():  # Bail out early if session initialization fails
-            logging.debug("TUI_MODE: launch aborted because API session could not be initialized")  # Log abort
+            logger.debug("TUI_MODE: launch aborted because API session could not be initialized")  # Log abort
             return  # Nothing further to run
 
         self._suppress_console_logging()  # Silence console handlers so Rich TUI owns stdout
@@ -76,40 +78,40 @@ class TUILauncher:  # Launch TUI mode from interactive menu.
             self._restore_console_logging()  # Re-attach console handlers before returning to menu
 
         self._print_exit_message()  # Show "returned from TUI" banner on stdout
-        logging.debug("TUI_MODE: launch() finished cleanly")  # Log after launch completes
+        logger.debug("TUI_MODE: launch() finished cleanly")  # Log after launch completes
 
     def _print_welcome(self) -> None:
         """Print TUI activation messages."""
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("\n>> Terminal User Interface mode activated")
+        logger.info("\n>> Terminal User Interface mode activated")
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info(">> Use arrow keys to navigate, Enter to select, Q to quit")
+        logger.info(">> Use arrow keys to navigate, Enter to select, Q to quit")
 
     def _ensure_api_session(self) -> bool:
         """Initialize Mist API session if needed."""
-        logging.info("TUI_MODE: ensuring apisession is initialized")  # Log before session check
+        logger.info("TUI_MODE: ensuring apisession is initialized")  # Log before session check
         if self._apisession():  # Session already exists - no reinitialization required
-            logging.debug("TUI_MODE: apisession already initialized; reusing existing session")  # Log reuse
+            logger.debug("TUI_MODE: apisession already initialized; reusing existing session")  # Log reuse
             return True  # Signal caller that session is ready
 
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info(">> Initializing Mist API session...")
+        logger.info(">> Initializing Mist API session...")
         misthelper_module = self._deps.misthelper_module  # Cache the module handle for both calls below
         if not misthelper_module.initialize_mist_session():  # Delegate to MistHelper's session bootstrap
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info("[ERROR] Failed to initialize Mist API session")
-            logging.error("TUI_MODE: Could not initialize API session")  # Log the failure with error level
+            logger.info("[ERROR] Failed to initialize Mist API session")
+            logger.error("TUI_MODE: Could not initialize API session")  # Log the failure with error level
             return False  # Signal caller that session initialization failed
 
         # initialize_mist_session mutates MistHelper.apisession. No additional sync needed since we read via getattr
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info(">> API session initialized successfully")
-        logging.debug("TUI_MODE: apisession initialized successfully")  # Log after successful init
+        logger.info(">> API session initialized successfully")
+        logger.debug("TUI_MODE: apisession initialized successfully")  # Log after successful init
         return True  # Signal caller that session is ready
 
     def _suppress_console_logging(self) -> None:
         """Remove console handlers to prevent interference with Rich TUI."""
-        logging.info("TUI_MODE: suppressing console handlers before Rich TUI takes stdout")  # Log before mutation
+        logger.info("TUI_MODE: suppressing console handlers before Rich TUI takes stdout")  # Log before mutation
         root_logger = logging.getLogger()  # Root logger owns the StreamHandler set
         self.console_handlers = [
             h  # Retain each handler so it can be re-attached in _restore_console_logging
@@ -118,7 +120,7 @@ class TUILauncher:  # Launch TUI mode from interactive menu.
         ]  # Filter to StreamHandler-only (exclude FileHandler which is stdio-safe under Rich)
         for handler in self.console_handlers:  # Detach every captured handler
             root_logger.removeHandler(handler)  # Remove from root so it stops writing to stdout
-            logging.debug("TUI_MODE: Removed console handler to prevent interference with Rich TUI")  # Log removal
+            logger.debug("TUI_MODE: Removed console handler to prevent interference with Rich TUI")  # Log removal
 
     def _get_debug_mode(self) -> bool:
         """Get debug mode from global args if available."""
@@ -128,7 +130,7 @@ class TUILauncher:  # Launch TUI mode from interactive menu.
 
     def _run_tui(self) -> None:
         """Create and run the TUI instance."""
-        logging.info("TUI_MODE: entering Rich TUI run loop")  # Log entry to TUI loop
+        logger.info("TUI_MODE: entering Rich TUI run loop")  # Log entry to TUI loop
         self.debug_mode = self._get_debug_mode()  # Latch debug flag once so exit path can reuse it
 
         from src.ui import tui as tui_module  # PLC0415: lazy import keeps the startup path light.
@@ -137,30 +139,30 @@ class TUILauncher:  # Launch TUI mode from interactive menu.
         tui.apisession = self._apisession()  # Hand the already-initialized apisession to the TUI
 
         if self.debug_mode:  # Only log the debug-enabled banner when caller opted in
-            logging.debug("TUI_MODE: Debug mode is ACTIVE - enhanced logging enabled")  # Debug-active breadcrumb
+            logger.debug("TUI_MODE: Debug mode is ACTIVE - enhanced logging enabled")  # Debug-active breadcrumb
 
         tui.run()  # Enter the Rich event loop (blocks until user quits)
-        logging.debug("TUI_MODE: Rich TUI run loop returned")  # Log after TUI loop finishes
+        logger.debug("TUI_MODE: Rich TUI run loop returned")  # Log after TUI loop finishes
 
     def _handle_keyboard_interrupt(self) -> None:
         """Handle user Ctrl+C interruption."""
-        logging.info("TUI_MODE: User interrupted with Ctrl+C")  # Log the intentional keyboard abort
+        logger.info("TUI_MODE: User interrupted with Ctrl+C")  # Log the intentional keyboard abort
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("\n[EXIT] TUI mode stopped by user")
+        logger.info("\n[EXIT] TUI mode stopped by user")
 
     def _handle_fatal_error(self, error: Exception) -> None:
         """Handle fatal TUI errors."""
-        logging.error("TUI_MODE: Fatal error - %s", error, exc_info=True)  # Log with traceback for postmortem
+        logger.error("TUI_MODE: Fatal error - %s", error, exc_info=True)  # Log with traceback for postmortem
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("\n[ERROR] TUI mode crashed: %s", error)
+        logger.info("\n[ERROR] TUI mode crashed: %s", error)
 
     def _restore_console_logging(self) -> None:
         """Restore console handlers after TUI mode exits."""
-        logging.info("TUI_MODE: restoring console handlers after Rich TUI exit")  # Log before re-attach
+        logger.info("TUI_MODE: restoring console handlers after Rich TUI exit")  # Log before re-attach
         root_logger = logging.getLogger()  # Same root logger we detached from earlier
         for handler in self.console_handlers:  # Re-attach every previously-suppressed handler
             root_logger.addHandler(handler)  # Restore the handler so console logging resumes
-        logging.debug("TUI_MODE: Restored console handler after TUI exit")  # Log after restoration completes
+        logger.debug("TUI_MODE: Restored console handler after TUI exit")  # Log after restoration completes
 
     def _print_exit_message(self) -> None:
         """Print exit messages and debug timestamp if enabled."""
@@ -168,8 +170,8 @@ class TUILauncher:  # Launch TUI mode from interactive menu.
 
         if self.debug_mode:  # Only emit the timestamped completion trace when debug mode is on
             timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Local wall-clock for eyeball parity
-            logging.debug("TUI_DEBUG: [%s] TUI_MODE function completed - returning to caller", timestamp)  # Trace
+            logger.debug("TUI_DEBUG: [%s] TUI_MODE function completed - returning to caller", timestamp)  # Trace
 
-        logging.info("TUI_MODE: TUI mode completed successfully")  # Success-path summary log
+        logger.info("TUI_MODE: TUI mode completed successfully")  # Success-path summary log
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("\n>> Returned from TUI mode to main menu")
+        logger.info("\n>> Returned from TUI mode to main menu")

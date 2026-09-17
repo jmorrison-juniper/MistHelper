@@ -8,6 +8,8 @@ from typing import Any  # Generic typing for nested API JSON payloads
 
 from . import _deps  # Sibling runtime dependency container set by configure_gateway_override_dependencies
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class DeviceDataFetcher:
     """Fetch (port_configs, interface_stats) per device, choosing fast vs sequential mode."""
@@ -18,7 +20,7 @@ class DeviceDataFetcher:
         fast: bool,
     ) -> dict[str, tuple[dict[str, Any], dict[str, Any]]]:
         """Return {device_id: (port_configs, interface_stats)} for every override-flagged device."""
-        logging.info(  # Announce the fetch phase with mode + device count for operator visibility
+        logger.info(  # Announce the fetch phase with mode + device count for operator visibility
             "Fetching live device data for %d devices (fast=%s)",
             len(devices_with_overrides),
             fast,
@@ -27,7 +29,7 @@ class DeviceDataFetcher:
             cache = DeviceDataFetcher._fetch_fast(devices_with_overrides)  # Parallel via connection-pool helper
         else:
             cache = DeviceDataFetcher._fetch_sequential(devices_with_overrides)  # One device at a time
-        logging.debug("Live data cache populated for %d devices", len(cache))  # Confirm cache size after action
+        logger.debug("Live data cache populated for %d devices", len(cache))  # Confirm cache size after action
         return cache  # Caller uses this cache to build per-port report rows in the third pass
 
     @staticmethod
@@ -35,7 +37,7 @@ class DeviceDataFetcher:
         devices_with_overrides: dict[str, dict[str, Any]],
     ) -> dict[str, tuple[dict[str, Any], dict[str, Any]]]:
         """Parallel fetch using the shared connection-pool execution helper."""
-        logging.info(" Using fast mode with connection pool management for device data fetching...")  # legacy log
+        logger.info(" Using fast mode with connection pool management for device data fetching...")  # legacy log
         work_items = list(devices_with_overrides.items())  # Stable ordering for deterministic logs and retries
         successful_results, failed_devices = _deps.execute_fn(  # Pool-managed run (1012 SC-003 rename)
             work_items=work_items,
@@ -44,7 +46,7 @@ class DeviceDataFetcher:
             retry_function=None,
         )
         cache = DeviceDataFetcher._build_cache_from_results(successful_results, failed_devices)  # Merge results
-        logging.info(  # Legacy summary log preserved verbatim for downstream log parsers
+        logger.info(  # Legacy summary log preserved verbatim for downstream log parsers
             "! Fast mode: Fetched data for %d/%d devices with connection pool protection",
             len(successful_results),
             len(work_items),
@@ -57,7 +59,7 @@ class DeviceDataFetcher:
         failed_devices: list[tuple[str, Any]],
     ) -> dict[str, tuple[dict[str, Any], dict[str, Any]]]:
         """Merge worker results + failed-device entries into the unified device data cache."""
-        logging.debug("Merging %d successes + %d failures into cache", len(successful_results), len(failed_devices))
+        logger.debug("Merging %d successes + %d failures into cache", len(successful_results), len(failed_devices))
         cache: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {}  # Final cache keyed by device_id
         for device_id_result, port_configs, interface_stats in successful_results:  # Successful pool workers
             cache[device_id_result] = (port_configs, interface_stats)  # Store live data for third-pass consumer
@@ -88,7 +90,7 @@ class DeviceDataFetcher:
         devices_with_overrides: dict[str, dict[str, Any]],
     ) -> dict[str, tuple[dict[str, Any], dict[str, Any]]]:
         """Sequential fetch (no connection pool) for small batches or non-fast mode."""
-        logging.info("Sequential fetch for %d devices (no connection pool)", len(devices_with_overrides))  # trace
+        logger.info("Sequential fetch for %d devices (no connection pool)", len(devices_with_overrides))  # trace
         cache: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {}  # Same shape as fast-mode cache
         for device_id, device_info in devices_with_overrides.items():  # One device per iteration
             device_name = device_info["device_name"]  # For breadcrumbs in API error logs
@@ -101,7 +103,7 @@ class DeviceDataFetcher:
     @staticmethod
     def _fetch_port_configs(site_id: str, device_id: str, device_name: str) -> dict[str, Any]:
         """Fetch the port_config dict for one device, returning {} on any API failure."""
-        logging.debug("Fetching port_config for %s (%s)", device_name, device_id)  # trace before API call
+        logger.debug("Fetching port_config for %s (%s)", device_name, device_id)  # trace before API call
         try:
             resp = _deps.mistapi.api.v1.sites.devices.getSiteDevice(_deps.apisession, site_id, device_id)  # API
             device_config_data = getattr(resp, "data", {})  # Defensive: SDK may return objects without .data
@@ -118,7 +120,7 @@ class DeviceDataFetcher:
     @staticmethod
     def _fetch_interface_stats(site_id: str, device_id: str, device_name: str) -> dict[str, Any]:
         """Fetch the if_stat dict for one device, returning {} on any API failure."""
-        logging.debug("Fetching if_stat for %s (%s)", device_name, device_id)  # trace before API call
+        logger.debug("Fetching if_stat for %s (%s)", device_name, device_id)  # trace before API call
         try:
             stats_resp = _deps.mistapi.api.v1.sites.stats.getSiteDeviceStats(  # Mist stats API call
                 _deps.apisession, site_id, device_id
@@ -134,13 +136,13 @@ class DeviceDataFetcher:
         """Emit the legacy warning message for a stats fetch failure, branching on 403 vs other errors."""
         message = str(exception)  # Stringify once for the substring check below
         if "403" in message or "Forbidden" in message:  # 403 is common when token lacks stats permission
-            logging.warning(  # Legacy message preserved verbatim for downstream log parsers
+            logger.warning(  # Legacy message preserved verbatim for downstream log parsers
                 "[WARN] Insufficient permissions to fetch device stats for %s (%s): 403 Forbidden",
                 device_name,
                 device_id,
             )
             return  # Distinguished log line for permission errors aids operator triage
-        logging.warning(  # All other errors use the generic legacy warning line
+        logger.warning(  # All other errors use the generic legacy warning line
             "[WARN] Could not fetch device stats for %s (%s): %s",
             device_name,
             device_id,

@@ -384,7 +384,7 @@ class SiteWirelessClientCaptureService:
     def execute(cls, manager: Any) -> None:
         """Run wireless client packet capture workflow using manager dependencies."""
         helpers = _Helpers(*_resolve_prompt_helpers())  # WHY: Frozen helper bundle
-        logging.info(_LOG_START)  # WHY: Trace workflow start
+        logger.info(_LOG_START)  # WHY: Trace workflow start
         site_id = helpers.prompt_utils.select_site_with_logging()  # WHY: Prompt for the target site
         if not site_id:  # WHY: No site chosen (message already printed by helper)
             return  # WHY: Abort the workflow

@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any  # WHY: broad typing for opaque payloads
 
 from ._ssid_template_cluster import _ClusterBase  # WHY: shared parent-proxy wrapper
 
+logger = logging.getLogger(__name__)  # WHY: Use the module logger for non-exception log entries.
 if TYPE_CHECKING:  # WHY: only pulled in by type checkers to avoid import cycle
     from collections.abc import Callable  # WHY: precise callable type for safe_input fn
 
@@ -49,7 +50,7 @@ def _check_prerequisite_for_all(phase_number: int) -> bool:  # WHY: run-all shor
 def _check_cache_exists(cache_file: str) -> bool:  # WHY: gate downstream phases on phase-1 artefact
     """Check if Phase 1 cache file exists."""
     if not os.path.exists(cache_file):  # WHY: guard first-run before phase 1 completes
-        logging.warning("Phase 1 cache not found. Run Phase 1 first.")  # WHY: teach operator the fix
+        logger.warning("Phase 1 cache not found. Run Phase 1 first.")  # WHY: teach operator the fix
         return False  # WHY: signal caller to abort the current phase
     return True  # WHY: cache present, downstream phase may proceed
 
@@ -61,7 +62,7 @@ def _handle_completed_resume(  # WHY: UX branch when prior run finished all rows
     safe_input_fn: SafeInputFn,
 ) -> tuple[bool, list[dict[str, Any]]]:
     """Handle resume when phase is already complete."""
-    logging.warning(
+    logger.warning(
         "Phase %d already completed (%d/%d). Re-running will overwrite.", phase, completed_count, total
     )  # WHY: warn
     choice: str = safe_input_fn(  # WHY: ask before re-running a completed phase
@@ -81,7 +82,7 @@ def _handle_partial_resume(  # WHY: UX branch when prior run stopped mid-phase
     safe_input_fn: SafeInputFn,
 ) -> tuple[bool, list[dict[str, Any]]]:
     """Handle resume when phase is partially complete."""
-    logging.warning(
+    logger.warning(
         "Phase %d partially completed (%d/%d).", phase, completed_count, total
     )  # WHY: report progress to operator
     choice: str = safe_input_fn(  # WHY: default (Y) is resume — matches operator intent
@@ -110,7 +111,7 @@ class _SsidTemplateCacheCluster(_ClusterBase):  # WHY: proxy cluster grouping ca
             return _check_cache_exists(parent.CACHE_FILE)  # WHY: reuse shared cache-existence guard
         prior_file = parent.PHASE_RESULT_FILES.get(phase - 1)  # WHY: chain phases via results file
         if prior_file and not os.path.exists(prior_file):  # WHY: prior artefact absent blocks this phase
-            logging.warning("Phase %d results not found. Run Phase %d first.", phase - 1, phase - 1)  # WHY: teach fix
+            logger.warning("Phase %d results not found. Run Phase %d first.", phase - 1, phase - 1)  # WHY: teach fix
             return False  # WHY: signal caller to abort
         return True  # WHY: prior artefact present, proceed
 
@@ -136,9 +137,9 @@ class _SsidTemplateCacheCluster(_ClusterBase):  # WHY: proxy cluster grouping ca
             return  # WHY: no timestamp → nothing to log
         age_minutes = _cache_age_minutes(collected_at)  # WHY: reuse shared helper for age math
         if age_minutes <= freshness_minutes:  # WHY: distinguish fresh vs stale in logs
-            logging.info("Cache is fresh (%.1f minutes old)", age_minutes)  # WHY: fresh branch telemetry
+            logger.info("Cache is fresh (%.1f minutes old)", age_minutes)  # WHY: fresh branch telemetry
         else:
-            logging.info("Cache is stale (%.1f minutes old)", age_minutes)  # WHY: stale branch telemetry
+            logger.info("Cache is stale (%.1f minutes old)", age_minutes)  # WHY: stale branch telemetry
 
     def _save_cache(self, data: dict[str, Any]) -> None:  # WHY: persists Phase-1 cache to disk
         """Write cache JSON with collection timestamp."""
@@ -149,7 +150,7 @@ class _SsidTemplateCacheCluster(_ClusterBase):  # WHY: proxy cluster grouping ca
         try:  # WHY: tolerate disk/permission errors without failing pipeline
             with open(parent.CACHE_FILE, "w", encoding="utf-8") as file_handle:  # WHY: overwrite prior cache
                 json.dump(data, file_handle, indent=2, default=str)  # WHY: pretty for grep
-            logging.info("Cache saved to %s", parent.CACHE_FILE)  # WHY: confirm write path in logs
+            logger.info("Cache saved to %s", parent.CACHE_FILE)  # WHY: confirm write path in logs
         except OSError as error:  # WHY: disk full/perm error path
             logging.error("Failed to save cache: %s", error)  # WHY: disk full/perm errors are recoverable
 
@@ -169,7 +170,7 @@ class _SsidTemplateCacheCluster(_ClusterBase):  # WHY: proxy cluster grouping ca
         try:  # WHY: tolerate disk/permission errors without failing pipeline
             with open(result_file, "w", encoding="utf-8") as file_handle:  # WHY: overwrite prior results
                 json.dump(payload, file_handle, indent=2, default=str)  # WHY: pretty for grep
-            logging.info("Phase %d results saved to %s", phase, result_file)  # WHY: confirm write path in logs
+            logger.info("Phase %d results saved to %s", phase, result_file)  # WHY: confirm write path in logs
         except OSError as error:  # WHY: disk full/perm error path
             logging.error("Failed to save phase %d results: %s", phase, error)  # WHY: recoverable disk error
 

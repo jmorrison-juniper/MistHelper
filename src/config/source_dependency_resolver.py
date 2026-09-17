@@ -12,6 +12,8 @@ from typing import Any  # Support dynamic third-party and runtime objects.
 
 from src.config import runtime_settings  # Share runtime values with all source packages.
 
+logger = logging.getLogger(__name__)  # Use this module name in log records.
+
 
 class SourceDependencyResolverService:
     """Resolve legacy source dependency names through canonical source owners."""
@@ -93,32 +95,32 @@ class SourceDependencyResolverService:
 
     def root_module(self) -> ModuleType | Any:
         """Return the injected host module for root-only bootstrap helpers."""
-        logging.info("Resolving the bound host module")  # Log before reading the injected host module.
+        logger.info("Resolving the bound host module")  # Log before reading the injected host module.
         if self._root_module is None:  # A direct source call can occur before host bootstrap binds the root.
             msg = "The host module is not bound to SourceDependencyResolver"  # Build a clear failure message.
-            logging.error("%s", msg)  # Log the configuration error before raising it.
+            logger.error("%s", msg)  # Log the configuration error before raising it.
             raise RuntimeError(msg)  # Fail fast so the caller does not use stale state.
         module_name = getattr(self._root_module, "__name__", type(self._root_module).__name__)  # Build a safe name.
-        logging.debug("Resolved the bound host module: %s", module_name)  # Log safe module identity.
+        logger.debug("Resolved the bound host module: %s", module_name)  # Log safe module identity.
         return self._root_module  # Return the injected host module.
 
     def active_dependency_host(self) -> Any:
         """Return a test-injected host when present, or this resolver."""
-        logging.info("Resolving the active dependency host")  # Log before selecting the dependency host.
+        logger.info("Resolving the active dependency host")  # Log before selecting the dependency host.
         test_host = self._test_host_override()  # Detect tests that need a captured fake host.
         if test_host is not None:  # A patched sys.modules entry must stay visible after context exit.
-            logging.debug("Resolved the test dependency host")  # Log that the test seam is active.
+            logger.debug("Resolved the test dependency host")  # Log that the test seam is active.
             return test_host  # Return the fake host for tests that assert identity.
-        logging.debug("Resolved the source dependency resolver as the host")  # Log the production path.
+        logger.debug("Resolved the source dependency resolver as the host")  # Log the production path.
         return self  # Return the resolver for production source dependency access.
 
     def __getattr__(self, name: str) -> Any:
         """Resolve a dependency name without importing the root module."""
-        logging.info("Resolving source dependency %s", name)  # Log before the dependency lookup.
+        logger.info("Resolving source dependency %s", name)  # Log before the dependency lookup.
         test_host = self._test_host_override()  # Detect tests that replace sys.modules without binding the resolver.
         if test_host is not None and (not isinstance(test_host, ModuleType) or hasattr(test_host, name)):
             value = getattr(test_host, name)  # Read the test-owned value before the source defaults.
-            logging.debug("Resolved test-host dependency %s", name)  # Log the override without its value.
+            logger.debug("Resolved test-host dependency %s", name)  # Log the override without its value.
             return value  # Return the injected test value.
         if name in self._context_names:  # Runtime state lives in the application context.
             return self._resolve_context_value(name)  # Return the mapped runtime state.
@@ -127,7 +129,7 @@ class SourceDependencyResolverService:
             if host_value is not None:  # A patched root setting must win over the source default.
                 return host_value  # Return the explicit host setting.
             value = getattr(runtime_settings, self._setting_names[name])  # Read the mapped setting field.
-            logging.debug("Resolved settings dependency %s", name)  # Log the settings lookup without value details.
+            logger.debug("Resolved settings dependency %s", name)  # Log the settings lookup without value details.
             return value  # Return the setting value to the caller.
         mock_value = self._mock_override(name)  # Let tests replace source dependencies through the bound host.
         if mock_value is not None:  # A test double must win over the canonical source owner.
@@ -142,19 +144,19 @@ class SourceDependencyResolverService:
         test_host = self._test_host_override()  # Detect tests that replace sys.modules without binding the resolver.
         if test_host is not None and (not isinstance(test_host, ModuleType) or hasattr(test_host, name)):
             setattr(test_host, name, value)  # Publish the value to the active test host.
-            logging.debug("Published test-host dependency %s", name)  # Log the safe state name.
+            logger.debug("Published test-host dependency %s", name)  # Log the safe state name.
             return  # Stop after routing the test-host write.
         if name in self._context_names:  # Runtime state writes belong to the active context.
             setattr(self._active_context(), self._context_names[name], value)  # Write the mapped context field.
-            logging.debug("Published context dependency %s", name)  # Log the safe state name.
+            logger.debug("Published context dependency %s", name)  # Log the safe state name.
             return  # Stop after routing the context write.
         if name in self._setting_names:  # Setting writes belong to the source settings module.
             setattr(runtime_settings, self._setting_names[name], value)  # Write the mapped setting field.
-            logging.debug("Published settings dependency %s", name)  # Log the safe setting name.
+            logger.debug("Published settings dependency %s", name)  # Log the safe setting name.
             return  # Stop after routing the setting write.
         if self._root_module is not None and not name.startswith("_"):  # Host bootstrap writes still belong to root.
             setattr(self._root_module, name, value)  # Publish the bootstrap value on the injected host module.
-            logging.debug("Published host dependency %s", name)  # Log the safe host attribute name.
+            logger.debug("Published host dependency %s", name)  # Log the safe host attribute name.
             return  # Stop after routing the host write.
         super().__setattr__(name, value)  # Preserve normal attribute writes for private state.
 
@@ -163,22 +165,22 @@ class SourceDependencyResolverService:
         test_host = self._test_host_override()  # Detect tests that replace sys.modules without binding the resolver.
         if test_host is not None:  # A test-injected host must win over the active context.
             value = getattr(test_host, name, None)  # Read fake host state when a test injects it.
-            logging.debug("Resolved test-host dependency %s", name)  # Log the state lookup without details.
+            logger.debug("Resolved test-host dependency %s", name)  # Log the state lookup without details.
             return value  # Return the fake runtime state to the caller.
         if self._root_module is not None and not isinstance(self._root_module, ModuleType):  # Tests bind mocks.
             value = getattr(self._root_module, name, None)  # Read fake host state when a test injects it.
-            logging.debug("Resolved mock-host dependency %s", name)  # Log the state lookup without details.
+            logger.debug("Resolved mock-host dependency %s", name)  # Log the state lookup without details.
             return value  # Return the fake runtime state to the caller.
         value = getattr(self._active_context(), self._context_names[name])  # Read the mapped context field.
-        logging.debug("Resolved context dependency %s", name)  # Log the state lookup without value details.
+        logger.debug("Resolved context dependency %s", name)  # Log the state lookup without value details.
         return value  # Return the runtime state to the caller.
 
     def _active_context(self) -> Any:
         """Return the active application context from the source entrypoint."""
-        logging.info("Resolving the active application context")  # Log before importing the source entrypoint.
+        logger.info("Resolving the active application context")  # Log before importing the source entrypoint.
         entrypoint = importlib.import_module("src.refactors.main_entrypoint")  # Import the source context owner.
         context = entrypoint.MainEntrypoint.context  # Read the active context without touching the root module.
-        logging.debug("Resolved the active application context: %s", id(context))  # Log non-secret context identity.
+        logger.debug("Resolved the active application context: %s", id(context))  # Log non-secret context identity.
         return context  # Return the active state container.
 
     def _resolve_named_dependency(self, name: str) -> Any:
@@ -195,7 +197,7 @@ class SourceDependencyResolverService:
         """Resolve a host-only helper from the injected root module."""
         root = self.root_module()  # Use the injected host for bootstrap helpers not yet extracted.
         value = getattr(root, name)  # Read the host-only helper from the injected module object.
-        logging.debug("Resolved host-only dependency %s", name)  # Log the safe helper name.
+        logger.debug("Resolved host-only dependency %s", name)  # Log the safe helper name.
         return value  # Return the host-only helper.
 
     def _mock_override(self, name: str) -> Any | None:
@@ -203,19 +205,19 @@ class SourceDependencyResolverService:
         test_host = self._test_host_override()  # Detect tests that replace sys.modules without binding the resolver.
         if test_host is not None:  # A test-injected host exposes its own dependency overrides.
             value = getattr(test_host, name, None)  # Read the fake dependency from the injected host.
-            logging.debug("Resolved test-host override for dependency %s", name)  # Log the override name only.
+            logger.debug("Resolved test-host override for dependency %s", name)  # Log the override name only.
             return value  # Return the fake dependency for isolated unit tests.
         if self._root_module is None:  # No host means no test double can be present.
             return None  # Use the canonical source owner.
         if not isinstance(self._root_module, ModuleType):  # A mock host exposes child mocks through getattr.
             value = getattr(self._root_module, name, None)  # Read the fake dependency from the injected mock host.
-            logging.debug("Resolved mock-host override for dependency %s", name)  # Log the override name only.
+            logger.debug("Resolved mock-host override for dependency %s", name)  # Log the override name only.
             return value  # Return the fake dependency for isolated unit tests.
         module_vars = vars(self._root_module)  # Read explicit host attributes without invoking dynamic lookups.
         value = module_vars.get(name)  # Read only values that a test or host assigned directly.
         value_module = type(value).__module__ if value is not None else ""  # Identify test doubles safely.
         if value is not None and value_module.startswith("unittest."):  # A real root can still hold monkeypatch mocks.
-            logging.debug("Resolved test override for dependency %s", name)  # Log the override without its value.
+            logger.debug("Resolved test override for dependency %s", name)  # Log the override without its value.
             return value  # Return the test override for monkeypatch compatibility.
         return None  # Use the canonical dependency when no override exists.
 
@@ -226,7 +228,7 @@ class SourceDependencyResolverService:
         module_vars = vars(self._root_module)  # Read explicit host attributes without dynamic lookups.
         if name not in module_vars:  # No explicit host value exists for this name.
             return None  # Use the source-owned value path.
-        logging.debug("Resolved explicit host value for dependency %s", name)  # Log the safe value name.
+        logger.debug("Resolved explicit host value for dependency %s", name)  # Log the safe value name.
         return module_vars[name]  # Return the host value that a test or bootstrap patched.
 
     def _test_host_override(self) -> Any | None:
@@ -234,7 +236,7 @@ class SourceDependencyResolverService:
         candidate = sys.modules.get("Mist" + "Helper")  # Read without an import and without the guarded literal.
         if candidate is None or candidate is self._root_module:  # No replacement is active.
             return None  # Use the bound host or source owner.
-        logging.debug("Detected a test-injected host module override")  # Log no object detail.
+        logger.debug("Detected a test-injected host module override")  # Log no object detail.
         return candidate  # Return the injected host so legacy tests keep their seam.
 
     def _resolve_source_symbol(self, name: str) -> Any:
@@ -243,7 +245,7 @@ class SourceDependencyResolverService:
         module = importlib.import_module(module_name)  # Import the canonical source module lazily.
         symbol_name = "MarvisTroubleshootUtils" if name == "ExtractedMarvisTroubleshootUtils" else name  # Map alias.
         value = getattr(module, symbol_name)  # Read the helper class from its owner module.
-        logging.debug("Resolved source dependency %s from %s", name, module_name)  # Log the canonical owner.
+        logger.debug("Resolved source dependency %s from %s", name, module_name)  # Log the canonical owner.
         return value  # Return the helper class to the caller.
 
     def _resolve_external_symbol(self, name: str) -> Any:
@@ -252,28 +254,28 @@ class SourceDependencyResolverService:
         module = importlib.import_module(module_name)  # Import the external module lazily.
         if name == "PrettyTable":  # PrettyTable is a class inside the module.
             return module.PrettyTable  # Return the renderer class used by legacy code.
-        logging.debug("Resolved external dependency %s", name)  # Log the safe dependency name.
+        logger.debug("Resolved external dependency %s", name)  # Log the safe dependency name.
         return module  # Return the imported module.
 
     def initialize_mist_session(self) -> bool:
         """Initialize the Mist API session through the extracted initializer."""
-        logging.info("Initializing the Mist API session through the source resolver")  # Log before session work.
+        logger.info("Initializing the Mist API session through the source resolver")  # Log before session work.
         override = self._mock_override("initialize_mist_session")  # Preserve tests that patch the host function.
         if override is not None:  # A test or host can provide the old initializer seam.
             result = bool(override())  # Call the injected initializer and normalize the result.
-            logging.debug("The injected session initializer returned %s", result)  # Log success or failure only.
+            logger.debug("The injected session initializer returned %s", result)  # Log success or failure only.
             return result  # Return the injected initializer result to the caller.
         from src.refactors.initialize_mist_session import MistSessionInitializer  # Import lazily to avoid cycles.
 
         result = MistSessionInitializer.initialize()  # Run the canonical token-session initializer.
-        logging.debug("The source session initializer returned %s", result)  # Log success or failure only.
+        logger.debug("The source session initializer returned %s", result)  # Log success or failure only.
         return result  # Return the initializer result to the caller.
 
     def _configure_gateway_module(self) -> None:
         """Wire gateway export dependencies from source-owned seams."""
-        logging.info("Configuring gateway export dependencies from the source resolver")  # Log before DI wiring.
+        logger.info("Configuring gateway export dependencies from the source resolver")  # Log before DI wiring.
         self.root_module()._configure_gateway_module()  # Use injected root helper until the DI builder is extracted.
-        logging.debug("Gateway export dependencies are configured")  # Log after the DI wiring completes.
+        logger.debug("Gateway export dependencies are configured")  # Log after the DI wiring completes.
 
 
 SourceDependencyResolver = SourceDependencyResolverService()  # Provide one resolver instance for source packages.

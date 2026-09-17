@@ -33,6 +33,8 @@ from ._wan2_variable_reporting import _Wan2VariableReporting  # WHY: audit + sum
 from ._wan2_variable_selection import _Wan2VariableSelection  # WHY: selection + confirmation cluster
 from ._wan2_variable_template import _Wan2VariableTemplate  # WHY: template fetch/apply cluster
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 @dataclass(frozen=True)
 class Wan2VariableDeps:
@@ -131,7 +133,7 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
         """
         self._dry_run = dry_run  # WHY: propagate mode to every cluster helper
         self._print_header()  # WHY: banner (IO cluster)
-        logging.warning("Menu #104 DESTRUCTIVE: Update Gateway Templates WAN2 Variable operation started")  # WHY: audit
+        logger.warning("Menu #104 DESTRUCTIVE: Update Gateway Templates WAN2 Variable operation started")  # WHY: audit
         data = self._load_csv_data()  # WHY: template + site CSVs (IO cluster)
         if data is None:  # WHY: no templates -> abort
             return  # WHY: caller stops workflow
@@ -166,9 +168,9 @@ class GatewayWan2VariableMigrator:  # pylint: disable=too-many-instance-attribut
 
     def _log_no_changes_needed(self) -> None:
         """Log the 'no templates require modification' outcome."""
-        logging.info("\n  No templates found with %s port configurations.", self._search_pattern)  # WHY: user feedback
-        logging.info("  No changes needed.")  # WHY: closing line
-        logging.info("Menu #104: No templates require modification (searched for %s)", self._search_pattern)
+        logger.info("\n  No templates found with %s port configurations.", self._search_pattern)  # WHY: user feedback
+        logger.info("  No changes needed.")  # WHY: closing line
+        logger.info("Menu #104: No templates require modification (searched for %s)", self._search_pattern)
 
     def _run_and_report(
         self,

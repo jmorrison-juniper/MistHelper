@@ -13,6 +13,8 @@ from src.config.source_dependency_resolver import (
 )
 from src.utils.console import echo
 
+logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
+
 
 class SSIDBroadcastGapReport:
     """Find organization sites that do not broadcast a selected SSID."""
@@ -42,7 +44,7 @@ class SSIDBroadcastGapReport:
         for site in sites:  # WHY: evaluate each organization site.
             site_id = str(site.get("id", ""))  # WHY: the derived endpoint requires a site identifier.
             if not site_id:  # WHY: skip malformed site records that cannot be queried.
-                logging.warning("Skipping site without an id")  # WHY: surface incomplete API data.
+                logger.warning("Skipping site without an id")  # WHY: surface incomplete API data.
                 continue
             response = mistapi.api.v1.sites.wlans.listSiteWlansDerived(
                 apisession, site_id, resolve=True
@@ -57,7 +59,7 @@ class SSIDBroadcastGapReport:
                         "ssid": ssid,
                     }
                 )  # WHY: retain a stable row key and operator-readable fields.
-        logging.info("SSID gap report found %d sites", len(missing))  # WHY: record report size.
+        logger.info("SSID gap report found %d sites", len(missing))  # WHY: record report size.
         return missing
 
     @staticmethod
