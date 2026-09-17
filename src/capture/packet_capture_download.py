@@ -12,6 +12,8 @@ from typing import Any  # WHY: Support Mist API response payloads with flexible 
 
 import requests  # WHY: Download PCAP binaries from Mist-provided URLs.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 _STEP_CHECK_BANNER = (
     "\n[Step 1/3] Checking for completed PCAPs in last 24 hours..."  # WHY: Legacy operator banner preserved.
 )
@@ -62,7 +64,7 @@ class PacketCaptureDownloadManager:
     def fetch_completed_pcaps(self, list_captures_fn: Callable[[], Any], iteration: int) -> list[dict[str, Any]]:
         """Fetch completed PCAP records that expose download URLs."""
         print(_STEP_CHECK_BANNER)  # WHY: Preserve the user-facing loop banner before the API call.
-        logging.info("Loop iteration %s: Fetching PCAP list from API", iteration)  # WHY: Log list op before API call.
+        logger.info("Loop iteration %s: Fetching PCAP list from API", iteration)  # WHY: Log list op before API call.
         pcaps_response = self._invoke_list_callback(list_captures_fn, iteration)  # WHY: Isolate API call try/except.
         if pcaps_response is None:  # WHY: Guard failure path so loop mode continues safely.
             return []  # WHY: Return no completed PCAPs so the loop can continue safely.
@@ -76,7 +78,7 @@ class PacketCaptureDownloadManager:
         """Call the list callback and log status, returning None on failure."""
         try:  # WHY: Catch API/listing failures so loop mode can continue safely.
             pcaps_response = list_captures_fn()  # WHY: Invoke caller-provided list callback for current scope.
-            logging.debug(
+            logger.debug(
                 "Loop iteration %s: PCAP list callback returned status %s",
                 iteration,
                 getattr(pcaps_response, "status_code", "unknown"),
@@ -91,7 +93,7 @@ class PacketCaptureDownloadManager:
     def _log_list_failure(status_code: int) -> list[dict[str, Any]]:
         """Emit legacy non-success warning and return an empty completed list."""
         print(f"  Warning: Could not fetch PCAP list (HTTP {status_code})")  # WHY: Preserve existing warning text.
-        logging.warning("Failed to list PCAPs: %s", status_code)  # WHY: Log non-success status for audit visibility.
+        logger.warning("Failed to list PCAPs: %s", status_code)  # WHY: Log non-success status for audit visibility.
         return []  # WHY: Treat failed list calls as no-download rounds to preserve prior behavior.
 
     @staticmethod
@@ -101,7 +103,7 @@ class PacketCaptureDownloadManager:
             pcap for pcap in pcap_list if PacketCaptureDownloadManager._is_downloadable(pcap)
         ]  # WHY: Keep only downloadable PCAP entries to match existing loop semantics.
         print(f"  Found {len(completed)} completed PCAP(s) with download URLs")  # WHY: Preserve legacy count output.
-        logging.debug(
+        logger.debug(
             "Loop iteration %s: Filtered %s completed PCAP entries", iteration, len(completed)
         )  # WHY: Log the filtered count after parsing and selection.
         return completed  # WHY: Hand the downloadable capture records back to the manager loop.
@@ -121,17 +123,17 @@ class PacketCaptureDownloadManager:
         effective_download = download_single_fn or self.download_single_pcap  # WHY: Default to own downloader.
         if not completed_pcaps:  # WHY: Preserve the early-no-op branch when no completed PCAPs are available.
             print(_STEP_NO_PENDING_BANNER)  # WHY: Keep the same loop-step output for empty rounds.
-            logging.debug("No completed PCAPs were available for download")  # WHY: Record empty download phase.
+            logger.debug("No completed PCAPs were available for download")  # WHY: Record empty download phase.
             return 0  # WHY: Return zero downloads to preserve the prior loop contract.
         print(_STEP_DOWNLOAD_BANNER)  # WHY: Preserve the loop-step banner before local file checks begin.
-        logging.info(
+        logger.info(
             "Checking %s completed PCAP(s) for pending downloads", len(completed_pcaps)
         )  # WHY: Log the download scan before processing capture entries.
         downloads = self._process_pending_items(
             completed_pcaps, download_folder, effective_download
         )  # WHY: Delegate per-item scan to bounded helper to keep this function short.
         self._print_download_summary(downloads)  # WHY: Emit legacy summary output based on total writes.
-        logging.debug(
+        logger.debug(
             "Pending download scan completed with %s new file(s)", downloads
         )  # WHY: Log final scan outcome after all items are processed.
         return downloads  # WHY: Return the number of new files written this round.
@@ -147,7 +149,7 @@ class PacketCaptureDownloadManager:
         for pcap in completed_pcaps:  # WHY: Process each downloadable capture record one time in order.
             item = self._prepare_pending_item(pcap, download_folder)  # WHY: Normalize identifier and paths once.
             if os.path.exists(item.local_path):  # WHY: Avoid re-downloading files that already exist locally.
-                logging.debug("Skipping %s - already downloaded", item.capture_id)  # WHY: Log local cache hit.
+                logger.debug("Skipping %s - already downloaded", item.capture_id)  # WHY: Log local cache hit.
                 continue  # WHY: Preserve existing skip behavior for already-downloaded captures.
             downloads += self._download_pending_item(item, download_single_fn)  # WHY: Delegate one HTTP transfer.
         return downloads  # WHY: Return final count so caller can emit summary + logs.
@@ -165,11 +167,11 @@ class PacketCaptureDownloadManager:
     def _download_pending_item(item: _PendingItem, download_single_fn: Callable[[str, str, str, str], int]) -> int:
         """Emit progress logs, invoke the downloader, and return write count."""
         print(f"\n  --> Downloading PCAP: {item.capture_id}")  # WHY: Preserve per-capture operator progress output.
-        logging.info("Starting PCAP download for %s", item.capture_id)  # WHY: Log file download before callback.
+        logger.info("Starting PCAP download for %s", item.capture_id)  # WHY: Log file download before callback.
         written = download_single_fn(
             item.pcap_url, item.local_path, item.filename, item.capture_id
         )  # WHY: Delegate the actual file transfer to the injected single-download function.
-        logging.debug(
+        logger.debug(
             "Download counter after %s is %s", item.capture_id, written
         )  # WHY: Log running download count after callback returns.
         return written  # WHY: Return per-item written count for aggregation.
@@ -191,10 +193,10 @@ class PacketCaptureDownloadManager:
         requests_module: Any = requests,
     ) -> int:
         """Download one PCAP file from its URL and stream it to disk."""
-        logging.info("Downloading PCAP %s from %s", capture_id, url)  # WHY: Log outbound download before HTTP call.
+        logger.info("Downloading PCAP %s from %s", capture_id, url)  # WHY: Log outbound download before HTTP call.
         try:  # WHY: Catch transfer and file-write failures so caller can continue safely.
             response = requests_module.get(url, stream=True, timeout=_DEFAULT_TIMEOUT_SEC)  # WHY: Stream file.
-            logging.debug("Download response for %s status %s", capture_id, response.status_code)  # WHY: Log status.
+            logger.debug("Download response for %s status %s", capture_id, response.status_code)  # WHY: Log status.
             return self._handle_stream_response(response, local_path, filename, capture_id)  # WHY: Bounded helper.
         except Exception as download_error:  # pylint: disable=broad-exception-caught  # WHY: Legacy safety net.
             return self._handle_download_exception(download_error, capture_id)  # WHY: Preserve failure contract.
@@ -203,7 +205,7 @@ class PacketCaptureDownloadManager:
     def _handle_download_exception(download_error: Exception, capture_id: str) -> int:
         """Emit legacy failure output and log exception details before returning zero."""
         print(f"      Error downloading: {download_error}")  # WHY: Preserve existing operator exception text.
-        logging.exception(
+        logger.exception(
             "Download exception for %s: %s", capture_id, download_error
         )  # WHY: Log full transfer exception for debugging.
         return 0  # WHY: Preserve prior failure contract when download exceptions occur.
@@ -233,7 +235,7 @@ class PacketCaptureDownloadManager:
     def _log_stream_failure(status_code: int, capture_id: str) -> int:
         """Emit legacy HTTP failure output and return zero writes."""
         print(f"      Failed to download: HTTP {status_code}")  # WHY: Preserve existing HTTP failure message.
-        logging.error(
+        logger.error(
             "Download failed for %s: %s", capture_id, status_code
         )  # WHY: Log HTTP failure with capture identifier.
         return 0  # WHY: Preserve prior contract for failed downloads.
@@ -243,8 +245,8 @@ class PacketCaptureDownloadManager:
         """Report streamed-file success with legacy size and location output."""
         file_size_mb = os.path.getsize(local_path) / _BYTES_PER_MB  # WHY: Compute size for user feedback and logging.
         print(f"      Downloaded: {filename} ({file_size_mb:.2f} MB)")  # WHY: Preserve success message with size.
-        logging.debug("Downloaded PCAP %s to %s", capture_id, local_path)  # WHY: Log final local file path.
-        logging.info(
+        logger.debug("Downloaded PCAP %s to %s", capture_id, local_path)  # WHY: Log final local file path.
+        logger.info(
             "Downloaded PCAP %s: %.2f MB", capture_id, file_size_mb
         )  # WHY: Log final size summary for audit evidence.
 
@@ -258,7 +260,7 @@ class PacketCaptureDownloadManager:
     ) -> None:
         """Poll until a PCAP URL is ready, then download the resulting file."""
         self._print_poll_banner(capture_id, duration)  # WHY: Preserve legacy multi-line banner output.
-        logging.info(
+        logger.info(
             "Polling for PCAP availability for capture %s", capture_id
         )  # WHY: Log poll lifecycle before first list call.
         pcap_url: str | None = None  # WHY: Track discovered URL so cancellation/error messages can reuse it.
@@ -289,16 +291,16 @@ class PacketCaptureDownloadManager:
     ) -> None:
         """Invoke the save callback once a URL is ready. Short-circuit otherwise."""
         if not pcap_url:  # WHY: Preserve the early exit when the URL never appears.
-            logging.debug(
+            logger.debug(
                 "Polling finished for %s without a downloadable URL", capture_id
             )  # WHY: Log no-URL outcome after poll loop ends.
             return  # WHY: Preserve current no-download outcome when polling times out.
         save_callback = save_pcap_file_fn or self.save_pcap_file  # WHY: Use injected save callback when provided.
-        logging.info(
+        logger.info(
             "PCAP URL resolved for %s; starting file save", capture_id
         )  # WHY: Log handoff from polling to file download.
         save_callback(pcap_url, capture_id, prefix)  # WHY: Save discovered PCAP using caller-selected callback.
-        logging.debug(
+        logger.debug(
             "PCAP save callback completed for %s", capture_id
         )  # WHY: Log completion after file-save callback returns.
 
@@ -314,7 +316,7 @@ class PacketCaptureDownloadManager:
     def _report_poll_error(capture_id: str, pcap_url: str | None, error: Exception) -> None:
         """Emit legacy high-level poll error output and optional manual hint."""
         print(f"\n! Error downloading PCAP file: {error}")  # WHY: Preserve existing high-level download error text.
-        logging.exception(
+        logger.exception(
             "Exception in poll_and_download_pcap for %s: %s", capture_id, error
         )  # WHY: Log full polling/download exception context.
         if pcap_url:  # WHY: Preserve manual URL hint when one was already discovered.
@@ -336,7 +338,7 @@ class PacketCaptureDownloadManager:
             start_time=time.time(),
             sleep_fn=sleep_fn,
         )  # WHY: Group polling parameters immutably so helpers stay within 5-param budget.
-        logging.info(
+        logger.info(
             "Polling capture list for %s up to %s seconds", capture_id, max_wait
         )  # WHY: Log bounded polling plan before loop begins.
         for poll_attempt in range(1, ctx.max_polls + 1):  # WHY: Poll until URL appears or timeout budget is exhausted.
@@ -350,7 +352,7 @@ class PacketCaptureDownloadManager:
         try:  # WHY: Catch transient poll failures and continue retrying within same wait budget.
             elapsed = int(time.time() - ctx.start_time)  # WHY: Calculate elapsed time for progress and ready messages.
             response = ctx.list_captures_fn()  # WHY: Invoke caller-provided list callback for current attempt.
-            logging.debug(
+            logger.debug(
                 "Poll attempt %s for %s returned status %s",
                 poll_attempt,
                 ctx.capture_id,
@@ -377,7 +379,7 @@ class PacketCaptureDownloadManager:
         sleep_fn: Callable[[float], None],
     ) -> None:
         """Log non-success poll response and sleep before the next retry."""
-        logging.warning(
+        logger.warning(
             "Poll attempt %s: API returned status %s", poll_attempt, status_code
         )  # WHY: Log non-success response before sleeping.
         sleep_fn(_POLL_INTERVAL_SEC)  # WHY: Preserve current retry pacing after failed poll response.
@@ -408,7 +410,7 @@ class PacketCaptureDownloadManager:
         print(
             f"\r* PCAP file ready for download (after {elapsed}s)                    "
         )  # WHY: Preserve ready banner that clears the progress line.
-        logging.info(
+        logger.info(
             "PCAP URL available after %ss: %s", elapsed, pcap_url
         )  # WHY: Log ready URL and elapsed time for auditability.
         return pcap_url  # WHY: Return the URL to the caller so the file can be saved.
@@ -433,7 +435,7 @@ class PacketCaptureDownloadManager:
         print(
             f"  The capture may still be processing. Check the Mist portal for capture ID: {capture_id}"
         )  # WHY: Preserve manual follow-up guidance after timeout.
-        logging.debug(
+        logger.debug(
             "Polling timed out for %s after %s seconds", capture_id, elapsed_total
         )  # WHY: Log timeout outcome after poll budget is exhausted.
         return None  # WHY: Preserve current timeout contract for callers.
@@ -443,16 +445,16 @@ class PacketCaptureDownloadManager:
         """Normalize list-capture API response payloads into a list of capture dicts."""
         if isinstance(raw_data, dict) and "results" in raw_data:  # WHY: Preserve dict-style paginated payloads.
             captures = list(raw_data["results"])  # WHY: Materialize iterable into a mutable list.
-            logging.debug(
+            logger.debug(
                 "Poll attempt %s: Extracted 'results' with %s items", poll_attempt, len(captures)
             )  # WHY: Log normalized capture count for dict payloads.
             return captures  # WHY: Return normalized capture list for further processing.
         if isinstance(raw_data, list):  # WHY: Preserve raw list payloads returned by some endpoints.
-            logging.debug(
+            logger.debug(
                 "Poll attempt %s: Data is list with %s items", poll_attempt, len(raw_data)
             )  # WHY: Log list payload size before returning it unchanged.
             return raw_data  # WHY: Return existing list payload without additional wrapping.
-        logging.warning(
+        logger.warning(
             "Poll attempt %s: Unexpected data structure: %s", poll_attempt, type(raw_data)
         )  # WHY: Log unexpected payload shapes for troubleshooting.
         return []  # WHY: Preserve existing fallback for malformed or unexpected payloads.
@@ -466,7 +468,7 @@ class PacketCaptureDownloadManager:
             return PacketCaptureDownloadManager._extract_pcap_url(
                 capture, capture_id, poll_attempt
             )  # WHY: Delegate URL extraction + logging to bounded helper.
-        logging.debug(
+        logger.debug(
             "Poll attempt %s: Capture %s not found in %s captures", poll_attempt, capture_id, len(captures)
         )  # WHY: Log when target capture has not appeared yet.
         return None  # WHY: Preserve current not-found contract for polling loop.
@@ -475,10 +477,10 @@ class PacketCaptureDownloadManager:
     def _extract_pcap_url(capture: dict[str, Any], capture_id: str, poll_attempt: int) -> str | None:
         """Read the pcap_url field from a matched capture and log the outcome."""
         pcap_url = capture.get("pcap_url")  # WHY: Read PCAP URL field once target capture is found.
-        logging.debug(
+        logger.debug(
             "Poll attempt %s: Found capture %s", poll_attempt, capture_id
         )  # WHY: Log that target capture record was located.
-        logging.debug(
+        logger.debug(
             "  - pcap_url: %s", pcap_url if pcap_url else "NOT SET YET"
         )  # WHY: Log whether URL is ready without changing operator output.
         return str(pcap_url) if pcap_url else None  # WHY: Return ready URL or preserve waiting state.
@@ -493,7 +495,7 @@ class PacketCaptureDownloadManager:
     ) -> None:
         """Download the final PCAP payload and save it under the historic filename pattern."""
         print("\n* Downloading PCAP file...")  # WHY: Preserve user-facing banner before file download begins.
-        logging.info("Downloading final PCAP artifact for %s", capture_id)  # WHY: Log outbound artifact download.
+        logger.info("Downloading final PCAP artifact for %s", capture_id)  # WHY: Log outbound artifact download.
         download_response = PacketCaptureDownloadManager._fetch_final_pcap(
             pcap_url, capture_id, requests_module
         )  # WHY: Delegate HTTP fetch + status logging to bounded helper.
@@ -515,7 +517,7 @@ class PacketCaptureDownloadManager:
         response = requests_module.get(
             pcap_url, timeout=_DEFAULT_TIMEOUT_SEC
         )  # WHY: Fetch final PCAP payload in one request to preserve existing behavior.
-        logging.debug(
+        logger.debug(
             "Final PCAP download for %s returned status %s", capture_id, response.status_code
         )  # WHY: Log artifact download status immediately after response arrives.
         return response  # WHY: Return raw response so caller can inspect status and body.
@@ -526,7 +528,7 @@ class PacketCaptureDownloadManager:
         print("\n! Failed to download PCAP file")  # WHY: Preserve existing high-level failure message.
         print(f"  HTTP Status: {status_code}")  # WHY: Preserve HTTP status detail shown to operators.
         print(f"  You can try downloading manually from: {pcap_url}")  # WHY: Preserve manual-recovery guidance.
-        logging.error("PCAP download failed: HTTP %s", status_code)  # WHY: Log HTTP failure for audit visibility.
+        logger.error("PCAP download failed: HTTP %s", status_code)  # WHY: Log HTTP failure for audit visibility.
 
     @staticmethod
     def _write_final_pcap(content: bytes, capture_id: str, prefix: str, output_dir: Path | None) -> Path:
@@ -548,9 +550,9 @@ class PacketCaptureDownloadManager:
         print(f"  Location: {output_filename}")  # WHY: Preserve saved-file path output for operators.
         print(f"  Size: {file_size_mb:.2f} MB")  # WHY: Preserve downloaded size output for operators.
         print("\n  Open with Wireshark or other PCAP analysis tools")  # WHY: Preserve post-download guidance text.
-        logging.debug(
+        logger.debug(
             "Saved PCAP %s to %s", capture_id, output_filename
         )  # WHY: Log final file path after write succeeds.
-        logging.info(
+        logger.info(
             "PCAP file downloaded: %s (%.2f MB)", output_filename, file_size_mb
         )  # WHY: Log final saved artifact summary for audit evidence.

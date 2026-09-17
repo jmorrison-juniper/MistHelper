@@ -15,6 +15,8 @@ from src.capture._packet_capture_tcpdump import PacketCaptureTcpdump  # WHY: ext
 from src.capture.org_capture_workflow import OrgCaptureWorkflow  # WHY: reusable org-scope workflow helper
 from src.capture.packet_capture_download import PacketCaptureDownloadManager  # WHY: pcap download side-effect owner
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 if TYPE_CHECKING:  # WHY: guard type-only imports to avoid runtime overhead
     pass  # WHY: reserved for future TYPE_CHECKING-only imports
 
@@ -147,7 +149,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         self._prompts = PacketCapturePrompts(self)  # WHY: cluster helper for prompts, summaries, validation
         self._exec = PacketCaptureExec(self)  # WHY: cluster helper for exec/monitor/download flows
         self._org = PacketCaptureOrg(self)  # WHY: cluster helper for org/mxedge capture flows
-        logging.debug("PacketCaptureManager initialized for org_id: %s", self.org_id)  # WHY: audit init
+        logger.debug("PacketCaptureManager initialized for org_id: %s", self.org_id)  # WHY: audit init
 
     @staticmethod
     def validate_mac_address(mac_address: str) -> bool:  # WHY: enforce MAC format before sending to Mist API
@@ -381,8 +383,8 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
 
         Presents user with capture type options and guides through configuration.
         """
-        logging.info("Menu #9: Starting site packet capture manager")  # WHY: audit entry
-        logging.debug("ENTRY: PacketCaptureManager.start_site_packet_capture()")  # WHY: debug trace
+        logger.info("Menu #9: Starting site packet capture manager")  # WHY: audit entry
+        logger.debug("ENTRY: PacketCaptureManager.start_site_packet_capture()")  # WHY: debug trace
         self._print_site_capture_menu()  # WHY: render the choice menu
         choice = _get_input_utils().safe_input(
             "\nEnter your choice: ", context="site_capture_menu"
@@ -459,7 +461,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
 
     def _start_site_client_capture_wireless(self) -> None:
         """Start wireless client packet capture at site level."""
-        logging.info("Starting site wireless client capture")  # WHY: entry-point audit log
+        logger.info("Starting site wireless client capture")  # WHY: entry-point audit log
         site_id = _get_prompt_utils().select_site_with_logging()  # WHY: interactive site chooser
         if not site_id:  # WHY: user cancelled site selection
             return  # WHY: helper logged reason. Bail silently
@@ -531,7 +533,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
 
     def _start_site_client_capture_wired(self) -> None:
         """Start wired client packet capture at site level."""
-        logging.info("Starting site wired client capture")  # WHY: entry-point audit log
+        logger.info("Starting site wired client capture")  # WHY: entry-point audit log
         site_id = _get_prompt_utils().select_site_with_logging()  # WHY: interactive site chooser
         if not site_id:  # WHY: user cancelled site selection
             return  # WHY: bail silently
@@ -553,10 +555,10 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         Returns:
             ``(gateway_mac, port_list)`` tuple or ``None`` if cancelled.
         """
-        logging.debug("Prompting for gateway selection from site inventory")  # WHY: audit start of prompt
+        logger.debug("Prompting for gateway selection from site inventory")  # WHY: audit start of prompt
         gateway_mac = _get_prompt_network_device_utils().select_gateway_mac(site_id)  # WHY: interactive gateway chooser
         if not gateway_mac:  # WHY: user cancelled or no gateway available
-            logging.warning("No gateway selected or gateway selection failed - aborting capture")  # WHY: audit cancel
+            logger.warning("No gateway selected or gateway selection failed - aborting capture")  # WHY: audit cancel
             return None  # WHY: propagate cancel to orchestrator
         gateway_mac = self.normalize_mac_address(gateway_mac)  # WHY: normalize before payload use
         # CodeQL py/clear-text-logging-sensitive-data. Verdict: accepted_with_rationale.
@@ -565,7 +567,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         # The line runs at DEBUG level and writes to the local log file on the operator host.
         # Review again if the log ships to a remote collector, or if this line adds a secret.
         logging.debug("Selected and normalized gateway MAC: %s", gateway_mac)  # WHY: audit final MAC value
-        logging.debug("Prompting for port selection from gateway")  # WHY: audit next interactive step
+        logger.debug("Prompting for port selection from gateway")  # WHY: audit next interactive step
         port_selection_result = (
             _get_prompt_network_device_utils().select_ports_from_device(  # WHY: interactive port picker
                 site_id, gateway_mac, device_type="gateway", return_available=True
@@ -592,7 +594,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
 
     def _start_site_gateway_capture(self) -> None:
         """Start gateway packet capture at site level."""
-        logging.info("Starting site gateway capture")  # WHY: entry-point audit log
+        logger.info("Starting site gateway capture")  # WHY: entry-point audit log
         site_id = _get_prompt_utils().select_site_with_logging()  # WHY: interactive site chooser
         if not site_id:  # WHY: user cancelled site selection
             return  # WHY: bail silently
@@ -631,7 +633,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         switch_mac = self._switch_pick_and_normalize(site_id)  # WHY: interactive switch chooser + normalize
         if switch_mac is None:  # WHY: user cancelled switch selection
             return None  # WHY: propagate cancel to caller
-        logging.debug("Prompting for port selection from switch")  # WHY: audit next interactive step
+        logger.debug("Prompting for port selection from switch")  # WHY: audit next interactive step
         port_selection_result = (
             _get_prompt_network_device_utils().select_ports_from_device(  # WHY: interactive port picker
                 site_id, switch_mac, device_type="switch", return_available=True
@@ -645,12 +647,10 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
 
     def _switch_pick_and_normalize(self, site_id: str) -> str | None:
         """Interactively pick a switch MAC and normalize for API use."""
-        logging.debug("Prompting for switch selection from site inventory")  # WHY: preserves debug audit trail
+        logger.debug("Prompting for switch selection from site inventory")  # WHY: preserves debug audit trail
         switch_mac = _get_prompt_network_device_utils().select_switch_mac(site_id)  # WHY: interactive switch chooser
         if not switch_mac:  # WHY: user cancelled or no switch available
-            logging.warning(
-                "No switch selected or switch selection failed - aborting capture"
-            )  # WHY: audit user cancel
+            logger.warning("No switch selected or switch selection failed - aborting capture")  # WHY: audit user cancel
             return None  # WHY: signal caller to bail out
         switch_mac = self.normalize_mac_address(switch_mac)  # WHY: normalize before API call to match payload format
         # CodeQL py/clear-text-logging-sensitive-data. Verdict: accepted_with_rationale.
@@ -703,7 +703,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
 
     def _start_site_switch_capture(self) -> None:
         """Start switch packet capture at site level."""
-        logging.info("Starting site switch capture")  # WHY: entry-point audit log
+        logger.info("Starting site switch capture")  # WHY: entry-point audit log
         site_id = _get_prompt_utils().select_site_with_logging()  # WHY: interactive site chooser
         if not site_id:  # WHY: user cancelled site selection
             return  # WHY: bail out silently. Helper logs its own reason
@@ -733,7 +733,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
 
     def _start_site_new_association_capture(self) -> None:
         """Start new association packet capture at site level."""
-        logging.info("Starting site new association capture")  # WHY: entry-point audit log
+        logger.info("Starting site new association capture")  # WHY: entry-point audit log
         site_id = _get_prompt_utils().select_site_with_logging()  # WHY: interactive site chooser
         if not site_id:  # WHY: user cancelled site selection
             return  # WHY: bail silently
@@ -859,10 +859,10 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
             cancel. Callers that receive ``"ALL_APS"`` should route to the
             multi-AP flow.
         """
-        logging.debug("Prompting for AP selection from site inventory")  # WHY: audit start of prompt
+        logger.debug("Prompting for AP selection from site inventory")  # WHY: audit start of prompt
         ap_mac = _get_prompt_network_device_utils().select_ap_mac(site_id)  # WHY: interactive AP chooser
         if not ap_mac:  # WHY: user cancelled or no AP available
-            logging.warning("No AP selected or AP selection failed - aborting capture")  # WHY: audit cancel
+            logger.warning("No AP selected or AP selection failed - aborting capture")  # WHY: audit cancel
             return None  # WHY: propagate cancel to orchestrator
         if ap_mac == "ALL_APS":  # WHY: sentinel routes to multi-AP flow
             return cast(str, ap_mac)  # WHY: caller dispatches to _start_site_scan_capture_all_aps
@@ -877,18 +877,18 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
 
     def _start_site_scan_capture(self) -> None:
         """Start scan radio packet capture at site level."""
-        logging.info("Starting site scan capture")  # WHY: entry-point audit log
+        logger.info("Starting site scan capture")  # WHY: entry-point audit log
         site_id = _get_prompt_utils().select_site_with_logging()  # WHY: interactive site chooser
-        logging.debug("Site selection returned: %s", site_id)  # WHY: audit prompt result
+        logger.debug("Site selection returned: %s", site_id)  # WHY: audit prompt result
         if not site_id:  # WHY: user cancelled site selection
-            logging.warning("No site_id returned from selection - aborting capture")  # WHY: audit cancel
+            logger.warning("No site_id returned from selection - aborting capture")  # WHY: audit cancel
             return  # WHY: bail silently
         self._print_scan_banner(site_id)  # WHY: banner rendering owned by helper
         ap_mac = self._scan_select_ap(site_id)  # WHY: interactive AP chooser with sentinel handling
         if ap_mac is None:  # WHY: user cancelled AP selection
             return  # WHY: propagate cancel
         if ap_mac == "ALL_APS":  # WHY: sentinel routes to multi-AP path
-            logging.info("User selected all APs - launching multi-AP captures")  # WHY: audit dispatch
+            logger.info("User selected all APs - launching multi-AP captures")  # WHY: audit dispatch
             self._start_site_scan_capture_all_aps(site_id)  # WHY: hand off to multi-AP flow
             return  # WHY: single-AP path is done
         self._scan_single_ap_run(site_id, ap_mac)  # WHY: rest of single-AP flow lives in helper
@@ -896,7 +896,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
     @staticmethod
     def _print_scan_banner(site_id: str) -> None:
         """Render the scan-capture banner and audit-log the flow start."""
-        logging.debug("Proceeding with scan capture configuration for site: %s", site_id)  # WHY: audit flow start
+        logger.debug("Proceeding with scan capture configuration for site: %s", site_id)  # WHY: audit flow start
         print("\n" + "-" * 80)  # WHY: banner start
         print(" SCAN RADIO CAPTURE CONFIGURATION")  # WHY: flow-identifying header
         print("-" * 80)  # WHY: banner end
@@ -917,16 +917,16 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         Returns:
             Comma-separated field names in sorted order.
         """
-        logging.debug("Building a log-safe field summary for a capture payload")  # WHY: audit before the scrub
+        logger.debug("Building a log-safe field summary for a capture payload")  # WHY: audit before the scrub
         field_names = sorted(str(key) for key in payload)  # WHY: a key is a code literal, so it holds no user value
         summary = ", ".join(field_names)  # WHY: one line suits the log record format
-        logging.debug("Field summary built with %d fields", len(field_names))  # WHY: audit after the scrub
+        logger.debug("Field summary built with %d fields", len(field_names))  # WHY: audit after the scrub
         return summary  # WHY: the caller logs this string in place of the raw payload
 
     def _scan_single_ap_run(self, site_id: str, ap_mac: str) -> None:
         """Gather remaining params and launch a single-AP scan capture."""
         band = self._prompt_scan_band()  # WHY: user picks 2.4/5/6 GHz
-        logging.debug("Band selected: %s", band)  # WHY: audit chosen band
+        logger.debug("Band selected: %s", band)  # WHY: audit chosen band
         scan_params = self._gather_scan_radio_params(band)  # WHY: channel/bandwidth/duration, and so on.
         if scan_params is None:  # WHY: user cancelled a scan-param prompt
             return  # WHY: propagate cancel
@@ -942,9 +942,9 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         # Reviewed 2026-08-22. The old line logged the raw payload, so the AP MAC and every
         # future payload field reached the log. The summary keeps the field names only.
         fields = self._log_safe_payload_fields(payload)  # WHY: field names only, so no value reaches the log
-        logging.debug("Payload constructed with fields: %s", fields)  # WHY: audit the payload shape
+        logger.debug("Payload constructed with fields: %s", fields)  # WHY: audit the payload shape
         self._display_scan_capture_summary(payload, enable_loop)  # WHY: confirm before launch
-        logging.info("User confirmed - executing site capture")  # WHY: audit launch
+        logger.info("User confirmed - executing site capture")  # WHY: audit launch
         self._run_site_capture(site_id, payload, enable_loop, check_ap_mac=ap_mac)  # WHY: launch via shared runner
 
     @staticmethod
@@ -1057,7 +1057,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
             f"\n> Launching multi-AP capture for {len(ap_macs)} APs with single API call..."
         )  # WHY: user progress cue
         payload = self._multi_ap_build_payload(ap_macs, params)  # WHY: assemble API request body
-        logging.debug("Multi-AP payload constructed for %s APs", len(ap_macs))  # WHY: audit payload size
+        logger.debug("Multi-AP payload constructed for %s APs", len(ap_macs))  # WHY: audit payload size
         self._multi_ap_launch(site_id, payload, params)  # WHY: single failure-handling call site
 
     def _start_site_scan_capture_all_aps(self, site_id: str) -> None:
@@ -1066,7 +1066,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         Args:
             site_id (str): Site UUID
         """
-        logging.info("Starting multi-AP scan capture for site: %s", site_id)  # WHY: audit multi-AP entry
+        logger.info("Starting multi-AP scan capture for site: %s", site_id)  # WHY: audit multi-AP entry
         ap_macs = self._multi_ap_preflight(site_id)  # WHY: enumerate APs and print preflight banner
         if ap_macs is None:  # WHY: preflight aborted because site had no APs
             return  # WHY: cancel gracefully
@@ -1074,7 +1074,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         if params is None:  # WHY: user cancelled somewhere in the prompt chain
             return  # WHY: bail without side effects
         self._multi_ap_confirm_and_launch(site_id, ap_macs, params)  # WHY: summary+confirm+launch cluster
-        logging.info("Multi-AP scan capture function completed")  # WHY: audit successful exit
+        logger.info("Multi-AP scan capture function completed")  # WHY: audit successful exit
 
     def _execute_site_capture(self, site_id: str, payload: dict[str, Any]) -> None:
         """Delegate site capture execution to the extracted exec cluster."""
@@ -1204,8 +1204,8 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         NOTE: Organization-level captures are for Mist Edges only.
         Site-level Mist Edges should use site captures (option 9).
         """
-        logging.info("Menu #10: Starting organization packet capture manager")  # WHY: audit log entry
-        logging.debug("ENTRY: PacketCaptureManager.start_org_packet_capture()")  # WHY: legacy debug trace
+        logger.info("Menu #10: Starting organization packet capture manager")  # WHY: audit log entry
+        logger.debug("ENTRY: PacketCaptureManager.start_org_packet_capture()")  # WHY: legacy debug trace
         print("\n" + "=" * 80)  # WHY: banner top border
         print(" ORGANIZATION PACKET CAPTURE MANAGER")  # WHY: banner text
         print("=" * 80)  # WHY: banner divider
@@ -1315,7 +1315,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
             )
 
             print(f"\n* Capture info exported to: {filename}")
-            logging.info("Capture info exported to %s", filename)
+            logger.info("Capture info exported to %s", filename)
 
         except Exception as error:  # pylint: disable=broad-exception-caught
             logging.exception("Failed to export capture info: %s", error)

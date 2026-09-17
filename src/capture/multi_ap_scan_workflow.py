@@ -6,6 +6,8 @@ import logging  # WHY: Emit structured diagnostics consistent with sibling captu
 from dataclasses import dataclass  # WHY: Use frozen dataclasses for immutable value-object semantics.
 from typing import Any  # WHY: Preserve legacy DI collaborator typing without leaking concrete classes.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 _SEP_WIDE = "=" * 80  # WHY: Reuse legacy summary separator without duplicating literal in every print call.
 _SEP_SECTION = "-" * 80  # WHY: Reuse legacy section separator without duplicating literal in every print call.
 _BAND_CHOICES = (
@@ -72,7 +74,7 @@ class MultiApScanCaptureWorkflow:
 
     def _prompt_band(self) -> str:  # WHY: Resolve operator band selection to a normalized Mist API string.
         """Prompt for scan band and normalize to Mist API values."""
-        logging.info("Prompting operator for scan band selection")  # WHY: Record band-prompt entry for traceability.
+        logger.info("Prompting operator for scan band selection")  # WHY: Record band-prompt entry for traceability.
         print("\nSelect band:")  # WHY: Preserve legacy header text.
         print("  1. 2.4 GHz")  # WHY: Preserve legacy option 1 text.
         print("  2. 5 GHz (default)")  # WHY: Preserve legacy default option text.
@@ -81,13 +83,13 @@ class MultiApScanCaptureWorkflow:
             "Enter choice [1-3] (default 2): ", default_value="2", context="band"
         )
         resolved = _BAND_CHOICES.get(choice, _BAND_DEFAULT)  # WHY: Normalize via table + legacy default fallback.
-        logging.debug("Resolved band selection to API value: %s", resolved)  # WHY: Record normalized band value.
+        logger.debug("Resolved band selection to API value: %s", resolved)  # WHY: Record normalized band value.
         return resolved  # WHY: Return normalized band string used by downstream payload logic.
 
     def _prompt_channel(self, band: str) -> int | None:  # WHY: Resolve band-specific operator channel selection.
         """Prompt for channel using legacy per-band prompt text."""
         prompt_text, default_value = _CHANNEL_SPECS.get(band, _CHANNEL_SPECS["6"])  # WHY: Look up prompt text.
-        logging.info("Prompting operator for channel selection in band %s", band)  # WHY: Trace channel-prompt entry.
+        logger.info("Prompting operator for channel selection in band %s", band)  # WHY: Trace channel-prompt entry.
         channel_str = self.input_utils.safe_input(  # WHY: Capture operator channel value with EOF-safe helper.
             prompt_text, default_value=default_value, context="channel"
         )
@@ -101,18 +103,18 @@ class MultiApScanCaptureWorkflow:
             print(f"\n! Invalid channel: {channel_str}")  # WHY: Preserve legacy operator-facing error message.
             logging.error("Invalid channel input provided: %s", channel_str)  # WHY: Log conversion failure.
             return None  # WHY: Sentinel so caller can short-circuit execution safely.
-        logging.debug("Validated channel value: %s", channel_value)  # WHY: Log parsed channel for diagnostics.
+        logger.debug("Validated channel value: %s", channel_value)  # WHY: Log parsed channel for diagnostics.
         return channel_value  # WHY: Return numeric channel for downstream capture configuration.
 
     def _prompt_bandwidth(self, band: str) -> str:  # WHY: Resolve band-constrained operator bandwidth selection.
         """Prompt for channel bandwidth preserving legacy options."""
-        logging.info("Prompting operator for bandwidth selection in band %s", band)  # WHY: Trace bandwidth prompt.
+        logger.info("Prompting operator for bandwidth selection in band %s", band)  # WHY: Trace bandwidth prompt.
         self._print_bandwidth_menu(band)  # WHY: Emit legacy menu, band-constrained.
         choice = self.input_utils.safe_input(  # WHY: Capture bandwidth selection with EOF-safe helper.
             "Enter choice (default 1): ", default_value="1", context="bandwidth"
         )
         resolved = _BW_CHOICES.get(choice, _BW_DEFAULT)  # WHY: Map choice to legacy width string with default.
-        logging.debug("Resolved bandwidth selection to API value: %s", resolved)  # WHY: Log normalized bandwidth.
+        logger.debug("Resolved bandwidth selection to API value: %s", resolved)  # WHY: Log normalized bandwidth.
         return resolved  # WHY: Return normalized width for payload construction.
 
     def _print_bandwidth_menu(self, band: str) -> None:  # WHY: Emit legacy bandwidth menu based on band constraints.
@@ -127,7 +129,7 @@ class MultiApScanCaptureWorkflow:
 
     def _prompt_duration(self) -> int | None:  # WHY: Resolve validated operator capture duration.
         """Prompt for capture duration with legacy validation rules."""
-        logging.info("Prompting operator for capture duration")  # WHY: Trace duration prompt entry.
+        logger.info("Prompting operator for capture duration")  # WHY: Trace duration prompt entry.
         duration_str = self.input_utils.safe_input(  # WHY: Capture duration input with EOF-safe helper.
             "Enter capture duration in seconds (default 60, min 60, max 86400): ",
             default_value="60",
@@ -145,7 +147,7 @@ class MultiApScanCaptureWorkflow:
 
     def _prompt_num_packets(self) -> int | None:  # WHY: Resolve validated operator packet-count selection.
         """Prompt for packet count preserving legacy validation."""
-        logging.info("Prompting operator for packet count")  # WHY: Trace packet-count prompt entry.
+        logger.info("Prompting operator for packet count")  # WHY: Trace packet-count prompt entry.
         packets_str = self.input_utils.safe_input(  # WHY: Capture packet-count input with EOF-safe helper.
             "Enter number of packets (default 1024, max 10000): ",
             default_value="1024",
@@ -171,16 +173,16 @@ class MultiApScanCaptureWorkflow:
             return None  # WHY: Sentinel to trigger safe early return in caller.
         if value < spec.low or value > spec.high:  # WHY: Enforce legacy inclusive range check.
             print(spec.range_msg)  # WHY: Preserve legacy validation message for operator clarity.
-            logging.error(spec.range_log, value)  # WHY: Log validation failure for troubleshooting.
+            logger.error(spec.range_log, value)  # WHY: Log validation failure for troubleshooting.
             return None  # WHY: Sentinel so caller exits early on invalid value.
-        logging.debug("Validated bounded int value: %s", value)  # WHY: Log accepted value for diagnostics.
+        logger.debug("Validated bounded int value: %s", value)  # WHY: Log accepted value for diagnostics.
         return value  # WHY: Return validated integer for downstream use.
 
     def _build_payload(  # WHY: Convert config + AP inventory into legacy single-call multi-AP scan payload.
         self, ap_macs: list[str], config: CaptureConfig
     ) -> dict[str, Any]:
         """Build the legacy single-call multi-AP scan payload."""
-        logging.info("Building multi-AP capture payload for %d APs", len(ap_macs))  # WHY: Trace payload build entry.
+        logger.info("Building multi-AP capture payload for %d APs", len(ap_macs))  # WHY: Trace payload build entry.
         aps_dict = self._build_aps_dict(ap_macs, config)  # WHY: Delegate per-AP dict construction.
         payload: dict[str, Any] = {  # WHY: Mirror legacy scan payload contract exactly.
             "type": "scan",
@@ -193,7 +195,7 @@ class MultiApScanCaptureWorkflow:
             "max_pkt_len": _DEFAULT_MAX_PKT_LEN,
             "aps": aps_dict,
         }
-        logging.debug("Multi-AP payload constructed for %d APs", len(ap_macs))  # WHY: Log completion without secrets.
+        logger.debug("Multi-AP payload constructed for %d APs", len(ap_macs))  # WHY: Log completion without secrets.
         return payload  # WHY: Return payload for API invocation.
 
     def _build_aps_dict(  # WHY: Isolate per-AP normalization so payload builder stays within length limits.
@@ -212,7 +214,7 @@ class MultiApScanCaptureWorkflow:
 
     def _display_summary(self, ap_count: int, config: CaptureConfig) -> None:  # WHY: Emit operator-facing summary.
         """Print legacy multi-AP capture summary text."""
-        logging.info("Displaying multi-AP capture configuration summary")  # WHY: Trace summary emission entry.
+        logger.info("Displaying multi-AP capture configuration summary")  # WHY: Trace summary emission entry.
         print("\n" + _SEP_WIDE)  # WHY: Render legacy visual separator.
         print(" MULTI-AP CAPTURE CONFIGURATION SUMMARY")  # WHY: Render legacy title text.
         print(_SEP_WIDE)  # WHY: Render legacy separator for readability.
@@ -225,11 +227,11 @@ class MultiApScanCaptureWorkflow:
         print(f"  Packets: {config.num_packets}")  # WHY: Confirm capture volume to operator.
         print(f"  Format: {config.capture_format}")  # WHY: Confirm output format to operator.
         print(_SEP_WIDE)  # WHY: Render legacy closing separator.
-        logging.debug("Displayed summary for %d APs (%s)", ap_count, config.capture_format)  # WHY: Log summary.
+        logger.debug("Displayed summary for %d APs (%s)", ap_count, config.capture_format)  # WHY: Log summary.
 
     def _check_existing_captures(self, site_id: str) -> None:  # WHY: Courtesy lookup for existing site captures.
         """Run a non-blocking courtesy lookup for existing site captures."""
-        logging.info("Checking for existing site captures before launch")  # WHY: Trace courtesy check entry.
+        logger.info("Checking for existing site captures before launch")  # WHY: Trace courtesy check entry.
         try:
             response = self.mistapi_module.api.v1.sites.pcaps.listSitePacketCaptures(  # WHY: Query current captures.
                 self.manager.mist_session, site_id
@@ -237,30 +239,30 @@ class MultiApScanCaptureWorkflow:
         except Exception as check_error:  # WHY: Keep failure non-blocking to preserve legacy semantics.
             logging.debug("Could not check for existing captures: %s", check_error)  # WHY: Log non-blocking failure.
             return  # WHY: Exit courtesy check silently on failure per legacy behavior.
-        logging.debug("Existing-capture lookup returned HTTP status %s", response.status_code)  # WHY: Log status.
+        logger.debug("Existing-capture lookup returned HTTP status %s", response.status_code)  # WHY: Log status.
         if response.status_code == 200:  # WHY: Only inspect payload on success per legacy behavior.
             existing = response.data or []  # WHY: Normalize empty data to list for len().
             if existing:  # WHY: Emit diagnostic only when conflicting captures exist.
-                logging.debug("%d capture(s) already in progress or recently completed", len(existing))  # WHY: Log.
+                logger.debug("%d capture(s) already in progress or recently completed", len(existing))  # WHY: Log.
 
     def _gather_capture_config(self) -> CaptureConfig | None:  # WHY: Sequence operator prompts and validate output.
         """Prompt operator for capture parameters. Return CaptureConfig or None on abort."""
         band = self._prompt_band()  # WHY: Prompt for band first per legacy flow.
         channel = self._prompt_channel(band)  # WHY: Prompt for channel constrained by band.
         if channel is None:  # WHY: Abort early when channel input is invalid.
-            logging.warning("Channel selection invalid; aborting multi-AP capture workflow")  # WHY: Log abort.
+            logger.warning("Channel selection invalid; aborting multi-AP capture workflow")  # WHY: Log abort.
             return None  # WHY: Signal caller to short-circuit.
         bandwidth = self._prompt_bandwidth(band)  # WHY: Prompt for bandwidth after channel.
         duration = self._prompt_duration()  # WHY: Prompt for duration with bounds validation.
         if duration is None:  # WHY: Abort early when duration input is invalid.
-            logging.warning("Duration selection invalid; aborting multi-AP capture workflow")  # WHY: Log abort.
+            logger.warning("Duration selection invalid; aborting multi-AP capture workflow")  # WHY: Log abort.
             return None  # WHY: Signal caller to short-circuit.
         num_packets = self._prompt_num_packets()  # WHY: Prompt for packet limit with bounds validation.
         if num_packets is None:  # WHY: Abort early when packet count is invalid.
-            logging.warning("Packet-count selection invalid; aborting multi-AP capture workflow")  # WHY: Log abort.
+            logger.warning("Packet-count selection invalid; aborting multi-AP capture workflow")  # WHY: Log abort.
             return None  # WHY: Signal caller to short-circuit.
         capture_format = self.manager._get_capture_format_selection()  # WHY: Resolve capture format via manager.
-        logging.debug("Selected capture format: %s", capture_format)  # WHY: Log chosen format for diagnostics.
+        logger.debug("Selected capture format: %s", capture_format)  # WHY: Log chosen format for diagnostics.
         return CaptureConfig(band, channel, bandwidth, duration, num_packets, capture_format)  # WHY: Aggregate.
 
     def _post_launch_action(  # WHY: Dispatch wait/download vs stream subscription based on capture format.
@@ -270,14 +272,14 @@ class MultiApScanCaptureWorkflow:
         if capture_format == "pcap":  # WHY: Preserve legacy pcap-format branch.
             print("\n> Waiting for PCAP file to be ready...")  # WHY: Preserve legacy wait message.
             print("  This may take a few moments after capture completes.")  # WHY: Preserve legacy expectation.
-            logging.info("Delegating to site PCAP wait/download for capture_id=%s", capture_id)  # WHY: Log.
+            logger.info("Delegating to site PCAP wait/download for capture_id=%s", capture_id)  # WHY: Log.
             self.manager._wait_and_download_pcap(site_id, capture_id, duration)  # WHY: Invoke wait/download.
-            logging.debug("Site PCAP wait/download finished for capture_id=%s", capture_id)  # WHY: Log completion.
+            logger.debug("Site PCAP wait/download finished for capture_id=%s", capture_id)  # WHY: Log completion.
         elif capture_format == "stream":  # WHY: Preserve legacy stream-format branch.
             print("\n> Stream format selected - subscribe to WebSocket for real-time data")  # WHY: Preserve message.
-            logging.info("Delegating to site capture stream subscription for capture_id=%s", capture_id)  # WHY: Log.
+            logger.info("Delegating to site capture stream subscription for capture_id=%s", capture_id)  # WHY: Log.
             self.manager._subscribe_to_site_capture_stream(site_id, capture_id)  # WHY: Invoke stream subscription.
-            logging.debug("Site capture stream subscription completed for capture_id=%s", capture_id)  # WHY: Log.
+            logger.debug("Site capture stream subscription completed for capture_id=%s", capture_id)  # WHY: Log.
 
     def _handle_launch_success(  # WHY: Print success output, export metadata, and dispatch post-launch action.
         self, result: dict[str, Any], site_id: str, ap_macs: list[str], config: CaptureConfig
@@ -291,9 +293,9 @@ class MultiApScanCaptureWorkflow:
         print(f"  Format: {config.capture_format}")  # WHY: Preserve legacy format output.
         print(f"  Duration: {config.duration} seconds")  # WHY: Preserve legacy duration output.
         print(f"  Expires: {result.get('expiry', 'unknown')}")  # WHY: Preserve legacy expiry output.
-        logging.info("Multi-AP capture started: capture_id=%s ap_count=%s", capture_id, ap_count)  # WHY: Log.
+        logger.info("Multi-AP capture started: capture_id=%s ap_count=%s", capture_id, ap_count)  # WHY: Log.
         self.manager._export_capture_info_to_csv(result, "site", site_id)  # WHY: Persist capture metadata.
-        logging.debug("Capture metadata export completed for capture_id=%s", capture_id)  # WHY: Log export end.
+        logger.debug("Capture metadata export completed for capture_id=%s", capture_id)  # WHY: Log export end.
         self._post_launch_action(config.capture_format, site_id, capture_id, config.duration)  # WHY: Dispatch.
 
     def _handle_launch_error(self, response: Any) -> None:  # WHY: Emit legacy operator guidance for API failures.
@@ -311,7 +313,7 @@ class MultiApScanCaptureWorkflow:
         else:  # WHY: Fall back to generic failure output for non-conflict errors.
             print(f"\n! Failed to start capture: {response.status_code}")  # WHY: Preserve generic failure output.
             print(f"  Error details: {error_details}")  # WHY: Preserve detailed error output.
-        logging.error("Multi-AP capture failed: %s - %s", response.status_code, error_details)  # WHY: Log outcome.
+        logger.error("Multi-AP capture failed: %s - %s", response.status_code, error_details)  # WHY: Log outcome.
 
     def _launch_capture(  # WHY: Build payload, invoke start API, dispatch success/error handling.
         self, site_id: str, ap_macs: list[str], config: CaptureConfig
@@ -319,9 +321,9 @@ class MultiApScanCaptureWorkflow:
         """Build payload, call startSitePacketCapture, and dispatch success/error handlers."""
         print(f"\n> Launching multi-AP capture for {len(ap_macs)} APs with single API call...")  # WHY: Legacy msg.
         payload = self._build_payload(ap_macs, config)  # WHY: Assemble legacy payload for API call.
-        logging.debug("Payload ready for startSitePacketCapture request")  # WHY: Log payload readiness.
+        logger.debug("Payload ready for startSitePacketCapture request")  # WHY: Log payload readiness.
         try:
-            logging.info("Calling startSitePacketCapture for site %s", site_id)  # WHY: Trace API call entry.
+            logger.info("Calling startSitePacketCapture for site %s", site_id)  # WHY: Trace API call entry.
             response = self.mistapi_module.api.v1.sites.pcaps.startSitePacketCapture(  # WHY: Invoke start API.
                 self.manager.mist_session, site_id, payload
             )
@@ -329,7 +331,7 @@ class MultiApScanCaptureWorkflow:
             print(f"\n! Error starting multi-AP capture: {error}")  # WHY: Preserve legacy exception message.
             logging.exception("Exception launching multi-AP capture: %s", error)  # WHY: Log traceback.
             return  # WHY: Exit early after logging the exception per legacy behavior.
-        logging.debug("startSitePacketCapture returned HTTP status %s", response.status_code)  # WHY: Log status.
+        logger.debug("startSitePacketCapture returned HTTP status %s", response.status_code)  # WHY: Log status.
         if response.status_code == 200:  # WHY: 200 signals successful launch per legacy contract.
             self._handle_launch_success(response.data, site_id, ap_macs, config)  # WHY: Success branch dispatch.
         else:  # WHY: Non-200 dispatches legacy error-handling path.
@@ -351,23 +353,23 @@ class MultiApScanCaptureWorkflow:
         self, site_id: str, ap_macs: list[str], config: CaptureConfig
     ) -> None:
         """Pause for operator confirmation then launch capture."""
-        logging.info("Requesting final operator confirmation before starting capture")  # WHY: Trace confirm entry.
+        logger.info("Requesting final operator confirmation before starting capture")  # WHY: Trace confirm entry.
         self.input_utils.safe_input(  # WHY: Pause for explicit operator confirmation with EOF-safe helper.
             f"\nPress Enter to start capture for {len(ap_macs)} APs (Ctrl+C to cancel): ",
             context="confirmation",
             allow_empty=True,
         )
-        logging.debug("Operator confirmation received; proceeding with launch")  # WHY: Log confirmation completion.
+        logger.debug("Operator confirmation received; proceeding with launch")  # WHY: Log confirmation completion.
         self._launch_capture(site_id, ap_macs, config)  # WHY: Launch capture and dispatch response.
 
     def run(self, site_id: str) -> None:  # WHY: Entry point orchestrating the extracted multi-AP scan workflow.
         """Execute the extracted multi-AP scan capture workflow."""
-        logging.info("Starting multi-AP scan capture for site: %s", site_id)  # WHY: Log workflow start.
+        logger.info("Starting multi-AP scan capture for site: %s", site_id)  # WHY: Log workflow start.
         ap_macs = self.device_utils.get_all_ap_macs_from_site(site_id)  # WHY: Retrieve AP MAC inventory.
-        logging.debug("Retrieved %d AP MAC addresses for site %s", len(ap_macs), site_id)  # WHY: Log inventory.
+        logger.debug("Retrieved %d AP MAC addresses for site %s", len(ap_macs), site_id)  # WHY: Log inventory.
         if not ap_macs:  # WHY: Short-circuit when no APs are available for capture.
             print("\n! No APs found at site")  # WHY: Preserve legacy no-AP message.
-            logging.warning("No AP MACs found for site %s; aborting workflow", site_id)  # WHY: Log early exit.
+            logger.warning("No AP MACs found for site %s; aborting workflow", site_id)  # WHY: Log early exit.
             return  # WHY: Exit early because no APs means no valid targets.
         self._print_prep_header(len(ap_macs))  # WHY: Emit legacy pre-config header to operator.
         self._check_existing_captures(site_id)  # WHY: Run non-blocking courtesy check for existing captures.
@@ -377,7 +379,7 @@ class MultiApScanCaptureWorkflow:
             return  # WHY: Exit silently on invalid operator input per legacy behavior.
         self._display_summary(len(ap_macs), config)  # WHY: Display configuration summary before confirmation.
         self._confirm_and_launch(site_id, ap_macs, config)  # WHY: Prompt confirmation and launch capture.
-        logging.info("Multi-AP scan capture function completed")  # WHY: Log workflow completion boundary.
+        logger.info("Multi-AP scan capture function completed")  # WHY: Log workflow completion boundary.
 
 
 __all__ = [

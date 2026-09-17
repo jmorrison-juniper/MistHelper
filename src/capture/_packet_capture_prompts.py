@@ -20,6 +20,8 @@ from __future__ import annotations  # WHY: postponed annotation eval for forward
 import logging  # WHY: audit-trail logging for capture prompt lifecycle events
 from typing import Any, cast  # WHY: opaque manager reference plus typed cast for lazy proxies
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 def _pc() -> Any:
     """Return the ``packet_capture`` module for test-patchable name lookup.
@@ -207,7 +209,7 @@ class PacketCapturePrompts:
         bandwidth = _BW_MAP.get(choice, "20")  # WHY: unknown input falls back to 20MHz safely
         if band == "24" and bandwidth not in ("20", "40"):  # WHY: 2.4GHz caps at 40MHz per spec
             print(f"\n! Invalid bandwidth {bandwidth} for 2.4 GHz band")  # WHY: user-facing error
-            logging.error("Invalid bandwidth %s for 2.4 GHz band", bandwidth)  # WHY: audit-trail log
+            logger.error("Invalid bandwidth %s for 2.4 GHz band", bandwidth)  # WHY: audit-trail log
             return None  # WHY: sentinel indicating validation failure
         return bandwidth  # WHY: valid bandwidth returned to caller
 
@@ -249,7 +251,7 @@ class PacketCapturePrompts:
         )
         if proceed != "y":  # WHY: any answer other than y means cancel
             print("\n* Capture cancelled by user")  # WHY: explicit user feedback
-            logging.info("User cancelled due to existing capture on AP")  # WHY: audit-trail entry
+            logger.info("User cancelled due to existing capture on AP")  # WHY: audit-trail entry
             return False  # WHY: signal cancel to caller
         return True  # WHY: signal user chose to proceed despite the conflict
 
@@ -269,7 +271,7 @@ class PacketCapturePrompts:
         if captures is None:  # WHY: fetch failed - nothing to log
             return  # WHY: skip log line rather than mislead user
         if captures:  # WHY: only announce when at least one capture exists
-            logging.info("Found %s existing capture(s) at site %s", len(captures), site_id)  # WHY: audit
+            logger.info("Found %s existing capture(s) at site %s", len(captures), site_id)  # WHY: audit
             print(f"  Note: {len(captures)} existing capture(s) found at this site")  # WHY: user note
 
     def _multi_ap_success_summary(self, result: dict[str, Any], capture_format: str, duration: int) -> str:
@@ -282,7 +284,7 @@ class PacketCapturePrompts:
         print(f"  Format: {capture_format}")  # WHY: show file vs stream so user knows next step
         print(f"  Duration: {duration} seconds")  # WHY: echo requested duration for clarity
         print(f"  Expires: {result.get('expiry', 'unknown')}")  # WHY: expiry helps download timing
-        logging.info("Multi-AP capture started: id=%s, aps=%s", capture_id, ap_count)  # WHY: audit
+        logger.info("Multi-AP capture started: id=%s, aps=%s", capture_id, ap_count)  # WHY: audit
         return str(capture_id)  # WHY: coerce to str for downstream URL construction
 
     def _dispatch_multi_ap_output(self, site_id: str, capture_id: str, capture_format: str) -> None:
@@ -305,7 +307,7 @@ class PacketCapturePrompts:
             return False  # WHY: leave other 400s to the generic failure branch
         print("\n! Capture(s) already in progress on one or more APs")  # WHY: user-visible conflict
         print("  Wait for existing captures to complete")  # WHY: guidance on next step
-        logging.error("Multi-AP capture conflict: %s", detail)  # WHY: audit-trail log
+        logger.error("Multi-AP capture conflict: %s", detail)  # WHY: audit-trail log
         return True  # WHY: caller can short-circuit the generic failure branch
 
     def handle_multi_ap_capture_result(self, response: Any, site_id: str, duration: int, capture_format: str) -> None:
@@ -320,7 +322,7 @@ class PacketCapturePrompts:
             return  # WHY: conflict path already logged and messaged
         print(f"\n! Failed to start capture: {response.status_code}")  # WHY: generic failure banner
         print(f"  Error details: {error_details}")  # WHY: dump API-provided details for debugging
-        logging.error("Multi-AP capture failed: %s", response.status_code)  # WHY: audit-trail log
+        logger.error("Multi-AP capture failed: %s", response.status_code)  # WHY: audit-trail log
 
     @staticmethod
     def _print_client_summary_body(capture_type: str, payload: dict[str, Any], ap_mac: str | None) -> None:
@@ -440,21 +442,21 @@ class PacketCapturePrompts:
     def _expand_port_selection(port_list: list[str], available_ports: list[Any]) -> list[str]:
         """Expand an empty port_list to include all available ports."""
         if port_list:  # WHY: user-selected ports take precedence
-            logging.debug("Specific ports selected: %s", port_list)  # WHY: debug-log the choice
+            logger.debug("Specific ports selected: %s", port_list)  # WHY: debug-log the choice
             return port_list  # WHY: return the user's explicit selection unchanged
         expanded = [name for name, _ in available_ports]  # WHY: derive names from (name, meta) tuples
-        logging.debug("All ports selected: %s", expanded)  # WHY: debug-log the expansion
+        logger.debug("All ports selected: %s", expanded)  # WHY: debug-log the expansion
         return expanded  # WHY: fully-expanded list acts as "all ports"
 
     @staticmethod
     def validate_port_selection(port_selection_result: Any) -> tuple[list[str], list[Any]] | None:
         """Validate and expand port selection from device."""
         if port_selection_result is None:  # WHY: helper returns None when user cancels
-            logging.warning("Port selection failed or cancelled")  # WHY: audit warning
+            logger.warning("Port selection failed or cancelled")  # WHY: audit warning
             return None  # WHY: propagate cancel
         port_list, available_ports = port_selection_result  # WHY: unpack the (list, list) tuple
         if port_list is None:  # WHY: nested None signals cancel from downstream helper
-            logging.warning("Port selection failed or cancelled")  # WHY: audit warning
+            logger.warning("Port selection failed or cancelled")  # WHY: audit warning
             return None  # WHY: propagate cancel
         return PacketCapturePrompts._expand_port_selection(port_list, available_ports), available_ports
 

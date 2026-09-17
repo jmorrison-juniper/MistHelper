@@ -8,6 +8,8 @@ from typing import Any
 
 from src.capture.packet_capture_download import PacketCaptureDownloadManager
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 @dataclass
 class SitePcapWaitDownloadWorkflow:
@@ -19,19 +21,19 @@ class SitePcapWaitDownloadWorkflow:
 
     def execute(self, site_id: str, capture_id: str, duration: int) -> None:
         """Execute legacy-equivalent wait/download flow for site captures."""
-        logging.info(
+        logger.info(
             "Starting site PCAP wait/download workflow for site_id=%s capture_id=%s", site_id, capture_id
         )  # Log workflow entry with key identifiers for traceability.
-        logging.info(
+        logger.info(
             "Initializing packet-capture download manager"
         )  # Log before constructing helper object used by polling flow.
         download_manager = (
             PacketCaptureDownloadManager()
         )  # Create helper manager that owns polling and file-download mechanics.
-        logging.debug(
+        logger.debug(
             "Packet-capture download manager initialized successfully"
         )  # Log successful helper initialization.
-        logging.info(
+        logger.info(
             "Invoking poll_and_download_pcap for site capture_id=%s", capture_id
         )  # Log before triggering polling/download state machine.
 
@@ -55,18 +57,18 @@ class SitePcapWaitDownloadWorkflow:
             prefix="",
             save_pcap_file_fn=save_callback,  # Reuse prepared save callback.
         )
-        logging.debug(
+        logger.debug(
             "Completed poll_and_download_pcap for site capture_id=%s", capture_id
         )  # Log workflow completion after polling/download returns.
 
     def run(self, site_id: str, capture_id: str, duration: int) -> None:
         """Backward-compatible alias for existing unit tests."""
-        logging.info(
+        logger.info(
             "Running site PCAP wait/download compatibility alias"
         )  # Log alias invocation so compatibility path is visible in logs.
         self.execute(
             site_id, capture_id, duration
         )  # Delegate to canonical execute method to preserve single implementation path.
-        logging.debug(
+        logger.debug(
             "Completed site PCAP wait/download compatibility alias"
         )  # Log alias completion to bracket the compatibility call path.
