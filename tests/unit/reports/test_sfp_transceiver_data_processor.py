@@ -8,7 +8,7 @@ Covers all eight static methods on ``src.reports.sfp_transceiver_data_processor`
 ``_log_merge_summary`` (matched==0 vs matched>0 log paths),
 ``_finalize_merge_output`` (write + user notice + logging),
 ``_run_merge_pipeline`` (happy path + FileNotFoundError / csv.Error /
-Exception re-raises), and ``merge_transceiver_data`` (public entry point
+KeyError re-raises), and ``merge_transceiver_data`` (public entry point
 resolves paths and delegates to helpers).
 """
 
@@ -269,6 +269,15 @@ def test_run_merge_pipeline_reraises_generic_exception() -> None:
     with patch.object(P, "_load_device_site_context", side_effect=RuntimeError("boom")):
         with pytest.raises(RuntimeError, match="boom"):
             P._run_merge_pipeline("port.csv", "devices.csv")
+
+
+def test_run_merge_pipeline_logs_and_reraises_missing_header(caplog: pytest.LogCaptureFixture) -> None:
+    """KeyError from CSV header access logs and reaches the caller."""
+    with caplog.at_level(logging.ERROR):  # Capture the explicit failure log from the narrowed handler.
+        with patch.object(P, "_load_device_site_context", side_effect=KeyError("mac")):  # Simulate a missing CSV key.
+            with pytest.raises(KeyError, match="mac"):  # The caller still receives the failure.
+                P._run_merge_pipeline("port.csv", "devices.csv")  # Run the pipeline through the narrowed handler.
+    assert "Unexpected error during transceiver merge" in caplog.text  # The handler logs before it raises.
 
 
 # ---------- merge_transceiver_data ----------
