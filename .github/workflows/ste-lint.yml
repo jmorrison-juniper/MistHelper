@@ -46,10 +46,6 @@ jobs:
           tools/ste_linter/README.md
           .github/skills/hardening-junos/SKILL.md
           .github/skills/hardening-junos/references/baseline-controls.md
-          .github/skills/hardening-junos/references/junos-verified-rules.md
-          .github/skills/hardening-junos/references/repository-decisions.md
-          .github/skills/hardening-junos/references/source-index.md
           .github/skills/hardening-junos/references/stig-rules.md
           .github/skills/hardening-junos/references/corpus-operations.md
-          .github/skills/hardening-junos/references/validation-and-gaps.md
           .github/skills/hardening-junos/references/verification.md
