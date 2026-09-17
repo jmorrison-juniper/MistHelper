@@ -33,6 +33,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+logger = logging.getLogger(__name__)  # Keep firmware log records tied to this module.
+
 DEVICE_LISTING_ENDPOINT = "listSiteDevices"  # WHY: name the endpoint that reports the configured version
 SITE_STATS_ENDPOINT = "listSiteDevicesStats"  # WHY: name the site endpoint that reports the running version
 ORG_INVENTORY_ENDPOINT = "getOrgInventory"  # WHY: name the org endpoint that reports the running version
@@ -105,7 +107,7 @@ class RunningFirmwareVersionResolver:
         Returns:
             A map of device id or MAC address to the running version string.
         """
-        logging.info("Indexing device stats rows for a running version lookup rows=%d", len(rows))  # WHY: entry audit
+        logger.info("Indexing device stats rows for a running version lookup rows=%d", len(rows))  # WHY: entry audit
         running_by_key: dict[str, str] = {}  # WHY: accumulate one map that both key shapes can reach
         for row in rows:  # WHY: a single pass keeps the cost linear in the row count
             version = str(row.get("version") or "")  # WHY: normalize a missing version to an empty string
@@ -114,7 +116,7 @@ class RunningFirmwareVersionResolver:
             for key in (row.get("id"), row.get("device_id"), row.get("mac")):  # WHY: accept every join key shape
                 if key:  # WHY: skip an absent identifier
                     running_by_key[str(key)] = version  # WHY: store the running version under each usable key
-        logging.debug("Indexed running versions keys=%d", len(running_by_key))  # WHY: exit audit
+        logger.debug("Indexed running versions keys=%d", len(running_by_key))  # WHY: exit audit
         return running_by_key  # WHY: the caller joins device rows against this map
 
     def fetch_site_running_versions(self, site_id: str) -> dict[str, str]:
@@ -127,7 +129,7 @@ class RunningFirmwareVersionResolver:
             A map of device id or MAC address to the running version string. The
             map is empty when the endpoint fails, so the caller can fall back.
         """
-        logging.info("Reading running firmware versions from %s site=%s", SITE_STATS_ENDPOINT, site_id)  # WHY: audit
+        logger.info("Reading running firmware versions from %s site=%s", SITE_STATS_ENDPOINT, site_id)  # WHY: audit
         stats_fn = self._resolve_stats_fn()  # WHY: pick the injected callable or the real endpoint
         try:  # WHY: a network call can raise, and a firmware flow must not stop here
             response = stats_fn(
@@ -138,7 +140,7 @@ class RunningFirmwareVersionResolver:
             return {}  # WHY: an empty map tells the caller that no running version was read
         rows = self._rows_from_response(response, site_id)  # WHY: one helper handles the status and payload shape
         running_by_key = self.index_stats_rows(rows)  # WHY: build the join map for the caller
-        logging.debug("Read running versions site=%s keys=%d", site_id, len(running_by_key))  # WHY: exit audit
+        logger.debug("Read running versions site=%s keys=%d", site_id, len(running_by_key))  # WHY: exit audit
         return running_by_key  # WHY: the caller overlays these values onto its device rows
 
     def read(self, device_row: dict[str, Any], running_by_key: dict[str, str]) -> FirmwareVersionReading:
@@ -161,7 +163,7 @@ class RunningFirmwareVersionResolver:
             if running:  # WHY: the first hit is the running version
                 return FirmwareVersionReading(running, SITE_STATS_ENDPOINT, True)  # WHY: safe for a decision
         listed = str(device_row.get("version") or "")  # WHY: the listing value is the only value that remains
-        logging.warning(
+        logger.warning(
             "No running version for device %s. The %s value %s is stale.",
             device_row.get("id", "unknown"),
             DEVICE_LISTING_ENDPOINT,
@@ -191,7 +193,7 @@ class RunningFirmwareVersionResolver:
         """
         status = getattr(response, "status_code", 200)  # WHY: a stand-in response may omit the status
         if status != 200:  # WHY: a non-200 status carries no usable rows
-            logging.error("The %s call for site %s returned %s", SITE_STATS_ENDPOINT, site_id, status)  # WHY: audit
+            logger.error("The %s call for site %s returned %s", SITE_STATS_ENDPOINT, site_id, status)  # WHY: audit
             return []  # WHY: an empty list drives the caller onto its fallback
         data = getattr(response, "data", None) or []  # WHY: normalize a missing payload to an empty list
         return [row for row in data if isinstance(row, dict)]  # WHY: drop any row shape the caller cannot read

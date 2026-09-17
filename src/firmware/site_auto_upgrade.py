@@ -21,6 +21,8 @@ from src.dataclasses.site_auto_upgrade_deps import (  # WHY: bundles DI params (
     SiteAutoUpgradeMspDeps,
 )
 
+logger = logging.getLogger(__name__)  # Keep firmware log records tied to this module.
+
 # ---------------------------------------------------------------------------
 # Type aliases for injected dependencies
 # ---------------------------------------------------------------------------
@@ -130,7 +132,7 @@ class SiteAutoUpgradeConfigurator:
         resolved = _resolve_configurator_kwargs(cfg)  # WHY: normalize both invocation forms.
         self._apply_config_to_attributes(resolved)  # WHY: hydrate 6 DI-derived attrs.
         self._reset_workflow_state()  # WHY: seed 11 workflow-scoped attrs to defaults.
-        logging.debug(  # WHY: action-log post-init state.
+        logger.debug(  # WHY: action-log post-init state.
             "SiteAutoUpgradeConfigurator initialized: org_id=%s, dry_run=%s",
             resolved.org_id,
             resolved.dry_run,
@@ -166,9 +168,9 @@ class SiteAutoUpgradeConfigurator:
     @staticmethod
     def execute(**cfg: Any) -> None:
         """Entry point for menu system - checks MSP privileges."""
-        logging.info("Starting Site Auto-Upgrade Configuration workflow")  # WHY: action-log workflow start.
+        logger.info("Starting Site Auto-Upgrade Configuration workflow")  # WHY: action-log workflow start.
         if cfg.get("dry_run"):  # WHY: advertise dry-run so operator is not surprised.
-            logging.info("DRY-RUN MODE enabled - no API calls will be made")  # WHY: dry-run advert log.
+            logger.info("DRY-RUN MODE enabled - no API calls will be made")  # WHY: dry-run advert log.
         core_deps = SiteAutoUpgradeCoreDeps(  # WHY: bundle 5 always-needed DI params.
             apisession=cfg["apisession"],
             safe_input_fn=cfg["safe_input_fn"],
@@ -183,7 +185,7 @@ class SiteAutoUpgradeConfigurator:
         SiteAutoUpgradeConfigurator._dispatch_mode(  # WHY: delegate MSP-vs-single-org decision to helper.
             core_deps, msp_deps, cfg.get("msp_privileges") or [], cfg["get_org_id_fn"]
         )
-        logging.debug("Exiting SiteAutoUpgradeConfigurator.execute()")  # WHY: trace exit for observability.
+        logger.debug("Exiting SiteAutoUpgradeConfigurator.execute()")  # WHY: trace exit for observability.
 
     @staticmethod
     def _dispatch_mode(
@@ -204,7 +206,7 @@ class SiteAutoUpgradeConfigurator:
 
     def run_msp_mode(self) -> tuple[bool, int]:  # WHY: run the MSP bulk all-sites configuration flow.
         """Execute configuration workflow for MSP mode (all sites)."""
-        logging.debug("Entering run_msp_mode() for org: %s", self.org_name)  # WHY: trace entry.
+        logger.debug("Entering run_msp_mode() for org: %s", self.org_name)  # WHY: trace entry.
         if not self._step1_fetch_sites():  # WHY: sites are required for every downstream step.
             return (False, 0)  # WHY: abort with zero configured on fetch failure.
         self.selected_sites = self.all_sites.copy()  # WHY: MSP mode auto-selects every site.
@@ -212,7 +214,7 @@ class SiteAutoUpgradeConfigurator:
         if not self._msp_ensure_versions():  # WHY: either use pre-shared versions or fetch+auto-pick.
             return (False, 0)  # WHY: abort if versions cannot be resolved.
         success, count = self._apply_auto_upgrade_config()  # WHY: apply the auto-upgrade config to all sites.
-        logging.info(  # WHY: action-log the outcome for later audit.
+        logger.info(  # WHY: action-log the outcome for later audit.
             "MSP mode complete for %s: success=%s, sites=%s", self.org_name, success, count
         )
         return (success, count)  # WHY: propagate success flag and configured-site count.
@@ -233,7 +235,7 @@ class SiteAutoUpgradeConfigurator:
 
     def _auto_select_versions(self) -> bool:  # WHY: auto-pick the most stable version per model.
         """Auto-select firmware versions (latest stable for each model)."""
-        logging.debug("Entering _auto_select_versions()")  # WHY: trace entry.
+        logger.debug("Entering _auto_select_versions()")  # WHY: trace entry.
         if not self.model_version_map:  # WHY: no model->version data means we cannot select anything.
             print("  X No firmware versions available")  # WHY: tell operator nothing can be selected.
             return False  # WHY: abort auto-selection.
@@ -244,14 +246,14 @@ class SiteAutoUpgradeConfigurator:
             selected = _pick_stable_version(versions)  # WHY: choose the stable release for this model.
             self.custom_versions[model] = selected  # WHY: record the chosen version.
             print(f"    {model}: {self.custom_versions[model]}")  # WHY: show selected version.
-        logging.info(  # WHY: action-log the auto-selection outcome.
+        logger.info(  # WHY: action-log the auto-selection outcome.
             "Auto-selected versions for %s model(s)", len(self.custom_versions)
         )
         return bool(self.custom_versions)  # WHY: succeed only if at least one version was chosen.
 
     def _apply_auto_upgrade_config(self) -> tuple[bool, int]:
         """Apply auto-upgrade configuration to all selected sites."""
-        logging.debug("Entering _apply_auto_upgrade_config()")  # WHY: trace entry.
+        logger.debug("Entering _apply_auto_upgrade_config()")  # WHY: trace entry.
         if not self.selected_sites:  # WHY: no sites means nothing to configure.
             return (False, 0)  # WHY: abort with zero configured.
         settings = self._build_auto_upgrade_settings()  # WHY: build the auto-upgrade payload.
@@ -294,7 +296,7 @@ class SiteAutoUpgradeConfigurator:
 
     def run(self) -> None:  # WHY: run the interactive single-org configuration flow.
         """Execute the interactive configuration workflow."""
-        logging.debug("Entering run() for org_id=%s", self.org_id)  # WHY: trace entry.
+        logger.debug("Entering run() for org_id=%s", self.org_id)  # WHY: trace entry.
         _print_intro_header(self.dry_run)  # WHY: print the intro/warning header.
         if not self._step1_fetch_sites():  # WHY: sites are required for every downstream step.
             return  # WHY: abort if no sites could be fetched.
@@ -695,7 +697,7 @@ def _handle_msp_mode(  # WHY: dispatch single-org vs MSP multi-org mode.
     get_org_id_fn: GetOrgIdFn,
 ) -> None:
     """Handle MSP privilege detection and mode selection."""
-    logging.debug("Entering _handle_msp_mode")  # WHY: action-log entry.
+    logger.debug("Entering _handle_msp_mode")  # WHY: action-log entry.
     _print_msp_mode_banner(core.dry_run)  # WHY: print header + optional dry-run warning.
     try:
         mode = (
@@ -729,7 +731,7 @@ def _dispatch_msp_mode_choice(
 ) -> None:
     """Route the operator's mode choice to the correct workflow."""
     if mode == "2":  # WHY: operator chose the multi-org MSP workflow.
-        logging.info("User selected MSP Multi-Org mode")  # WHY: action-log the operator's choice.
+        logger.info("User selected MSP Multi-Org mode")  # WHY: action-log the operator's choice.
         _execute_msp_mode(core, msp)  # WHY: run the MSP multi-org flow.
         return  # WHY: MSP mode owns the rest of the workflow.
     _run_single_org(core, get_org_id_fn)  # WHY: fall back to single-org flow.
@@ -740,7 +742,7 @@ def _run_single_org(  # WHY: run the single-org configuration path.
     get_org_id_fn: GetOrgIdFn,
 ) -> None:
     """Run single-org configuration workflow."""
-    logging.debug("Entering _run_single_org")  # WHY: action-log entry.
+    logger.debug("Entering _run_single_org")  # WHY: action-log entry.
     org_id = get_org_id_fn()  # WHY: prompt operator (or read cache) for the target org id.
     if not org_id:  # WHY: no org id means the operator cancelled or nothing is available.
         print("  X No organization selected")  # WHY: tell operator.
@@ -832,7 +834,7 @@ def _msp_confirm_and_apply(  # WHY: confirm then apply across MSP orgs.
     shared_versions: dict[str, str] | None,
 ) -> None:
     """Display summary, confirm, and apply MSP configuration."""
-    logging.debug("Entering _msp_confirm_and_apply")  # WHY: action-log entry.
+    logger.debug("Entering _msp_confirm_and_apply")  # WHY: action-log entry.
     _display_msp_pre_apply_summary(  # WHY: show planned changes before firing.
         shared_schedule, shared_versions, selected_orgs
     )
@@ -869,13 +871,13 @@ def _apply_msp_config(
     print("\n" + "-" * 70)  # WHY: visual step separator.
     print("  STEP 6: Applying Configuration")  # WHY: step header.
     print("-" * 70)  # WHY: visual section divider.
-    logging.info(  # WHY: action-log the apply step across orgs.
+    logger.info(  # WHY: action-log the apply step across orgs.
         "Applying MSP config across %d org(s)", len(selected_orgs)
     )
     all_results = _apply_to_all_orgs(  # WHY: run the per-org configurator.
         core, selected_orgs, shared_schedule, shared_versions
     )
-    logging.debug("Completed MSP apply across %d org(s)", len(all_results))  # WHY: trace completion.
+    logger.debug("Completed MSP apply across %d org(s)", len(all_results))  # WHY: trace completion.
     _print_msp_summary(all_results, core.dry_run)  # WHY: final results table for operator.
 
 
@@ -884,7 +886,7 @@ def _execute_msp_mode(  # WHY: execute the MSP multi-org flow.
     msp: SiteAutoUpgradeMspDeps,
 ) -> None:
     """Execute MSP multi-organization auto-upgrade configuration."""
-    logging.debug("Entering _execute_msp_mode")  # WHY: action-log entry.
+    logger.debug("Entering _execute_msp_mode")  # WHY: action-log entry.
     if not msp.select_msps_fn or not msp.select_orgs_fn:  # WHY: MSP DI is optional at boundary.
         print("  X MSP functions not available")  # WHY: tell operator.
         return  # WHY: bail out - MSP callables missing.
@@ -941,7 +943,7 @@ def _apply_to_all_orgs(  # WHY: apply shared config to every selected org.
     shared_versions: dict[str, str] | None,
 ) -> list[dict[str, Any]]:
     """Apply configuration to all selected organizations."""
-    logging.debug("Entering _apply_to_all_orgs for %d org(s)", len(selected_orgs))  # WHY: action-log entry.
+    logger.debug("Entering _apply_to_all_orgs for %d org(s)", len(selected_orgs))  # WHY: action-log entry.
     all_results: list[dict[str, Any]] = []  # WHY: accumulate one result dict per org.
     total = len(selected_orgs)  # WHY: cache count for header printing.
     for idx, org_info in enumerate(selected_orgs, start=1):  # WHY: 1-based for operator-visible progress.
@@ -1111,7 +1113,7 @@ def _apply_family_selection(  # WHY: apply the operator's family selection.
     ctx: FamilySelectionContext,
 ) -> None:
     """Apply user's version selection for a model family."""
-    logging.debug(  # WHY: action-log entry with family context.
+    logger.debug(  # WHY: action-log entry with family context.
         "Entering _apply_family_selection for family %s", ctx.family
     )
     if choice and choice.isdigit():  # WHY: numeric choice picks a specific version.
@@ -1384,11 +1386,11 @@ def _perform_site_settings_update(
     if dry_run:  # WHY: dry-run reports what it would do.
         print(f"    [DRY-RUN] {site_name}")  # WHY: report the would-apply.
         return  # WHY: no mutation in dry-run.
-    logging.info("Updating auto-upgrade settings for site %s", site_name)  # WHY: action-log before the API mutation.
+    logger.info("Updating auto-upgrade settings for site %s", site_name)  # WHY: action-log before the API mutation.
     import mistapi.api.v1.sites.setting as sites_setting_api  # WHY: lazy import.
 
     sites_setting_api.updateSiteSettings(apisession, site_id, body=settings)  # WHY: push the updated settings.
-    logging.debug("Updated auto-upgrade settings for site %s", site_name)  # WHY: action-log after the API mutation.
+    logger.debug("Updated auto-upgrade settings for site %s", site_name)  # WHY: action-log after the API mutation.
     print(f"    [OK] {site_name}")  # WHY: report success.
 
 

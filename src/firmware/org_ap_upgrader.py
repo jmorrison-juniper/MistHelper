@@ -16,6 +16,8 @@ from dataclasses import dataclass  # WHY: frozen slots dataclass collapses 11-pa
 from datetime import UTC, datetime, timedelta  # WHY: UTC-aware time math for upgrade scheduling
 from typing import Any  # WHY: Any typing for injected callables and API session handle
 
+logger = logging.getLogger(__name__)  # Keep firmware log records tied to this module.
+
 
 @dataclass(frozen=True, slots=True, kw_only=True)  # WHY: frozen+slots+kw_only per data-model.md contract
 class OrgAPUpgraderConfig:  # WHY: declare OrgAPUpgraderConfig class
@@ -47,12 +49,12 @@ class OrgAPUpgraderConfig:  # WHY: declare OrgAPUpgraderConfig class
 
     def __post_init__(self) -> None:  # WHY: declare private helper __post_init__
         """Validate every field per data-model.md validation-rules table."""
-        logging.info("Validating OrgAPUpgraderConfig for org %s", self.org_id)  # WHY: bracket-open trace
+        logger.info("Validating OrgAPUpgraderConfig for org %s", self.org_id)  # WHY: bracket-open trace
         self._validate_identity()  # WHY: enforce str org_id + non-None apisession
         object.__setattr__(self, "dry_run", bool(self.dry_run))  # WHY: permissive bool coercion (frozen ok)
         self._validate_di_hooks()  # WHY: enforce None-or-callable for the six DI hooks
         self._validate_msp_context()  # WHY: normalize msp_privileges + shape-check selected_msp
-        logging.debug("OrgAPUpgraderConfig validated (org_id=%s)", self.org_id)  # WHY: bracket-close trace
+        logger.debug("OrgAPUpgraderConfig validated (org_id=%s)", self.org_id)  # WHY: bracket-close trace
 
     def _validate_identity(self) -> None:  # WHY: declare private helper _validate_identity
         """Enforce identity-field types per data-model.md validation-rules table."""
@@ -115,7 +117,7 @@ class OrgLevelAPFirmwareUpgrader:
         ``self.<attr>`` surface via ``_apply_config_to_attributes`` so every
         downstream helper continues to read collaborators unchanged.
         """
-        logging.info(  # WHY: bracket-open trace at constructor boundary
+        logger.info(  # WHY: bracket-open trace at constructor boundary
             "Initializing OrgLevelAPFirmwareUpgrader (dry_run=%s)",
             cfg.get("dry_run", False),
         )
@@ -124,7 +126,7 @@ class OrgLevelAPFirmwareUpgrader:
         self._init_selection_state()  # WHY: existing helper, initializes site-scope selection state
         self._init_device_state()  # WHY: existing helper, initializes device/firmware state
         self._init_results_state()  # WHY: existing helper, initializes results tracking state
-        logging.debug(  # WHY: bracket-close trace after init
+        logger.debug(  # WHY: bracket-close trace after init
             "OrgLevelAPFirmwareUpgrader init complete for org %s",
             self._config.org_id,
         )
@@ -136,14 +138,14 @@ class OrgLevelAPFirmwareUpgrader:
         today so no other helper needs to change simultaneously with the
         constructor migration.
         """
-        logging.info(  # WHY: bracket-open trace before rebinding attributes
+        logger.info(  # WHY: bracket-open trace before rebinding attributes
             "Applying config to instance attributes for org %s",
             self._config.org_id,
         )
         self._apply_identity_and_flags()  # WHY: rebind org_id / apisession / dry_run
         self._apply_di_hooks()  # WHY: rebind six DI hooks with sensible fallbacks
         self._apply_msp_context()  # WHY: rebind MSP list (narrowed) + selected_msp
-        logging.debug("Applied %d config fields to instance", 11)  # WHY: bracket-close trace
+        logger.debug("Applied %d config fields to instance", 11)  # WHY: bracket-close trace
 
     def _apply_identity_and_flags(self) -> None:  # WHY: declare private helper _apply_identity_and_flags
         """Rebind identity fields + dry_run flag onto the pre-refactor surface."""
@@ -205,22 +207,22 @@ class OrgLevelAPFirmwareUpgrader:
 
     def run(self) -> None:  # WHY: declare public entry point
         """Entry point that detects MSP privileges and branches accordingly."""
-        logging.info("OrgLevelAPFirmwareUpgrader workflow started, dry_run=%s", self.dry_run)  # WHY: audit workflow ent
+        logger.info("OrgLevelAPFirmwareUpgrader workflow started, dry_run=%s", self.dry_run)  # WHY: audit workflow ent
         if self._try_msp_mode():  # WHY: consume MSP branch when privileges detected and user selects it
             return  # WHY: MSP mode fully handled. No single-org fallthrough
         self._run_single_org_mode()  # WHY: default single-org path
-        logging.debug("OrgLevelAPFirmwareUpgrader.run completed")  # WHY: bracket exit
+        logger.debug("OrgLevelAPFirmwareUpgrader.run completed")  # WHY: bracket exit
 
     def _try_msp_mode(self) -> bool:  # WHY: declare private helper _try_msp_mode
         """Return True when MSP multi-org mode was selected and executed."""
         if not self._has_msp_privileges():  # WHY: guard clause short-circuits non-MSP orgs
             return False  # WHY: fall through to single-org mode
-        logging.debug("MSP privileges detected: %d MSP(s)", len(self._msp_privileges or []))  # WHY: trace count
+        logger.debug("MSP privileges detected: %d MSP(s)", len(self._msp_privileges or []))  # WHY: trace count
         mode = self._prompt_msp_mode()  # WHY: ask user which mode to run
         if mode is None:  # WHY: SystemExit sentinel from prompt helper
             return True  # WHY: treat cancellation as fully-handled (no further action)
         if mode == "2":  # WHY: option 2 == MSP multi-org
-            logging.info("User selected MSP Multi-Org mode")  # WHY: audit selection
+            logger.info("User selected MSP Multi-Org mode")  # WHY: audit selection
             self._execute_msp_mode()  # WHY: run MSP workflow
             return True  # WHY: MSP path finished. Skip single-org
         return False  # WHY: user chose single-org (option 1)
@@ -231,13 +233,13 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _run_single_org_mode(self) -> None:  # WHY: declare private helper _run_single_org_mode
         """Resolve org_id then run the single-org execute workflow."""
-        logging.info("Using single-org mode")  # WHY: audit branch selection
+        logger.info("Using single-org mode")  # WHY: audit branch selection
         org_id = self._resolve_org_id()  # WHY: use injected resolver or existing self.org_id
         if not org_id:  # WHY: guard against empty/missing org selection
             print("  X No organization selected")  # WHY: surface fault to the user
-            logging.warning("No organization selected")  # WHY: audit warning for missing org
+            logger.warning("No organization selected")  # WHY: audit warning for missing org
             return  # WHY: cannot proceed without target org
-        logging.info("Single-org mode: org_id=%s", org_id)  # WHY: audit resolved id
+        logger.info("Single-org mode: org_id=%s", org_id)  # WHY: audit resolved id
         self.org_id = org_id  # WHY: persist for downstream helpers reading self.org_id
         self.execute()  # WHY: dispatch to the multi-step orchestration
 
@@ -273,7 +275,7 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _execute_msp_mode(self) -> None:  # WHY: declare private helper _execute_msp_mode
         """Execute MSP multi-organization upgrade mode via three phase helpers."""
-        logging.info("Starting MSP Multi-Org AP firmware upgrade workflow")  # WHY: workflow entry audit
+        logger.info("Starting MSP Multi-Org AP firmware upgrade workflow")  # WHY: workflow entry audit
         self._print_msp_mode_header()  # WHY: banner + dry-run notice for user
         selected_orgs = self._msp_phase_select()  # WHY: pick MSPs, gather orgs. None on cancel
         if selected_orgs is None:  # WHY: guard cancelled selection - cancel msg already printed
@@ -281,32 +283,32 @@ class OrgLevelAPFirmwareUpgrader:
         if not self._confirm_msp_orgs(selected_orgs):  # WHY: user must confirm before execution
             return  # WHY: exit early on decline
         self._msp_phase_iterate(selected_orgs)  # WHY: drive per-org upgrades + print summary
-        logging.debug("_execute_msp_mode completed for %d orgs", len(selected_orgs))  # WHY: exit trace
+        logger.debug("_execute_msp_mode completed for %d orgs", len(selected_orgs))  # WHY: exit trace
 
     def _msp_phase_select(self) -> list[Any] | None:  # WHY: declare private helper _msp_phase_select
         """MSP phase 1: select MSPs and gather orgs. Returns None if user cancels."""
-        logging.info("MSP phase: select MSPs and collect orgs")  # WHY: phase entry audit
+        logger.info("MSP phase: select MSPs and collect orgs")  # WHY: phase entry audit
         selected_msps = self._select_msps()  # WHY: user picks one or more MSPs
         if not selected_msps:  # WHY: cancellation guard on MSP selection
             print("  X Cancelled - no MSP selected")  # WHY: user-visible cancel notice
-            logging.warning("MSP selection cancelled")  # WHY: audit trail
+            logger.warning("MSP selection cancelled")  # WHY: audit trail
             return None  # WHY: signal cancellation upstream
-        logging.info("User selected %s MSP(s)", len(selected_msps))  # WHY: audit selection count
+        logger.info("User selected %s MSP(s)", len(selected_msps))  # WHY: audit selection count
         selected_orgs = self._collect_orgs_from_msps(selected_msps)  # WHY: expand MSPs -> orgs
         if not selected_orgs:  # WHY: cancellation guard on org selection
             print("  X Cancelled - no organizations selected")  # WHY: user-visible cancel notice
-            logging.warning("Organization selection cancelled")  # WHY: audit trail
+            logger.warning("Organization selection cancelled")  # WHY: audit trail
             return None  # WHY: signal cancellation upstream
-        logging.info("User selected %s organization(s) for upgrade", len(selected_orgs))  # WHY: audit
+        logger.info("User selected %s organization(s) for upgrade", len(selected_orgs))  # WHY: audit
         return selected_orgs  # WHY: hand off to confirm/iterate phases
 
     def _msp_phase_iterate(self, selected_orgs: list[Any]) -> None:  # WHY: declare private helper _msp_phase_iterate
         """MSP phase 3: execute per-org upgrades and print final summary."""
-        logging.info("MSP phase: executing upgrades on %d orgs", len(selected_orgs))  # WHY: phase entry
+        logger.info("MSP phase: executing upgrades on %d orgs", len(selected_orgs))  # WHY: phase entry
         all_results = self._execute_org_upgrades(selected_orgs)  # WHY: drive per-org upgrade workflow
-        logging.info("MSP multi-org upgrade completed: %s organizations processed", len(all_results))  # WHY: audit
+        logger.info("MSP multi-org upgrade completed: %s organizations processed", len(all_results))  # WHY: audit
         self._print_msp_summary(all_results, self.dry_run)  # WHY: user-visible cross-org summary
-        logging.debug("MSP phase iterate complete for %d orgs", len(all_results))  # WHY: exit trace
+        logger.debug("MSP phase iterate complete for %d orgs", len(all_results))  # WHY: exit trace
 
     def _print_msp_mode_header(self) -> None:  # WHY: declare private helper _print_msp_mode_header
         """Print MSP mode header banner."""
@@ -322,7 +324,7 @@ class OrgLevelAPFirmwareUpgrader:
         if self.dry_run:  # WHY: branch on condition
             print("")  # WHY: surface user-facing message
             print("  >> DRY-RUN MODE: No actual upgrades will be performed <<")  # WHY: surface user-facing message
-            logging.debug("Dry-run mode enabled")  # WHY: action-log after operation
+            logger.debug("Dry-run mode enabled")  # WHY: action-log after operation
 
     def _collect_orgs_from_msps(self, selected_msps: list[Any]) -> list[Any]:  # WHY: declare private helper _collect_or
         """Collect orgs from each selected MSP."""
@@ -335,7 +337,7 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _confirm_msp_orgs(self, selected_orgs: list[Any]) -> bool:  # WHY: declare private helper _confirm_msp_orgs
         """Confirm selected orgs before proceeding (PCPP: present -> collect -> decide)."""
-        logging.info("Presenting confirmation for %d orgs", len(selected_orgs))  # WHY: phase entry
+        logger.info("Presenting confirmation for %d orgs", len(selected_orgs))  # WHY: phase entry
         self._present_msp_confirmation(selected_orgs)  # WHY: user-visible confirmation banner
         confirm = self._prompt_msp_confirmation()  # WHY: capture user's Y/n input
         if confirm is None:  # WHY: guard SystemExit sentinel from input helper
@@ -370,21 +372,21 @@ class OrgLevelAPFirmwareUpgrader:
         """Interpret confirmation input and emit final user-visible messaging."""
         if confirm in ["n", "no"]:  # WHY: explicit decline branch
             print("  Cancelled.")  # WHY: user-visible cancel notice
-            logging.warning("User declined MSP multi-org confirmation")  # WHY: audit decline
+            logger.warning("User declined MSP multi-org confirmation")  # WHY: audit decline
             return False  # WHY: signal decline to orchestrator
         print("")  # WHY: blank spacer before confirmation notice
         print(f"  + Confirmed - proceeding with {len(selected_orgs)} organization(s)")  # WHY: user-visible confirm
-        logging.info("User confirmed MSP multi-org upgrade for %s organization(s)", len(selected_orgs))  # WHY: audit
+        logger.info("User confirmed MSP multi-org upgrade for %s organization(s)", len(selected_orgs))  # WHY: audit
         return True  # WHY: proceed with execution phase
 
     def _execute_org_upgrades(self, selected_orgs: list[Any]) -> list[dict[str, Any]]:  # WHY: declare private helper _e
         """Execute upgrade for each selected org via named phase helpers."""
-        logging.info("Executing per-org upgrades across %d org(s)", len(selected_orgs))  # WHY: entry audit
+        logger.info("Executing per-org upgrades across %d org(s)", len(selected_orgs))  # WHY: entry audit
         all_results: list[dict[str, Any]] = []  # WHY: accumulator for cross-org summary
         for idx, org_info in enumerate(selected_orgs, start=1):  # WHY: sequential per-org loop
             result = self._org_phase_process_one(idx, org_info, len(selected_orgs))  # WHY: process a single org
             all_results.append(result)  # WHY: aggregate result for summary phase
-        logging.debug("_execute_org_upgrades produced %d results", len(all_results))  # WHY: exit trace
+        logger.debug("_execute_org_upgrades produced %d results", len(all_results))  # WHY: exit trace
         return all_results  # WHY: hand results to summary printer
 
     def _org_phase_process_one(  # WHY: declare private helper _org_phase_process_one
@@ -394,7 +396,7 @@ class OrgLevelAPFirmwareUpgrader:
         org_id = org_info["id"]  # WHY: extract identifier for spawned upgrader
         org_name = org_info["name"]  # WHY: extract display name for banner + logs
         self._org_phase_print_banner(idx, org_name, total)  # WHY: user-visible org header
-        logging.info("Processing organization %s/%s: %s", idx, total, org_name)  # WHY: audit each org
+        logger.info("Processing organization %s/%s: %s", idx, total, org_name)  # WHY: audit each org
         upgrader = self._org_phase_spawn_upgrader(org_id)  # WHY: build per-org OrgLevel instance
         upgrader.execute()  # WHY: run the full per-org workflow synchronously
         return self._org_phase_collect_result(org_id, org_name, upgrader)  # WHY: harvest stats
@@ -408,7 +410,7 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _org_phase_spawn_upgrader(self, org_id: str) -> OrgLevelAPFirmwareUpgrader:  # WHY: declare private helper _org_
         """Spawn a per-org OrgLevelAPFirmwareUpgrader with propagated DI hooks."""
-        logging.debug("Spawning OrgLevelAPFirmwareUpgrader for org %s", org_id)  # WHY: audit spawn
+        logger.debug("Spawning OrgLevelAPFirmwareUpgrader for org %s", org_id)  # WHY: audit spawn
         return OrgLevelAPFirmwareUpgrader(  # WHY: reuse the same class for each org
             org_id=org_id,  # WHY: scope to the specific org for this iteration
             apisession=self.apisession,  # WHY: share Mist API session
@@ -432,7 +434,7 @@ class OrgLevelAPFirmwareUpgrader:
             "failed": upgrader.failed_api_calls,  # WHY: failed-API count
             "devices": upgrader.total_devices_upgraded,  # WHY: device-count metric
         }
-        logging.debug(
+        logger.debug(
             "Organization %s: success=%s, failed=%s, devices=%s",
             org_name,
             result["success"],
@@ -447,7 +449,7 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _select_msps(self) -> list[Any]:
         """Select MSPs for upgrade."""
-        logging.debug("Entering _select_msps()")  # WHY: action-log after operation
+        logger.debug("Entering _select_msps()")  # WHY: action-log after operation
         print("")  # WHY: surface user-facing message
         print("-" * 70)  # WHY: surface user-facing message
         print("  STEP 1: MSP Selection")  # WHY: surface user-facing message
@@ -461,7 +463,7 @@ class OrgLevelAPFirmwareUpgrader:
             msp_name = self._msp_privileges[0].get("msp_name", "Unknown")  # WHY: compute msp_name
             print(f"  Only one MSP available: {msp_name}")  # WHY: surface user-facing message
             print(f"  + Auto-selected: {msp_name}")  # WHY: surface user-facing message
-            logging.info("Auto-selected single MSP: %s", msp_name)  # WHY: action-log before operation
+            logger.info("Auto-selected single MSP: %s", msp_name)  # WHY: action-log before operation
             return list(self._msp_privileges)  # WHY: return computed result
 
         default_idx = self._find_selected_msp_index()  # WHY: compute default_idx
@@ -512,7 +514,7 @@ class OrgLevelAPFirmwareUpgrader:
             selection
         ):  # Stop early when operator cancels or submits blank without a default.
             print("  Cancelled.")  # Make cancellation obvious in interactive runs.
-            logging.info("MSP selection cancelled")  # Preserve audit trail for operator cancellation.
+            logger.info("MSP selection cancelled")  # Preserve audit trail for operator cancellation.
             return []  # WHY: return computed result
         if self._is_select_all_selection(selection):  # Route explicit bulk selection through dedicated summary logic.
             return self._select_all_msps()  # WHY: return computed result
@@ -553,7 +555,7 @@ class OrgLevelAPFirmwareUpgrader:
         """Return the currently selected MSP as a list."""
         msp = self._selected_msp or {}  # WHY: compute msp
         print(f"  + Using current MSP: {msp.get('msp_name', 'Unknown')}")  # WHY: surface user-facing message
-        logging.debug("Using default MSP: %s", msp.get("msp_name"))  # WHY: action-log after operation
+        logger.debug("Using default MSP: %s", msp.get("msp_name"))  # WHY: action-log after operation
         return [self._selected_msp]  # WHY: return computed result
 
     def _select_all_msps(self) -> list[Any]:  # WHY: declare private helper _select_all_msps
@@ -562,7 +564,7 @@ class OrgLevelAPFirmwareUpgrader:
         print(f"  + Selected ALL {len(self._msp_privileges)} MSP(s):")  # WHY: surface user-facing message
         for msp in self._msp_privileges:  # WHY: iterate collection
             print(f"      - {msp.get('msp_name', 'Unknown')}")  # WHY: surface user-facing message
-        logging.info("User selected ALL %s MSP(s)", len(self._msp_privileges))  # WHY: action-log before operation
+        logger.info("User selected ALL %s MSP(s)", len(self._msp_privileges))  # WHY: action-log before operation
         return list(self._msp_privileges)  # WHY: return computed result
 
     def _select_msps_by_indices(self, selection: str) -> list[Any]:  # WHY: declare private helper _select_msps_by_indic
@@ -570,7 +572,7 @@ class OrgLevelAPFirmwareUpgrader:
         indices = self._parse_selection(selection, len(self._msp_privileges))  # WHY: compute indices
         if not indices:  # WHY: guard against missing precondition
             print("  X Invalid selection")  # WHY: surface user-facing message
-            logging.warning("Invalid MSP selection: %s", selection)  # WHY: surface non-fatal issue
+            logger.warning("Invalid MSP selection: %s", selection)  # WHY: surface non-fatal issue
             return []  # WHY: return computed result
 
         selected = [self._msp_privileges[i] for i in indices]  # WHY: compute selected
@@ -578,17 +580,17 @@ class OrgLevelAPFirmwareUpgrader:
         print(f"  + Selected {len(selected)} MSP(s):")  # WHY: surface user-facing message
         for msp in selected:  # WHY: iterate collection
             print(f"      - {msp.get('msp_name', 'Unknown')}")  # WHY: surface user-facing message
-        logging.info("User selected %s MSP(s)", len(selected))  # WHY: action-log before operation
+        logger.info("User selected %s MSP(s)", len(selected))  # WHY: action-log before operation
         return selected  # WHY: return computed result
 
     def _select_orgs_from_msp(self, msp: dict[str, Any]) -> list[Any]:  # WHY: declare private helper _select_orgs_from_
         """Select organizations from a specific MSP (PCPP: prepare -> compute -> present)."""
-        logging.info("Selecting orgs from MSP %s", msp.get("msp_name"))  # WHY: phase entry audit
+        logger.info("Selecting orgs from MSP %s", msp.get("msp_name"))  # WHY: phase entry audit
         msp_id, msp_name = self._prepare_msp_identity(msp)  # WHY: extract stable id + name
         self._present_msp_org_header(msp_name)  # WHY: user-visible STEP 2 banner
         if self.apisession is None:  # WHY: guard uninitialised session
             print("  X API session not initialized")  # WHY: user-visible error
-            logging.error("API session not initialized for org fetch")  # WHY: audit precondition failure
+            logger.error("API session not initialized for org fetch")  # WHY: audit precondition failure
             return []  # WHY: no orgs can be fetched
         return self._collect_msp_orgs_safely(msp_id, msp_name)  # WHY: wrap fetch+display in try/except
 
@@ -622,45 +624,45 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _fetch_msp_orgs(self, msp_id: str, msp_name: str) -> list[Any]:  # WHY: declare private helper _fetch_msp_orgs
         """Fetch organizations from an MSP."""
-        logging.info("Fetching orgs for MSP %s", msp_name)  # WHY: bracket entry
+        logger.info("Fetching orgs for MSP %s", msp_name)  # WHY: bracket entry
         response = self._call_list_msp_orgs(msp_id)  # WHY: HTTP call isolated for CC hygiene
         orgs = self._extract_msp_orgs(response, msp_name)  # WHY: normalize response into list
         if not orgs:  # WHY: guard against empty MSP inventory
             return []  # WHY: caller handles empty list gracefully
         sorted_orgs = sorted(orgs, key=lambda x: x.get("name", "").lower())  # WHY: alphabetical UX
         print(f"  + Found {len(sorted_orgs)} organization(s) under {msp_name}")  # WHY: user feedback
-        logging.info("Found %s organizations under MSP %s", len(sorted_orgs), msp_name)  # WHY: audit count
+        logger.info("Found %s organizations under MSP %s", len(sorted_orgs), msp_name)  # WHY: audit count
         return sorted_orgs  # WHY: return sorted result
 
     def _call_list_msp_orgs(self, msp_id: str) -> Any:  # WHY: declare private helper _call_list_msp_orgs
         """Invoke listMspOrgs for the supplied MSP id."""
         msp_orgs_api = importlib.import_module("mistapi.api.v1.msps.orgs")  # WHY: late import keeps startup light
-        logging.debug("Calling listMspOrgs for msp_id=%s", msp_id)  # WHY: audit API call
+        logger.debug("Calling listMspOrgs for msp_id=%s", msp_id)  # WHY: audit API call
         return msp_orgs_api.listMspOrgs(self.apisession, msp_id)  # WHY: HTTP round-trip
 
     def _extract_msp_orgs(self, response: Any, msp_name: str) -> list[Any]:  # WHY: declare private helper _extract_msp_
         """Normalize a listMspOrgs response into a list of org dicts."""
-        logging.info("Extracting MSP orgs from response for msp=%s", msp_name)  # WHY: bracket entry with MSP identity
+        logger.info("Extracting MSP orgs from response for msp=%s", msp_name)  # WHY: bracket entry with MSP identity
         if not self._response_has_data(response):  # WHY: guard against network failure/malformed response
             self._warn_msp_fetch_failed(msp_name)  # WHY: emit fault message + audit log
             return []  # WHY: signal empty inventory to caller so it can skip this MSP
         orgs = self._normalize_msp_org_payload(response.data)  # WHY: fold scalar->list and None->[] variants
         if not orgs:  # WHY: empty inventory is a valid but reportable outcome
             self._warn_msp_empty(msp_name)  # WHY: surface empty result to operator + audit log
-        logging.debug("Extracted %d org(s) from MSP %s", len(orgs), msp_name)  # WHY: bracket exit with count
+        logger.debug("Extracted %d org(s) from MSP %s", len(orgs), msp_name)  # WHY: bracket exit with count
         return orgs  # WHY: caller inspects list truthiness to decide next step
 
     @staticmethod
     def _warn_msp_fetch_failed(msp_name: str) -> None:  # WHY: declare private helper _warn_msp_fetch_failed
         """Emit user-visible + audit-log messages when MSP org fetch fails."""
         print(f"  X Failed to fetch organizations from {msp_name}")  # WHY: user-visible fault line
-        logging.warning("Failed to fetch organizations from MSP %s", msp_name)  # WHY: audit trail for operators
+        logger.warning("Failed to fetch organizations from MSP %s", msp_name)  # WHY: audit trail for operators
 
     @staticmethod
     def _warn_msp_empty(msp_name: str) -> None:  # WHY: declare private helper _warn_msp_empty
         """Emit user-visible + audit-log messages when an MSP contains no orgs."""
         print(f"  X No organizations found under {msp_name}")  # WHY: user-visible empty-result line
-        logging.warning("No organizations found under MSP %s", msp_name)  # WHY: audit trail for downstream skip
+        logger.warning("No organizations found under MSP %s", msp_name)  # WHY: audit trail for downstream skip
 
     @staticmethod
     def _normalize_msp_org_payload(raw: Any) -> list[Any]:  # WHY: declare private helper _normalize_msp_org_payload
@@ -693,16 +695,16 @@ class OrgLevelAPFirmwareUpgrader:
             self._read_org_selection_value()
         )  # Reuse normalized input flow so org logic stays focused on outcomes.
         if selection is None:  # Stop quietly when safe_input requests controlled exit.
-            logging.debug("SystemExit during org selection")  # Preserve existing diagnostic event for early exits.
+            logger.debug("SystemExit during org selection")  # Preserve existing diagnostic event for early exits.
             return []  # WHY: return computed result
-        logging.debug("User selection input: '%s'", selection)  # Keep traceability for operator-entered scope.
+        logger.debug("User selection input: '%s'", selection)  # Keep traceability for operator-entered scope.
         if self._should_skip_org_selection(selection):  # Treat quit and blank as intentional MSP skip actions.
             print(f"  Skipping {msp_name}")  # Confirm which MSP branch is being skipped.
-            logging.info("User skipped MSP %s", msp_name)  # Preserve operator choice in logs.
+            logger.info("User skipped MSP %s", msp_name)  # Preserve operator choice in logs.
             return []  # WHY: return computed result
         if self._is_select_all_selection(selection):  # Bulk select needs separate summary output for clarity.
             self._print_all_org_selection(orgs, msp_name)  # Show full list so operator can verify wide scope.
-            logging.info(
+            logger.info(
                 "User selected ALL %s organizations from MSP %s", len(orgs), msp_name
             )  # Keep existing summary logging.
             return orgs  # WHY: return computed result
@@ -740,7 +742,7 @@ class OrgLevelAPFirmwareUpgrader:
         indices = self._parse_selection(selection, len(orgs))  # Convert free-form tokens into zero-based org positions.
         if not indices:  # Reject invalid selections before any orgs are accepted.
             print("  X Invalid selection, skipping this MSP")  # Make skipped scope explicit to operator.
-            logging.warning(
+            logger.warning(
                 "Invalid org selection '%s' for MSP %s", selection, msp_name
             )  # Preserve invalid-input diagnostics.
             return []  # WHY: return computed result
@@ -750,7 +752,7 @@ class OrgLevelAPFirmwareUpgrader:
             f"  + Selected {len(selected)} organization(s) from {msp_name}:"
         )  # Echo exact scope to reduce destructive mistakes.
         self._print_selection_names(selected)  # Keep list formatting identical to ALL-selection summary.
-        logging.info(
+        logger.info(
             "User selected %s organization(s) from MSP %s", len(selected), msp_name
         )  # Preserve existing success logging.
         return selected  # WHY: return computed result
@@ -841,12 +843,12 @@ class OrgLevelAPFirmwareUpgrader:
     @staticmethod
     def _print_msp_summary(results: list[dict[str, Any]], dry_run: bool) -> None:  # WHY: declare private helper _print_
         """Print summary of MSP multi-org upgrade."""
-        logging.info("Printing MSP summary for %d org(s), dry_run=%s", len(results), dry_run)  # WHY: bracket entry
+        logger.info("Printing MSP summary for %d org(s), dry_run=%s", len(results), dry_run)  # WHY: bracket entry
         OrgLevelAPFirmwareUpgrader._print_msp_summary_header(dry_run)  # WHY: emit banner + dry-run notice
         totals = OrgLevelAPFirmwareUpgrader._compute_msp_totals(results)  # WHY: aggregate counters once
         OrgLevelAPFirmwareUpgrader._print_msp_summary_totals(len(results), totals)  # WHY: overall counters
         OrgLevelAPFirmwareUpgrader._print_msp_summary_breakdown(results)  # WHY: per-org detail block
-        logging.debug("MSP summary printed")  # WHY: bracket exit
+        logger.debug("MSP summary printed")  # WHY: bracket exit
 
     @staticmethod
     def _print_msp_summary_header(dry_run: bool) -> None:  # WHY: declare private helper _print_msp_summary_header
@@ -914,11 +916,9 @@ class OrgLevelAPFirmwareUpgrader:
 
     def execute(self) -> None:  # WHY: declare public method execute
         """Execute the org-level AP firmware upgrade workflow."""
-        logging.info(
-            "Starting org-level AP firmware upgrade..."
-        )  # Keep top-level entry log for workflow observability.
-        logging.debug("OrgLevelAPFirmwareUpgrader.execute() initiated")  # Preserve detailed lifecycle tracing.
-        logging.debug("Using org_id: %s", self.org_id)  # Capture current org context before any prompts mutate state.
+        logger.info("Starting org-level AP firmware upgrade...")  # Keep top-level entry log for workflow observability.
+        logger.debug("OrgLevelAPFirmwareUpgrader.execute() initiated")  # Preserve detailed lifecycle tracing.
+        logger.debug("Using org_id: %s", self.org_id)  # Capture current org context before any prompts mutate state.
         self._print_execute_header()  # Show operator-facing banner before interactive workflow starts.
         try:
             if self._run_execute_steps():  # Run ordered steps through shared loop to reduce branching noise.
@@ -944,7 +944,7 @@ class OrgLevelAPFirmwareUpgrader:
         if self.dry_run:  # WHY: branch on condition
             print("")  # WHY: surface user-facing message
             print("  >> DRY-RUN MODE: No actual upgrades will be performed <<")  # WHY: surface user-facing message
-            logging.info("DRY-RUN MODE enabled - no API calls will be made")  # WHY: action-log before operation
+            logger.info("DRY-RUN MODE enabled - no API calls will be made")  # WHY: action-log before operation
 
     # =========================================================================
     # STEP 1: SITE SCOPE SELECTION
@@ -952,7 +952,7 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _step1_select_site_scope(self) -> bool:  # WHY: declare private helper _step1_select_site_scope
         """Select whether to upgrade all sites or specific sites (PCPP)."""
-        logging.info("Prompting for site scope selection")  # WHY: phase entry audit
+        logger.info("Prompting for site scope selection")  # WHY: phase entry audit
         self._present_site_scope_menu()  # WHY: show scope options to user
         choice = self._prompt_site_scope()  # WHY: capture user input
         if choice is None:  # WHY: guard SystemExit sentinel
@@ -978,7 +978,7 @@ class OrgLevelAPFirmwareUpgrader:
         except SystemExit:  # WHY: user aborted via safe_input
             logging.debug("SystemExit during site scope selection")  # WHY: audit abort
             return None  # WHY: signal abort upstream
-        logging.debug("Site scope selection: %s", choice)  # WHY: audit chosen value
+        logger.debug("Site scope selection: %s", choice)  # WHY: audit chosen value
         return choice  # WHY: return normalized input
 
     def _decide_site_scope(self, choice: str) -> bool:  # WHY: declare private helper _decide_site_scope
@@ -987,12 +987,12 @@ class OrgLevelAPFirmwareUpgrader:
             self.target_all_sites = True  # WHY: mark org-wide scope
             self.selected_site_ids = []  # WHY: empty list means all sites
             print("  + Targeting ALL sites in organization")  # WHY: user-visible confirmation
-            logging.info("Org-level upgrade: targeting all sites")  # WHY: audit choice
+            logger.info("Org-level upgrade: targeting all sites")  # WHY: audit choice
             return True  # WHY: proceed to next step
         if choice == "2":  # WHY: specific-sites branch
             return self._select_specific_sites()  # WHY: delegate to sub-picker
         print("  X Invalid selection")  # WHY: user-visible error for other input
-        logging.warning("Invalid site scope selection")  # WHY: audit invalid input
+        logger.warning("Invalid site scope selection")  # WHY: audit invalid input
         return False  # WHY: signal failure to caller
 
     def _select_specific_sites(self) -> bool:  # WHY: declare private helper _select_specific_sites
@@ -1070,7 +1070,7 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _step2_discover_aps(self) -> bool:  # WHY: declare private helper _step2_discover_aps
         """Discover APs from selected scope."""
-        logging.debug("Entering _step2_discover_aps()")  # WHY: action-log after operation
+        logger.debug("Entering _step2_discover_aps()")  # WHY: action-log after operation
         print("")  # WHY: surface user-facing message
         print("-" * 70)  # WHY: surface user-facing message
         print("  STEP 2: Device Discovery")  # WHY: surface user-facing message
@@ -1078,18 +1078,18 @@ class OrgLevelAPFirmwareUpgrader:
 
         if self.target_all_sites:  # WHY: branch on condition
             print("  Fetching all APs from organization...")  # WHY: surface user-facing message
-            logging.debug("Fetching APs from all sites in organization")  # WHY: action-log after operation
+            logger.debug("Fetching APs from all sites in organization")  # WHY: action-log after operation
             return self._fetch_org_aps()  # WHY: return computed result
         print(f"  Fetching APs from {len(self.selected_site_ids)} selected site(s)...")  # WHY: surface user-facing mess
-        logging.debug("Fetching APs from %s selected sites", len(self.selected_site_ids))  # WHY: action-log after opera
+        logger.debug("Fetching APs from %s selected sites", len(self.selected_site_ids))  # WHY: action-log after opera
         return self._fetch_selected_sites_aps()  # WHY: return computed result
 
     def _fetch_org_aps(self) -> bool:  # WHY: declare private helper _fetch_org_aps
         """Fetch all APs from the organization with full pagination (PCPP)."""
-        logging.info("Fetching org APs for %s", self.org_id)  # WHY: phase entry audit
+        logger.info("Fetching org APs for %s", self.org_id)  # WHY: phase entry audit
         if self.apisession is None or self.org_id is None:  # WHY: precondition guard
             print("  X API session or org_id not initialized")  # WHY: user-visible error
-            logging.error("API session or org_id not initialized for AP fetch")  # WHY: audit failure
+            logger.error("API session or org_id not initialized for AP fetch")  # WHY: audit failure
             return False  # WHY: cannot proceed without session/org
         return self._fetch_org_aps_safely()  # WHY: wrap fetch in guarded helper
 
@@ -1107,39 +1107,39 @@ class OrgLevelAPFirmwareUpgrader:
         """Normalize inventory data into self.all_aps and organize by model."""
         if not devices_data:  # WHY: guard empty response
             print("  X Failed to retrieve devices")  # WHY: user-visible error
-            logging.warning("No device data returned from org inventory")  # WHY: audit empty
+            logger.warning("No device data returned from org inventory")  # WHY: audit empty
             return False  # WHY: nothing to process
         self.all_aps = self._filter_ap_devices(devices_data)  # WHY: keep AP-type devices only
         if not self.all_aps:  # WHY: guard zero APs
             print("  X No access points found in organization")  # WHY: user-visible error
-            logging.warning("No APs found in organization")  # WHY: audit zero-AP condition
+            logger.warning("No APs found in organization")  # WHY: audit zero-AP condition
             return False  # WHY: nothing to upgrade
-        logging.info("Discovered %s APs in organization", len(self.all_aps))  # WHY: audit count
+        logger.info("Discovered %s APs in organization", len(self.all_aps))  # WHY: audit count
         return self._organize_aps_by_model()  # WHY: build model->APs mapping
 
     def _get_org_inventory(self) -> list[Any]:  # WHY: declare private helper _get_org_inventory
         """Retrieve org inventory with pagination."""
-        logging.info("Retrieving org inventory for org_id=%s", self.org_id)  # WHY: trace entry into inventory fetch
+        logger.info("Retrieving org inventory for org_id=%s", self.org_id)  # WHY: trace entry into inventory fetch
         if not self._has_apisession():  # WHY: guard clause on missing session
             return []  # WHY: bail out with empty inventory
         response = self._call_get_org_inventory()  # WHY: single API-boundary helper for CC reduction
         if not self._response_has_data(response):  # WHY: reuse existing response-shape predicate
             return []  # WHY: no data available, return empty list
         devices_data = self._collect_paginated_inventory(response)  # WHY: normalize paginated data into a list
-        logging.debug("Retrieved %d device(s) from org inventory", len(devices_data))  # WHY: post-op observability
+        logger.debug("Retrieved %d device(s) from org inventory", len(devices_data))  # WHY: post-op observability
         return devices_data  # WHY: return normalized inventory list
 
     def _has_apisession(self) -> bool:  # WHY: declare private helper _has_apisession
         """Guard predicate confirming API session is present."""
         if self.apisession is None:  # WHY: single check keeps caller CC low
             print("  X API session not initialized")  # WHY: user-visible diagnostic
-            logging.error("API session not initialized for org %s", self.org_id)  # WHY: audit log for missing session
+            logger.error("API session not initialized for org %s", self.org_id)  # WHY: audit log for missing session
             return False  # WHY: signal caller to abort
         return True  # WHY: session available, continue
 
     def _call_get_org_inventory(self) -> Any:  # WHY: declare private helper _call_get_org_inventory
         """Invoke mistapi getOrgInventory and return the raw response."""
-        logging.info("Calling getOrgInventory for org %s", self.org_id)  # WHY: trace API-boundary call
+        logger.info("Calling getOrgInventory for org %s", self.org_id)  # WHY: trace API-boundary call
         org_inventory_api = importlib.import_module("mistapi.api.v1.orgs.inventory")  # WHY: lazy import to keep top of
         response = org_inventory_api.getOrgInventory(  # WHY: paginated AP inventory fetch
             self.apisession,
@@ -1147,12 +1147,12 @@ class OrgLevelAPFirmwareUpgrader:
             type="ap",
             limit=1000,  # WHY: cap page size to reduce round-trips
         )
-        logging.debug("getOrgInventory returned response=%s", bool(response))  # WHY: post-op observability
+        logger.debug("getOrgInventory returned response=%s", bool(response))  # WHY: post-op observability
         return response  # WHY: hand raw response to shape predicate
 
     def _collect_paginated_inventory(self, response: Any) -> list[Any]:  # WHY: declare private helper _collect_paginate
         """Normalize mistapi paginated response into a list."""
-        logging.info("Collecting paginated inventory for org %s", self.org_id)  # WHY: trace pagination step
+        logger.info("Collecting paginated inventory for org %s", self.org_id)  # WHY: trace pagination step
         import mistapi  # WHY: lazy import. Only needed for pagination helper
 
         devices_data = mistapi.get_all(response=response, mist_session=self.apisession)  # WHY: exhaust pagination curso
@@ -1160,7 +1160,7 @@ class OrgLevelAPFirmwareUpgrader:
             normalized = [devices_data] if devices_data else []  # WHY: coerce scalar to list-of-one or empty list
         else:
             normalized = devices_data  # WHY: already the expected shape
-        logging.debug("Paginated inventory normalized to %d device(s)", len(normalized))  # WHY: post-op observability
+        logger.debug("Paginated inventory normalized to %d device(s)", len(normalized))  # WHY: post-op observability
         return normalized  # WHY: return uniform list to caller
 
     @staticmethod
@@ -1196,25 +1196,25 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _fetch_site_aps(self, site_id: str, site_name: str) -> list[Any]:  # WHY: declare private helper _fetch_site_aps
         """Fetch APs from a single site."""
-        logging.info("Fetching APs from site %s (id=%s)", site_name, site_id)  # WHY: trace entry into per-site fetch
+        logger.info("Fetching APs from site %s (id=%s)", site_name, site_id)  # WHY: trace entry into per-site fetch
         print(f"    Fetching APs from {site_name}...")  # WHY: user-visible progress line
         response = self._call_list_site_devices(site_id)  # WHY: single API-boundary helper for CC reduction
         if not self._site_response_has_devices(response):  # WHY: guard predicate handles empty / missing data
             return []  # WHY: bail early with empty list
         site_aps = self._normalize_site_devices(response)  # WHY: coerce data payload into a list of devices
         self._tag_devices_with_site(site_aps, site_id, site_name)  # WHY: annotate every AP with originating site
-        logging.debug("Fetched %d AP(s) from site %s", len(site_aps), site_name)  # WHY: post-op observability
+        logger.debug("Fetched %d AP(s) from site %s", len(site_aps), site_name)  # WHY: post-op observability
         return site_aps  # WHY: return tagged list to caller
 
     def _call_list_site_devices(self, site_id: str) -> Any:  # WHY: declare private helper _call_list_site_devices
         """Invoke mistapi listSiteDevices for the given site."""
-        logging.info("Calling listSiteDevices for site %s", site_id)  # WHY: trace API-boundary call
+        logger.info("Calling listSiteDevices for site %s", site_id)  # WHY: trace API-boundary call
         import mistapi.api.v1.sites.devices  # WHY: lazy import to avoid module-load cost
 
         response = mistapi.api.v1.sites.devices.listSiteDevices(  # WHY: filtered listing by AP type
             self.apisession, site_id, type="ap"
         )
-        logging.debug("listSiteDevices returned response=%s", bool(response))  # WHY: post-op observability
+        logger.debug("listSiteDevices returned response=%s", bool(response))  # WHY: post-op observability
         return response  # WHY: hand raw response back for shape validation
 
     @staticmethod
@@ -1256,17 +1256,17 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _step3_fetch_firmware_stats(self) -> bool:  # WHY: declare private helper _step3_fetch_firmware_stats
         """Fetch current firmware versions for all discovered APs."""
-        logging.debug("Entering _step3_fetch_firmware_stats()")  # WHY: action-log after operation
+        logger.debug("Entering _step3_fetch_firmware_stats()")  # WHY: action-log after operation
         self._print_step3_header()  # WHY: advance computation
 
         if self.apisession is None or self.org_id is None:  # WHY: branch on condition
             print("  X API session or org_id not initialized")  # WHY: surface user-facing message
-            logging.error("API session or org_id not initialized for firmware stats")  # WHY: surface fatal issue
+            logger.error("API session or org_id not initialized for firmware stats")  # WHY: surface fatal issue
             return False  # WHY: return computed result
 
         try:
             self._populate_ap_versions()  # WHY: advance computation
-            logging.info("Retrieved firmware versions for %s devices", len(self.ap_versions))  # WHY: action-log before
+            logger.info("Retrieved firmware versions for %s devices", len(self.ap_versions))  # WHY: action-log before
             self._display_version_distribution()  # WHY: advance computation
             return True  # WHY: return computed result
         except Exception as error:  # WHY: handle expected error
@@ -1388,21 +1388,21 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _step4_fetch_available_firmware(self) -> bool:  # WHY: declare private helper _step4_fetch_available_firmware
         """Fetch available firmware versions for each model."""
-        logging.debug("Entering _step4_fetch_available_firmware()")  # WHY: action-log after operation
+        logger.debug("Entering _step4_fetch_available_firmware()")  # WHY: action-log after operation
         self._print_step4_header()  # WHY: advance computation
 
         if self.apisession is None or self.org_id is None:  # WHY: branch on condition
             print("  X API session or org_id not initialized")  # WHY: surface user-facing message
-            logging.error("API session or org_id not initialized for firmware fetch")  # WHY: surface fatal issue
+            logger.error("API session or org_id not initialized for firmware fetch")  # WHY: surface fatal issue
             return False  # WHY: return computed result
 
         try:
             if not self._load_available_versions():  # WHY: guard against missing precondition
                 print("  X Failed to retrieve available firmware versions")  # WHY: surface user-facing message
-                logging.warning("Failed to load available firmware versions")  # WHY: surface non-fatal issue
+                logger.warning("Failed to load available firmware versions")  # WHY: surface non-fatal issue
                 return False  # WHY: return computed result
 
-            logging.debug("Loaded %s firmware version entries", len(self.available_versions))  # WHY: action-log after o
+            logger.debug("Loaded %s firmware version entries", len(self.available_versions))  # WHY: action-log after o
             self._build_model_version_mapping()  # WHY: advance computation
             return self._display_version_summary()  # WHY: return computed result
 
@@ -1435,10 +1435,10 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _build_model_version_mapping(self) -> None:  # WHY: declare private helper _build_model_version_mapping
         """Build model-to-versions mapping from available_versions."""
-        logging.info("Building model->versions mapping from %d version entries", len(self.available_versions))
+        logger.info("Building model->versions mapping from %d version entries", len(self.available_versions))
         for version_info in self.available_versions:  # WHY: single loop reduces branching in caller
             self._accumulate_version_entry(version_info)  # WHY: each entry handled by predicate + append helper
-        logging.debug("Model->versions mapping now covers %d model(s)", len(self.model_version_ranges))  # WHY: post-op
+        logger.debug("Model->versions mapping now covers %d model(s)", len(self.model_version_ranges))  # WHY: post-op
 
     def _accumulate_version_entry(self, version_info: Any) -> None:  # WHY: declare private helper _accumulate_version_e
         """Add a single version entry to the model->versions mapping."""
@@ -1473,7 +1473,7 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _step5_select_firmware_versions(self) -> bool:  # WHY: declare private helper _step5_select_firmware_versions
         """Let user select firmware version for each model."""
-        logging.debug("Entering _step5_select_firmware_versions()")  # WHY: action-log after operation
+        logger.debug("Entering _step5_select_firmware_versions()")  # WHY: action-log after operation
         print("")  # WHY: surface user-facing message
         print("-" * 70)  # WHY: surface user-facing message
         print("  STEP 5: Firmware Version Selection")  # WHY: surface user-facing message
@@ -1483,10 +1483,10 @@ class OrgLevelAPFirmwareUpgrader:
 
         if not model_selections:  # WHY: guard against missing precondition
             print("\n  X No upgrades selected")  # WHY: surface user-facing message
-            logging.warning("No firmware versions selected by user")  # WHY: surface non-fatal issue
+            logger.warning("No firmware versions selected by user")  # WHY: surface non-fatal issue
             return False  # WHY: return computed result
 
-        logging.info("User selected firmware for %s model(s)", len(model_selections))  # WHY: action-log before operatio
+        logger.info("User selected firmware for %s model(s)", len(model_selections))  # WHY: action-log before operatio
         self._organize_by_version(model_selections)  # WHY: advance computation
         return True  # WHY: return computed result
 
@@ -1637,7 +1637,7 @@ class OrgLevelAPFirmwareUpgrader:
         """Record skipped devices, emit confirmation, and build plan entry."""
         self._record_already_at_target_devices(len(devices), len(devices_needing))  # WHY: track skipped devices
         print(f"    + Selected {target_version} for {len(devices_needing)} device(s)")  # WHY: user-visible confirm
-        logging.debug("Version %s applied to %d devices", target_version, len(devices_needing))  # WHY: audit
+        logger.debug("Version %s applied to %d devices", target_version, len(devices_needing))  # WHY: audit
         return {"version": target_version, "devices": devices_needing}  # WHY: plan entry for orchestrator
 
     @staticmethod
@@ -1731,11 +1731,11 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _organize_by_version(self, model_selections: dict[str, Any]) -> None:  # WHY: declare private helper _organize_b
         """Reorganize selections by version for org-level API."""
-        logging.info("Organizing %d model selection(s) by version", len(model_selections))  # WHY: trace entry
+        logger.info("Organizing %d model selection(s) by version", len(model_selections))  # WHY: trace entry
         self._accumulate_version_buckets(model_selections)  # WHY: mutate upgrade_plan in a single helper
         self._print_upgrade_plan_summary()  # WHY: user-visible per-version summary
         self._print_api_efficiency_summary()  # WHY: user-visible API-call count report
-        logging.debug("Upgrade plan now contains %d version bucket(s)", len(self.upgrade_plan))  # WHY: post-op observab
+        logger.debug("Upgrade plan now contains %d version bucket(s)", len(self.upgrade_plan))  # WHY: post-op observab
 
     def _accumulate_version_buckets(self, model_selections: dict[str, Any]) -> None:  # WHY: declare private helper _acc
         """Populate self.upgrade_plan by rearranging model->version into version->models."""
@@ -1772,14 +1772,14 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _step6_configure_upgrade(self) -> bool:  # WHY: declare private helper _step6_configure_upgrade
         """Configure upgrade parameters."""
-        logging.info("Entering _step6_configure_upgrade()")  # WHY: trace entry into step 6
+        logger.info("Entering _step6_configure_upgrade()")  # WHY: trace entry into step 6
         self._print_step6_header()  # WHY: user-visible step banner
         if not self._run_configuration_stages():  # WHY: table-driven stage runner keeps CC low
             return False  # WHY: any stage cancellation aborts step 6
         if not self._apply_default_settings():  # WHY: fill in defaults after user answers
             return False  # WHY: defaults failure aborts step 6
         self._display_configuration()  # WHY: show the composed configuration to user
-        logging.info("Upgrade configuration complete: %s", self.upgrade_config)  # WHY: audit final config payload
+        logger.info("Upgrade configuration complete: %s", self.upgrade_config)  # WHY: audit final config payload
         return True  # WHY: step 6 succeeded
 
     def _run_configuration_stages(self) -> bool:  # WHY: declare private helper _run_configuration_stages
@@ -1792,7 +1792,7 @@ class OrgLevelAPFirmwareUpgrader:
         )
         for stage_fn, cancel_msg in stages:  # WHY: single loop keeps caller CC at 2
             if not stage_fn():  # WHY: each stage returns bool
-                logging.info(cancel_msg)  # WHY: audit which stage cancelled
+                logger.info(cancel_msg)  # WHY: audit which stage cancelled
                 return False  # WHY: propagate cancellation upward
         return True  # WHY: all stages accepted user input
 
@@ -1889,7 +1889,7 @@ class OrgLevelAPFirmwareUpgrader:
         is_for_reboot: bool = False,
     ) -> str | None:
         """Parse time input to ISO 8601 format."""
-        logging.info("Parsing time input=%r is_for_reboot=%s", time_str, is_for_reboot)  # WHY: trace parser entry
+        logger.info("Parsing time input=%r is_for_reboot=%s", time_str, is_for_reboot)  # WHY: trace parser entry
         if self._is_immediate_time(time_str):  # WHY: guard clause on empty / 'now' sentinel
             return None  # WHY: immediate execution has no ISO stamp
         normalized = time_str.strip()  # WHY: single normalization for downstream parsers
@@ -1898,10 +1898,10 @@ class OrgLevelAPFirmwareUpgrader:
         for strategy in (self._try_parse_relative, self._try_parse_after):  # WHY: table-driven strategy list (R-5)
             matched, value = self._resolve_time_strategy(strategy, ctx)  # WHY: bool tuple replaces sentinel
             if matched:  # WHY: bool tuple element narrows dispatcher outcome without object type
-                logging.debug("_parse_time_input resolved via %s", strategy.__name__)  # WHY: audit which parser hit
+                logger.debug("_parse_time_input resolved via %s", strategy.__name__)  # WHY: audit which parser hit
                 return value  # WHY: return final ISO string or None
         result = self._parse_absolute_time(normalized, use_site_local)  # WHY: fall-through to absolute-time parser
-        logging.debug("_parse_time_input absolute result=%s", result)  # WHY: post-op observability
+        logger.debug("_parse_time_input absolute result=%s", result)  # WHY: post-op observability
         return result  # WHY: return absolute-time parser result
 
     @staticmethod
@@ -1928,13 +1928,13 @@ class OrgLevelAPFirmwareUpgrader:
         use_site_local: bool,
     ) -> str | None:
         """Try parsing 'X after' format. Returns None if not matching, '' for no result."""
-        logging.info("Trying 'after' parser on input=%r", time_str)  # WHY: trace parser entry
+        logger.info("Trying 'after' parser on input=%r", time_str)  # WHY: trace parser entry
         if "after" not in time_str.lower():  # WHY: fast-exit predicate for non-matching input
             return None  # WHY: signal 'not this format'
         if self._reboot_relative_disallowed(is_for_reboot, use_site_local):  # WHY: single predicate for combined-mode g
             return ""  # WHY: matched but produced no result
         result = self._compute_after_offset(time_str, base_datetime)  # WHY: extracted arithmetic helper keeps CC low
-        logging.debug("_try_parse_after result=%r", result)  # WHY: post-op observability
+        logger.debug("_try_parse_after result=%r", result)  # WHY: post-op observability
         return result  # WHY: return offset stamp or '' fallthrough
 
     def _reboot_relative_disallowed(self, is_for_reboot: bool, use_site_local: bool) -> bool:  # WHY: private helper
@@ -2217,14 +2217,14 @@ class OrgLevelAPFirmwareUpgrader:
     @staticmethod
     def _parse_canary_phase_values(phases_input: str) -> list[int] | None:  # WHY: declare private helper _parse_canary_
         """Parse comma-separated canary phases."""
-        logging.info("Parsing canary phase input=%r", phases_input)  # WHY: bracket entry with sanitized user input
+        logger.info("Parsing canary phase input=%r", phases_input)  # WHY: bracket entry with sanitized user input
         phases = OrgLevelAPFirmwareUpgrader._tokenize_canary_phases(phases_input)  # WHY: strict integer tokenization
         if phases is None:  # WHY: tokenizer returns None when any token failed int() conversion
             return None  # WHY: propagate parse failure so caller falls back to default plan
         if not OrgLevelAPFirmwareUpgrader._canary_phases_in_range(phases):  # WHY: enforce 1..100 percentage bounds
-            logging.debug("Canary phases rejected: empty or out-of-range")  # WHY: bracket rejection reason
+            logger.debug("Canary phases rejected: empty or out-of-range")  # WHY: bracket rejection reason
             return None  # WHY: reject empty or out-of-range phase lists to prevent invalid API payloads
-        logging.debug("Canary phases accepted: %s", phases)  # WHY: bracket successful acceptance
+        logger.debug("Canary phases accepted: %s", phases)  # WHY: bracket successful acceptance
         return phases  # WHY: return validated integer wave plan
 
     @staticmethod
@@ -2254,13 +2254,13 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _configure_canary_phases(self) -> bool:  # WHY: declare private helper _configure_canary_phases
         """Configure canary phase percentages."""
-        logging.info("Configuring canary phases")  # WHY: bracket entry to phase configuration
+        logger.info("Configuring canary phases")  # WHY: bracket entry to phase configuration
         self._canary_phase_present()  # WHY: emit banner + wave-format guidance
         phases_input = self._canary_phase_prompt()  # WHY: gather user rollout string via safe_input
         if phases_input is None:  # WHY: SystemExit sentinel from prompt helper
             return False  # WHY: abort configuration when user interrupts
         result = self._canary_phase_apply(phases_input)  # WHY: parse + persist phase plan
-        logging.debug("_configure_canary_phases result=%s", result)  # WHY: bracket completion
+        logger.debug("_configure_canary_phases result=%s", result)  # WHY: bracket completion
         return result  # WHY: propagate success to Step 6 orchestrator
 
     def _canary_phase_present(self) -> None:  # WHY: declare private helper _canary_phase_present
@@ -2457,14 +2457,14 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _step7_confirm_and_execute(self) -> bool:  # WHY: declare private helper _step7_confirm_and_execute
         """Confirm upgrade plan and execute."""
-        logging.debug("Entering _step7_confirm_and_execute()")  # WHY: action-log after operation
+        logger.debug("Entering _step7_confirm_and_execute()")  # WHY: action-log after operation
         self._print_step7_header()  # WHY: advance computation
         self._display_upgrade_summary()  # WHY: advance computation
         self._display_version_breakdown()  # WHY: advance computation
 
         if self.dry_run:  # WHY: branch on condition
             print("\n  >> DRY-RUN: Simulating execution <<")  # WHY: surface user-facing message
-            logging.debug("Executing dry-run simulation")  # WHY: action-log after operation
+            logger.debug("Executing dry-run simulation")  # WHY: action-log after operation
             return self._execute_dry_run()  # WHY: return computed result
 
         return self._confirm_and_execute_live()  # WHY: return computed result
@@ -2497,7 +2497,7 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _confirm_and_execute_live(self) -> bool:  # WHY: declare private helper _confirm_and_execute_live
         """Confirm and execute live upgrade."""
-        logging.debug("Entering _confirm_and_execute_live()")  # WHY: action-log after operation
+        logger.debug("Entering _confirm_and_execute_live()")  # WHY: action-log after operation
         self._print_destructive_warning()  # WHY: advance computation
 
         try:
@@ -2506,14 +2506,14 @@ class OrgLevelAPFirmwareUpgrader:
             logging.debug("SystemExit during upgrade confirmation")  # WHY: action-log after operation
             return False  # WHY: return computed result
 
-        logging.debug("User confirmation input: '%s'", confirm)  # WHY: action-log after operation
+        logger.debug("User confirmation input: '%s'", confirm)  # WHY: action-log after operation
 
         if confirm != "UPGRADE":  # WHY: branch on condition
             print("  X Upgrade cancelled")  # WHY: surface user-facing message
-            logging.warning("User cancelled upgrade - confirmation failed")  # WHY: surface non-fatal issue
+            logger.warning("User cancelled upgrade - confirmation failed")  # WHY: surface non-fatal issue
             return False  # WHY: return computed result
 
-        logging.info("User confirmed upgrade - executing")  # WHY: action-log before operation
+        logger.info("User confirmed upgrade - executing")  # WHY: action-log before operation
         return self._execute_upgrades()  # WHY: return computed result
 
     @staticmethod
@@ -2540,11 +2540,11 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _print_dry_run_entry(self, version: str, data: dict[str, Any]) -> None:  # WHY: declare private helper _print_dr
         """Print a single dry-run upgrade entry."""
-        logging.info("Rendering dry-run entry for version=%s device_count=%d", version, len(data["device_ids"]))
+        logger.info("Rendering dry-run entry for version=%s device_count=%d", version, len(data["device_ids"]))
         summary = self._build_dry_run_summary(version, data)  # WHY: separate prepare from present per PCPP
         self._render_dry_run_summary(summary)  # WHY: emit prepared summary to stdout
         self._print_dry_run_extras()  # WHY: append optional canary/P2P details when configured
-        logging.debug("Dry-run entry rendered for version=%s", version)  # WHY: bracket exit
+        logger.debug("Dry-run entry rendered for version=%s", version)  # WHY: bracket exit
 
     def _build_dry_run_summary(self, version: str, data: dict[str, Any]) -> dict[str, str]:  # WHY: declare private help
         """Assemble the printable fields for a dry-run upgrade entry."""
@@ -2615,12 +2615,12 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _execute_upgrades(self) -> bool:  # WHY: declare private helper _execute_upgrades
         """Execute actual org-level upgrades."""
-        logging.info("Executing org-level AP firmware upgrades")  # WHY: bracket entry for observability
+        logger.info("Executing org-level AP firmware upgrades")  # WHY: bracket entry for observability
         if not self._upgrade_phase_precheck():  # WHY: guard against missing session/org before API calls
             return False  # WHY: propagate failure to run() orchestrator
         self._upgrade_phase_dispatch()  # WHY: iterate upgrade plan invoking single-version helper
         self._upgrade_phase_report()  # WHY: emit counters summary to the user
-        logging.debug(
+        logger.debug(
             "_execute_upgrades completed with successful=%d failed=%d",
             self.successful_api_calls,
             self.failed_api_calls,
@@ -2632,7 +2632,7 @@ class OrgLevelAPFirmwareUpgrader:
         print("\n  Executing org-level upgrades...")  # WHY: user-visible banner for phase begin
         if self.apisession is None or self.org_id is None:  # WHY: guard clause avoids AttributeError deeper in stack
             print("  X API session or org_id not initialized")  # WHY: surface the fault to the user
-            logging.error("API session or org_id not initialized for upgrade execution")  # WHY: audit trail
+            logger.error("API session or org_id not initialized for upgrade execution")  # WHY: audit trail
             return False  # WHY: signal precheck failure to orchestrator
         return True  # WHY: prerequisites satisfied
 
@@ -2649,7 +2649,7 @@ class OrgLevelAPFirmwareUpgrader:
         print(f"    - Successful API Calls: {self.successful_api_calls}")  # WHY: report success counter
         print(f"    - Failed API Calls: {self.failed_api_calls}")  # WHY: report failure counter
         print(f"    - Total Devices: {self.total_devices_upgraded}")  # WHY: report devices touched
-        logging.info(  # WHY: emit structured summary for log consumers
+        logger.info(  # WHY: emit structured summary for log consumers
             "Org-level upgrade execution complete: successful=%s, failed=%s, total_devices=%s",
             self.successful_api_calls,
             self.failed_api_calls,
@@ -2665,11 +2665,11 @@ class OrgLevelAPFirmwareUpgrader:
         """Execute upgrade for a single version."""
         models_str = ", ".join(data["models"])  # WHY: compute models_str
         print(f"\n  Upgrading to {version} ({models_str})...")  # WHY: surface user-facing message
-        logging.info("Processing upgrade to version %s for models: %s", version, models_str)  # WHY: action-log before o
+        logger.info("Processing upgrade to version %s for models: %s", version, models_str)  # WHY: action-log before o
 
         body = self._build_upgrade_body(version, data)  # WHY: compute body
 
-        logging.debug("Upgrade API body: %s", body)  # WHY: action-log after operation
+        logger.debug("Upgrade API body: %s", body)  # WHY: action-log after operation
         if self._is_debug_fn():  # WHY: branch on condition
             print(f"    API Body: {body}")  # WHY: surface user-facing message
 
@@ -2739,13 +2739,13 @@ class OrgLevelAPFirmwareUpgrader:
         data: dict[str, Any],
     ) -> None:
         """Process the response from an upgrade API call."""
-        logging.info("Processing upgrade response for version %s", version)  # WHY: bracket entry
+        logger.info("Processing upgrade response for version %s", version)  # WHY: bracket entry
         if not self._response_has_data(response):  # WHY: guard clause for empty/invalid response
             self._record_upgrade_failure()  # WHY: increment failure counter and notify user
             return  # WHY: exit early on missing response payload
         upgrade_id = self._extract_upgrade_id(response)  # WHY: pull the upgrade job id when available
         self._record_upgrade_success(upgrade_id, version, data)  # WHY: persist per-device result rows
-        logging.debug("_process_upgrade_response recorded %d devices", len(data["device_ids"]))  # WHY: bracket exit
+        logger.debug("_process_upgrade_response recorded %d devices", len(data["device_ids"]))  # WHY: bracket exit
 
     @staticmethod
     def _response_has_data(response: Any) -> bool:  # WHY: declare private helper _response_has_data
@@ -2786,9 +2786,9 @@ class OrgLevelAPFirmwareUpgrader:
 
     def _step8_write_results(self) -> None:  # WHY: declare private helper _step8_write_results
         """Write upgrade results to file."""
-        logging.debug("Entering _step8_write_results()")  # WHY: action-log after operation
+        logger.debug("Entering _step8_write_results()")  # WHY: action-log after operation
         if not self.results:  # WHY: guard against missing precondition
-            logging.debug("No results to write")  # WHY: action-log after operation
+            logger.debug("No results to write")  # WHY: action-log after operation
             return  # WHY: return early
 
         filename = os.path.join("data", "org_level_ap_upgrade_results.csv")  # WHY: compute filename
@@ -2796,7 +2796,7 @@ class OrgLevelAPFirmwareUpgrader:
             if self._write_results_fn:  # WHY: branch on condition
                 self._write_results_fn(self.results, filename, api_function_name="orgLevelAPFirmwareUpgrade")  # WHY: xx
             print(f"\n  Results written to: {filename}")  # WHY: surface user-facing message
-            logging.info("Upgrade results written to: %s", filename)  # WHY: action-log before operation
+            logger.info("Upgrade results written to: %s", filename)  # WHY: action-log before operation
         except Exception as exc:  # WHY: handle expected error
             print(f"  X Failed to write results: {exc}")  # WHY: surface user-facing message
             logging.error("Failed to write upgrade results: %s", exc)  # WHY: surface fatal issue
