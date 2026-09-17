@@ -20,6 +20,8 @@ from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 
+logger = logging.getLogger(__name__)  # WHY: name each record for this module, not the root logger.
+
 
 class AuditAnalysisOps:
     """Menu #25: Audit Log Analysis operations."""
@@ -30,7 +32,7 @@ class AuditAnalysisOps:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if mh.IS_TEST_MODE:  # Use a fixed time range so --test runs without interactive input.
             return "7d"  # Default to 7 days in test mode. Skips the safe_input prompt.
-        logging.warning(  # Uses warning level so the hint shows by default (#886).
+        logger.warning(  # Uses warning level so the hint shows by default (#886).
             "Time range examples: 7d, 4w, 3m, 1y, 6w-2w (6 weeks ago to 2 weeks ago)"
         )
         raw = mh.InputUtils.safe_input("Enter time range [7d]: ", context="audit_analysis")
@@ -42,14 +44,14 @@ class AuditAnalysisOps:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         api_kwargs = TimeRangeParser.to_api_kwargs(time_range)  # Convert to API start/end params.
         try:
-            logging.info(
+            logger.info(
                 "Fetching audit logs for org %s with range %s",
                 org_id,
                 time_range.description,
             )  # Log before API call.
             response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(mh.apisession, org_id, **api_kwargs, limit=1000)
             entries = mistapi.get_all(response=response, mist_session=mh.apisession) or []
-            logging.debug("Retrieved %d raw audit log entries", len(entries))
+            logger.debug("Retrieved %d raw audit log entries", len(entries))
             return entries  # WHY: mistapi.get_all returns list[Any], list[dict] is the concrete type per Mist docs.
         except Exception as exc:  # API-side exceptions are logged and swallowed by design.
             logging.error("API call failed: %s", exc)  # Log API failure with context.
@@ -61,10 +63,10 @@ class AuditAnalysisOps:
         renderer = AuditReportRenderer()  # Initialize report generator.
         md_path = os.path.join("data", "OrgAuditAnalysis.md")  # Mermaid timeline output path.
         renderer.render_mermaid(analysis, md_path)
-        logging.warning("Mermaid report: %s", md_path)  # Uses warning level so the operator sees the path (#886).
+        logger.warning("Mermaid report: %s", md_path)  # Uses warning level so the operator sees the path (#886).
         html_path = os.path.join("data", "OrgAuditAnalysis.html")  # Interactive HTML output path.
         renderer.render_html(analysis, html_path)
-        logging.warning("HTML report: %s", html_path)  # Uses warning level so the operator sees the path (#886).
+        logger.warning("HTML report: %s", html_path)  # Uses warning level so the operator sees the path (#886).
 
     @staticmethod
     def audit_log_analysis() -> None:
@@ -82,16 +84,16 @@ class AuditAnalysisOps:
         except ValueError as exc:
             logging.error("Invalid time range: %s", exc)
             return
-        logging.warning(  # Uses warning level so the range shows by default (#886).
+        logger.warning(  # Uses warning level so the range shows by default (#886).
             "Fetching audit logs for: %s", time_range.description
         )
         entries = AuditAnalysisOps._fetch_filtered_audit_entries(org_id, time_range)  # API call + paginate.
         if entries is None:  # API failed (already logged inside helper).
             return
-        logging.warning("Retrieved %d raw entries", len(entries))  # Uses warning level so it shows by default (#886).
+        logger.warning("Retrieved %d raw entries", len(entries))  # Uses warning level so it shows by default (#886).
         log_filter = AuditLogFilter()  # Noise filter.
         filtered, stats = log_filter.filter_with_stats(entries)  # Remove noise entries with stats.
-        logging.warning(  # Uses warning level so the operator sees the stats (#886).
+        logger.warning(  # Uses warning level so the operator sees the stats (#886).
             "Filtered: %d kept, %d noise removed", stats["kept_count"], stats["removed_count"]
         )
         analyzer = AuditLogAnalyzer()  # Pattern analyzer.
