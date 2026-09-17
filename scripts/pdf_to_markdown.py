@@ -29,11 +29,9 @@ import os
 import re
 import time
 from collections import Counter
-from concurrent.futures import ProcessPoolExecutor
+from importlib import import_module
 from pathlib import Path
 from typing import Any
-
-import pdfplumber
 
 # One drawn line of a page: the text, the modal font size, and the bold state.
 TextLine = tuple[str, float, bool]
@@ -137,6 +135,9 @@ class PdfLineReader:
     def read_document(self) -> tuple[dict[str, str], list[list[TextLine]], float]:
         """Return the metadata, the lines of each page, and the body font size."""
         logging.info("Reading PDF %s", self.source_path)  # announce the read before it starts
+        logging.info("Loading the PDF reader for %s", self.source_path)  # defer the heavy import until conversion
+        pdfplumber: Any = import_module("pdfplumber")  # load the optional converter dependency only when used
+        logging.debug("Loaded the PDF reader for %s", self.source_path)  # record that conversion can start
         sizes: Counter[float] = Counter()  # the size count of every character of every page
         pages: list[list[TextLine]] = []  # one entry for each page, in document order
         with pdfplumber.open(str(self.source_path)) as document:  # pdfplumber closes the file
@@ -276,12 +277,23 @@ class PdfMarkdownCommand:
         parser = argparse.ArgumentParser(description="Convert PDF reference material to Markdown.")
         parser.add_argument("pdf", nargs="*", help="One or more PDF files to convert.")
         workers_help = "Worker processes. The default is the processor count."  # T017 states the default
-        parser.add_argument("--workers", type=int, default=os.cpu_count() or 1, help=workers_help)
+        parser.add_argument("--workers", type=int, default=None, help=workers_help)
         parser.add_argument("--list-file", default=None, help="A text file that holds one PDF path for each line.")
         parser.add_argument("--source-root", default=None, help="The folder that the source_file field is relative to.")
         parser.add_argument("--output-root", default=None, help="The folder that receives the Markdown tree.")
         parser.add_argument("--manifest", default=None, help="The JSON file that receives one row for each source.")
-        return parser.parse_args(argv)  # argparse exits by itself on a bad argument
+        arguments = parser.parse_args(argv)  # argparse exits by itself on a bad argument
+        if arguments.workers is None:  # only the default path needs the host processor probe
+            arguments.workers = self._default_worker_count()  # defer the processor probe to runtime
+        return arguments  # the command uses the resolved worker count
+
+    @staticmethod
+    def _default_worker_count() -> int:
+        """Return the worker count that the host reports for this run."""
+        logging.info("Reading the processor count for the PDF converter")  # the host probe can vary by runner
+        worker_count = os.cpu_count() or 1  # fall back to one worker when the platform reports no count
+        logging.debug("Using %d worker processes as the default", worker_count)  # record the chosen fan-out
+        return worker_count  # the parser writes this value into the arguments
 
     def _sources(self, arguments: argparse.Namespace) -> list[str]:
         """Return every source path, from the command line and from the list file."""
@@ -300,6 +312,12 @@ class PdfMarkdownCommand:
         logging.info("Converting %d PDF files", len(jobs))  # announce the batch before it starts
         if arguments.workers <= 1:  # one worker keeps the traceback of a test in this process
             return [self.convert_one(job) for job in jobs]
+        logging.info("Loading the process pool for %d workers", arguments.workers)  # defer spawn support to conversion
+        from concurrent.futures import ProcessPoolExecutor  # isolate Windows spawn cost from module import
+
+        logging.debug(
+            "Loaded the process pool for %d workers", arguments.workers
+        )  # record that parallel work can start
         with ProcessPoolExecutor(max_workers=arguments.workers) as pool:  # a page read is CPU bound
             return list(pool.map(self.convert_one, jobs, chunksize=1))  # 1 file for each dispatch balances
 
