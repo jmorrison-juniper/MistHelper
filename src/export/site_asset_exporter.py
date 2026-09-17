@@ -34,6 +34,8 @@ from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: canonical flatten and escape helpers keep CSV output consistent with peers.
 
+logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
+
 
 class SiteAssetExporter:
     """Site asset and asset-filter exporter.
@@ -63,12 +65,12 @@ class SiteAssetExporter:
             return []
         if isinstance(response_payload, list):  # Defensive support for list payloads from wrappers and mocks.
             rows = [row for row in response_payload if isinstance(row, dict)]  # Keep only dict rows.
-            logging.debug("Normalized list payload to %d dict rows", len(rows))  # Coercion trace.
+            logger.debug("Normalized list payload to %d dict rows", len(rows))  # Coercion trace.
             return rows
         if isinstance(response_payload, dict):  # The expected SDK path returns one object as a dict.
-            logging.debug("Normalized dict payload to a single-row list")  # Coercion trace.
+            logger.debug("Normalized dict payload to a single-row list")  # Coercion trace.
             return [response_payload]
-        logging.warning(  # An unexpected type means the SDK contract changed, so say so instead of failing.
+        logger.warning(  # An unexpected type means the SDK contract changed, so say so instead of failing.
             "Unexpected payload type %s; treating it as an empty result",
             type(response_payload).__name__,
         )
@@ -90,15 +92,15 @@ class SiteAssetExporter:
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No rows, so inform the operator and return.
-            logging.info("! No %s data found", label)  # ASCII-only user notice.
+            logger.info("! No %s data found", label)  # ASCII-only user notice.
             return
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested dicts for CSV.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # Make multiline values CSV-safe.
         mh.DataExporter.write_with_format_selection(  # Persist through the CSV, SQLite, or Arango selector.
             sanitized_data, filename, api_function_name=api_function_name
         )
-        logging.debug("%s persisted %d rows to %s", api_function_name, len(rawdata), filename)  # Post-call count.
-        logging.info("! %d %s records exported to %s", len(rawdata), label, filename)  # User notice with count.
+        logger.debug("%s persisted %d rows to %s", api_function_name, len(rawdata), filename)  # Post-call count.
+        logger.info("! %d %s records exported to %s", len(rawdata), label, filename)  # User notice with count.
 
     @staticmethod
     def _prompt_identifier(prompt_text: str, context: str) -> str | None:
@@ -116,7 +118,7 @@ class SiteAssetExporter:
             The trimmed identifier, or None when the operator gave no answer.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Prompting the operator for %s", context)  # Action log before the prompt.
+        logger.info("Prompting the operator for %s", context)  # Action log before the prompt.
         value = str(  # WHY: the lazy module attribute is untyped, so pin the declared str return.
             mh.InputUtils.safe_input(  # safe_input enforces EOF-safe prompting.
                 prompt_text,
@@ -124,10 +126,10 @@ class SiteAssetExporter:
                 context=context,
             )
         ).strip()  # Strip whitespace so stray spaces do not pass validation.
-        logging.debug("Completed the %s prompt with value_present=%s", context, bool(value))  # Prompt result trace.
+        logger.debug("Completed the %s prompt with value_present=%s", context, bool(value))  # Prompt result trace.
         if not value:  # A blank answer, an EOF, or an interrupt must abort before any API call.
-            logging.error("No value provided for %s. Exiting.", context)  # Abort reason.
-            logging.info("! No identifier supplied. Exiting.")  # User-facing cancel line.
+            logger.error("No value provided for %s. Exiting.", context)  # Abort reason.
+            logger.info("! No identifier supplied. Exiting.")  # User-facing cancel line.
             return None
         return value
 
@@ -141,14 +143,14 @@ class SiteAssetExporter:
             peer site-scoped exports.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Site Assets Of Interest:")  # Menu header echoed to the operator.
-        logging.info("Starting the getSiteAssetsOfInterest export...")  # Pre-call trace.
+        logger.info("Site Assets Of Interest:")  # Menu header echoed to the operator.
+        logger.info("Starting the getSiteAssetsOfInterest export...")  # Pre-call trace.
         resolved = mh.SiteDeviceExporter._resolve_site_for_stats("assets of interest")  # Shared site prompt.
         if resolved is None:  # The operator declined, and the shared helper already logged the reason.
             return
         site_id, site_name = resolved  # Unpack the resolved identifiers for the API call.
         try:
-            logging.info("Calling getSiteAssetsOfInterest for site_id=%s (%s)", site_id, site_name)  # Pre-call log.
+            logger.info("Calling getSiteAssetsOfInterest for site_id=%s (%s)", site_id, site_name)  # Pre-call log.
             response = mistapi.api.v1.sites.stats.getSiteAssetsOfInterest(  # SDK call with default filters.
                 mh.apisession, site_id
             )
@@ -168,8 +170,8 @@ class SiteAssetExporter:
             needs both a site and an asset-filter identifier.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Site Asset Filter Detail:")  # Menu header echoed to the operator.
-        logging.info("Starting the getSiteAssetFilter export...")  # Pre-call trace.
+        logger.info("Site Asset Filter Detail:")  # Menu header echoed to the operator.
+        logger.info("Starting the getSiteAssetFilter export...")  # Pre-call trace.
         resolved = mh.SiteDeviceExporter._resolve_site_for_stats("asset filter detail")  # Shared site prompt.
         if resolved is None:  # The operator declined, and the shared helper already logged the reason.
             return
@@ -181,7 +183,7 @@ class SiteAssetExporter:
         if assetfilter_id is None:  # The prompt helper already logged the cancellation.
             return
         try:
-            logging.info(  # Pre-call log with full context.
+            logger.info(  # Pre-call log with full context.
                 "Calling getSiteAssetFilter for site_id=%s assetfilter_id=%s", site_id, assetfilter_id
             )
             response = mistapi.api.v1.sites.assetfilters.getSiteAssetFilter(  # SDK get-by-id call.
@@ -204,8 +206,8 @@ class SiteAssetExporter:
             both a site and an asset identifier.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Site Asset Detail:")  # Menu header echoed to the operator.
-        logging.info("Starting the getSiteAsset export...")  # Pre-call trace.
+        logger.info("Site Asset Detail:")  # Menu header echoed to the operator.
+        logger.info("Starting the getSiteAsset export...")  # Pre-call trace.
         resolved = mh.SiteDeviceExporter._resolve_site_for_stats("asset detail")  # Shared site prompt.
         if resolved is None:  # The operator declined, and the shared helper already logged the reason.
             return
@@ -217,7 +219,7 @@ class SiteAssetExporter:
         if asset_id is None:  # The prompt helper already logged the cancellation.
             return
         try:
-            logging.info("Calling getSiteAsset for site_id=%s asset_id=%s", site_id, asset_id)  # Pre-call log.
+            logger.info("Calling getSiteAsset for site_id=%s asset_id=%s", site_id, asset_id)  # Pre-call log.
             response = mistapi.api.v1.sites.assets.getSiteAsset(mh.apisession, site_id, asset_id)  # SDK get-by-id call.
             payload = getattr(response, "data", response)  # Support both object and dict responses.
             rows = SiteAssetExporter._normalize_payload(payload)  # Normalize the single object to rows.

@@ -22,6 +22,8 @@ import logging  # WHY: structured operational logging preserves action-trace con
 from dataclasses import dataclass  # WHY: dataclass bundles injected deps + the immutable site stamp payload.
 from typing import Any  # WHY: vendor JSON payload shapes remain dynamic dicts of arbitrary value types.
 
+logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
+
 _SITE_LIST_CSV = "SiteList.csv"  # WHY: canonical SiteList filename referenced by cache + prompt + lookup helpers.
 _OUTPUT_CSV = "SiteWanClientEvents.CSV"  # WHY: canonical output filename for placeholder and finalize paths.
 _API_PAGE_LIMIT = 1000  # WHY: paginated API page size — matches sibling exporters for behavioral parity.
@@ -102,8 +104,8 @@ class WanClientEventsExporter:
             marking the workflow boundary for tracing.
         """
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("Export Site WAN Client Events:")
-        logging.info("Starting export of site WAN client events...")  # WHY: log workflow start boundary.
+        logger.info("Export Site WAN Client Events:")
+        logger.info("Starting export of site WAN client events...")  # WHY: log workflow start boundary.
 
     @staticmethod
     def _announce_fetch(site_id: str, site_name: str) -> None:
@@ -118,11 +120,11 @@ class WanClientEventsExporter:
             site_id: Resolved site UUID being queried.
             site_name: Resolved display name for the site.
         """
-        logging.info(
+        logger.info(
             "Fetching WAN client events for site: %s (ID: %s)", site_name, site_id
         )  # WHY: log before API calls for tracing.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("! Fetching WAN client events for site: %s", site_name)
+        logger.info("! Fetching WAN client events for site: %s", site_name)
 
     @staticmethod
     def _log_export_failure(site_id: str, exception: BaseException) -> None:
@@ -137,11 +139,11 @@ class WanClientEventsExporter:
             site_id: Site UUID whose fetch failed.
             exception: The exception raised during the guarded pipeline.
         """
-        logging.exception(
+        logger.exception(
             "! Failed to fetch WAN client events for site %s: %s", site_id, exception
         )  # WHY: full traceback log.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.error("! Failed to fetch WAN client events: %s", exception)
+        logger.error("! Failed to fetch WAN client events: %s", exception)
 
     def _run_export_pipeline(self, stamp: _SiteStamp) -> None:
         """Execute the fetch + finalize stages under exception-guard protection.
@@ -175,18 +177,18 @@ class WanClientEventsExporter:
         Returns:
             Resolved site UUID string, or None when the operator cancelled.
         """
-        logging.info("Ensuring SiteList.csv cache is available before site resolution")  # WHY: log precondition.
+        logger.info("Ensuring SiteList.csv cache is available before site resolution")  # WHY: log precondition.
         self.cache_utils.check_and_generate_csv(_SITE_LIST_CSV, self.org_site_exporter.sites)  # WHY: seed cache.
-        logging.debug("SiteList.csv cache check/generation completed")  # WHY: after-action confirmation for trace.
+        logger.debug("SiteList.csv cache check/generation completed")  # WHY: after-action confirmation for trace.
         if site_id:
             return site_id  # WHY: caller supplied a site id — no interactive prompt required.
-        logging.info("No site_id provided; prompting operator to select a site from CSV")  # WHY: log prompt intent.
+        logger.info("No site_id provided; prompting operator to select a site from CSV")  # WHY: log prompt intent.
         chosen = self.prompt_utils.select_site_id_from_csv(_SITE_LIST_CSV)  # WHY: interactive picker via helper.
-        logging.debug("Site selection prompt completed with site_id=%s", chosen)  # WHY: result for traceability.
+        logger.debug("Site selection prompt completed with site_id=%s", chosen)  # WHY: result for traceability.
         if not chosen:
-            logging.error(_NO_SITE_TEXT)  # WHY: cancel-path log preserved for operator debugging.
+            logger.error(_NO_SITE_TEXT)  # WHY: cancel-path log preserved for operator debugging.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info(_NO_SITE_TEXT)
+            logger.info(_NO_SITE_TEXT)
             return None  # WHY: signal abort to orchestrator so no artifacts are written.
         return chosen  # WHY: resolved site identifier to operate on for the remainder of the workflow.
 
@@ -205,10 +207,10 @@ class WanClientEventsExporter:
             The site's display name, or ``Unknown Site`` on lookup failure.
         """
         try:
-            logging.info("Resolving site name from SiteList.csv for site_id=%s", site_id)  # WHY: log lookup start.
+            logger.info("Resolving site name from SiteList.csv for site_id=%s", site_id)  # WHY: log lookup start.
             site_list_path = self.file_path_utils.get_csv_path(_SITE_LIST_CSV)  # WHY: canonical CSV path lookup.
             site_name = self._scan_site_list_for_name(site_list_path, site_id)  # WHY: delegate row-scan to helper.
-            logging.debug("Resolved site name for site_id=%s to '%s'", site_id, site_name)  # WHY: log resolved.
+            logger.debug("Resolved site name for site_id=%s to '%s'", site_id, site_name)  # WHY: log resolved.
             return site_name  # WHY: return the resolved (or fallback) name for headers and CSV stamping.
         except Exception as exception:
             logging.warning("! Failed to load site name from SiteList.csv: %s", exception)  # WHY: non-fatal warn log.
@@ -250,13 +252,13 @@ class WanClientEventsExporter:
         Returns:
             List of event-row dicts (possibly empty). Never ``None``.
         """
-        logging.info("Fetching WAN client events data...")  # WHY: log before first-page API call for tracing.
+        logger.info("Fetching WAN client events data...")  # WHY: log before first-page API call for tracing.
         # WHY: #1639 — mistapi 0.63.3 exposes the callable flat under wan_clients, not under .events.search.
         endpoint = self.mistapi_module.api.v1.sites.wan_clients.searchSiteWanClientEvents
         response = endpoint(self.apisession, site_id, limit=_API_PAGE_LIMIT)  # WHY: first-page API call.
         results = self.mistapi_module.get_all(response=response, mist_session=self.apisession)  # WHY: paginate.
         count = len(results) if results else 0  # WHY: capture size once for both log line and return value.
-        logging.debug("Fetched %d WAN client event records", count)  # WHY: after-action size for trace.
+        logger.debug("Fetched %d WAN client event records", count)  # WHY: after-action size for trace.
         return results or []  # WHY: normalize None to empty list so caller logic stays branch-free.
 
     def _write_no_data_placeholder(self, stamp: _SiteStamp) -> None:
@@ -270,16 +272,16 @@ class WanClientEventsExporter:
         Args:
             stamp: Site identifiers used to populate the sentinel row.
         """
-        logging.warning(_NO_DATA_TEXT)  # WHY: preserve empty-result log severity + text from sibling exporters.
+        logger.warning(_NO_DATA_TEXT)  # WHY: preserve empty-result log severity + text from sibling exporters.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info(_NO_DATA_TEXT)
-        logging.info("Writing no-data placeholder CSV for %s", _OUTPUT_CSV)  # WHY: log before placeholder write.
+        logger.info(_NO_DATA_TEXT)
+        logger.info("Writing no-data placeholder CSV for %s", _OUTPUT_CSV)  # WHY: log before placeholder write.
         output_path = self.file_path_utils.get_csv_path(_OUTPUT_CSV)  # WHY: resolve canonical output path.
         with open(output_path, "w", newline="", encoding="utf-8") as file_handle:
             writer = csv.writer(file_handle)  # WHY: plain CSV writer for the fixed placeholder schema.
             writer.writerow(_PLACEHOLDER_HEADER)  # WHY: emit header row expected by downstream readers.
             writer.writerow([stamp.site_id, stamp.site_name, _PLACEHOLDER_MESSAGE])  # WHY: emit sentinel body row.
-        logging.debug("No-data placeholder CSV written to %s", output_path)  # WHY: after-action confirmation.
+        logger.debug("No-data placeholder CSV written to %s", output_path)  # WHY: after-action confirmation.
 
     @staticmethod
     def _stamp_events(
@@ -300,11 +302,11 @@ class WanClientEventsExporter:
         Returns:
             The same list, mutated in place, returned for pipeline chaining.
         """
-        logging.info("Stamping site identifiers on %d event rows", len(events))  # WHY: log before stamping loop.
+        logger.info("Stamping site identifiers on %d event rows", len(events))  # WHY: log before stamping loop.
         for event in events:
             event["site_id"] = stamp.site_id  # WHY: stamp site UUID for downstream reporting consistency.
             event["site_name"] = stamp.site_name  # WHY: stamp human-readable site name for operator context.
-        logging.debug("Completed stamping site identifiers on event rows")  # WHY: after-action confirmation.
+        logger.debug("Completed stamping site identifiers on event rows")  # WHY: after-action confirmation.
         return events  # WHY: return mutated list for chained finalize call.
 
     def _finalize_export(self, events: list[dict[str, Any]]) -> None:
@@ -337,12 +339,12 @@ class WanClientEventsExporter:
         Returns:
             CSV-safe flattened rows ready for the backend writer.
         """
-        logging.info("Flattening nested WAN client event fields for export")  # WHY: log before flatten action.
+        logger.info("Flattening nested WAN client event fields for export")  # WHY: log before flatten action.
         flattened = self.data_processing_utils.flatten_nested_fields(events)  # WHY: flatten nested dicts.
-        logging.debug("Flatten transformation produced %d rows", len(flattened))  # WHY: after-action row count.
-        logging.info("Escaping multiline fields for CSV-safe output")  # WHY: log before sanitize action.
+        logger.debug("Flatten transformation produced %d rows", len(flattened))  # WHY: after-action row count.
+        logger.info("Escaping multiline fields for CSV-safe output")  # WHY: log before sanitize action.
         sanitized = self.data_processing_utils.escape_multiline(flattened)  # WHY: escape multiline values.
-        logging.debug("Multiline escaping completed for %d rows", len(sanitized))  # WHY: after-action size.
+        logger.debug("Multiline escaping completed for %d rows", len(sanitized))  # WHY: after-action size.
         return sanitized  # WHY: return CSV-safe rows for the final write stage.
 
     def _write_final_output(self, sanitized: list[dict[str, Any]]) -> None:
@@ -357,11 +359,11 @@ class WanClientEventsExporter:
         Args:
             sanitized: CSV-safe rows for the backend writer.
         """
-        logging.info("Writing %s to configured output backend", _OUTPUT_CSV)  # WHY: log before final write.
+        logger.info("Writing %s to configured output backend", _OUTPUT_CSV)  # WHY: log before final write.
         self.data_exporter.write_with_format_selection(
             sanitized, _OUTPUT_CSV, api_function_name=_API_FUNCTION_NAME
         )  # WHY: persist with PK-strategy hint so SQLite upserts by mac+timestamp.
-        logging.debug("%s write completed successfully", _OUTPUT_CSV)  # WHY: after-action write confirmation.
+        logger.debug("%s write completed successfully", _OUTPUT_CSV)  # WHY: after-action write confirmation.
 
     @staticmethod
     def _print_success_summary(sanitized: list[dict[str, Any]]) -> None:
@@ -376,9 +378,9 @@ class WanClientEventsExporter:
             sanitized: Final CSV-safe rows persisted to the backend.
         """
         total_records = len(sanitized)  # WHY: total row count for summary reporting.
-        logging.info(
+        logger.info(
             "! WAN client events exported to %s (%d records)", _OUTPUT_CSV, total_records
         )  # WHY: structured log mirrors the operator print block for tracing parity.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("! WAN client events exported to %s", _OUTPUT_CSV)
-        logging.info("   %d WAN client event records", total_records)
+        logger.info("! WAN client events exported to %s", _OUTPUT_CSV)
+        logger.info("   %d WAN client event records", total_records)

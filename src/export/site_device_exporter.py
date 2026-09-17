@@ -48,14 +48,14 @@ class SiteDeviceExporter:
         SECURITY: always fetches type=all then filters locally, avoiding Mist's APs-only default.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Fetching device inventory for site_id=%s, device_type=%s", site_id, device_type)  # Log the fetch.
+        logger.info("Fetching device inventory for site_id=%s, device_type=%s", site_id, device_type)  # Log the fetch.
         rawdata = mistapi.api.v1.sites.devices.listSiteDevices(
             mh.apisession, site_id, type="all"
         ).data  # All device types
         if not rawdata:  # No devices.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("No devices found for the selected site.")  # Tell the user.
-            logging.warning("No devices found for site_id=%s", site_id)  # Warn none found.
+            logger.warning("No devices found for site_id=%s", site_id)  # Warn none found.
             return  # Abort.
         if device_type != "all":  # Type filter requested.
             rawdata = SiteDeviceExporter._filter_devices_by_type(rawdata, device_type, site_id)  # Keep matching types
@@ -66,7 +66,7 @@ class SiteDeviceExporter:
         inventory = DataProcessingUtils.escape_multiline(inventory)
         fields = DataProcessingUtils.get_unique_keys(inventory)
         mh.DataExporter.write_with_format_selection(inventory, csv_filename, api_function_name="listSiteDevicesStats")
-        logging.info("Device inventory written to %s (%s rows)", csv_filename, len(inventory))  # Log the write.
+        logger.info("Device inventory written to %s (%s rows)", csv_filename, len(inventory))  # Log the write.
         SiteDeviceExporter._display_inventory_table(inventory, fields)  # Debug-log a PrettyTable of the inventory.
 
     @staticmethod
@@ -79,7 +79,7 @@ class SiteDeviceExporter:
         if not filtered:  # None after filter.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("No devices of type '%s' found at the selected site.", device_type)  # Tell the user.
-            logging.warning("No devices of type '%s' found for site_id: %s", device_type, site_id)  # Warn none.
+            logger.warning("No devices of type '%s' found for site_id: %s", device_type, site_id)  # Warn none.
             return None  # Signal the caller to abort.
         return filtered  # Devices matching the requested type(s).
 
@@ -95,7 +95,7 @@ class SiteDeviceExporter:
                 logging.warning("! Could not sort table by 'model': %s", error)  # Warn sort failure.
         for item in inventory:  # Add each row.
             table.add_row([item.get(field, "") for field in fields])  # Build and add the row.
-        logging.debug("\n%s", table.get_string())  # Log the table.
+        logger.debug("\n%s", table.get_string())  # Log the table.
 
     @staticmethod
     def _persist_site_device_stats(rawdata: list[dict[str, Any]], site_name: str) -> None:
@@ -120,17 +120,17 @@ class SiteDeviceExporter:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         site_id = mh.PromptUtils.select_site()  # Prompt the operator to choose a site
         if not site_id:  # Operator skipped or no sites available
-            logging.error("No site selected. Exiting.")
+            logger.error("No site selected. Exiting.")
             return None
         current_org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org context
         if not current_org_id:  # Org not resolvable -> cannot list sites
-            logging.error("No org_id available. Exiting.")
+            logger.error("No org_id available. Exiting.")
             return None
         sites = mh.APICoreFetchUtils.all_sites_with_limit(current_org_id)  # Look up sites for friendly-name resolution
         site_name = next(
             (site["name"] for site in sites if site["id"] == site_id), site_id
         )  # Friendly name or id fallback
-        logging.info("Exporting %s for site: %s", export_label, site_name)  # Trace which site is being exported
+        logger.info("Exporting %s for site: %s", export_label, site_name)  # Trace which site is being exported
         return site_id, site_name
 
     @staticmethod
@@ -139,7 +139,7 @@ class SiteDeviceExporter:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Site Device Statistics:")  # Header
-        logging.info("Starting export of site device statistics...")  # Trace start
+        logger.info("Starting export of site device statistics...")  # Trace start
         resolved = SiteDeviceExporter._resolve_site_for_stats("device statistics")  # Prompt + org/site resolution
         if resolved is None:  # Abort signaled by resolver
             return
@@ -188,18 +188,18 @@ class SiteDeviceExporter:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Export Virtual Chassis Information:")  # Header.
-        logging.info("Starting export of site device virtual chassis information...")  # Log start.
+        logger.info("Starting export of site device virtual chassis information...")  # Log start.
         site_id = mh.PromptUtils.select_site()  # Select a site.
         if not site_id:  # No site.
-            logging.error("No site selected. Exiting.")  # Log the error.
+            logger.error("No site selected. Exiting.")  # Log the error.
             return  # Abort.
         # Issue #431: inlined PromptUtils.select_device -> canonical select_device_id_from_inventory.
         device_id = mh.PromptUtils.select_device_id_from_inventory(site_id, device_type="switch")  # Select a switch.
         if not device_id:  # No switch.
-            logging.error("No switch device selected. Exiting.")  # Log the error.
+            logger.error("No switch device selected. Exiting.")  # Log the error.
             return  # Abort.
         device_name = SiteDeviceExporter._resolve_device_name(site_id, device_id)  # Friendly name (falls back to id).
-        logging.info("Exporting virtual chassis information for device: %s", device_name)  # Log the export.
+        logger.info("Exporting virtual chassis information for device: %s", device_name)  # Log the export.
         SiteDeviceExporter._export_vc_for_device(site_id, device_id, device_name)  # Fetch + write + summarize VC data.
 
     @staticmethod
@@ -223,7 +223,7 @@ class SiteDeviceExporter:
                 mh.apisession, site_id, device_id
             )  # Fetch
             if not response.data:  # No VC payload.
-                logging.warning("! No virtual chassis data returned for device %s", device_name)  # Warn no VC data.
+                logger.warning("! No virtual chassis data returned for device %s", device_name)  # Warn no VC data.
                 # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logger.warning("! No virtual chassis data found for device %s", device_name)  # Tell the user.
                 return  # Nothing to export.
@@ -234,7 +234,7 @@ class SiteDeviceExporter:
             mh.DataExporter.write_with_format_selection(
                 sanitized, filename, api_function_name="getSiteDeviceVirtualChassis"
             )
-            logging.info("! Virtual chassis information exported to %s", filename)  # Log the export.
+            logger.info("! Virtual chassis information exported to %s", filename)  # Log the export.
             SiteDeviceExporter._print_vc_summary(sanitized, device_name, filename)  # Print a short operator summary.
         except Exception as e:  # Export failed.
             logging.error("! Failed to export virtual chassis information: %s", e)  # Log the error.
@@ -282,7 +282,7 @@ class SiteDeviceExporter:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Site Device List:")  # Header
-        logging.info("Starting export of site device list...")  # Trace start
+        logger.info("Starting export of site device list...")  # Trace start
         resolved = SiteDeviceExporter._resolve_site_for_stats("device list")  # Prompt + org/site resolution
         if resolved is None:  # Abort signaled by resolver
             return

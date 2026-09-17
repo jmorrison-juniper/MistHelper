@@ -54,6 +54,8 @@ from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: canonical flatten and escape helpers keep CSV output consistent with peers.
 
+logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
+
 _VALID_ZONE_TYPES = frozenset({"zones", "rssizones"})  # WHY: the SDK rejects any other value in the URL path.
 _DEFAULT_ZONE_TYPE = "zones"  # WHY: the common case, so an empty answer stays useful.
 
@@ -84,7 +86,7 @@ class SiteSearchExporter:
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No rows, so inform the operator and return.
-            logging.info("! No %s data found for this site", label)  # ASCII-only user notice.
+            logger.info("! No %s data found for this site", label)  # ASCII-only user notice.
             return
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested dicts for CSV.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # Make multiline values CSV-safe.
@@ -92,8 +94,8 @@ class SiteSearchExporter:
         mh.DataExporter.write_with_format_selection(  # Persist through the CSV, SQLite, or Arango selector.
             sanitized_data, filename, api_function_name=operation
         )
-        logging.debug("%s persisted %d rows to %s", operation, len(rawdata), filename)  # Post-call count trace.
-        logging.info("! %d %s records exported to %s", len(rawdata), label, filename)  # User notice with count.
+        logger.debug("%s persisted %d rows to %s", operation, len(rawdata), filename)  # Post-call count trace.
+        logger.info("! %d %s records exported to %s", len(rawdata), label, filename)  # User notice with count.
 
     @staticmethod
     def _run_site_search(
@@ -119,14 +121,14 @@ class SiteSearchExporter:
                 after the site. Only searchSiteZoneSessions needs one today.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Site %s Search:", label.title())  # Menu header echoed to the operator.
-        logging.info("Starting the %s export...", operation)  # Pre-call trace.
+        logger.info("Site %s Search:", label.title())  # Menu header echoed to the operator.
+        logger.info("Starting the %s export...", operation)  # Pre-call trace.
         resolved = mh.SiteDeviceExporter._resolve_site_for_stats(f"{label} search")  # Shared site prompt.
         if resolved is None:  # The operator declined, and the shared helper already logged the reason.
             return
         site_id, site_name = resolved  # Unpack the resolved identifiers for the API call.
         try:
-            logging.info("Calling %s for site_id=%s (%s)", operation, site_id, site_name)  # Pre-call log.
+            logger.info("Calling %s for site_id=%s (%s)", operation, site_id, site_name)  # Pre-call log.
             response = api_call(mh.apisession, site_id, *extra_args)  # SDK call with default filters.
             rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page through all rows.
             SiteSearchExporter._persist(rawdata, site_name, prefix, operation, label)  # Persist or report empty.
@@ -290,7 +292,7 @@ class SiteSearchExporter:
             The trimmed identifier, or None when the operator gave no answer.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Prompting the operator for %s", context)  # Action log before the prompt.
+        logger.info("Prompting the operator for %s", context)  # Action log before the prompt.
         value = str(  # WHY: the lazy module attribute is untyped, so pin the declared str return.
             mh.InputUtils.safe_input(  # safe_input enforces EOF-safe prompting.
                 prompt_text,
@@ -298,10 +300,10 @@ class SiteSearchExporter:
                 context=context,
             )
         ).strip()  # Strip whitespace so stray spaces do not pass validation.
-        logging.debug("Completed the %s prompt with value_present=%s", context, bool(value))  # Prompt result trace.
+        logger.debug("Completed the %s prompt with value_present=%s", context, bool(value))  # Prompt result trace.
         if not value:  # A blank answer, an EOF, or an interrupt must abort before any API call.
-            logging.error("No value provided for %s. Exiting.", context)  # Abort reason.
-            logging.info("! No identifier supplied. Exiting.")  # User-facing cancel line.
+            logger.error("No value provided for %s. Exiting.", context)  # Abort reason.
+            logger.info("! No identifier supplied. Exiting.")  # User-facing cancel line.
             return None
         return value
 
@@ -325,17 +327,17 @@ class SiteSearchExporter:
             return []
         if isinstance(response_payload, list):  # Defensive support for list payloads from wrappers and mocks.
             rows = [row for row in response_payload if isinstance(row, dict)]  # Keep only dict rows.
-            logging.debug("Normalized list payload to %d dict rows", len(rows))  # Coercion trace.
+            logger.debug("Normalized list payload to %d dict rows", len(rows))  # Coercion trace.
             return rows
         if isinstance(response_payload, dict):  # The expected SDK path returns one object as a dict.
             if isinstance(response_payload.get("results"), list):  # The documented shape nests the rows under results.
                 rows = [row for row in response_payload["results"] if isinstance(row, dict)]  # Keep only dict rows.
                 if rows:  # A non-empty results array is the row set to export.
-                    logging.debug("Normalized results array to %d dict rows", len(rows))  # Coercion trace.
+                    logger.debug("Normalized results array to %d dict rows", len(rows))  # Coercion trace.
                     return rows
-            logging.debug("Normalized dict payload to a single-row list")  # Coercion trace.
+            logger.debug("Normalized dict payload to a single-row list")  # Coercion trace.
             return [response_payload]
-        logging.warning(  # An unexpected type means the SDK contract changed, so say so instead of failing.
+        logger.warning(  # An unexpected type means the SDK contract changed, so say so instead of failing.
             "Unexpected payload type %s; treating it as an empty result",
             type(response_payload).__name__,
         )
@@ -351,8 +353,8 @@ class SiteSearchExporter:
             for the two identifiers before it calls the SDK.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Site Call Troubleshoot:")  # Menu header echoed to the operator.
-        logging.info("Starting the troubleshootSiteCall export...")  # Pre-call trace.
+        logger.info("Site Call Troubleshoot:")  # Menu header echoed to the operator.
+        logger.info("Starting the troubleshootSiteCall export...")  # Pre-call trace.
         resolved = mh.SiteDeviceExporter._resolve_site_for_stats("call troubleshoot")  # Shared site prompt.
         if resolved is None:  # The operator declined, and the shared helper already logged the reason.
             return
@@ -370,7 +372,7 @@ class SiteSearchExporter:
         if meeting_id is None:  # The prompt helper already logged the cancellation.
             return
         try:
-            logging.info(  # Pre-call log with full context.
+            logger.info(  # Pre-call log with full context.
                 "Calling troubleshootSiteCall for site_id=%s client_mac=%s meeting_id=%s",
                 site_id,
                 client_mac,
@@ -402,7 +404,7 @@ class SiteSearchExporter:
             The chosen zone type, or None when the operator gave no valid answer.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Prompting the operator for the zone type")  # Action log before the prompt.
+        logger.info("Prompting the operator for the zone type")  # Action log before the prompt.
         answer = str(
             mh.InputUtils.safe_input(  # safe_input enforces EOF-safe prompting.
                 "Enter the zone type for searchSiteZoneSessions [zones/rssizones, default zones]: ",
@@ -411,10 +413,10 @@ class SiteSearchExporter:
             )
         ).strip()
         zone_type = answer or _DEFAULT_ZONE_TYPE  # An empty answer falls back to the default.
-        logging.debug("Zone type prompt resolved to %s", zone_type)  # Prompt result trace.
+        logger.debug("Zone type prompt resolved to %s", zone_type)  # Prompt result trace.
         if zone_type not in _VALID_ZONE_TYPES:  # A wrong value would produce a 404, so stop here.
-            logging.error("Invalid zone type %s for searchSiteZoneSessions. Exiting.", zone_type)
-            logging.info("! Zone type must be one of: %s", ", ".join(sorted(_VALID_ZONE_TYPES)))
+            logger.error("Invalid zone type %s for searchSiteZoneSessions. Exiting.", zone_type)
+            logger.info("! Zone type must be one of: %s", ", ".join(sorted(_VALID_ZONE_TYPES)))
             return None
         return zone_type
 

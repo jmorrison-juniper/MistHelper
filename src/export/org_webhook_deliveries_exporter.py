@@ -13,6 +13,8 @@ from src.config.source_dependency_resolver import (
 from src.data.data_processing_utils import DataProcessingUtils  # WHY: reuse shared CSV-safe flattening.
 from src.utils.input_utils import InputUtils  # WHY: handle EOF safely in SSH and container sessions.
 
+logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
+
 _OPERATION = "searchOrgWebhooksDeliveries"  # WHY: select the configured storage-key strategy.
 
 
@@ -23,11 +25,11 @@ class OrgWebhookDeliveriesExporter:
     def _resolve_webhook_choice(raw: str, webhooks: list[dict[str, Any]]) -> tuple[str, str] | None:
         """Convert a one-based operator choice into a webhook identifier and name."""
         if not raw.isdigit():  # Reject text before integer conversion can fail.
-            logging.info("! Invalid webhook selection")  # Tell the operator why the prompt stopped.
+            logger.info("! Invalid webhook selection")  # Tell the operator why the prompt stopped.
             return None
         index = int(raw)  # Convert the validated one-based choice to an integer.
         if not 1 <= index <= len(webhooks):  # Reject choices outside the displayed range.
-            logging.info("! Webhook selection must be between 1 and %s", len(webhooks))  # Explain the range.
+            logger.info("! Webhook selection must be between 1 and %s", len(webhooks))  # Explain the range.
             return None
         webhook = webhooks[index - 1]  # Select the requested webhook row.
         webhook_id = str(webhook.get("id", ""))  # Preserve the API identifier for the search call.
@@ -38,15 +40,15 @@ class OrgWebhookDeliveriesExporter:
     def _select_webhook_id(org_id: str) -> tuple[str, str] | None:
         """List organization webhooks and prompt for one selection."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Listing organization webhooks for org_id=%s", org_id)  # Log before the SDK call.
+        logger.info("Listing organization webhooks for org_id=%s", org_id)  # Log before the SDK call.
         response = mistapi.api.v1.orgs.webhooks.listOrgWebhooks(mh.apisession, org_id)  # Fetch choices.
         webhooks = mistapi.get_all(response=response, mist_session=mh.apisession)  # Read all webhook pages.
-        logging.debug("Received %d organization webhooks", len(webhooks))  # Log the choice count.
+        logger.debug("Received %d organization webhooks", len(webhooks))  # Log the choice count.
         if not webhooks:  # Stop when the organization has no configured webhooks.
-            logging.info("! No webhooks configured for this organization")  # Give the operator a clear result.
+            logger.info("! No webhooks configured for this organization")  # Give the operator a clear result.
             return None
         for index, webhook in enumerate(webhooks, start=1):  # Display one-based choices for the operator.
-            logging.info(
+            logger.info(
                 "  %s. %s [%s]", index, webhook.get("name", "(unnamed)"), webhook.get("id", "?")
             )  # Show choices.
         raw = InputUtils.safe_input(
@@ -59,16 +61,16 @@ class OrgWebhookDeliveriesExporter:
         """Flatten and persist delivery rows."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # Treat an empty search result as a valid outcome.
-            logging.info("! No organization webhook delivery data found")  # Tell the operator no rows exist.
+            logger.info("! No organization webhook delivery data found")  # Tell the operator no rows exist.
             return
         flattened = DataProcessingUtils.flatten_nested_fields(rawdata)  # Normalize nested API values.
         sanitized = DataProcessingUtils.escape_multiline(flattened)  # Keep multiline fields CSV-safe.
         safe_name = webhook_name.replace(" ", "_")  # Keep the output filename portable.
         filename = f"OrgWebhookDeliveries_{safe_name}.csv"  # Use a stable organization export filename.
-        logging.info("Writing organization webhook delivery data")  # Log before the storage action.
+        logger.info("Writing organization webhook delivery data")  # Log before the storage action.
         mh.DataExporter.write_with_format_selection(sanitized, filename, api_function_name=_OPERATION)  # Persist rows.
-        logging.debug("%s persisted %d rows to %s", _OPERATION, len(rawdata), filename)  # Log the write result.
-        logging.info(
+        logger.debug("%s persisted %d rows to %s", _OPERATION, len(rawdata), filename)  # Log the write result.
+        logger.info(
             "! %d organization webhook delivery records exported to %s", len(rawdata), filename
         )  # Report success.
 
@@ -76,7 +78,7 @@ class OrgWebhookDeliveriesExporter:
     def deliveries() -> None:
         """Search and export deliveries for one organization webhook."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Organization Webhook Deliveries Search:")  # Show the selected operation.
+        logger.info("Organization Webhook Deliveries Search:")  # Show the selected operation.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the organization context.
         if not org_id:  # Stop when the operator does not select an organization.
             return
@@ -85,14 +87,14 @@ class OrgWebhookDeliveriesExporter:
             return
         webhook_id, webhook_name = webhook_choice  # Unpack the selected webhook.
         try:
-            logging.info(
+            logger.info(
                 "Calling %s for org_id=%s webhook_id=%s", _OPERATION, org_id, webhook_id
             )  # Log before API call.
             response = mistapi.api.v1.orgs.webhooks.searchOrgWebhooksDeliveries(
                 mh.apisession, org_id, webhook_id
             )  # Fetch deliveries.
             rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page through all results.
-            logging.debug("%s returned %d rows", _OPERATION, len(rawdata))  # Log the response count.
+            logger.debug("%s returned %d rows", _OPERATION, len(rawdata))  # Log the response count.
             OrgWebhookDeliveriesExporter._persist(rawdata, webhook_name)  # Write the normalized result.
         except Exception as exception:  # Keep SDK failures inside the menu loop.
             logging.error("Error fetching organization webhook deliveries: %s", exception)  # Record failure context.
