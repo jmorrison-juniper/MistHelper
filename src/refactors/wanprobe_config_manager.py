@@ -132,7 +132,9 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
         print(f"    Probe IPs: {self.probe_ips}")  # Show probe IPs.
         print(f"    Probe Profile: {self.probe_profile}")  # Show probe profile.
         print("=" * 70)  # Divider.
-        logger.warning("Menu #166 DESTRUCTIVE: Configure WAN Probe Override operation started")  # Log the start.
+        logger.info(
+            "Menu #166 DESTRUCTIVE: Configure WAN Probe Override operation started"
+        )  # Use INFO for start progress.
 
     def _initialize(self) -> bool:  # Initialize state.
         """Initialize org_id and return True on success."""
@@ -522,8 +524,8 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
             print(f"\n  !? {failure_count} templates failed - check audit report")  # Warn the failures
 
     def _log_destructive_completion(self, results: list[dict[str, Any]]) -> None:
-        """Log a warning-level summary of the destructive operation completion."""
+        """Log an info-level summary of the destructive operation completion."""
         success_count = sum(1 for r in results if r["status"] == "SUCCESS")  # Count successes
-        logger.warning(  # Log the summary
+        logger.info(  # Use INFO because a successful completion count is not a fault.
             "Menu #166 DESTRUCTIVE operation complete: %s templates updated", success_count
         )
