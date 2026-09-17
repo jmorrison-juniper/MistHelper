@@ -10,6 +10,8 @@ from typing import Any  # WHY: apisession / mistapi / DataExporter typed as Any 
 
 from prettytable import PrettyTable  # WHY: console rendering for the operator-facing summary tables
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 apisession: Any = None  # WHY: mistapi session injected by configure_* to keep the module import-safe
 mistapi: Any = None  # WHY: mistapi module injected lazily. Direct import would create cycles at load
 DataExporter: Any = None  # WHY: exporter injected so tests can substitute a mock without touching disk
@@ -65,7 +67,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
     @staticmethod
     def _fetch_switch_physical_inventory(target_org_id: str) -> list[dict]:  # WHY: paginated switch listing
         """Fetch switch inventory records with full pagination."""
-        logging.info("Fetching switch physical inventory via searchOrgDevices, org=%s", target_org_id)  # WHY: op trace
+        logger.info("Fetching switch physical inventory via searchOrgDevices, org=%s", target_org_id)  # WHY: op trace
         all_records: list[dict] = []  # WHY: accumulator across pages
         next_url: str | None = None  # WHY: cursor for the next page. None means "first request"
         page_num: int = 0  # WHY: counter for log context
@@ -81,7 +83,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
             next_url = page_data.get("next")  # WHY: continuation URL for the next iteration
             if not next_url:  # WHY: API omits "next" once the final page is served
                 break  # WHY: final page reached. Stop looping
-        logging.info(  # WHY: summarize outcome once at the end so logs stay quiet during success
+        logger.info(  # WHY: summarize outcome once at the end so logs stay quiet during success
             "Switch physical inventory complete: %d logical devices org=%s", len(all_records), target_org_id
         )
         return all_records  # WHY: caller aggregates counts from these raw records
@@ -89,7 +91,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
     @staticmethod
     def _aggregate_switch_counts(switch_records: list[dict], distinct: str) -> list[dict]:  # WHY: VC-aware sum
         """Aggregate switch counts by model/version using num_members for VC accuracy."""
-        logging.info(  # WHY: op trace preserves visibility for large orgs
+        logger.info(  # WHY: op trace preserves visibility for large orgs
             "Aggregating switch physical counts by %s from %d records", distinct, len(switch_records)
         )
         counts: dict[str, int] = {}  # WHY: bucket -> running total
@@ -101,13 +103,13 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
             {"device_type": "switch", distinct: value, "count": count} for value, count in counts.items()
         ]
         rows.sort(key=lambda row: -int(row.get("count", 0)))  # WHY: largest buckets first for readability
-        logging.debug("Switch %s aggregation: %d distinct values", distinct, len(rows))  # WHY: outcome trace
+        logger.debug("Switch %s aggregation: %d distinct values", distinct, len(rows))  # WHY: outcome trace
         return rows  # WHY: caller may merge with unassigned rows before rendering
 
     @staticmethod
     def _fetch_gateway_physical_inventory(target_org_id: str) -> list[dict]:  # WHY: HA-aware gateway listing
         """Fetch gateway inventory records with vc=True to include HA members."""
-        logging.info("Fetching gateway physical inventory via getOrgInventory, org=%s", target_org_id)  # WHY: op trace
+        logger.info("Fetching gateway physical inventory via getOrgInventory, org=%s", target_org_id)  # WHY: op trace
         try:  # WHY: inventory fetch errors must not abort the larger summary run
             response = mistapi.api.v1.orgs.inventory.getOrgInventory(  # WHY: getOrgInventory yields per-node records
                 apisession, target_org_id, type="gateway", vc=True, limit=_INVENTORY_PAGE_SIZE
@@ -116,7 +118,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
         except Exception as error:  # WHY: degrade gracefully rather than crash the parent report
             logging.exception("getOrgInventory gateway failed: %s", error)  # WHY: traceback for ops
             all_records = []  # WHY: empty list keeps callers happy
-        logging.info(  # WHY: summarize outcome once so logs stay quiet during success
+        logger.info(  # WHY: summarize outcome once so logs stay quiet during success
             "Gateway physical inventory complete: %d physical devices org=%s", len(all_records), target_org_id
         )
         return all_records  # WHY: caller aggregates counts from these records
@@ -124,7 +126,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
     @staticmethod
     def _aggregate_gateway_counts(gateway_records: list[dict], distinct: str) -> list[dict]:  # WHY: per-record sum
         """Aggregate gateway counts by model/version using one record per physical gateway."""
-        logging.info(  # WHY: op trace mirrors switch aggregation for parity
+        logger.info(  # WHY: op trace mirrors switch aggregation for parity
             "Aggregating gateway physical counts by %s from %d records", distinct, len(gateway_records)
         )
         counts: dict[str, int] = {}  # WHY: bucket -> physical gateway count
@@ -135,13 +137,13 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
             {"device_type": "gateway", distinct: value, "count": count} for value, count in counts.items()
         ]
         rows.sort(key=lambda row: -int(row.get("count", 0)))  # WHY: largest buckets first for readability
-        logging.debug("Gateway %s aggregation: %d distinct values", distinct, len(rows))  # WHY: outcome trace
+        logger.debug("Gateway %s aggregation: %d distinct values", distinct, len(rows))  # WHY: outcome trace
         return rows  # WHY: caller may merge with unassigned rows before rendering
 
     @staticmethod
     def _fetch_ap_inventory(target_org_id: str) -> list[dict]:  # WHY: portal "Claim APs" data source
         """Fetch all claimed APs (assigned + unassigned) from the org inventory."""
-        logging.info("Fetching all AP inventory via getOrgInventory, org=%s", target_org_id)  # WHY: op trace
+        logger.info("Fetching all AP inventory via getOrgInventory, org=%s", target_org_id)  # WHY: op trace
         try:  # WHY: inventory fetch errors must not abort the larger summary run
             response = mistapi.api.v1.orgs.inventory.getOrgInventory(  # WHY: same data as portal claim screen
                 apisession, target_org_id, type="ap", limit=_INVENTORY_PAGE_SIZE
@@ -150,7 +152,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
         except Exception as error:  # WHY: graceful degradation keeps other reports running
             logging.exception("getOrgInventory AP fetch failed: %s", error)  # WHY: traceback for ops
             all_records = []  # WHY: empty result surfaces no AP rows rather than crashing
-        logging.debug("AP inventory fetched: %d records org=%s", len(all_records), target_org_id)  # WHY: outcome
+        logger.debug("AP inventory fetched: %d records org=%s", len(all_records), target_org_id)  # WHY: outcome
         return all_records  # WHY: caller aggregates by version/model
 
     @staticmethod
@@ -165,7 +167,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
     @staticmethod
     def _aggregate_ap_counts(ap_records: list[dict], distinct: str) -> list[dict]:  # WHY: full-inventory AP sum
         """Aggregate AP counts from full inventory so claimed-but-never-connected APs are not lost."""
-        logging.info("Aggregating %d AP inventory records by %s", len(ap_records), distinct)  # WHY: op trace
+        logger.info("Aggregating %d AP inventory records by %s", len(ap_records), distinct)  # WHY: op trace
         counts: dict[str, int] = {}  # WHY: bucket label -> running count
         for record in ap_records:  # WHY: walk every claimed AP exactly once
             value = OrgDeviceInventorySummaryCore._ap_inventory_bucket(record, distinct)  # WHY: 3-way version rule
@@ -174,13 +176,13 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
             {"device_type": "ap", distinct: value, "count": count} for value, count in counts.items()
         ]
         rows.sort(key=lambda row: -int(row.get("count", 0)))  # WHY: largest buckets first for readability
-        logging.debug("AP %s aggregation produced %d buckets", distinct, len(rows))  # WHY: outcome trace
+        logger.debug("AP %s aggregation produced %d buckets", distinct, len(rows))  # WHY: outcome trace
         return rows  # WHY: caller may merge with unassigned rows before rendering
 
     @staticmethod
     def _fetch_unassigned_inventory(target_org_id: str) -> list[dict]:  # WHY: unassigned switches only
         """Fetch switch inventory that is claimed but not assigned to any site."""
-        logging.info("Fetching unassigned switch inventory via getOrgInventory, org=%s", target_org_id)  # WHY: trace
+        logger.info("Fetching unassigned switch inventory via getOrgInventory, org=%s", target_org_id)  # WHY: trace
         try:  # WHY: supplemental fetch errors must not break the primary report
             response = mistapi.api.v1.orgs.inventory.getOrgInventory(  # WHY: inventory API returns claimed stock
                 apisession, target_org_id, type="switch", limit=_INVENTORY_PAGE_SIZE
@@ -190,7 +192,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
             logging.exception("getOrgInventory unassigned switch failed: %s", error)  # WHY: traceback for ops
             all_records = []  # WHY: empty on error keeps downstream filters valid
         unassigned = [record for record in all_records if not record.get("site_id")]  # WHY: no site_id => stock
-        logging.debug(  # WHY: filter selectivity trace for post-mortem sizing
+        logger.debug(  # WHY: filter selectivity trace for post-mortem sizing
             "Unassigned switch inventory: %d of %d records have no site_id", len(unassigned), len(all_records)
         )
         return unassigned  # WHY: caller aggregates by version/model
@@ -205,7 +207,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
     @staticmethod
     def _aggregate_unassigned_counts(unassigned_records: list[dict], distinct: str) -> list[dict]:  # WHY: stock rollup
         """Aggregate unassigned device counts. Firmware rows bucket under an 'unassigned' label."""
-        logging.info("Aggregating %d unassigned records by %s", len(unassigned_records), distinct)  # WHY: op trace
+        logger.info("Aggregating %d unassigned records by %s", len(unassigned_records), distinct)  # WHY: op trace
         counts: dict[tuple[str, str], int] = {}  # WHY: key on (device_type, bucket) to keep types separate
         for record in unassigned_records:  # WHY: walk each unassigned inventory record once
             device_type = record.get("type") or _UNKNOWN  # WHY: inventory record carries its own ap/switch type
@@ -215,13 +217,13 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
             {"device_type": device_type, distinct: value, "count": count}
             for (device_type, value), count in counts.items()
         ]
-        logging.debug("Unassigned %s aggregation produced %d rows", distinct, len(rows))  # WHY: outcome trace
+        logger.debug("Unassigned %s aggregation produced %d rows", distinct, len(rows))  # WHY: outcome trace
         return rows  # WHY: caller merges with assigned rows before rendering
 
     @staticmethod
     def _merge_counts(base_rows: list[dict], extra_rows: list[dict], distinct: str) -> list[dict]:  # WHY: sum overlaps
         """Merge supplemental rows into base rows, summing counts by (device_type, value)."""
-        logging.info(  # WHY: op trace with input sizes eases regressions triage
+        logger.info(  # WHY: op trace with input sizes eases regressions triage
             "Merging %d base and %d supplemental %s rows", len(base_rows), len(extra_rows), distinct
         )
         combined: dict[tuple[str, str], int] = {}  # WHY: running total per (device_type, value)
@@ -236,13 +238,13 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
             {"device_type": device_type, distinct: value, "count": combined[(device_type, value)]}
             for (device_type, value) in order
         ]
-        logging.debug("Merge produced %d combined %s rows", len(merged), distinct)  # WHY: outcome trace
+        logger.debug("Merge produced %d combined %s rows", len(merged), distinct)  # WHY: outcome trace
         return merged  # WHY: caller sorts before rendering
 
     @staticmethod
     def _fetch_switch_type_rows(target_org_id: str, distinct: str, _ap_records: list[dict] | None) -> list[dict]:
         """Return switch rows using the VC-aware fetch + aggregate pipeline."""  # WHY: dispatch handler for "switch"
-        logging.info("Fetching switch %s counts with VC-aware method, org=%s", distinct, target_org_id)  # WHY: trace
+        logger.info("Fetching switch %s counts with VC-aware method, org=%s", distinct, target_org_id)  # WHY: trace
         try:  # WHY: never abort the combined report on one type's failure
             records = OrgDeviceInventorySummaryCore._fetch_switch_physical_inventory(target_org_id)  # WHY: paginate
             return OrgDeviceInventorySummaryCore._aggregate_switch_counts(records, distinct)  # WHY: VC-accurate sum
@@ -253,7 +255,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
     @staticmethod
     def _fetch_gateway_type_rows(target_org_id: str, distinct: str, _ap_records: list[dict] | None) -> list[dict]:
         """Return gateway rows using the HA-aware fetch + aggregate pipeline."""  # WHY: dispatch handler for "gateway"
-        logging.info("Fetching gateway %s counts with HA-aware method, org=%s", distinct, target_org_id)  # WHY: trace
+        logger.info("Fetching gateway %s counts with HA-aware method, org=%s", distinct, target_org_id)  # WHY: trace
         try:  # WHY: never abort the combined report on one type's failure
             records = OrgDeviceInventorySummaryCore._fetch_gateway_physical_inventory(target_org_id)  # WHY: HA members
             return OrgDeviceInventorySummaryCore._aggregate_gateway_counts(records, distinct)  # WHY: per-record sum
@@ -285,7 +287,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
         ap_records: list[dict] | None = None,
     ) -> list[dict]:
         """Fetch grouped counts for AP/switch/gateway by model or version."""
-        logging.info("Fetching device %s counts for all types, org=%s", distinct, target_org_id)  # WHY: op trace
+        logger.info("Fetching device %s counts for all types, org=%s", distinct, target_org_id)  # WHY: op trace
         all_rows: list[dict] = []  # WHY: accumulate rows across every device type
         for device_type in OrgDeviceInventorySummaryCore._DEVICE_TYPES:  # WHY: canonical ordering
             handler = OrgDeviceInventorySummaryCore._TYPE_HANDLERS[device_type]  # WHY: table-driven avoids branching
@@ -294,7 +296,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
             all_rows, target_org_id, distinct, unassigned_records
         )
         all_rows.sort(key=lambda row: (row.get("device_type", ""), -int(row.get("count", 0))))  # WHY: stable output
-        logging.info("Total %s count rows after fetch and sort: %d", distinct, len(all_rows))  # WHY: outcome trace
+        logger.info("Total %s count rows after fetch and sort: %d", distinct, len(all_rows))  # WHY: outcome trace
         return all_rows  # WHY: caller renders and exports
 
     @staticmethod
@@ -319,13 +321,13 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
         """Print the labelled banner and table for one summary."""
         separator = "=" * _SEPARATOR_WIDTH  # WHY: reuse the constant width for both borders
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("\n%s", separator)  # WHY: leading blank line separates from preceding output
+        logger.info("\n%s", separator)  # WHY: leading blank line separates from preceding output
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("  %s Distribution Summary", distinct.capitalize())  # WHY: operator label matches column
+        logger.info("  %s Distribution Summary", distinct.capitalize())  # WHY: operator label matches column
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info(separator)  # WHY: trailing border closes the banner block
+        logger.info(separator)  # WHY: trailing border closes the banner block
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("%s", table)  # WHY: rendered PrettyTable follows the banner
+        logger.info("%s", table)  # WHY: rendered PrettyTable follows the banner
 
     @staticmethod
     def _display_and_export(rows: list[dict], distinct: str, filename: str, api_func: str) -> None:  # WHY: I/O leaf
@@ -419,7 +421,7 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
     @staticmethod
     def run_for_org(target_org_id: str) -> tuple[list[dict], list[dict], list[dict], str]:  # WHY: pipeline entry
         """Run all inventory summaries for one organization and export results."""
-        logging.info("Starting org device inventory summary org=%s", target_org_id)  # WHY: op trace
+        logger.info("Starting org device inventory summary org=%s", target_org_id)  # WHY: op trace
         start_time = time.time()  # WHY: elapsed reporting for operator feedback
         safe_org = OrgDeviceInventorySummaryCore._resolve_safe_org_name(target_org_id)  # WHY: file-safe prefix
         unassigned_records = OrgDeviceInventorySummaryCore._fetch_unassigned_inventory(target_org_id)  # WHY: reuse
@@ -434,11 +436,11 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
             target_org_id, safe_org, model_rows, unassigned_records, ap_records
         )
         elapsed = time.time() - start_time  # WHY: total wall-clock cost of the summary
-        logging.info(  # WHY: log outcome so ops can tune inventory volume
+        logger.info(  # WHY: log outcome so ops can tune inventory volume
             "Org device inventory summary for %s completed in %.1f seconds", target_org_id, elapsed
         )
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("\nSummary for %s completed in %.1f seconds", safe_org, elapsed)  # operator feedback
+        logger.info("\nSummary for %s completed in %.1f seconds", safe_org, elapsed)  # operator feedback
         return model_rows, version_rows, ver_per_model, safe_org  # WHY: public tuple preserved for callers
 
     @staticmethod
@@ -446,8 +448,8 @@ class OrgDeviceInventorySummaryCore:  # WHY: single-org inventory summarization 
         """Run inventory summaries for the currently selected org."""
         if not org_id:  # WHY: guard clause reports the misconfiguration instead of crashing
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info("X No organization selected")  # WHY: user-visible error mirrors the rest of the CLI
-            logging.error("OrgDeviceInventorySummaryCore.execute called with empty org_id")  # WHY: audit trail
+            logger.info("X No organization selected")  # WHY: user-visible error mirrors the rest of the CLI
+            logger.error("OrgDeviceInventorySummaryCore.execute called with empty org_id")  # WHY: audit trail
             return  # WHY: early return keeps the happy path un-indented
         OrgDeviceInventorySummaryCore.run_for_org(org_id)  # WHY: delegate to the parameterized pipeline
 
