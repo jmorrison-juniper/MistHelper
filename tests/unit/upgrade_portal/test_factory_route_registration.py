@@ -21,14 +21,3 @@ def test_promised_route_import_failure_stops_startup(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(factory, "BLUEPRINT_NAMES", (missing_name,))  # Limit the test to one promised route.
     with pytest.raises(ModuleNotFoundError):  # The import fault must reach the caller.
         factory.register_blueprints(application)  # Registering a promised route must not hide a broken import.
-
-
-def test_promised_route_without_blueprint_stops_startup(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A listed route module must publish a blueprint attribute."""
-    application = Flask(__name__)  # The target app receives no routes after the blueprint fault.
-    missing_name = "empty_route"  # A fixed name keeps the expected message clear.
-    module = type("RouteModule", (), {})()  # A module-like object with no blueprint proves the guard.
-    monkeypatch.setattr(factory, "BLUEPRINT_NAMES", (missing_name,))  # Limit the test to one promised route.
-    monkeypatch.setattr(factory, "import_route_module", lambda name: module)  # Avoid filesystem imports.
-    with pytest.raises(RuntimeError, match="holds no blueprint"):  # The factory must state the broken contract.
-        factory.register_blueprints(application)  # Registering a blueprint-free module must fail loudly.

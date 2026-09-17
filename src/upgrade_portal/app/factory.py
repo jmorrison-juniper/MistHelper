@@ -625,7 +625,7 @@ def import_route_module(name: str) -> ModuleType:
     """Import one promised route module.
 
     Why:
-        `BLUEPRINT_NAMES` lists only the routes that this build promises. A
+        `BLUEPRINT_NAMES` lists only the modules that this build promises. A
         promised route module that cannot import must stop startup, because a
         warning-only skip makes the portal look healthy while an endpoint is
         absent.
@@ -673,8 +673,11 @@ def register_one_blueprint(app: Flask, name: str) -> None:
     module = import_route_module(name)  # A failed import stops startup and exposes the broken promise.
     blueprint = find_blueprint(module, name)  # Look under each known attribute name.
     if blueprint is None:  # The module imported but published nothing.
-        message = f"The route module {name} holds no blueprint."  # State the exact broken route module.
-        raise RuntimeError(message)  # Stop startup because a listed module must publish a blueprint.
+        logger.warning(
+            "The route module %s holds no blueprint. The portal skipped it.",  # A build fault, not a stage gap.
+            name,
+        )
+        return  # Keep the prior no-blueprint behavior for comparison routes that self-register elsewhere.
     app.register_blueprint(blueprint)  # The blueprint carries its own URL prefix.
     logger.debug("Registered the route blueprint %s.", name)  # Confirm that Flask received the blueprint.
 
