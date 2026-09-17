@@ -758,68 +758,51 @@ class APProfileMigrationManager:
 
     @staticmethod
     def _print_revert_summary(summary: APProfileRevertSummary) -> None:
-        """Print the operator-facing end-of-run summary for menu 208.
+        """Print the operator-facing end-of-run summary for menu 208."""
+        logging.info("Printing the AP profile revert summary")  # Record the operator summary boundary.
+        print("\nRevert summary:")  # Keep the existing heading text for characterization tests.
+        print(f"  Backup file: {summary.run.backup_path}")  # Show the replayed backup path for audit lookup.
+        print(f"  Source profile: {summary.run.source_name} (id={summary.run.source_id})")  # Show the restored profile.
+        print(f"  Planned APs: {summary.run.planned_count}")  # Show the original planned AP count.
+        print(f"  Reverted APs: {len(summary.reverted_ids)}")  # Show successful revert count.
+        print(f"  Missing APs: {len(summary.missing_ids)}")  # Show recoverable missing AP count.
+        print(f"  Failed APs: {len(summary.failed_ids)}")  # Show failed AP count for repair triage.
+        print(f"  Outcome: {summary.run.outcome}")  # Show the final state label.
+        APProfileMigrationManager._print_revert_detail_ids(summary)  # Print optional AP ID details.
+        APProfileMigrationManager._print_pacing_summary(summary.run.pacing_stats)  # Print rate-limit counters.
+        logging.debug("Printed revert summary with outcome=%s", summary.run.outcome)  # Record summary completion.
 
-        Why:
-            The summary block is deterministic text with two conditional
-            "missing" / "failed" lines and one adaptive-limiter telemetry
-            block. Extracting it drops several branches out of the entry point
-            and gives a single call site to freeze in golden-output tests.
+    @staticmethod
+    def _print_revert_detail_ids(summary: APProfileRevertSummary) -> None:
+        """Print optional missing and failed AP identifiers for menu 208."""
+        if summary.missing_ids:  # Name every missing AP so the operator can repair inventory drift.
+            print(f"  Missing device_ids: {', '.join(summary.missing_ids)}")  # Preserve the existing detail text.
+        if summary.failed_ids:  # Name every failed AP so the operator can retry or repair by hand.
+            print(f"  Failed device_ids: {', '.join(summary.failed_ids)}")  # Preserve the existing detail text.
 
-        Args:
-            summary: Revert result data for the operator-facing summary.
-        """
-        print("\nRevert summary:")
-        print(f"  Backup file: {summary.run.backup_path}")
-        print(f"  Source profile: {summary.run.source_name} (id={summary.run.source_id})")
-        print(f"  Planned APs: {summary.run.planned_count}")
-        print(f"  Reverted APs: {len(summary.reverted_ids)}")
-        print(f"  Missing APs: {len(summary.missing_ids)}")
-        print(f"  Failed APs: {len(summary.failed_ids)}")
-        print(f"  Outcome: {summary.run.outcome}")
-        if summary.missing_ids:
-            # WHY: name every missing AP so the operator can hand-fix.
-            print(f"  Missing device_ids: {', '.join(summary.missing_ids)}")
-        if summary.failed_ids:
-            print(f"  Failed device_ids: {', '.join(summary.failed_ids)}")
+    @staticmethod
+    def _pacing_delay_summary(pacing_stats: dict[str, float | int]) -> tuple[int, float, float]:
+        """Return delay count, mean, and maximum for a pacing statistics dict."""
+        delay_count = int(pacing_stats["delay_count"])  # Normalize the counter before division.
+        delay_sum = float(pacing_stats["delay_sum"])  # Normalize the sum before division.
+        delay_mean = (delay_sum / delay_count) if delay_count > 0 else 0.0  # Avoid division by zero.
+        delay_max = float(pacing_stats["delay_max"])  # Normalize the max value for formatting.
+        return delay_count, delay_mean, delay_max  # Return all display values as one grouped result.
 
-        # WHY: FR-A09 -- adaptive-rate-limiter telemetry lines. Same text,
-        # same order as the migrate-side summary so operators reading both
-        # menus see one consistent block.
-        delay_count = int(summary.run.pacing_stats["delay_count"])
-        delay_mean = (summary.run.pacing_stats["delay_sum"] / delay_count) if delay_count > 0 else 0.0
-        delay_max = float(summary.run.pacing_stats["delay_max"])
-        print(f"  Total PUTs issued        : {int(summary.run.pacing_stats['puts_issued'])}")
-        print(f"  HTTP 429 responses seen  : {int(summary.run.pacing_stats['http_429_seen'])}")
-        print(f"  Non-429 failures         : {int(summary.run.pacing_stats['non_429_failures'])}")
-        print(f"  Rate limiter delay (s)   : mean={delay_mean:.3f}  max={delay_max:.3f}")
+    @staticmethod
+    def _print_pacing_summary(pacing_stats: dict[str, float | int]) -> None:
+        """Print the shared adaptive-rate-limiter summary block."""
+        delay_values = APProfileMigrationManager._pacing_delay_summary(pacing_stats)  # Reuse one formula.
+        _delay_count, delay_mean, delay_max = delay_values  # Name each display value for the output row.
+        print(f"  Total PUTs issued        : {int(pacing_stats['puts_issued'])}")  # Show write attempts issued.
+        print(f"  HTTP 429 responses seen  : {int(pacing_stats['http_429_seen'])}")  # Show throttle events.
+        print(f"  Non-429 failures         : {int(pacing_stats['non_429_failures'])}")  # Show hard failure events.
+        print(f"  Rate limiter delay (s)   : mean={delay_mean:.3f}  max={delay_max:.3f}")  # Show limiter delay values.
 
     @staticmethod
     def _build_revert_audit_payload(org_id: str, summary: APProfileRevertSummary) -> dict[str, Any]:
-        """Build the JSONL audit payload for a completed revert run.
-
-        Why:
-            Split from the entry point so the payload shape can be exercised
-            in unit tests without invoking the whole menu. The shape matches
-            data-model-rate-limiting.md section 3 for the pacing sub-dict.
-
-        Args:
-            org_id: The operator's current org.
-            backup_path: Absolute path of the backup file that was replayed.
-            source_id: Original source profile ID reverted to.
-            planned_count: Total AP count from the backup's ``aps_planned``.
-            reverted_ids: Successfully reverted device IDs.
-            missing_ids: Device IDs Mist reported as no-longer-existing.
-            failed_ids: Device IDs that failed for non-429 reasons.
-            outcome: ``success`` / ``partial`` / ``failure`` label.
-            pacing_stats: Final pacing counters from the revert loop.
-
-        Returns:
-            The dict that ``_emit_revert_audit`` will write as one JSONL row.
-        """
-        delay_count = int(summary.run.pacing_stats["delay_count"])
-        delay_mean = (summary.run.pacing_stats["delay_sum"] / delay_count) if delay_count > 0 else 0.0
-        delay_max = float(summary.run.pacing_stats["delay_max"])
+        """Build the JSONL audit payload for a completed revert run."""
+        logging.info("Building the AP profile revert audit payload")  # Record the audit serialization boundary.
         return {
             "event_type": "ap_profile_migration_revert",
             "timestamp_utc": _utc_iso_timestamp(),
@@ -833,14 +816,23 @@ class APProfileMigrationManager:
             "outcome": summary.run.outcome,
             # WHY: FR-A09 -- pacing telemetry sub-dict per
             # data-model-rate-limiting.md section 3.
-            "pacing": {
-                "puts_issued": int(summary.run.pacing_stats["puts_issued"]),
-                "http_429_seen": int(summary.run.pacing_stats["http_429_seen"]),
-                "non_429_failures": int(summary.run.pacing_stats["non_429_failures"]),
-                "delay_seconds_mean": round(delay_mean, 3),
-                "delay_seconds_max": round(delay_max, 3),
-            },
+            "pacing": APProfileMigrationManager._build_pacing_audit_payload(summary.run.pacing_stats),
         }
+
+    @staticmethod
+    def _build_pacing_audit_payload(pacing_stats: dict[str, float | int]) -> dict[str, int | float]:
+        """Build the shared pacing sub-dict for migration and revert audits."""
+        delay_values = APProfileMigrationManager._pacing_delay_summary(pacing_stats)  # Reuse summary math.
+        _delay_count, delay_mean, delay_max = delay_values  # Name each audit value.
+        payload = {  # Keep the audit key order stable for JSONL consumers.
+            "puts_issued": int(pacing_stats["puts_issued"]),  # Record total PUT attempts.
+            "http_429_seen": int(pacing_stats["http_429_seen"]),  # Record throttle responses.
+            "non_429_failures": int(pacing_stats["non_429_failures"]),  # Record non-throttle failures.
+            "delay_seconds_mean": round(delay_mean, 3),  # Record rounded average delay.
+            "delay_seconds_max": round(delay_max, 3),  # Record rounded maximum delay.
+        }
+        logging.debug("Built pacing audit payload with puts_issued=%s", payload["puts_issued"])  # Record size.
+        return payload  # Return the pacing sub-dict for the caller envelope.
 
     # ------------------------------------------------------------------
     # Private helpers -- adaptive rate limiting (addendum FR-A01..FR-A09)
@@ -1198,27 +1190,11 @@ class APProfileMigrationManager:
         context: APProfileBackupContext,
         ap_records: list[dict[str, Any]],
     ) -> dict[str, Any]:
-        """Assemble the backup dict per data-model §1.3.
-
-        Why:
-            Centralises the schema so a future field addition edits one
-            place. Timestamp is normalized to trailing ``Z`` for human
-            readability (data-model §1.3).
-
-        Args:
-            org_id: The Mist org UUID.
-            source_id: The source profile UUID.
-            source_snapshot: Full source-profile JSON.
-            target_id: The target profile UUID.
-            target_snapshot: Full target-profile JSON.
-            ap_records: The APs the migration plans to reassign.
-
-        Returns:
-            The pre-run backup payload dict.
-        """
-        # WHY: aware UTC + ISO extended, then replace "+00:00" with "Z" for the
-        # canonical trailing-Z form the data-model example uses.
-        ts = datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+        """Assemble the backup dict per data-model section 1.3."""
+        logging.info("Building the AP profile migration backup payload")  # Record the backup build boundary.
+        ts = datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")  # Use canonical UTC text.
+        planned = [dict(rec) for rec in ap_records]  # Copy AP records so later caller mutation cannot alter the backup.
+        logging.debug("Built backup payload inputs with planned_count=%s", len(planned))  # Record payload size.
         return {
             "schema_version": _BACKUP_SCHEMA_VERSION,
             "org_id": context.org_id,
@@ -1227,7 +1203,7 @@ class APProfileMigrationManager:
             "target_profile_id": context.target_id,
             "source_profile_snapshot": dict(context.source_snapshot),
             "target_profile_snapshot": dict(context.target_snapshot),
-            "aps_planned": [dict(rec) for rec in ap_records],
+            "aps_planned": planned,
             "aps_reassigned": [],
             "outcome": "success",
             "failure_detail": None,
@@ -1235,45 +1211,25 @@ class APProfileMigrationManager:
 
     @staticmethod
     def _write_backup_file(payload: dict[str, Any], data_dir: str) -> str:
-        """Write ``payload`` to a new backup file and return the absolute path.
+        """Write ``payload`` to a new backup file and return the absolute path."""
+        logging.info("Writing the AP profile migration backup file")  # Record the backup write boundary.
+        filename = APProfileMigrationManager._backup_filename(payload)  # Build the data-model file name.
+        target_dir = Path(data_dir)  # Use pathlib so Windows and Linux builds share one path rule.
+        target_dir.mkdir(parents=True, exist_ok=True)  # Ensure a fresh checkout has the data directory.
+        target_path = target_dir / filename  # Join the directory and file name safely.
+        target_path.write_text(json.dumps(payload, indent=2, sort_keys=False), encoding="utf-8")  # Write readable JSON.
+        resolved = str(target_path.resolve())  # Normalize the path for the operator summary and audit.
+        logging.debug("Wrote AP profile migration backup file to %s", resolved)  # Record the written path.
+        return resolved  # Return the resolved backup path for downstream revert use.
 
-        Why:
-            The filename convention (data-model §1.1) sorts chronologically
-            as a plain string, so ``ls | sort`` gives newest-last without a
-            special comparator.
-
-        Args:
-            payload: The backup dict returned by ``_build_backup_payload``.
-            data_dir: Directory under which the file is written.
-
-        Returns:
-            The absolute path (as a string) of the file just written.
-
-        Raises:
-            OSError: When the write fails for any reason (disk full, denied,
-                path missing). The caller MUST NOT issue any PUT if this
-                raises (FR-011).
-        """
-        # WHY: parse ISO timestamp back into the basic YYYYMMDDTHHMMSSZ form
-        # used in the filename per data-model §1.1.
-        iso_ts = str(payload.get("migration_timestamp_utc", ""))
-        basic_ts = iso_ts.replace("-", "").replace(":", "")  # WHY: strip separators.
-        source_id = str(payload.get("source_profile_id", ""))
-        target_id = str(payload.get("target_profile_id", ""))
-        filename = f"ap-profile-migration_{basic_ts}_{source_id}_to_{target_id}.json"
-
-        # WHY: ensure the directory exists so a fresh checkout without data/
-        # still writes cleanly (a common CI-runner situation).
-        target_dir = Path(data_dir)
-        target_dir.mkdir(parents=True, exist_ok=True)
-        target_path = target_dir / filename
-        # WHY: sort_keys=False preserves the field order the data-model
-        # example shows -- readable for humans skimming the file.
-        target_path.write_text(
-            json.dumps(payload, indent=2, sort_keys=False),
-            encoding="utf-8",
-        )
-        return str(target_path.resolve())
+    @staticmethod
+    def _backup_filename(payload: dict[str, Any]) -> str:
+        """Return the data-model file name for a migration backup."""
+        iso_ts = str(payload.get("migration_timestamp_utc", ""))  # Read the timestamp from the backup payload.
+        basic_ts = iso_ts.replace("-", "").replace(":", "")  # Strip separators for lexical time ordering.
+        source_id = str(payload.get("source_profile_id", ""))  # Read the source profile ID for the file name.
+        target_id = str(payload.get("target_profile_id", ""))  # Read the target profile ID for the file name.
+        return f"ap-profile-migration_{basic_ts}_{source_id}_to_{target_id}.json"  # Preserve the existing name shape.
 
     @staticmethod
     def _reassign_one_ap(
@@ -1478,49 +1434,43 @@ class APProfileMigrationManager:
 
     @staticmethod
     def _print_migration_summary(summary: APProfileMigrationSummary) -> None:
-        """Print the end-of-run summary block.
+        """Print the end-of-run summary block."""
+        logging.info("Printing the AP profile migration summary")  # Record the operator summary boundary.
+        planned = len(summary.payload.get("aps_planned", []))  # Count planned APs from the persisted schema.
+        reassigned = len(summary.payload.get("aps_reassigned", []))  # Count successfully reassigned APs.
+        outcome = summary.payload.get("outcome", "unknown")  # Read the final state label with the existing fallback.
+        print("\nMigration summary:")  # Keep the existing heading text.
+        print(f"  Source profile: {summary.source_name} (id={summary.source_id})")  # Show the source profile.
+        print(f"  Target profile: {summary.target_name} (id={summary.target_id})")  # Show the target profile.
+        print(f"  Planned APs: {planned}")  # Show the intended AP count.
+        print(f"  Reassigned APs: {reassigned}")  # Show the completed AP count.
+        print(f"  Outcome: {outcome}")  # Show the final state label.
+        print(f"  Backup file: {summary.backup_path}")  # Show the backup file for revert use.
+        APProfileMigrationManager._print_migration_failure(summary.payload, outcome)  # Print failure detail.
+        pacing_stats = APProfileMigrationManager._migration_pacing_stats(summary.payload)  # Read limiter counters.
+        APProfileMigrationManager._print_pacing_summary(pacing_stats)  # Print limiter counters.
+        logging.debug("Printed migration summary with outcome=%s", outcome)  # Record summary completion.
 
-        Why:
-            The summary names the source, target, backup file path, and the
-            planned/reassigned counts so the operator sees the outcome at a
-            glance without opening the JSON file.
+    @staticmethod
+    def _migration_pacing_stats(payload: dict[str, Any]) -> dict[str, float | int]:
+        """Return migration pacing statistics with the existing zero fallback."""
+        pacing_stats = payload.get("_pacing")  # Read the ephemeral summary data from the in-memory payload.
+        defaults = APProfileMigrationManager._new_pacing_stats()  # Preserve zero defaults for missing pacing keys.
+        if isinstance(pacing_stats, dict):  # Preserve existing values when the loop attached them.
+            defaults.update(pacing_stats)  # Preserve partial dict behavior by filling absent keys.
+        return defaults  # Return a complete counter set for output formatting.
 
-        Args:
-            summary: Migration result data for the operator-facing summary.
-        """
-        planned = len(summary.payload.get("aps_planned", []))
-        reassigned = len(summary.payload.get("aps_reassigned", []))
-        outcome = summary.payload.get("outcome", "unknown")
-        print("\nMigration summary:")
-        print(f"  Source profile: {summary.source_name} (id={summary.source_id})")
-        print(f"  Target profile: {summary.target_name} (id={summary.target_id})")
-        print(f"  Planned APs: {planned}")
-        print(f"  Reassigned APs: {reassigned}")
-        print(f"  Outcome: {outcome}")
-        print(f"  Backup file: {summary.backup_path}")
-        if outcome != "success":
-            fd = summary.payload.get("failure_detail")
-            if fd is not None:
-                print(f"  Failed AP: {fd.get('failed_device_id')}  " f"reason: {fd.get('error_message')}")
-        # WHY: FR-A09 -- adaptive-rate-limiter telemetry lines. Text and
-        # order pinned by data-model-rate-limiting.md section 2 so menus
-        # 207 and 208 present one consistent block to the operator.
-        pacing_stats = summary.payload.get("_pacing") or {
-            "puts_issued": 0,
-            "http_429_seen": 0,
-            "non_429_failures": 0,
-            "delay_sum": 0.0,
-            "delay_max": 0.0,
-            "delay_count": 0,
-        }
-        _delay_count = int(pacing_stats.get("delay_count", 0))
-        _delay_sum = float(pacing_stats.get("delay_sum", 0.0))
-        _delay_mean = (_delay_sum / _delay_count) if _delay_count > 0 else 0.0
-        _delay_max = float(pacing_stats.get("delay_max", 0.0))
-        print(f"  Total PUTs issued        : {int(pacing_stats.get('puts_issued', 0))}")
-        print(f"  HTTP 429 responses seen  : {int(pacing_stats.get('http_429_seen', 0))}")
-        print(f"  Non-429 failures         : {int(pacing_stats.get('non_429_failures', 0))}")
-        print(f"  Rate limiter delay (s)   : mean={_delay_mean:.3f}  max={_delay_max:.3f}")
+    @staticmethod
+    def _print_migration_failure(payload: dict[str, Any], outcome: Any) -> None:
+        """Print migration failure detail when the outcome is not success."""
+        if outcome == "success":  # Keep success output byte-identical by printing no failure detail.
+            return  # Return early because no failure block is needed.
+        failure_detail = payload.get("failure_detail")  # Read the persisted failure payload.
+        if failure_detail is not None:  # Preserve the prior condition for partial runs.
+            print(  # Preserve the existing operator-visible failure line.
+                f"  Failed AP: {failure_detail.get('failed_device_id')}  "
+                f"reason: {failure_detail.get('error_message')}"
+            )
 
     # ------------------------------------------------------------------
     # Private helpers -- revert (T036-T042)
@@ -1670,91 +1620,84 @@ class APProfileMigrationManager:
 
     @staticmethod
     def _validate_backup_top_level(payload: dict[str, Any]) -> None:
-        """Enforce data-model 1.6 rules 1 through 3 on the backup top level.
+        """Enforce data-model rules 1 through 3 on the backup top level."""
+        logging.info("Validating AP profile backup top-level fields")  # Record the schema validation boundary.
+        APProfileMigrationManager._require_backup_version(payload)  # Validate the schema version first.
+        APProfileMigrationManager._require_backup_string_fields(payload)  # Validate required string fields next.
+        APProfileMigrationManager._require_backup_plan_list(payload)  # Validate the planned AP list last.
+        logging.debug("Validated AP profile backup top-level fields")  # Record validation completion.
 
-        Why:
-            Isolates the schema-version + required-string-field + planned-list
-            checks so ``_load_and_validate_backup`` stays under the Radon
-            complexity gate.
-
-        Args:
-            payload: The parsed backup dict.
-
-        Returns:
-            None.
-
-        Raises:
-            ValueError: When schema_version is wrong, a required string
-                field is missing or empty, or ``aps_planned`` is missing or
-                not a JSON array.
-        """
-        version = payload.get("schema_version")
-        if version != _BACKUP_SCHEMA_VERSION:
+    @staticmethod
+    def _require_backup_version(payload: dict[str, Any]) -> None:
+        """Validate the backup schema version."""
+        version = payload.get("schema_version")  # Read the schema version field from the backup.
+        if version != _BACKUP_SCHEMA_VERSION:  # Refuse unknown backup schemas before any AP changes.
             raise ValueError(f"schema_version must be {_BACKUP_SCHEMA_VERSION}; got {version!r}")
-        for field in ("org_id", "source_profile_id", "target_profile_id", "migration_timestamp_utc"):
-            value = payload.get(field)
-            if not isinstance(value, str) or not value.strip():
+
+    @staticmethod
+    def _require_backup_string_fields(payload: dict[str, Any]) -> None:
+        """Validate required top-level string fields."""
+        fields = ("org_id", "source_profile_id", "target_profile_id", "migration_timestamp_utc")  # Preserve order.
+        for field in fields:  # Validate fields in the original message order.
+            value = payload.get(field)  # Read the field value for shape validation.
+            if not isinstance(value, str) or not value.strip():  # Require a non-empty string value.
                 raise ValueError(f"required field {field!r} must be a non-empty string")
-        planned = payload.get("aps_planned")
-        if planned is None:
+
+    @staticmethod
+    def _require_backup_plan_list(payload: dict[str, Any]) -> None:
+        """Validate that ``aps_planned`` exists and is a list."""
+        planned = payload.get("aps_planned")  # Read the planned AP list from the backup.
+        if planned is None:  # Preserve the specific missing-field message.
             raise ValueError("required field 'aps_planned' is missing")
-        if not isinstance(planned, list):
+        if not isinstance(planned, list):  # Preserve the specific type message.
             raise ValueError("required field 'aps_planned' must be a JSON array")
 
     @staticmethod
     def _validate_planned_records(planned: list[Any]) -> None:
-        """Enforce data-model 1.6 rule 4 on every ``aps_planned`` entry.
+        """Enforce data-model rule 4 on every ``aps_planned`` entry."""
+        logging.info("Validating %d planned AP records from backup", len(planned))  # Record validation scope.
+        for idx, rec in enumerate(planned):  # Preserve the original record order in error messages.
+            APProfileMigrationManager._validate_planned_record(idx, rec)  # Validate one AP record.
+        logging.debug("Validated %d planned AP records from backup", len(planned))  # Record validation count.
 
-        Why:
-            Each APRecord must have non-empty ``device_id``, ``site_id``,
-            and ``mac``. Extracting the loop keeps the caller's CC low.
+    @staticmethod
+    def _validate_planned_record(index: int, record: Any) -> None:
+        """Validate one planned AP record from the backup file."""
+        if not isinstance(record, dict):  # Require object shape for each AP plan row.
+            raise ValueError(f"aps_planned[{index}] must be a JSON object")
+        for field in ("device_id", "site_id", "mac"):  # Preserve required-field validation order.
+            APProfileMigrationManager._validate_planned_field(index, record, field)  # Validate one field.
 
-        Args:
-            planned: The list of AP records from the backup file.
-
-        Returns:
-            None.
-
-        Raises:
-            ValueError: When any entry is not a dict or any required
-                sub-field is missing or empty.
-        """
-        for idx, rec in enumerate(planned):
-            if not isinstance(rec, dict):
-                raise ValueError(f"aps_planned[{idx}] must be a JSON object")
-            for sub in ("device_id", "site_id", "mac"):
-                v = rec.get(sub)
-                if not isinstance(v, str) or not v.strip():
-                    raise ValueError(f"aps_planned[{idx}].{sub} must be a non-empty string")
+    @staticmethod
+    def _validate_planned_field(index: int, record: dict[str, Any], field: str) -> None:
+        """Validate one required field in a planned AP record."""
+        value = record.get(field)  # Read the AP record field value.
+        if not isinstance(value, str) or not value.strip():  # Require a non-empty string value.
+            raise ValueError(f"aps_planned[{index}].{field} must be a non-empty string")
 
     @staticmethod
     def _validate_reassigned_list(reassigned: Any, planned: list[Any]) -> None:
-        """Enforce data-model 1.6 rule 5 on ``aps_reassigned``.
-
-        Why:
-            Every entry of ``aps_reassigned`` must be a string and must
-            appear as a ``device_id`` in ``aps_planned``. Guards against
-            hand-edited backups that reference APs not in the plan.
-
-        Args:
-            reassigned: The value of the ``aps_reassigned`` field.
-            planned: The list of AP records (already validated).
-
-        Returns:
-            None.
-
-        Raises:
-            ValueError: When the field is not a list, an entry is not a
-                string, or an entry is not present in ``aps_planned``.
-        """
-        if not isinstance(reassigned, list):
+        """Enforce data-model rule 5 on ``aps_reassigned``."""
+        logging.info("Validating AP profile reassignment list")  # Record reassigned-list validation boundary.
+        if not isinstance(reassigned, list):  # Require list shape before iterating entries.
             raise ValueError("field 'aps_reassigned' must be a JSON array of strings")
-        planned_ids = {str(rec.get("device_id", "")) for rec in planned}
-        for entry in reassigned:
-            if not isinstance(entry, str):
-                raise ValueError("aps_reassigned entries must be strings")
-            if entry not in planned_ids:
-                raise ValueError(f"aps_reassigned contains id {entry!r} not present in aps_planned")
+        planned_ids = APProfileMigrationManager._planned_device_ids(planned)  # Build the valid ID set.
+        for entry in reassigned:  # Validate reassigned IDs in their stored order.
+            APProfileMigrationManager._validate_reassigned_entry(entry, planned_ids)  # Validate one reassigned ID.
+        logging.debug("Validated %d reassigned AP IDs", len(reassigned))  # Record validation count.
+
+    @staticmethod
+    def _planned_device_ids(planned: list[Any]) -> set[str]:
+        """Return the device IDs that appear in the planned AP list."""
+        return {str(record.get("device_id", "")) for record in planned}  # Preserve prior set construction.
+
+    @staticmethod
+    def _validate_reassigned_entry(entry: Any, planned_ids: set[str]) -> None:
+        """Validate one reassigned AP ID against the planned AP set."""
+        if not isinstance(entry, str):  # Require string entries before membership checks.
+            raise ValueError("aps_reassigned entries must be strings")
+        if entry not in planned_ids:  # Refuse a reassigned AP that does not appear in the plan.
+            raise ValueError(f"aps_reassigned contains id {entry!r} not present in aps_planned")
 
     @staticmethod
     def _validate_snapshot_ids(payload: dict[str, Any]) -> None:
