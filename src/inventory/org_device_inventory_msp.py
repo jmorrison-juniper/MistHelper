@@ -9,6 +9,8 @@ from typing import Any  # WHY: injected dependencies + Mist API responses are he
 
 from prettytable import PrettyTable  # WHY: render aligned pivot tables for operator console.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 # Module-level constants keep magic strings/values out of function bodies.
 _HEADER_DIVIDER: str = "=" * 62  # WHY: legacy divider width for MSP report headers.
 _MENU_DIVIDER: str = "=" * 60  # WHY: legacy divider width for the interactive dispatch menu.
@@ -84,7 +86,7 @@ def _prompt_msp_choice(privileges: list[dict[str, Any]]) -> dict[str, Any] | Non
         if 0 <= choice_idx < len(privileges):  # WHY: guard against out-of-range indexes.
             return privileges[choice_idx]  # WHY: return the selected MSP dict.
         print(_INVALID_SELECTION_MSG)  # WHY: notify operator of out-of-range selection.
-        logging.warning("MSP selection out of range: %s", choice)  # WHY: log for post-mortem debugging.
+        logger.warning("MSP selection out of range: %s", choice)  # WHY: log for post-mortem debugging.
     except (ValueError, SystemExit):  # WHY: cover parse errors and EOF/interrupt from safe_input.
         print(_INVALID_INPUT_MSG)  # WHY: notify operator of parse error.
         logging.warning("MSP selection input error")  # WHY: log the invalid-input branch.
@@ -108,7 +110,7 @@ def _prompt_org_index(orgs_data: list[dict[str, Any]]) -> int | None:
         choice_idx = int(choice) - 1  # WHY: convert 1-based input to 0-based index.
         if not (0 <= choice_idx < len(orgs_data)):  # WHY: guard against out-of-range indexes.
             print(_INVALID_SELECTION_MSG)  # WHY: notify operator of bad range.
-            logging.warning("Org selection out of range: %s", choice)  # WHY: log for post-mortem debugging.
+            logger.warning("Org selection out of range: %s", choice)  # WHY: log for post-mortem debugging.
             return None  # WHY: signal invalid choice.
         return choice_idx  # WHY: return valid 0-based index for downstream lookup.
     except (ValueError, SystemExit):  # WHY: cover parse errors and EOF/interrupt from safe_input.
@@ -137,7 +139,7 @@ def _call_list_msp_orgs(msp_id: str, msp_name: str) -> list[dict[str, Any]]:
         print(f"X Failed to retrieve organizations: {error}")  # WHY: show error to interactive operator.
         logging.exception("listMspOrgs failed for msp_id=%s: %s", msp_id, error)  # WHY: full stack in log.
         return []  # WHY: empty list lets callers short-circuit gracefully.
-    logging.debug("Received %d orgs from MSP %s", len(orgs_data), msp_name)  # WHY: post-call trace.
+    logger.debug("Received %d orgs from MSP %s", len(orgs_data), msp_name)  # WHY: post-call trace.
     return orgs_data  # WHY: return the normalised org list.
 
 
@@ -230,7 +232,7 @@ class OrgDeviceInventoryMSPOrchestrator:
         """Prompt for MSP selection when multiple are available."""
         if not msp_privileges:  # WHY: no privileges means the operator is not connected as MSP.
             print(_NO_MSP_MSG)  # WHY: show single-source no-privilege message.
-            logging.warning("_resolve_active_msp called with no MSP privileges")  # WHY: trace.
+            logger.warning("_resolve_active_msp called with no MSP privileges")  # WHY: trace.
             return None  # WHY: signal caller that MSP flow cannot proceed.
         if len(msp_privileges) == 1:  # WHY: single privilege short-circuits selection UI.
             active_msp = msp_privileges[0]  # WHY: only choice available.
@@ -244,11 +246,11 @@ class OrgDeviceInventoryMSPOrchestrator:
         """Retrieve all child organizations for the selected MSP."""
         if apisession is None:  # WHY: session may be missing if wiring skipped.
             print(_NO_API_SESSION_MSG)  # WHY: operator-facing session error.
-            logging.error("_fetch_org_list: apisession is None")  # WHY: trace missing session.
+            logger.error("_fetch_org_list: apisession is None")  # WHY: trace missing session.
             return []  # WHY: empty list lets callers short-circuit gracefully.
         msp_id = active_msp["msp_id"]  # WHY: required identifier for the mistapi call.
         msp_name = active_msp["msp_name"]  # WHY: friendly name for logs and operator messaging.
-        logging.info("Fetching orgs for MSP %s (id=%s)", msp_name, msp_id)  # WHY: pre-call trace.
+        logger.info("Fetching orgs for MSP %s (id=%s)", msp_name, msp_id)  # WHY: pre-call trace.
         print(f"\n  Fetching organizations for MSP: {msp_name}...")  # WHY: operator progress feedback.
         return _call_list_msp_orgs(msp_id, msp_name)  # WHY: delegate SDK call + normalisation.
 
@@ -261,7 +263,7 @@ class OrgDeviceInventoryMSPOrchestrator:
         orgs_data = OrgDeviceInventoryMSPOrchestrator._fetch_org_list(active_msp)  # WHY: pull child orgs.
         if not orgs_data:  # WHY: nothing to select if MSP has no orgs.
             print(_NO_ORGS_MSG)  # WHY: consistent operator message.
-            logging.info("run_single_msp_org: no orgs for MSP %s", active_msp["msp_id"])  # WHY: trace.
+            logger.info("run_single_msp_org: no orgs for MSP %s", active_msp["msp_id"])  # WHY: trace.
             return  # WHY: abort flow when there are no orgs.
         _print_org_choices(orgs_data)  # WHY: show numbered list to operator.
         choice_idx = _prompt_org_index(orgs_data)  # WHY: read validated 0-based index or None.
@@ -271,9 +273,9 @@ class OrgDeviceInventoryMSPOrchestrator:
         chosen_id = chosen.get("id", "")  # WHY: id is required for downstream inventory run.
         if not chosen_id:  # WHY: guard against malformed org records.
             print("X Selected org has no ID")  # WHY: operator-facing error for missing id.
-            logging.error("Selected org record missing 'id': %s", chosen)  # WHY: log record for triage.
+            logger.error("Selected org record missing 'id': %s", chosen)  # WHY: log record for triage.
             return  # WHY: cannot invoke per-org runner without an id.
-        logging.info("Running inventory for selected org: %s (%s)", chosen.get("name"), chosen_id)  # WHY: trace.
+        logger.info("Running inventory for selected org: %s (%s)", chosen.get("name"), chosen_id)  # WHY: trace.
         run_for_org_fn(chosen_id)  # WHY: hand off to caller-supplied per-org runner.
 
     @staticmethod
@@ -281,7 +283,7 @@ class OrgDeviceInventoryMSPOrchestrator:
         all_ver_data: list[tuple[str, list[dict]]],
     ) -> list[dict]:
         """Flatten per-org version row lists into a single list tagged with org name."""
-        logging.debug("Flattening MSP version rows from %d orgs", len(all_ver_data))  # WHY: pre-pass trace.
+        logger.debug("Flattening MSP version rows from %d orgs", len(all_ver_data))  # WHY: pre-pass trace.
         flat: list[dict] = []  # WHY: accumulator for combined rows across orgs.
         for safe_org, ver_rows in all_ver_data:  # WHY: iterate (org, rows) pairs.
             for row in ver_rows:  # WHY: each row is a model/version count for the given org.
@@ -376,14 +378,14 @@ class OrgDeviceInventoryMSPOrchestrator:
         print(f"{_HEADER_DIVIDER}")  # WHY: preserve legacy divider after header.
         print(table)  # WHY: render the pivot table to the operator.
         ordered_fields = ["Org", "Model", "Device Type"] + versions + ["Total"]  # WHY: CSV header column order.
-        logging.info("Exporting combined MSP pivot to %s", filename)  # WHY: log before export side effect.
+        logger.info("Exporting combined MSP pivot to %s", filename)  # WHY: log before export side effect.
         DataExporter.write_with_format_selection(
             export_rows,
             filename,
             api_function_name="orgDeviceVersionPerModel",
             fieldnames=ordered_fields,
         )  # WHY: single writer call handles format selection prompt + file write.
-        logging.debug("Combined MSP pivot export complete (%d rows)", len(export_rows))  # WHY: post-write trace.
+        logger.debug("Combined MSP pivot export complete (%d rows)", len(export_rows))  # WHY: post-write trace.
 
     @staticmethod
     def _display_combined_pivot_and_export(
@@ -391,11 +393,11 @@ class OrgDeviceInventoryMSPOrchestrator:
         filename: str,
     ) -> None:
         """Build combined version-per-model pivot across all MSP orgs and export it."""
-        logging.info("Building combined MSP version pivot from %d org datasets", len(all_ver_data))  # WHY: entry log.
+        logger.info("Building combined MSP version pivot from %d org datasets", len(all_ver_data))  # WHY: entry log.
         flat = OrgDeviceInventoryMSPOrchestrator._flatten_msp_version_rows(all_ver_data)  # WHY: flatten per-org rows.
         if not flat:  # WHY: no rows -> nothing to pivot or export.
             print("  No version-per-model data available for combined pivot")  # WHY: preserve legacy message.
-            logging.warning("_display_combined_pivot_and_export: no data to pivot")  # WHY: preserve legacy log.
+            logger.warning("_display_combined_pivot_and_export: no data to pivot")  # WHY: preserve legacy log.
             return  # WHY: abort when there is no data.
         versions, pivot = OrgDeviceInventoryMSPOrchestrator._build_msp_version_pivot(flat)  # WHY: build pivot map.
         table, export_rows, _col_totals, _grand_total = (
@@ -475,7 +477,7 @@ class OrgDeviceInventoryMSPOrchestrator:
         child_org_id = org_record.get("id", "")  # WHY: required identifier for the per-org runner.
         child_org_name = org_record.get("name", child_org_id)  # WHY: display name for logs + operator UI.
         if not child_org_id:  # WHY: cannot invoke runner without an id.
-            logging.warning("Skipping org record with no id: %s", org_record)  # WHY: log skipped record.
+            logger.warning("Skipping org record with no id: %s", org_record)  # WHY: log skipped record.
             return  # WHY: skip malformed record.
         print(f"  [{idx}/{total}] {child_org_name}")  # WHY: operator progress indicator.
         OrgDeviceInventoryMSPOrchestrator._run_org_and_collect(
@@ -499,24 +501,24 @@ class OrgDeviceInventoryMSPOrchestrator:
     @staticmethod
     def execute_msp(run_for_org_fn: Callable[[str], tuple[list[dict], list[dict], list[dict], str]]) -> None:
         """Mode 3: run inventory summaries for all orgs under selected MSP."""
-        logging.info("Starting MSP device inventory summary")  # WHY: entry log for batch flow.
+        logger.info("Starting MSP device inventory summary")  # WHY: entry log for batch flow.
         active_msp = OrgDeviceInventoryMSPOrchestrator._resolve_active_msp()  # WHY: pick MSP to iterate.
         if active_msp is None:  # WHY: resolver returned None -> cannot continue.
             return  # WHY: nothing to do.
         orgs_data = OrgDeviceInventoryMSPOrchestrator._fetch_org_list(active_msp)  # WHY: retrieve child orgs.
         if not orgs_data:  # WHY: batch mode needs at least one org.
             print(_NO_ORGS_MSG)  # WHY: consistent operator message.
-            logging.info("execute_msp: no orgs found for MSP %s", active_msp["msp_id"])  # WHY: trace.
+            logger.info("execute_msp: no orgs found for MSP %s", active_msp["msp_id"])  # WHY: trace.
             return  # WHY: abort empty batch.
         print(f"  Found {len(orgs_data)} organizations.  Running inventory summary for each...\n")  # WHY: header.
         collected = OrgDeviceInventoryMSPOrchestrator._process_orgs_batch(orgs_data, run_for_org_fn)  # WHY: batch.
-        logging.info("MSP inventory complete for %d orgs", len(orgs_data))  # WHY: post-batch trace.
+        logger.info("MSP inventory complete for %d orgs", len(orgs_data))  # WHY: post-batch trace.
         print(f"\nMSP inventory summary complete. Processed {len(orgs_data)} organizations.")  # WHY: operator footer.
         if len(collected) >= _MIN_ORGS_FOR_COMBINED:  # WHY: combined reports meaningful only for 2+ orgs.
             msp_safe_name = _sanitize_msp_name(active_msp.get("msp_name", "MSP"))  # WHY: filesystem-safe MSP name.
             OrgDeviceInventoryMSPOrchestrator._build_combined_reports(msp_safe_name, collected)  # WHY: combined step.
         else:
-            logging.info("Skipping combined reports: fewer than 2 orgs processed successfully")  # WHY: trace skip.
+            logger.info("Skipping combined reports: fewer than 2 orgs processed successfully")  # WHY: trace skip.
 
     @staticmethod
     def dispatch(
