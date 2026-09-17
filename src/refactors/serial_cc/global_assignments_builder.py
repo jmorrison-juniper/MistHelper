@@ -4,6 +4,8 @@ import logging  # WHY: debug logs for optional-dep import outcomes
 from collections.abc import Callable  # WHY: type alias for injected fallback handler
 from typing import Any  # WHY: broad module-object typing on the imports dict
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 # Per-module attribute re-exports: module name -> tuple of (global_name, source_attr).
 # Each entry copies module_obj.<source_attr> into global_vars[<global_name>] via getattr(default None).
 _ATTRIBUTE_EXPORTS: dict[str, tuple[tuple[str, str], ...]] = {
@@ -85,7 +87,7 @@ class GlobalAssignmentsBuilderService:  # WHY: single-purpose helper class extra
         """Register present-only modules and emit a debug log line for each."""
         if module_name in _LOGGED_MODULES and module_obj:  # Only when configured and actually imported
             global_vars[module_name] = module_obj  # Expose module under its own name
-            logging.debug("Added %s to global namespace", module_name)  # Trace which optional module loaded
+            logger.debug("Added %s to global namespace", module_name)  # Trace which optional module loaded
 
     @classmethod
     def execute(cls, imports: dict[str, Any], add_fallbacks_fn: Callable[[dict[str, Any]], None]) -> dict[str, Any]:

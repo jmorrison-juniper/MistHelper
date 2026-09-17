@@ -24,14 +24,16 @@ from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:
     """Resolve source-owned runtime dependencies without static cross-module imports."""
-    logging.info(  # Log before importing MistHelper module for dependency resolution
+    logger.info(  # Log before importing MistHelper module for dependency resolution
         "Resolving SwitchToInteractiveLoginManager runtime dependencies from MistHelper"
     )
     misthelper_module = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-    logging.debug(  # Log after successful module import for observability
+    logger.debug(  # Log after successful module import for observability
         "SwitchToInteractiveLoginManager runtime dependencies resolved successfully"
     )
     return SimpleNamespace(
@@ -58,11 +60,11 @@ class SwitchToInteractiveLoginManager:
 
     def __init__(self) -> None:
         """Initialize manager with late-bound MistHelper handles."""
-        logging.info(  # Log construction start for observability
+        logger.info(  # Log construction start for observability
             "SwitchToInteractiveLoginManager init: starting new manager instance"
         )
         self._deps: SimpleNamespace = _resolve_runtime_dependencies()  # Late-bound MistHelper handles
-        logging.debug("SwitchToInteractiveLoginManager init complete")  # Log after construction
+        logger.debug("SwitchToInteractiveLoginManager init complete")  # Log after construction
 
     def _misthelper(self) -> Any:
         """Return the current MistHelper module so monkeypatched attributes are honoured."""
@@ -74,11 +76,11 @@ class SwitchToInteractiveLoginManager:
         Returns:
             bool: Always ``True`` so the numbered-menu dispatcher keeps looping.
         """
-        logging.info("User initiated switch to interactive login")  # Operator action note (kept from original)
+        logger.info("User initiated switch to interactive login")  # Operator action note (kept from original)
         misthelper = self._misthelper()  # Cache module handle for the helper lookups below
         misthelper._print_switch_login_header()  # Show the explanatory banner
         if not misthelper._prompt_switch_login_confirmation():  # User cancelled or EOF'd the prompt
-            logging.debug(  # Log cancel path for postmortem tracing
+            logger.debug(  # Log cancel path for postmortem tracing
                 "SwitchToInteractiveLoginManager: user declined confirmation; staying on menu"
             )
             return True  # Stay on the menu without changing session
@@ -87,17 +89,17 @@ class SwitchToInteractiveLoginManager:
 
     def _attempt_login_and_finalize(self, misthelper: Any) -> None:
         """Attempt rollback-guarded interactive login and finalize MSP/org selection on success."""
-        logging.info("SwitchToInteractiveLoginManager: attempting rollback-guarded login")  # Log attempt entry
+        logger.info("SwitchToInteractiveLoginManager: attempting rollback-guarded login")  # Log attempt entry
         old_session = getattr(misthelper, "apisession", None)  # Preserve current session for rollback
         old_org_id = getattr(misthelper, "org_id", None)  # Preserve current org for rollback
         if not misthelper._attempt_interactive_login_with_rollback(  # Try login. Restores on failure
             old_session, old_org_id
         ):
-            logging.debug(  # Log rollback path for postmortem tracing
+            logger.debug(  # Log rollback path for postmortem tracing
                 "SwitchToInteractiveLoginManager: interactive login failed; rolled back and staying on menu"
             )
             return  # Login failed but old session was restored -- stay running
         misthelper._handle_interactive_login_success()  # Login succeeded -- show status and pick MSP/org
-        logging.debug(  # Log success path so callers can trace successful session swap
+        logger.debug(  # Log success path so callers can trace successful session swap
             "SwitchToInteractiveLoginManager: interactive login succeeded; session updated"
         )

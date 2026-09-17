@@ -11,6 +11,8 @@ from src.refactors.fast_mode_constants import (
     FAST_MODE_MAX_CONCURRENT_CONNECTIONS,
 )  # Post-T-02 direct import of the fast-mode concurrent-connection cap
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 _VC_PREVIEW_FIELDS = (  # Summary columns kept aligned with prior in-method PrettyTable preview
     "name",
     "mac",
@@ -63,7 +65,7 @@ class SwitchVcStatsService:
         device_id = switch.get("id")  # Device UUID required by getSiteDeviceVirtualChassis API
         name = switch.get("name", "")  # Human-readable device name for logging context
         mac = switch.get("mac", "")  # Device MAC for logging context
-        logging.debug(
+        logger.debug(
             "Processing switch: name=%s, id=%s, site_id=%s, mac=%s, model=%s, serial=%s",
             name,
             device_id,
@@ -79,7 +81,7 @@ class SwitchVcStatsService:
         """Fetch VC stats for one switch and merge with inventory row context."""
         site_id, device_id, name, mac = cls._log_switch_context(switch)  # Debug-log and extract API identifiers
         if not site_id or not device_id:  # Guard against records missing required path parameters
-            logging.warning(
+            logger.warning(
                 "Skipping switch with missing site_id or device_id: name=%s, mac=%s", name, mac
             )  # Warn so operators can inspect malformed inventory rows
             return None  # Signal caller to omit this switch from export rows
@@ -87,7 +89,7 @@ class SwitchVcStatsService:
             vc_stats = deps.mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(
                 deps.apisession, site_id, device_id
             ).data  # Fetch VC membership and stacking cable details for switch
-            logging.debug("Fetched VC stats for switch %s (%s)", name, device_id)  # Trace successful fetch
+            logger.debug("Fetched VC stats for switch %s (%s)", name, device_id)  # Trace successful fetch
             return {**switch, **vc_stats}  # Merge inventory context with VC API payload for export
         except Exception as fetch_error:  # Keep processing other switches when one fetch fails
             logging.warning(
@@ -99,7 +101,7 @@ class SwitchVcStatsService:
     def _collect_vc_stats_parallel(cls, deps: SimpleNamespace, switches: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Fetch VC stats concurrently with a bounded thread pool for fast mode."""
         max_workers = FAST_MODE_MAX_CONCURRENT_CONNECTIONS  # Respect configured worker cap (post-T-02 module import)
-        logging.info(
+        logger.info(
             "Fast mode: fetching VC stats for %d switches with %d concurrent workers", len(switches), max_workers
         )  # Log concurrency plan before pool starts
         results: list[dict[str, Any]] = []  # Accumulate merged rows in completion order
@@ -153,7 +155,7 @@ class SwitchVcStatsService:
     def _render_preview_table(cls, all_vc_stats: list[dict[str, Any]]) -> None:
         """Log a PrettyTable summary. Swallow rendering errors so export never fails on preview."""
         try:  # PrettyTable may fail if columns are malformed. Keep preview non-fatal
-            logging.debug("\n%s", cls._build_preview_table(all_vc_stats))  # Emit rendered summary to debug log
+            logger.debug("\n%s", cls._build_preview_table(all_vc_stats))  # Emit rendered summary to debug log
         except Exception as preview_error:  # Never fail export because preview generation failed
             logging.debug("Skipping VC stats PrettyTable preview due to error: %s", preview_error)  # Trace skip cause
 
@@ -162,31 +164,31 @@ class SwitchVcStatsService:
         """Emit first-row sample and compact summary table for debug logs."""
         if not all_vc_stats:  # Nothing to preview when export rows are empty
             return  # Exit early with no preview output
-        logging.debug("Sample VC stats row: %s", all_vc_stats[0])  # Log first row for raw payload visibility
+        logger.debug("Sample VC stats row: %s", all_vc_stats[0])  # Log first row for raw payload visibility
         cls._render_preview_table(all_vc_stats)  # Delegate PrettyTable rendering to keep this method small
 
     @classmethod
     def execute(cls) -> None:
         """Run switch VC stats export workflow and write OrgSwitchVCStats.csv."""
         deps = _resolve_runtime_dependencies()  # Resolve all runtime collaborators from MistHelper
-        logging.info("Switch Virtual Chassis Statistics:")  # User-facing operation banner
-        logging.info("Exporting all switch virtual chassis stats...")  # Log workflow start for operators
+        logger.info("Switch Virtual Chassis Statistics:")  # User-facing operation banner
+        logger.info("Exporting all switch virtual chassis stats...")  # Log workflow start for operators
 
         switches = cls._load_switches(deps)  # Load VC-eligible switch rows from cached OrgInventory.csv
         if not switches:  # Nothing to process when inventory has no VC switches
-            logging.warning("No switches found in OrgInventory.csv.")  # Log empty-input condition
+            logger.warning("No switches found in OrgInventory.csv.")  # Log empty-input condition
             return  # Exit without producing a stats file
 
         all_vc_stats = cls._collect_vc_stats(deps, switches)  # Fetch/merge VC stats across all switches
-        logging.info("Flattening and sanitizing %d VC stats entries for CSV export.", len(all_vc_stats))  # Trace size
+        logger.info("Flattening and sanitizing %d VC stats entries for CSV export.", len(all_vc_stats))  # Trace size
         all_vc_stats = deps.DataProcessingUtils.flatten_nested_fields(all_vc_stats)  # Flatten nested fields for CSV
         all_vc_stats = deps.DataProcessingUtils.escape_multiline(all_vc_stats)  # Sanitize multiline fields
         deps.DataExporter.write_with_format_selection(
             all_vc_stats, "OrgSwitchVCStats.csv", api_function_name="getSiteDeviceVirtualChassis"
         )  # Persist VC stats
         # User-facing result count
-        logging.info("! %d switch VC stats exported to OrgSwitchVCStats.csv", len(all_vc_stats))
-        logging.info(
+        logger.info("! %d switch VC stats exported to OrgSwitchVCStats.csv", len(all_vc_stats))
+        logger.info(
             "! Switch VC stats exported to OrgSwitchVCStats.csv (%d records).", len(all_vc_stats)
         )  # Log success
         cls._emit_debug_preview(all_vc_stats)  # Emit optional debug preview for operator diagnostics

@@ -23,14 +23,16 @@ from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:  # Module-level dependency resolver used at manager init
     """Resolve source-owned runtime dependencies without static cross-module imports."""
-    logging.info(  # Log before importing MistHelper module for dependency resolution
+    logger.info(  # Log before importing MistHelper module for dependency resolution
         "Resolving RunInteractiveTestManager runtime dependencies from MistHelper"
     )
     misthelper_module = SourceDependencyResolver.active_dependency_host()  # WHY: preserve fake-host test seams.
-    logging.debug(  # Log after successful module import for observability
+    logger.debug(  # Log after successful module import for observability
         "RunInteractiveTestManager runtime dependencies resolved successfully"
     )
     return SimpleNamespace(
@@ -56,11 +58,11 @@ class RunInteractiveTestManager:  # Manager class owning the run_interactive_tes
 
     def __init__(self) -> None:  # Manager constructor -- late-binds MistHelper module handle
         """Initialize manager with late-bound MistHelper handles."""
-        logging.info(  # Log construction start for observability
+        logger.info(  # Log construction start for observability
             "RunInteractiveTestManager init: starting new manager instance"
         )
         self._deps: SimpleNamespace = _resolve_runtime_dependencies()  # Late-bound MistHelper handles
-        logging.debug("RunInteractiveTestManager init complete")  # Log after construction
+        logger.debug("RunInteractiveTestManager init complete")  # Log after construction
 
     def _misthelper(self) -> Any:  # Accessor for the late-bound MistHelper module handle
         """Return the current MistHelper module so monkeypatched attributes are honoured."""
@@ -80,11 +82,11 @@ class RunInteractiveTestManager:  # Manager class owning the run_interactive_tes
         Returns:
             bool: Runner outcome — True if all tested options passed, False otherwise.
         """
-        logging.info("Routing run_interactive_test to InteractiveTestRunner")  # Preserved original entry log
+        logger.info("Routing run_interactive_test to InteractiveTestRunner")  # Preserved original entry log
         runner = self._misthelper()._build_interactive_test_runner(  # Build runner with context closures
             self._get_org_id, self._set_org_id
         )
-        logging.info("Executing interactive test runner")  # Preserved log before invocation
+        logger.info("Executing interactive test runner")  # Preserved log before invocation
         result = bool(runner.execute())  # Cast Any (runner return) to bool for strict typing conformance
-        logging.debug("Completed run_interactive_test with result=%s", result)  # Preserved outcome log
+        logger.debug("Completed run_interactive_test with result=%s", result)  # Preserved outcome log
         return result  # Signal pass/fail to callers for exit-code logic

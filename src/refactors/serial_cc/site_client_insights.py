@@ -134,7 +134,7 @@ class SiteClientInsightsService:
     def _resolve_site_name(deps: SimpleNamespace, site_id: str) -> str:
         """Resolve the human-readable site name, falling back to the site id on failure."""
         try:
-            logging.info("Resolving client insight site name for site %s", site_id)  # WHY: trace the single-site lookup
+            logger.info("Resolving client insight site name for site %s", site_id)  # WHY: trace the single-site lookup
             response = deps.mistapi.api.v1.sites.sites.getSiteInfo(
                 deps.apisession, site_id
             )  # WHY: call installed SDK route
@@ -147,10 +147,10 @@ class SiteClientInsightsService:
             if (
                 isinstance(status_code, int) and status_code >= 400
             ):  # WHY: report API faults without MagicMock comparison errors
-                logging.error("Mist API returned status %s for site %s", status_code, site_id)  # WHY: expose fault
+                logger.error("Mist API returned status %s for site %s", status_code, site_id)  # WHY: expose fault
                 return site_id  # WHY: keep export filenames stable when lookup fails
             site_name = str(site_data.get(_KEY_NAME, site_id)) if site_data else site_id  # WHY: prefer API name
-            logging.debug("Resolved client insight site %s to name %s", site_id, site_name)  # WHY: record result
+            logger.debug("Resolved client insight site %s to name %s", site_id, site_name)  # WHY: record result
             return site_name  # WHY: caller needs the site label for output files
         except AttributeError:
             logging.exception("Mist SDK site lookup is not available for site %s", site_id)  # WHY: expose SDK drift
@@ -214,9 +214,9 @@ class SiteClientInsightsService:
             return None  # WHY: Skip to the next metric
         client_insight_data = getattr(response, "data", response) or {}  # WHY: Normalize to the payload (or empty)
         if not client_insight_data:  # WHY: Metric returned no data
-            logging.debug(_MSG_METRIC_EMPTY, metric)  # WHY: Trace empty result
+            logger.debug(_MSG_METRIC_EMPTY, metric)  # WHY: Trace empty result
             return None  # WHY: No record to accumulate
-        logging.debug(_MSG_METRIC_OK, metric)  # WHY: Trace success
+        logger.debug(_MSG_METRIC_OK, metric)  # WHY: Trace success
         return _tag_insight_record(client_insight_data, metric, context)  # WHY: Return the tagged record
 
     @classmethod
@@ -243,7 +243,7 @@ class SiteClientInsightsService:
         if not all_client_data:  # WHY: No data collected for any metric - write empty for consistency
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning(_MSG_EXPORT_EMPTY_TMPL, filename)  # WHY: User summary
-            logging.warning(_MSG_EXPORT_EMPTY_LOG, site_name)  # WHY: Warn on empty run
+            logger.warning(_MSG_EXPORT_EMPTY_LOG, site_name)  # WHY: Warn on empty run
             deps.DataExporter.write_with_format_selection(
                 [], filename, api_function_name="listSiteWirelessClientsStats"
             )  # WHY: Write empty export file
@@ -255,7 +255,7 @@ class SiteClientInsightsService:
         )  # WHY: Write the export file
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(_MSG_EXPORT_OK_TMPL, metrics_retrieved, filename)  # WHY: User summary
-        logging.info(_MSG_EXPORT_OK_LOG, metrics_retrieved, site_name, filename)  # WHY: Trace successful export
+        logger.info(_MSG_EXPORT_OK_LOG, metrics_retrieved, site_name, filename)  # WHY: Trace successful export
 
     @classmethod
     def _prepare_site_context(cls, deps: SimpleNamespace, site_id: str) -> _SiteContext:
@@ -288,7 +288,7 @@ class SiteClientInsightsService:
         if not normalized:  # WHY: MAC failed format validation
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning(_MSG_INVALID_MAC_TMPL, client_mac)  # WHY: Inform the user
-            logging.error(_MSG_INVALID_MAC_LOG, client_mac)  # WHY: Trace the failure
+            logger.error(_MSG_INVALID_MAC_LOG, client_mac)  # WHY: Trace the failure
             return None  # WHY: Abort
         return str(normalized)  # WHY: Normalized MAC (str-cast narrows Any for downstream str formatting)
 
@@ -300,7 +300,7 @@ class SiteClientInsightsService:
             return list(client_metrics)  # WHY: Freeze return type (list[str])
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning(_MSG_NO_METRICS)  # WHY: Inform the user of misconfiguration
-        logging.error(_MSG_NO_METRICS_LOG)  # WHY: Trace the misconfiguration
+        logger.error(_MSG_NO_METRICS_LOG)  # WHY: Trace the misconfiguration
         deps.DataExporter.write_with_format_selection(
             [], filename, api_function_name="listSiteWirelessClientsStats"
         )  # WHY: Write an empty export for consistency
@@ -329,7 +329,7 @@ class SiteClientInsightsService:
         """Emit the banner + refresh notice and run the canonical metric refresh."""
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(_BANNER)  # WHY: User-facing banner
-        logging.info(_MSG_START)  # WHY: Trace workflow start
+        logger.info(_MSG_START)  # WHY: Trace workflow start
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info(_MSG_REFRESH)  # WHY: Inform about the metric refresh
         deps.ConstDefinitionsExporter(deps.apisession).export_all()  # WHY: Regenerate ConstInsightMetrics.csv
@@ -366,7 +366,7 @@ class SiteClientInsightsService:
         cls._print_intro_and_refresh(deps)  # WHY: Banner + metric refresh
         site_id = deps.PromptUtils.select_site()  # WHY: Prompt for the target site
         if not site_id:  # WHY: No site chosen - nothing to export
-            logging.error(_MSG_NO_SITE)  # WHY: Trace the early exit
+            logger.error(_MSG_NO_SITE)  # WHY: Trace the early exit
             return  # WHY: Abort the workflow
         context = cls._resolve_export_context(deps, site_id)  # WHY: Resolve site + client + filename
         if context is None:  # WHY: Any prompt/guard aborted (message already printed)

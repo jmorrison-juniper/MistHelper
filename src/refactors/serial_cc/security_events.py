@@ -17,6 +17,8 @@ from src.dataclasses.progress_event import (
     ProgressContext,
 )  # Bundles progress identity for emit_progress_* (issue #470).
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 _OUTPUT_FILES: tuple[str, ...] = (  # Files the service produces. Also drives fast-mode freshness.
     "OrgSecurityPolicies.csv",  # Flattened org security policies dataset.
     "OrgSecIntelProfiles.csv",  # Flattened org security intelligence profiles dataset.
@@ -86,11 +88,11 @@ class SecurityEventsService:
         """Run the organization security export workflow."""
         deps = _resolve_runtime_dependencies()  # Resolve MistHelper dependencies once for the whole run.
         if fast and SecurityEventsService._all_outputs_fresh(deps, list(_OUTPUT_FILES)):
-            logging.info(
+            logger.info(
                 "Fast mode cache hit: All security data CSVs are fresh; skipping fetch."
             )  # Trace short-circuit.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info("* Fast mode: Using cached security data (all files fresh)")
+            logger.info("* Fast mode: Using cached security data (all files fresh)")
             return  # No fetch needed. The cached CSVs are still valid.
         SecurityEventsService._run_export_workflow(deps)  # Delegate the actual export to keep this entrypoint short.
 
@@ -98,8 +100,8 @@ class SecurityEventsService:
     def _run_export_workflow(deps: SimpleNamespace) -> None:
         """Execute the three security exports and emit progress bookends."""
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("Export Organization Security Data:")
-        logging.info("Starting export of organization security policies, intelligence profiles, and rogue data...")
+        logger.info("Export Organization Security Data:")
+        logger.info("Starting export of organization security policies, intelligence profiles, and rogue data...")
         emitter = deps.PROGRESS_EMITTER  # Optional. None disables progress emission.
         if emitter:
             emitter.emit_progress_start(
@@ -111,8 +113,8 @@ class SecurityEventsService:
             SecurityEventsService._export_flattened_dataset(deps, spec)  # Fetch + flatten + export one dataset.
         SecurityEventsService._export_rogue_data(deps)  # Third file: combined rogue export.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("Security data export completed (3 files generated)")
-        logging.info("Completed security policies, intelligence profiles, and rogue data export aggregate.")
+        logger.info("Security data export completed (3 files generated)")
+        logger.info("Completed security policies, intelligence profiles, and rogue data export aggregate.")
         if emitter:
             emitter.emit_progress_complete(  # Bundle identity into a ProgressContext per issue #470.
                 ProgressContext(_PROGRESS_ISSUE_ID, _PROGRESS_STAGE, _PROGRESS_TOTAL),
@@ -168,13 +170,13 @@ class SecurityEventsService:
         dataset = SecurityEventsService._fetch_dataset(deps, spec)  # Isolate the try/except paging in a helper.
         if not dataset:  # Guard clause: write an empty file and note the miss for observability.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info(
+            logger.info(
                 "! 0 %s exported to %s %s",
                 spec.data_label,
                 spec.output_file,
                 spec.empty_suffix,
             )
-            logging.warning(spec.empty_message)  # Trace an empty result for postmortems.
+            logger.warning(spec.empty_message)  # Trace an empty result for postmortems.
             deps.DataExporter.write_with_format_selection(
                 [], spec.output_file, api_function_name="listOrgSecPolicies"
             )  # Write empty for consistency.
@@ -185,22 +187,22 @@ class SecurityEventsService:
             processed, spec.output_file, api_function_name="listOrgSecPolicies"
         )  # Emit the CSV/XLSX file.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info(
+        logger.info(
             "! %d %s exported to %s",
             len(processed),
             spec.data_label,
             spec.output_file,
         )
-        logging.info("Exported %d %s to %s", len(processed), spec.data_label, spec.output_file)  # Trace volume.
+        logger.info("Exported %d %s to %s", len(processed), spec.data_label, spec.output_file)  # Trace volume.
 
     @staticmethod
     def _fetch_dataset(deps: SimpleNamespace, spec: _FlattenedExportSpec) -> list[dict[str, Any]]:
         """Invoke the spec's fetcher and page through results, tolerating failures."""
         try:
-            logging.info("Fetching organization %s...", spec.start_label)  # Trace the fetch start.
+            logger.info("Fetching organization %s...", spec.start_label)  # Trace the fetch start.
             response = spec.fetcher()  # Zero-arg lambda invokes the specific list endpoint.
             dataset = deps.mistapi.get_all(response=response, mist_session=deps.apisession) or []  # Page all rows.
-            logging.debug("%s fetched: %d", spec.data_label.capitalize(), len(dataset))  # Trace row count.
+            logger.debug("%s fetched: %d", spec.data_label.capitalize(), len(dataset))  # Trace row count.
             return dataset
         except Exception as error:  # Fetch failure is non-fatal. We still write an empty export downstream.
             logging.warning("Failed to fetch %s: %s", spec.start_label, error)  # Trace the failure cause.
@@ -238,7 +240,7 @@ class SecurityEventsService:
             clients = SecurityEventsService._fetch_tagged_rogue(
                 deps, site_id, site_name, rogue_duration, _ROGUE_KINDS[1]
             )  # Rogue clients for this site.
-            logging.info(
+            logger.info(
                 "! Fetched %d rogue APs and %d rogue clients from site: %s",
                 len(aps),
                 len(clients),
@@ -271,8 +273,8 @@ class SecurityEventsService:
         """Flatten + export combined rogue data, or write an empty file when nothing was found."""
         if not all_rogue_data:  # Guard: no rogue devices anywhere. Still emit an empty file for consistency.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info("! 0 rogue devices exported to OrgRogueData.csv (no rogue devices found)")
-            logging.info("No rogue devices found across all sites (OrgRogueData.csv written empty).")  # Trace empty.
+            logger.info("! 0 rogue devices exported to OrgRogueData.csv (no rogue devices found)")
+            logger.info("No rogue devices found across all sites (OrgRogueData.csv written empty).")  # Trace empty.
             deps.DataExporter.write_with_format_selection(
                 [], _ROGUE_OUTPUT, api_function_name="listSiteRogueClients"
             )  # Consistent empty export.
@@ -283,8 +285,8 @@ class SecurityEventsService:
             processed, _ROGUE_OUTPUT, api_function_name="listSiteRogueClients"
         )  # Write the combined rogue export.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("! %d rogue devices exported to OrgRogueData.csv", len(processed))
-        logging.info("Exported %d rogue devices to OrgRogueData.csv", len(processed))  # Trace export volume.
+        logger.info("! %d rogue devices exported to OrgRogueData.csv", len(processed))
+        logger.info("Exported %d rogue devices to OrgRogueData.csv", len(processed))  # Trace export volume.
 
     @staticmethod
     def _export_rogue_data(deps: SimpleNamespace) -> None:
@@ -294,7 +296,7 @@ class SecurityEventsService:
         )  # Dynamic lookback (prod default 168h, test 1h).
         rogue_duration = f"{lookback_hours}h"  # Duration string accepted by the insights endpoints.
         deps.TimeUtils.log_dynamic_lookback("rogue data fetch", lookback_hours)  # Trace chosen lookback.
-        logging.info("Fetching rogue APs and clients from all sites via insights...")  # Trace workflow start.
+        logger.info("Fetching rogue APs and clients from all sites via insights...")  # Trace workflow start.
         deps.CacheUtils.check_and_generate_csv(_SITE_LIST_CSV, deps.OrgSiteExporter.sites)  # Ensure site list exists.
         all_rogue_aps: list[dict[str, Any]] = []  # Accumulates tagged rogue APs across sites.
         all_rogue_clients: list[dict[str, Any]] = []  # Accumulates tagged rogue clients across sites.

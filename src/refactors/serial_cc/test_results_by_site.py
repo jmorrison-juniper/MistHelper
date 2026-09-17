@@ -9,12 +9,14 @@ from typing import Any  # MistHelper surface is dynamic. Typed as Any at the bou
 from src.config.source_dependency_resolver import SourceDependencyResolver  # WHY: resolve source dependencies.
 from src.refactors.connection_pool_executor import ConnectionPoolExecutor  # Pool executor extracted per 1012 SC-003
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:
     """Resolve MistHelper runtime dependencies without static cross-module imports."""
-    logging.info("Resolving GatewayTestResultsService runtime dependencies from MistHelper")  # Log before import
+    logger.info("Resolving GatewayTestResultsService runtime dependencies from MistHelper")  # Log before import
     misthelper_module = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-    logging.debug("Runtime dependencies resolved successfully")  # Log after successful resolution
+    logger.debug("Runtime dependencies resolved successfully")  # Log after successful resolution
     return SimpleNamespace(
         ConfigUtils=misthelper_module.ConfigUtils,  # Org ID prompt/cache utility
         CacheUtils=misthelper_module.CacheUtils,  # CSV cache existence checker
@@ -40,14 +42,14 @@ class GatewayTestResultsService:
     @staticmethod
     def _fetch_site_tests(deps: SimpleNamespace, site_id: str, connection_semaphore: Any) -> list[dict[str, Any]]:
         """Fetch all synthetic test results for one site, honouring an optional connection semaphore."""
-        logging.info("Fetching synthetic test results for site %s", site_id)  # Log before API call
+        logger.info("Fetching synthetic test results for site %s", site_id)  # Log before API call
         try:
             deps.ValidationUtils.validate_site_id(
                 site_id, "GatewayTestResultsService._fetch_site_tests"
             )  # Reject malformed site_id before issuing API call
             response = GatewayTestResultsService._invoke_search_api(deps, site_id, connection_semaphore)
             results = GatewayTestResultsService._extract_tagged_results(response, site_id)  # Parse+tag
-            logging.debug("Retrieved %d test results for site %s", len(results), site_id)  # Log after success
+            logger.debug("Retrieved %d test results for site %s", len(results), site_id)  # Log after success
             return results  # Return tagged result rows for the caller to accumulate
         except Exception as exception:  # Non-fatal: skip this site and continue to the next
             logging.warning("Failed to fetch test results for site %s: %s", site_id, exception)  # Warn with context
@@ -71,7 +73,7 @@ class GatewayTestResultsService:
         """Return the results list from ``response.data``, tagging each row with ``site_id``."""
         # WHY: extracted so _fetch_site_tests drops from 29 lines to <25 and CC from 6 to <=5.
         if not hasattr(response, "data"):  # Guard against malformed API responses
-            logging.warning("No data attribute in response for site %s", site_id)  # Warn for diagnostics
+            logger.warning("No data attribute in response for site %s", site_id)  # Warn for diagnostics
             return []  # Return empty list so caller accumulates cleanly
         results: list[dict[str, Any]] = (
             response.data.get("results", []) if isinstance(response.data, dict) else []
@@ -83,7 +85,7 @@ class GatewayTestResultsService:
     @staticmethod
     def _load_fast_site_ids(deps: SimpleNamespace) -> list[str]:
         """Derive site IDs with gateways from cached inventory CSV (fast-path optimisation)."""
-        logging.info("Loading site IDs with gateways from cached OrgInventory.csv")  # Log before CSV read
+        logger.info("Loading site IDs with gateways from cached OrgInventory.csv")  # Log before CSV read
         deps.CacheUtils.check_and_generate_csv(
             "OrgInventory.csv", deps.OrgInventoryExporter.inventory
         )  # Ensure cached CSV exists before opening it
@@ -96,13 +98,13 @@ class GatewayTestResultsService:
                 if row.get("type") == "gateway" and row.get("site_id") and str(row.get("site_id")).strip()
             ]  # Extract site_ids for gateway-type rows only (excludes empty/None)
         deduped = list(dict.fromkeys(sorted(raw_ids)))  # Sort then deduplicate while preserving insertion order
-        logging.info("Loaded %d site_ids with gateways from cached inventory", len(deduped))  # Log after CSV read
+        logger.info("Loaded %d site_ids with gateways from cached inventory", len(deduped))  # Log after CSV read
         return deduped  # Return deduplicated, sorted site_ids
 
     @classmethod
     def _collect_fast(cls, deps: SimpleNamespace, site_ids: list[str]) -> list[dict[str, Any]]:
         """Collect results concurrently via connection pool (fast-path)."""
-        logging.info("Starting fast-mode concurrent fetch for %d sites", len(site_ids))  # Log before pool
+        logger.info("Starting fast-mode concurrent fetch for %d sites", len(site_ids))  # Log before pool
         start_time = time.time()  # Track elapsed time for fast-mode summary logging
         successful_results, failed_sites = deps.execute_fn(  # Pool run via ConnectionPoolExecutor (1012 SC-003)
             work_items=site_ids,
@@ -114,7 +116,7 @@ class GatewayTestResultsService:
             if isinstance(site_list, list):  # Defensive guard for unexpected pool result shapes
                 flattened.extend(site_list)  # Flatten each site's result list into the accumulator
         duration = time.time() - start_time  # Compute elapsed seconds for the summary
-        logging.info(
+        logger.info(
             "Fast-mode complete: ok_sites=%d fail_sites=%d total=%d records=%d elapsed=%.2fs",
             len(successful_results),
             len(failed_sites),
@@ -127,7 +129,7 @@ class GatewayTestResultsService:
     @classmethod
     def _collect_sequential(cls, deps: SimpleNamespace, site_ids: list[str]) -> list[dict[str, Any]]:
         """Collect results sequentially with adaptive rate limiting (standard path)."""
-        logging.info("Starting sequential fetch for %d sites with gateways", len(site_ids))  # Log before loop
+        logger.info("Starting sequential fetch for %d sites with gateways", len(site_ids))  # Log before loop
         all_results: list[dict[str, Any]] = []  # Accumulates results across all sites
         smoothed = None  # Adaptive rate-limit smoothing state. Reset at the start of each run
         for site_id in deps.tqdm(site_ids, desc="Sites", unit="site"):  # Iterate with progress bar
@@ -140,69 +142,69 @@ class GatewayTestResultsService:
             time.sleep(delay)  # Honour rate-limit delay before the next site
         total_results = len(all_results)  # Precompute total count for log line brevity
         total_sites = len(site_ids)  # Precompute site count for log line brevity
-        logging.info("Sequential fetch complete: %d results across %d sites", total_results, total_sites)
+        logger.info("Sequential fetch complete: %d results across %d sites", total_results, total_sites)
         return all_results  # Return accumulated results from all sites
 
     @staticmethod
     def _export_results(deps: SimpleNamespace, all_results: list[dict[str, Any]], fast: bool) -> None:
         """Flatten, sanitise, and persist results. Emit user-facing summary."""
         if not all_results:  # No results found across all sites
-            logging.warning("No test results found; CSV not created")  # Warn so operator can investigate
+            logger.warning("No test results found; CSV not created")  # Warn so operator can investigate
             # User-facing empty-result message
-            logging.info("! No gateway test results found. CSV not created.")
+            logger.info("! No gateway test results found. CSV not created.")
             return  # Exit early — nothing to write
         filename = "AllGatewayTestResults.csv"  # Canonical output file name (contract with callers)
-        logging.info("Exporting %d gateway test results to %s", len(all_results), filename)  # Log before export
+        logger.info("Exporting %d gateway test results to %s", len(all_results), filename)  # Log before export
         flattened = deps.DataProcessingUtils.flatten_nested_fields(all_results)  # Flatten nested structures
         sanitized = deps.DataProcessingUtils.escape_multiline(flattened)  # Sanitise multiline CSV fields
         deps.DataExporter.write_with_format_selection(
             sanitized, filename, api_function_name="listSiteDeviceTests"
         )  # Write to configured output backend
-        logging.debug("Exported %d records to %s", len(sanitized), filename)  # Log after successful write
+        logger.debug("Exported %d records to %s", len(sanitized), filename)  # Log after successful write
         # User-facing count
-        logging.info("! %d gateway test results exported to %s", len(all_results), filename)
-        logging.info("All test results saved to %s (%d records)", filename, len(all_results))  # Trace final count
+        logger.info("! %d gateway test results exported to %s", len(all_results), filename)
+        logger.info("All test results saved to %s (%d records)", filename, len(all_results))  # Trace final count
         if fast:  # Only log the fast-mode optimisation note when relevant
-            logging.info(
+            logger.info(
                 "API Optimization: Used cached inventory to derive site IDs, reducing API calls"
             )  # Inform operator why fast mode is faster
 
     @classmethod
     def execute(cls, fast: bool = False) -> None:
         """Export all synthetic test results for sites with gateways."""
-        logging.info("Starting GatewayTestResultsService export (fast=%s)", fast)  # Log before workflow
+        logger.info("Starting GatewayTestResultsService export (fast=%s)", fast)  # Log before workflow
         deps = _resolve_runtime_dependencies()  # Resolve all collaborators from MistHelper at call time
         # User-facing operation banner
-        logging.info("Gateway Synthetic Test Results:")
-        logging.info(
+        logger.info("Gateway Synthetic Test Results:")
+        logger.info(
             "Searching all test results (including speed tests) for sites with gateways"
         )  # Trace workflow intent
         if fast:  # Announce fast-mode activation so operator can see it in logs
-            logging.info("Fast mode: using cached inventory and concurrent site processing")  # Trace activation
+            logger.info("Fast mode: using cached inventory and concurrent site processing")  # Trace activation
         org_id = deps.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve target org (cached or prompted)
-        logging.debug("Resolved org_id: %s", org_id)  # Trace org resolution
+        logger.debug("Resolved org_id: %s", org_id)  # Trace org resolution
         site_ids = cls._resolve_site_ids(deps, org_id, fast)  # Discover sites with gateways
         if not site_ids:  # No gateway sites found in org
-            logging.warning("No sites with gateways found for org %s", org_id)  # Warn for visibility
+            logger.warning("No sites with gateways found for org %s", org_id)  # Warn for visibility
             return  # Exit early without producing an empty CSV
         all_results = cls._collect_fast(deps, site_ids) if fast else cls._collect_sequential(deps, site_ids)
         cls._export_results(deps, all_results, fast)  # Flatten, sanitise, and write results to CSV
-        logging.info("GatewayTestResultsService export complete")  # Log after full workflow
+        logger.info("GatewayTestResultsService export complete")  # Log after full workflow
 
     @classmethod
     def _resolve_site_ids(cls, deps: SimpleNamespace, org_id: str, fast: bool) -> list[str]:
         """Discover site IDs with gateways via cache (fast) or API (standard)."""
-        logging.info("Resolving site IDs with gateways (fast=%s)", fast)  # Log before discovery
+        logger.info("Resolving site IDs with gateways (fast=%s)", fast)  # Log before discovery
         if fast:  # Fast path: avoid full inventory API call by reading cached CSV
             try:
                 site_ids = cls._load_fast_site_ids(deps)  # Load site IDs from cached OrgInventory CSV
                 if site_ids:  # Cache hit
                     return site_ids  # Return cache-derived site IDs
-                logging.warning("Fast-mode cache empty; falling back to API discovery")  # Warn about fallback
+                logger.warning("Fast-mode cache empty; falling back to API discovery")  # Warn about fallback
             except Exception as exception:  # Cache failure is non-fatal. Fall back to API
                 logging.warning("Fast-mode site derivation failed (%s); falling back to API", exception)  # Trace
-        logging.info("Discovering site IDs via API for org %s", org_id)  # Log before API call
+        logger.info("Discovering site IDs via API for org %s", org_id)  # Log before API call
         raw = deps.GatewayExportUtils._get_site_ids_with_devices(org_id)  # Full API discovery. Returns Any
         site_ids = list(raw) if raw else []  # Cast Any->list[str] for mypy (GatewayExportUtils returns list)
-        logging.debug("API discovery returned %d site IDs", len(site_ids))  # Log after API call
+        logger.debug("API discovery returned %d site IDs", len(site_ids))  # Log after API call
         return site_ids  # Return API-discovered site IDs
