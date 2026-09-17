@@ -34,6 +34,8 @@ from src.data.data_processing_utils import (
 )  # WHY: canonical flatten and escape helpers keep CSV output consistent with peers.
 from src.utils.input_utils import InputUtils  # WHY: the shared, EOF-safe MSP identifier prompt.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 @dataclass(frozen=True)
 class _CountOp:
@@ -151,7 +153,7 @@ class CountExporter:
             return None
         callable_obj = getattr(module, operation.operation, None)  # Fetch the operation function.
         if callable_obj is None:  # The module exists but no longer defines this operation.
-            logging.error("SDK module %s does not define %s", operation.module, operation.operation)  # Name the gap.
+            logger.error("SDK module %s does not define %s", operation.module, operation.operation)  # Name the gap.
         return callable_obj
 
     @staticmethod
@@ -171,7 +173,7 @@ class CountExporter:
             The chosen operation, or None when the operator declines.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Offering %d %s count operations", len(operations), scope_label)  # Pre-prompt log.
+        logger.info("Offering %d %s count operations", len(operations), scope_label)  # Pre-prompt log.
         for index, operation in enumerate(operations, start=1):  # Number the rows from one.
             print(f"  [{index}] {operation.operation}")  # Operator-facing choice row.
         answer = str(  # WHY: the lazy module attribute is untyped, so pin the declared str return.
@@ -181,14 +183,14 @@ class CountExporter:
                 context=f"count_exporter.{scope_label}.selection",
             )
         ).strip()
-        logging.debug("Operator answered %r for the %s selection", answer, scope_label)  # Answer trace.
+        logger.debug("Operator answered %r for the %s selection", answer, scope_label)  # Answer trace.
         if not answer.isdigit():  # A non-numeric answer, an EOF, or an interrupt aborts.
-            logging.info("! No operation selected. Returning to the menu.")  # User-facing cancel.
+            logger.info("! No operation selected. Returning to the menu.")  # User-facing cancel.
             return None
         position = int(answer)  # Convert once the value is known to be all digits.
         if not 1 <= position <= len(operations):  # Guard the table bounds before indexing.
-            logging.error("Selection %d is outside 1-%d", position, len(operations))  # Bound breach.
-            logging.info("! That number is not on the list. Returning to the menu.")  # User notice.
+            logger.error("Selection %d is outside 1-%d", position, len(operations))  # Bound breach.
+            logger.info("! That number is not on the list. Returning to the menu.")  # User notice.
             return None
         return operations[position - 1]  # Menu rows are one-based, the tuple is zero-based.
 
@@ -202,15 +204,15 @@ class CountExporter:
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No rows, so inform the operator and return.
-            logging.info("! No %s data found", operation)  # ASCII-only user notice.
+            logger.info("! No %s data found", operation)  # ASCII-only user notice.
             return
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten for CSV.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # Make CSV-safe.
         mh.DataExporter.write_with_format_selection(  # Persist through the shared selector.
             sanitized_data, filename, api_function_name=operation
         )
-        logging.debug("%s persisted %d rows to %s", operation, len(rawdata), filename)  # Post-call count.
-        logging.info("! %d %s records exported to %s", len(rawdata), operation, filename)  # User notice.
+        logger.debug("%s persisted %d rows to %s", operation, len(rawdata), filename)  # Post-call count.
+        logger.info("! %d %s records exported to %s", len(rawdata), operation, filename)  # User notice.
 
     @staticmethod
     def _run(operation: _CountOp, identifier: str, label: str) -> None:
@@ -223,10 +225,10 @@ class CountExporter:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         callable_obj = CountExporter._resolve(operation)  # Resolve the SDK function.
         if callable_obj is None:  # The resolver already logged which part was missing.
-            logging.info("! %s is unavailable in this SDK version.", operation.operation)  # Notice.
+            logger.info("! %s is unavailable in this SDK version.", operation.operation)  # Notice.
             return
         try:
-            logging.info("Calling %s for %s", operation.operation, identifier)  # Pre-call log.
+            logger.info("Calling %s for %s", operation.operation, identifier)  # Pre-call log.
             response = callable_obj(mh.apisession, identifier)  # Every count takes session + id.
             rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page all rows.
             filename = f"{operation.operation}_{label.replace(' ', '_')}.csv"  # Per-target filename.
@@ -239,13 +241,13 @@ class CountExporter:
     def org_counts() -> None:
         """Run any org-scoped count operation (menu 235)."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Org Counts:")  # Menu header echoed to the operator.
+        logger.info("Org Counts:")  # Menu header echoed to the operator.
         operation = CountExporter._choose(_ORG_OPS, "org")  # Ask which count to run.
         if operation is None:  # The chooser already logged the cancellation.
             return
         org_id = str(mh.ConfigUtils.get_cached_or_prompted_org_id())  # Reuse the shared org resolver.
         if not org_id:  # No org means no call is possible.
-            logging.info("! No org selected. Returning to the menu.")  # User-facing cancel.
+            logger.info("! No org selected. Returning to the menu.")  # User-facing cancel.
             return
         CountExporter._run(operation, org_id, org_id)  # Execute and persist.
 
@@ -253,7 +255,7 @@ class CountExporter:
     def site_counts() -> None:
         """Run any site-scoped count operation (menu 236)."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Site Counts:")  # Menu header echoed to the operator.
+        logger.info("Site Counts:")  # Menu header echoed to the operator.
         operation = CountExporter._choose(_SITE_OPS, "site")  # Ask which count to run.
         if operation is None:  # The chooser already logged the cancellation.
             return
@@ -266,7 +268,7 @@ class CountExporter:
     @staticmethod
     def msp_counts() -> None:
         """Run any MSP-scoped count operation (menu 237)."""
-        logging.info("MSP Counts:")  # Menu header echoed to the operator.
+        logger.info("MSP Counts:")  # Menu header echoed to the operator.
         operation = CountExporter._choose(_MSP_OPS, "msp")  # Ask which count to run.
         if operation is None:  # The chooser already logged the cancellation.
             return

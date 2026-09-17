@@ -20,6 +20,8 @@ from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class OrgAdminExporter:
     """Organization Admin and License Exporter.
@@ -32,7 +34,7 @@ class OrgAdminExporter:
     def api_tokens() -> None:
         """Export organization API tokens to OrgApiTokens.csv."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Starting export of organization api tokens...")  # Log start.
+        logger.info("Starting export of organization api tokens...")  # Log start.
         mh.APIDataFetcher(  # Fetch and write tokens.
             title="Organization Api Tokens:",
             api_call=mistapi.api.v1.orgs.apitokens.listOrgApiTokens,
@@ -44,7 +46,7 @@ class OrgAdminExporter:
     def admins() -> None:
         """Export organization admins to OrgAdmins.csv."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Starting export of organization admins...")  # Log start.
+        logger.info("Starting export of organization admins...")  # Log start.
         mh.APIDataFetcher(  # Fetch and write admins.
             title="Organization Admins:",
             api_call=mistapi.api.v1.orgs.admins.listOrgAdmins,
@@ -66,7 +68,7 @@ class OrgAdminExporter:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         list_func = getattr(mistapi.api.v1.orgs.licenses, "listOrgLicenses", None)  # Locate the wrapper if shipped.
         if list_func is None:  # Wrapper missing -> fall back to raw GET.
-            logging.debug("listOrgLicenses wrapper not present in mistapi library; performing direct GET /licenses")
+            logger.debug("listOrgLicenses wrapper not present in mistapi library; performing direct GET /licenses")
             raw_url = f"/api/v1/orgs/{current_org_id}/licenses"  # Compose raw API path.
             if mh.apisession is None:  # Direct GET requires an initialized session.
                 raise ValueError("API session not initialized")
@@ -80,7 +82,7 @@ class OrgAdminExporter:
         """Fetch license rows via wrapper or raw GET fallback, normalized to a list."""
         raw_items = OrgAdminExporter._fetch_license_payload(current_org_id)  # Resolve via wrapper/raw dispatch.
         if not isinstance(raw_items, list):  # Normalize unexpected shapes to a list.
-            logging.debug("License endpoint returned non-list payload; normalizing to list")  # Trace normalization.
+            logger.debug("License endpoint returned non-list payload; normalizing to list")  # Trace normalization.
             raw_items = [raw_items]  # Wrap single item.
         return raw_items  # Caller decides empty/persist.
 
@@ -88,19 +90,19 @@ class OrgAdminExporter:
     def licenses() -> None:
         """Export organization licenses to OrgLicenses.csv."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Starting export of organization licenses (canonical endpoint)...")  # Log start.
+        logger.info("Starting export of organization licenses (canonical endpoint)...")  # Log start.
         filename = "OrgLicenses.csv"  # Build the CSV name.
         current_org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         try:
             raw_items = OrgAdminExporter._fetch_license_records(current_org_id)  # Fetch rows via wrapper/fallback.
             if not raw_items:  # No records.
-                logging.info("No license records returned from canonical endpoint; writing empty OrgLicenses.csv")
+                logger.info("No license records returned from canonical endpoint; writing empty OrgLicenses.csv")
                 mh.DataExporter.write_with_format_selection([], filename, api_function_name="listOrgLicenses")
                 return  # Abort.
             processed = DataProcessingUtils.flatten_nested_fields(raw_items)  # Flatten nested fields.
             processed = DataProcessingUtils.escape_multiline(processed)  # CSV-safe.
             mh.DataExporter.write_with_format_selection(processed, filename, api_function_name="listOrgLicenses")
-            logging.info("Exported %s license records to %s.", len(processed), filename)  # Log export count.
+            logger.info("Exported %s license records to %s.", len(processed), filename)  # Log export count.
         except Exception as e:  # Export failed.
             logging.error("Failed to export licenses: %s", e)  # Log the error.
             try:
@@ -115,13 +117,13 @@ class OrgAdminExporter:
     def usage() -> None:
         """Export organization usage data to OrgUsage.csv."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Starting export of organization license usage...")  # Log start.
+        logger.info("Starting export of organization license usage...")  # Log start.
         mh.APIDataFetcher(  # Fetch and write usage.
             title="Organization License Usage:",
             api_call=mistapi.api.v1.orgs.licenses.getOrgLicensesBySite,
             filename="OrgUsage",
             sort_key="site_id",
         ).execute()
-        logging.info(" License usage data exported to OrgUsage")  # Log completion.
+        logger.info(" License usage data exported to OrgUsage")  # Log completion.
         # WHY: user-visible completion banner (replaces prior print()).
-        logging.warning(" License usage data exported to OrgUsage")
+        logger.warning(" License usage data exported to OrgUsage")

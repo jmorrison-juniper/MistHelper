@@ -44,6 +44,8 @@ from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: canonical flatten and escape helpers keep CSV output consistent with peers.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class OrgSearchExporter:
     """Organization-scoped search exporter.
@@ -135,10 +137,10 @@ class OrgSearchExporter:
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if getattr(mh, "IS_TEST_MODE", False):  # The unattended sweep must never block on stdin.
-            logging.info("Test mode skips the optional %s filters", operation)  # Action log before the skip.
-            logging.debug("Completed the %s prompts with 0 filters", operation)  # Result trace.
+            logger.info("Test mode skips the optional %s filters", operation)  # Action log before the skip.
+            logger.debug("Completed the %s prompts with 0 filters", operation)  # Result trace.
             return {}
-        logging.info("Prompting the operator for the optional %s filters", operation)  # Action log before.
+        logger.info("Prompting the operator for the optional %s filters", operation)  # Action log before.
         filters: dict[str, Any] = {}  # A blank optional filter stays out of the SDK call.
         for name, label in prompts.items():  # Ask for each optional filter through the safe wrapper.
             prompt_text = f"Enter {label} for {operation} (optional): "  # Name the filter and the operation.
@@ -150,7 +152,7 @@ class OrgSearchExporter:
             if value is None:  # The answer was unusable, so leave the SDK default in place.
                 continue
             filters[name] = value  # Forward the converted filter.
-        logging.debug("Completed the %s prompts with %d filters", operation, len(filters))  # Result trace.
+        logger.debug("Completed the %s prompts with %d filters", operation, len(filters))  # Result trace.
         return filters
 
     @staticmethod
@@ -169,7 +171,7 @@ class OrgSearchExporter:
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No rows, so inform the operator and return.
-            logging.info("! No %s data found for this organization", label)  # ASCII-only user notice.
+            logger.info("! No %s data found for this organization", label)  # ASCII-only user notice.
             return
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested dicts for CSV.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # Make multiline values CSV-safe.
@@ -177,8 +179,8 @@ class OrgSearchExporter:
         mh.DataExporter.write_with_format_selection(  # Persist through the CSV, SQLite, or Arango selector.
             sanitized_data, filename, api_function_name=operation
         )
-        logging.debug("%s persisted %d rows to %s", operation, len(rawdata), filename)  # Post-call count trace.
-        logging.info("! %d %s records exported to %s", len(rawdata), label, filename)  # User notice with count.
+        logger.debug("%s persisted %d rows to %s", operation, len(rawdata), filename)  # Post-call count trace.
+        logger.info("! %d %s records exported to %s", len(rawdata), label, filename)  # User notice with count.
 
     @staticmethod
     def _run_org_search(
@@ -204,16 +206,16 @@ class OrgSearchExporter:
             prompts: The optional filter prompts, or None to ask for no filter.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Organization %s Search:", label.title())  # Menu header echoed to the operator.
-        logging.info("Starting the %s export...", operation)  # Pre-call trace.
+        logger.info("Organization %s Search:", label.title())  # Menu header echoed to the operator.
+        logger.info("Starting the %s export...", operation)  # Pre-call trace.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the organization context.
         if not org_id:  # The operator declined, or no organization could be resolved.
-            logging.error("No org_id available for %s. Exiting.", operation)  # Abort reason.
-            logging.info("! No organization selected. Exiting.")  # User-facing cancel line.
+            logger.error("No org_id available for %s. Exiting.", operation)  # Abort reason.
+            logger.info("! No organization selected. Exiting.")  # User-facing cancel line.
             return
         filters = OrgSearchExporter._prompt_filters(operation, prompts) if prompts else {}  # Optional filters.
         try:
-            logging.info("Calling %s for org_id=%s", operation, org_id)  # Pre-call log.
+            logger.info("Calling %s for org_id=%s", operation, org_id)  # Pre-call log.
             response = api_call(mh.apisession, org_id, **filters)  # SDK call with the supplied filters.
             rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page through all rows.
             OrgSearchExporter._persist(rawdata, prefix, operation, label)  # Persist or report empty.

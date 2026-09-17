@@ -32,6 +32,8 @@ from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: canonical flatten and escape helpers keep CSV output consistent with peers.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 # The operationId that selects the primary-key strategy for the written row.
 _OPERATION = "testOrgCradlepointConnection"
 
@@ -60,16 +62,16 @@ class OrgCradlepointConnectionExporter:
             The status body as a dict, or an empty dict when the body is absent.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Calling testOrgCradlepointConnection for org_id=%s", org_id)  # Pre-call log.
+        logger.info("Calling testOrgCradlepointConnection for org_id=%s", org_id)  # Pre-call log.
         response = mistapi.api.v1.orgs.setting.testOrgCradlepointConnection(
             mh.apisession, org_id
         )  # The SDK call for the Cradlepoint status.
         payload = getattr(response, "data", None)  # The SDK exposes the body on .data.
-        logging.debug(
+        logger.debug(
             "testOrgCradlepointConnection returned payload_type=%s", type(payload).__name__
         )  # Post-call trace.
         if not isinstance(payload, dict):  # A list body or a None body means no status was returned.
-            logging.debug("testOrgCradlepointConnection returned no dict body for org %s", org_id)  # Explain it.
+            logger.debug("testOrgCradlepointConnection returned no dict body for org %s", org_id)  # Explain it.
             return {}
         return payload
 
@@ -90,11 +92,11 @@ class OrgCradlepointConnectionExporter:
             A list that holds one flattened row, or an empty list for no body.
         """
         if not payload:  # An absent body has nothing to write.
-            logging.debug("No Cradlepoint status body to flatten")  # Explain the empty result.
+            logger.debug("No Cradlepoint status body to flatten")  # Explain the empty result.
             return []
         row = {"org_id": org_id, **payload}  # Tag the row with the org, then copy the status fields.
         flattened = DataProcessingUtils.flatten_nested_fields([row])  # Flatten every nested field.
-        logging.debug("Built %d Cradlepoint status row(s)", len(flattened))  # Post-build count trace.
+        logger.debug("Built %d Cradlepoint status row(s)", len(flattened))  # Post-build count trace.
         return flattened
 
     @staticmethod
@@ -107,14 +109,14 @@ class OrgCradlepointConnectionExporter:
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rows:  # No rows, so inform the operator and return.
-            logging.info("! No Cradlepoint connection status found")  # ASCII-only user notice.
+            logger.info("! No Cradlepoint connection status found")  # ASCII-only user notice.
             return
         sanitized_data = DataProcessingUtils.escape_multiline(rows)  # Make multiline values CSV-safe.
         mh.DataExporter.write_with_format_selection(  # Persist through the CSV, SQLite, or Arango selector.
             sanitized_data, filename, api_function_name=_OPERATION
         )
-        logging.debug("%s persisted %d rows to %s", _OPERATION, len(rows), filename)  # Post-call count.
-        logging.info("! %d Cradlepoint status record(s) exported to %s", len(rows), filename)  # Notice.
+        logger.debug("%s persisted %d rows to %s", _OPERATION, len(rows), filename)  # Post-call count.
+        logger.info("! %d Cradlepoint status record(s) exported to %s", len(rows), filename)  # Notice.
 
     @staticmethod
     def status() -> None:
@@ -125,7 +127,7 @@ class OrgCradlepointConnectionExporter:
             API call, and the write, and it keeps every failure inside the menu.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Organization Cradlepoint Connection Status:")  # Menu header echoed to the operator.
+        logger.info("Organization Cradlepoint Connection Status:")  # Menu header echoed to the operator.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve which org to read.
         if not org_id:  # The resolver already logged the cancellation.
             return

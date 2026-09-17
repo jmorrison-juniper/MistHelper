@@ -17,6 +17,8 @@ from src.config.source_dependency_resolver import (
 )
 from src.data.data_processing_utils import DataProcessingUtils
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 _OPERATION = "searchOrgInventory"
 _PREFIX = "OrgInventorySearch"
 _FILTERS = (
@@ -48,38 +50,38 @@ class OrgInventorySearchExporter:
             value = mh.InputUtils.safe_input(f"{label} (optional): ", context=context)
             if value:
                 filters[field] = int(value) if field == "limit" else value
-        logging.debug("Collected %d searchOrgInventory filter(s)", len(filters))
+        logger.debug("Collected %d searchOrgInventory filter(s)", len(filters))
         return filters
 
     @staticmethod
     def _persist(rows: list[Any], org_id: str, mh: Any) -> None:
         """Flatten and write rows through the configured output backend."""
         if not rows:
-            logging.info("! No organization inventory search data found")
+            logger.info("! No organization inventory search data found")
             return
         flattened = DataProcessingUtils.flatten_nested_fields(rows)
         sanitized = DataProcessingUtils.escape_multiline(flattened)
         filename = f"{_PREFIX}_{org_id}.csv"
         mh.DataExporter.write_with_format_selection(sanitized, filename, api_function_name=_OPERATION)
-        logging.debug("%s persisted %d rows to %s", _OPERATION, len(rows), filename)
-        logging.info("! %d organization inventory search record(s) exported to %s", len(rows), filename)
+        logger.debug("%s persisted %d rows to %s", _OPERATION, len(rows), filename)
+        logger.info("! %d organization inventory search record(s) exported to %s", len(rows), filename)
 
     @staticmethod
     def inventory() -> None:
         """Search organization inventory and export the result (menu 248)."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Organization Inventory Search:")
-        logging.info("Starting the %s export...", _OPERATION)
+        logger.info("Organization Inventory Search:")
+        logger.info("Starting the %s export...", _OPERATION)
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()
         if not org_id:
-            logging.info("! No organization selected. Exiting.")
+            logger.info("! No organization selected. Exiting.")
             return
         try:
             filters = OrgInventorySearchExporter._prompt_filters(mh)
-            logging.info("Calling %s for org_id=%s", _OPERATION, org_id)
+            logger.info("Calling %s for org_id=%s", _OPERATION, org_id)
             response = mistapi.api.v1.orgs.inventory.searchOrgInventory(mh.apisession, org_id, **filters)
             rows = mistapi.get_all(response=response, mist_session=mh.apisession)
-            logging.debug("%s returned %d row(s)", _OPERATION, len(rows))
+            logger.debug("%s returned %d row(s)", _OPERATION, len(rows))
             OrgInventorySearchExporter._persist(rows, org_id, mh)
         except Exception as error:
             logging.error("Error fetching organization inventory search for %s: %s", org_id, error)

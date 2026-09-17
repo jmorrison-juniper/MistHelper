@@ -30,6 +30,8 @@ from src.data.data_processing_utils import (
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 from src.time.time_utils import TimeUtils  # WHY: 1014 P6 direct import (FR-005).
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class OrgClientSecurityExporter:
     """Organization Client and Security Exporter.
@@ -75,7 +77,7 @@ class OrgClientSecurityExporter:
         output_file = "OrgRogueClients.csv"  # Destination CSV for this export
         if OrgClientSecurityExporter._check_csv_cache_fresh(output_file, fast):  # Fast-mode cache hit short-circuits
             return  # Skip the API calls entirely
-        logging.info("Starting export of rogue clients from all sites...")  # Log the start of the export
+        logger.info("Starting export of rogue clients from all sites...")  # Log the start of the export
         lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)  # 7 days normally, 1 hour in test mode
         rogue_duration = f"{lookback_hours}h"  # Format the lookback as the API's duration string
         TimeUtils.log_dynamic_lookback("rogue clients fetch", lookback_hours)  # Log which lookback window is used
@@ -98,7 +100,7 @@ class OrgClientSecurityExporter:
         output_file = "OrgRogueAPs.csv"  # Destination CSV for this export
         if OrgClientSecurityExporter._check_csv_cache_fresh(output_file, fast):  # Fast-mode cache hit short-circuits
             return  # Skip the API calls entirely
-        logging.info("Starting export of rogue APs from all sites...")  # Log the start of the export
+        logger.info("Starting export of rogue APs from all sites...")  # Log the start of the export
         lookback_hours = TimeUtils.get_dynamic_lookback_hours(168, 1)  # 7 days normally, 1 hour in test mode
         rogue_duration = f"{lookback_hours}h"  # Format the lookback as the API's duration string
         TimeUtils.log_dynamic_lookback("rogue APs fetch", lookback_hours)  # Log which lookback window is used
@@ -126,13 +128,13 @@ class OrgClientSecurityExporter:
                 return False  # Fall through to fetch
             age_minutes = (time.time() - os.path.getmtime(path)) / 60.0  # File age in minutes
             if age_minutes >= mh.CSV_FRESHNESS_MINUTES:  # Cached file is stale
-                logging.debug("Cache for %s is stale (%.1fm)", output_file, age_minutes)  # Trace staleness
+                logger.debug("Cache for %s is stale (%.1fm)", output_file, age_minutes)  # Trace staleness
                 return False  # Force a fresh fetch
-            logging.info(
+            logger.info(
                 "Fast mode cache hit: %s is fresh (%.1fm); skipping fetch.", output_file, age_minutes
             )  # Log the cache hit
             # User-facing fast-mode cache hit banner.
-            logging.info("* Fast mode: Using cached %s (age %.1fm)", output_file, age_minutes)
+            logger.info("* Fast mode: Using cached %s (age %.1fm)", output_file, age_minutes)
             return True  # Cache hit short-circuits the orchestrator
         except Exception as cache_error:  # Inspecting the cache failed
             logging.debug("Fast mode freshness check failed for %s: %s", output_file, cache_error)  # Trace
@@ -146,7 +148,7 @@ class OrgClientSecurityExporter:
         try:
             with open(site_list_path, encoding="utf-8") as f:  # Open the cached site list
                 rows = list(csv.DictReader(f))  # Read all sites as dictionaries
-            logging.debug("Loaded %s sites from SiteList.csv", len(rows))  # Trace site count
+            logger.debug("Loaded %s sites from SiteList.csv", len(rows))  # Trace site count
             return rows  # Return the loaded rows
         except Exception as e:  # Failure reading the cached site list
             logging.error("Failed to process sites for rogue export: %s", e)  # Log the broader failure
@@ -166,7 +168,7 @@ class OrgClientSecurityExporter:
             for rogue in rogues:  # Tag each rogue with site context
                 rogue["site_id"] = site_id  # Record which site detected it
                 rogue["site_name"] = site_name  # Record the site name for readability
-            logging.info("! Fetched %s %s from site: %s", len(rogues), label, site_name)  # Per-site summary
+            logger.info("! Fetched %s %s from site: %s", len(rogues), label, site_name)  # Per-site summary
             return rogues  # type: ignore[no-any-return]  # Return the tagged list
         except Exception as e:  # This site's fetch failed
             logging.warning("! Failed to fetch %s from site %s: %s", label, site_name, e)  # Warn but keep going
@@ -203,10 +205,10 @@ class OrgClientSecurityExporter:
             flattened = DataProcessingUtils.flatten_nested_fields(rogues)  # Flatten nested JSON to CSV rows
             sanitized = DataProcessingUtils.escape_multiline(flattened)
             mh.DataExporter.write_with_format_selection(sanitized, csv_basename, api_function_name="listSiteRogueAPs")
-            logging.info("! %s %s exported to %s", len(rogues), label, csv_basename)  # Log the export
+            logger.info("! %s %s exported to %s", len(rogues), label, csv_basename)  # Log the export
             # User-facing export count banner.
-            logging.info("! %d %s exported to %s", len(rogues), label, csv_basename)
+            logger.info("! %d %s exported to %s", len(rogues), label, csv_basename)
         else:  # No rogues found anywhere
-            logging.info("No %s found across all sites", label)  # Log the empty result
+            logger.info("No %s found across all sites", label)  # Log the empty result
             # User-facing empty-result banner.
-            logging.info(" No %s detected across all sites", label)
+            logger.info(" No %s detected across all sites", label)

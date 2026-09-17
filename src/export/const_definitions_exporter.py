@@ -23,6 +23,8 @@ from src.data.data_processing_utils import (
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 from src.dataclasses.endpoint_config import EndpointConfig  # Const endpoint descriptor.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class ConstDefinitionsExporter:  # Const definitions exporter.
     """Exports all available const definitions from the Mist API to individual CSV files.
@@ -56,13 +58,13 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
     def export_all(self) -> None:  # Export every const endpoint.
         """Main entry point: discover and export all const definitions."""
         print("Export All Available Const Definitions (Dynamic Discovery):")  # Header.
-        logging.info("Starting comprehensive dynamic export of all const definitions...")  # Log start.
+        logger.info("Starting comprehensive dynamic export of all const definitions...")  # Log start.
 
         try:
             self._discover_endpoints()  # Discover endpoints.
             if not self.discovered_endpoints:  # None found.
                 print("! No const endpoints discovered from mistapi library")  # Tell the user.
-                logging.error("Dynamic discovery found no const endpoints")  # Log the error.
+                logger.error("Dynamic discovery found no const endpoints")  # Log the error.
                 return  # Abort.
 
             self._process_all_endpoints()  # Process all endpoints.
@@ -79,7 +81,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         import mistapi.api.v1.const as const_package  # Import the const package.
 
         print("! Dynamically discovering const endpoints from mistapi library...")  # Tell the user.
-        logging.info("Starting dynamic discovery of const endpoints")  # Log start.
+        logger.info("Starting dynamic discovery of const endpoints")  # Log start.
 
         # Walk every non-package module under mistapi.api.v1.const for inspection.
         const_prefix = const_package.__name__ + "."
@@ -89,7 +91,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             self._inspect_module(modname)  # Inspect the module.
 
         print(f"! Successfully discovered {len(self.discovered_endpoints)} const endpoints dynamically")
-        logging.info("Dynamic discovery completed: %s endpoints found", len(self.discovered_endpoints))
+        logger.info("Dynamic discovery completed: %s endpoints found", len(self.discovered_endpoints))
 
     def _inspect_module(self, modname: str) -> None:  # Inspect one const module.
         """Inspect a single const module for API functions."""
@@ -112,12 +114,12 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         functions = self._find_api_functions(module, endpoint_name)  # Find candidate API functions.
         if not functions:  # None found.
             print(f"    ! No API functions found in {endpoint_name}")  # Tell the user.
-            logging.warning("No functions found in %s", endpoint_name)  # Warn none found.
+            logger.warning("No functions found in %s", endpoint_name)  # Warn none found.
             return  # Skip it.
         api_function = self._select_best_function(functions)  # Pick the best function.
         if not api_function:  # No suitable function (none accept a session param)
             print(f"    ! No suitable API functions found in {endpoint_name}")  # Tell the user none.
-            logging.warning("No API functions with mist_session parameter found in %s", endpoint_name)  # Warn
+            logger.warning("No API functions with mist_session parameter found in %s", endpoint_name)  # Warn
             return  # Nothing to register
         self._register_endpoint(endpoint_name, module, api_function, modname)  # Register the endpoint.
 
@@ -145,7 +147,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             if not type(self)._is_session_api_function(obj):  # Combined function/session predicate
                 continue
             functions.append(name)  # Keep the function
-            logging.debug("Found potential API function in %s: %s%s", endpoint_name, name, inspect.signature(obj))
+            logger.debug("Found potential API function in %s: %s%s", endpoint_name, name, inspect.signature(obj))
         return functions  # Return the discovered names
 
     def _select_best_function(self, functions: list[str]) -> str | None:  # Pick the best function.
@@ -191,7 +193,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             special_handling=special_handling,
         )
         print(f"    ! Found API function: {api_function}() -> {filename}")  # Tell the user.
-        logging.debug("Discovered %s: %s() -> %s", endpoint_name, api_function, filename)  # Trace the find.
+        logger.debug("Discovered %s: %s() -> %s", endpoint_name, api_function, filename)  # Trace the find.
 
     def _build_filename(self, endpoint_name: str) -> str:  # Build the const filename.
         """Convert endpoint_name to ConstTitleCase.csv filename."""
@@ -232,7 +234,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             print(f"    ! Will call for all available countries -> {filename}")  # Tell the user.
             return "all_countries"  # All-countries handling.
         print(f"    ! Skipping {api_function}() - requires additional parameters: {param_names}")  # Tell user skip.
-        logging.info("Skipping %s.%s() - requires parameters: %s", endpoint_name, api_function, param_names)
+        logger.info("Skipping %s.%s() - requires parameters: %s", endpoint_name, api_function, param_names)
         return "skip"  # Skip it.
 
     def _determine_special_handling(
@@ -282,11 +284,11 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         if file_age_hours < self.CACHE_MAX_AGE_HOURS:  # Within the window.
             print(f"  ! Found fresh {config.filename} (created {file_timestamp}, {file_age_hours:.1f}h old)")
             print(f"  ! Skipping API call - using cached data (cache valid for {self.CACHE_MAX_AGE_HOURS}h)")
-            logging.info("Using cached %s file (age: %.1fh)", config.endpoint_name, file_age_hours)
+            logger.info("Using cached %s file (age: %.1fh)", config.endpoint_name, file_age_hours)
             return True  # Fresh.
         print(f"  ! Found stale {config.filename} (created {file_timestamp}, {file_age_hours:.1f}h old)")
         print(f"  ! File is older than {self.CACHE_MAX_AGE_HOURS}h threshold - fetching fresh data from API...")
-        logging.info("Refreshing stale %s file (age: %.1fh)", config.endpoint_name, file_age_hours)
+        logger.info("Refreshing stale %s file (age: %.1fh)", config.endpoint_name, file_age_hours)
         return False  # Stale.
 
     def _is_file_fresh(self, config: EndpointConfig) -> bool:  # Check cache freshness.
@@ -298,7 +300,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         file_path = os.path.join("data", config.filename)  # Build the file path.
         if not os.path.exists(file_path):  # File missing.
             print(f"  ! {config.filename} not found - fetching fresh data from API...")  # Tell the user.
-            logging.info("%s not found, fetching from API", config.filename)  # Log the fetch.
+            logger.info("%s not found, fetching from API", config.filename)  # Log the fetch.
             return False  # Not fresh.
         try:
             file_mtime = os.path.getmtime(file_path)  # Read the mtime.
@@ -498,7 +500,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
             c for c in country_codes if ConstDefinitionsExporter._is_valid_alpha2(c)
         ]  # Delegate predicate to helper
         if len(valid) < len(country_codes):  # Some entries failed validation
-            logging.debug("Filtered out %s invalid country codes", len(country_codes) - len(valid))
+            logger.debug("Filtered out %s invalid country codes", len(country_codes) - len(valid))
         return valid
 
     def _fetch_valid_country_codes_from_api(self) -> list[str]:
@@ -610,7 +612,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         original_count = len(country_codes)  # Remember the original count for logging.
         filtered = [c for c in country_codes if ConstDefinitionsExporter._is_valid_alpha2(c)]  # Delegate predicate
         if len(filtered) < original_count:  # Some were filtered.
-            logging.debug(  # Trace the filter.
+            logger.debug(  # Trace the filter.
                 "Filtered out %s invalid country codes for ap_channels", original_count - len(filtered)
             )
         return filtered  # Return the cleaned list.
@@ -676,7 +678,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not const_data:  # No data.
             print(f"  ! 0 {config.description.lower()} exported to {config.filename} (no data available)")
-            logging.warning("No %s data available from %s endpoint", config.description.lower(), config.endpoint_name)
+            logger.warning("No %s data available from %s endpoint", config.description.lower(), config.endpoint_name)
             mh.DataExporter.write_with_format_selection([], config.filename, api_function_name=config.function_name)  # type: ignore[no-untyped-call]
             self.endpoints_updated += 1  # Count updated.
             return  # Abort.
@@ -686,7 +688,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         mh.DataExporter.write_with_format_selection(processed, config.filename, api_function_name=config.function_name)  # type: ignore[no-untyped-call]
 
         print(f"  ! {len(processed)} {config.description.lower()} exported to {config.filename}")  # Tell the user.
-        logging.info("Exported %s fresh %s to %s", len(processed), config.description.lower(), config.filename)
+        logger.info("Exported %s fresh %s to %s", len(processed), config.description.lower(), config.filename)
         self.endpoints_updated += 1  # Count updated.
 
     def _convert_to_list(self, endpoint_name: str, const_data) -> list:  # type: ignore[no-untyped-def, type-arg]
@@ -768,7 +770,7 @@ class ConstDefinitionsExporter:  # Const definitions exporter.
         print(f"  ! Files updated/created: {self.endpoints_updated}")  # Updated count.
         print(f"  ! Failed endpoints: {self.endpoints_failed}")  # Failed count.
 
-        logging.info(  # Log the totals.
+        logger.info(  # Log the totals.
             "Dynamic const export completed: %s discovered, %s processed, %s skipped (fresh), %s updated, %s failed",
             len(self.discovered_endpoints),
             self.endpoints_processed,

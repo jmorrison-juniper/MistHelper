@@ -23,6 +23,8 @@ from src.data.data_processing_utils import (
 from src.export.endpoint_catalog import menu_text  # WHY: one source for the description and the safety flag.
 from src.utils.input_utils import InputUtils  # WHY: MSP selection must use the EOF-safe prompt.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 @dataclass(frozen=True)
 class _EndpointFamilyOp:
@@ -453,14 +455,14 @@ class EndpointFamilyExporter:
             return None
         callable_obj = getattr(module, operation.operation, None)  # Read the selected function from the module.
         if callable_obj is None:
-            logging.error("SDK module %s does not define %s", operation.module, operation.operation)  # Record drift.
+            logger.error("SDK module %s does not define %s", operation.module, operation.operation)  # Record drift.
         return callable_obj
 
     @staticmethod
     def _choose(operations: tuple[_EndpointFamilyOp, ...], scope_label: str) -> _EndpointFamilyOp | None:
         """Prompt the operator to select one operation from a scope table."""
         mh = EndpointFamilyExporter._mist_helper()  # Load the prompt helper at use time.
-        logging.info("Offering %d %s endpoint operations", len(operations), scope_label)  # Log the prompt.
+        logger.info("Offering %d %s endpoint operations", len(operations), scope_label)  # Log the prompt.
         for index, operation in enumerate(operations, start=1):
             print(f"  [{index}] {menu_text(operation.operation)}")  # Show the name, the description, and the flag.
         answer = str(
@@ -470,14 +472,14 @@ class EndpointFamilyExporter:
                 context=f"endpoint_family_exporter.{scope_label}.selection",
             )
         ).strip()  # Normalize the answer.
-        logging.debug("Operator answered %r for the %s endpoint selection", answer, scope_label)  # Trace the answer.
+        logger.debug("Operator answered %r for the %s endpoint selection", answer, scope_label)  # Trace the answer.
         if not answer.isdigit():
-            logging.info("! No operation selected. Returning to the menu.")  # Explain the safe cancel path.
+            logger.info("! No operation selected. Returning to the menu.")  # Explain the safe cancel path.
             return None
         position = int(answer)  # Convert after the numeric guard to avoid ValueError.
         if not 1 <= position <= len(operations):
-            logging.error("Selection %d is outside 1-%d", position, len(operations))  # Record the bad bound.
-            logging.info("! That number is not on the list. Returning to the menu.")  # Explain the safe cancel path.
+            logger.error("Selection %d is outside 1-%d", position, len(operations))  # Record the bad bound.
+            logger.info("! That number is not on the list. Returning to the menu.")  # Explain the safe cancel path.
             return None
         return operations[position - 1]  # Map the one-based menu row to the tuple index.
 
@@ -509,11 +511,11 @@ class EndpointFamilyExporter:
         values: list[str] = []  # Preserve the positional SDK argument order.
         labels: list[str] = []  # Keep a readable target label for the export file.
         for param in operation.required:
-            logging.info("Prompting for %s for %s", param, operation.operation)  # Log before each prompt.
+            logger.info("Prompting for %s for %s", param, operation.operation)  # Log before each prompt.
             resolved = EndpointFamilyExporter._prompt_identifier(param, operation.operation)  # Collect one value.
-            logging.debug("Prompt result for %s on %s: %s", param, operation.operation, bool(resolved))  # Log status.
+            logger.debug("Prompt result for %s on %s: %s", param, operation.operation, bool(resolved))  # Log status.
             if resolved is None:
-                logging.info("! No %s selected. Returning to the menu.", param)  # Explain the safe cancel path.
+                logger.info("! No %s selected. Returning to the menu.", param)  # Explain the safe cancel path.
                 return None
             values.append(resolved[0])  # Add the identifier in signature order.
             labels.append(resolved[1])  # Add a safe filename label for the identifier.
@@ -538,17 +540,17 @@ class EndpointFamilyExporter:
         """Flatten and persist endpoint rows through the shared exporter."""
         mh = EndpointFamilyExporter._mist_helper()  # Load the shared DataExporter only when needed.
         rows = EndpointFamilyExporter._normalize(rawdata)  # Convert single-object responses to one row.
-        logging.debug("%s returned %d normalized rows", operation, len(rows))  # Record the normalized size.
+        logger.debug("%s returned %d normalized rows", operation, len(rows))  # Record the normalized size.
         if not rows:
-            logging.info("! No %s data found", operation)  # Empty read results are valid.
+            logger.info("! No %s data found", operation)  # Empty read results are valid.
             return
         flattened_data = DataProcessingUtils.flatten_nested_fields(rows)  # Flatten nested JSON for tabular output.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # Keep line breaks safe in CSV cells.
         mh.DataExporter.write_with_format_selection(
             sanitized_data, filename, api_function_name=operation
         )  # Persist data.
-        logging.info("! %d %s records exported to %s", len(rows), operation, filename)  # Tell the operator.
-        logging.debug("%s persisted %d rows to %s", operation, len(rows), filename)  # Record the write result.
+        logger.info("! %d %s records exported to %s", len(rows), operation, filename)  # Tell the operator.
+        logger.debug("%s persisted %d rows to %s", operation, len(rows), filename)  # Record the write result.
 
     @staticmethod
     def _run(operation: _EndpointFamilyOp) -> None:
@@ -559,10 +561,10 @@ class EndpointFamilyExporter:
             return
         callable_obj = EndpointFamilyExporter._resolve(operation)  # Resolve the SDK function before the API call.
         if callable_obj is None:
-            logging.info("! %s is unavailable in this SDK version.", operation.operation)  # Explain SDK drift.
+            logger.info("! %s is unavailable in this SDK version.", operation.operation)  # Explain SDK drift.
             return
         try:
-            logging.info("Calling %s for %s", operation.operation, arguments.label)  # Log before the SDK call.
+            logger.info("Calling %s for %s", operation.operation, arguments.label)  # Log before the SDK call.
             response = callable_obj(mh.apisession, *arguments.values)  # Call the SDK with identifiers in order.
             rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Collect every page.
             filename = f"{operation.operation}_{arguments.label.replace(' ', '_')}.csv"  # Build a readable export name.
@@ -576,7 +578,7 @@ class EndpointFamilyExporter:
     @staticmethod
     def _run_menu(operations: tuple[_EndpointFamilyOp, ...], scope_label: str) -> None:
         """Choose and run one endpoint from a menu table."""
-        logging.info("%s Endpoint Family:", scope_label.title())  # Show the menu header.
+        logger.info("%s Endpoint Family:", scope_label.title())  # Show the menu header.
         operation = EndpointFamilyExporter._choose(operations, scope_label)  # Ask which endpoint to run.
         if operation is None:
             return

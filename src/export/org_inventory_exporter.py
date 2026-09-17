@@ -43,7 +43,7 @@ from src.dataclasses.progress_event import ProgressContext  # Progress emitter p
 from src.export.org_site_exporter import OrgSiteExporter  # SiteList.csv generator for cache path.
 from src.utils.file_path_utils import FilePathUtils  # get_csv_path canonical location.
 
-logger = logging.getLogger(__name__)  # WHY: module-scoped logger routes operator notices through capture/redirection.
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 
 
 class OrgInventoryExporter:  # Org inventory exporters.
@@ -76,7 +76,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
         Uses APIDataFetcher to handle API call, CSV writing, and table display.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Starting export of organization device inventory...")  # Log inventory export start.
+        logger.info("Starting export of organization device inventory...")  # Log inventory export start.
         emitter = mh.PROGRESS_EMITTER  # Capture progress emitter.
         if emitter:  # Branch: emitter present.
             emitter.emit_progress_start("12", "inventory", 1)  # Emit progress start.
@@ -89,7 +89,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
             vc=True,  # Include all physical VC member devices (6186 vs 3224 logical)
             limit=1000,
         ).execute()
-        logging.info("Completed organization inventory export and wrote results to OrgInventory.csv.")
+        logger.info("Completed organization inventory export and wrote results to OrgInventory.csv.")
         if emitter:  # Branch: emitter present.
             emitter.emit_progress_complete(ProgressContext("12", "inventory", 1), 1, False, time.time() - op_start)
 
@@ -100,7 +100,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
         Uses APIDataFetcher to handle API call, CSV writing, and table display.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Starting export of all organization devices...")  # Log devices export start.
+        logger.info("Starting export of all organization devices...")  # Log devices export start.
         emitter = mh.PROGRESS_EMITTER  # Capture progress emitter.
         if emitter:  # Branch: emitter present.
             emitter.emit_progress_start("17", "devices", 1)  # Emit progress start.
@@ -111,7 +111,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
             filename="OrgDevices.csv",
             sort_key="type",
         ).execute()
-        logging.info("Completed organization devices export and wrote results to OrgDevices.csv.")
+        logger.info("Completed organization devices export and wrote results to OrgDevices.csv.")
         if emitter:  # Branch: emitter present.
             emitter.emit_progress_complete(ProgressContext("17", "devices", 1), 1, False, time.time() - op_start)
 
@@ -150,20 +150,20 @@ class OrgInventoryExporter:  # Org inventory exporters.
     ) -> int:
         """Fetch one inventory variant and persist as raw JSON. Return row count."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Fetching raw inventory variant for %s...", filename)  # Log before API call
+        logger.info("Fetching raw inventory variant for %s...", filename)  # Log before API call
         response = mistapi.api.v1.orgs.inventory.getOrgInventory(mh.apisession, current_org_id, **request_kwargs)
         raw_inventory = mistapi.get_all(response=response, mist_session=mh.apisession)  # Paginate all results
         output_path = os.path.join(output_folder, filename)  # Build deterministic file path
         with open(output_path, "w", encoding="utf-8") as json_file:  # UTF-8 for portable JSON encoding
             json.dump(raw_inventory, json_file, indent=2, default=str)  # Pretty-print so humans can diff variants
-        logging.info("Saved %d entries to %s", len(raw_inventory), output_path)  # Log per-file count
+        logger.info("Saved %d entries to %s", len(raw_inventory), output_path)  # Log per-file count
         return len(raw_inventory)  # Return for summary aggregation
 
     @staticmethod
     def _export_combined_inventory_raw_json(output_folder: str, current_org_id: str) -> None:
         """Export raw inventory JSON variants used for VC delta analysis."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Saving raw inventory JSON for delta comparison...")  # Log start of diagnostic exports
+        logger.info("Saving raw inventory JSON for delta comparison...")  # Log start of diagnostic exports
         try:  # Raw JSON export is diagnostic only and must never block the main report
             os.makedirs(output_folder, exist_ok=True)  # Ensure shared output folder exists
             page_limit = mh.DEFAULT_API_PAGE_LIMIT  # Read live default page size.
@@ -263,13 +263,13 @@ class OrgInventoryExporter:  # Org inventory exporters.
         duplicate_vc_entries: int,
     ) -> None:
         """Log and print the virtual chassis filtering summary for operators."""
-        logging.info(  # Explain how many rows were filtered to reach physical-hardware-only reporting
+        logger.info(  # Explain how many rows were filtered to reach physical-hardware-only reporting
             "Loaded %d total devices, filtered to %d physical devices (excluded %d virtual VC identifiers)",
             len(all_devices),
             len(site_configs),
             len(all_devices) - len(site_configs),
         )
-        logging.info(  # Break down virtual rows into duplicates versus empty VC shells
+        logger.info(  # Break down virtual rows into duplicates versus empty VC shells
             "Virtual VC breakdown: %d duplicate entries (real hardware counted elsewhere) + %d empty VC shells (provisioned but no physical members assigned)",  # noqa: E501
             duplicate_vc_entries,
             len(empty_vc_shells),
@@ -506,7 +506,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
         site_lookup = {  # Build site lookup from API rows.
             site["id"]: {"name": site.get("name", ""), "address": site.get("address", "")} for site in sites
         }
-        logging.debug("Loaded %s sites for lookup.", len(site_lookup))  # Log loaded site count.
+        logger.debug("Loaded %s sites for lookup.", len(site_lookup))  # Log loaded site count.
         return site_lookup  # Site id -> info map.
 
     @staticmethod
@@ -519,7 +519,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
                 site_lookup = {  # Build site lookup from CSV rows.
                     row["id"]: {"name": row.get("name", ""), "address": row.get("address", "")} for row in reader
                 }
-            logging.debug("Loaded %s sites from cached SiteList.csv", len(site_lookup))  # Log loaded site count.
+            logger.debug("Loaded %s sites from cached SiteList.csv", len(site_lookup))  # Log loaded site count.
             return site_lookup  # Cached site lookup.
         except Exception as exception:  # Cached read failed.
             logging.warning("Failed to load from cached SiteList.csv, falling back to API: %s", exception)  # Warn.
@@ -533,7 +533,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
             with open(inventory_path, encoding="utf-8") as file:  # Open cached inventory CSV.
                 reader = csv.DictReader(file)  # Read inventory CSV rows.
                 inventory = list(reader)  # Materialize inventory rows.
-            logging.debug("Loaded %s devices from cached OrgInventory.csv", len(inventory))  # Log loaded device count.
+            logger.debug("Loaded %s devices from cached OrgInventory.csv", len(inventory))  # Log loaded device count.
             return inventory  # Cached inventory rows.
         except Exception as exception:  # Cached read failed.
             logging.warning("Failed to load from cached OrgInventory.csv, falling back to API: %s", exception)  # Warn.
@@ -552,7 +552,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
             return site_lookup, inventory  # Cached data (with fallback already applied).
         site_lookup = OrgInventoryExporter._build_site_lookup_from_api(org_id)  # Non-fast: fetch sites from API.
         inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)  # Non-fast: fetch inventory from API.
-        logging.debug("Loaded %s devices from org inventory.", len(inventory))  # Log loaded device count.
+        logger.debug("Loaded %s devices from org inventory.", len(inventory))  # Log loaded device count.
         return site_lookup, inventory  # Direct-API data.
 
     @staticmethod
@@ -567,7 +567,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
             mac = device.get("mac", "")  # Get device MAC address.
             if mac and device.get("site_id"):  # Any device with a site assignment.
                 mac_to_site_id[mac] = device["site_id"]  # Index for vc_mac lookups.
-        logging.info(  # Log the built index size.
+        logger.info(  # Log the built index size.
             "Built mac->site_id lookup with %d entries for VC member site inheritance", len(mac_to_site_id)
         )
         return mac_to_site_id  # mac -> site_id inheritance map.
@@ -606,9 +606,9 @@ class OrgInventoryExporter:  # Org inventory exporters.
             if inherited:  # The device inherited its site from a VC parent.
                 vc_inherited_count += 1  # Count successful inheritance.
             enriched_devices.append(device)  # Add enriched device to output list.
-            logging.debug("Enriched device %s (%s) with site info.", device.get("name", ""), device.get("mac", ""))
+            logger.debug("Enriched device %s (%s) with site info.", device.get("name", ""), device.get("mac", ""))
         if vc_inherited_count:  # Log inheritance summary if any members were fixed.
-            logging.info("%d physical VC members inherited site info from their VC parent", vc_inherited_count)
+            logger.info("%d physical VC members inherited site info from their VC parent", vc_inherited_count)
         return enriched_devices  # Enriched device records.
 
     @staticmethod
@@ -623,7 +623,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
         )  # type: ignore[no-untyped-call]
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! %s devices exported to AllDevicesWithSiteInfo.csv", len(devices))  # Confirm export to operator.
-        logging.info("All device data written to AllDevicesWithSiteInfo.csv (%s records).", len(devices))  # Log write.
+        logger.info("All device data written to AllDevicesWithSiteInfo.csv (%s records).", len(devices))  # Log write.
         return devices  # Processed rows for the summary table.
 
     @staticmethod
@@ -645,7 +645,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
         ]
         for device in devices:  # Iterate enriched devices for rows.
             table.add_row([device.get(column, "") for column in table.field_names])  # One cell per defined column.
-        logging.debug("\n%s", table.get_string())  # Debug-log the table.
+        logger.debug("\n%s", table.get_string())  # Debug-log the table.
 
     @staticmethod
     def devices_with_site_info(fast: bool = False):
@@ -657,9 +657,9 @@ class OrgInventoryExporter:  # Org inventory exporters.
         """
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("All Devices with Site and Address Info:")  # Inform operator of export.
-        logging.info("Fetching All Devices with Site Info...")  # Log fetch start.
+        logger.info("Fetching All Devices with Site Info...")  # Log fetch start.
         if fast:  # Fast mode reuses cached CSV files.
-            logging.info(" Fast mode enabled for devices with site info export")  # Log fast mode enabled.
+            logger.info(" Fast mode enabled for devices with site info export")  # Log fast mode enabled.
         org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
         site_lookup, inventory = OrgInventoryExporter._devices_load_data(org_id, fast)  # Load sites + inventory.
         mac_to_site_id = OrgInventoryExporter._build_mac_to_site_id(inventory)  # Build VC inheritance index.
@@ -678,18 +678,18 @@ class OrgInventoryExporter:  # Org inventory exporters.
         """
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Gateways with Site and Address Info:")  # Inform operator of export.
-        logging.info("Fetching Gateways with Site Info...")  # Log fetch start.
+        logger.info("Fetching Gateways with Site Info...")  # Log fetch start.
         org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
 
         sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch sites from API.
         site_lookup = {site["id"]: {"name": site.get("name", ""), "address": site.get("address", "")} for site in sites}
-        logging.debug("Loaded %s sites for lookup.", len(site_lookup))  # Log loaded site count.
+        logger.debug("Loaded %s sites for lookup.", len(site_lookup))  # Log loaded site count.
 
         inventory = APICoreFetchUtils.all_inventory_with_limit(org_id)  # Fetch inventory from API.
-        logging.debug("Loaded %s devices from org inventory.", len(inventory))  # Log loaded device count.
+        logger.debug("Loaded %s devices from org inventory.", len(inventory))  # Log loaded device count.
 
         gateways = OrgInventoryExporter._enrich_gateways_with_site_info(inventory, site_lookup)  # Filter + enrich
-        logging.info("Enriched %s gateway devices with site info.", len(gateways))  # Log enriched gateway count.
+        logger.info("Enriched %s gateway devices with site info.", len(gateways))  # Log enriched gateway count.
         gateways = OrgInventoryExporter._flatten_sort_export_gateways(gateways)  # Flatten/sort/write CSV. Returns rows
         OrgInventoryExporter._display_gateways_summary_table(gateways)  # Debug-log a PrettyTable of the gateways.
 
@@ -705,7 +705,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
         )  # type: ignore[no-untyped-call]
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! %s gateways exported to GatewaysWithSiteInfo.csv", len(gateways))  # Confirm export to operator.
-        logging.info("Gateway data written to GatewaysWithSiteInfo.csv")  # Log write success.
+        logger.info("Gateway data written to GatewaysWithSiteInfo.csv")  # Log write success.
         return gateways  # Processed rows for the summary table
 
     @staticmethod
@@ -759,4 +759,4 @@ class OrgInventoryExporter:  # Org inventory exporters.
             table.add_row(  # Add gateway row to table.
                 [gateway.get(column, "") for column in table.field_names]  # One cell per defined column
             )
-        logging.debug("\n%s", table.get_string())  # Debug-log the table.
+        logger.debug("\n%s", table.get_string())  # Debug-log the table.
