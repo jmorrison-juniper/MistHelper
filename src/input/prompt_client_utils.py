@@ -22,6 +22,8 @@ from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 
+logger = logging.getLogger(__name__)  # Use this module name in log records.
+
 
 class PromptClientUtils:
     """Client Selection Prompts.
@@ -34,19 +36,19 @@ class PromptClientUtils:
     def select_client_mac(site_id: str) -> str | None:
         """Prompt the operator to select a connected client at ``site_id`` and return its MAC."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.debug("Fetching connected clients for site: %s", site_id)  # Trace start.
+        logger.debug("Fetching connected clients for site: %s", site_id)  # Trace start.
         try:
             all_clients = PromptClientUtils._fetch_all_clients_for_site(site_id)  # Wireless + wired tagged.
             if not all_clients:  # No clients to choose from.
                 # WHY (#886 Phase 2): consolidate print+warning into single WARNING so operator sees notice
                 # on the default root-logger config (INFO is suppressed by default).
-                logging.warning("No connected clients found at the selected site (site_id=%s).", site_id)
+                logger.warning("No connected clients found at the selected site (site_id=%s).", site_id)
                 return None  # Abort.
             all_clients.sort(key=lambda x: (x.get("hostname", ""), x.get("username", "")))  # Sort.
             table, index_to_client = PromptClientUtils._build_client_selection_table(all_clients)  # Build UI.
             PromptClientUtils._render_client_selection_prompt(table, len(all_clients))  # Print prompt.
             user_input = mh.InputUtils.safe_input("\nEnter your choice: ", context="client_selection").strip()
-            logging.debug("User input for client selection: %s", user_input)  # Log raw choice.
+            logger.debug("User input for client selection: %s", user_input)  # Log raw choice.
             return PromptClientUtils._handle_client_selection_input(user_input, index_to_client)  # Resolve.
         except Exception as error:  # Catch fetch + render failures.
             # WHY (#886 Phase 2): consolidate print+exception into single logging.exception
@@ -61,7 +63,7 @@ class PromptClientUtils:
         wired_list = wired or []  # Coerce None -> empty for safe len()
         if not (wireless_list or wired_list):  # Nothing to log when both empty
             return
-        logging.info(
+        logger.info(
             "Found %s connected clients at site (%s wireless, %s wired)",
             len(wireless_list) + len(wired_list),  # Combined total
             len(wireless_list),  # Per-type breakdown
@@ -124,16 +126,16 @@ class PromptClientUtils:
             so operators still see the prompt UI on the default root-logger config
             (INFO is suppressed) while satisfying the ruff T20 print/pprint ban.
         """
-        logging.warning("\n%s", "=" * 80)  # Header rule.
-        logging.warning(" SELECT CONNECTED CLIENT")  # Title.
-        logging.warning("%s", "=" * 80)  # Header rule.
-        logging.warning("  Found %d connected clients", count)  # Count.
-        logging.warning("%s", "=" * 80)  # Separator.
-        logging.warning("%s", table)  # Render table.
-        logging.warning("\nOptions:")  # Options heading.
-        logging.warning("  - Enter index number to select a client")  # Index option.
-        logging.warning("  - Enter 'm' to manually type MAC address")  # Manual option.
-        logging.warning("  - Enter 'c' to cancel")  # Cancel option.
+        logger.warning("\n%s", "=" * 80)  # Header rule.
+        logger.warning(" SELECT CONNECTED CLIENT")  # Title.
+        logger.warning("%s", "=" * 80)  # Header rule.
+        logger.warning("  Found %d connected clients", count)  # Count.
+        logger.warning("%s", "=" * 80)  # Separator.
+        logger.warning("%s", table)  # Render table.
+        logger.warning("\nOptions:")  # Options heading.
+        logger.warning("  - Enter index number to select a client")  # Index option.
+        logger.warning("  - Enter 'm' to manually type MAC address")  # Manual option.
+        logger.warning("  - Enter 'c' to cancel")  # Cancel option.
 
     @staticmethod
     def _handle_client_selection_input(user_input: str, index_to_client: dict) -> str | None:
@@ -141,20 +143,20 @@ class PromptClientUtils:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if user_input.lower() == "m":  # Manual MAC path.
             manual_mac = mh.InputUtils.safe_input("Enter client MAC address: ", context="manual_mac")  # Prompt.
-            logging.info("User chose manual MAC entry: %s", manual_mac)  # Log manual choice.
+            logger.info("User chose manual MAC entry: %s", manual_mac)  # Log manual choice.
             return manual_mac  # type: ignore[no-any-return]  # Return typed MAC.
         if user_input.lower() == "c":  # Cancel path.
-            logging.info("User cancelled client selection")  # Log cancel.
+            logger.info("User cancelled client selection")  # Log cancel.
             return None  # Abort selection.
         if not user_input.isdigit():  # Bad input path.
             # WHY (#886 Phase 2): consolidate print+error into single WARNING so operator sees
             # the validation hint on the default root-logger config.
-            logging.warning("Please enter a valid index number, 'm' for manual, or 'c' to cancel (got %r).", user_input)
+            logger.warning("Please enter a valid index number, 'm' for manual, or 'c' to cancel (got %r).", user_input)
             return None  # Abort selection.
         idx = int(user_input)  # Parse index.
         if idx not in index_to_client:  # Out of range path.
             # WHY (#886 Phase 2): consolidate print+error into single WARNING for operator visibility.
-            logging.warning("Invalid index: %s", idx)
+            logger.warning("Invalid index: %s", idx)
             return None  # Abort selection.
         return PromptClientUtils._finalize_client_choice(idx, index_to_client[idx])  # Success path.
 
@@ -166,7 +168,7 @@ class PromptClientUtils:
         conn_type = client.get("connection_type", "Unknown")  # Connection type for log.
         # WHY (#886 Phase 2): consolidate print+info into single WARNING so the "Selected: ..."
         # confirmation surfaces on the default root-logger config (INFO is suppressed).
-        logging.warning(
+        logger.warning(
             "Selected: %s (%s) - MAC: %s (idx=%s)",
             client_hostname,
             conn_type,
@@ -180,7 +182,7 @@ class PromptClientUtils:
         """Parse client-selection input to a validated 0..max_index, or None for quit/invalid."""
         if user_input.lower() in ("q", "quit", "exit"):  # Explicit quit commands
             # WHY (#886 Phase 2): retire print() in favor of logging.warning (surfaces on default root-logger).
-            logging.warning("Exiting client selection...")
+            logger.warning("Exiting client selection...")
             return None  # Signal quit to caller
         try:
             idx = int(user_input)  # Parse numeric index
@@ -190,7 +192,7 @@ class PromptClientUtils:
             return None  # Signal invalid input
         if not 0 <= idx <= max_index:  # Out-of-range numeric input
             # WHY (#886 Phase 2): retire print() in favor of logging.warning (surfaces on default root-logger).
-            logging.warning("Invalid index. Please enter a number between 0 and %d.", max_index)
+            logger.warning("Invalid index. Please enter a number between 0 and %d.", max_index)
             return None  # Signal out-of-range
         return idx  # Validated index in range
 
@@ -200,8 +202,8 @@ class PromptClientUtils:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY (#886 Phase 2): retire print() decorations in favor of logging.warning
         # (visible on default root-logger config while satisfying the ruff T20 ban).
-        logging.warning("\n  Client Selection")
-        logging.warning("%s", "=" * 30)
+        logger.warning("\n  Client Selection")
+        logger.warning("%s", "=" * 30)
         site_id = mh.PromptUtils._determine_search_scope(site_id)  # type: ignore[assignment]
         if site_id is False:  # type: ignore[comparison-overlap]  # User explicitly cancelled
             return None, None, None  # Abort when no scope resolved.
@@ -222,7 +224,7 @@ class PromptClientUtils:
         all_clients = mh.PromptUtils._fetch_all_clients(org_id, site_id)  # Fetch all clients for org/site.
         if not all_clients:  # Handle empty client set.
             # WHY (#886 Phase 2): retire print() in favor of logging.warning (surfaces on default root-logger).
-            logging.warning("No clients found.")
+            logger.warning("No clients found.")
             return None, None, None  # Abort with empty result.
         sites_cache = mh.PromptUtils._load_sites_cache(org_id)  # Load sites cache for names.
         mh.PromptUtils._display_client_table(all_clients, sites_cache)  # Display the client table.
@@ -244,14 +246,14 @@ class PromptClientUtils:
             site_id = mh.PromptUtils.select_site_id_from_csv()  # Prompt site from CSV.
             if not site_id:  # Handle no-site selection.
                 # WHY (#886 Phase 2): retire print() in favor of logging.warning (surfaces on default root-logger).
-                logging.warning("No site selected.")
+                logger.warning("No site selected.")
                 return None, None  # Abort with no ids.
 
         if not device_id:  # Resolve device when not supplied.
             device_id = mh.PromptUtils.select_device_id_from_inventory(site_id, device_type="all")
             if not device_id:  # Handle no-device selection.
                 # WHY (#886 Phase 2): retire print() in favor of logging.warning (surfaces on default root-logger).
-                logging.warning("No device selected.")
+                logger.warning("No device selected.")
                 return None, None  # Abort with no ids.
 
         return site_id, device_id  # Return resolved id pair.
