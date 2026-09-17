@@ -26,6 +26,8 @@ from src.refactors.msp_privilege_detection import (
     detect_msp_privileges,  # Extracted MSP privilege detector (1015 T-05, Cat E)
 )
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class MSPInventoryExporter:
     """MSP-Wide Device Inventory Export.
@@ -58,7 +60,7 @@ class MSPInventoryExporter:
 
     def _run(self) -> None:
         """Execute the MSP inventory export workflow."""
-        logging.info("Menu #144: Starting MSP-wide device inventory export")
+        logger.info("Menu #144: Starting MSP-wide device inventory export")
         self._print_header()
 
         if not self._ensure_msp_privileges():
@@ -66,7 +68,7 @@ class MSPInventoryExporter:
 
         self._process_all_msps()
         self._finalize_export()
-        logging.info(
+        logger.info(
             "Menu #144 complete: %s devices exported from %s orgs across %s MSPs",
             self.device_count,
             self.org_count,
@@ -109,7 +111,7 @@ class MSPInventoryExporter:
 
         if proceed not in ("", "y", "yes"):
             print("  Cancelled.")
-            logging.info("MSP inventory export cancelled by user")
+            logger.info("MSP inventory export cancelled by user")
             return False
 
         return self._execute_login_and_validate()
@@ -131,9 +133,9 @@ class MSPInventoryExporter:
             print("  X Login failed.")
             return False
 
-        logging.info("MSP inventory export: detecting MSP privileges post-login")  # BEFORE: trace detection call
+        logger.info("MSP inventory export: detecting MSP privileges post-login")  # BEFORE: trace detection call
         mh.msp_privileges = detect_msp_privileges(mh.apisession)  # Detect via extracted module and publish to mh global
-        logging.debug(
+        logger.debug(
             "MSP inventory export: detection returned %d MSP grant(s)", len(mh.msp_privileges)
         )  # AFTER: trace outcome for observability
 
@@ -141,7 +143,7 @@ class MSPInventoryExporter:
             print("")
             print("  X No MSP privileges after login.")
             print("    Your account may not have MSP-level access.")
-            logging.warning("MSP inventory export: no MSP privileges after interactive login")
+            logger.warning("MSP inventory export: no MSP privileges after interactive login")
             return False
 
         self._print_continuation_header()

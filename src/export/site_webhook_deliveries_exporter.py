@@ -30,6 +30,8 @@ from src.data.data_processing_utils import (
 )  # WHY: canonical flatten/escape helpers. Keeps CSV output consistent with peers.
 from src.utils.input_utils import InputUtils  # WHY: safe_input honors EOF/Ctrl-C per Constitution.
 
+logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
+
 
 class SiteWebhookDeliveriesExporter:
     """Site Webhook Deliveries search exporter.
@@ -57,7 +59,7 @@ class SiteWebhookDeliveriesExporter:
             otherwise ``None`` (no webhooks configured or invalid input).
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info(  # INFO trace before the listing SDK call (pre-call per Action Logging).
+        logger.info(  # INFO trace before the listing SDK call (pre-call per Action Logging).
             "Listing webhooks for site_id=%s for delivery-search selection", site_id
         )
         response = mistapi.api.v1.sites.webhooks.listSiteWebhooks(  # SDK call -- enumerate webhooks.
@@ -66,12 +68,12 @@ class SiteWebhookDeliveriesExporter:
         webhooks = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page all rows.
         if not webhooks:  # Site has no configured webhooks -- nothing to search deliveries for.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info("! No webhooks configured for this site")  # ASCII-only user notice.
-            logging.warning("No webhooks configured for site_id=%s", site_id)  # Warn for logs.
+            logger.info("! No webhooks configured for this site")  # ASCII-only user notice.
+            logger.warning("No webhooks configured for site_id=%s", site_id)  # Warn for logs.
             return None
         for idx, wh in enumerate(webhooks, start=1):  # Enumerate with 1-based index for humans.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info("  %s. %s  [%s]", idx, wh.get("name", "(unnamed)"), wh.get("id", "?"))  # Show each webhook.
+            logger.info("  %s. %s  [%s]", idx, wh.get("name", "(unnamed)"), wh.get("id", "?"))  # Show each webhook.
         raw = InputUtils.safe_input(  # WHY: safe_input handles EOF/Ctrl-C gracefully in SSH/CI.
             "Select webhook number: ", context="site_webhook_deliveries_selection"
         )
@@ -96,12 +98,12 @@ class SiteWebhookDeliveriesExporter:
         """
         if not raw.isdigit():  # Non-numeric input -- reject.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info("! Invalid selection (not a number)")  # ASCII-only user notice.
+            logger.info("! Invalid selection (not a number)")  # ASCII-only user notice.
             return None
         idx = int(raw)  # Parse the operator's 1-based choice.
         if not 1 <= idx <= len(webhooks):  # Out-of-range index.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info("! Selection out of range (1..%s)", len(webhooks))  # ASCII-only user notice.
+            logger.info("! Selection out of range (1..%s)", len(webhooks))  # ASCII-only user notice.
             return None
         chosen = webhooks[idx - 1]  # Convert to 0-based access.
         return chosen.get("id", ""), chosen.get("name", chosen.get("id", "webhook"))  # Return id+name.
@@ -124,7 +126,7 @@ class SiteWebhookDeliveriesExporter:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No delivery rows in the query window -- inform the operator.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info("! No webhook delivery data found")  # ASCII-only user notice.
+            logger.info("! No webhook delivery data found")  # ASCII-only user notice.
             return
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested dicts for CSV.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # CSV-safe multiline escape.
@@ -134,11 +136,11 @@ class SiteWebhookDeliveriesExporter:
         mh.DataExporter.write_with_format_selection(  # Persist through CSV/SQLite/Arango backend selector.
             sanitized_data, filename, api_function_name="searchSiteWebhooksDeliveries"
         )
-        logging.debug(  # DEBUG-level count trace per Action Logging principle (post-call).
+        logger.debug(  # DEBUG-level count trace per Action Logging principle (post-call).
             "searchSiteWebhooksDeliveries persisted %d rows to %s", len(rawdata), filename
         )
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("! %s webhook delivery records exported to %s", len(rawdata), filename)  # User notice.
+        logger.info("! %s webhook delivery records exported to %s", len(rawdata), filename)  # User notice.
 
     @staticmethod
     def deliveries() -> None:
@@ -153,8 +155,8 @@ class SiteWebhookDeliveriesExporter:
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("Site Webhook Deliveries Search:")  # Menu header echoed to operator.
-        logging.info(  # INFO trace before the API call per Action Logging principle (pre-call).
+        logger.info("Site Webhook Deliveries Search:")  # Menu header echoed to operator.
+        logger.info(  # INFO trace before the API call per Action Logging principle (pre-call).
             "Starting searchSiteWebhooksDeliveries export..."
         )
         resolved = mh.SiteDeviceExporter._resolve_site_for_stats(  # Prompt + org/site resolution (shared).
@@ -168,7 +170,7 @@ class SiteWebhookDeliveriesExporter:
             return
         webhook_id, webhook_name = webhook_choice  # Unpack selected webhook identifiers.
         try:
-            logging.info(  # INFO trace immediately before the SDK call (with full context).
+            logger.info(  # INFO trace immediately before the SDK call (with full context).
                 "Calling searchSiteWebhooksDeliveries site_id=%s webhook_id=%s (%s)",
                 site_id,
                 webhook_id,

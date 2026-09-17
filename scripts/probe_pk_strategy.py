@@ -112,13 +112,13 @@ class ResponseAnalyzer:
 
     def classify(self, record: dict, op_id: str) -> dict:
         """Return a complete strategy dict for one inspected response record."""
-        logging.info("Classifying response record for %s ...", op_id)  # log before analysis
+        logger.info("Classifying response record for %s ...", op_id)  # log before analysis
         fields = set(record.keys())  # top-level keys in the real API response
         strategy = self._choose_strategy(fields)  # pick strategy type based on heuristics
         pk_fields = self._pick_pk_fields(fields, strategy)  # decide which fields form the PK
         indexes = sorted(fields & _GOOD_INDEX_CANDIDATES)  # common useful index candidates
         description = self._build_description(op_id, strategy, fields)  # human-readable desc
-        logging.debug(
+        logger.debug(
             "Classified %s as %s with pk=%s",
             op_id,
             strategy,
@@ -237,19 +237,19 @@ class MistApiProbe:
     def fetch_first_record(self, op_id: str, context: dict) -> dict | None:
         """Find, call, and return the first record from a mistapi function."""
         if not self.is_read_only(op_id):
-            logging.warning(
+            logger.warning(
                 "SKIPPED %s — mutating operationId refused (read-only probe only)", op_id
             )  # refuse to call any write/delete/mutating operation
             return None  # hard stop: no network call made
 
-        logging.info("Probing %s ...", op_id)  # log before API call
+        logger.info("Probing %s ...", op_id)  # log before API call
         func = self._resolve_function(op_id)  # locate SDK function by name
         if func is None:
-            logging.warning("Could not locate mistapi function for %s", op_id)
+            logger.warning("Could not locate mistapi function for %s", op_id)
             return None  # skip unknown operationIds
 
         kwargs = self._build_kwargs(func, context)  # build minimal call arguments
-        logging.debug("Calling %s with kwargs %s", op_id, list(kwargs.keys()))
+        logger.debug("Calling %s with kwargs %s", op_id, list(kwargs.keys()))
 
         try:
             response = func(**kwargs)  # invoke the SDK function
@@ -257,7 +257,7 @@ class MistApiProbe:
             logging.error("API call failed for %s: %s", op_id, exc)
             return None  # skip on any API error
 
-        logging.debug("Got response type %s", type(response).__name__)
+        logger.debug("Got response type %s", type(response).__name__)
         return self._extract_first_record(response, op_id)  # pull first record from response
 
     def _resolve_function(self, op_id: str):
@@ -293,7 +293,7 @@ class MistApiProbe:
                 if env_val:
                     kwargs[param_name] = env_val  # use env var fallback
                 else:
-                    logging.warning(
+                    logger.warning(
                         "Required param '%s' for %s not in context or env (%s)",
                         param_name,
                         func.__name__,
@@ -318,14 +318,14 @@ class MistApiProbe:
         if isinstance(data, dict):
             # Many list endpoints wrap results in a 'results' key
             if "results" in data and isinstance(data["results"], list) and data["results"]:
-                logging.debug("Unwrapping 'results' array for %s", op_id)
+                logger.debug("Unwrapping 'results' array for %s", op_id)
                 return data["results"][0]  # return first item in results[]
             return data  # return the dict itself
 
         if isinstance(data, list) and data:
             return data[0] if isinstance(data[0], dict) else None  # first item if list
 
-        logging.warning("No usable record found in response for %s", op_id)
+        logger.warning("No usable record found in response for %s", op_id)
         return None  # no usable record found
 
 
@@ -341,7 +341,7 @@ class SuggestionWriter:
 
     def write(self, suggestions: dict[str, dict]) -> None:
         """Write all suggestions to pk_strategy_suggestions.py for review."""
-        logging.info(
+        logger.info(
             "Writing %d strategy suggestions to %s",
             len(suggestions),
             self.OUTPUT_PATH,
@@ -365,7 +365,7 @@ class SuggestionWriter:
         lines.append("}")
         lines.append("")
         self.OUTPUT_PATH.write_text("\n".join(lines), encoding="utf-8")  # write to disk
-        logging.info("Written to %s — review before pasting into MistHelper.py", self.OUTPUT_PATH)
+        logger.info("Written to %s — review before pasting into MistHelper.py", self.OUTPUT_PATH)
 
     def print_summary(self, suggestions: dict[str, dict]) -> None:
         """Print a console summary table of strategy type counts."""
@@ -391,7 +391,7 @@ def _load_mist_session():
 
         mist_session = mistapi.APISession()  # create session from env/config
         mist_session.login()  # authenticate with Mist API
-        logging.info("Authenticated mistapi session established")
+        logger.info("Authenticated mistapi session established")
         return mist_session
     except Exception as exc:
         logger.error("Could not create mistapi session: %s", exc)
@@ -424,7 +424,7 @@ def _detect_org_id(context: dict, mist_session) -> None:
         privs = data.get("privileges", []) if isinstance(data, dict) else []  # get privilege list
         if privs:
             context["org_id"] = privs[0].get("org_id", "")  # use first org in privileges
-            logging.info("Auto-detected org_id: %s", context["org_id"])  # log resolved value
+            logger.info("Auto-detected org_id: %s", context["org_id"])  # log resolved value
     except Exception as exc:
         logging.warning("Could not auto-detect org_id: %s", exc)  # non-fatal, warn and continue
 
@@ -440,7 +440,7 @@ def _detect_site_id(context: dict, mist_session) -> None:
         target = target or (sites[0] if sites else None)  # fallback to first site
         if target:
             context["site_id"] = target.get("id", "")  # store site UUID
-            logging.info("Auto-detected site_id: %s (%s)", context["site_id"], target.get("name", ""))
+            logger.info("Auto-detected site_id: %s (%s)", context["site_id"], target.get("name", ""))
     except Exception as exc:
         logging.warning("Could not auto-detect site_id: %s", exc)  # non-fatal
 
@@ -488,7 +488,7 @@ def _discover_clients(context: dict, mist_session, site_id: str) -> None:
         clients = _unwrap_list(getattr(resp, "data", resp))  # normalize response
         if clients:
             context["client_mac"] = clients[0].get("mac", "")  # use first connected client
-            logging.info("Auto-detected client_mac: %s", context["client_mac"])
+            logger.info("Auto-detected client_mac: %s", context["client_mac"])
     except Exception as exc:
         logging.warning("Could not auto-detect client_mac: %s", exc)  # no clients online is normal
 
@@ -520,7 +520,7 @@ def _fetch_first(context: dict, mist_session, key: str, module_path: str, func_n
             context[key] = first.get("id", "")  # store the UUID id
             if key == "device_id" and first.get("mac"):
                 context["device_mac"] = first["mac"]  # devices carry mac alongside id
-            logging.info("Auto-detected %s: %s", key, context[key])  # log what we found
+            logger.info("Auto-detected %s: %s", key, context[key])  # log what we found
     except Exception as exc:
         logging.warning("Could not auto-detect %s (%s.%s): %s", key, module_path, func_name, exc)
 
@@ -551,7 +551,7 @@ def _load_op_ids_from_args(args) -> list[str]:
 
     seen: set[str] = set()  # deduplicate while preserving order
     deduped = [op for op in op_ids if not (op in seen or seen.add(op))]  # type: ignore[func-returns-value]
-    logging.info("Probing %d unique operationIds", len(deduped))
+    logger.info("Probing %d unique operationIds", len(deduped))
     return deduped  # return deduplicated list
 
 
@@ -561,7 +561,7 @@ def _collect_library_only_funcs() -> list[str]:
 
     import mistapi.api.v1 as v1  # mistapi SDK root package  # noqa: I001
 
-    logging.info("Scanning mistapi library for all public function names ...")
+    logger.info("Scanning mistapi library for all public function names ...")
 
     all_lib_funcs: set[str] = set()  # accumulate all SDK function names
     for module_info in pkgutil.walk_packages(v1.__path__, v1.__name__ + "."):
@@ -576,7 +576,7 @@ def _collect_library_only_funcs() -> list[str]:
     # MistHelper.py is too large to import; return all library funcs and
     # let the caller cross-reference against the existing strategy dict manually.
 
-    logging.info("Found %d library functions to consider", len(all_lib_funcs))
+    logger.info("Found %d library functions to consider", len(all_lib_funcs))
     return sorted(all_lib_funcs)  # return sorted list
 
 
@@ -646,20 +646,20 @@ def main() -> None:
         analyzer = ResponseAnalyzer()  # create analyzer instance
         suggestions: dict[str, dict] = {}  # accumulate results
 
-        logging.info("Beginning probe loop for %d operationIds ...", len(op_ids))
+        logger.info("Beginning probe loop for %d operationIds ...", len(op_ids))
         mutating_skipped = [op for op in op_ids if not MistApiProbe.is_read_only(op)]
         read_only_ops = [op for op in op_ids if MistApiProbe.is_read_only(op)]
         if mutating_skipped:
-            logging.warning(
+            logger.warning(
                 "Pre-flight: refusing %d mutating operationIds (write-safe probe only): %s",
                 len(mutating_skipped),
                 mutating_skipped,
             )  # log refused list before any network calls are made
-        logging.info("Probing %d read-only operationIds ...", len(read_only_ops))
+        logger.info("Probing %d read-only operationIds ...", len(read_only_ops))
         for op_id in read_only_ops:
             record = probe.fetch_first_record(op_id, context)  # make live API call
             if record is None:
-                logging.warning("Skipping %s — no usable record returned", op_id)
+                logger.warning("Skipping %s — no usable record returned", op_id)
                 continue  # skip if probe failed
             suggestions[op_id] = analyzer.classify(record, op_id)  # classify the record
 

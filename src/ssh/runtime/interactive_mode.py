@@ -21,6 +21,7 @@ from src.ssh.config.validators import (  # Shared input validators
 from src.ssh.connection.connector import SshConnector  # Exposes _validate_port classmethod
 from src.utils.input_utils import InputUtils  # EOF-safe input wrapper (issue #452: replace raw input()).
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
 
 
@@ -30,7 +31,7 @@ class InteractiveMode:  # Groups the interactive REPL prompt helpers under one n
     @staticmethod
     def _prompt_hostname() -> str:  # Public prompt entry-point for the hostname phase.
         """Loop until the user enters a syntactically valid hostname/IP."""
-        logging.info("Prompting user for SSH hostname")  # Before-action log
+        logger.info("Prompting user for SSH hostname")  # Before-action log
         while True:  # Validation loop
             hostname = InputUtils.safe_input(
                 "- Enter hostname or IP address: ", context="ssh_hostname"
@@ -43,13 +44,13 @@ class InteractiveMode:  # Groups the interactive REPL prompt helpers under one n
                 # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logger.warning("X  Invalid hostname or IP address format")
                 continue  # Re-enter the validation loop.
-            logging.debug("Hostname accepted: %s", hostname)  # After-action log
+            logger.debug("Hostname accepted: %s", hostname)  # After-action log
             return hostname  # Hand the validated hostname back to the caller.
 
     @staticmethod
     def _prompt_username() -> str:  # Public prompt entry-point for the username phase.
         """Loop until the user enters a syntactically valid username."""
-        logging.info("Prompting user for SSH username")  # Before-action log
+        logger.info("Prompting user for SSH username")  # Before-action log
         while True:  # Validation loop
             username = InputUtils.safe_input("X  Enter username: ", context="ssh_username")  # EOF-safe read.
             if not username:  # Empty -> reprompt
@@ -60,35 +61,35 @@ class InteractiveMode:  # Groups the interactive REPL prompt helpers under one n
                 # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logger.warning("X  Invalid username format (alphanumeric, underscore, hyphen, dot only)")
                 continue  # Re-enter the validation loop.
-            logging.debug("Username accepted: %s", username)  # After-action log
+            logger.debug("Username accepted: %s", username)  # After-action log
             return username  # Hand the validated username back to the caller.
 
     @staticmethod
     def _prompt_password() -> str:  # Public prompt entry-point for the password phase.
         """Prompt securely for the SSH password (no validation loop)."""
-        logging.info("Prompting user for SSH password (hidden input)")  # Before-action log
+        logger.info("Prompting user for SSH password (hidden input)")  # Before-action log
         password = getpass.getpass("!? Enter password: ")  # Hidden input via getpass
-        logging.debug("Password received (length=%d)", len(password))  # After-action log w/o secret
+        logger.debug("Password received (length=%d)", len(password))  # After-action log w/o secret
         return password  # Hand the raw password back to the caller.
 
     @staticmethod
     def _prompt_port() -> int:  # Public prompt entry-point for the port phase.
         """Prompt for SSH port number with validation, default 22."""
-        logging.info("Prompting user for SSH port")  # Before-action log
+        logger.info("Prompting user for SSH port")  # Before-action log
         while True:  # Validation loop
             try:  # Catch non-numeric input
                 port_input = InputUtils.safe_input(
                     ">> Enter SSH port (default 22): ", context="ssh_port"
                 )  # EOF-safe read.
                 if not port_input:  # Default port path
-                    logging.debug("Port defaulted to 22")  # Trace default-branch decision.
+                    logger.debug("Port defaulted to 22")  # Trace default-branch decision.
                     return 22  # Return the documented default port.
                 port = int(port_input)  # Parse user-provided integer
                 if not SshConnector._validate_port(port):  # Range check 1..65535
                     # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                     logger.warning("X  Port must be between 1 and 65535")
                     continue  # Re-enter the validation loop.
-                logging.debug("Port accepted: %d", port)  # After-action log
+                logger.debug("Port accepted: %d", port)  # After-action log
                 return port  # Hand the validated port back to the caller.
             except ValueError:  # Non-numeric input
                 # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
@@ -97,11 +98,11 @@ class InteractiveMode:  # Groups the interactive REPL prompt helpers under one n
     @staticmethod
     def _prompt_timeout() -> int:
         """Prompt for connection timeout with validation, default 30."""
-        logging.info("Prompting user for SSH timeout")  # Before-action log
+        logger.info("Prompting user for SSH timeout")  # Before-action log
         while True:  # Validation loop
             timeout = InteractiveMode._read_bounded_timeout()  # Delegate parse+range check to helper.
             if timeout is not None:  # Helper returned an accepted value.
-                logging.debug("Timeout accepted: %d", timeout)  # After-action log
+                logger.debug("Timeout accepted: %d", timeout)  # After-action log
                 return timeout  # Hand the validated timeout back to the caller.
 
     @staticmethod
@@ -117,7 +118,7 @@ class InteractiveMode:  # Groups the interactive REPL prompt helpers under one n
             logger.warning("X  Timeout must be a valid number")
             return None  # Signal caller to re-prompt.
         if not timeout_input:  # Empty entry selects the default timeout.
-            logging.debug("Timeout defaulted to 30")  # Trace default-branch decision.
+            logger.debug("Timeout defaulted to 30")  # Trace default-branch decision.
             return 30  # Return the documented default.
         try:  # int() raises ValueError on non-numeric strings.
             timeout = int(timeout_input)  # Parse user-provided integer.
@@ -134,19 +135,19 @@ class InteractiveMode:  # Groups the interactive REPL prompt helpers under one n
     @staticmethod
     def _prompt_shell_mode() -> bool:
         """Prompt whether to use interactive shell mode (y/N)."""
-        logging.info("Prompting user for shell-mode preference")  # Before-action log
+        logger.info("Prompting user for shell-mode preference")  # Before-action log
         shell_mode = InputUtils.safe_input(
             "X  Use interactive shell mode? (y/N - recommended for network devices): ",
             context="ssh_shell_mode",
         ).lower()  # EOF-safe read, lowercased for affirmative comparison.
         use_shell = shell_mode in ["y", "yes", "true", "1"]  # Treat affirmative answers as true
-        logging.debug("Shell mode selected: %s", use_shell)  # After-action log
+        logger.debug("Shell mode selected: %s", use_shell)  # After-action log
         return use_shell
 
     @staticmethod
     def _prompt_command() -> str:
         """Loop until the user enters a syntactically valid command."""
-        logging.info("Prompting user for command to execute")  # Before-action log
+        logger.info("Prompting user for command to execute")  # Before-action log
         while True:  # Validation loop
             command = InputUtils.safe_input("!? Enter command to execute: ", context="ssh_command")  # EOF-safe read.
             if not command:  # Empty -> reprompt
@@ -157,13 +158,13 @@ class InteractiveMode:  # Groups the interactive REPL prompt helpers under one n
                 # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logger.warning("X  Invalid command (too long or contains null bytes)")
                 continue
-            logging.debug("Command accepted (length=%d)", len(command))  # After-action log
+            logger.debug("Command accepted (length=%d)", len(command))  # After-action log
             return command
 
     @staticmethod
     def run() -> bool:
         """Orchestrate the interactive REPL and dispatch a single SSH command."""
-        logging.info("Entering SSH runner interactive mode")  # Before-action log
+        logger.info("Entering SSH runner interactive mode")  # Before-action log
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("- Enhanced SSH Command Runner v2 - Interactive Mode")
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
@@ -174,7 +175,7 @@ class InteractiveMode:  # Groups the interactive REPL prompt helpers under one n
         if not password:  # Reject empty passwords explicitly
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("X  Password is required")
-            logging.debug("Interactive mode aborted: empty password")
+            logger.debug("Interactive mode aborted: empty password")
             return False
         port = InteractiveMode._prompt_port()  # Phase 4: port
         timeout = InteractiveMode._prompt_timeout()  # Phase 5: timeout
@@ -182,7 +183,7 @@ class InteractiveMode:  # Groups the interactive REPL prompt helpers under one n
         command = InteractiveMode._prompt_command()  # Phase 7: command
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n>> Starting SSH session (shell_mode=%s)...", use_shell)
-        logging.debug("Dispatching interactive SSH command to SingleCommandRunner.run")  # After-action log
+        logger.debug("Dispatching interactive SSH command to SingleCommandRunner.run")  # After-action log
         interactive_request = SingleCommandRequest(  # WHY: dataclass keeps SingleCommandRunner.run at 1 param.
             hostname=hostname,
             username=username,

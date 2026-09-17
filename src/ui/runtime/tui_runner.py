@@ -11,6 +11,8 @@ import sys  # WHY: stdin fd for termios cbreak setup
 import time  # WHY: sleep briefly between loop iterations
 from typing import Any  # WHY: TUI back-ref is loosely typed
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 LOOP_SLEEP_S = 0.01  # 10ms yield between loop iterations
 REFRESH_PER_SECOND = 20  # Live() refresh frequency
 
@@ -25,7 +27,7 @@ class TuiRunner:  # WHY: extracted from MistHelperTUI.run (was CC=33)
     def run(self) -> None:  # WHY: public entry point retained for compat
         """Public entry point matching the original ``MistHelperTUI.run`` shape."""
         tui = self._tui  # Local alias
-        logging.info("TUI: Starting hierarchical API explorer")  # Action log before setup
+        logger.info("TUI: Starting hierarchical API explorer")  # Action log before setup
         self._setup_terminal()  # Switch Unix terminal to cbreak mode
         try:  # WHY: teardown must always run even on setup/loop errors
             tui._discover_current_level()  # Populate the root level items
@@ -35,10 +37,10 @@ class TuiRunner:  # WHY: extracted from MistHelperTUI.run (was CC=33)
             raise  # WHY: re-raise so caller sees the failure
         finally:
             self._teardown_terminal()  # Restore terminal even on error
-            logging.info("TUI: Explorer exited cleanly")  # Action log after teardown
+            logger.info("TUI: Explorer exited cleanly")  # Action log after teardown
             # WHY (#886 Phase 2): retire print() in favor of logging.warning so the exit banner
             # reaches the operator on the default root-logger config (INFO is suppressed by default).
-            logging.warning("\n[EXIT] MistHelper TUI - Hierarchical API Explorer closed")  # User-visible exit banner
+            logger.warning("\n[EXIT] MistHelper TUI - Hierarchical API Explorer closed")  # User-visible exit banner
 
     def _setup_terminal(self) -> None:  # WHY: enter cbreak so keys read w/o Enter
         """Put the Unix terminal into raw (cbreak) mode for keypress capture."""

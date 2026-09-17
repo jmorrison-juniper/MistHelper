@@ -18,6 +18,8 @@ from __future__ import annotations  # WHY: postponed evaluation for forward-ref 
 import logging  # WHY: orchestrator emits structured log lines around device commands
 from typing import TYPE_CHECKING, Any  # WHY: TYPE_CHECKING avoids runtime cycle with parent
 
+logger = logging.getLogger(__name__)  # Use this module name in log records.
+
 if TYPE_CHECKING:  # WHY: only needed for static type checkers. Skipped at runtime
     from src.network.routing_utils import RoutingUtils, SsrRouteContext  # WHY: types only
 
@@ -54,8 +56,8 @@ class _RoutingUtilsSSR:  # WHY: cluster wrapper matching parsing/display/payload
             self._ru.check_fn()
         )  # WHY: capture debug flag once for whole flow (renamed from is_debug_mode_fn per 1012)
         self._ru._setup_debug_mode(debug_mode)  # WHY: hoist logger to DEBUG when enabled
-        logging.info("Starting SSR/SRX dedicated routing table operation...")  # WHY: production log
-        logging.debug("ENTER: execute_show_ssr_routes")  # WHY: trace marker for debug logs
+        logger.info("Starting SSR/SRX dedicated routing table operation...")  # WHY: production log
+        logger.debug("ENTER: execute_show_ssr_routes")  # WHY: trace marker for debug logs
         websocket_manager = None  # WHY: init early so finally-block cleanup is always safe
         try:  # WHY: outer try wraps happy-path so exceptions still hit cleanup
             websocket_manager = self._run_ssr_flow(debug_mode)  # WHY: happy path split for CC≤5
@@ -66,7 +68,7 @@ class _RoutingUtilsSSR:  # WHY: cluster wrapper matching parsing/display/payload
             self._ru._handle_routing_error("SSR/SRX routing table", error, debug_mode)  # WHY: shared
         finally:  # WHY: always disconnect regardless of outcome
             self._ru._cleanup_websocket(websocket_manager, debug_mode)  # WHY: shared cleanup
-            logging.debug("EXIT: execute_show_ssr_routes")  # WHY: trace marker for debug logs
+            logger.debug("EXIT: execute_show_ssr_routes")  # WHY: trace marker for debug logs
 
     def _run_ssr_flow(self, debug_mode: bool) -> Any | None:
         """Run the happy-path SSR routing flow. Returns websocket_manager for cleanup."""
@@ -259,7 +261,7 @@ class _RoutingUtilsSSR:  # WHY: cluster wrapper matching parsing/display/payload
     ) -> str | None:
         """Execute the SSR/SRX routing table API call."""
         print(f"\n-> Executing SSR/SRX routing table query on device {device_id}...")  # WHY: UX
-        logging.debug("Request body: %s", request_body)  # WHY: always log body for postmortem
+        logger.debug("Request body: %s", request_body)  # WHY: always log body for postmortem
         if debug_mode:  # WHY: also echo body to stdout when debug is on
             print(f"[DEBUG] Request body = {request_body}")  # WHY: legacy debug format
         return self._ru._payload._call_ssr_api(site_id, device_id, request_body, debug_mode)  # WHY

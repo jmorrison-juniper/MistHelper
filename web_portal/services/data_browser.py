@@ -13,6 +13,7 @@ from collections import deque
 from contextlib import closing
 from itertools import islice
 
+logger = logging.getLogger(__name__)  # Use a module logger so records include this module name.
 ALLOWED_EXTENSIONS = {".csv", ".db", ".sqlite", ".log", ".json"}
 
 # The smallest page the preview returns. A zero page size divided by zero and
@@ -99,18 +100,18 @@ class DataBrowserService:
         Return `None` when the request leaves the data directory, names a
         directory, or names a file type that the listing does not show.
         """
-        logging.info("Data browser resolves a path request: %s", rel_path)
+        logger.info("Data browser resolves a path request: %s", rel_path)
         candidate = os.path.realpath(os.path.join(self._data_dir, rel_path))  # Follow every link.
         # Append the separator to the root. Without the separator the path
         # "/app/data_backup" passes a bare check for the prefix "/app/data".
         root = os.path.join(self._real_data_dir, "")
         if not candidate.startswith(root):  # Refuse a target outside the data directory.
-            logging.debug("Data browser refused a path outside the data directory: %s", rel_path)
+            logger.debug("Data browser refused a path outside the data directory: %s", rel_path)
             return None
         if not self._is_browsable_file(candidate):  # Refuse a directory or a hidden file type.
-            logging.debug("Data browser refused a path that is not a browsable file: %s", rel_path)
+            logger.debug("Data browser refused a path that is not a browsable file: %s", rel_path)
             return None
-        logging.debug("Data browser accepted the path request: %s", rel_path)
+        logger.debug("Data browser accepted the path request: %s", rel_path)
         return candidate
 
     @staticmethod

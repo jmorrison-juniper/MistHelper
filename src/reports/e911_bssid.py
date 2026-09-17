@@ -14,6 +14,8 @@ from typing import Any, ClassVar  # WHY: mistapi returns untyped JSON dicts. Cla
 
 from src.utils.console import echo  # WHY: 1031 stdout + INFO log helper replaces legacy WARNING-channel echoes.
 
+logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
+
 
 @dataclass  # WHY: promote plain class into an auto-init dataclass
 class SiteBatchContext:  # WHY: bundle per-batch state as a single object passed to helpers
@@ -134,10 +136,10 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         echo("    Fetching site information...")
         all_sites = E911BSSIDReportGenerator._fetch_all_sites(apisession, org_id, page_limit)  # WHY: paginated list
         site_lookup = E911BSSIDReportGenerator._build_site_lookup(all_sites)  # WHY: dict for O(1) lookup by id
-        logging.info("Sites fetched: %d", len(site_lookup))  # WHY: telemetry for run-size auditing
+        logger.info("Sites fetched: %d", len(site_lookup))  # WHY: telemetry for run-size auditing
         echo("    Fetching AP inventory stats...")
         ap_lookup = E911BSSIDReportGenerator._fetch_ap_stats(apisession, org_id, page_limit)  # WHY: MAC-indexed AP data
-        logging.info("AP device stats fetched: %d", len(ap_lookup))  # WHY: audit AP inventory size
+        logger.info("AP device stats fetched: %d", len(ap_lookup))  # WHY: audit AP inventory size
         return {"sites": site_lookup, "aps": ap_lookup}  # WHY: bundled return keeps caller signature small
 
     @staticmethod
@@ -159,7 +161,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         cache = E911BSSIDReportGenerator._prefetch_site_templates(  # WHY: cache SSIDs per template
             apisession, org_id, site_lookup
         )
-        logging.info("Cached %d unique site templates", len(cache))  # WHY: audit prefetch efficiency
+        logger.info("Cached %d unique site templates", len(cache))  # WHY: audit prefetch efficiency
         return {  # WHY: bundle wlan sources for the parent aggregator
             "wlan_templates": wlan_templates,
             "org_wlans": org_wlans,
@@ -177,7 +179,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
             apisession, org_id
         )
         org_wlans = E911BSSIDReportGenerator._fetch_org_wlans(apisession, org_id, page_limit)  # WHY: org-scope SSIDs
-        logging.info("Org templates: %d, org WLANs: %d", len(wlan_templates), len(org_wlans))  # WHY: audit sizes
+        logger.info("Org templates: %d, org WLANs: %d", len(wlan_templates), len(org_wlans))  # WHY: audit sizes
         return wlan_templates, org_wlans  # WHY: caller assembles into the bulk WLAN bundle
 
     @staticmethod
@@ -197,10 +199,10 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         radio_macs_data: list[dict[str, Any]] = mistapi.get_all(  # WHY: fetch all remaining pages
             response=radio_response, mist_session=apisession
         )
-        logging.info("Radio MAC records fetched: %d", len(radio_macs_data))  # WHY: audit radio-record count
+        logger.info("Radio MAC records fetched: %d", len(radio_macs_data))  # WHY: audit radio-record count
         echo("    Inferring radio bands from MAC positions...")
         radio_band_lookup = E911BSSIDReportGenerator._infer_radio_bands(radio_macs_data)  # WHY: position -> band
-        logging.info("Radio bands inferred: %d broadcast radios", len(radio_band_lookup))  # WHY: audit inference
+        logger.info("Radio bands inferred: %d broadcast radios", len(radio_band_lookup))  # WHY: audit inference
         return {"radio_macs": radio_macs_data, "radio_bands": radio_band_lookup}  # WHY: bundle for parent
 
     @staticmethod
@@ -328,7 +330,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         try:  # WHY: filesystem errors during rate-limit recovery should not crash the report
             with open(E911BSSIDReportGenerator.CHECKPOINT_FILE, "w", encoding="utf-8") as handle:
                 json.dump(checkpoint, handle)  # WHY: default separators keep file compact enough
-            logging.info("Checkpoint saved: %d sites completed", completed_count)  # WHY: audit progress
+            logger.info("Checkpoint saved: %d sites completed", completed_count)  # WHY: audit progress
         except OSError as error:  # WHY: only OS-level errors (disk full, perms) suppress-and-log
             logging.warning("Failed to save checkpoint: %s", error)  # WHY: user still sees the print output
 
@@ -342,7 +344,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
             with open(path, encoding="utf-8") as handle:  # WHY: utf-8 matches write encoding
                 checkpoint: dict[str, Any] = json.load(handle)  # WHY: JSON round-trip preserves structure
             if checkpoint.get("org_id") != org_id:  # WHY: stale checkpoint from a different org is unusable
-                logging.info("Checkpoint org mismatch -- ignoring stale checkpoint")
+                logger.info("Checkpoint org mismatch -- ignoring stale checkpoint")
                 return None  # WHY: force fresh run against current org
             return checkpoint  # WHY: caller extracts state fields
         except (json.JSONDecodeError, OSError) as error:  # WHY: both corrupt-JSON and read-error paths land here
@@ -355,7 +357,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         path = E911BSSIDReportGenerator.CHECKPOINT_FILE  # WHY: alias for readability
         if os.path.exists(path):  # WHY: cheap check avoids OSError on missing file
             os.remove(path)  # WHY: clean slate for next report run
-            logging.info("Checkpoint file removed")  # WHY: audit trail of successful completion
+            logger.info("Checkpoint file removed")  # WHY: audit trail of successful completion
 
     @staticmethod
     def _fetch_org_wlan_templates(
@@ -475,7 +477,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
             return  # WHY: nothing to add when no templates apply here
         template_wlans = [w for w in org_wlans if w.get("template_id") in assigned_template_ids]  # WHY: filter
         E911BSSIDReportGenerator._add_wlans_to_band_lookup(site_id, template_wlans, wlan_band_lookup)
-        logging.debug(  # WHY: audit which templates contributed which WLANs
+        logger.debug(  # WHY: audit which templates contributed which WLANs
             "Site %s: %d org WLANs via %d templates",
             site_id[:8],
             len(template_wlans),
@@ -937,7 +939,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         5000 API calls per clock-hour rate limit.
         """
         echo("\n=== E911 BSSID Compliance Report ===")
-        logging.info("Starting E911 BSSID compliance report generation...")  # WHY: audit trail entry
+        logger.info("Starting E911 BSSID compliance report generation...")  # WHY: audit trail entry
         start_time = time.time()  # WHY: elapsed-time telemetry at the end
         site_state = E911BSSIDReportGenerator._restore_or_init(org_id, safe_input_fn)  # WHY: resume or fresh state
         org_data = E911BSSIDReportGenerator._load_or_fetch_org(apisession, page_limit, org_id, site_state)  # WHY: bulk
@@ -958,7 +960,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         radio_macs_data: list[dict[str, Any]] = org_data["radio_macs"]  # WHY: primary iteration payload
         if not radio_macs_data:  # WHY: nothing to report -> operator feedback + audit trail
             echo("No APs found in this organization.")
-            logging.info("No APs found - skipping E911 report generation")  # WHY: audit trail
+            logger.info("No APs found - skipping E911 report generation")  # WHY: audit trail
         return radio_macs_data  # WHY: caller uses truthiness to short-circuit
 
     @staticmethod
@@ -1044,7 +1046,7 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
         E911BSSIDReportGenerator._display_summary(len(unique_sites), len(radio_macs_data), len(rows), compliance_gaps)
         E911BSSIDReportGenerator._clear_checkpoint()  # WHY: successful run -> no checkpoint needed
         elapsed = time.time() - start_time  # WHY: telemetry for report duration
-        logging.info("E911 BSSID report completed in %.1f seconds", elapsed)  # WHY: audit trail
+        logger.info("E911 BSSID report completed in %.1f seconds", elapsed)  # WHY: audit trail
         echo("\nReport completed in %.1f seconds", elapsed)
 
     @staticmethod
@@ -1082,5 +1084,5 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
             filename_or_table=filename,
             api_function_name="generateE911BSSIDReport",
         )
-        logging.info("E911 report saved: data/%s (%d BSSIDs)", filename, len(rows))  # WHY: audit success
+        logger.info("E911 report saved: data/%s (%d BSSIDs)", filename, len(rows))  # WHY: audit success
         return filename  # WHY: caller prints the path to the operator

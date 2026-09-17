@@ -35,6 +35,7 @@ from src.ssh.runtime.interactive_mode import InteractiveMode  # Concrete REPL im
 from src.utils.console import echo  # WHY: spec 1031 console echo keeps stdout text and drops the WARNING level.
 from src.utils.input_utils import InputUtils  # EOF-safe input wrapper (issue #452)
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
 
 _MIN_TIMEOUT_SEC = 1  # WHY: lower bound preserved from legacy _validate_timeout semantics.
@@ -265,12 +266,12 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
     @staticmethod
     def _prompt_for_commands() -> list[str]:  # WHY: last-resort prompt. It reads no earlier command list.
         """Interactive command-source picker used when no other source supplied commands."""
-        logging.info("Prompting user for SSH command(s) at runtime")  # Before-action log
+        logger.info("Prompting user for SSH command(s) at runtime")  # Before-action log
         command = InputUtils.safe_input("!? Enter command to execute: ", context="ssh_app_runner_command")  # EOF-safe
         if not command:  # Hard failure: user provided nothing
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("X  No commands specified")
-            logging.debug("User declined to enter any command at the interactive prompt")
+            logger.debug("User declined to enter any command at the interactive prompt")
             return []
         return [command]  # Single user-supplied command
 
@@ -305,7 +306,7 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
     @staticmethod
     def _run_single_command(request: _ExecutionRequest) -> bool:  # WHY: 1-host / 1-command dispatch branch.
         """Dispatch to SingleCommandRunner.run for the 1-host/1-command case."""
-        logging.info("Dispatching to SingleCommandRunner.run (1 host / 1 cmd)")  # Dispatch log
+        logger.info("Dispatching to SingleCommandRunner.run (1 host / 1 cmd)")  # Dispatch log
         single_request = SingleCommandRequest(  # T013d dataclass keeps SingleCommandRunner.run at 1 param
             hostname=request.hosts[0],
             username=request.user,
@@ -320,7 +321,7 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
     @staticmethod
     def _run_batch(request: _ExecutionRequest) -> bool:  # WHY: 1-host / N-command dispatch branch.
         """Dispatch to BatchExecutor.run for the 1-host/N-commands case."""
-        logging.info("Dispatching to BatchExecutor.run (1 host / %d cmds)", len(request.commands))  # Dispatch log
+        logger.info("Dispatching to BatchExecutor.run (1 host / %d cmds)", len(request.commands))  # Dispatch log
         batch_request = BatchRunRequest(  # T013d dataclass keeps BatchExecutor.run at 1 param
             hostname=request.hosts[0],
             username=request.user,
@@ -340,7 +341,7 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
         if max_threads != requested:  # Tell the user if we clamped their request
             # WHY: spec 1031 console echo. The stdout text stays the same and the record drops to INFO.
             echo("!? Adjusted thread count from %d to %d", requested, max_threads)  # WHY: report the clamp.
-        logging.info(
+        logger.info(
             "Dispatching to MultiHostRunner.run (%d hosts / %d cmds)", len(request.hosts), len(request.commands)
         )
         multi_request = MultiHostRunRequest(  # T039 immutable bundle collapses runner signature
@@ -354,7 +355,7 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
             max_threads=max_threads,
         )
         ssh_results = MultiHostRunner.run(multi_request)  # Dispatch the multi-host fan-out
-        logging.debug("MultiHostRunner.run returned failed=%s", ssh_results.get("failed"))  # After-action log
+        logger.debug("MultiHostRunner.run returned failed=%s", ssh_results.get("failed"))  # After-action log
         return ssh_results["failed"] == 0  # type: ignore[no-any-return]  # Success when no host failed
 
     @staticmethod

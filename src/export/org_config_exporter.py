@@ -24,6 +24,8 @@ from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class OrgConfigExporter:
     """Organization Configuration Exporter.
@@ -77,7 +79,7 @@ class OrgConfigExporter:
     @staticmethod
     def _show_no_msp_access_guidance() -> None:
         """Print the 'MSP access not available' guidance banner with login + token tips."""
-        logging.warning("MSP data requires MSP-level privileges (not detected)")  # Log why we cannot query.
+        logger.warning("MSP data requires MSP-level privileges (not detected)")  # Log why we cannot query.
         print("")  # Spacer.
         print("=" * 60)  # Top border.
         print("  MSP ACCESS NOT AVAILABLE")  # Title.
@@ -136,10 +138,10 @@ class OrgConfigExporter:
         msp_id = selected_msp["msp_id"]  # MSP id.
         msp_name = selected_msp["msp_name"]  # MSP name.
         print(f"  Fetching organizations for MSP: {msp_name}...")  # Tell the user.
-        logging.info("Fetching MSP organizations for %s (ID: %s)", msp_name, msp_id)  # Log fetch.
+        logger.info("Fetching MSP organizations for %s (ID: %s)", msp_name, msp_id)  # Log fetch.
         if mh.apisession is None:  # No session.
             print("X No active API session")  # Tell the user.
-            logging.error("Cannot fetch MSP orgs - apisession is None")  # Log it.
+            logger.error("Cannot fetch MSP orgs - apisession is None")  # Log it.
             return  # Abort.
         try:
             import mistapi.api.v1.msps.orgs as msp_orgs_api  # Import MSP orgs API.
@@ -158,7 +160,7 @@ class OrgConfigExporter:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not orgs_data:  # No orgs.
             print("  No organizations found under this MSP")  # Tell the user.
-            logging.info("MSP has no organizations")  # Log it.
+            logger.info("MSP has no organizations")  # Log it.
             mh.DataExporter.write_with_format_selection(
                 [], "MspOrganizations.csv", api_function_name="listMspOrgs"
             )  # Empty write.
@@ -168,7 +170,7 @@ class OrgConfigExporter:
             processed, "MspOrganizations.csv", api_function_name="listMspOrgs"
         )  # Persist.
         print(f"  + {len(processed)} organizations exported to MspOrganizations.csv")  # Tell.
-        logging.info("Exported %s MSP organizations to MspOrganizations.csv", len(processed))  # Log.
+        logger.info("Exported %s MSP organizations to MspOrganizations.csv", len(processed))  # Log.
         OrgConfigExporter._print_msp_orgs_summary(msp_name, orgs_data)  # Show first 10.
 
     @staticmethod
@@ -176,7 +178,7 @@ class OrgConfigExporter:
         """Validate the MSP-orgs API response and return a normalized list (or None on failure)."""
         if not response or not hasattr(response, "data"):  # No data.
             print("X Failed to retrieve MSP organizations")  # Tell the user.
-            logging.error("listMspOrgs returned no data")  # Log it.
+            logger.error("listMspOrgs returned no data")  # Log it.
             return None  # Abort.
         orgs_data = response.data  # Read the payload.
         if not isinstance(orgs_data, list):  # Normalize to a list.

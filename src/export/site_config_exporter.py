@@ -23,6 +23,8 @@ from src.data.data_processing_utils import (
 from src.export.site_export_utils import SiteExportUtils  # WHY: Pattern 1 inline construction for maps/zones exports.
 from src.utils.tqdm_wrapper import tqdm  # WHY: 1015 T-14 -- canonical wrapper import (eliminates mh.tqdm).
 
+logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
+
 
 class SiteConfigExporter:
     """Site Configuration Exporter.
@@ -71,28 +73,28 @@ class SiteConfigExporter:
         """Flatten + sort by SSID + write WLAN rows (or write empty CSV when none)."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No rows.
-            logging.warning("No data provided for output to %s", filename)  # Warn none.
+            logger.warning("No data provided for output to %s", filename)  # Warn none.
             mh.DataExporter.write_with_format_selection([], filename, api_function_name="listSiteWlans")  # Empty CSV.
             # WHY: Preserve user-facing zero-record notice verbatim. INFO-level structured emit.
-            logging.info("! 0 records exported to data\\%s", filename)
+            logger.info("! 0 records exported to data\\%s", filename)
             return  # Done.
         processed = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
         processed = DataProcessingUtils.escape_multiline(processed)  # CSV-safe.
         processed = sorted(processed, key=lambda row: row.get("ssid", ""))  # Sort by SSID.
         mh.DataExporter.write_with_format_selection(processed, filename, api_function_name="listSiteWlans")  # Persist.
         # WHY: Preserve user-facing record-count notice verbatim.
-        logging.info("! %s records exported to data\\%s", len(processed), filename)
-        logging.info("Exported %s WLAN records for site %s to %s", len(processed), site_name, filename)
+        logger.info("! %s records exported to data\\%s", len(processed), filename)
+        logger.info("Exported %s WLAN records for site %s to %s", len(processed), site_name, filename)
 
     @staticmethod
     def wlans(site_id: str | None = None) -> None:
         """Export effective WLANs for a site to SiteWlans.csv."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Starting export of site WLANs...")  # Log start.
+        logger.info("Starting export of site WLANs...")  # Log start.
         if not site_id:  # No site given.
             site_id = mh.PromptUtils.select_site()  # Select a site.
             if not site_id:  # No site.
-                logging.error("No site selected. Exiting.")  # Log the error.
+                logger.error("No site selected. Exiting.")  # Log the error.
                 return  # Abort.
         site_name = SiteConfigExporter._resolve_wlan_site_name(site_id)  # Resolve site name.
         filename = f"SiteWlans_{site_name.replace(' ', '_').replace('-', '_')}.csv"  # Build CSV name.
@@ -150,22 +152,22 @@ class SiteConfigExporter:
         """Export configuration settings for all sites to AllSiteConfigs.csv."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: Preserve user-facing banner verbatim.
-        logging.info("Site Configuration Settings:")
-        logging.info("Starting export of all site configuration settings...")  # Log start.
+        logger.info("Site Configuration Settings:")
+        logger.info("Starting export of all site configuration settings...")  # Log start.
         current_org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
-        logging.debug("Using org_id: %s for site settings export.", current_org_id)  # Trace the org.
+        logger.debug("Using org_id: %s for site settings export.", current_org_id)  # Trace the org.
         data = APIFetchUtils.all_site_settings(mh.apisession, current_org_id, limit=1000)
         if data:  # Have data.
-            logging.info("Fetched settings for %s sites. Flattening and sanitizing data...", len(data))
+            logger.info("Fetched settings for %s sites. Flattening and sanitizing data...", len(data))
             data = DataProcessingUtils.flatten_nested_fields(data)  # Flatten nested fields.
             data = DataProcessingUtils.escape_multiline(data)  # CSV-safe.
             mh.DataExporter.write_with_format_selection(
                 data, "AllSiteConfigs.csv", api_function_name="listSiteSettings"
             )  # Persist.
             # WHY: Preserve user-facing record-count notice verbatim.
-            logging.info("! %s site configurations exported to AllSiteConfigs.csv", len(data))
-            logging.info(" Site configs saved to AllSiteConfigs.csv")  # Log the save.
+            logger.info("! %s site configurations exported to AllSiteConfigs.csv", len(data))
+            logger.info(" Site configs saved to AllSiteConfigs.csv")  # Log the save.
         else:
-            logging.warning(" No site configs found.")  # Warn none found.
+            logger.warning(" No site configs found.")  # Warn none found.
             # WHY: Preserve user-facing empty-result notice verbatim.
-            logging.warning("! No site configurations found.")
+            logger.warning("! No site configurations found.")

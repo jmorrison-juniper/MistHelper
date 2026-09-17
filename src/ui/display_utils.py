@@ -17,6 +17,8 @@ from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class DisplayUtils:
     """Centralized display and output utilities.
@@ -53,7 +55,7 @@ class DisplayUtils:
         table.field_names = fields  # Apply column ordering
         DisplayUtils._apply_sort_if_valid(table, sortby, fields)  # Optional sort
         DisplayUtils._populate_table_rows(table, data, fields)  # Fill cells
-        logging.debug("\n%s", table.get_string())  # Emit fully rendered table at debug level
+        logger.debug("\n%s", table.get_string())  # Emit fully rendered table at debug level
 
     @staticmethod
     def create_progress_bar(progress_percentage: float | None, bar_length: int = 20) -> str:

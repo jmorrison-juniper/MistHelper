@@ -93,6 +93,7 @@ from ._ssid_template_phase45 import (  # WHY: re-export phase 4/5 helpers refere
     _SsidTemplatePhase45Cluster,  # WHY: phase-4/5 templates+disable cluster bound in __init__
 )
 
+logger = logging.getLogger(__name__)  # WHY: Use the module logger for non-exception log entries.
 # WHY: declare the module-level re-export surface so ruff F401 does not flag the
 # intentional pass-throughs above (tests reach these helpers by patching them at
 # ``ssid_template_consolidation.<name>``, which requires the symbol to bind here).
@@ -186,10 +187,10 @@ def _fetch_and_log(  # WHY: parent-owned so its __globals__ points here for mist
     ``patch.object(ssid_template_consolidation, "mistapi", ...)``
     observable when they call ``_mod._fetch_and_log`` directly.
     """
-    logging.warning("Fetching %s...", label)  # WHY: operator telemetry during multi-call fetch
+    logger.warning("Fetching %s...", label)  # WHY: operator telemetry during multi-call fetch
     response = api_fn(session, org_id, **kwargs)  # WHY: mistapi list endpoint call
     data: list[dict[str, Any]] = mistapi.get_all(response=response, mist_session=session) or []  # WHY: paginate
-    logging.info("%s fetched: %d", label.capitalize(), len(data))  # WHY: audit trail per collection
+    logger.info("%s fetched: %d", label.capitalize(), len(data))  # WHY: audit trail per collection
     return data  # WHY: caller receives the fully paginated list
 
 
@@ -308,17 +309,17 @@ class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-att
         get_org_id_fn: GetOrgIdFn,
     ) -> None:
         """Menu 159 entry point — prompt for SSID, launch phase menu."""
-        logging.warning(
+        logger.warning(
             "=== SSID Template Consolidation (5-Phase Guided Workflow) ==="
         )  # WHY: banner for operator context
-        logging.info("Starting SSID Template Consolidation workflow")  # WHY: audit-log workflow entry
+        logger.info("Starting SSID Template Consolidation workflow")  # WHY: audit-log workflow entry
         context = SSIDTemplateConsolidationManager._resolve_target_context(  # WHY: extracted for STRUCT-LENGTH
             get_org_id_fn, safe_input_fn
         )
         if context is None:  # WHY: resolver already printed the user-visible reason
             return  # WHY: abort execution when org/ssid resolution failed
         current_org_id, target_ssid = context  # WHY: destructure validated org + ssid pair
-        logging.info("Target SSID: %s, Org: %s", target_ssid, current_org_id)  # WHY: audit-log operator inputs
+        logger.info("Target SSID: %s, Org: %s", target_ssid, current_org_id)  # WHY: audit-log operator inputs
         # fmt: off
         deps = SsidTemplateDeps(  # WHY: bundle 6 deps into frozen struct. STRUCT-LENGTH block
             org_id=current_org_id, target_ssid=target_ssid, apisession=apisession,
@@ -335,11 +336,11 @@ class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-att
         """Resolve (org_id, target_ssid) or None when either is missing."""
         current_org_id: str | None = get_org_id_fn()  # WHY: pull active org from injected getter
         if not current_org_id:
-            logging.warning("No organization selected. Exiting.")  # WHY: fail fast when no org is bound
+            logger.warning("No organization selected. Exiting.")  # WHY: fail fast when no org is bound
             return None  # WHY: caller treats None as an aborted workflow
         target_ssid = SSIDTemplateConsolidationManager._prompt_target_ssid(safe_input_fn)  # WHY: prompt operator
         if not target_ssid:
-            logging.warning("No target SSID specified. Exiting.")  # WHY: empty SSID -> nothing to consolidate
+            logger.warning("No target SSID specified. Exiting.")  # WHY: empty SSID -> nothing to consolidate
             return None  # WHY: caller treats None as an aborted workflow
         return current_org_id, target_ssid  # WHY: hand off validated pair to execute()
 
@@ -385,13 +386,13 @@ class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-att
     def _handle_menu_choice(self, choice: str, dispatch: dict[str, Any]) -> bool:  # WHY: extracted so complexity <= 5
         """Route one menu selection. Return True when the menu should exit."""
         if choice.lower() in ("q", "quit", ""):  # WHY: quit tokens include blank enter
-            logging.warning("Returning to main menu.")  # WHY: operator feedback before unwinding
+            logger.warning("Returning to main menu.")  # WHY: operator feedback before unwinding
             return True  # WHY: signal caller to exit the menu loop
         if choice == "6":  # WHY: 6 = sequential run of all phases
             self._run_all_phases(dispatch)  # WHY: delegates to shared runner
             return True  # WHY: sequential run is terminal like quit
         if choice not in dispatch:  # WHY: guard against typos before int() cast
-            logging.warning("Invalid selection: %s", choice)  # WHY: surface the bad token
+            logger.warning("Invalid selection: %s", choice)  # WHY: surface the bad token
             return False  # WHY: stay in the menu after typo
         phase_number = int(choice)  # WHY: dispatch keys are digit strings
         if not self._check_prerequisite(phase_number):  # WHY: bail if the preceding phase artifact missing
@@ -411,20 +412,20 @@ class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-att
 
     def _display_phase_menu(self, labels: dict[str, str]) -> None:  # WHY: printer split from loop for clarity
         """Print the numbered phase menu."""
-        logging.warning("--- SSID Template Consolidation: %s ---", self.target_ssid)  # WHY: banner shows target SSID
+        logger.warning("--- SSID Template Consolidation: %s ---", self.target_ssid)  # WHY: banner shows target SSID
         for key, description in labels.items():  # WHY: iterate the ordered menu rows
-            logging.warning("%s. %s", key, description)  # WHY: numbered menu row
-        logging.warning("q. Return to main menu")  # WHY: escape hatch back to the top-level CLI
+            logger.warning("%s. %s", key, description)  # WHY: numbered menu row
+        logger.warning("q. Return to main menu")  # WHY: escape hatch back to the top-level CLI
 
     def _run_all_phases(self, dispatch: dict[str, Any]) -> None:  # WHY: sequential all-phases runner
         """Execute phases 1-5 sequentially, stopping on failure."""
         for phase_key in ("1", "2", "3", "4", "5"):  # WHY: run every phase in order
             phase_number = int(phase_key)  # WHY: dispatch keys are digit strings
-            logging.warning("%s", "=" * 60)  # WHY: visual separator between phases
-            logging.warning("Starting Phase %d", phase_number)  # WHY: operator sees which phase started
-            logging.warning("%s", "=" * 60)  # WHY: closing separator for banner symmetry
+            logger.warning("%s", "=" * 60)  # WHY: visual separator between phases
+            logger.warning("Starting Phase %d", phase_number)  # WHY: operator sees which phase started
+            logger.warning("%s", "=" * 60)  # WHY: closing separator for banner symmetry
             if not _check_prerequisite_for_all(phase_number):  # WHY: gate the phase on its prerequisite artifact
-                logging.warning("Phase %d prerequisite not met. Stopping.", phase_number)  # WHY: fail-fast message
+                logger.warning("Phase %d prerequisite not met. Stopping.", phase_number)  # WHY: fail-fast message
                 return  # WHY: stop the run-all when prereqs are missing
             try:
                 dispatch[phase_key]()  # WHY: invoke the phase's bound handler
@@ -432,7 +433,7 @@ class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-att
                 logging.exception("Phase %d failed: %s", phase_number, error)  # WHY: audit-log full traceback
                 logging.warning("Phase %d failed: %s", phase_number, error)  # WHY: surface the error to the operator
                 return  # WHY: halt the sequence on the first failure
-        logging.warning("All 5 phases completed successfully.")  # WHY: success message after full sequence
+        logger.warning("All 5 phases completed successfully.")  # WHY: success message after full sequence
 
     # ------------------------------------------------------------------
     # Shared helpers
@@ -440,16 +441,16 @@ class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-att
 
     def _confirm_or_cancel(self, summary: str) -> bool:  # WHY: shared CONFIRM gate for write phases
         """Display summary and require CONFIRM to proceed."""
-        logging.warning("%s", summary)  # WHY: print the operator-facing plan summary before prompting
+        logger.warning("%s", summary)  # WHY: print the operator-facing plan summary before prompting
         confirmation = self.safe_input_fn(  # WHY: EOF-safe stdin reader with confirmation context tag
             f'Type "{self.CONFIRM_KEYWORD}" to proceed: ',
             context="ssid_consolidation_confirm",
         )
         if confirmation != self.CONFIRM_KEYWORD:  # WHY: literal-match gate blocks accidental writes
-            logging.warning("Operation cancelled - confirmation not provided")  # WHY: audit-log cancel
-            logging.warning("Operation cancelled.")  # WHY: user-visible cancel message
+            logger.warning("Operation cancelled - confirmation not provided")  # WHY: audit-log cancel
+            logger.warning("Operation cancelled.")  # WHY: user-visible cancel message
             return False  # WHY: caller aborts the write path
-        logging.info("Operation confirmed at %s", datetime.now(UTC).isoformat())  # WHY: audit-log confirmation time
+        logger.info("Operation confirmed at %s", datetime.now(UTC).isoformat())  # WHY: audit-log confirmation time
         return True  # WHY: caller proceeds with the write
 
     # ------------------------------------------------------------------
@@ -511,7 +512,7 @@ def _write_single_site_vars(  # WHY: parent-owned so tests can patch mistapi at 
         mistapi.api.v1.sites.sites.updateSiteInfo(  # WHY: PUT merged vars back to Mist
             apisession, site_id, body={"vars": merged_vars}
         )
-        logging.info("Site vars written for %s (%d vars)", site_id, len(entries))  # WHY: audit-log success
+        logger.info("Site vars written for %s (%d vars)", site_id, len(entries))  # WHY: audit-log success
         return _build_success_write_results(entries)  # WHY: mark each entry written+timestamp
     except Exception as error:  # WHY: convert API/network failure into structured records
         logging.error("Failed to write vars for site %s: %s", site_id, error)  # WHY: audit-log failure
@@ -567,12 +568,12 @@ def _create_site_group(group: dict[str, Any], org_id: str, apisession: Any) -> N
         created = response.data if hasattr(response, "data") else {}  # WHY: mistapi returns .data
         group["group_id"] = created.get("id", "")  # WHY: cache new id for downstream assignments
         group["exists"] = True  # WHY: flip flag so downstream logic reuses this group
-        logging.info(  # WHY: audit-log the successful creation
+        logger.info(  # WHY: audit-log the successful creation
             "Created group '%s' (id=%s)",
             group["group_name"],
             group["group_id"],
         )
-        logging.warning("Created group: %s", group["group_name"])  # WHY: operator feedback for the create
+        logger.warning("Created group: %s", group["group_name"])  # WHY: operator feedback for the create
     except Exception as error:  # WHY: convert API/network failure into an audit-log + user message
         logging.error(  # WHY: audit-log the failure with the group name
             "Failed to create group '%s': %s",
@@ -646,7 +647,7 @@ def _push_group_site_ids(  # WHY: mistapi PUT extracted so callers stay slim
         group["group_id"],
         body={"site_ids": merged},
     )
-    logging.info("Updated group '%s' with %d new sites", group["group_name"], len(new_ids))  # WHY: audit-log
+    logger.info("Updated group '%s' with %d new sites", group["group_name"], len(new_ids))  # WHY: audit-log
 
 
 # WHY: _build_assign_results, _build_failed_assign_results, and
@@ -738,7 +739,7 @@ def _append_ssid_to_template(  # WHY: additive path for misthelper_-owned templa
     mistapi.api.v1.orgs.templates.updateOrgTemplate(  # WHY: PUT updated wlan list back to Mist
         params.apisession, params.org_id, template_id, body=template_data
     )
-    logging.info("Appended SSID to template '%s'", params.template_name)  # WHY: audit-log the append
+    logger.info("Appended SSID to template '%s'", params.template_name)  # WHY: audit-log the append
     return _template_result(  # WHY: return updated_append row for the phase report
         params,
         TemplateOutcome(template_id=template_id, action="updated_append"),
@@ -779,7 +780,7 @@ def _create_new_template(  # WHY: fresh-create path (used by initial create + ov
     )
     created = response.data if hasattr(response, "data") else {}  # WHY: mistapi returns .data
     template_id: str = created.get("id", "")  # WHY: id returned by createOrgTemplate
-    logging.info(  # WHY: audit-log the successful create
+    logger.info(  # WHY: audit-log the successful create
         "Created template '%s' (id=%s)",
         params.template_name,
         template_id,
@@ -855,7 +856,7 @@ def _apply_ssid_disable(
         # fmt: on
         result["status"] = "disabled"  # WHY: sentinel consumed by resume + summary logic
         result["timestamp"] = datetime.now(UTC).isoformat()  # WHY: record when the flip happened
-        logging.info("Disabled SSID %s in template %s", ssid_id, template_id)  # WHY: audit-log success
+        logger.info("Disabled SSID %s in template %s", ssid_id, template_id)  # WHY: audit-log success
     else:  # WHY: SSID row not in template -> record skip, do not PUT
         result["status"] = "skipped"  # WHY: sentinel consumed by resume + summary logic
         result["reason"] = "SSID not found in template"  # WHY: surface skip reason in the report

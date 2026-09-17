@@ -33,6 +33,8 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any
 
+logger = logging.getLogger(__name__)  # Use a module logger so tests can identify this log source.
+
 # One drawn line of a page: the text, the modal font size, and the bold state.
 TextLine = tuple[str, float, bool]
 # One row of the conversion manifest: the source, the status, and the 2 counts.
@@ -87,7 +89,7 @@ class MarkdownTextRules:
             return [text]  # this branch keeps the body text unchanged
         parts = [match.group(0).strip() for match in matches]  # one output line for each entry
         tail = text[matches[-1].end() :].strip()  # the text that follows the last page number
-        logging.debug("Split a contents run into %d entries", len(parts))  # record the split
+        logger.debug("Split a contents run into %d entries", len(parts))  # record the split
         return parts + [tail] if tail else parts  # the tail is a contents entry without a number
 
     def repeated_headers(self, pages: list[list[TextLine]]) -> frozenset[str]:
@@ -121,7 +123,7 @@ class MarkdownTextRules:
         heads = [line for line in solid if line.startswith("#")]  # every heading of the document
         if not solid or len(heads) <= 0.25 * len(solid):  # the measured ceiling of research Decision 15
             return lines
-        logging.debug("Demoting the weak headings of a document at %d of %d", len(heads), len(solid))
+        logger.debug("Demoting the weak headings of a document at %d of %d", len(heads), len(solid))
         return [line[5:] if line.startswith("#### ") else line for line in lines]  # the weakest signal
 
 
@@ -134,10 +136,10 @@ class PdfLineReader:
 
     def read_document(self) -> tuple[dict[str, str], list[list[TextLine]], float]:
         """Return the metadata, the lines of each page, and the body font size."""
-        logging.info("Reading PDF %s", self.source_path)  # announce the read before it starts
-        logging.info("Loading the PDF reader for %s", self.source_path)  # defer the heavy import until conversion
+        logger.info("Reading PDF %s", self.source_path)  # announce the read before it starts
+        logger.info("Loading the PDF reader for %s", self.source_path)  # defer the heavy import until conversion
         pdfplumber: Any = import_module("pdfplumber")  # load the optional converter dependency only when used
-        logging.debug("Loaded the PDF reader for %s", self.source_path)  # record that conversion can start
+        logger.debug("Loaded the PDF reader for %s", self.source_path)  # record that conversion can start
         sizes: Counter[float] = Counter()  # the size count of every character of every page
         pages: list[list[TextLine]] = []  # one entry for each page, in document order
         with pdfplumber.open(str(self.source_path)) as document:  # pdfplumber closes the file
@@ -146,7 +148,7 @@ class PdfLineReader:
                 pages.append(self._page_lines(page, sizes))
                 page.flush_cache()  # release the character cache, so a 1,000 page guide fits
         body_size = self._body_size(sizes)  # the count of the whole document gives this value
-        logging.debug("Read %d pages, body size %s", len(pages), body_size)  # record the result
+        logger.debug("Read %d pages, body size %s", len(pages), body_size)  # record the result
         return metadata, pages, body_size
 
     def _body_size(self, sizes: Counter[float]) -> float:
@@ -155,7 +157,7 @@ class PdfLineReader:
             return 0.0
         floor = 0.10 * sum(sizes.values())  # a size below this share describes a note, not the body
         common = [size for size, count in sizes.items() if count >= floor]  # the sizes of the text
-        logging.debug("Measured %d common sizes from %d distinct sizes", len(common), len(sizes))
+        logger.debug("Measured %d common sizes from %d distinct sizes", len(common), len(sizes))
         return max(common) if common else sizes.most_common(1)[0][0]  # the modal size is the fallback
 
     def _page_lines(self, page: Any, sizes: Counter[float]) -> list[TextLine]:
@@ -196,7 +198,7 @@ class PdfMarkdownConverter:
 
     def convert(self) -> ManifestRow:
         """Write the Markdown file and return one manifest row."""
-        logging.info("Converting PDF %s", self.source_path)  # announce the work before it starts
+        logger.info("Converting PDF %s", self.source_path)  # announce the work before it starts
         metadata, pages, body_size = PdfLineReader(self.source_path).read_document()
         headers = self.RULES.repeated_headers(pages)  # find the running header before rendering
         rendered = [self._render_page(lines, number, body_size, headers) for number, lines in enumerate(pages, 1)]
@@ -207,7 +209,7 @@ class PdfMarkdownConverter:
         text = self._front_matter(metadata, len(pages)) + body  # the front matter opens the file
         self.output_path.parent.mkdir(parents=True, exist_ok=True)  # the output tree mirrors the source
         self.output_path.write_text(text, encoding="utf-8")  # one atomic write for each document
-        logging.debug("Wrote %d characters to %s", len(text), self.output_path)  # record the size
+        logger.debug("Wrote %d characters to %s", len(text), self.output_path)  # record the size
         return self._row(len(pages), len(body))
 
     def _render_page(self, lines: list[TextLine], number: int, body_size: float, headers: frozenset[str]) -> str:
@@ -252,7 +254,7 @@ class PdfMarkdownConverter:
         """Return the manifest row of this document, with its quality status."""
         density = chars / pages if pages else 0.0  # FR-027 measures characters for each page
         status = "converted" if density >= 200 else "review"  # a thin document needs a human
-        logging.debug("Document gives %.1f characters for each page", density)  # record the density
+        logger.debug("Document gives %.1f characters for each page", density)  # record the density
         return {"source": self._relative_source(), "status": status, "pages": pages, "chars": chars}
 
 
@@ -263,11 +265,11 @@ class PdfMarkdownCommand:
         """Convert every PDF that the command line names and return the exit code."""
         arguments = self._parse(argv)  # read the paths and the options that the operator gave
         logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")  # ASCII output
-        logging.info("Starting the conversion with %d workers", arguments.workers)  # announce the run
+        logger.info("Starting the conversion with %d workers", arguments.workers)  # announce the run
         started = time.monotonic()  # the manifest reports the run time for a capacity estimate
         rows = self._convert_all(arguments)  # the pool does the work
         seconds = time.monotonic() - started  # the elapsed time of the whole batch
-        logging.debug("Converted %d files in %.1f seconds", len(rows), seconds)  # record the result
+        logger.debug("Converted %d files in %.1f seconds", len(rows), seconds)  # record the result
         if arguments.manifest:  # the corpus rebuild needs one row for each source file
             self._write_manifest(Path(arguments.manifest), rows, seconds)
         return 0 if all(row["status"] != "failed" for row in rows) else 1  # a failure fails the run
@@ -290,9 +292,9 @@ class PdfMarkdownCommand:
     @staticmethod
     def _default_worker_count() -> int:
         """Return the worker count that the host reports for this run."""
-        logging.info("Reading the processor count for the PDF converter")  # the host probe can vary by runner
+        logger.info("Reading the processor count for the PDF converter")  # the host probe can vary by runner
         worker_count = os.cpu_count() or 1  # fall back to one worker when the platform reports no count
-        logging.debug("Using %d worker processes as the default", worker_count)  # record the chosen fan-out
+        logger.debug("Using %d worker processes as the default", worker_count)  # record the chosen fan-out
         return worker_count  # the parser writes this value into the arguments
 
     def _sources(self, arguments: argparse.Namespace) -> list[str]:
@@ -301,7 +303,7 @@ class PdfMarkdownCommand:
         if arguments.list_file:  # a corpus rebuild names 4,006 paths, which no command line carries
             listed = Path(arguments.list_file).read_text(encoding="utf-8").splitlines()
             sources += [line.strip() for line in listed if line.strip()]  # 1 path for each line
-        logging.debug("Collected %d source paths", len(sources))  # record the size of the batch
+        logger.debug("Collected %d source paths", len(sources))  # record the size of the batch
         return sources
 
     def _convert_all(self, arguments: argparse.Namespace) -> list[ManifestRow]:
@@ -309,15 +311,13 @@ class PdfMarkdownCommand:
         source_root = Path(arguments.source_root) if arguments.source_root else None  # citation root
         output_root = Path(arguments.output_root) if arguments.output_root else None  # output tree
         jobs = [(source, source_root, output_root) for source in self._sources(arguments)]
-        logging.info("Converting %d PDF files", len(jobs))  # announce the batch before it starts
+        logger.info("Converting %d PDF files", len(jobs))  # announce the batch before it starts
         if arguments.workers <= 1:  # one worker keeps the traceback of a test in this process
             return [self.convert_one(job) for job in jobs]
-        logging.info("Loading the process pool for %d workers", arguments.workers)  # defer spawn support to conversion
+        logger.info("Loading the process pool for %d workers", arguments.workers)  # defer spawn support to conversion
         from concurrent.futures import ProcessPoolExecutor  # isolate Windows spawn cost from module import
 
-        logging.debug(
-            "Loaded the process pool for %d workers", arguments.workers
-        )  # record that parallel work can start
+        logger.debug("Loaded the process pool for %d workers", arguments.workers)  # record that parallel work can start
         with ProcessPoolExecutor(max_workers=arguments.workers) as pool:  # a page read is CPU bound
             return list(pool.map(self.convert_one, jobs, chunksize=1))  # 1 file for each dispatch balances
 
@@ -336,14 +336,14 @@ class PdfMarkdownCommand:
 
     def _write_manifest(self, path: Path, rows: list[ManifestRow], seconds: float) -> None:
         """Write the JSON manifest that holds one row for each source file."""
-        logging.info("Writing the conversion manifest %s", path)  # announce the write
+        logger.info("Writing the conversion manifest %s", path)  # announce the write
         counts: Counter[str] = Counter(str(row["status"]) for row in rows)  # the status of each row
         pages = sum(int(row["pages"]) for row in rows)  # the total page count of the run
         chars = sum(int(row["chars"]) for row in rows)  # the total character count of the run
         report = {"status_counts": dict(counts), "pages": pages, "chars": chars, "seconds": round(seconds, 1)}
         path.parent.mkdir(parents=True, exist_ok=True)  # the manifest sits beside the Markdown tree
         path.write_text(json.dumps({**report, "files": rows}, indent=1), encoding="utf-8")
-        logging.debug("Manifest holds %d rows and %d pages", len(rows), pages)  # record the result
+        logger.debug("Manifest holds %d rows and %d pages", len(rows), pages)  # record the result
 
 
 if __name__ == "__main__":

@@ -17,6 +17,8 @@ from src.data.data_processing_utils import (  # WHY: reuse the shared export nor
     DataProcessingUtils,
 )
 
+logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
+
 
 class SiteOtherDeviceEventsExporter:
     """Export site other-device event search results."""
@@ -26,27 +28,27 @@ class SiteOtherDeviceEventsExporter:
         """Flatten and persist event rows for one site."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # WHY: an empty search is valid and needs no output file.
-            logging.info(
+            logger.info(
                 "! No other-device event data found for this site"
             )  # WHY: tell the operator why no file exists.
             return  # WHY: avoid writing an empty export.
-        logging.info("Flattening other-device event data")  # WHY: trace the transformation before it starts.
+        logger.info("Flattening other-device event data")  # WHY: trace the transformation before it starts.
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # WHY: make nested API fields tabular.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # WHY: keep multiline values CSV-safe.
-        logging.debug(
+        logger.debug(
             "Prepared %d other-device event rows", len(sanitized_data)
         )  # WHY: report the transformed row count.
         filename = (
             f"SiteOtherDeviceEvents_{site_name.replace(' ', '_')}.csv"  # WHY: identify the site in the output name.
         )
-        logging.info("Writing other-device events to %s", filename)  # WHY: trace the backend write.
+        logger.info("Writing other-device events to %s", filename)  # WHY: trace the backend write.
         mh.DataExporter.write_with_format_selection(  # WHY: support every configured output backend.
             sanitized_data, filename, api_function_name="searchSiteOtherDeviceEvents"
         )
-        logging.debug(
+        logger.debug(
             "Persisted %d other-device event rows to %s", len(rawdata), filename
         )  # WHY: confirm the write result.
-        logging.info(
+        logger.info(
             "! %d other-device event records exported to %s", len(rawdata), filename
         )  # WHY: show completion to the operator.
 
@@ -54,8 +56,8 @@ class SiteOtherDeviceEventsExporter:
     def other_device_events() -> None:
         """Search and export other-device events for a selected site."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Site Other Device Events Search:")  # WHY: identify the selected menu action.
-        logging.info("Starting searchSiteOtherDeviceEvents export")  # WHY: trace the operation before site selection.
+        logger.info("Site Other Device Events Search:")  # WHY: identify the selected menu action.
+        logger.info("Starting searchSiteOtherDeviceEvents export")  # WHY: trace the operation before site selection.
         resolved = mh.SiteDeviceExporter._resolve_site_for_stats(
             "other-device events search"
         )  # WHY: use the shared safe prompt.
@@ -63,7 +65,7 @@ class SiteOtherDeviceEventsExporter:
             return  # WHY: preserve the menu loop after a cancelled selection.
         site_id, site_name = resolved  # WHY: pass the resolved identifiers to the SDK and output path.
         try:  # WHY: keep SDK failures inside the menu operation.
-            logging.info(
+            logger.info(
                 "Calling searchSiteOtherDeviceEvents for site_id=%s (%s)", site_id, site_name
             )  # WHY: trace the API call.
             response = (
@@ -74,7 +76,7 @@ class SiteOtherDeviceEventsExporter:
             rawdata = mistapi.get_all(
                 response=response, mist_session=mh.apisession
             )  # WHY: retrieve every paged event row.
-            logging.debug("Received %d other-device event rows", len(rawdata))  # WHY: report the API result count.
+            logger.debug("Received %d other-device event rows", len(rawdata))  # WHY: report the API result count.
             SiteOtherDeviceEventsExporter._persist_events(
                 rawdata, site_name
             )  # WHY: route rows through the shared writer.

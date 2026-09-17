@@ -44,6 +44,8 @@ from src.data.data_processing_utils import (
 )  # WHY: canonical flatten and escape helpers keep CSV output consistent with peers.
 from src.utils.input_utils import InputUtils  # WHY: the shared, EOF-safe MSP identifier prompt.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 # The two response keys that hold record arrays rather than counters. The
 # summary row drops them, and the detail rows read them.
 _RECORD_KEYS: tuple[tuple[str, str], ...] = (
@@ -76,12 +78,12 @@ class MSPLicenseExporter:
             The response body as a dict, or an empty dict when the body is absent.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Calling listMspLicenses for msp_id=%s", msp_id)  # Pre-call log.
+        logger.info("Calling listMspLicenses for msp_id=%s", msp_id)  # Pre-call log.
         response = mistapi.api.v1.msps.licenses.listMspLicenses(mh.apisession, msp_id)  # SDK call.
         payload = getattr(response, "data", None)  # The SDK exposes the body on .data.
-        logging.debug("listMspLicenses returned payload_type=%s", type(payload).__name__)  # Post-call trace.
+        logger.debug("listMspLicenses returned payload_type=%s", type(payload).__name__)  # Post-call trace.
         if not isinstance(payload, dict):  # A list body or a None body means the MSP has no license record.
-            logging.debug("listMspLicenses returned no dict body for msp_id=%s", msp_id)  # Explain the empty result.
+            logger.debug("listMspLicenses returned no dict body for msp_id=%s", msp_id)  # Explain the empty result.
             return {}
         return payload
 
@@ -102,7 +104,7 @@ class MSPLicenseExporter:
         """
         record_keys = {key for key, _ in _RECORD_KEYS}  # The array keys the detail file owns.
         counters = {key: value for key, value in payload.items() if key not in record_keys}  # Keep the maps only.
-        logging.debug("Built the MSP summary from %d counter keys", len(counters))  # Post-build trace.
+        logger.debug("Built the MSP summary from %d counter keys", len(counters))  # Post-build trace.
         flattened = DataProcessingUtils.flatten_nested_fields([counters])  # Expand each counter map into columns.
         row: dict[str, Any] = {"msp_id": msp_id}  # Lead with the primary key so the CSV reads left to right.
         row.update(flattened[0] if flattened else {})  # Merge the counters behind the identifier.
@@ -127,14 +129,14 @@ class MSPLicenseExporter:
         for key, record_type in _RECORD_KEYS:  # Walk the subscription array, then the amendment array.
             records = payload.get(key) or []  # A missing key and a null value both mean no record.
             if not isinstance(records, list):  # A malformed body must not stop the export.
-                logging.warning("listMspLicenses returned a non-list %s field; skipping it", key)  # Name the gap.
+                logger.warning("listMspLicenses returned a non-list %s field; skipping it", key)  # Name the gap.
                 continue
             for record in records:  # Each record becomes one row.
                 if not isinstance(record, dict):  # Skip a malformed entry rather than write a broken row.
-                    logging.warning("Skipping a non-dict entry in the %s field", key)  # Name the skipped entry.
+                    logger.warning("Skipping a non-dict entry in the %s field", key)  # Name the skipped entry.
                     continue
                 rows.append({"msp_id": msp_id, "record_type": record_type, **record})  # Tag, then copy the record.
-        logging.debug("Built %d MSP license detail rows", len(rows))  # Post-build count trace.
+        logger.debug("Built %d MSP license detail rows", len(rows))  # Post-build count trace.
         return DataProcessingUtils.flatten_nested_fields(rows)  # Flatten any nested field before the write.
 
     @staticmethod
@@ -153,14 +155,14 @@ class MSPLicenseExporter:
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rows:  # No rows, so inform the operator and return.
-            logging.info("! No MSP %s data found", noun)  # ASCII-only user notice.
+            logger.info("! No MSP %s data found", noun)  # ASCII-only user notice.
             return
         sanitized_data = DataProcessingUtils.escape_multiline(rows)  # Make multiline values CSV-safe.
         mh.DataExporter.write_with_format_selection(  # Persist through the CSV, SQLite, or Arango selector.
             sanitized_data, filename, api_function_name=api_function_name
         )
-        logging.debug("%s persisted %d rows to %s", api_function_name, len(rows), filename)  # Post-call count.
-        logging.info("! %d MSP %s records exported to %s", len(rows), noun, filename)  # User notice with count.
+        logger.debug("%s persisted %d rows to %s", api_function_name, len(rows), filename)  # Post-call count.
+        logger.info("! %d MSP %s records exported to %s", len(rows), noun, filename)  # User notice with count.
 
     @staticmethod
     def licenses() -> None:
@@ -170,7 +172,7 @@ class MSPLicenseExporter:
             Interactive menu entry point. The method owns the prompt, the API
             call, and the two writes, and it keeps every failure inside the menu.
         """
-        logging.info("MSP Licenses:")  # Menu header echoed to the operator.
+        logger.info("MSP Licenses:")  # Menu header echoed to the operator.
         msp_id = InputUtils.prompt_msp_id()  # Ask which MSP to read.
         if msp_id is None:  # The prompt helper already logged the cancellation.
             return

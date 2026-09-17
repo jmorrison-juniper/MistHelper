@@ -20,6 +20,7 @@ from src.websocket.manager import (  # WHY: WebSocket lifecycle + error utilitie
     select_ws_site,
 )
 
+logger = logging.getLogger(__name__)  # WHY: Use the module logger for non-exception log entries.
 _TIMEOUT_SWITCH = 45  # WHY: extended ARP timeout for switches (legacy value).
 _TIMEOUT_GATEWAY = 35  # WHY: extended ARP timeout for gateways (legacy value).
 _TIMEOUT_DEFAULT = 30  # WHY: default ARP timeout for APs / unknown devices.
@@ -53,8 +54,8 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
 
     def execute(self, deps: WebSocketCmdDeps) -> None:  # WHY: top-level workflow entry.
         """Top-level entry: prompt user, run ARP, render results."""
-        logging.info("Starting WebSocket ARP operation...")  # WHY: action log at workflow start.
-        logging.debug("ENTER: arp_device_websocket")  # WHY: trace marker preserved.
+        logger.info("Starting WebSocket ARP operation...")  # WHY: action log at workflow start.
+        logger.debug("ENTER: arp_device_websocket")  # WHY: trace marker preserved.
         debug_mode = detect_debug_mode()  # WHY: honor --debug / -d once per run.
         if debug_mode:  # WHY: mirror legacy debug banner.
             print("[DEBUG] Starting ARP via WebSocket operation...")  # WHY: legacy banner.
@@ -66,7 +67,7 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
             logging.debug("EXIT: arp_device_websocket - error")  # WHY: trace marker preserved.
         finally:  # WHY: always release WS resources on any exit path.
             cleanup_ws_connection(websocket_manager)  # WHY: disconnect if connected.
-            logging.debug("EXIT: arp_device_websocket")  # WHY: trace marker preserved.
+            logger.debug("EXIT: arp_device_websocket")  # WHY: trace marker preserved.
 
     def _run_workflow(  # WHY: drive site+device prompts, compat check, and ARP dispatch.
         self, deps: WebSocketCmdDeps, debug_mode: bool
@@ -96,11 +97,11 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
         debug_mode: bool,
     ) -> dict[str, Any] | None:
         """Look up device record for type/model context. Return None if unavailable."""
-        logging.debug("Fetching device record for ARP target device=%s", device_id)  # WHY: log.
+        logger.debug("Fetching device record for ARP target device=%s", device_id)  # WHY: log.
         device_info = self._lookup_device_record(deps, site_id, device_id, debug_mode)  # WHY: API.
         if device_info and debug_mode:  # WHY: legacy debug echo of resolved attributes.
             self._echo_device_attributes(device_info, device_id)  # WHY: legacy debug line.
-        logging.debug("Device record resolved present=%s", device_info is not None)  # WHY: log.
+        logger.debug("Device record resolved present=%s", device_info is not None)  # WHY: log.
         return device_info  # WHY: caller uses metadata for compat + timeout selection.
 
     @staticmethod
@@ -167,17 +168,17 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
         print("   -> Switches may have limited WebSocket ARP support")  # WHY: legacy phrasing.
         print("   -> Consider using SSH-based ARP commands instead")  # WHY: legacy phrasing.
         print("   -> This operation may timeout or return limited results")  # WHY: legacy.
-        logging.info(  # WHY: action log before blocking on user input.
+        logger.info(  # WHY: action log before blocking on user input.
             "Prompting operator to confirm switch ARP attempt model=%s", device_model
         )
         response = (  # WHY: EOF-safe input wrapper drops newline, lower-case for match.
             deps.safe_input_fn("   -> Continue anyway? (y/N): ", context="websocket_arp").strip().lower()
         )
         if response in ("y", "yes"):  # WHY: legacy affirmative answers.
-            logging.debug("Switch ARP attempt confirmed by operator")  # WHY: after log on confirm.
+            logger.debug("Switch ARP attempt confirmed by operator")  # WHY: after log on confirm.
             return True  # WHY: caller proceeds.
         print("! Operation cancelled by user")  # WHY: legacy phrasing preserved.
-        logging.info("Switch ARP attempt cancelled by operator")  # WHY: after log on cancel.
+        logger.info("Switch ARP attempt cancelled by operator")  # WHY: after log on cancel.
         return False  # WHY: caller aborts.
 
     def _issue_arp_and_render(  # WHY: connect WS, POST ARP, await results, render output.
@@ -214,13 +215,13 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
         print(f"\n-> Executing ARP command on device {device_id}...")  # WHY: legacy banner.
         print("-> Establishing WebSocket connection...")  # WHY: legacy banner preserved.
         websocket_manager = WebSocketManager(deps.apisession)  # WHY: per-run WS manager.
-        logging.info(  # WHY: action log before connect+subscribe.
+        logger.info(  # WHY: action log before connect+subscribe.
             "Connecting WebSocket for ARP site=%s device=%s", site_id, device_id
         )
         if not websocket_manager.connect_and_subscribe(site_id, device_id, debug_mode):  # WHY: sub.
-            logging.warning("WebSocket connect+subscribe failed for ARP")  # WHY: after log.
+            logger.warning("WebSocket connect+subscribe failed for ARP")  # WHY: after log.
             return websocket_manager  # WHY: hand to finally for cleanup.
-        logging.debug("WebSocket connect+subscribe succeeded for ARP")  # WHY: after log.
+        logger.debug("WebSocket connect+subscribe succeeded for ARP")  # WHY: after log.
         return websocket_manager  # WHY: caller proceeds with POST + wait.
 
     def _post_arp_command(  # WHY: POST device-scoped ARP endpoint, demux session id.
@@ -274,13 +275,13 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
         """Wait for the ARP result on the WS, then render it or report timeout."""
         self._announce_wait(session_id, debug_mode)  # WHY: legacy banner + debug lines.
         timeout_seconds = self._compute_timeout(device_info)  # WHY: type-aware timeout.
-        logging.info(  # WHY: action log before blocking wait.
+        logger.info(  # WHY: action log before blocking wait.
             "Awaiting ARP result session=%s timeout=%ds", session_id[:8], timeout_seconds
         )
         arp_result = websocket_manager.wait_for_command_result(  # WHY: block until result.
             session_id, timeout_seconds=timeout_seconds
         )
-        logging.debug("ARP wait completed; has_result=%s", arp_result is not None)  # WHY: log.
+        logger.debug("ARP wait completed; has_result=%s", arp_result is not None)  # WHY: log.
         if debug_mode:  # WHY: legacy debug echo of wait outcome + shape.
             self._echo_wait_outcome(arp_result)  # WHY: emit legacy debug lines.
         if arp_result:  # WHY: success path renders the captured payload.
@@ -334,7 +335,7 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
         )
         print("=" * 60)  # WHY: legacy visual closer preserved verbatim.
         device_context = self._format_device_context(device_info, device_id)  # WHY: log payload.
-        logging.info("WebSocket ARP completed successfully for %s", device_context)  # WHY: log.
+        logger.info("WebSocket ARP completed successfully for %s", device_context)  # WHY: log.
 
     @staticmethod
     def _print_result_banner() -> None:
@@ -411,7 +412,7 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
         self, raw_output: str, debug_mode: bool
     ) -> None:
         """Parse gateway JSON ARP response. Tabulate on success, fall back on failure."""
-        logging.debug("Attempting to parse gateway ARP JSON payload")  # WHY: log before parse.
+        logger.debug("Attempting to parse gateway ARP JSON payload")  # WHY: log before parse.
         try:  # WHY: match legacy fallback phrasing on JSON parse failure.
             gateway_data = json.loads(raw_output)  # WHY: decode the JSON document.
         except json.JSONDecodeError as json_error:  # WHY: fall back to raw echo on failure.
@@ -432,7 +433,7 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
         """Print the JSON-parse-failure fallback (legacy phrasing + raw echo)."""
         if debug_mode:  # WHY: legacy debug echo of the parse error.
             print(f"[DEBUG] Failed to parse gateway JSON: {json_error}")  # WHY: legacy line.
-        logging.warning("Gateway ARP JSON parse failed: %s", json_error)  # WHY: after log.
+        logger.warning("Gateway ARP JSON parse failed: %s", json_error)  # WHY: after log.
         print("Failed to parse gateway JSON output")  # WHY: legacy phrasing preserved.
         self._echo_raw_fallback(raw_output)  # WHY: emit legacy raw echo block.
 
@@ -525,7 +526,7 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
         print("! Timeout waiting for ARP results")  # WHY: legacy phrasing preserved.
         if device_info:  # WHY: type-specific help when we know what we hit.
             self._render_timeout_help(device_info)  # WHY: emit legacy troubleshooting block.
-        logging.warning("WebSocket ARP operation timed out")  # WHY: after log on timeout.
+        logger.warning("WebSocket ARP operation timed out")  # WHY: after log on timeout.
 
     @staticmethod
     def _render_timeout_help(device_info: dict[str, Any]) -> None:

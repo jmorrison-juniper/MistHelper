@@ -13,6 +13,8 @@ from collections.abc import Callable  # WHY: precise type for zero-arg handler t
 from datetime import UTC, datetime  # WHY: high-resolution timestamp for debug traces
 from typing import Any  # WHY: TUI back-reference is loosely typed
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class KeyboardDispatchTable:  # WHY: replaces handle_input (was CC=65) with O(1) tables
     """Routes a key press to the correct handler based on TUI execution state."""
@@ -32,7 +34,7 @@ class KeyboardDispatchTable:  # WHY: replaces handle_input (was CC=65) with O(1)
         tui = self._tui  # Local alias for readability
         if tui.debug_mode:  # Trace key + state for debugging
             ts = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # WHY: ms-precision for keystroke ordering
-            logging.debug(  # WHY: emit structured trace so we can reconstruct user's key sequence
+            logger.debug(  # WHY: emit structured trace so we can reconstruct user's key sequence
                 "TUI_DEBUG: [%s] Key pressed: %r (state=%s, path=%s, selection=%s)",
                 ts,
                 key,
@@ -53,11 +55,11 @@ class KeyboardDispatchTable:  # WHY: replaces handle_input (was CC=65) with O(1)
         handler = table.get(key)  # O(1) dispatch lookup
         if handler is None:  # Unknown key for this mode
             if self._tui.debug_mode:  # WHY: only trace unhandled keys in debug mode
-                logging.debug("TUI_DEBUG: Unhandled key in %s mode: %r", mode, key)  # WHY: capture no-op keystroke
+                logger.debug("TUI_DEBUG: Unhandled key in %s mode: %r", mode, key)  # WHY: capture no-op keystroke
             return  # WHY: nothing to run, exit early
-        logging.info("TUI: dispatching key %s in %s mode", key, mode)  # Action log: before handler
+        logger.info("TUI: dispatching key %s in %s mode", key, mode)  # Action log: before handler
         handler()  # Run bound handler
-        logging.debug("TUI: dispatched key %s in %s mode", key, mode)  # Action log: after handler
+        logger.debug("TUI: dispatched key %s in %s mode", key, mode)  # Action log: after handler
 
     # ---- dispatch table builders ----------------------------------------
 
@@ -162,7 +164,7 @@ class KeyboardDispatchTable:  # WHY: replaces handle_input (was CC=65) with O(1)
         """Prompt mode needs a printable-character fallback after the dict."""
         handler = self._prompt_handlers.get(key)  # Try the table first
         if handler is not None:  # Known control key
-            logging.info("TUI: prompting dispatch %r", key)  # WHY: action-log control-key path
+            logger.info("TUI: prompting dispatch %r", key)  # WHY: action-log control-key path
             handler()  # WHY: run the bound prompt handler
             return  # WHY: control key handled, skip printable-char fallback
         if len(key) == 1 and key.isprintable():  # Otherwise append printable char
@@ -210,7 +212,7 @@ class KeyboardDispatchTable:  # WHY: replaces handle_input (was CC=65) with O(1)
         tui.current_path.append(module_name)  # Descend one level
         tui.current_selection = 0  # Reset selection at new level
         tui._discover_current_level()  # Refresh current_items
-        logging.info("TUI: Navigated into module: %s", module_name)
+        logger.info("TUI: Navigated into module: %s", module_name)
 
     def _nav_back(self) -> None:
         """Escape: pop one level off the path. Quit when already at root."""
@@ -221,7 +223,7 @@ class KeyboardDispatchTable:  # WHY: replaces handle_input (was CC=65) with O(1)
         removed = tui.current_path.pop()  # Pop the deepest segment
         tui.current_selection = 0  # Reset selection at parent level
         tui._discover_current_level()  # Refresh current_items
-        logging.info("TUI: Navigated back from: %s", removed)
+        logger.info("TUI: Navigated back from: %s", removed)
 
     def _set_quit(self) -> None:
         """Set the TUI running flag to ``False`` (graceful exit)."""

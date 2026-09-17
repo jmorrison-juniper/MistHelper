@@ -19,6 +19,7 @@ from src.websocket.manager import (  # WHY: WebSocket lifecycle + credential hel
     select_ws_site,
 )
 
+logger = logging.getLogger(__name__)  # WHY: Use the module logger for non-exception log entries.
 _RESULT_TRANSPORT_KEYS = frozenset({"raw", "Output", "session"})  # WHY: Fields rendered elsewhere or transport-only.
 _WAIT_TIMEOUT_SECONDS = 60  # WHY: Legacy budget matching Mist show_mac_table RPC latency envelope.
 _HTTP_TIMEOUT_SECONDS = 30  # WHY: Legacy REST timeout used by the previous inline implementation.
@@ -46,17 +47,17 @@ class MacTableCommand:  # WHY: Namespace grouping the show_mac_table workflow he
             logging.debug("EXIT: show_mac_table_websocket - error")  # WHY: Preserve legacy exit-trace marker.
         finally:
             cleanup_ws_connection(websocket_manager, debug_mode)  # WHY: Always release WS socket and subscriptions.
-            logging.debug("EXIT: show_mac_table_websocket")  # WHY: Preserve legacy exit-trace marker.
+            logger.debug("EXIT: show_mac_table_websocket")  # WHY: Preserve legacy exit-trace marker.
 
     @staticmethod
     def _enter_workflow() -> bool:  # WHY: Isolates debug detection so execute() stays under complexity budget.
         """Log workflow entry, honor --debug flag, and return the resolved debug mode."""
-        logging.info("Menu #5: Starting WebSocket show MAC table operation")  # WHY: Log workflow entry boundary.
+        logger.info("Menu #5: Starting WebSocket show MAC table operation")  # WHY: Log workflow entry boundary.
         debug_mode = "--debug" in sys.argv or "-d" in sys.argv  # WHY: Honor user-supplied verbose-output flag.
         if debug_mode:  # WHY: Gate verbose logger + banner behind operator opt-in.
             logging.getLogger().setLevel(logging.DEBUG)  # WHY: Raise log verbosity for interactive troubleshooting.
             print("[DEBUG] DEBUG MODE ENABLED")  # WHY: Preserve legacy operator-facing debug banner.
-        logging.debug("ENTER: show_mac_table_websocket")  # WHY: Preserve legacy enter-trace for log greppability.
+        logger.debug("ENTER: show_mac_table_websocket")  # WHY: Preserve legacy enter-trace for log greppability.
         return debug_mode  # WHY: Caller decides whether to escalate downstream helpers into debug output.
 
     @staticmethod
@@ -96,9 +97,9 @@ class MacTableCommand:  # WHY: Namespace grouping the show_mac_table workflow he
     @staticmethod
     def _resolve_targets(deps: WebSocketCmdDeps, debug_mode: bool) -> tuple[str, str] | None:  # WHY: Prompt helper.
         """Prompt operator for the site and switch device and return their IDs, or None on abort."""
-        logging.info("Prompting operator for WebSocket MAC table target site")  # WHY: Log before interactive prompt.
+        logger.info("Prompting operator for WebSocket MAC table target site")  # WHY: Log before interactive prompt.
         site_id = select_ws_site(deps, debug_mode)  # WHY: Interactive site selection via shared helper.
-        logging.debug("Site selection result: %s", site_id)  # WHY: Log result without leaking richer data.
+        logger.debug("Site selection result: %s", site_id)  # WHY: Log result without leaking richer data.
         if site_id is None:  # WHY: Guard clause — abort cleanly when operator cancels site pick.
             return None  # WHY: Operator cancelled site selection — propagate abort.
 
@@ -106,9 +107,9 @@ class MacTableCommand:  # WHY: Namespace grouping the show_mac_table workflow he
         print("-> Routers/gateways operate at Layer 3 and typically don't maintain MAC tables")  # WHY: Legacy.
         print("-> APs forward wireless traffic but don't maintain traditional MAC tables")  # WHY: Legacy guidance.
 
-        logging.info("Prompting operator to select a switch device under site %s", site_id)  # WHY: Before pick.
+        logger.info("Prompting operator to select a switch device under site %s", site_id)  # WHY: Before pick.
         device_id = deps.select_device_fn(site_id, device_type="switch")  # WHY: Filter pick list to switches only.
-        logging.debug("Device selection result: %s", device_id)  # WHY: Log selection result for traceability.
+        logger.debug("Device selection result: %s", device_id)  # WHY: Log selection result for traceability.
         if not device_id:  # WHY: Guard clause — a MAC table requires a Layer-2 device.
             print("! No switch device selected. MAC table command requires Layer 2 switching devices.")  # WHY: Legacy.
             print("! Only switches maintain MAC address learning tables for Ethernet forwarding.")  # WHY: Legacy.
@@ -123,10 +124,10 @@ class MacTableCommand:  # WHY: Namespace grouping the show_mac_table workflow he
         deps: WebSocketCmdDeps, site_id: str, device_id: str, debug_mode: bool
     ) -> WebSocketManager | None:  # WHY: Encapsulates WS handshake so caller stays under length budget.
         """Construct WS manager and perform connect+subscribe, returning manager on success or None on failure."""
-        logging.info("Opening WebSocket and subscribing to device %s on site %s", device_id, site_id)  # WHY: Before.
+        logger.info("Opening WebSocket and subscribing to device %s on site %s", device_id, site_id)  # WHY: Before.
         websocket_manager = WebSocketManager(deps.apisession)  # WHY: Build manager bound to current auth session.
         connected = websocket_manager.connect_and_subscribe(site_id, device_id, debug_mode)  # WHY: WS open + sub.
-        logging.debug("WebSocket connect_and_subscribe returned: %s", connected)  # WHY: After-call trace.
+        logger.debug("WebSocket connect_and_subscribe returned: %s", connected)  # WHY: After-call trace.
         if not connected:
             return None  # WHY: Connection failure — caller returns without printing extra text.
         return websocket_manager  # WHY: Manager ready for RPC + result wait.
@@ -155,9 +156,9 @@ class MacTableCommand:  # WHY: Namespace grouping the show_mac_table workflow he
         deps: WebSocketCmdDeps, websocket_manager: WebSocketManager, debug_mode: bool
     ) -> tuple[str, str] | None:
         """Return (host, token) when credentials pass validation, otherwise None."""
-        logging.info("Resolving Mist credentials for direct REST RPC")  # WHY: Log before credential lookup action.
+        logger.info("Resolving Mist credentials for direct REST RPC")  # WHY: Log before credential lookup action.
         mist_host, mist_apitoken = get_mist_credentials(deps.apisession)  # WHY: Extract host + token from session.
-        logging.debug("Mist credentials resolved (host=%s, token=[REDACTED])", mist_host)  # WHY: Result, redacted.
+        logger.debug("Mist credentials resolved (host=%s, token=[REDACTED])", mist_host)  # WHY: Result, redacted.
         if not check_mist_credentials(websocket_manager, mist_host, mist_apitoken, debug_mode):
             return None  # WHY: Validator failed and already printed operator-facing text.
         return mist_host, mist_apitoken  # WHY: Caller uses tuple to assemble RPC URL + auth headers.
@@ -169,7 +170,7 @@ class MacTableCommand:  # WHY: Namespace grouping the show_mac_table workflow he
         """Issue the REST RPC that initiates the WebSocket session response and return the raw response."""
         mac_table_payload: dict[str, Any] = {}  # WHY: show_mac_table requires no additional parameters.
         print("-> Issuing show MAC table command...")  # WHY: Legacy progress message.
-        logging.debug("MAC table payload: %s", mac_table_payload)  # WHY: Trace request body (always empty by design).
+        logger.debug("MAC table payload: %s", mac_table_payload)  # WHY: Trace request body (always empty by design).
         if debug_mode:
             print(f"[DEBUG] MAC table payload = {mac_table_payload}")  # WHY: Legacy debug detail line.
         mac_table_url = f"https://{mist_host}/api/v1/sites/{site_id}/devices/{device_id}/show_mac_table"  # WHY: URL.
@@ -177,11 +178,11 @@ class MacTableCommand:  # WHY: Namespace grouping the show_mac_table workflow he
         if debug_mode:
             print(f"[DEBUG] POST URL = {mac_table_url}")  # WHY: Legacy debug detail line.
             print("[DEBUG] Headers = {'Authorization': 'Token [REDACTED]', 'Content-Type': 'application/json'}")
-        logging.info("POST %s to trigger show_mac_table RPC", mac_table_url)  # WHY: Log before HTTP request action.
+        logger.info("POST %s to trigger show_mac_table RPC", mac_table_url)  # WHY: Log before HTTP request action.
         response = requests.post(  # WHY: Issue REST RPC that initiates the WebSocket session response.
             mac_table_url, headers=headers, json=mac_table_payload, timeout=_HTTP_TIMEOUT_SECONDS
         )
-        logging.debug("show_mac_table HTTP status=%s", response.status_code)  # WHY: After-call result.
+        logger.debug("show_mac_table HTTP status=%s", response.status_code)  # WHY: After-call result.
         if debug_mode:
             print(f"[DEBUG] HTTP Response Status = {response.status_code}")  # WHY: Legacy debug line.
             print(f"[DEBUG] HTTP Response Body = {response.text}")  # WHY: Legacy debug line.
@@ -206,11 +207,11 @@ class MacTableCommand:  # WHY: Namespace grouping the show_mac_table workflow he
     @staticmethod
     def _await_and_display(websocket_manager: WebSocketManager, session_id: str, debug_mode: bool) -> None:
         """Block on the WS result for the given session and render formatted output."""
-        logging.info("Waiting for MAC table result on session %s", session_id)  # WHY: Log before blocking WS wait.
+        logger.info("Waiting for MAC table result on session %s", session_id)  # WHY: Log before blocking WS wait.
         mac_table_result = websocket_manager.wait_for_command_result(
             session_id, timeout_seconds=_WAIT_TIMEOUT_SECONDS
         )  # WHY: 60s budget matches legacy behavior.
-        logging.debug(
+        logger.debug(
             "wait_for_command_result returned populated=%s", mac_table_result is not None
         )  # WHY: After-call summary.
         if debug_mode:
@@ -220,7 +221,7 @@ class MacTableCommand:  # WHY: Namespace grouping the show_mac_table workflow he
 
         if mac_table_result:
             MacTableCommand._render_result(mac_table_result)  # WHY: Pretty-print MAC table fields to stdout.
-            logging.info("WebSocket show MAC table completed successfully")  # WHY: Log success outcome.
+            logger.info("WebSocket show MAC table completed successfully")  # WHY: Log success outcome.
             return  # WHY: Done — successful path.
 
         MacTableCommand._render_timeout(websocket_manager, debug_mode)  # WHY: Emit legacy timeout diagnostics.
@@ -234,7 +235,7 @@ class MacTableCommand:  # WHY: Namespace grouping the show_mac_table workflow he
         print("  - The device is busy or not responding")  # WHY: Legacy diagnostic hint.
         print("  - Network connectivity issues")  # WHY: Legacy diagnostic hint.
         print("! Note: MAC tables are primarily a Layer 2 (switch) feature")  # WHY: Legacy diagnostic reminder.
-        logging.warning("WebSocket show MAC table operation timed out")  # WHY: Log timeout outcome.
+        logger.warning("WebSocket show MAC table operation timed out")  # WHY: Log timeout outcome.
         dump_ws_debug_state(websocket_manager, debug_mode)  # WHY: Emit additional WS state when debug enabled.
 
     @staticmethod

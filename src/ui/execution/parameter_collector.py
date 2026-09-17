@@ -10,6 +10,8 @@ from typing import Any  # WHY: TUI back-ref is loosely typed
 
 from src.ui.execution.function_executor import FunctionExecutor, _redact  # WHY: run + secret-redaction helpers
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class ParameterCollector:  # WHY: extracted from MistHelperTUI._submit_parameter (was CC=14)
     """Captures keystroke-collected parameter values and advances state."""
@@ -26,12 +28,12 @@ class ParameterCollector:  # WHY: extracted from MistHelperTUI._submit_parameter
             return  # WHY: idempotent no-op when collection already complete
         param_info = tui.param_list[tui.current_param_index]  # Current parameter dict
         value = tui.input_buffer.strip()  # Trim typed buffer
-        logging.info("TUI: parameter submit %s", param_info["name"])  # Action log before processing
+        logger.info("TUI: parameter submit %s", param_info["name"])  # Action log before processing
         if not self._capture_value(param_info, value):  # Capture into function_params
             return  # Error already surfaced
         tui.current_param_index += 1  # Advance to next parameter
         tui.input_buffer = ""  # Reset typed buffer
-        logging.debug("TUI: parameter submit done %s", param_info["name"])  # Action log after processing
+        logger.debug("TUI: parameter submit done %s", param_info["name"])  # Action log after processing
         if tui.current_param_index >= len(tui.param_list):  # All params collected -> run
             self._executor.execute()  # WHY: hand off to executor now that inputs are complete
 
@@ -67,5 +69,5 @@ class ParameterCollector:  # WHY: extracted from MistHelperTUI._submit_parameter
             return True  # WHY: int stored, continue collection
         tui.function_params[param_name] = value  # Generic string capture
         if tui.debug_mode:  # Redacted debug log of capture
-            logging.debug("TUI_DEBUG: Parameter stored - %s: %s", param_name, _redact(param_name, value))
+            logger.debug("TUI_DEBUG: Parameter stored - %s: %s", param_name, _redact(param_name, value))
         return True  # WHY: string captured, continue collection

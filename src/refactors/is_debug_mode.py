@@ -14,6 +14,8 @@ from __future__ import annotations  # Enable postponed evaluation for forward-re
 import logging  # Structured action logging per Constitution VII
 import sys  # Read CLI argv to detect --debug / -d flag presence
 
+logger = logging.getLogger(__name__)  # Keep refactor logs tied to this module.
+
 
 class IsDebugMode:  # Class-body seam for the debug-mode predicate (FR-005 carry-forward)
     """Class-body seam owning the debug-mode predicate."""
@@ -26,7 +28,7 @@ class IsDebugMode:  # Class-body seam for the debug-mode predicate (FR-005 carry
         that previously lived at MistHelper.py:318-320. No behavioral change:
         the predicate is a pure argv scan with no side effects.
         """
-        logging.debug("[DEBUG-MODE] Checking CLI flags for debug-mode indicators")  # BEFORE: predicate entry
+        logger.debug("[DEBUG-MODE] Checking CLI flags for debug-mode indicators")  # BEFORE: predicate entry
         result = "--debug" in sys.argv or "-d" in sys.argv  # Return True if debug flag present in command line
-        logging.debug("[DEBUG-MODE] Debug-mode predicate result: %s", result)  # AFTER: predicate outcome
+        logger.debug("[DEBUG-MODE] Debug-mode predicate result: %s", result)  # AFTER: predicate outcome
         return result  # Emit the boolean verdict to the caller

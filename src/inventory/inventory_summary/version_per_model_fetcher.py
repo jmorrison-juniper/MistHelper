@@ -6,6 +6,8 @@ import logging  # WHY: structured log emission for orchestrator + fetcher tracin
 
 from src.inventory import org_device_inventory_summary as _parent  # Parent module exposes apisession / mistapi globals
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class VersionPerModelFetcher:  # WHY: namespace for the decomposed version-per-model expansion helpers
     """Decomposed replacement for the original `_fetch_versions_per_model` helper."""
@@ -61,7 +63,7 @@ class VersionPerModelFetcher:  # WHY: namespace for the decomposed version-per-m
         ap_records: list[dict] | None = None,
     ) -> list[dict]:
         """Return per-model version count rows across AP / switch / gateway types."""
-        logging.info(
+        logger.info(
             "Fetching version distribution per model, org=%s", target_org_id
         )  # Trace orchestrator entry for ops visibility
         # WHY: single switch/gateway fetch shared across all model rows
@@ -74,7 +76,7 @@ class VersionPerModelFetcher:  # WHY: namespace for the decomposed version-per-m
             target_org_id, all_rows, ap_records, unassigned_records
         )  # Adds AP + unassigned rows in-place
         all_rows.sort(key=VersionPerModelFetcher._sort_row_key)  # type/model/-count order
-        logging.debug(
+        logger.debug(
             "Total version-per-model rows after fetch and sort: %d", len(all_rows)
         )  # Record final row count for diagnostics
         return all_rows  # WHY: sorted, fully expanded rows returned to summary orchestrator
@@ -87,7 +89,7 @@ class VersionPerModelFetcher:  # WHY: namespace for the decomposed version-per-m
         # version bucket and unassigned APs under an "unassigned" bucket instead of vanishing entirely.
         if ap_records is None:  # WHY: fallback fetch preserves standalone usage
             ap_records = _parent.OrgDeviceInventorySummaryCore._fetch_ap_inventory(target_org_id)  # AP fetch
-        logging.info("Building AP version-per-model rows from %d records", len(ap_records))  # Log before aggregation
+        logger.info("Building AP version-per-model rows from %d records", len(ap_records))  # Log before aggregation
         counts: dict[tuple[str, str], int] = {}  # Running total per (model, version_bucket)
         for record in ap_records:  # Walk every claimed AP exactly once
             model_name = record.get("model") or "unknown"  # Keep real model for the pivot's Model column
@@ -100,7 +102,7 @@ class VersionPerModelFetcher:  # WHY: namespace for the decomposed version-per-m
             {"device_type": "ap", "model": model_name, "version": version, "count": count}
             for (model_name, version), count in counts.items()
         ]
-        logging.debug("AP version-per-model produced %d rows", len(rows))  # Record outcome
+        logger.debug("AP version-per-model produced %d rows", len(rows))  # Record outcome
         return rows  # WHY: caller extends the aggregate row set with these AP entries
 
     @staticmethod
@@ -127,7 +129,7 @@ class VersionPerModelFetcher:  # WHY: namespace for the decomposed version-per-m
         # APs are handled by _ap_rows, which counts all APs straight from inventory.)
         if unassigned_records is None:  # WHY: fallback fetch preserves standalone usage
             unassigned_records = _parent.OrgDeviceInventorySummaryCore._fetch_unassigned_inventory(target_org_id)
-        logging.info("Building unassigned version-per-model rows from %d records", len(unassigned_records))  # log
+        logger.info("Building unassigned version-per-model rows from %d records", len(unassigned_records))  # log
         counts = VersionPerModelFetcher._accumulate_unassigned(unassigned_records)  # Delegate fold
         rows = [  # Materialize into standard rows with the synthetic "unassigned" version bucket
             {
@@ -138,7 +140,7 @@ class VersionPerModelFetcher:  # WHY: namespace for the decomposed version-per-m
             }
             for (device_type, model_name), count in counts.items()
         ]
-        logging.debug("Unassigned version-per-model produced %d rows", len(rows))  # Record outcome
+        logger.debug("Unassigned version-per-model produced %d rows", len(rows))  # Record outcome
         return rows  # WHY: caller extends the aggregate row set with these unassigned entries
 
     @staticmethod
@@ -148,7 +150,7 @@ class VersionPerModelFetcher:  # WHY: namespace for the decomposed version-per-m
             row.get("device_type") == "switch" for row in model_rows
         ):  # Skip API call when no switches need expansion
             return []  # WHY: no switch models -> skip API entirely
-        logging.info(
+        logger.info(
             "Pre-fetching switch inventory for version distribution, org=%s", target_org_id
         )  # Log before potentially slow API
         try:
@@ -158,7 +160,7 @@ class VersionPerModelFetcher:  # WHY: namespace for the decomposed version-per-m
         except Exception as error:  # Inventory fetch errors must not abort the whole summary run
             logging.exception("Switch inventory pre-fetch failed: %s", error)  # Capture traceback for postmortem
             records = []  # Degrade gracefully so per-model loop yields empty switch rows
-        logging.debug("Switch pre-fetch returned %d records", len(records))  # Record outcome for diagnostics
+        logger.debug("Switch pre-fetch returned %d records", len(records))  # Record outcome for diagnostics
         return records  # WHY: caller uses these for per-model switch expansion
 
     @staticmethod
@@ -168,7 +170,7 @@ class VersionPerModelFetcher:  # WHY: namespace for the decomposed version-per-m
             row.get("device_type") == "gateway" for row in model_rows
         ):  # Skip API call when no gateways need expansion
             return []  # WHY: no gateway models -> skip API entirely
-        logging.info(
+        logger.info(
             "Pre-fetching gateway inventory for version distribution, org=%s", target_org_id
         )  # Log before potentially slow API
         try:
@@ -178,7 +180,7 @@ class VersionPerModelFetcher:  # WHY: namespace for the decomposed version-per-m
         except Exception as error:  # Inventory fetch errors must not abort the whole summary run
             logging.exception("Gateway inventory pre-fetch failed: %s", error)  # Capture traceback for postmortem
             records = []  # Degrade gracefully so per-model loop yields empty gateway rows
-        logging.debug("Gateway pre-fetch returned %d records", len(records))  # Record outcome for diagnostics
+        logger.debug("Gateway pre-fetch returned %d records", len(records))  # Record outcome for diagnostics
         return records
 
     @staticmethod

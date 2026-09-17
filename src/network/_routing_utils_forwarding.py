@@ -23,6 +23,8 @@ import json  # WHY: forwarding output arrives as either raw text or a JSON body
 import logging  # WHY: orchestrator emits structured log lines around device commands
 from typing import TYPE_CHECKING, Any  # WHY: TYPE_CHECKING avoids runtime cycle with parent
 
+logger = logging.getLogger(__name__)  # Use this module name in log records.
+
 if TYPE_CHECKING:  # WHY: only needed for static type checkers. Skipped at runtime
     from src.network.routing_utils import RoutingUtils  # WHY: parent type for cross-reference only
 
@@ -64,8 +66,8 @@ class _RoutingUtilsForwarding:  # WHY: cluster wrapper matching the parsing/disp
             self._ru.check_fn()
         )  # WHY: capture debug flag once for entire flow (renamed from is_debug_mode_fn per 1012)
         self._ru._setup_debug_mode(debug_mode)  # WHY: hoist logger to DEBUG when needed
-        logging.info("Starting WebSocket show forwarding table operation...")  # WHY: production log
-        logging.debug("ENTER: execute_show_forwarding_table")  # WHY: trace marker for debug logs
+        logger.info("Starting WebSocket show forwarding table operation...")  # WHY: production log
+        logger.debug("ENTER: execute_show_forwarding_table")  # WHY: trace marker for debug logs
         websocket_manager = None  # WHY: init early so finally-block cleanup is always safe
         try:  # WHY: outer try wraps the whole flow so exceptions still hit cleanup
             websocket_manager = self._run_forwarding_flow(debug_mode)  # WHY: happy path split
@@ -73,7 +75,7 @@ class _RoutingUtilsForwarding:  # WHY: cluster wrapper matching the parsing/disp
             self._ru._handle_routing_error("forwarding table", error, debug_mode)  # WHY: shared
         finally:  # WHY: always disconnect regardless of success/failure
             self._ru._cleanup_websocket(websocket_manager, debug_mode)  # WHY: shared cleanup
-            logging.debug("EXIT: execute_show_forwarding_table")  # WHY: trace marker for debug logs
+            logger.debug("EXIT: execute_show_forwarding_table")  # WHY: trace marker for debug logs
 
     def _run_forwarding_flow(self, debug_mode: bool) -> Any | None:
         """Run the happy-path forwarding-table flow. Returns websocket_manager to clean up."""
@@ -283,7 +285,7 @@ class _RoutingUtilsForwarding:  # WHY: cluster wrapper matching the parsing/disp
     ) -> str | None:
         """Execute the forwarding table command via REST API."""
         print("-> Issuing show forwarding table command...")  # WHY: UX preserved
-        logging.debug("Forwarding table payload: %s", payload)  # WHY: always log payload
+        logger.debug("Forwarding table payload: %s", payload)  # WHY: always log payload
         if debug_mode:  # WHY: also echo payload to stdout when debug is on
             print(f"[DEBUG] Forwarding table payload = {payload}")  # WHY: legacy debug format
         session_id, error_msg = self._ru._payload._post_device_command(  # WHY: shared POST
@@ -389,7 +391,7 @@ class _RoutingUtilsForwarding:  # WHY: cluster wrapper matching the parsing/disp
                 device_info.get("type", "unknown"),
                 device_info.get("model", "unknown"),
             )
-        logging.warning("WebSocket show forwarding table operation timed out")  # WHY: production
+        logger.warning("WebSocket show forwarding table operation timed out")  # WHY: production
 
     @staticmethod
     def _print_timeout_header() -> None:

@@ -29,6 +29,8 @@ from src.utils.tqdm_wrapper import (
     tqdm,
 )  # WHY: 1015 T-14 -- import directly from canonical wrapper (eliminates mh.tqdm).
 
+logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
+
 _GET_SITE_BEACON_API_FUNCTION_NAME = "getSiteBeacon"  # WHY: operation id for PK routing.
 _GET_SITE_BEACON_FILENAME_PREFIX = "SiteBeacon"  # WHY: deterministic prefix keeps per-request artifacts discoverable.
 _GET_SITE_BEACON_FALLBACK_RETRIES = 2  # WHY: bounded fallback retry count when runtime retry config is unavailable.
@@ -47,7 +49,7 @@ class SiteClientExporter:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No clients -- tell the user and return.
             # WHY: user notice.
-            logging.info("! No client data found for this site")
+            logger.info("! No client data found for this site")
             return
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # CSV-safe.
@@ -56,14 +58,14 @@ class SiteClientExporter:
             sanitized_data, filename, api_function_name="listSiteWirelessClientsStats"
         )  # Persist.
         # WHY: user notice with count.
-        logging.info("! %d client records exported to %s", len(rawdata), filename)
+        logger.info("! %d client records exported to %s", len(rawdata), filename)
 
     @staticmethod
     def clients() -> None:
         """Export client data for a site to SiteClients.csv."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Site Client Statistics:")  # WHY: header.
-        logging.info("Starting export of site client statistics...")  # Trace start.
+        logger.info("Site Client Statistics:")  # WHY: header.
+        logger.info("Starting export of site client statistics...")  # Trace start.
         resolved = mh.SiteDeviceExporter._resolve_site_for_stats(  # Prompt + org/site resolution (shared).
             "client statistics"
         )
@@ -101,7 +103,7 @@ class SiteClientExporter:
     def wifi_clients(site_id: str | None = None) -> None:
         """Compatibility facade that delegates WiFi client export to extracted exporter."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info(
+        logger.info(
             "Delegating wifi_clients to WifiClientsExporter"
         )  # Log before constructing extracted exporter dependencies.
         exporter = WifiClientsExporter(  # Preserve existing utility wiring to avoid behavior drift.
@@ -114,11 +116,9 @@ class SiteClientExporter:
             mistapi_module=mistapi,
             apisession=mh.apisession,
         )
-        logging.debug(
-            "Initialized WifiClientsExporter for site_id=%s", site_id
-        )  # Log exporter construction completion.
+        logger.debug("Initialized WifiClientsExporter for site_id=%s", site_id)  # Log exporter construction completion.
         exporter.execute(site_id=site_id)  # Delegate export execution while preserving facade signature.
-        logging.debug("Completed delegated wifi_clients export workflow")  # Log delegated exporter completion.
+        logger.debug("Completed delegated wifi_clients export workflow")  # Log delegated exporter completion.
 
     @staticmethod
     def wan_client_events(site_id: str | None = None) -> None:
@@ -136,7 +136,7 @@ class SiteClientExporter:
                 operator for a site via the injected ``PromptUtils``.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info(
+        logger.info(
             "Delegating wan_client_events to WanClientEventsExporter"
         )  # WHY: trace facade dispatch for the WAN client event exporter.
         exporter = WanClientEventsExporter(  # WHY: build orchestrator with the same injected deps used by wifi_clients.
@@ -149,11 +149,11 @@ class SiteClientExporter:
             mistapi_module=mistapi,  # WHY: SDK module hosting the wan_clients.events.search endpoint + get_all pager.
             apisession=mh.apisession,  # WHY: authenticated mistapi session shared across all menu actions.
         )
-        logging.debug(
+        logger.debug(
             "Initialized WanClientEventsExporter for site_id=%s", site_id
         )  # WHY: capture construction for diagnostics.
         exporter.execute(site_id=site_id)  # WHY: run the fetch + persist pipeline defined by the extracted exporter.
-        logging.debug(
+        logger.debug(
             "Completed delegated wan_client_events export workflow"
         )  # WHY: mark facade completion for log timeline correlation.
 
@@ -184,33 +184,33 @@ class SiteClientExporter:
     def _prompt_site_beacon_identifiers() -> tuple[str, str] | None:
         """Prompt for site/beacon IDs through safe_input and reject empty responses."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Prompting operator for site_id required by getSiteBeacon")  # WHY: action log before first prompt.
+        logger.info("Prompting operator for site_id required by getSiteBeacon")  # WHY: action log before first prompt.
         site_id = mh.InputUtils.safe_input(  # WHY: safe_input enforces EOF/interrupt-safe prompting semantics.
             "Enter Site ID for getSiteBeacon: ",  # WHY: explicit site-id prompt.
             allow_empty=False,  # WHY: empty identifiers are invalid for the API path contract.
             context="site_client_exporter.getSiteBeacon.site_id",  # WHY: prompt context tag.
         ).strip()  # WHY: strip whitespace so accidental spaces do not bypass empty-input validation.
-        logging.debug(
+        logger.debug(
             "Completed site_id prompt for getSiteBeacon with value_present=%s",
             bool(site_id),
         )  # WHY: prompt result trace.
         if not site_id:  # WHY: blank/EOF/interrupt should abort cleanly before any API call.
-            logging.error("No site_id provided for getSiteBeacon. Exiting.")  # WHY: abort reason.
-            logging.info("! No site selected. Exiting.")  # WHY: user-facing cancel line.
+            logger.error("No site_id provided for getSiteBeacon. Exiting.")  # WHY: abort reason.
+            logger.info("! No site selected. Exiting.")  # WHY: user-facing cancel line.
             return None  # WHY: signal caller to terminate flow without side effects.
-        logging.info("Prompting operator for beacon_id required by getSiteBeacon")  # WHY: pre-prompt log.
+        logger.info("Prompting operator for beacon_id required by getSiteBeacon")  # WHY: pre-prompt log.
         beacon_id = mh.InputUtils.safe_input(  # WHY: safe_input keeps beacon prompt EOF-safe in SSH/container sessions.
             "Enter Beacon ID for getSiteBeacon: ",  # WHY: explicit beacon-id prompt.
             allow_empty=False,  # WHY: empty beacon identifiers are invalid for the endpoint contract.
             context="site_client_exporter.getSiteBeacon.beacon_id",  # WHY: prompt context tag.
         ).strip()  # WHY: trim accidental whitespace before validation and filename generation.
-        logging.debug(
+        logger.debug(
             "Completed beacon_id prompt for getSiteBeacon with value_present=%s",
             bool(beacon_id),
         )  # WHY: prompt result trace.
         if not beacon_id:  # WHY: blank/EOF/interrupt should abort before reaching SDK call.
-            logging.error("No beacon_id provided for getSiteBeacon. Exiting.")  # WHY: abort reason.
-            logging.info("! No beacon selected. Exiting.")  # WHY: user-facing cancel line.
+            logger.error("No beacon_id provided for getSiteBeacon. Exiting.")  # WHY: abort reason.
+            logger.info("! No beacon selected. Exiting.")  # WHY: user-facing cancel line.
             return None  # WHY: signal caller to stop without invoking the API.
         return site_id, beacon_id  # WHY: both required identifiers are now validated and ready for API invocation.
 
@@ -221,15 +221,15 @@ class SiteClientExporter:
             return []  # WHY: callers rely on list semantics for empty-result handling.
         if isinstance(response_payload, list):  # WHY: defensive support for list payloads from wrappers/mocks.
             normalized_rows = [row for row in response_payload if isinstance(row, dict)]  # WHY: keep only dict rows.
-            logging.debug(
+            logger.debug(
                 "Normalized list payload for getSiteBeacon to %d dict rows",
                 len(normalized_rows),
             )  # WHY: coercion trace.
             return normalized_rows  # WHY: list payload already matches exporter shape after dict filtering.
         if isinstance(response_payload, dict):  # WHY: expected SDK path returns one beacon object as a dict.
-            logging.debug("Normalized dict payload for getSiteBeacon to single-row list")  # WHY: coercion trace.
+            logger.debug("Normalized dict payload for getSiteBeacon to single-row list")  # WHY: coercion trace.
             return [response_payload]  # WHY: DataExporter expects iterable rows; wrap single dict into list.
-        logging.warning(
+        logger.warning(
             "Unexpected getSiteBeacon payload type %s; treating as empty result",
             type(response_payload).__name__,
         )  # WHY: diagnose odd payload.
@@ -243,7 +243,7 @@ class SiteClientExporter:
         filename = (  # WHY: deterministic artifact naming.
             f"{_GET_SITE_BEACON_FILENAME_PREFIX}_{sanitized_site_id}_{sanitized_beacon_id}.csv"
         )
-        logging.debug("Built deterministic getSiteBeacon filename: %s", filename)  # WHY: artifact trace.
+        logger.debug("Built deterministic getSiteBeacon filename: %s", filename)  # WHY: artifact trace.
         return filename  # WHY: caller persists output using this stable filename.
 
     @staticmethod
@@ -257,7 +257,7 @@ class SiteClientExporter:
         )
         smoothed_delay = None  # WHY: seed RateLimitingUtils smoothing state for adaptive-delay retries.
         for attempt in range(retry_limit + 1):  # WHY: include initial attempt plus configured retry attempts.
-            logging.info(
+            logger.info(
                 "Calling getSiteBeacon for site_id=%s beacon_id=%s (attempt %d/%d)",
                 site_id,
                 beacon_id,
@@ -272,7 +272,7 @@ class SiteClientExporter:
                 )
                 payload = getattr(response, "data", response)  # WHY: support object and dict responses.
                 rows = SiteClientExporter._normalize_site_beacon_payload(payload)  # WHY: normalize to list rows.
-                logging.debug(
+                logger.debug(
                     "getSiteBeacon call succeeded with %d normalized rows",
                     len(rows),
                 )  # WHY: post-call summary.
@@ -311,8 +311,8 @@ class SiteClientExporter:
     def get_site_beacon() -> None:
         """Run getSiteBeacon prompt -> fetch -> export workflow."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Export Site Beacon Detail:")  # WHY: operator-facing header for new menu operation.
-        logging.info("Starting getSiteBeacon workflow...")  # WHY: start boundary log for observability timelines.
+        logger.info("Export Site Beacon Detail:")  # WHY: operator-facing header for new menu operation.
+        logger.info("Starting getSiteBeacon workflow...")  # WHY: start boundary log for observability timelines.
         identifiers = SiteClientExporter._prompt_site_beacon_identifiers()  # WHY: gather validated identifiers.
         if identifiers is None:  # WHY: prompt helper already logged cancellation/EOF details.
             return  # WHY: stop cleanly when required identifiers were not provided.
@@ -332,23 +332,23 @@ class SiteClientExporter:
             logging.info("! Error fetching site beacon detail: %s", exception)  # WHY: user-facing error line.
             return  # WHY: do not attempt export after fetch failure.
         if not rows:  # WHY: empty payload should end cleanly without writing empty artifacts.
-            logging.warning(
+            logger.warning(
                 "! getSiteBeacon returned no data for site_id=%s beacon_id=%s",
                 site_id,
                 beacon_id,
             )  # WHY: no-data warning.
-            logging.info("! No beacon data found for the specified identifiers.")  # WHY: user-facing no-data line.
+            logger.info("! No beacon data found for the specified identifiers.")  # WHY: user-facing no-data line.
             return  # WHY: skip export when endpoint returns no rows.
         filename = SiteClientExporter._build_site_beacon_filename(site_id, beacon_id)  # WHY: deterministic filename.
-        logging.info("Persisting %d getSiteBeacon row(s) to %s", len(rows), filename)  # WHY: pre-write log.
+        logger.info("Persisting %d getSiteBeacon row(s) to %s", len(rows), filename)  # WHY: pre-write log.
         mh.DataExporter.write_with_format_selection(  # WHY: canonical multi-backend write path.
             rows,  # WHY: normalized row payload from endpoint response.
             filename,  # WHY: deterministic export filename derived from site+beacon identifiers.
             api_function_name=_GET_SITE_BEACON_API_FUNCTION_NAME,  # WHY: explicit operation id for PK strategy.
         )
-        logging.debug(
+        logger.debug(
             "Persisted getSiteBeacon payload with row_count=%d filename=%s",
             len(rows),
             filename,
         )  # WHY: post-write summary.
-        logging.info("! Exported site beacon detail to %s", filename)  # WHY: user-facing success message.
+        logger.info("! Exported site beacon detail to %s", filename)  # WHY: user-facing success message.

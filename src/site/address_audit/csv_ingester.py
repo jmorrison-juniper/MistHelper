@@ -22,6 +22,8 @@ import re  # Whitespace-collapsing in address sanitization.
 
 from src.site.address_audit.models import AddressRow  # Parsed-row dataclass.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 _MIN_COLUMNS = 6  # serial, model, address, city, state, zip (address may span >1 physical field).
 _CANDIDATE_DELIMITERS = ("\t", ",", ";", "|")  # Delimiters to probe, in priority order.
 
@@ -31,18 +33,18 @@ class CSVAddressIngester:
 
     def load(self, path: str) -> tuple[list[AddressRow], int]:
         """Parse ``path`` into ``AddressRow`` objects plus a parse-failure count."""
-        logging.info("Starting CSV ingestion from %s", path)  # Action-log the source file.
+        logger.info("Starting CSV ingestion from %s", path)  # Action-log the source file.
         if not os.path.isfile(path):  # Guard: a missing file is a controlled error, not a crash.
-            logging.error("CSV file not found: %s", path)  # Log the missing-file condition.
+            logger.error("CSV file not found: %s", path)  # Log the missing-file condition.
             raise FileNotFoundError(f"CSV file not found: {path}")  # Controlled, caller-catchable error.
         with open(path, encoding="utf-8-sig", newline="") as handle:  # utf-8-sig strips an Excel BOM.
             sample = self._read_sample_line(handle)  # First non-blank line, for delimiter detection.
             handle.seek(0)  # Rewind so the csv.reader sees the whole file (quoted newlines intact).
             delimiter = self._detect_delimiter(sample)  # Pick tab/comma/and so on from the data itself.
-            logging.debug("Detected delimiter %r for %s", delimiter, path)  # Trace the chosen delimiter.
+            logger.debug("Detected delimiter %r for %s", delimiter, path)  # Trace the chosen delimiter.
             reader = csv.reader(handle, delimiter=delimiter)  # Reader honors quoted multi-line fields.
             rows, failures = self._parse_reader(reader)  # Parse every record.
-        logging.debug("Ingested %d rows, %d parse failures", len(rows), failures)  # Action-log totals.
+        logger.debug("Ingested %d rows, %d parse failures", len(rows), failures)  # Action-log totals.
         return rows, failures  # Hand both back to the orchestrator.
 
     @staticmethod
@@ -92,11 +94,11 @@ class CSVAddressIngester:
         cleaned = [field.strip() for field in raw_fields]  # Trim every field up front.
         if len(cleaned) < _MIN_COLUMNS:  # Too few columns to be a valid 6-field record.
             if any(cleaned):  # Only log non-blank short rows (blank lines are silent skips).
-                logging.debug("Skipping short row (%d fields): %r", len(cleaned), raw_fields)  # Trace.
+                logger.debug("Skipping short row (%d fields): %r", len(cleaned), raw_fields)  # Trace.
             return None  # Signal a parse failure.
         serial = cleaned[0]  # Serial is the golden key (already trimmed).
         if not serial.isdigit():  # Non-numeric serial cannot match a device (also rejects headers).
-            logging.debug("Skipping row with non-numeric serial: %r", cleaned[0])  # Trace the skip.
+            logger.debug("Skipping row with non-numeric serial: %r", cleaned[0])  # Trace the skip.
             return None  # Signal a parse failure to the caller.
         return self._build_row(cleaned)  # Assemble the AddressRow by fixed structure.
 

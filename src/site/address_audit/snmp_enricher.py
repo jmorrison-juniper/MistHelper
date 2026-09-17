@@ -20,6 +20,8 @@ import logging  # Action logging before/after every operation (project NON-NEGOT
 import re  # Strip the leading SAP store-code prefix.
 from typing import Any  # Loose typing for the Mist site record dict.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 # Leading SAP store code: 3-7 alphanumerics followed by a hyphen separator, anchored at start.
 # Matches "S2SJB - ", "08806 - ", "0542E - ", "T000I - ". Never strips a real street number
 # because a bare house number is not followed by " - " in these records.
@@ -37,13 +39,13 @@ class SNMPLocationEnricher:  # WHY: single-purpose class extracting SNMP locatio
         customer's SAP store-code prefix is stripped from whichever value wins.
         """
         site_id = site_record.get("id", "unknown")  # For log context only.
-        logging.info("Enriching SNMP location for site %s", site_id)  # Action-log start.
+        logger.info("Enriching SNMP location for site %s", site_id)  # Action-log start.
         var_value = self._read_var_location(site_record)  # Read the snmp_location site variable.
         config_value = self._read_config_location(site_record)  # Read snmp_config.location.
         chosen = config_value or var_value  # Prefer the authoritative config value when present.
         cleaned = self._strip_store_prefix(chosen)  # Drop the SAP store code (not part of the address).
         source = self._describe_source(config_value, var_value)  # Which field won (for the log line).
-        logging.debug("SNMP location for site %s resolved from %s (store-code stripped)", site_id, source)
+        logger.debug("SNMP location for site %s resolved from %s (store-code stripped)", site_id, source)
         return cleaned  # De-prefixed location, or None when neither field is populated.
 
     @staticmethod

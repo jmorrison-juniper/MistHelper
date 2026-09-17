@@ -16,6 +16,7 @@ from functools import partial  # WHY: build a per-log-file writer without an inn
 from src.ssh.connection.connector import SshConnector  # WHY: T013b - extracted connection establishment
 from src.ssh.shell_execution.shell_executor import ShellExecutor  # WHY: T013b - extracted interactive-shell executor
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 # ---------------------------------------------------------------------------
 # Module constants (replace magic values scattered through the class body)
 # ---------------------------------------------------------------------------
@@ -412,7 +413,7 @@ class EnhancedSSHRunner:
         exit_status = stdout.channel.recv_exit_status()  # type: ignore[attr-defined]  # WHY: paramiko exit code
         elapsed = time.time() - start_time  # WHY: measure wall-clock time spent on the exec
         self._log_exec_details(stdout_output, stderr_output, exit_status, elapsed, with_pty)  # WHY: bounded log
-        logging.warning(  # WHY: user-visible per-host completion banner (previously print()).
+        logger.warning(  # WHY: user-visible per-host completion banner (previously print()).
             "- [%s] Command completed with exit status: %s", hostname, exit_status
         )
         return exit_status == 0, stdout_output, stderr_output  # WHY: legacy success/stdout/stderr tuple shape
@@ -453,7 +454,7 @@ class EnhancedSSHRunner:
             self.logger.debug("Closing SSH connection")  # WHY: trace so users can confirm clean teardown
             self.client.close()  # WHY: releases paramiko file descriptors and server-side session
             self.client = None  # WHY: reset so subsequent _execute_command calls fail fast with a clear message
-            logging.warning(">> SSH connection closed")  # WHY: user-visible teardown banner (previously print()).
+            logger.warning(">> SSH connection closed")  # WHY: user-visible teardown banner (previously print()).
         else:
             self.logger.debug("No SSH connection to close")  # WHY: helpful trace during teardown of failed connect
 

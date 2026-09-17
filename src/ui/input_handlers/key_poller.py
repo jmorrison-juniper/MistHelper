@@ -11,6 +11,8 @@ import sys
 import time
 from typing import Any
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 # Dispatch table for Windows special-key second bytes (msvcrt: \xe0 / \x00 prefix).
 # Each value is the canonical key name returned to the dispatcher.
 _WINDOWS_SPECIAL_KEYS: dict[bytes, str] = {
@@ -47,26 +49,26 @@ class _WindowsKeyPoller:
 
     def poll(self) -> str | None:
         """Return the next pressed key as a canonical string, or ``None``."""
-        logging.debug("TUI_DEBUG: WindowsKeyPoller.poll() invoked")  # Action log: before poll
+        logger.debug("TUI_DEBUG: WindowsKeyPoller.poll() invoked")  # Action log: before poll
         if not self._msvcrt.kbhit():  # Fast path: nothing buffered
             return None  # Caller will sleep and retry
         raw_byte = self._msvcrt.getch()  # Pull first byte from kbhit buffer
         if self._tui.debug_mode:  # Debug-mode trace of raw byte
-            logging.debug("TUI_DEBUG: Raw key byte received: %r", raw_byte)
+            logger.debug("TUI_DEBUG: Raw key byte received: %r", raw_byte)
         if raw_byte in (b"\xe0", b"\x00"):  # Special-key escape prefixes
             return self._read_special_key()  # Delegate to second-byte dispatcher
         decoded = raw_byte.decode("utf-8", errors="ignore").lower()  # Normal printable -> lowercase string
-        logging.debug("TUI_DEBUG: Decoded key: %r", decoded)  # Action log: after decode
+        logger.debug("TUI_DEBUG: Decoded key: %r", decoded)  # Action log: after decode
         return str(decoded)  # Coerce to plain str for typing
 
     def _read_special_key(self) -> str | None:
         """Resolve the second byte of a Windows special-key sequence."""
         second = self._msvcrt.getch()  # Read the follow-up byte
         if self._tui.debug_mode:  # Debug trace of second byte
-            logging.debug("TUI_DEBUG: Special key second byte: %r", second)
+            logger.debug("TUI_DEBUG: Special key second byte: %r", second)
         mapped = _WINDOWS_SPECIAL_KEYS.get(second)  # Look up canonical name
         if mapped is None and self._tui.debug_mode:  # Unknown sequence -> log only
-            logging.debug("TUI_DEBUG: Unhandled special key: %r", second)
+            logger.debug("TUI_DEBUG: Unhandled special key: %r", second)
         return mapped  # May be None for unknown keys
 
 
@@ -82,12 +84,12 @@ class _UnixKeyPoller:
 
     def poll(self) -> str | None:
         """Return the next pressed key as a canonical string, or ``None``."""
-        logging.debug("TUI_DEBUG: UnixKeyPoller.poll() invoked")  # Action log: before poll
+        logger.debug("TUI_DEBUG: UnixKeyPoller.poll() invoked")  # Action log: before poll
         if not self._select.select([sys.stdin], [], [], 0)[0]:  # Non-blocking readability check
             return None  # No data ready
         first_char = sys.stdin.read(1)  # Read the first byte
         if self._tui.debug_mode:  # Debug trace of raw byte
-            logging.debug("TUI_DEBUG: Unix raw key: %r", first_char)
+            logger.debug("TUI_DEBUG: Unix raw key: %r", first_char)
         if first_char == "\x1b":  # ESC -> may begin a CSI sequence
             return self._parse_unix_csi()  # Delegate to CSI parser
         return first_char.lower()  # Plain printable key
@@ -99,7 +101,7 @@ class _UnixKeyPoller:
             return "escape"
         if not remaining.startswith("["):  # ESC followed by non-bracket -> ignore
             if self._tui.debug_mode:
-                logging.debug("TUI_DEBUG: Unix ESC + non-CSI: %r", remaining)
+                logger.debug("TUI_DEBUG: Unix ESC + non-CSI: %r", remaining)
             return None
         arrow_code = remaining[1:2]  # Single-letter CSI terminator
         if arrow_code == "5" and remaining[2:3] == "~":  # CSI 5~  -> Page Up
@@ -108,7 +110,7 @@ class _UnixKeyPoller:
             return "page_down"
         mapped = _UNIX_CSI_LETTERS.get(arrow_code)  # Map A/B/C/D/H/F via dispatch dict
         if mapped is None and self._tui.debug_mode:  # Unknown CSI letter -> log only
-            logging.debug("TUI_DEBUG: Unrecognized CSI: ESC[%s", arrow_code)
+            logger.debug("TUI_DEBUG: Unrecognized CSI: ESC[%s", arrow_code)
         return mapped  # None means unhandled
 
     def _read_csi_payload(self) -> str:

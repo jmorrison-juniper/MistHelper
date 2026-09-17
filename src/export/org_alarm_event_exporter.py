@@ -25,6 +25,8 @@ from src.data.data_processing_utils import (
 from src.export.device_events_52w_exporter import DeviceEvents52wExporter  # 52-week device events exporter.
 from src.time.time_utils import TimeUtils  # WHY: 1014 P6 direct import (FR-005).
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class OrgAlarmEventExporter:
     """Focused exporter for alarm and event time-series data from the Mist API.
@@ -48,7 +50,7 @@ class OrgAlarmEventExporter:
             **api_kwargs: Additional arguments for the API call.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Starting export of organization %s...", data_type)  # Log export start.
+        logger.info("Starting export of organization %s...", data_type)  # Log export start.
         safe_data_type = data_type.replace(" ", "").replace("-", "").title()  # Sanitize data type for filename.
         filename = f"Org{safe_data_type}.csv"  # Build output CSV name.
         mh.APIDataFetcher(  # Fetch and write the data.
@@ -64,8 +66,8 @@ class OrgAlarmEventExporter:
     def alarms() -> None:
         """Export open organization alarms from the past 24 hours to OrgAlarms.csv."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Menu #20: Starting organization alarms export")  # Log alarms menu start.
-        logging.debug("ENTRY: OrgAlarmEventExporter.alarms()")  # Trace entry for debugging.
+        logger.info("Menu #20: Starting organization alarms export")  # Log alarms menu start.
+        logger.debug("ENTRY: OrgAlarmEventExporter.alarms()")  # Trace entry for debugging.
         hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
         TimeUtils.log_dynamic_lookback("open org alarms export", hours)  # Log chosen lookback window.
         try:
@@ -77,8 +79,8 @@ class OrgAlarmEventExporter:
                 duration=f"{hours}h",
                 acked=False,
             ).execute()
-            logging.info("Completed org alarms export and wrote results to OrgAlarms.csv.")
-            logging.debug("EXIT: OrgAlarmEventExporter.alarms - success")  # Trace successful exit.
+            logger.info("Completed org alarms export and wrote results to OrgAlarms.csv.")
+            logger.debug("EXIT: OrgAlarmEventExporter.alarms - success")  # Trace successful exit.
         except Exception as error:  # Catch export errors.
             logging.error("Failed to export open org alarms: %s", error)  # Log export failure.
             logging.debug("EXIT: OrgAlarmEventExporter.alarms - error")  # Trace error exit.
@@ -109,8 +111,8 @@ class OrgAlarmEventExporter:
     def device_events() -> None:
         """Export all device events from the past 24 hours to OrgDeviceEvents.csv."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Menu #21: Starting device events export")  # Log device events menu start.
-        logging.info("Search Org Device Events:")  # Log search start.
+        logger.info("Menu #21: Starting device events export")  # Log device events menu start.
+        logger.info("Search Org Device Events:")  # Log search start.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
         hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
         TimeUtils.log_dynamic_lookback("recent device events export", hours)  # Log chosen lookback window.
@@ -120,18 +122,18 @@ class OrgAlarmEventExporter:
         )
         rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page through all events.
         events = rawdata  # Alias rawdata as events.
-        logging.info(
+        logger.info(
             "Fetched %s device events from the past %s hours (duration=%s).", len(events), hours, duration_param
         )
         mh.DataExporter.write_with_format_selection(
             events, "OrgDeviceEvents.csv", api_function_name="searchOrgDeviceEvents"
         )  # Persist events.
-        logging.info("Device events written to OrgDeviceEvents.csv (%s rows).", len(events))
+        logger.info("Device events written to OrgDeviceEvents.csv (%s rows).", len(events))
         # WHY: operator-visible export confirmation (replaces prior print()).
-        logging.warning("! %s device events exported to OrgDeviceEvents.csv", len(events))
-        logging.info("Menu #21: Device events export completed - %s events", len(events))
+        logger.warning("! %s device events exported to OrgDeviceEvents.csv", len(events))
+        logger.info("Menu #21: Device events export completed - %s events", len(events))
         if events:  # Branch: events present.
-            logging.debug("Sample device events: %s", json.dumps(events[:3], indent=2))  # Debug-dump sample events.
+            logger.debug("Sample device events: %s", json.dumps(events[:3], indent=2))  # Debug-dump sample events.
 
     @staticmethod
     def device_events_52w() -> None:

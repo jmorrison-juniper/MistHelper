@@ -21,6 +21,7 @@ from typing import Any
 
 import pytest
 
+from src.upgrade_portal.app.routes import auth  # The auth route owns the dependency row seam key.
 from tests.support.lock_store_double import FakeLockStore  # The store stand-in that keeps every test off Redis.
 
 logger = logging.getLogger(__name__)
@@ -210,7 +211,7 @@ def fake_capture_storage() -> FakeCaptureStorage:
 
 
 @pytest.fixture
-def portal_app() -> Any:
+def portal_app(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Return the capture portal application in test mode.
 
     Why:
@@ -233,8 +234,10 @@ def portal_app() -> Any:
         reason="The capture portal application factory is not built yet.",
     )
     logger.info("Build the capture portal application for a contract test")  # WHY: ASCII, %s style, no credential.
+    monkeypatch.setenv("MISTHELPER_STANDALONE", "true")  # Skip DNS probes before test seams are installed.
     app = factory.create_app()
     app.config.update(TESTING=True)  # WHY: Test mode reports the real exception instead of a 500 page.
+    app.config[auth.DEPENDENCY_ROWS_KEY] = []  # Contract tests drive routes, not live store probes.
     app.config["ORG_UPGRADE_WRITES_ENABLED"] = True
     app.config[LAUNCHER_KEY] = None  # WHY: No contract test may start a real run driver thread.
     app.config[STOP_RUNNER_KEY] = None  # WHY: No contract test may send a real cancel to the cloud.

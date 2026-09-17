@@ -36,6 +36,7 @@ from src.config.source_dependency_resolver import (
 )
 from src.utils.rate_limiting import AdaptivePacer  # WHY: quota-aware pacing for the bulk template PUT loop
 
+logger = logging.getLogger(__name__)  # Keep refactor logs tied to this module.
 _MH = SourceDependencyResolver  # Use the source resolver for lazy dependency access.
 
 
@@ -87,7 +88,7 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
         """Print and log the 'no WAN interfaces found' message for the menu #166 dry-run path."""
         print("\n  No WAN interfaces found in selected templates.")  # Tell the user.
         print("  No changes needed.")  # Tell the user.
-        logging.info("Menu #166: No WAN interfaces found in selected templates")  # Log it.
+        logger.info("Menu #166: No WAN interfaces found in selected templates")  # Log it.
 
     def _prepare_templates_with_changes(self) -> list[dict[str, Any]] | None:
         """Run all init/load/select/analyze guard steps. Return analyzed list or None to signal abort."""
@@ -131,14 +132,14 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
         print(f"    Probe IPs: {self.probe_ips}")  # Show probe IPs.
         print(f"    Probe Profile: {self.probe_profile}")  # Show probe profile.
         print("=" * 70)  # Divider.
-        logging.warning("Menu #166 DESTRUCTIVE: Configure WAN Probe Override operation started")  # Log the start.
+        logger.warning("Menu #166 DESTRUCTIVE: Configure WAN Probe Override operation started")  # Log the start.
 
     def _initialize(self) -> bool:  # Initialize state.
         """Initialize org_id and return True on success."""
         self.org_id = _MH.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         if not self.org_id:  # No org.
             print(" Failed to get organization ID.")  # Tell the user.
-            logging.error("Menu #166: Could not obtain org_id")  # Log the error.
+            logger.error("Menu #166: Could not obtain org_id")  # Log the error.
             return False  # Abort.
         return True  # Initialized.
 
@@ -166,13 +167,13 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
             self.templates = list(csv.DictReader(file_handle))  # Read the templates.
         if not self.templates:  # No templates.
             print(" No gateway templates found.")  # Tell the user.
-            logging.warning("Menu #166: No gateway templates available")  # Warn none.
+            logger.warning("Menu #166: No gateway templates available")  # Warn none.
             return False  # Abort.
         sites_path = _MH.FilePathUtils.get_csv_path("SiteList.csv")  # Sites path.
         with open(sites_path, encoding="utf-8") as file_handle:  # Open the CSV.
             self.sites = list(csv.DictReader(file_handle))  # Read the sites.
         self._build_template_site_counts()  # Tally per-template site counts.
-        logging.info("Loaded %s gateway templates and %s sites", len(self.templates), len(self.sites))
+        logger.info("Loaded %s gateway templates and %s sites", len(self.templates), len(self.sites))
         return True  # Loaded.
 
     def _render_template_list(self, templates_sorted: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -197,7 +198,7 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
         """Parse a user template-selection string into the matching template rows (empty list on failure)."""
         if selection == "cancel":  # User cancelled
             print(" Operation cancelled.")
-            logging.info("Menu #166 cancelled by user at template selection")
+            logger.info("Menu #166 cancelled by user at template selection")
             return []
         if selection == "all":  # Select all templates as-is
             return template_list
@@ -228,15 +229,15 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
     def _analyze_templates(self, templates_to_modify: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Fetch and analyze templates for WAN interfaces and return templates with changes."""
         print(f"\n  Analyzing {len(templates_to_modify)} templates for WAN interfaces...")  # Tell the user
-        logging.info("Analyzing %s templates for WAN interfaces", len(templates_to_modify))  # Trace count
+        logger.info("Analyzing %s templates for WAN interfaces", len(templates_to_modify))  # Trace count
         result = self._run_template_analysis_pool(templates_to_modify)  # Run parallel analysis
-        logging.debug("Template analysis produced %s templates with changes", len(result))  # Trace result count
+        logger.debug("Template analysis produced %s templates with changes", len(result))  # Trace result count
         return result  # Return templates with WAN interfaces
 
     def _run_template_analysis_pool(self, templates_to_modify: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Run per-template analysis in a thread pool and collect the non-empty results."""
         max_workers = min(10, len(templates_to_modify))  # Size the worker pool
-        logging.info(
+        logger.info(
             "Fetching %s templates in parallel (max %s workers)", len(templates_to_modify), max_workers
         )  # Trace pool sizing
         templates_with_changes: list[dict[str, Any]] = []  # Collect changed templates
@@ -255,15 +256,15 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
 
     def _analyze_template(self, template_info: dict[str, Any]) -> dict[str, Any] | None:
         """Analyze a single template: fetch config and extract WAN interfaces."""
-        logging.debug("Analyzing template %s", template_info.get("name"))  # Trace per-template start
+        logger.debug("Analyzing template %s", template_info.get("name"))  # Trace per-template start
         config = self._fetch_template_config(template_info)  # Fetch the template config
         if config is None:  # Fetch failed or returned invalid structure
             return None  # Skip this template
         wan_interfaces = self._extract_wan_interfaces(config.get("port_config"))  # Walk port_config for WAN ports
         if not wan_interfaces:  # Template has no WAN-usage ports
-            logging.debug("Template %s has no WAN interfaces", template_info.get("name"))  # Trace empty result
+            logger.debug("Template %s has no WAN interfaces", template_info.get("name"))  # Trace empty result
             return None  # Skip this template
-        logging.debug(
+        logger.debug(
             "Template %s has %s WAN interfaces", template_info.get("name"), len(wan_interfaces)
         )  # Trace per-template result
         return {  # Return the change record
@@ -279,13 +280,13 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
         template_id = template_info["id"]  # Template id
         template_name = template_info["name"]  # Template name
         try:
-            logging.debug("Fetching template configuration for %s", template_name)  # Trace the fetch
+            logger.debug("Fetching template configuration for %s", template_name)  # Trace the fetch
             response = mistapi.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate(  # Fetch the template
                 _MH.apisession, self.org_id, template_id
             )
             config = response.data if hasattr(response, "data") else {}  # Unwrap the config
             if not isinstance(config, dict):  # Invalid structure
-                logging.warning("Template %s returned invalid structure", template_name)  # Warn it
+                logger.warning("Template %s returned invalid structure", template_name)  # Warn it
                 return None  # Skip it
             return config  # Return the valid config dict
         except Exception as error:  # Analysis failed
@@ -297,7 +298,7 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
     def _extract_wan_interfaces(self, port_config: Any) -> list[dict[str, Any]]:
         """Extract WAN-usage interfaces from a template's port_config, returning empty list when invalid."""
         if not isinstance(port_config, dict):  # Invalid or missing port_config
-            logging.debug("Skipping template: port_config is not a dict")  # Trace skip
+            logger.debug("Skipping template: port_config is not a dict")  # Trace skip
             return []  # No WAN ports
         wan_interfaces: list[dict[str, Any]] = []  # Collect WAN ports
         for port_name, port_settings in port_config.items():  # Walk every port entry
@@ -353,7 +354,7 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
         ).strip()
         if confirmation != "APPLY":  # Not confirmed.
             print(" Operation cancelled.")  # Tell the user.
-            logging.info("Menu #166 cancelled by user at final confirmation")  # Log the cancel.
+            logger.info("Menu #166 cancelled by user at final confirmation")  # Log the cancel.
             return False  # Abort.
         return True  # Confirmed.
 
@@ -423,7 +424,7 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
                     "probe_profile": self.probe_profile,
                 }
                 interfaces_modified.append(port_name)  # Mark it modified.
-                logging.debug("Template %s: Updated %s probe config", template_name, port_name)  # Trace the update.
+                logger.debug("Template %s: Updated %s probe config", template_name, port_name)  # Trace the update.
         return interfaces_modified  # Ports that received a probe override
 
     def _persist_template_update(
@@ -436,21 +437,21 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
         """Commit the template config (dry-run logs only, else calls the API). Return (status, error)."""
         template_name = template["name"]  # Template name for logging.
         if dry_run:  # Dry-run.
-            logging.info("DRY-RUN: Would update template %s interfaces: %s", template_name, interfaces_modified)
+            logger.info("DRY-RUN: Would update template %s interfaces: %s", template_name, interfaces_modified)
             return "DRY-RUN", ""  # No API call performed.
-        logging.debug("Updating template %s via API", template_name)  # Trace the update.
+        logger.debug("Updating template %s via API", template_name)  # Trace the update.
         update_resp = mistapi.api.v1.orgs.gatewaytemplates.updateOrgGatewayTemplate(  # Update the template.
             _MH.apisession, self.org_id, template["id"], body=config
         )
         if update_resp.status_code == 200:  # Success.
-            logging.info("Successfully updated template %s", template_name)  # Log success.
+            logger.info("Successfully updated template %s", template_name)  # Log success.
             return "SUCCESS", ""  # Updated successfully.
-        logging.error("Failed to update template %s: status %s", template_name, update_resp.status_code)  # Log fail
+        logger.error("Failed to update template %s: status %s", template_name, update_resp.status_code)  # Log fail
         return "FAILED", f"API returned status {update_resp.status_code}"  # Report the API failure
 
     def _generate_report(self, results: list[dict[str, Any]], dry_run: bool) -> None:  # Generate the audit report
         """Generate and display final report."""
-        logging.info("Generating audit report for %s results (dry_run=%s)", len(results), dry_run)  # Trace start
+        logger.info("Generating audit report for %s results (dry_run=%s)", len(results), dry_run)  # Trace start
         report_data = [self._build_report_row(result) for result in results]  # Build per-result report rows
         output_file = "GatewayTemplate_WAN_Probe_Config_Audit.csv"  # Output filename
         _MH.DataExporter.write_with_format_selection(
@@ -486,7 +487,7 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
         total_sites = sum(
             r["site_count"] for r in results if r["status"] in ("SUCCESS", "DRY-RUN")
         )  # Sites affected by successful or dry-run results
-        logging.debug("Report totals: interfaces=%s sites=%s", total_interfaces, total_sites)  # Trace totals
+        logger.debug("Report totals: interfaces=%s sites=%s", total_interfaces, total_sites)  # Trace totals
         return total_interfaces, total_sites  # Return aggregates
 
     def _emit_dry_run_summary(self, results: list[dict[str, Any]], total_interfaces: int, total_sites: int) -> None:
@@ -521,6 +522,6 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
     def _log_destructive_completion(self, results: list[dict[str, Any]]) -> None:
         """Log a warning-level summary of the destructive operation completion."""
         success_count = sum(1 for r in results if r["status"] == "SUCCESS")  # Count successes
-        logging.warning(  # Log the summary
+        logger.warning(  # Log the summary
             "Menu #166 DESTRUCTIVE operation complete: %s templates updated", success_count
         )

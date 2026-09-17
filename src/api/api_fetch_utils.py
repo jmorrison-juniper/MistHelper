@@ -31,6 +31,8 @@ from src.config.source_dependency_resolver import (
 )
 from src.security import CredentialRedactor  # WHY: strip device credentials at the read boundary (#2011).
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class APIFetchUtils:  # Higher-level org/site fetchers.
     """Centralized API fetch utilities.
@@ -48,18 +50,18 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
         try:
             mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
             org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the target org.
-            logging.info("Fetching organization services for org_id: %s", org_id)  # Log before the API call.
+            logger.info("Fetching organization services for org_id: %s", org_id)  # Log before the API call.
 
             # Call the Mist API to get organization services
             response = mistapi.api.v1.orgs.services.listOrgServices(mh.apisession, org_id, limit=1000)  # List services.
 
             if hasattr(response, "data") and response.data:  # Only proceed with data.
                 services_data = response.data  # Unwrap the payload.
-                logging.info("Successfully retrieved %s organization services", len(services_data))  # Log the count.
+                logger.info("Successfully retrieved %s organization services", len(services_data))  # Log the count.
                 services_list = APIFetchUtils._normalize_org_services(services_data)  # Normalize to display rows.
                 return services_list  # Return normalized services.
 
-            logging.warning("No organization services found or response data is empty")  # Warn on empty response.
+            logger.warning("No organization services found or response data is empty")  # Warn on empty response.
             return []  # No services to return.
 
         except Exception as error:  # Never crash on API failure.
@@ -99,7 +101,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
             config = CredentialRedactor.redact(raw)  # Drop every credential before the record travels.
             config["site_id"] = site_id  # Tag with site id
             config["site_name"] = site_name  # Tag with site name
-            logging.info("! Fetched config for site: %s (ID: %s)", site_name, site_id)
+            logger.info("! Fetched config for site: %s (ID: %s)", site_name, site_id)
             return config
         except Exception as error:  # Skip sites that fail
             logging.warning("! Failed to fetch config for %s (ID: %s): %s", site_name, site_id, error)
@@ -110,7 +112,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
         """Fetch per-site settings for every site in the org. Limit param is unused (kept for back-compat)."""
         del limit  # Kept in signature for back-compat. Explicitly discard so linters do not flag it.
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Fetching all site settings...")  # Log before fetching sites
+        logger.info("Fetching all site settings...")  # Log before fetching sites
         sites = mh.APICoreFetchUtils.all_sites_with_limit(org_id)  # List all sites first
         all_configs = []  # Collect per-site settings
         for site in tqdm(sites, desc="Sites", unit="site"):  # type: ignore[no-untyped-call]
@@ -119,13 +121,13 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
             config = APIFetchUtils._fetch_single_site_setting(apisession, site)  # One site at a time
             if config is not None:  # Skip failed fetches
                 all_configs.append(config)
-        logging.info("Fetched settings for %s sites.", len(all_configs))  # Log total fetched
+        logger.info("Fetched settings for %s sites.", len(all_configs))  # Log total fetched
         return all_configs  # Return all site settings
 
     @staticmethod
     def _gw_load_inventory(apisession, org_id):
         """Fetch the org inventory. Return the device list, or None when the fetch fails."""
-        logging.info("Fetching org inventory to find gateway devices...")  # Log before the inventory fetch.
+        logger.info("Fetching org inventory to find gateway devices...")  # Log before the inventory fetch.
         try:  # The inventory fetch is the one hard dependency. Isolate its failure.
             response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)  # Fetch inventory.
             return mistapi.get_all(response=response, mist_session=apisession)  # Page through all devices.
@@ -166,7 +168,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
         work_site_id, work_device_id, work_site_name = work_item  # Unpack the work item.
         with connection_semaphore:  # Limit concurrent connections via the pool semaphore.
             try:  # Isolate per-device failures so one bad device does not abort the batch.
-                logging.debug("Fetching config for %s (%s)", work_device_id, work_site_name)  # Trace the fetch.
+                logger.debug("Fetching config for %s (%s)", work_device_id, work_site_name)  # Trace the fetch.
                 config_response = mistapi.api.v1.sites.devices.getSiteDevice(  # Call the device API.
                     apisession, work_site_id, work_device_id
                 )
@@ -174,9 +176,9 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
                 if config:  # Only keep non-empty configs.
                     config["site_name"] = work_site_name  # Tag with site name for enrichment.
                     config["site_id"] = work_site_id  # Tag with site id for enrichment.
-                    logging.debug("! Config fetched for %s", work_device_id)  # Trace success.
+                    logger.debug("! Config fetched for %s", work_device_id)  # Trace success.
                     return config  # Return the enriched config.
-                logging.warning("! Empty config for device %s", work_device_id)  # Warn on empty config.
+                logger.warning("! Empty config for device %s", work_device_id)  # Warn on empty config.
                 return None  # Treat empty config as a miss.
             except Exception as inner_error:  # Per-device fetch failed.
                 logging.error("! Failed to fetch config for device %s: %s", work_device_id, inner_error)  # Log error.
@@ -192,7 +194,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
                 return result  # Hand back the recovered config.
             if attempt < max_retries:  # More attempts remain.
                 delay = 0.5 * (1.5**attempt)  # Exponential backoff delay.
-                logging.debug(  # Trace the retry/backoff.
+                logger.debug(  # Trace the retry/backoff.
                     "Retrying device %s in %.2fs (attempt %s/%s)",
                     failed_device_id,
                     delay,
@@ -200,7 +202,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
                     max_retries + 1,
                 )
                 time.sleep(delay)  # Back off before retrying.
-        logging.warning(  # Warn after exhausting every attempt.
+        logger.warning(  # Warn after exhausting every attempt.
             "! Failed to fetch config for device %s after %s attempts", failed_device_id, max_retries + 1
         )
         return None  # Every attempt failed.
@@ -255,14 +257,14 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
         inventory = APIFetchUtils._gw_load_inventory(apisession, org_id)  # Fetch the org inventory (None on failure).
         if inventory is None:  # The inventory fetch failed outright.
             return []  # Degrade to an empty list.
-        logging.info("Found %s total devices in org inventory.", len(inventory))  # Log the device count.
+        logger.info("Found %s total devices in org inventory.", len(inventory))  # Log the device count.
         site_name_lookup = APIFetchUtils._gw_load_site_names()  # Load site id->name enrichment map.
         work_items = APIFetchUtils._gw_build_work_items(inventory, site_name_lookup)  # Build the gateway work list.
-        logging.info("Prepared %s gateway device config API calls.", len(work_items))  # Log planned API calls.
+        logger.info("Prepared %s gateway device config API calls.", len(work_items))  # Log planned API calls.
         if fast:  # Fast mode uses the connection pool with retry.
             all_device_configs = APIFetchUtils._gw_collect_fast(apisession, work_items)  # Pooled concurrent path.
         else:  # Sequential processing for non-fast mode.
             all_device_configs = APIFetchUtils._gw_collect_sequential(apisession, work_items)  # Serial fetch path.
         all_device_configs = [config for config in all_device_configs if config is not None]  # Drop any failures.
-        logging.info("! Completed fetching %s gateway device configs.", len(all_device_configs))  # Log completion.
+        logger.info("! Completed fetching %s gateway device configs.", len(all_device_configs))  # Log completion.
         return all_device_configs  # Return the gateway configs.

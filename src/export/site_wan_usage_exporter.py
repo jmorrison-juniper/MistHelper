@@ -27,6 +27,8 @@ from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: canonical flatten/escape helpers. Keeps CSV output consistent with peers.
 
+logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
+
 
 class SiteWanUsageExporter:
     """Site WAN Usage search exporter.
@@ -56,7 +58,7 @@ class SiteWanUsageExporter:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No WAN usage rows for this site -- inform the operator and return.
             # WHY: ASCII-only user notice.
-            logging.info("! No WAN usage data found for this site")
+            logger.info("! No WAN usage data found for this site")
             return
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested dicts for CSV.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # CSV-safe multiline escape.
@@ -64,11 +66,11 @@ class SiteWanUsageExporter:
         mh.DataExporter.write_with_format_selection(  # Persist through CSV/SQLite/Arango backend selector.
             sanitized_data, filename, api_function_name="searchSiteWanUsage"
         )
-        logging.debug(  # DEBUG-level count trace per Action Logging principle (post-call).
+        logger.debug(  # DEBUG-level count trace per Action Logging principle (post-call).
             "searchSiteWanUsage persisted %d rows to %s", len(rawdata), filename
         )
         # WHY: user notice with count.
-        logging.info("! %d WAN usage records exported to %s", len(rawdata), filename)
+        logger.info("! %d WAN usage records exported to %s", len(rawdata), filename)
 
     @staticmethod
     def wan_usages() -> None:
@@ -82,8 +84,8 @@ class SiteWanUsageExporter:
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: menu header echoed to operator.
-        logging.info("Site WAN Usage Search:")
-        logging.info(  # INFO trace before the API call per Action Logging principle (pre-call).
+        logger.info("Site WAN Usage Search:")
+        logger.info(  # INFO trace before the API call per Action Logging principle (pre-call).
             "Starting searchSiteWanUsage export..."
         )
         resolved = mh.SiteDeviceExporter._resolve_site_for_stats(  # Prompt + org/site resolution (shared).
@@ -93,7 +95,7 @@ class SiteWanUsageExporter:
             return
         site_id, site_name = resolved  # Unpack resolved identifiers for the API call.
         try:
-            logging.info(  # INFO trace immediately before the SDK call (with site context).
+            logger.info(  # INFO trace immediately before the SDK call (with site context).
                 "Calling searchSiteWanUsage for site_id=%s (%s)", site_id, site_name
             )
             response = mistapi.api.v1.sites.wan_usages.searchSiteWanUsage(  # SDK call -- defaults for filters.

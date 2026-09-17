@@ -38,6 +38,8 @@ from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: canonical flatten and escape helpers keep CSV output consistent with peers.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 # The operationId that selects the primary-key strategy for the written rows.
 _OPERATION = "getOrgSecIntelProfile"
 
@@ -66,13 +68,13 @@ class OrgSecIntelProfileExporter:
             One dict for each profile. The list is empty when the org holds none.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Calling listOrgSecIntelProfiles for org_id=%s", org_id)  # Pre-call log.
+        logger.info("Calling listOrgSecIntelProfiles for org_id=%s", org_id)  # Pre-call log.
         response = mistapi.api.v1.orgs.secintelprofiles.listOrgSecIntelProfiles(
             mh.apisession, org_id
         )  # The list endpoint is paginated, so page it through the shared helper.
         rows = mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page every profile.
         profiles = [row for row in rows if isinstance(row, dict)]  # Drop any malformed entry before use.
-        logging.debug("listOrgSecIntelProfiles returned %d profiles", len(profiles))  # Post-call count.
+        logger.debug("listOrgSecIntelProfiles returned %d profiles", len(profiles))  # Post-call count.
         return profiles
 
     @staticmethod
@@ -100,13 +102,13 @@ class OrgSecIntelProfileExporter:
                 context="org_sec_intel_profile.selection",
             )
         ).strip()
-        logging.debug("Operator answered %r for the profile selection", answer)  # Answer trace.
+        logger.debug("Operator answered %r for the profile selection", answer)  # Answer trace.
         if not answer.isdigit():  # A non-numeric answer, an EOF, or an interrupt aborts.
-            logging.info("! No profile selected. Returning to the menu.")  # User-facing cancel.
+            logger.info("! No profile selected. Returning to the menu.")  # User-facing cancel.
             return None
         position = int(answer)  # Convert once the value is known to be all digits.
         if not 1 <= position <= len(profiles):  # Guard the table bounds before indexing.
-            logging.info("! %d is outside 1-%d. Returning to the menu.", position, len(profiles))  # Bounds notice.
+            logger.info("! %d is outside 1-%d. Returning to the menu.", position, len(profiles))  # Bounds notice.
             return None
         return profiles[position - 1]  # The printed table starts at one, the list starts at zero.
 
@@ -126,16 +128,16 @@ class OrgSecIntelProfileExporter:
             The profile body as a dict, or an empty dict when the body is absent.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info(
+        logger.info(
             "Calling getOrgSecIntelProfile for org_id=%s profile_id=%s", org_id, secintelprofile_id
         )  # Pre-call log.
         response = mistapi.api.v1.orgs.secintelprofiles.getOrgSecIntelProfile(
             mh.apisession, org_id, secintelprofile_id
         )  # The SDK call for the single profile.
         payload = getattr(response, "data", None)  # The SDK exposes the body on .data.
-        logging.debug("getOrgSecIntelProfile returned payload_type=%s", type(payload).__name__)  # Post-call trace.
+        logger.debug("getOrgSecIntelProfile returned payload_type=%s", type(payload).__name__)  # Post-call trace.
         if not isinstance(payload, dict):  # A list body or a None body means the profile is gone.
-            logging.debug("getOrgSecIntelProfile returned no dict body for %s", secintelprofile_id)  # Explain it.
+            logger.debug("getOrgSecIntelProfile returned no dict body for %s", secintelprofile_id)  # Explain it.
             return {}
         return payload
 
@@ -156,11 +158,11 @@ class OrgSecIntelProfileExporter:
             A list that holds one flattened row, or an empty list for no body.
         """
         if not payload:  # An absent body has nothing to write.
-            logging.debug("No SecIntel profile body to flatten")  # Explain the empty result.
+            logger.debug("No SecIntel profile body to flatten")  # Explain the empty result.
             return []
         row = {"org_id": org_id, **payload}  # Tag the row with the org, then copy the profile fields.
         flattened = DataProcessingUtils.flatten_nested_fields([row])  # Flatten every nested field.
-        logging.debug("Built %d SecIntel profile row(s)", len(flattened))  # Post-build count trace.
+        logger.debug("Built %d SecIntel profile row(s)", len(flattened))  # Post-build count trace.
         return flattened
 
     @staticmethod
@@ -173,14 +175,14 @@ class OrgSecIntelProfileExporter:
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rows:  # No rows, so inform the operator and return.
-            logging.info("! No security intelligence profile data found")  # ASCII-only user notice.
+            logger.info("! No security intelligence profile data found")  # ASCII-only user notice.
             return
         sanitized_data = DataProcessingUtils.escape_multiline(rows)  # Make multiline values CSV-safe.
         mh.DataExporter.write_with_format_selection(  # Persist through the CSV, SQLite, or Arango selector.
             sanitized_data, filename, api_function_name=_OPERATION
         )
-        logging.debug("%s persisted %d rows to %s", _OPERATION, len(rows), filename)  # Post-call count.
-        logging.info("! %d security intelligence profile record(s) exported to %s", len(rows), filename)  # Notice.
+        logger.debug("%s persisted %d rows to %s", _OPERATION, len(rows), filename)  # Post-call count.
+        logger.info("! %d security intelligence profile record(s) exported to %s", len(rows), filename)  # Notice.
 
     @staticmethod
     def profile() -> None:
@@ -191,21 +193,21 @@ class OrgSecIntelProfileExporter:
             API calls, and the write, and it keeps every failure inside the menu.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Organization Security Intelligence Profile:")  # Menu header echoed to the operator.
+        logger.info("Organization Security Intelligence Profile:")  # Menu header echoed to the operator.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve which org to read.
         if not org_id:  # The resolver already logged the cancellation.
             return
         try:
             profiles = OrgSecIntelProfileExporter._list_profiles(org_id)  # Read the list once.
             if not profiles:  # An org with no profile is legitimate, so report it plainly.
-                logging.info("! This organization holds no security intelligence profile.")  # User notice.
+                logger.info("! This organization holds no security intelligence profile.")  # User notice.
                 return
             chosen = OrgSecIntelProfileExporter._choose_profile(profiles)  # Ask which profile to read.
             if chosen is None:  # The prompt helper already logged the cancellation.
                 return
             profile_id = str(chosen.get("id", "")).strip()  # The detail call needs the profile UUID.
             if not profile_id:  # A profile row without an id cannot drive the detail call.
-                logging.info("! The selected profile carries no id. Returning to the menu.")  # User notice.
+                logger.info("! The selected profile carries no id. Returning to the menu.")  # User notice.
                 return
             payload = OrgSecIntelProfileExporter._fetch(org_id, profile_id)  # Read the full profile body.
             rows = OrgSecIntelProfileExporter._build_row(org_id, payload)  # Flatten the body into one row.

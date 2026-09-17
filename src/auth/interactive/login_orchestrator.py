@@ -9,6 +9,8 @@ from typing import Any  # Generic typing for the shared state bag
 from .clouds import CloudSelector  # Cloud catalog + interactive cloud picker
 from .credential_prompter import CredentialPrompter  # Email/password/2FA prompt helper
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class LoginOrchestrator:
     """Drive the full interactive Mist login flow end-to-end."""
@@ -26,18 +28,18 @@ class LoginOrchestrator:
 
     def execute(self) -> bool:
         """Run the interactive login workflow. Return True on successful login."""
-        logging.info("LoginOrchestrator.execute() starting")  # Trace entry for operator timeline
+        logger.info("LoginOrchestrator.execute() starting")  # Trace entry for operator timeline
         mistapi_module = self._resolve_mistapi()  # Resolve SDK from state or via fallback import
         if mistapi_module is None:  # Hard failure: SDK is not available
-            logging.debug("LoginOrchestrator aborted: mistapi unavailable")  # Trace abort path
+            logger.debug("LoginOrchestrator aborted: mistapi unavailable")  # Trace abort path
             return False  # Propagate failure to the caller
         cloud = CloudSelector(self.safe_input).prompt()  # Render menu and collect cloud choice
         if cloud is None:  # User aborted at the cloud prompt
-            logging.debug("LoginOrchestrator aborted: cloud selection cancelled")  # Trace abort path
+            logger.debug("LoginOrchestrator aborted: cloud selection cancelled")  # Trace abort path
             return False  # Propagate failure to the caller
         credentials = self._collect_credentials()  # Collect email + password from the operator
         if credentials is None:  # User aborted at email or password prompt
-            logging.debug("LoginOrchestrator aborted: credential collection cancelled")  # Trace abort
+            logger.debug("LoginOrchestrator aborted: credential collection cancelled")  # Trace abort
             return False  # Propagate failure to the caller
         email, password = credentials  # Unpack the validated credential tuple
         cloud_name, host = cloud  # Unpack the validated cloud selection
@@ -48,7 +50,7 @@ class LoginOrchestrator:
         mistapi_module = self.state.get("mistapi")  # Prefer the SDK reference already in state
         if mistapi_module is not None:  # Fast path when MistHelper.py has imported it
             return mistapi_module  # Use the existing reference
-        logging.info("Resolving mistapi SDK via fallback import")  # Trace before deferred import
+        logger.info("Resolving mistapi SDK via fallback import")  # Trace before deferred import
         try:
             import mistapi as mistapi_fallback  # Deferred import keeps module load cheap
         except ImportError as import_error:  # SDK missing is a hard failure
@@ -56,7 +58,7 @@ class LoginOrchestrator:
             logging.warning("X Failed to import mistapi library")  # Legacy console message routed via logger
             return None  # Caller will short-circuit the login
         self.state["mistapi"] = mistapi_fallback  # Cache the SDK reference in shared state
-        logging.debug("mistapi SDK resolved via fallback import")  # Trace successful import
+        logger.debug("mistapi SDK resolved via fallback import")  # Trace successful import
         return mistapi_fallback  # Hand the SDK reference back to the orchestrator
 
     def _collect_credentials(self) -> tuple[str, str] | None:
@@ -79,9 +81,9 @@ class LoginOrchestrator:
         password: str,
     ) -> bool:
         """Perform the network login and dispatch exceptions to their handlers."""
-        logging.info("Authenticating to %s as %s on cloud %s", host, email, cloud_name)  # Trace
-        logging.warning("")  # Blank spacer matches legacy output exactly
-        logging.warning("  Authenticating...")  # Legacy console message routed via logger
+        logger.info("Authenticating to %s as %s on cloud %s", host, email, cloud_name)  # Trace
+        logger.warning("")  # Blank spacer matches legacy output exactly
+        logger.warning("  Authenticating...")  # Legacy console message routed via logger
         try:
             return self._run_login_pipeline(mistapi_module, host, email, password)  # Main path
         except ConnectionError as connection_error:  # Network failure surface
@@ -117,9 +119,9 @@ class LoginOrchestrator:
     @staticmethod
     def _log_login_inputs(host: str, email: str, password: str) -> None:
         """Emit the three legacy debug log lines describing the login inputs."""
-        logging.debug("Interactive login - host: %s", host)  # Legacy debug log preserved verbatim
-        logging.debug("Interactive login - email: %s", email)  # Legacy debug log preserved verbatim
-        logging.debug(  # Legacy debug log preserved verbatim
+        logger.debug("Interactive login - host: %s", host)  # Legacy debug log preserved verbatim
+        logger.debug("Interactive login - email: %s", email)  # Legacy debug log preserved verbatim
+        logger.debug(  # Legacy debug log preserved verbatim
             "Interactive login - password length: %s", len(password) if password else 0
         )
 
@@ -131,8 +133,8 @@ class LoginOrchestrator:
         password: str,
     ) -> Any | None:
         """Build the APISession object and clear any cached API token."""
-        logging.warning("  Creating API session...")  # Legacy console message routed via logger
-        logging.info("Creating mistapi APISession for %s", host)  # Trace before SDK call
+        logger.warning("  Creating API session...")  # Legacy console message routed via logger
+        logger.info("Creating mistapi APISession for %s", host)  # Trace before SDK call
         apisession = mistapi_module.APISession(  # Construct the SDK session with legacy kwargs
             email=email,
             password=password,
@@ -141,11 +143,11 @@ class LoginOrchestrator:
             show_cli_notif=False,  # Preserve legacy notification setting
         )
         if apisession is None:  # SDK contract allows None as a soft failure
-            logging.error("APISession constructor returned None")  # Legacy error log preserved
-            logging.warning("  X Failed to create API session")  # Legacy console message routed via logger
+            logger.error("APISession constructor returned None")  # Legacy error log preserved
+            logger.warning("  X Failed to create API session")  # Legacy console message routed via logger
             return None  # Caller will short-circuit the login
         LoginOrchestrator._clear_pre_existing_token(apisession)  # Force email/password path
-        logging.debug("APISession created successfully")  # Trace successful construction
+        logger.debug("APISession created successfully")  # Trace successful construction
         return apisession  # Hand the session back to the login pipeline
 
     @staticmethod
@@ -154,7 +156,7 @@ class LoginOrchestrator:
         # WHY: extracted so _create_api_session drops from 29 lines to 22 (STRUCT-LENGTH).
         if not apisession._apitoken:  # No cached token. Nothing to clear
             return  # Fast exit preserves legacy behaviour
-        logging.debug(  # Legacy debug log preserved verbatim
+        logger.debug(  # Legacy debug log preserved verbatim
             "Clearing API token to force email/password login (had %s token(s))",
             len(apisession._apitoken),
         )
@@ -164,10 +166,10 @@ class LoginOrchestrator:
     @staticmethod
     def _initial_login(apisession: Any) -> dict[str, Any] | None:
         """Issue the first login_with_return() call (no 2FA token)."""
-        logging.warning("  Sending login request...")  # Legacy console message routed via logger
-        logging.info("Sending initial login_with_return() request")  # Trace before SDK call
+        logger.warning("  Sending login request...")  # Legacy console message routed via logger
+        logger.info("Sending initial login_with_return() request")  # Trace before SDK call
         result: dict[str, Any] | None = apisession.login_with_return()  # Initial login attempt without 2FA
-        logging.debug("Initial login returned authenticated=%s", bool(result and result.get("authenticated")))
+        logger.debug("Initial login returned authenticated=%s", bool(result and result.get("authenticated")))
         return result  # Hand the raw login response back to the pipeline
 
     @staticmethod
@@ -182,16 +184,16 @@ class LoginOrchestrator:
 
     def _handle_two_factor(self, apisession: Any) -> dict[str, Any] | None:
         """Prompt for 2FA and replay the login with the code attached."""
-        logging.warning("")  # Blank spacer matches legacy output exactly
-        logging.warning("  Two-factor authentication required.")  # Legacy console message routed via logger
+        logger.warning("")  # Blank spacer matches legacy output exactly
+        logger.warning("  Two-factor authentication required.")  # Legacy console message routed via logger
         code = CredentialPrompter(self.safe_input).prompt_two_factor()  # EOF-safe 2FA prompt
         if code is None:  # User aborted at the 2FA prompt
             self.state["apisession"] = None  # Clear any partially established session
             return None  # Propagate failure to the caller
-        logging.warning("  Sending 2FA verification...")  # Legacy console message routed via logger
-        logging.info("Resubmitting login_with_return() with 2FA code")  # Trace before SDK call
+        logger.warning("  Sending 2FA verification...")  # Legacy console message routed via logger
+        logger.info("Resubmitting login_with_return() with 2FA code")  # Trace before SDK call
         result: dict[str, Any] | None = apisession.login_with_return(two_factor=code)  # Replay with 2FA
-        logging.debug("2FA login returned authenticated=%s", bool(result and result.get("authenticated")))
+        logger.debug("2FA login returned authenticated=%s", bool(result and result.get("authenticated")))
         return result  # Hand the post-2FA login response back to the pipeline
 
     @staticmethod
@@ -209,23 +211,23 @@ class LoginOrchestrator:
             error_message = error_field.get("detail", str(error_field))  # Prefer the detail string
         else:
             error_message = str(error_field)  # Coerce primitives/strings to string
-        logging.warning("  X Authentication failed: %s", error_message)  # Legacy console message routed via logger
-        logging.error("Interactive login failed: %s", error_message)  # Legacy error log preserved
+        logger.warning("  X Authentication failed: %s", error_message)  # Legacy console message routed via logger
+        logger.error("Interactive login failed: %s", error_message)  # Legacy error log preserved
         self.state["apisession"] = None  # Drop any partially established session reference
 
     def _finalize_session(self, apisession: Any, email: str, host: str) -> None:
         """Persist the session, configure timeout, and announce MSP privileges."""
         self.state["apisession"] = apisession  # Cache the live session for the rest of the app
-        logging.warning("")  # Blank spacer matches legacy output exactly
-        logging.warning("  + Login successful!")  # Legacy console message routed via logger
-        logging.info("Interactive login successful for %s to %s", email, host)  # Legacy info log
+        logger.warning("")  # Blank spacer matches legacy output exactly
+        logger.warning("  + Login successful!")  # Legacy console message routed via logger
+        logger.info("Interactive login successful for %s to %s", email, host)  # Legacy info log
         self._configure_session_timeout(apisession)  # Best-effort timeout configuration
         self._announce_msp_privileges()  # Detect and print MSP grants
 
     @staticmethod
     def _configure_session_timeout(apisession: Any) -> None:
         """Best-effort: configure the session timeout if the helper is available."""
-        logging.debug("Configuring session timeout (best-effort)")  # Trace before optional helper
+        logger.debug("Configuring session timeout (best-effort)")  # Trace before optional helper
         try:
             from src.auth.session_timeout import configure_session_timeout  # Deferred import
 
@@ -235,27 +237,25 @@ class LoginOrchestrator:
 
     def _announce_msp_privileges(self) -> None:
         """Detect MSP privileges via the injected callback and echo the result."""
-        logging.warning("  Checking for MSP privileges...")  # Legacy console message routed via logger
-        logging.info("Running detect_msp_privileges callback")  # Trace before callback
+        logger.warning("  Checking for MSP privileges...")  # Legacy console message routed via logger
+        logger.info("Running detect_msp_privileges callback")  # Trace before callback
         detected = self.detect_msp_privileges()  # Invoke the injected detection callback
-        logging.debug("detect_msp_privileges returned %d entries", len(detected) if detected else 0)
+        logger.debug("detect_msp_privileges returned %d entries", len(detected) if detected else 0)
         if detected:  # Operator has at least one MSP grant available
             self.state["msp_privileges"] = detected  # Cache the MSP grants for later selection
-            logging.warning(
+            logger.warning(
                 "  + MSP access detected: %d MSP(s) available", len(detected)
             )  # Legacy message routed via logger
             for msp in detected:  # Echo each MSP grant on its own line
-                logging.warning("    - %s (role: %s)", msp["msp_name"], msp["role"])  # Legacy format routed via logger
+                logger.warning("    - %s (role: %s)", msp["msp_name"], msp["role"])  # Legacy format routed via logger
         else:
-            logging.warning(
-                "  - No MSP privileges detected (org-level access only)"
-            )  # Legacy message routed via logger
-        logging.warning("")  # Blank spacer matches legacy output exactly
+            logger.warning("  - No MSP privileges detected (org-level access only)")  # Legacy message routed via logger
+        logger.warning("")  # Blank spacer matches legacy output exactly
 
     def _handle_connection_error(self, connection_error: ConnectionError) -> bool:
         """Map a ConnectionError to the legacy console + log output."""
-        logging.warning("  X Connection failed: %s", connection_error)  # Legacy console message routed via logger
-        logging.error("Interactive login connection error: %s", connection_error)  # Legacy error log
+        logger.warning("  X Connection failed: %s", connection_error)  # Legacy console message routed via logger
+        logger.error("Interactive login connection error: %s", connection_error)  # Legacy error log
         self.state["apisession"] = None  # Drop any partially established session reference
         return False  # Propagate failure to the caller
 
@@ -263,10 +263,10 @@ class LoginOrchestrator:
         """Map a ValueError to the legacy console + log output."""
         error_message = str(value_error).lower()  # Lowercase once for the substring guards
         if "token" in error_message or "401" in error_message:  # Token/auth surface
-            logging.warning("  X Invalid API token or credentials")  # Legacy console message routed via logger
+            logger.warning("  X Invalid API token or credentials")  # Legacy console message routed via logger
         else:
-            logging.warning("  X Authentication error: %s", value_error)  # Legacy console message routed via logger
-        logging.error("Interactive login value error: %s", value_error)  # Legacy error log preserved
+            logger.warning("  X Authentication error: %s", value_error)  # Legacy console message routed via logger
+        logger.error("Interactive login value error: %s", value_error)  # Legacy error log preserved
         self.state["apisession"] = None  # Drop any partially established session reference
         return False  # Propagate failure to the caller
 
@@ -275,7 +275,7 @@ class LoginOrchestrator:
         error_message = str(login_error)  # Preserve original casing for the print statement
         lower_message = error_message.lower()  # Lowercase copy for substring matching
         self._print_generic_error_message(login_error, error_message, lower_message)  # Map + print
-        logging.error("Interactive login failed: %s", login_error)  # Legacy error log preserved
+        logger.error("Interactive login failed: %s", login_error)  # Legacy error log preserved
         self.state["apisession"] = None  # Drop any partially established session reference
         return False  # Propagate failure to the caller
 
@@ -287,15 +287,15 @@ class LoginOrchestrator:
     ) -> None:
         """Print the legacy 'X ...' message for a generic login error."""
         if LoginOrchestrator._is_credential_error(lower_message):  # Credential surface
-            logging.warning("  X Invalid email or password")  # Legacy console message routed via logger
+            logger.warning("  X Invalid email or password")  # Legacy console message routed via logger
             return  # Guard clause keeps CC at 4
         if LoginOrchestrator._is_two_factor_error(lower_message):  # 2FA failure surface
-            logging.warning("  X Two-factor authentication failed")  # Legacy console message routed via logger
+            logger.warning("  X Two-factor authentication failed")  # Legacy console message routed via logger
             return  # Guard clause keeps CC at 4
         if "401" in error_message:  # HTTP 401 in the original message string
-            logging.warning("  X Invalid email or password (authentication failed)")  # Legacy message routed via logger
+            logger.warning("  X Invalid email or password (authentication failed)")  # Legacy message routed via logger
             return  # Guard clause keeps CC at 4
-        logging.warning("  X Login failed: %s", login_error)  # Legacy fallback message routed via logger
+        logger.warning("  X Login failed: %s", login_error)  # Legacy fallback message routed via logger
 
     @staticmethod
     def _is_credential_error(lower_message: str) -> bool:

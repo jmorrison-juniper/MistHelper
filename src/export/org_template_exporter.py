@@ -20,6 +20,8 @@ from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class OrgTemplateExporter:
     """Organization Template Exporter.
@@ -31,10 +33,10 @@ class OrgTemplateExporter:
     @staticmethod
     def all_templates() -> None:
         """Export all organization templates (gateway, network, RF, site, AP) to CSV files."""
-        logging.info("Starting export of organization templates...")  # Log start.
+        logger.info("Starting export of organization templates...")  # Log start.
         for title, api_call, filename, error_label in OrgTemplateExporter._template_export_specs():  # Each type.
             OrgTemplateExporter._export_one_template(title, api_call, filename, error_label)  # Non-fatal per type.
-        logging.info(" Organization templates export completed")  # Log completion.
+        logger.info(" Organization templates export completed")  # Log completion.
 
     @staticmethod
     def _template_export_specs() -> list[tuple[str, Any, str, str]]:
@@ -100,8 +102,8 @@ class OrgTemplateExporter:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not ap_profiles:  # No AP templates in this org.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info("! 0 AP templates exported to OrgApTemplates.csv (no templates found)")  # Inform user.
-            logging.info(
+            logger.info("! 0 AP templates exported to OrgApTemplates.csv (no templates found)")  # Inform user.
+            logger.info(
                 "No AP templates returned from canonical endpoint; writing empty OrgApTemplates.csv"
             )  # Log empty.
             mh.DataExporter.write_with_format_selection(
@@ -114,16 +116,16 @@ class OrgTemplateExporter:
             processed, filename, api_function_name="listOrgDeviceProfiles"
         )  # Persist.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("! %s AP templates exported to %s", len(processed), filename)  # Tell user.
-        logging.info("Exported %s AP templates to %s.", len(processed), filename)  # Log count.
+        logger.info("! %s AP templates exported to %s", len(processed), filename)  # Tell user.
+        logger.info("Exported %s AP templates to %s.", len(processed), filename)  # Log count.
 
     @staticmethod
     def ap_templates() -> None:
         """Export AP templates (canonical deviceprofiles type=ap) to OrgApTemplates.csv."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("Export Organization AP Templates:")  # Header.
-        logging.info("Starting export of organization AP templates (canonical deviceprofiles type=ap)...")  # Log start.
+        logger.info("Export Organization AP Templates:")  # Header.
+        logger.info("Starting export of organization AP templates (canonical deviceprofiles type=ap)...")  # Log start.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org.
         filename = "OrgApTemplates.csv"  # Output filename.
         try:
@@ -148,8 +150,8 @@ class OrgTemplateExporter:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not switch_profiles:  # No templates returned from the API.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info("! 0 switch templates exported to OrgSwitchTemplates.csv (no templates found)")  # User notice.
-            logging.info(  # Trace empty-result branch.
+            logger.info("! 0 switch templates exported to OrgSwitchTemplates.csv (no templates found)")  # User notice.
+            logger.info(  # Trace empty-result branch.
                 "No switch templates returned from canonical endpoint; writing empty OrgSwitchTemplates.csv"
             )
             mh.DataExporter.write_with_format_selection([], filename, api_function_name="listOrgNetworkTemplates")
@@ -160,16 +162,16 @@ class OrgTemplateExporter:
             processed, filename, api_function_name="listOrgNetworkTemplates"
         )  # Persist.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("! %s switch templates exported to %s", len(processed), filename)  # User notice.
-        logging.info("Exported %s switch templates to %s.", len(processed), filename)  # Trace count.
+        logger.info("! %s switch templates exported to %s", len(processed), filename)  # User notice.
+        logger.info("Exported %s switch templates to %s.", len(processed), filename)  # Trace count.
 
     @staticmethod
     def switch_templates() -> None:
         """Export switch templates to OrgSwitchTemplates.csv."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("Export Organization Switch Templates:")  # Header.
-        logging.info("Starting export of organization switch templates (canonical networktemplates)...")  # Log start.
+        logger.info("Export Organization Switch Templates:")  # Header.
+        logger.info("Starting export of organization switch templates (canonical networktemplates)...")  # Log start.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         filename = "OrgSwitchTemplates.csv"  # Build the CSV name.
         try:

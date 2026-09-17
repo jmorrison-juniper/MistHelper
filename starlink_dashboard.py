@@ -27,7 +27,7 @@ from typing import Any
 # executable on PATH, downloads about 50 MB, and installs two large packages, so the
 # operator needs those records when the startup fails. See issue #1721.
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-logger = logging.getLogger("starlink_dashboard")  # Named logger the whole module shares.
+logger = logging.getLogger(__name__)  # The module logger identifies this dashboard in shared logs.
 
 # Default precision for a GPS coordinate the dashboard prints. Three decimal places
 # locate a site to about 100 meters, which confirms the right terminal without
@@ -48,7 +48,7 @@ def _exact_gps_enabled() -> bool:
     """
     raw_value = os.environ.get(GPS_EXACT_ENV_VAR, "")  # An absent variable keeps the safe default.
     enabled = raw_value.strip().lower() in GPS_EXACT_OPT_IN_VALUES  # Accept the common opt-in spellings.
-    logging.debug("Exact GPS output opt-in is %s", enabled)  # Record which mode the dump used.
+    logger.debug("Exact GPS output opt-in is %s", enabled)  # Record which mode the dump used.
     return enabled
 
 
@@ -76,9 +76,9 @@ def _resolve_executable(name: str) -> str:
         str: The absolute path when PATH holds the program. The bare name otherwise.
         The bare name is safe, because PATH then holds no program that could take its place.
     """
-    logging.debug("Resolving the %s executable on PATH", name)  # Log before the PATH lookup runs.
+    logger.debug("Resolving the %s executable on PATH", name)  # Log before the PATH lookup runs.
     resolved = shutil.which(name)  # An absolute path stops an earlier PATH entry from supplying another program.
-    logging.debug("Resolved the %s executable to %s", name, resolved)  # Log the result of the PATH lookup.
+    logger.debug("Resolved the %s executable to %s", name, resolved)  # Log the result of the PATH lookup.
     return resolved or name  # Fall back to the bare name, so the existing FileNotFoundError branch still runs.
 
 

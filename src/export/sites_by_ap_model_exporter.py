@@ -17,6 +17,8 @@ from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 
+logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
+
 
 class SitesByAPModelExporter:
     """Sites by AP Model Exporter.
@@ -40,11 +42,11 @@ class SitesByAPModelExporter:
     def _print_model_options(models: list[str], aps: list[dict]) -> None:  # type: ignore[type-arg]
         """Print numbered list of AP models with per-model device count."""
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("\nAvailable AP models:")
+        logger.info("\nAvailable AP models:")
         for idx, model in enumerate(models, 1):  # List each model
             count = sum(1 for d in aps if d.get("model") == model)  # APs of this model
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info("  %3d. %s (%s APs)", idx, model, count)
+            logger.info("  %3d. %s (%s APs)", idx, model, count)
 
     @staticmethod
     def _resolve_model_choice(choice: str, models: list[str]) -> str | None:
@@ -140,8 +142,8 @@ class SitesByAPModelExporter:
         filename = f"SitesByAPModel_{safe_model}.csv"  # Build the CSV name.
         mh.DataExporter.write_with_format_selection(rows, filename, api_function_name="getSitesByAPModel")  # Persist.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("\n[OK] Exported %s sites with %s APs to %s", len(rows), model, filename)
-        logging.info("Exported %s sites with AP model %s", len(rows), model)  # Log the export.
+        logger.info("\n[OK] Exported %s sites with %s APs to %s", len(rows), model, filename)
+        logger.info("Exported %s sites with AP model %s", len(rows), model)  # Log the export.
 
     @staticmethod
     def _build_site_map(all_sites: list) -> dict[str, Any]:  # type: ignore[type-arg]
@@ -153,26 +155,26 @@ class SitesByAPModelExporter:
         """Export CSV of sites containing APs of a selected model with site address info."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("Export Sites by AP Model:")
-        logging.info("Starting export of sites by AP model...")  # Trace start
+        logger.info("Export Sites by AP Model:")
+        logger.info("Starting export of sites by AP model...")  # Trace start
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("! Fetching AP inventory from organization...")
+        logger.info("! Fetching AP inventory from organization...")
         aps, models = SitesByAPModelExporter._get_ap_models(org_id)  # Fetch APs and models
         if not models:  # No models in inventory
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info("! No APs found in organization inventory.")
+            logger.info("! No APs found in organization inventory.")
             return
         model = SitesByAPModelExporter._prompt_model_selection(models, aps)  # Prompt operator for a model
         if not model:  # Operator skipped
             return
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("! Fetching site details for sites with %s APs...", model)
+        logger.info("! Fetching site details for sites with %s APs...", model)
         all_sites = mh.APICoreFetchUtils.all_sites_with_limit(org_id)  # List all sites
         site_map = SitesByAPModelExporter._build_site_map(all_sites)  # Index sites by id for row lookup
         rows = SitesByAPModelExporter._build_export_rows(aps, model, site_map)  # Build export rows
         if not rows:  # No rows match the chosen model
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info("! No sites found with %s APs.", model)
+            logger.info("! No sites found with %s APs.", model)
             return
         SitesByAPModelExporter._finalize_ap_model_export(rows, model)  # Slug + filename + write + log

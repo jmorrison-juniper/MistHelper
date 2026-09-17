@@ -16,6 +16,7 @@ from typing import Any  # WHY: Generic segment dict shape.
 from src.websocket.polling.completion_detector import CompletionDetector  # WHY: Indicator strategies.
 from src.websocket.polling.result_combiner import CombineRequest, combine_segments  # WHY: Final segment merge.
 
+logger = logging.getLogger(__name__)  # WHY: Use the module logger for non-exception log entries.
 # Circuit-breaker constant preserved verbatim from the original implementation.
 _MAX_CHECK_ITERATIONS = 10000  # WHY: Hard cap on polling iterations to avoid infinite loops.
 _DEFAULT_ACTIVITY_TIMEOUT = 2  # WHY: Default idle-window seconds before declaring completion.
@@ -105,7 +106,7 @@ class _PerformanceMonitor:  # WHY: Lightweight loop monitor preserved from the o
         """Emit emergency trace and raise a RuntimeError to abort the loop."""
         error_msg = _CB_ERROR_TMPL.format(name=self.name, max_iters=self.max_iterations)  # WHY: Prep msg.
         print(f"{_EMERG_PREFIX} {error_msg}")  # WHY: Preserve verbatim emergency print.
-        logging.error(error_msg)  # WHY: Also route through the root logger for ops.
+        logger.error(error_msg)  # WHY: Also route through the root logger for ops.
         raise RuntimeError(error_msg)  # WHY: Signal caller the safety limit tripped.
 
     def finish(self, debug_mode: bool) -> None:  # WHY: Public loop-completion hook.

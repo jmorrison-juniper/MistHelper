@@ -9,6 +9,8 @@ from packaging.version import InvalidVersion, Version  # WHY: PEP 440 parser han
 
 _VERSION_OPERATORS = (">=", "<=", "==", "!=", ">", "<")  # 2-char operators listed first to match before 1-char.
 
+logger = logging.getLogger(__name__)  # WHY: name each record for this module, not the root logger.
+
 
 class UVRuntimeHelper:  # Groups version parsing/comparison helpers under one namespace.
     """Helper methods for comparing and validating package versions."""
@@ -25,7 +27,7 @@ class UVRuntimeHelper:  # Groups version parsing/comparison helpers under one na
     @staticmethod
     def _split_operator_and_required(spec: str) -> tuple[str, str]:
         """Return (operator, required_version) parsed from a version spec string."""
-        logging.debug("Parsing version spec '%s' for operator and required", spec)  # Log spec parse entry.
+        logger.debug("Parsing version spec '%s' for operator and required", spec)  # Log spec parse entry.
         for symbol in _VERSION_OPERATORS:  # Iterate 2-char first so '>' never matches before '>='.
             if symbol in spec:  # Spec contains this operator token.
                 lhs, rhs = spec.split(symbol, 1)  # Split into name portion and required version portion.
@@ -56,7 +58,7 @@ class UVRuntimeHelper:  # Groups version parsing/comparison helpers under one na
             return True
         installed_version = UVRuntimeHelper.parse_version(installed)  # Convert the installed version with PEP 440.
         required_version = UVRuntimeHelper.parse_version(required)  # Convert the required version with PEP 440.
-        logging.debug(
+        logger.debug(
             "Comparing installed=%s required=%s operator=%s", installed_version, required_version, operator
         )  # Log comparison inputs for diagnostics.
         return UVRuntimeHelper._compare_versions(installed_version, required_version, operator)  # Dispatch compare.

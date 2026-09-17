@@ -19,6 +19,8 @@ import logging  # Structured output for CI and operator use
 import sys  # For sys.exit and sys.path manipulation
 from pathlib import Path  # For cross-platform file path handling
 
+logger = logging.getLogger(__name__)  # Use a module logger so tests can identify this log source.
+
 # Configure structured output so CI logs show PASS/FAIL clearly
 logging.basicConfig(
     level=logging.INFO,  # Show info and above; debug messages appear only in verbose mode
@@ -52,16 +54,16 @@ _WAVE1_CLASSES = [
 
 def _check_packet_capture_not_decomposed() -> tuple[bool, str]:
     """Check that no new packet-capture files were added to src/capture/."""
-    logging.info("Checking src/capture/ for new packet-capture decomposition files")  # Log before scan
+    logger.info("Checking src/capture/ for new packet-capture decomposition files")  # Log before scan
     capture_path = _REPO_ROOT / "src" / "capture"  # Path to the capture module directory
     if not capture_path.exists():  # Missing directory means no decomposition possible
-        logging.debug("src/capture/ not found -- skipping packet capture decomposition check")  # Debug note
+        logger.debug("src/capture/ not found -- skipping packet capture decomposition check")  # Debug note
         return True, "src/capture/ not found -- no decomposition possible"  # Not a failure
     actual_files = {  # Collect all filenames, excluding compiled bytecode subdirectories
         f.name for f in capture_path.iterdir() if not f.name.startswith("__pycache__")
     }
     new_files = actual_files - _CAPTURE_BASELINE_FILES  # Anything beyond baseline is a violation
-    logging.debug("src/capture/ files: %s", actual_files)  # Log all found files for traceability
+    logger.debug("src/capture/ files: %s", actual_files)  # Log all found files for traceability
     if new_files:  # Any new files indicate unauthorized packet-capture decomposition in Wave 1
         return False, f"New packet-capture files in src/capture/: {new_files}"
     return True, "No new packet-capture decomposition files -- OK"  # Clean result
@@ -69,7 +71,7 @@ def _check_packet_capture_not_decomposed() -> tuple[bool, str]:
 
 def _check_menu_actions_not_reduced() -> tuple[bool, str]:
     """Check that menu_actions key count has not dropped below Wave 1 baseline."""
-    logging.info(  # Log before import attempt so failures are traceable
+    logger.info(  # Log before import attempt so failures are traceable
         "Checking menu_actions key count against baseline of %d", _MENU_ACTIONS_BASELINE
     )
     sys.path.insert(0, str(_REPO_ROOT))  # Ensure repo root on path so MistHelper is importable
@@ -78,7 +80,7 @@ def _check_menu_actions_not_reduced() -> tuple[bool, str]:
     except ImportError as exc:  # Import failure is a hard error -- report and fail
         return False, f"Could not import MistHelper: {exc}"
     actual_count = len(MistHelper.menu_actions)  # Count all currently registered menu keys
-    logging.debug(  # Log count and baseline for comparison in operator output
+    logger.debug(  # Log count and baseline for comparison in operator output
         "menu_actions count: %d (baseline: %d)", actual_count, _MENU_ACTIONS_BASELINE
     )
     if actual_count < _MENU_ACTIONS_BASELINE:  # Below baseline means keys were removed
@@ -88,7 +90,7 @@ def _check_menu_actions_not_reduced() -> tuple[bool, str]:
 
 def _check_wave1_classes_still_accessible() -> tuple[bool, str]:
     """Check that all Wave-1-touched classes remain accessible in MistHelper."""
-    logging.info("Checking Wave-1-touched classes still accessible in MistHelper")  # Log before scan
+    logger.info("Checking Wave-1-touched classes still accessible in MistHelper")  # Log before scan
     sys.path.insert(0, str(_REPO_ROOT))  # Ensure repo root on path for import
     try:
         import MistHelper  # pylint: disable=import-outside-toplevel  # noqa: PLC0415
@@ -97,7 +99,7 @@ def _check_wave1_classes_still_accessible() -> tuple[bool, str]:
     missing = [  # Collect classes that are no longer accessible in the module
         cls for cls in _WAVE1_CLASSES if not hasattr(MistHelper, cls)
     ]
-    logging.debug("Classes checked: %s  Missing: %s", _WAVE1_CLASSES, missing)  # Log result for tracing
+    logger.debug("Classes checked: %s  Missing: %s", _WAVE1_CLASSES, missing)  # Log result for tracing
     if missing:  # Missing classes mean extraction or rename happened outside Wave 1 scope
         return False, f"Wave-1 classes missing from MistHelper: {missing}"
     return True, f"All {len(_WAVE1_CLASSES)} Wave-1-touched classes accessible -- OK"  # All present
@@ -105,19 +107,19 @@ def _check_wave1_classes_still_accessible() -> tuple[bool, str]:
 
 def _check_checklist_exists() -> tuple[bool, str]:
     """Check that the bounded-decomposition-checklist.md evidence document is present."""
-    logging.info("Checking bounded-decomposition-checklist.md exists")  # Log before file check
+    logger.info("Checking bounded-decomposition-checklist.md exists")  # Log before file check
     checklist_path = (  # Absolute path to the scope-boundary constraints evidence document
         _REPO_ROOT / "specs" / "192-compliance-decomposition-wave1" / "bounded-decomposition-checklist.md"
     )
     if not checklist_path.exists():  # Missing document means audit trail is incomplete
         return False, f"bounded-decomposition-checklist.md not found: {checklist_path}"
-    logging.debug("Checklist found at: %s", checklist_path)  # Confirm the path exists
+    logger.debug("Checklist found at: %s", checklist_path)  # Confirm the path exists
     return True, "bounded-decomposition-checklist.md present -- OK"  # Document found
 
 
 def main() -> int:
     """Run all scope boundary checks and report pass/fail per condition."""
-    logging.info("=== Wave 1 Scope Boundary Verification ===")  # Header for log readability
+    logger.info("=== Wave 1 Scope Boundary Verification ===")  # Header for log readability
     checks = [  # Ordered list of (label, check function) pairs — all must pass
         ("Packet capture not decomposed", _check_packet_capture_not_decomposed),
         ("Menu actions not reduced", _check_menu_actions_not_reduced),
@@ -126,21 +128,21 @@ def main() -> int:
     ]
     failures: list[str] = []  # Accumulate all failed condition messages for summary
     for label, check_fn in checks:  # Run each check and report individually
-        logging.info("Checking: %s", label)  # Log the check name before running it
+        logger.info("Checking: %s", label)  # Log the check name before running it
         passed, message = check_fn()  # Execute the check function and get result
         if passed:  # Check passed -- log at info level
-            logging.info("  PASS: %s", message)
+            logger.info("  PASS: %s", message)
         else:  # Check failed -- log at error level so CI highlights it
-            logging.error("  FAIL: %s", message)
+            logger.error("  FAIL: %s", message)
             failures.append(f"{label}: {message}")  # Accumulate failure details for summary
     if failures:  # One or more violations found -- scope boundaries were broken
-        logging.error(  # Error header with violation count
+        logger.error(  # Error header with violation count
             "=== Scope Boundary Audit FAILED (%d violation(s)) ===", len(failures)
         )
         for failure in failures:  # Print each violation so the operator knows what to fix
-            logging.error("  - %s", failure)
+            logger.error("  - %s", failure)
         return 1  # Non-zero exit signals CI gate failure
-    logging.info(  # All checks passed -- clean scope compliance
+    logger.info(  # All checks passed -- clean scope compliance
         "=== Scope Boundary Audit PASSED -- all %d checks OK ===", len(checks)
     )
     return 0  # Zero exit signals clean scope boundary compliance

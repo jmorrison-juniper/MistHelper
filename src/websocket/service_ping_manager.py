@@ -12,6 +12,7 @@ from src.websocket.service_ping_discovery import (  # WHY: reuse discovery mixin
     configure_service_ping_discovery_dependencies,  # WHY: forwards deps to discovery module.
 )
 
+logger = logging.getLogger(__name__)  # WHY: Use the module logger for non-exception log entries.
 apisession: Any = None  # WHY: lazily-bound authenticated Mist session assigned via injection.
 mistapi: Any = None  # WHY: lazily-bound mistapi module reference for API calls.
 PromptUtils: Any = None  # WHY: lazily-bound prompt helper for site/device selection.
@@ -141,7 +142,7 @@ class ServicePingManager(ServicePingDiscoveryMixin):  # WHY: define ServicePingM
     def _lookup_device_info(self) -> bool:  # WHY: pure lookup step split out to drop CC of caller.
         """Populate device_info from the Mist API listSiteDevices response."""
         try:  # WHY: mistapi failures must not crash the workflow.
-            logging.info(  # WHY: record the lookup for operational tracing.
+            logger.info(  # WHY: record the lookup for operational tracing.
                 "Fetching gateway device details for site %s and device %s",
                 self.site_id,
                 self.device_id,
@@ -149,12 +150,12 @@ class ServicePingManager(ServicePingDiscoveryMixin):  # WHY: define ServicePingM
             raw_data = mistapi.api.v1.sites.devices.listSiteDevices(  # WHY: query gateway list.
                 apisession, self.site_id, type="gateway"
             ).data
-            logging.debug("Retrieved %d gateway devices for site %s", len(raw_data or []), self.site_id)
+            logger.debug("Retrieved %d gateway devices for site %s", len(raw_data or []), self.site_id)
             self.device_info = next(  # WHY: pick the entry matching the chosen device id.
                 (device for device in raw_data if device.get("id") == self.device_id),
                 None,
             )
-            logging.debug("Device lookup complete for %s, found=%s", self.device_id, self.device_info is not None)
+            logger.debug("Device lookup complete for %s, found=%s", self.device_id, self.device_info is not None)
         except Exception as error:  # WHY: swallow api errors and drop to unknown-device prompt.
             logging.warning("Could not retrieve device details: %s", error)  # WHY: warn on failure.
             self._debug_print(f"Device details error: {error}")  # WHY: surface exception in debug.
@@ -235,13 +236,13 @@ class ServicePingManager(ServicePingDiscoveryMixin):  # WHY: define ServicePingM
 
     def _handle_ping_response(self, response: Any) -> str | None:  # WHY: extract response parsing.
         """Interpret Mist API response and return session id or None on failure."""
-        logging.info("Service ping mistapi response status: %s", response.status_code)  # WHY: log.
-        logging.info("Service ping mistapi response data: %s", response.data)  # WHY: log body.
+        logger.info("Service ping mistapi response status: %s", response.status_code)  # WHY: log.
+        logger.info("Service ping mistapi response data: %s", response.data)  # WHY: log body.
         self._debug_print(f"mistapi Response Status = {response.status_code}")  # WHY: debug status.
         self._debug_print(f"mistapi Response Data = {response.data}")  # WHY: debug body.
         if response.status_code != 200:  # WHY: any non-200 status signals command rejection.
             print(f"Failed to issue Service Ping command. Status {response.status_code}: {response.data}")
-            logging.error("Service ping failed - status %s: %s", response.status_code, response.data)
+            logger.error("Service ping failed - status %s: %s", response.status_code, response.data)
             return None  # WHY: caller aborts result waiting on failure.
         session_id = response.data.get("session", "")  # WHY: session id is stringly-typed in payload.
         if session_id:  # WHY: only print/log when the api actually returned a session identifier.
@@ -256,8 +257,8 @@ class ServicePingManager(ServicePingDiscoveryMixin):  # WHY: define ServicePingM
         """Issue the Mist API service-ping request and return session ID."""
         print("-> Issuing Service Ping command...")  # WHY: signal dispatch to operator.
         self._debug_print(f"Service ping payload being sent: {payload}")  # WHY: debug payload.
-        logging.info("Sending service ping via mistapi to device: %s", self.device_id)  # WHY: log.
-        logging.info("Service ping payload: %s", payload)  # WHY: log payload for audit.
+        logger.info("Sending service ping via mistapi to device: %s", self.device_id)  # WHY: log.
+        logger.info("Service ping payload: %s", payload)  # WHY: log payload for audit.
         try:  # WHY: guard the API round-trip so error path is uniform.
             response = mistapi.api.v1.sites.devices.servicePingFromSsr(  # WHY: dispatch call inline.
                 apisession, self.site_id, self.device_id, payload
@@ -360,7 +361,7 @@ class ServicePingManager(ServicePingDiscoveryMixin):  # WHY: define ServicePingM
         if self.device_info:  # WHY: only include name/type when metadata is available.
             device_name = self.device_info.get("name", "Unknown Device")  # WHY: log-friendly name.
             device_type = self.device_info.get("type", "unknown")  # WHY: log-friendly type label.
-            logging.info(
+            logger.info(
                 "Service ping completed for %s (%s) - Service: %s, Host: %s",
                 device_name,
                 device_type,
@@ -368,7 +369,7 @@ class ServicePingManager(ServicePingDiscoveryMixin):  # WHY: define ServicePingM
                 payload["host"],
             )
             return  # WHY: alternate branch handled below.
-        logging.info(  # WHY: fallback log when device metadata is missing.
+        logger.info(  # WHY: fallback log when device metadata is missing.
             "Service ping completed for device %s - Service: %s, Host: %s",
             self.device_id,
             payload["service"],
@@ -391,14 +392,14 @@ class ServicePingManager(ServicePingDiscoveryMixin):  # WHY: define ServicePingM
         del payload  # WHY: payload unused after refactor. Kept in signature for back-compat.
         print("\nNo Service Ping results received within timeout period.")  # WHY: primary message.
         if not self.device_info:  # WHY: bail out with a minimal log when we lack device metadata.
-            logging.warning("Service ping timeout - no results received for device %s", self.device_id)
+            logger.warning("Service ping timeout - no results received for device %s", self.device_id)
             return  # WHY: skip formatted guidance when we cannot identify device type.
         device_type = self.device_info.get("type", "unknown")  # WHY: drives tip table lookup.
         device_name = self.device_info.get("name", "Unknown Device")  # WHY: identify device.
         print(f"Device: {device_name} ({device_type})")  # WHY: identify device before tips.
         tips = _TROUBLESHOOTING_TIPS.get(device_type, _DEFAULT_TIPS)  # WHY: table fetch with fallback.
         self._print_timeout_tips(device_type, tips)  # WHY: helper prints correctly framed hints.
-        logging.warning("Service ping timeout - no results received for device %s", self.device_id)
+        logger.warning("Service ping timeout - no results received for device %s", self.device_id)
 
     def _cleanup(self) -> None:  # WHY: teardown helper called from execute's finally block.
         """Disconnect websocket transport and swallow cleanup exceptions."""
@@ -454,7 +455,7 @@ class ServicePingManager(ServicePingDiscoveryMixin):  # WHY: define ServicePingM
 
     def execute(self) -> None:  # WHY: menu 120 entry point orchestrating the workflow.
         """Run the complete service ping workflow for menu operation 120."""
-        logging.debug("ENTER: ServicePingManager.execute")  # WHY: trace lifecycle boundary.
+        logger.debug("ENTER: ServicePingManager.execute")  # WHY: trace lifecycle boundary.
         if self.debug_mode:  # WHY: only emit debug banner when the flag is set.
             print("[DEBUG] Starting Service Ping via WebSocket operation...")  # WHY: user-visible.
             print(f"[DEBUG] Command line args: {sys.argv}")  # WHY: record invocation context.
@@ -468,4 +469,4 @@ class ServicePingManager(ServicePingDiscoveryMixin):  # WHY: define ServicePingM
             logging.error("Service ping error: %s", error)  # WHY: log for post-mortem.
         finally:  # WHY: always run cleanup regardless of success or failure.
             self._cleanup()  # WHY: teardown transport and swallow disconnect errors.
-            logging.debug("EXIT: ServicePingManager.execute")  # WHY: trace lifecycle boundary.
+            logger.debug("EXIT: ServicePingManager.execute")  # WHY: trace lifecycle boundary.

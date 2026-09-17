@@ -46,6 +46,13 @@ _REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 # The command that removes a stale copy of the repository from the environment.
 _UNINSTALL_COMMAND = "python -m pip uninstall -y misthelper"
 
+# The `ConfigUtils` class attributes that hold state between two tests. The
+# `isolate_config_utils_state` fixture clears each one before and after every
+# test. Issue #2892 records what happens without that reset: six tests read an
+# organization and a session that a neighbor left behind, so they passed in the
+# full suite and failed when the file ran alone.
+_ISOLATED_CONFIG_ATTRIBUTES: tuple[str, ...] = ("_org_id_cache", "_apisession")
+
 
 def _shadowing_source_path() -> Path | None:
     """Return the path of a `src` package that sits outside this repository.
@@ -178,3 +185,27 @@ def tmp_jsonl_file(tmp_data_dir):
 def isolate_working_directory(tmp_path, monkeypatch):
     """Ensure tests never write to the real data/ directory."""
     monkeypatch.chdir(tmp_path)
+
+
+@pytest.fixture(autouse=True)
+def isolate_config_utils_state():
+    """Ensure tests never inherit an organization cache or Mist API session."""
+    from src.config.config_utils import ConfigUtils  # Import lazily so the environment guard runs first.
+
+    # Python creates a new attribute on any assignment, so a rename in
+    # `ConfigUtils` would leave this fixture clearing two dead names. The tests
+    # would still pass in the full suite and fail alone, which is the exact
+    # defect that issue #2892 repaired. Read the names first, so a rename stops
+    # the build instead of returning the defect without a signal.
+    for attribute in _ISOLATED_CONFIG_ATTRIBUTES:  # Check each name before the fixture clears it.
+        assert hasattr(ConfigUtils, attribute), (  # A missing name means a rename moved the state.
+            f"ConfigUtils holds no attribute named {attribute}. "
+            f"This fixture clears {len(_ISOLATED_CONFIG_ATTRIBUTES)} names to keep each test independent. "
+            "Update _ISOLATED_CONFIG_ATTRIBUTES in tests/conftest.py, or issue #2892 returns."
+        )
+
+    for attribute in _ISOLATED_CONFIG_ATTRIBUTES:  # Clear every shared name before the test runs.
+        setattr(ConfigUtils, attribute, None)  # Start the test with no inherited organization or session.
+    yield  # Run the test with only the state that the test creates.
+    for attribute in _ISOLATED_CONFIG_ATTRIBUTES:  # Clear every shared name after the test runs.
+        setattr(ConfigUtils, attribute, None)  # Leave no state for the next test to inherit.

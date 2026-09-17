@@ -15,6 +15,8 @@ from datetime import UTC, datetime  # Timestamped output filenames.
 
 from src.site.address_audit.models import AuditResult, CorrectionOutcome  # Per-row audit + write-back records.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 _HEADER = [  # CSV header row -- matches the seven terminal columns.
     "Site Name",  # Mist site name.
     "Current Mist Address",  # Address on the Mist record.
@@ -39,7 +41,7 @@ class AddressAuditReporter:
 
     def save(self, results: list[AuditResult], output_dir: str = "data") -> str:
         """Write ``results`` to ``data/address_audit_<UTC timestamp>.csv``. Return the path."""
-        logging.info("Saving address-audit report (%d rows)", len(results))  # Action-log start.
+        logger.info("Saving address-audit report (%d rows)", len(results))  # Action-log start.
         os.makedirs(output_dir, exist_ok=True)  # Ensure the output directory exists.
         stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")  # UTC timestamp for the filename.
         path = os.path.join(output_dir, f"address_audit_{stamp}.csv")  # Full output path.
@@ -48,7 +50,7 @@ class AddressAuditReporter:
             writer.writerow(_HEADER)  # Write the header row first.
             for result in results:  # One CSV row per audited row.
                 writer.writerow(self._build_row(result))  # Write full (untruncated) values.
-        logging.debug("Address-audit report written to %s", path)  # Action-log completion.
+        logger.debug("Address-audit report written to %s", path)  # Action-log completion.
         return path  # Return the written path to the caller.
 
     def _build_row(self, result: AuditResult) -> list[str]:
@@ -66,7 +68,7 @@ class AddressAuditReporter:
 
     def save_corrections(self, outcomes: list[CorrectionOutcome], output_dir: str = "data") -> str:
         """Write the before/after write-back outcomes to a timestamped CSV. Return the path."""
-        logging.info("Saving address-correction report (%d outcome rows)", len(outcomes))  # Action-log start.
+        logger.info("Saving address-correction report (%d outcome rows)", len(outcomes))  # Action-log start.
         os.makedirs(output_dir, exist_ok=True)  # Ensure the output directory exists.
         stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")  # UTC timestamp for the filename.
         path = os.path.join(output_dir, f"address_corrections_{stamp}.csv")  # Full output path.
@@ -77,7 +79,7 @@ class AddressAuditReporter:
                 writer.writerow(  # Six cells matching _CORRECTION_HEADER order.
                     [outcome.site_name, outcome.site_id, outcome.before, outcome.after, outcome.action, outcome.error]
                 )
-        logging.debug("Address-correction report written to %s", path)  # Action-log completion.
+        logger.debug("Address-correction report written to %s", path)  # Action-log completion.
         return path  # Return the written path to the caller.
 
     @staticmethod

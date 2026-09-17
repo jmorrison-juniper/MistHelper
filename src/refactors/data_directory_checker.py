@@ -23,7 +23,7 @@ import logging  # Structured action logging required by coding standards
 import os  # File-system operations (path join, exists, remove) used by the writable check
 import sys  # sys.exit() to abort early when the directory is not writable
 
-logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
+logger = logging.getLogger(__name__)  # Keep refactor logs tied to this module.
 
 
 class DataDirectoryChecker:
@@ -39,12 +39,12 @@ class DataDirectoryChecker:
 
     def __init__(self, data_dir: str) -> None:  # Initialize checker with target data directory path
         """Initialize with the data directory path to check."""
-        logging.info("DataDirectoryChecker init: target data_dir=%s", data_dir)  # Log construction start
+        logger.info("DataDirectoryChecker init: target data_dir=%s", data_dir)  # Log construction start
         self.data_dir = data_dir  # Store the data directory path for later validation
         self.test_file = os.path.join(
             data_dir, ".write_test"
         )  # Define test file path (.write_test) for permission validation
-        logging.debug("DataDirectoryChecker init complete: test_file=%s", self.test_file)  # Log after init
+        logger.debug("DataDirectoryChecker init complete: test_file=%s", self.test_file)  # Log after init
 
     def check(self) -> bool:  # Check if data directory is writable and handle errors
         """Check if data directory is writable.
@@ -52,10 +52,10 @@ class DataDirectoryChecker:
         Returns:
             True if writable, exits program if not writable due to permissions.
         """
-        logging.info("DataDirectoryChecker.check: validating write access to %s", self.data_dir)  # Pre-check log
+        logger.info("DataDirectoryChecker.check: validating write access to %s", self.data_dir)  # Pre-check log
         try:  # Attempt to validate write permission
             result = self._test_write_permission()  # Call permission test helper method
-            logging.debug("DataDirectoryChecker.check: write permission ok (result=%s)", result)  # Post-check log
+            logger.debug("DataDirectoryChecker.check: write permission ok (result=%s)", result)  # Post-check log
             return result  # Return success signal to caller
         except PermissionError:  # Catch permission errors and display actionable guidance
             self._handle_permission_error()  # Call error handler to print guidance and exit
@@ -75,7 +75,7 @@ class DataDirectoryChecker:
 
     def _handle_permission_error(self) -> None:  # Display context-specific guidance and exit
         """Print error message with context-specific guidance and exit."""
-        logging.error("DataDirectoryChecker: data directory %s is not writable", self.data_dir)  # Log fail
+        logger.error("DataDirectoryChecker: data directory %s is not writable", self.data_dir)  # Log fail
         in_container = self._is_running_in_container()  # Detect if running in container to show appropriate fix
 
         self._print_error_header()  # Print error banner with path information
