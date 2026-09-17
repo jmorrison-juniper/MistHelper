@@ -10,6 +10,8 @@ import inspect  # WHY: probe callable signatures for parameter discovery
 import logging  # WHY: action-log start/execute/error transitions
 from typing import Any  # WHY: TUI back-ref + parsed payloads are opaque
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 _SECRET_TOKENS = ("pass", "token", "key", "secret")  # Substrings that flag secret-like names
 
 
@@ -38,7 +40,7 @@ class FunctionExecutor:  # WHY: extracted from MistHelperTUI to own Live-mode ex
         if not func or not callable(func):  # Guard: invalid selection
             tui.output_lines = ["[ERROR] Selected item is not callable"]  # WHY: user-visible error line
             return  # WHY: nothing to execute, bail out early
-        logging.info("TUI: starting execution of %s", func_name)  # Action log before signature probe
+        logger.info("TUI: starting execution of %s", func_name)  # Action log before signature probe
         try:
             self._prepare_parameter_list(func)  # Build tui.param_list / function_params
         except Exception as error:  # Signature probing can fail on builtins
@@ -113,7 +115,7 @@ class FunctionExecutor:  # WHY: extracted from MistHelperTUI to own Live-mode ex
         func_name = tui.current_function.get("name")  # For logging
         tui.execution_state = "executing"  # Switch to running state
         tui.output_lines = ["[EXECUTING] Running API call..."]
-        logging.info("TUI: executing %s", func_name)  # Action log before call
+        logger.info("TUI: executing %s", func_name)  # Action log before call
         try:
             self._execute_and_paginate(func, func_name)  # Heavy lifting in helper
         except Exception as error:  # Surface and log any failure
@@ -137,13 +139,13 @@ class FunctionExecutor:  # WHY: extracted from MistHelperTUI to own Live-mode ex
         if tui._should_show_results_grid(parsed_data):  # Switch into grid view when tabular
             tui.execution_state = "viewing_results"
             tui.results_scroll_offset = 0
-            logging.info(
+            logger.info(
                 "TUI: Results grid available - entering viewing_results state with %s items",
                 len(parsed_data.get("results", [])),
             )
         else:
-            logging.info("TUI: Execution complete - no grid display (data type: %s)", type(parsed_data).__name__)
-        logging.debug("TUI: %s completed", func_name)  # Action log after success
+            logger.info("TUI: Execution complete - no grid display (data type: %s)", type(parsed_data).__name__)
+        logger.debug("TUI: %s completed", func_name)  # Action log after success
 
     def _paginate_if_possible(self, result: Any, parsed_data: Any) -> tuple[Any, Any]:  # WHY: cursor-pagination entry
         """Follow ``result.next`` cursor pagination, accumulating results."""

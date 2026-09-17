@@ -27,6 +27,8 @@ from src.input.prompt_client_utils import PromptClientUtils
 from src.utils.file_path_utils import FilePathUtils
 from src.utils.input_utils import InputUtils
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class PromptUtils:  # General prompt helpers.
     """Centralized prompt utilities for user input and selection operations.
@@ -50,13 +52,13 @@ class PromptUtils:  # General prompt helpers.
         # WHY (#886 Phase 2): retire print() in favor of logging.warning so operator sees the
         # table on the default root-logger config (INFO is suppressed by default). Lazy %-format
         # keeps ruff clean and renders PrettyTable via its __str__.
-        logging.warning("%s", table)  # Render the device table.
-        logging.info("Displayed device selection table to user.")  # Log table display.
+        logger.warning("%s", table)  # Render the device table.
+        logger.info("Displayed device selection table to user.")  # Log table display.
         user_input = InputUtils.safe_input(  # Read operator device choice.
             "Enter the index or name of the device to view device: ",
             context="device_inventory_selection",
         ).strip()
-        logging.debug("User input for device selection: %s", user_input)  # Log raw device input.
+        logger.debug("User input for device selection: %s", user_input)  # Log raw device input.
         return PromptUtils._resolve_device_selection(user_input, index_to_device, name_to_device)  # Resolve.
 
     @staticmethod
@@ -75,13 +77,13 @@ class PromptUtils:  # General prompt helpers.
         if not rawdata:  # Empty inventory path
             # WHY (#886 Phase 2): collapse paired print+logger into a single logging.warning so
             # the "no devices" banner reaches the operator via the same handler chain as the log.
-            logging.warning("No devices found for site_id: %s", site_id)
+            logger.warning("No devices found for site_id: %s", site_id)
             return None
         filtered = PromptUtils._filter_inventory_by_type(rawdata, device_type)  # Apply type filter
         if not filtered:  # Filter produced empty set
             # WHY (#886 Phase 2): collapse paired print+logger into a single logging.warning so
             # the "no devices of type" banner reaches the operator via the same handler chain.
-            logging.warning("No devices of type '%s' found for site_id: %s", device_type, site_id)
+            logger.warning("No devices of type '%s' found for site_id: %s", device_type, site_id)
             return None
         return filtered
 
@@ -93,7 +95,7 @@ class PromptUtils:  # General prompt helpers.
         inventory = DataProcessingUtils.flatten_nested_fields(inventory)  # Flatten nested fields.
         inventory = DataProcessingUtils.escape_multiline(inventory)  # type: ignore[no-untyped-call]
         mh.DataExporter.write_with_format_selection(inventory, csv_filename, api_function_name="getOrgInventory")  # type: ignore[no-untyped-call]
-        logging.info("Device inventory for site_id written to %s", csv_filename)  # Log CSV write location.
+        logger.info("Device inventory for site_id written to %s", csv_filename)  # Log CSV write location.
         table = PrettyTable()  # Build selection table.
         table.field_names = ["Index", "name", "mac", "model", "serial"]  # Columns.
         index_to_device: dict = {}  # Index lookup.
@@ -114,15 +116,15 @@ class PromptUtils:  # General prompt helpers.
             idx = int(normalized)  # Parse index.
             if idx in index_to_device:  # Valid index.
                 device_id = index_to_device[idx].get("id")  # Read id.
-                logging.info("User selected device by index: %s (device_id: %s)", idx, device_id)  # Log.
+                logger.info("User selected device by index: %s (device_id: %s)", idx, device_id)  # Log.
                 return device_id  # type: ignore[no-any-return]
-            logging.error(" Invalid index.")  # Log invalid index.
+            logger.error(" Invalid index.")  # Log invalid index.
             return None  # Abort.
         if normalized in name_to_device:  # Name match path.
             device_id = name_to_device[normalized].get("id")  # Read id by name.
-            logging.info("User selected device by name: %s (device_id: %s)", normalized, device_id)  # Log.
+            logger.info("User selected device by name: %s (device_id: %s)", normalized, device_id)  # Log.
             return device_id  # type: ignore[no-any-return]
-        logging.error(" Device not found by name or index.")  # Log not-found.
+        logger.error(" Device not found by name or index.")  # Log not-found.
         return None  # Abort.
 
     @staticmethod
@@ -133,11 +135,11 @@ class PromptUtils:  # General prompt helpers.
         index_to_site, name_to_site = PromptUtils._load_site_csv_maps(csv_file)  # Read CSV into index/name maps.
         # WHY (#886 Phase 2): retire print() in favor of logging.warning so operator sees the
         # heading + per-site rows on the default root-logger config (INFO is suppressed by default).
-        logging.warning("\nAvailable Sites:")  # Log available sites heading.
+        logger.warning("\nAvailable Sites:")  # Log available sites heading.
         for idx, row in index_to_site.items():  # Enumerate site rows.
-            logging.warning("[%s] %s", idx, row.get("name", "Unnamed"))  # Log each site option.
+            logger.warning("[%s] %s", idx, row.get("name", "Unnamed"))  # Log each site option.
         user_input = InputUtils.safe_input("\nEnter site index or name: ", context="site_selection").strip()
-        logging.debug("User input for site selection: %s", user_input)  # Log raw site input.
+        logger.debug("User input for site selection: %s", user_input)  # Log raw site input.
         if user_input.isdigit():  # Branch: numeric index choice.
             site_id = PromptUtils._pick_site_by_index(int(user_input), index_to_site)  # Resolve by index.
             if site_id is not None:  # Cache successful selection.
@@ -149,7 +151,7 @@ class PromptUtils:  # General prompt helpers.
             return site_id  # Return resolved id.
         # WHY (#886 Phase 2): collapse paired print+logger into a single logging.warning so the
         # site-not-found banner reaches the operator via the same handler chain as the log.
-        logging.warning("Site not found by name or index: %s", user_input)  # Log not-found site.
+        logger.warning("Site not found by name or index: %s", user_input)  # Log not-found site.
         return None  # Abort on not found.
 
     @staticmethod
@@ -168,13 +170,13 @@ class PromptUtils:  # General prompt helpers.
         if idx not in index_to_site:  # Validate index exists.
             # WHY (#886 Phase 2): collapse paired print+logger into a single logging.warning so
             # the invalid-index banner reaches the operator via the same handler chain.
-            logging.warning("Invalid site index entered: %s", idx)  # Log invalid index.
+            logger.warning("Invalid site index entered: %s", idx)  # Log invalid index.
             return None  # Abort on invalid index.
         site_id = index_to_site[idx].get("id")  # Read selected site id.
         # WHY (#886 Phase 2): retire print() in favor of logging.warning so operator sees the
         # confirmation banner on the default root-logger config (INFO is suppressed by default).
-        logging.warning("! Selected site: %s (ID: %s)", index_to_site[idx].get("name"), site_id)
-        logging.info("User selected site by index: %s (site_id: %s)", idx, site_id)  # Log index selection.
+        logger.warning("! Selected site: %s (ID: %s)", index_to_site[idx].get("name"), site_id)
+        logger.info("User selected site by index: %s (site_id: %s)", idx, site_id)  # Log index selection.
         return site_id  # Return selected site id.
 
     @staticmethod
@@ -183,8 +185,8 @@ class PromptUtils:  # General prompt helpers.
         site_id = name_to_site[name].get("id")  # Read site id by name.
         # WHY (#886 Phase 2): retire print() in favor of logging.warning so operator sees the
         # confirmation banner on the default root-logger config (INFO is suppressed by default).
-        logging.warning("! Selected site: %s (ID: %s)", name, site_id)
-        logging.info("User selected site by name: %s (site_id: %s)", name, site_id)  # Log name selection.
+        logger.warning("! Selected site: %s (ID: %s)", name, site_id)
+        logger.info("User selected site by name: %s (site_id: %s)", name, site_id)  # Log name selection.
         return site_id  # Return selected site id.
 
     @staticmethod
@@ -205,12 +207,12 @@ class PromptUtils:  # General prompt helpers.
         Returns:
             str: The selected site ID or None if no selection made
         """
-        logging.info("Prompting user to select a site from SiteList.csv...")  # Log selection prompt start.
+        logger.info("Prompting user to select a site from SiteList.csv...")  # Log selection prompt start.
         site_id = PromptUtils.select_site_id_from_csv()  # Prompt site from CSV.
         if site_id:  # Handle successful selection.
-            logging.info("! Selected site ID: %s", site_id)  # Log selected site id.
+            logger.info("! Selected site ID: %s", site_id)  # Log selected site id.
         else:
-            logging.error(" No site selected. User may have entered an invalid value or cancelled the prompt.")
+            logger.error(" No site selected. User may have entered an invalid value or cancelled the prompt.")
         return site_id  # Return selected site id.
 
     # PromptUtils.select_device removed per issue #431 (ARCH-DELEGATE).
@@ -235,7 +237,7 @@ class PromptUtils:  # General prompt helpers.
             if not selected_site:  # Handle no-site selection.
                 # WHY (#886 Phase 2): retire print() in favor of logging.warning so operator sees
                 # the "no site" banner on the default root-logger config (INFO is suppressed).
-                logging.warning(" No site selected.")  # Log none selected.
+                logger.warning(" No site selected.")  # Log none selected.
                 return False  # Signal scope failure.
             return selected_site  # Return chosen site scope.
         return None  # Org-wide search
@@ -252,13 +254,13 @@ class PromptUtils:  # General prompt helpers.
         if site_id:  # Branch: site-scoped search.
             # WHY (#886 Phase 2): retire print() in favor of logging.warning so operator sees the
             # search-scope banner on the default root-logger config (INFO is suppressed by default).
-            logging.warning("! Searching for clients in selected site...")
+            logger.warning("! Searching for clients in selected site...")
             wireless = PromptUtils._fetch_site_wireless_clients(site_id)  # Fetch site wireless clients.
             wired = PromptUtils._fetch_site_wired_clients(site_id)  # Fetch site wired clients.
         else:
             # WHY (#886 Phase 2): retire print() in favor of logging.warning so operator sees the
             # search-scope banner on the default root-logger config (INFO is suppressed by default).
-            logging.warning("! Searching for clients across organization...")
+            logger.warning("! Searching for clients across organization...")
             wireless = PromptUtils._fetch_org_wireless_clients(org_id)  # Fetch org wireless clients.
             wired = PromptUtils._fetch_org_wired_clients(org_id)  # Fetch org wired clients.
 
@@ -277,7 +279,7 @@ class PromptUtils:  # General prompt helpers.
             for client in clients:  # Tag each client.
                 client["client_type"] = "wireless"  # Mark as wireless type.
                 client["source_site_id"] = site_id  # Record source site id.
-            logging.info("Found %s wireless clients in site", len(clients))  # Log wireless client count.
+            logger.info("Found %s wireless clients in site", len(clients))  # Log wireless client count.
             return clients  # Return wireless clients.
         except Exception as exception:  # Catch fetch errors.
             logging.warning("Could not fetch wireless clients for site: %s", exception)  # Log fetch failure.
@@ -293,7 +295,7 @@ class PromptUtils:  # General prompt helpers.
             for client in clients:  # Tag each client.
                 client["client_type"] = "wired"  # Mark as wired type.
                 client["source_site_id"] = site_id  # Record source site id.
-            logging.info("Found %s wired clients in site", len(clients))  # Log wired client count.
+            logger.info("Found %s wired clients in site", len(clients))  # Log wired client count.
             return clients  # Return wired clients.
         except Exception as exception:  # Catch fetch errors.
             logging.warning("Could not fetch wired clients for site: %s", exception)  # Log fetch failure.
@@ -308,7 +310,7 @@ class PromptUtils:  # General prompt helpers.
             clients = mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page through all results.
             for client in clients:  # Tag each client.
                 client["client_type"] = "wireless"  # Mark as wireless type.
-            logging.info("Found %s wireless clients in organization", len(clients))  # Log wireless client count.
+            logger.info("Found %s wireless clients in organization", len(clients))  # Log wireless client count.
             return clients  # Return wireless clients.
         except Exception as exception:  # Catch fetch errors.
             logging.warning("Could not fetch wireless clients for org: %s", exception)  # Log fetch failure.
@@ -323,7 +325,7 @@ class PromptUtils:  # General prompt helpers.
             clients = mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page through all results.
             for client in clients:  # Tag each client.
                 client["client_type"] = "wired"  # Mark as wired type.
-            logging.info("Found %s wired clients in organization", len(clients))  # Log wired client count.
+            logger.info("Found %s wired clients in organization", len(clients))  # Log wired client count.
             return clients  # Return wired clients.
         except Exception as exception:  # Catch fetch errors.
             logging.warning("Could not fetch wired clients for org: %s", exception)  # Log fetch failure.
@@ -335,10 +337,10 @@ class PromptUtils:  # General prompt helpers.
         try:
             # WHY (#886 Phase 2): retire print() in favor of logging.warning so operator sees the
             # load banner on the default root-logger config (INFO is suppressed by default).
-            logging.warning(" Loading site information...")
+            logger.warning(" Loading site information...")
             sites = APICoreFetchUtils.all_sites_with_limit(org_id)  # Fetch all sites for org.
             cache = {site["id"]: site["name"] for site in sites}  # Build id-to-name map.
-            logging.info("Cached %s sites for client display", len(cache))  # Log cached site count.
+            logger.info("Cached %s sites for client display", len(cache))  # Log cached site count.
             return cache  # Return the cache.
         except Exception as exception:  # Catch fetch errors.
             logging.warning("Could not fetch sites for display: %s", exception)  # Log fetch failure.
@@ -351,9 +353,9 @@ class PromptUtils:  # General prompt helpers.
         wired_count = sum(1 for c in all_clients if c.get("client_type") == "wired")  # Count wired
         # WHY (#886 Phase 2): retire print() in favor of logging.warning so operator sees the
         # summary + legend + separator on the default root-logger config (INFO is suppressed).
-        logging.warning("\n  Summary: %s wireless, %s wired clients", wireless_count, wired_count)
-        logging.warning("\n  [+] = Online  [~] = Recently seen  [-] = Offline")
-        logging.warning("%s", "---" * 20)
+        logger.warning("\n  Summary: %s wireless, %s wired clients", wireless_count, wired_count)
+        logger.warning("\n  [+] = Online  [~] = Recently seen  [-] = Offline")
+        logger.warning("%s", "---" * 20)
 
     @staticmethod
     def _display_client_table(all_clients: list[dict], sites_cache: dict[str, str]) -> dict[int, dict]:  # type: ignore[type-arg]
@@ -365,8 +367,8 @@ class PromptUtils:  # General prompt helpers.
         # WHY (#886 Phase 2): retire print() in favor of logging.warning so operator sees the
         # "Found N clients" banner + table on the default root-logger config (INFO is suppressed).
         # Lazy %-format renders PrettyTable via its __str__ while keeping ruff clean.
-        logging.warning("\n  Found %d clients:", len(all_clients))
-        logging.warning("%s", table)
+        logger.warning("\n  Found %d clients:", len(all_clients))
+        logger.warning("%s", table)
         PromptUtils._print_client_type_summary(all_clients)  # Type counts + legend
         return dict(enumerate(all_clients))  # Index-to-client map for caller
 
@@ -492,12 +494,12 @@ class PromptUtils:  # General prompt helpers.
 
         # WHY (#886 Phase 2): retire print() in favor of logging.warning so operator sees the
         # selection heading + fields on the default root-logger config (INFO is suppressed).
-        logging.warning("\n Selected client:")
-        logging.warning("   Name: %s", hostname)
-        logging.warning("   MAC: %s", client_mac)
-        logging.warning("   Type: %s", client_type)
+        logger.warning("\n Selected client:")
+        logger.warning("   Name: %s", hostname)
+        logger.warning("   MAC: %s", client_mac)
+        logger.warning("   Type: %s", client_type)
         if client_site_id and client_site_id in sites_cache:  # Branch: known site.
-            logging.warning("   Site: %s", sites_cache[client_site_id])  # Show resolved site name.
+            logger.warning("   Site: %s", sites_cache[client_site_id])  # Show resolved site name.
 
-        logging.info("User selected client: MAC=%s, type=%s, site=%s", client_mac, client_type, client_site_id)
+        logger.info("User selected client: MAC=%s, type=%s, site=%s", client_mac, client_type, client_site_id)
         return client_mac, client_type, client_site_id  # Return client id triple.

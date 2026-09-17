@@ -10,6 +10,8 @@ from __future__ import annotations  # WHY: postponed eval for forward refs in ty
 import logging  # WHY: structured action logging for build lifecycle
 from typing import Any  # WHY: TUI hooks + payload values are heterogeneous
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 MAX_VISIBLE_ROWS = 25  # WHY: hard cap on visible rows so wide payloads stay legible
 UUID_LEN = 36  # WHY: canonical hyphenated UUID length. Used by _is_uuid_like
 SIMPLE_LIST_TYPES = (str, int, float, bool, type(None))  # WHY: primitives render inline
@@ -205,7 +207,7 @@ class ResultsGridBuilder:  # WHY: public builder for the results Panel, owned by
 
     def build(self) -> Any:  # WHY: sole public entry consumed by LayoutBuilder
         """Return the Rich Panel for the current result, or ``None`` when no data."""
-        logging.info("TUI: building results grid")  # WHY: action log before build
+        logger.info("TUI: building results grid")  # WHY: action log before build
         results = self._safe_results()  # WHY: guarded access to parsed results
         if not results:  # WHY: no data -> caller shows fallback panel
             return None  # WHY: None signals LayoutBuilder to render fallback
@@ -216,7 +218,7 @@ class ResultsGridBuilder:  # WHY: public builder for the results Panel, owned by
         start_row, end_row = self._compute_row_window(len(all_rows))  # WHY: pick visible row window
         self._populate_table(table, all_rows[start_row:end_row])  # WHY: fill visible rows
         title = self._compose_title(current_idx, len(results), len(all_rows), start_row, end_row)
-        logging.debug("TUI: results grid built (rows=%s)", len(all_rows))  # WHY: action log after build
+        logger.debug("TUI: results grid built (rows=%s)", len(all_rows))  # WHY: action log after build
         return self._tui.Panel(table, title=title, border_style="bright_yellow", box=self._tui.box.DOUBLE, expand=True)
 
     def _safe_results(self) -> list[Any]:
