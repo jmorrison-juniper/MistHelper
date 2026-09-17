@@ -21,6 +21,8 @@ from src.dataclasses.polyglot_write_outcome import PolyglotWriteOutcome
 from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 from src.refactors.sqlite_database_writer import SQLiteDatabaseWriter
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 # Optional polyglot DB layer — mirror MistHelper's try/except so the exporter
 # still works when the optional dependency is missing.
 try:  # pragma: no cover - import guard mirrors MistHelper
@@ -106,7 +108,7 @@ class DataExporter:  # Multi-backend export facade.
                 config,  # Pass env-derived connection/configuration object
                 strategies=ENDPOINT_PRIMARY_KEY_STRATEGIES,  # Per-endpoint primary-key upsert strategies
             )
-            logging.info("Polyglot DatabaseRouter initialized")  # Confirm successful backend startup
+            logger.info("Polyglot DatabaseRouter initialized")  # Confirm successful backend startup
         except Exception as error:  # Never let optional-backend startup crash a core CSV/SQLite export
             logging.warning("DatabaseRouter init failed, CSV/SQLite only: %s", error)  # Surface degraded mode
             cls._router = None  # Force safe CSV/SQLite path when router could not be constructed
@@ -118,7 +120,7 @@ class DataExporter:  # Multi-backend export facade.
             return
         cls._router_initialized = True  # Latch the guard before fallible work
         if not DataExporter._polyglot_db_layer_available():  # Optional polyglot layer not installed
-            logging.debug("Polyglot DB layer not installed - CSV/SQLite only")
+            logger.debug("Polyglot DB layer not installed - CSV/SQLite only")
             return
         cls._build_polyglot_router()  # Construct router (catches startup failures internally)
 
@@ -151,7 +153,7 @@ class DataExporter:  # Multi-backend export facade.
         opts = backend_options if backend_options is not None else ExportBackendOptions()  # Resolve defaults
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         output_format = opts.format_override if opts.format_override else mh.OUTPUT_FORMAT  # Override or global
-        logging.debug(
+        logger.debug(
             "DataExporter.write_with_format_selection: rows=%s, target=%s, format=%s, api_func=%s",
             len(data) if data else 0,
             filename_or_table,
@@ -180,7 +182,7 @@ class DataExporter:  # Multi-backend export facade.
             return
         if outcome.written:  # The rows reached a database, so the caller has nothing to fix.
             return
-        logging.warning(  # Warning level, because the operator sees a file and an empty database.
+        logger.warning(  # Warning level, because the operator sees a file and an empty database.
             "The database write was dropped for %s. Cause: %s. The file output %s holds the only copy.",
             api_function_name,  # Name the endpoint that lost the write.
             outcome.skip_reason,  # Name the cause identifier so a log search finds every case.
@@ -213,10 +215,10 @@ class DataExporter:  # Multi-backend export facade.
         if not DataExporter._polyglot_db_layer_available():  # No DB layer means no host to probe.
             cls._standalone_probe = True  # Cache the verdict so the check stays cheap.
             return True
-        logging.debug("Probing the polyglot database hosts")  # Log before the network probe.
+        logger.debug("Probing the polyglot database hosts")  # Log before the network probe.
         assert polyglot_hosts_unreachable is not None  # nosec B101 - _polyglot_db_layer_available proved the import.
         cls._standalone_probe = polyglot_hosts_unreachable()  # Ask the db package for one TCP verdict.
-        logging.debug("Polyglot host probe: unreachable=%s", cls._standalone_probe)  # Log the verdict.
+        logger.debug("Polyglot host probe: unreachable=%s", cls._standalone_probe)  # Log the verdict.
         return cls._standalone_probe
 
     @classmethod
@@ -233,7 +235,7 @@ class DataExporter:  # Multi-backend export facade.
         if not cls._polyglot_hosts_silent():  # At least one backend answers.
             return False  # Run the polyglot write, inside or outside a container.
         if not cls._standalone_logged:  # Emit the degraded-mode warning one time.
-            logging.warning(
+            logger.warning(
                 "Polyglot database hosts do not answer. MistHelper writes CSV and SQLite only. "
                 "Set ARANGO_HOST and REDIS_HOST to reach the databases."
             )  # Make the dropped polyglot write visible in the log.
@@ -261,7 +263,7 @@ class DataExporter:  # Multi-backend export facade.
     @staticmethod
     def _log_polyglot_skip(reason: str, api_function_name: str | None) -> None:
         """Write one warning that names the cause of a dropped polyglot write."""
-        logging.warning(  # Warning level, because the operator lost a database write.
+        logger.warning(  # Warning level, because the operator lost a database write.
             "%s Target: %s.",
             POLYGLOT_SKIP_MESSAGES[reason],  # The plain-language cause for a junior NOC engineer.
             api_function_name or "unnamed call site",  # Name the endpoint so the log points at the call.
@@ -281,17 +283,17 @@ class DataExporter:  # Multi-backend export facade.
         if reason is not None:  # The rows reached no database, so name the cause.
             DataExporter._log_polyglot_skip(reason, api_function_name)  # Make the loss visible in the log.
             return PolyglotWriteOutcome(False, reason, records_written, records_failed, backend)
-        logging.debug("Polyglot write stored %s rows in %s", records_written, backend)  # Log the result after.
+        logger.debug("Polyglot write stored %s rows in %s", records_written, backend)  # Log the result after.
         return PolyglotWriteOutcome(True, None, records_written, records_failed, backend)  # Report the true result.
 
     @staticmethod
     def _perform_polyglot_write(payload: list[dict[str, Any]], api_function_name: str) -> PolyglotWriteOutcome:
         """Issue the router write call and return a truthful outcome. Never raises."""
-        logging.info("Writing %s rows to the polyglot database for %s", len(payload), api_function_name)
+        logger.info("Writing %s rows to the polyglot database for %s", len(payload), api_function_name)
         try:
             assert DataExporter._router is not None  # nosec B101 - The caller checked _polyglot_skip_reason first.
             result = DataExporter._router.write(payload, api_function_name)  # Write to the polyglot database.
-            logging.info(  # Log the router answer before the exporter judges it.
+            logger.info(  # Log the router answer before the exporter judges it.
                 "Polyglot write: backend=%s, written=%s, failed=%s",
                 result.backend,
                 result.records_written,
@@ -340,11 +342,11 @@ class DataExporter:  # Multi-backend export facade.
     def _validate_write_inputs(data: list[dict[str, Any]], filename_or_table: str, output_format: str) -> bool:
         """Validate inputs for write operation. Returns True if valid."""
         if not data:  # No rows to write.
-            logging.warning("No data provided for output to %s", filename_or_table)  # warn no data.
+            logger.warning("No data provided for output to %s", filename_or_table)  # warn no data.
             return False  # Reject empty data.
 
         if output_format not in ["csv", "sqlite"]:  # Only csv/sqlite allowed.
-            logging.error("Invalid output format: %s. Must be 'csv' or 'sqlite'", output_format)  # bad format.
+            logger.error("Invalid output format: %s. Must be 'csv' or 'sqlite'", output_format)  # bad format.
             return False  # Reject bad format.
 
         return True  # Inputs valid.
@@ -357,7 +359,7 @@ class DataExporter:  # Multi-backend export facade.
     ) -> bool:
         """Write data to CSV format.  Pass fieldnames to preserve a specific column order."""
         csv_filename = filename_or_table if filename_or_table.endswith(".csv") else f"{filename_or_table}.csv"
-        logging.info("Writing %s rows to CSV file: %s", len(data), csv_filename)  # Log CSV write.
+        logger.info("Writing %s rows to CSV file: %s", len(data), csv_filename)  # Log CSV write.
         DataExporter.write_to_csv(data, csv_filename, fieldnames=fieldnames)  # Thread explicit column order through
         return True  # CSV written.
 
@@ -365,10 +367,10 @@ class DataExporter:  # Multi-backend export facade.
     def _write_sqlite_format(data: list[dict[str, Any]], filename_or_table: str, api_function_name: str | None) -> bool:
         """Write data to SQLite format. Returns True on success."""
         table_name = filename_or_table[:-4] if filename_or_table.endswith(".csv") else filename_or_table
-        logging.debug(  # Trace SQLite write.
+        logger.debug(  # Trace SQLite write.
             "SQLite write: table=%s, api_function=%s, strategy lookup initiated", table_name, api_function_name
         )
-        logging.info("Writing %s rows to SQLite table: %s", len(data), table_name)  # Log SQLite write.
+        logger.info("Writing %s rows to SQLite table: %s", len(data), table_name)  # Log SQLite write.
         return SQLiteDatabaseWriter(data, table_name, api_function_name).write()  # Run the writer.
 
     @staticmethod
@@ -384,19 +386,19 @@ class DataExporter:  # Multi-backend export facade.
             csv_file: Destination filename (placed in data/ if no directory is given).
             fieldnames: Optional explicit column order. Defaults to sorted unique keys.
         """
-        logging.debug("ENTRY: DataExporter.write_to_csv(data_rows=%s, csv_file=%s)", len(data) if data else 0, csv_file)
+        logger.debug("ENTRY: DataExporter.write_to_csv(data_rows=%s, csv_file=%s)", len(data) if data else 0, csv_file)
         if not data:  # No rows to write -- short-circuit and trace the early exit
-            logging.warning("No data provided to write to %s", csv_file)  # Inform caller of empty payload
-            logging.debug("EXIT: DataExporter.write_to_csv - no data to write")  # Trace early exit
+            logger.warning("No data provided to write to %s", csv_file)  # Inform caller of empty payload
+            logger.debug("EXIT: DataExporter.write_to_csv - no data to write")  # Trace early exit
             return  # Nothing to do
         csv_file_path = DataExporter._resolve_csv_path(csv_file)  # Place bare filenames under data/
-        logging.debug("Preparing to write %s rows to %s...", len(data), csv_file_path)  # Trace write prep
+        logger.debug("Preparing to write %s rows to %s...", len(data), csv_file_path)  # Trace write prep
         escaped_data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
         fields = DataExporter._resolve_csv_fields(escaped_data, fieldnames)  # Final column order for the CSV
-        logging.debug("CSV fields determined: %s", fields)  # Trace fields
+        logger.debug("CSV fields determined: %s", fields)  # Trace fields
         DataExporter._write_csv_with_exception_handling(csv_file_path, escaped_data, fields)  # Open + write rows
-        logging.info("File I/O: Successfully wrote %s rows to %s", len(escaped_data), csv_file_path)  # Log success
-        logging.debug("EXIT: DataExporter.write_to_csv - success")  # Trace exit
+        logger.info("File I/O: Successfully wrote %s rows to %s", len(escaped_data), csv_file_path)  # Log success
+        logger.debug("EXIT: DataExporter.write_to_csv - success")  # Trace exit
 
     @staticmethod
     def _resolve_csv_path(csv_file: str) -> str:
@@ -407,17 +409,17 @@ class DataExporter:  # Multi-backend export facade.
             resolved = os.path.join(data_dir, csv_file)  # Place under data/
         else:
             resolved = csv_file  # Caller-provided full path is honored verbatim
-        logging.debug("Resolved CSV destination path: %s", resolved)  # Trace path resolution
+        logger.debug("Resolved CSV destination path: %s", resolved)  # Trace path resolution
         return resolved  # Final destination
 
     @staticmethod
     def _resolve_csv_fields(escaped_data: list[dict[str, Any]], fieldnames: list[str] | None) -> list[str]:
         """Return the CSV column order. Honor caller-supplied fieldnames or fall back to sorted unique keys."""
         if fieldnames is not None:  # Caller supplied an explicit column order -- preserve it verbatim
-            logging.debug("Using caller-supplied fieldnames for CSV column order")  # Trace explicit ordering
+            logger.debug("Using caller-supplied fieldnames for CSV column order")  # Trace explicit ordering
             return fieldnames  # Use as-is
         derived = DataProcessingUtils.get_unique_keys(escaped_data)  # type: ignore[no-untyped-call]
-        logging.debug("Derived %s unique CSV columns from data", len(derived))  # Trace derived ordering
+        logger.debug("Derived %s unique CSV columns from data", len(derived))  # Trace derived ordering
         return derived  # Sorted unique keys
 
     @staticmethod
@@ -426,7 +428,7 @@ class DataExporter:  # Multi-backend export facade.
         for idx, row in enumerate(escaped_data):  # Walk each row in input order
             writer.writerow({field_name: row.get(field_name, "") for field_name in fields})  # Emit in col order
             if idx < 3:  # Trace the first three rows to aid post-mortem debugging
-                logging.debug("Row %s written: %s", idx, row)  # Per-row trace
+                logger.debug("Row %s written: %s", idx, row)  # Per-row trace
 
     @staticmethod
     def _write_csv_open_and_emit(
@@ -435,11 +437,11 @@ class DataExporter:  # Multi-backend export facade.
         fields: list[str],
     ) -> None:
         """Open the destination CSV and write header + rows. Lets I/O errors propagate to the caller."""
-        logging.debug("File I/O: Attempting to open %s for writing", csv_file_path)  # Trace pre-open
+        logger.debug("File I/O: Attempting to open %s for writing", csv_file_path)  # Trace pre-open
         with open(csv_file_path, "w", newline="", encoding="utf-8") as file_handle:  # Open CSV for writing
             writer = csv.DictWriter(file_handle, fieldnames=fields)  # Dict-based CSV writer
             writer.writeheader()  # Write the header row first
-            logging.debug("File I/O: Successfully wrote CSV header to %s", csv_file_path)  # Trace header write
+            logger.debug("File I/O: Successfully wrote CSV header to %s", csv_file_path)  # Trace header write
             DataExporter._emit_rows(writer, escaped_data, fields)  # Stream rows through the writer
 
     @staticmethod
@@ -481,7 +483,7 @@ class DataExporter:  # Multi-backend export facade.
         Returns the number of records exported (0 when there is no data or the export fails).
         """
         if not data:  # Nothing to export.
-            logging.warning("No data to export for %s", filename)  # warn no data.
+            logger.warning("No data to export for %s", filename)  # warn no data.
             return 0  # Zero exported.
 
         raw_data = [entry for entry in data if isinstance(entry, dict)]  # Keep dict rows only (defensive).
@@ -505,14 +507,14 @@ class DataExporter:  # Multi-backend export facade.
         if not sort_key:  # No sort requested
             return raw_data  # Preserve original order
         sorted_data = sorted(raw_data, key=lambda entry: entry.get(sort_key, ""))  # Sort by key (missing -> '')
-        logging.debug("Data sorted by key: %s", sort_key)  # Trace the sort.
+        logger.debug("Data sorted by key: %s", sort_key)  # Trace the sort.
         return sorted_data  # Sorted rows
 
     @staticmethod
     def _finalize_export(success: bool, processed_count: int, filename: str) -> int:  # Log + return export outcome
         """Log the export result and return the processed-row count on success, 0 on failure."""
         if success:  # Export succeeded.
-            logging.info("Exported %s records to %s", processed_count, filename)  # Log export count.
+            logger.info("Exported %s records to %s", processed_count, filename)  # Log export count.
             return processed_count  # Return rows exported.
-        logging.error("Failed to export data to %s", filename)  # log export failure.
+        logger.error("Failed to export data to %s", filename)  # log export failure.
         return 0  # Zero exported.

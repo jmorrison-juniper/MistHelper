@@ -20,6 +20,8 @@ from src.data.data_processing_utils import (
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 from src.time.time_utils import TimeUtils  # WHY: 1014 P6 direct import (FR-005).
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class SelfExportUtils:  # Self/account exporters.
     # pylint: disable=too-few-public-methods  # WHY: static-method utility class. Grouping by domain is the point.
@@ -35,7 +37,7 @@ class SelfExportUtils:  # Self/account exporters.
         """Flatten + persist self audit rows, or write an empty file when nothing was returned."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rows:  # No data returned -- write empty output rather than failing silently.
-            logging.warning("No self audit log records returned for the last %d hours", hours)  # Warn empty.
+            logger.warning("No self audit log records returned for the last %d hours", hours)  # Warn empty.
             mh.DataExporter.write_with_format_selection(
                 [], filename, api_function_name="listSelfAuditLogs"
             )  # Empty file signals successful run.
@@ -44,26 +46,26 @@ class SelfExportUtils:  # Self/account exporters.
         mh.DataExporter.write_with_format_selection(  # Persist to disk with format selection.
             rows, filename, api_function_name="listSelfAuditLogs"
         )
-        logging.info("Exported %d self audit log records to %s", len(rows), filename)  # Log success.
+        logger.info("Exported %d self audit log records to %s", len(rows), filename)  # Log success.
 
     @staticmethod
     def audit_logs() -> None:  # Export audit logs.
         """Export audit log of changes made by the authenticated admin account to SelfAuditLogs.csv."""
-        logging.info("Starting export of self (admin account) audit logs...")  # Log before operation.
+        logger.info("Starting export of self (admin account) audit logs...")  # Log before operation.
         filename = "SelfAuditLogs.csv"  # Output filename for self audit log entries.
         try:
             mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
             hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Same lookback as other audit log exports.
             TimeUtils.log_dynamic_lookback("self audit logs export", hours)  # Log lookback window selection.
-            logging.info("Fetching self audit logs for last %d hours...", hours)  # Log before API call.
+            logger.info("Fetching self audit logs for last %d hours...", hours)  # Log before API call.
             response = mistapi.api.v1.self.logs.listSelfAuditLogs(  # Call Mist API for admin account audit log.
                 mh.apisession,
                 duration=f"{hours}h",  # Limit results to the dynamic lookback window.
                 limit=1000,  # Request large page to minimise pagination round-trips.
             )
-            logging.debug("Raw API response received for self audit logs")  # Log after API call.
+            logger.debug("Raw API response received for self audit logs")  # Log after API call.
             rows = mistapi.get_all(response=response, mist_session=mh.apisession)  # Paginate through all results.
-            logging.debug("Received %d self audit log records after pagination", len(rows))  # Log record count.
+            logger.debug("Received %d self audit log records after pagination", len(rows))  # Log record count.
             SelfExportUtils._persist_self_audit_rows(rows, filename, hours)  # Persist or write empty.
         except Exception as exception:  # Catch any API or processing error.
             logging.exception("Failed to export self audit logs: %s", exception)  # Log full traceback.

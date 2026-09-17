@@ -42,7 +42,7 @@ class OrgExportUtils:
     def export_data(api_call, data_type, sort_key="name", limit=1000, **api_kwargs):  # Export an org endpoint.
         """Generic org-data export: build Org<DataType>.csv from `api_call`, pass `limit`/extras as API kwargs."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Starting export of organization %s...", data_type)  # Log start.
+        logger.info("Starting export of organization %s...", data_type)  # Log start.
 
         # Create filename from data_type
         if data_type.casefold() == "other device events":
@@ -79,7 +79,7 @@ class OrgExportUtils:
             for site_data in sites_sle_data:  # Tag each row with its SLE type.
                 site_data["sle_type"] = sle_type  # Record the SLE type on the row.
                 all_sites_sle_data.append(site_data)  # Collect into accumulator.
-            logging.debug("Retrieved SLE data for %s sites with SLE type: %s", len(sites_sle_data), sle_type)
+            logger.debug("Retrieved SLE data for %s sites with SLE type: %s", len(sites_sle_data), sle_type)
         except Exception as exception:  # Fetch failed -- skip this type but continue overall.
             logging.warning("Failed to get sites SLE data for type %s: %s", sle_type, exception)  # Warn and skip.
 
@@ -95,13 +95,13 @@ class OrgExportUtils:
             )  # type: ignore[no-untyped-call]
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("! %d sites SLE summary exported to OrgSitesSLESummary.csv", len(processed))  # Tell the user.
-            logging.info("Exported %s sites SLE summary to OrgSitesSLESummary.csv", len(processed))  # Log count.
+            logger.info("Exported %s sites SLE summary to OrgSitesSLESummary.csv", len(processed))  # Log count.
             return  # Done.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning(
             "! 0 sites SLE summary exported to OrgSitesSLESummary.csv (no data available)"
         )  # Tell user zero.
-        logging.warning("No sites SLE data available for organization")  # Warn no data.
+        logger.warning("No sites SLE data available for organization")  # Warn no data.
         mh.DataExporter.write_with_format_selection([], "OrgSitesSLESummary.csv", api_function_name="getOrgSitesSle")  # type: ignore[no-untyped-call]
 
     @staticmethod
@@ -128,7 +128,7 @@ class OrgExportUtils:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Export Organization Sites SLE Summary:")  # Header.
-        logging.info("Starting export of sites SLE summary...")  # Log start.
+        logger.info("Starting export of sites SLE summary...")  # Log start.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         sle_types = ["wifi", "wired", "wan"]  # SLE types to fetch.
         emitter = mh.PROGRESS_EMITTER  # Progress emitter handle.
@@ -189,7 +189,7 @@ class OrgExportUtils:
         such metric into one request per valid choice instead of failing.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Loading parameterized insight-metric choices from Mist constants...")  # Trace the lookup
+        logger.info("Loading parameterized insight-metric choices from Mist constants...")  # Trace the lookup
         try:  # The constants call may fail offline -> degrade to no expansion
             response = mistapi.api.v1.const.insight_metrics.listInsightMetrics(
                 mh.apisession
@@ -199,7 +199,7 @@ class OrgExportUtils:
             logging.error("Failed to load insight-metric constants for parameter expansion: %s", exception)  # Trace
             return {}  # No parameterized map available
         parameterized = OrgExportUtils._extract_metric_choices(definitions)  # Pull choices from the definitions
-        logging.debug("Discovered %s parameterized org insight metrics", len(parameterized))  # Trace the count
+        logger.debug("Discovered %s parameterized org insight metrics", len(parameterized))  # Trace the count
         return parameterized  # Map of metric -> required choices
 
     @staticmethod
@@ -210,10 +210,10 @@ class OrgExportUtils:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         uri = f"/api/v1/orgs/{org_id}/insights/{metric}"  # Org insight endpoint for this parameterized metric
         query = {"metric": choice, "duration": duration}  # Required 'metric' choice plus the lookback window
-        logging.debug("Fetching parameterized metric %s with metric=%s", metric, choice)  # Trace the attempt
+        logger.debug("Fetching parameterized metric %s with metric=%s", metric, choice)  # Trace the attempt
         session = mh.apisession  # Local handle so the Any | None global can be narrowed below
         if session is None:  # No authenticated session available (defensive guard)
-            logging.error("No API session available to fetch parameterized metric %s", metric)  # Trace the gap
+            logger.error("No API session available to fetch parameterized metric %s", metric)  # Trace the gap
             return None  # Cannot fetch without a session
         try:  # Per-choice failures must not abort the whole export
             response = session.mist_get(uri=uri, query=query)  # Low-level GET (SDK cannot pass query 'metric')
@@ -248,7 +248,7 @@ class OrgExportUtils:
                 retrieved += 1  # Count the success
             else:  # No data or the request failed
                 failed += 1  # Count the miss
-        logging.debug("Parameterized metric %s: %s retrieved, %s failed", metric, retrieved, failed)  # Trace totals
+        logger.debug("Parameterized metric %s: %s retrieved, %s failed", metric, retrieved, failed)  # Trace totals
         return records, retrieved, failed  # Aggregate result for this metric
 
     @staticmethod
@@ -284,9 +284,9 @@ class OrgExportUtils:
             )
             sites_data = mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page all site rows.
             if not sites_data:  # Category empty -- log and return None.
-                logging.debug("No sites data for insight metric: %s with SLE: %s", metric, sle_category)
+                logger.debug("No sites data for insight metric: %s with SLE: %s", metric, sle_category)
                 return None  # No data for this category.
-            logging.debug(  # Trace the successful category fetch with its site count.
+            logger.debug(  # Trace the successful category fetch with its site count.
                 "Got %s sites for insight metric: %s SLE: %s", len(sites_data), metric, sle_category
             )
             return OrgExportUtils._insight_build_sites_result(org_id, metric, sle_category, sites_data)
@@ -317,9 +317,9 @@ class OrgExportUtils:
         if insight_data:  # The metric returned a usable payload.
             insight_data["metric_type"] = metric  # Tag the metric name onto the payload.
             insight_data["org_id"] = org_id  # Tag the owning org onto the payload.
-            logging.debug("Successfully retrieved org insight data for metric: %s", metric)  # Trace the success.
+            logger.debug("Successfully retrieved org insight data for metric: %s", metric)  # Trace the success.
             return [insight_data], 1, 0  # One retrieved record, no failures.
-        logging.debug("No data available for org metric: %s", metric)  # Trace the empty payload.
+        logger.debug("No data available for org metric: %s", metric)  # Trace the empty payload.
         return [], 0, 1  # No data counts as a single failed metric (matches the original behavior).
 
     @staticmethod
@@ -328,12 +328,12 @@ class OrgExportUtils:
     ) -> tuple[list[dict[str, Any]], int, int]:
         """Dispatch one metric to the right fetch strategy. Return (records, retrieved, failed)."""
         try:  # Any metric-level failure is caught here so the overall loop continues.
-            logging.debug("Attempting to retrieve org insight metric: %s", metric)  # Trace the attempt.
+            logger.debug("Attempting to retrieve org insight metric: %s", metric)  # Trace the attempt.
             if metric in parameterized_metrics:  # Parameterized metric -> expand across its required 'metric' choices.
                 records, ok, fail = OrgExportUtils._fetch_parameterized_org_metric(  # One GET per valid choice.
                     org_id, metric, parameterized_metrics[metric], "7d"
                 )
-                logging.debug("Expanded parameterized metric %s into %s records", metric, len(records))  # Trace expand.
+                logger.debug("Expanded parameterized metric %s into %s records", metric, len(records))  # Trace expand.
                 return records, ok, fail  # Hand back the per-choice aggregate.
             if OrgExportUtils._insight_is_worst_sites_metric(metric):  # Site-SLE metric -> per-category analysis.
                 return OrgExportUtils._insight_fetch_worst_sites_sle(org_id, metric)  # Fetch across wifi/wan/wired.
@@ -347,7 +347,7 @@ class OrgExportUtils:
         """Fetch the org-wide sites SLE summary. Return (records, retrieved, failed)."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:  # Isolate the summary fetch so its failure does not abort the export.
-            logging.debug("Attempting to retrieve org sites SLE summary")  # Trace the attempt.
+            logger.debug("Attempting to retrieve org sites SLE summary")  # Trace the attempt.
             response = mistapi.api.v1.orgs.insights.getOrgSitesSle(
                 mh.apisession, org_id, duration="7d", limit=100
             )  # GET.
@@ -356,7 +356,7 @@ class OrgExportUtils:
                 for item in sites_data:  # Tag each row with its metric type and org.
                     item["metric_type"] = "org_sites_sle_summary"  # Mark these as the sites SLE summary.
                     item["org_id"] = org_id  # Tag the owning org.
-                logging.debug("Successfully retrieved org sites SLE data for %s sites", len(sites_data))  # Trace count.
+                logger.debug("Successfully retrieved org sites SLE data for %s sites", len(sites_data))  # Trace count.
                 return list(sites_data), 1, 0  # All rows as records. Counts as one successful retrieval.
             return [], 0, 0  # No summary data. Neither retrieved nor failed (matches original).
         except Exception as sites_error:  # Summary fetch failed.
@@ -427,7 +427,7 @@ class OrgExportUtils:
             "\n! Successfully exported %d organization insight metrics to 4 normalized CSV files",
             metrics_retrieved,
         )  # Summarize the export for the user.
-        logging.info(  # Log the export totals for traceability.
+        logger.info(  # Log the export totals for traceability.
             "Exported %s org insight data points from %s metrics to normalized CSV files",
             len(all_insight_data),
             metrics_retrieved,
@@ -467,7 +467,7 @@ class OrgExportUtils:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("Export Organization Insight Metrics (Normalized):")  # Header for the operation.
-        logging.info("Starting export of organization insight metrics with normalized structure...")  # Log start.
+        logger.info("Starting export of organization insight metrics with normalized structure...")  # Log start.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! Refreshing available insight metrics from Mist API...")  # Tell the user about the refresh.
         mh.InsightMetricsUtils.export_const_insight_metrics()  # Refresh ConstInsightMetrics.csv before scope filtering.
@@ -475,7 +475,7 @@ class OrgExportUtils:
         if not org_metrics:  # No org-scope metrics are available.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.warning("! No metrics found for org scope. Check ConstInsightMetrics.csv file.")  # Tell the user.
-            logging.error("No org-scope metrics found in const insight metrics")  # Log the error condition.
+            logger.error("No org-scope metrics found in const insight metrics")  # Log the error condition.
             OrgExportUtils._insight_write_empty_outputs(include_legacy=False)  # Write the 4 empty normalized files.
             return None  # Signal the orchestrator to abort.
         return org_metrics  # Hand the org-scope metric list back to the orchestrator.
@@ -487,7 +487,7 @@ class OrgExportUtils:
         logger.info(
             "! Metric retrieval completed: %d successful, %d failed", metrics_retrieved, metrics_failed
         )  # Tell user.
-        logging.info(
+        logger.info(
             "Org insight metrics: %s retrieved successfully, %s failed", metrics_retrieved, metrics_failed
         )  # Log the retrieval totals for traceability.
 
@@ -516,7 +516,7 @@ class OrgExportUtils:
             else:  # Every metric failed or returned empty.
                 # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
                 logger.warning("! 0 organization insight metrics exported (no data available)")  # Tell the user zero.
-                logging.warning("No org insight data available - all metrics failed or returned empty")  # Warn no data.
+                logger.warning("No org insight data available - all metrics failed or returned empty")  # Warn no data.
                 OrgExportUtils._insight_write_empty_outputs(include_legacy=True)  # Write the 5 empty files.
         except Exception as exception:  # The export failed unexpectedly.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
@@ -711,42 +711,42 @@ class OrgExportUtils:
         kwargs: dict[str, Any] = {"limit": 1000}  # Base API params.
         if duration:  # Caller-supplied duration takes priority.
             kwargs["duration"] = duration  # Set explicit duration string.
-            logging.info("Exporting audit logs for duration: %s", duration)  # Log the window.
+            logger.info("Exporting audit logs for duration: %s", duration)  # Log the window.
             return kwargs  # Done.
         if not full_history:  # No duration, recent-only mode.
             hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve lookback hours.
             TimeUtils.log_dynamic_lookback("audit logs export", hours)  # Log the window.
             kwargs["duration"] = f"{hours}h"  # Set the duration.
-            logging.info("Exporting only last %s hours of audit logs (duration=%sh).", hours, hours)
+            logger.info("Exporting only last %s hours of audit logs (duration=%sh).", hours, hours)
             return kwargs  # Done.
         kwargs["start"] = 0  # Full history from start.
-        logging.info("Exporting full audit log history (start=0).")  # Log full history.
+        logger.info("Exporting full audit log history (start=0).")  # Log full history.
         return kwargs  # Done.
 
     @staticmethod
     def audit_logs(full_history: bool = False, duration: str | None = None) -> None:  # Export audit logs.
         """Export org audit logs (24h/explicit duration/full history) to OrgAuditLogs.csv."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Menu #22: Starting audit logs export")  # Log start.
-        logging.debug("ENTRY: OrgExportUtils.audit_logs(full_history=%s, duration=%s)", full_history, duration)
+        logger.info("Menu #22: Starting audit logs export")  # Log start.
+        logger.debug("ENTRY: OrgExportUtils.audit_logs(full_history=%s, duration=%s)", full_history, duration)
         try:
             org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
             kwargs = OrgExportUtils._build_audit_log_kwargs(full_history, duration)  # Resolve API kwargs.
-            logging.debug("Making API call with parameters: %s", kwargs)  # Trace the params.
+            logger.debug("Making API call with parameters: %s", kwargs)  # Trace the params.
             response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(mh.apisession, org_id, **kwargs)  # List audit logs.
             rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page all rows.
             if not rawdata:  # No rows.
-                logging.warning(" No audit logs returned from API.")  # Warn none returned.
-                logging.debug("EXIT: OrgExportUtils.audit_logs - no data")  # Trace exit.
+                logger.warning(" No audit logs returned from API.")  # Warn none returned.
+                logger.debug("EXIT: OrgExportUtils.audit_logs - no data")  # Trace exit.
                 return  # Abort.
             data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested fields.
             data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
             mh.DataExporter.write_with_format_selection(data, "OrgAuditLogs.csv", api_function_name="listOrgAuditLogs")  # type: ignore[no-untyped-call]
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("! %d audit logs exported to OrgAuditLogs.csv", len(data))  # Tell the user.
-            logging.info("Completed audit logs export and wrote results to OrgAuditLogs.csv.")  # Log completion.
-            logging.info("Menu #22: Audit logs export completed - %s records", len(data))  # Log the count.
-            logging.debug("EXIT: OrgExportUtils.audit_logs - success")  # Trace success.
+            logger.info("Completed audit logs export and wrote results to OrgAuditLogs.csv.")  # Log completion.
+            logger.info("Menu #22: Audit logs export completed - %s records", len(data))  # Log the count.
+            logger.debug("EXIT: OrgExportUtils.audit_logs - success")  # Trace success.
         except Exception as e:  # Export failed.
             logging.error("Failed to export audit logs: %s", e)  # Log the error.
             logging.debug("EXIT: OrgExportUtils.audit_logs - error")  # Trace exit.

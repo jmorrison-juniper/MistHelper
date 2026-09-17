@@ -20,6 +20,8 @@ from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class LicenseExportUtils:
     """Custom exporters for license payloads that need manual flattening."""
@@ -36,7 +38,7 @@ class LicenseExportUtils:
     @staticmethod
     def _flatten_org_license_async_claim_status_summary(org_id_value: str, payload: dict) -> dict:
         """Flatten one async-claim payload into a summary row."""
-        logging.info("Flattening async-claim summary for org %s", org_id_value)  # Log before summary flatten.
+        logger.info("Flattening async-claim summary for org %s", org_id_value)  # Log before summary flatten.
         completed_items = payload.get("completed") or []  # Normalize completed list for safe counting.
         incompleted_items = payload.get("incompleted") or []  # Normalize incompleted list for safe counting.
         polled_at_utc = datetime.now(UTC).isoformat()  # Capture UTC poll timestamp (timezone-aware).
@@ -53,13 +55,13 @@ class LicenseExportUtils:
             "timestamp": payload.get("timestamp"),  # Keep Mist response timestamp.
             "polled_at_utc": polled_at_utc,  # Keep local poll timestamp.
         }
-        logging.debug("Flattened summary scheduled_at=%s", summary_row.get("scheduled_at"))  # Log summary result.
+        logger.debug("Flattened summary scheduled_at=%s", summary_row.get("scheduled_at"))  # Log summary result.
         return summary_row  # Return normalized summary row.
 
     @staticmethod
     def _flatten_org_license_async_claim_status_details(org_id_value: str, payload: dict) -> list[dict]:
         """Flatten details[] payload into one row per device."""
-        logging.info("Flattening async-claim details for org %s", org_id_value)  # Log before detail flatten.
+        logger.info("Flattening async-claim details for org %s", org_id_value)  # Log before detail flatten.
         detail_items = payload.get("details") or []  # Normalize details list for safe iteration.
         scheduled_at_value = payload.get("scheduled_at")  # Capture parent job key for joins.
         polled_at_utc = datetime.now(UTC).isoformat()  # Capture UTC poll timestamp (timezone-aware).
@@ -75,21 +77,21 @@ class LicenseExportUtils:
             for detail_item in detail_items  # Iterate all detail entries.
             if isinstance(detail_item, dict)  # Ignore malformed entries safely.
         ]
-        logging.debug("Flattened %d detail rows for org %s", len(detail_rows), org_id_value)  # Log detail count.
+        logger.debug("Flattened %d detail rows for org %s", len(detail_rows), org_id_value)  # Log detail count.
         return detail_rows  # Return normalized detail rows.
 
     @staticmethod
     def _prompt_async_claim_include_detail() -> bool:
         """Prompt user for per-device detail preference. Returns parsed boolean."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Prompting for include_detail in async-claim export")  # Log before detail prompt.
+        logger.info("Prompting for include_detail in async-claim export")  # Log before detail prompt.
         detail_answer = mh.InputUtils.safe_input(  # Collect detail preference from user.
             "Include per-device detail? (y/N): ",  # Prompt text with safe default.
             context="org_license_claim_status:detail",  # Tag prompt context for EOF handling.
             default_value="N",  # Default to summary-only mode.
         )
         include_detail = detail_answer.strip().lower() in {"y", "yes"}  # Parse yes/no to boolean.
-        logging.debug("Resolved include_detail=%s", include_detail)  # Log parsed detail value.
+        logger.debug("Resolved include_detail=%s", include_detail)  # Log parsed detail value.
         return include_detail  # Return parsed preference.
 
     @staticmethod
@@ -97,7 +99,7 @@ class LicenseExportUtils:
         """Invoke the async-claim SDK endpoint and return (status_code, payload)."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         detail_query_value = True if include_detail else None  # Omit query param when detail is false.
-        logging.info("Calling async-claim API for org %s", org_id)  # Log before SDK call.
+        logger.info("Calling async-claim API for org %s", org_id)  # Log before SDK call.
         response = mistapi.api.v1.orgs.claim.GetOrgLicenseAsyncClaimStatus(  # Call SDK endpoint.
             mh.apisession,  # Reuse global authenticated API session.
             org_id,  # Pass validated org id to API call.
@@ -105,23 +107,23 @@ class LicenseExportUtils:
         )
         status_code = getattr(response, "status_code", 200)  # Read status code when SDK provides it.
         payload = getattr(response, "data", None) or {}  # Normalize body to dict when missing.
-        logging.debug("Async-claim API status=%s", status_code)  # Log status code after API call.
+        logger.debug("Async-claim API status=%s", status_code)  # Log status code after API call.
         return status_code, payload  # Return raw response tuple for status routing.
 
     @staticmethod
     def _handle_async_claim_status(status_code: int, org_id: str, payload: dict) -> dict | None:
         """Route status code to bail-out (None) or normalized payload for downstream writes."""
         if status_code == 401:  # Handle auth failures explicitly.
-            logging.error("Mist 401 for async-claim org %s; check token", org_id)  # Provide auth guidance.
+            logger.error("Mist 401 for async-claim org %s; check token", org_id)  # Provide auth guidance.
             return None  # Signal bail-out to caller.
         if status_code == 403:  # Handle permission failures explicitly.
-            logging.error("Mist 403 for async-claim org %s; check org access", org_id)  # Provide access guidance.
+            logger.error("Mist 403 for async-claim org %s; check org access", org_id)  # Provide access guidance.
             return None  # Signal bail-out because caller lacks required permission.
         if status_code == 400:  # Handle invalid request inputs gracefully.
-            logging.warning("Mist 400 for async-claim org %s; check org_id", org_id)  # Provide input guidance.
+            logger.warning("Mist 400 for async-claim org %s; check org_id", org_id)  # Provide input guidance.
             return None  # Signal bail-out so user can retry with corrected input.
         if status_code == 404:  # Handle no-active-job response as empty export.
-            logging.warning("No async claim job for org %s; exporting empty rows", org_id)  # Explain empty output.
+            logger.warning("No async claim job for org %s; exporting empty rows", org_id)  # Explain empty output.
             return {}  # Force empty payload for deterministic writes.
         return payload  # Pass through non-error payload for normal export flow.
 
@@ -129,41 +131,41 @@ class LicenseExportUtils:
     def _write_async_claim_summary(org_id: str, payload: dict) -> None:
         """Flatten and persist the single-row async-claim summary for the org."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Preparing summary rows for org %s", org_id)  # Log before summary transform.
+        logger.info("Preparing summary rows for org %s", org_id)  # Log before summary transform.
         summary_rows: list[Any] = (  # Build summary rows list from payload.
             [LicenseExportUtils._flatten_org_license_async_claim_status_summary(org_id, payload)]  # Wrap flattened row.
             if isinstance(payload, dict) and payload  # Only flatten when payload has data.
             else []  # Keep empty list for no-data cases.
         )
-        logging.debug("Prepared %d summary rows", len(summary_rows))  # Log summary count.
+        logger.debug("Prepared %d summary rows", len(summary_rows))  # Log summary count.
         summary_filename = f"org_{org_id[:8]}_claim_status_summary"  # Build summary filename stem.
-        logging.info("Writing async-claim summary for org %s", org_id)  # Log before summary write.
+        logger.info("Writing async-claim summary for org %s", org_id)  # Log before summary write.
         mh.DataExporter.write_with_format_selection(  # Write summary rows to selected backend.
             summary_rows,  # Pass summary rows or empty list.
             summary_filename,  # Use deterministic summary filename stem.
             api_function_name="getOrgLicenseAsyncClaimStatus",  # Route via summary PK strategy.
         )
-        logging.debug("Completed summary write for org %s", org_id)  # Log summary write completion.
+        logger.debug("Completed summary write for org %s", org_id)  # Log summary write completion.
 
     @staticmethod
     def _write_async_claim_details(org_id: str, payload: dict) -> None:
         """Flatten and persist per-device async-claim detail rows for the org."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Preparing detail rows for org %s", org_id)  # Log before detail transform.
+        logger.info("Preparing detail rows for org %s", org_id)  # Log before detail transform.
         detail_rows: list[Any] = (  # Build detail rows list from payload.
             LicenseExportUtils._flatten_org_license_async_claim_status_details(org_id, payload)  # Flatten details.
             if isinstance(payload, dict) and payload  # Only flatten when payload has data.
             else []  # Keep empty list for no-data cases.
         )
-        logging.debug("Prepared %d detail rows", len(detail_rows))  # Log detail count.
+        logger.debug("Prepared %d detail rows", len(detail_rows))  # Log detail count.
         detail_filename = f"org_{org_id[:8]}_claim_status_details"  # Build detail filename stem.
-        logging.info("Writing async-claim details for org %s", org_id)  # Log before detail write.
+        logger.info("Writing async-claim details for org %s", org_id)  # Log before detail write.
         mh.DataExporter.write_with_format_selection(  # Write detail rows to selected backend.
             detail_rows,  # Pass detail rows or empty list.
             detail_filename,  # Use deterministic detail filename stem.
             api_function_name="getOrgLicenseAsyncClaimStatusDetails",  # Route via detail PK strategy.
         )
-        logging.debug("Completed detail write for org %s", org_id)  # Log detail write completion.
+        logger.debug("Completed detail write for org %s", org_id)  # Log detail write completion.
 
     @staticmethod
     def _resolve_async_claim_include_detail(include_detail: bool | None) -> bool:
@@ -176,13 +178,13 @@ class LicenseExportUtils:
     def export_org_license_async_claim_status(org_id: str | None = None, include_detail: bool | None = None) -> None:
         """Fetch and export async claim status summary plus optional details."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Resolving org_id for async-claim export")  # Log before org resolution.
+        logger.info("Resolving org_id for async-claim export")  # Log before org resolution.
         resolved_org_id = (
             org_id or mh.ConfigUtils.get_cached_or_prompted_org_id()
         )  # Explicit arg else standard resolver.
-        logging.debug("Resolved async-claim org_id=%s", resolved_org_id)  # Log resolved org id.
+        logger.debug("Resolved async-claim org_id=%s", resolved_org_id)  # Log resolved org id.
         if not LicenseExportUtils._is_valid_uuid(resolved_org_id):  # Validate input before any API call.
-            logging.warning("Invalid org_id %s for async-claim export", resolved_org_id)  # Warn on invalid input.
+            logger.warning("Invalid org_id %s for async-claim export", resolved_org_id)  # Warn on invalid input.
             return  # Stop early when input is invalid.
         detail = LicenseExportUtils._resolve_async_claim_include_detail(include_detail)  # Normalize detail flag.
         status_code, raw_payload = LicenseExportUtils._call_async_claim_api(  # SDK call for async-claim status.
