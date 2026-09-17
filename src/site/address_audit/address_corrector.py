@@ -30,7 +30,7 @@ from src.utils.input_utils import InputUtils  # EOF-safe operator prompts.
 _CORRECTABLE = frozenset({"MISSING_SUITE", "MISSING_NUMBER", "WRONG_STREET", "CSV_BETTER", "AMBIGUOUS"})
 _YES = ("y", "yes")  # Accepted affirmative responses (case-insensitive).
 
-logger = logging.getLogger(__name__)  # WHY: Module-scoped logger routes former print() operator notices.
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 
 
 class AddressCorrector:
@@ -46,7 +46,7 @@ class AddressCorrector:
         for result in results:  # Walk every audited row.
             if self._is_correctable(result):  # Has a site, a suggestion, and a correctable state.
                 targets.append(result)  # Keep it for review.
-        logging.debug("Identified %d correctable row(s) of %d", len(targets), len(results))  # Trace count.
+        logger.debug("Identified %d correctable row(s) of %d", len(targets), len(results))  # Trace count.
         return targets  # One AuditResult per pushable correction.
 
     @staticmethod
@@ -67,7 +67,7 @@ class AddressCorrector:
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("No correctable addresses to push.")
             return []  # Empty outcome list.
-        logging.info("Reviewing %d correctable address(es) for write-back", len(targets))  # Action-log start.
+        logger.info("Reviewing %d correctable address(es) for write-back", len(targets))  # Action-log start.
         self._print_intro(len(targets))  # Warn that this writes to Mist.
         outcomes = [self._review_one(result) for result in targets]  # Review/push each row.
         self._print_summary(outcomes)  # Show pushed/skipped/failed tally.
@@ -81,13 +81,13 @@ class AddressCorrector:
         self._show(site.site_name or "-", before, after)  # Side-by-side display.
         choice = InputUtils.safe_input("Push this corrected address to Mist? [y/N]: ", context="address_writeback")
         if choice.strip().lower() not in _YES:  # Operator declined this site.
-            logging.info("Operator skipped write-back for site %s", site.site_id)  # Action-log the skip.
+            logger.info("Operator skipped write-back for site %s", site.site_id)  # Action-log the skip.
             return CorrectionOutcome(site.site_name or "-", site.site_id or "", before, after, "skipped")
         return self._push(site.site_name or "-", site.site_id or "", before, after)  # Accepted -> push.
 
     def _push(self, name: str, site_id: str, before: str, after: str) -> CorrectionOutcome:
         """Write the corrected address to one Mist site. Never raises."""
-        logging.info("Pushing corrected address to site %s (%s)", site_id, name)  # Action-log the write.
+        logger.info("Pushing corrected address to site %s (%s)", site_id, name)  # Action-log the write.
         try:
             ok = self._update_site_address(site_id, after)  # Fetch-modify-PUT the site record.
         except Exception as exc:  # one failed write must not abort the batch.
@@ -105,16 +105,16 @@ class AddressCorrector:
 
     def _update_site_address(self, site_id: str, address: str) -> bool:
         """Fetch the full site, replace only ``address``, and PUT it back. Return success."""
-        logging.debug("Fetching site %s before write-back", site_id)  # Trace the read.
+        logger.debug("Fetching site %s before write-back", site_id)  # Trace the read.
         current = mistapi.api.v1.sites.sites.getSiteInfo(self._api, site_id)  # Full current site record.
         site = current.data if isinstance(current.data, dict) else {}  # Guard against list/empty payloads.
         if not site:  # No usable site record returned.
-            logging.warning("Site %s returned no record; cannot write back", site_id)  # Trace the miss.
+            logger.warning("Site %s returned no record; cannot write back", site_id)  # Trace the miss.
             return False  # Treat as a failed update.
         site["address"] = address  # Replace ONLY the address. Everything else is preserved.
         updated = mistapi.api.v1.sites.sites.updateSiteInfo(self._api, site_id, site)  # PUT the full record.
         success = updated.status_code in (200, 201)  # 2xx => Mist accepted the change.
-        logging.debug("Write-back for site %s status=%s", site_id, updated.status_code)  # Trace the result.
+        logger.debug("Write-back for site %s status=%s", site_id, updated.status_code)  # Trace the result.
         return success  # True only on a 2xx response.
 
     @staticmethod

@@ -10,6 +10,8 @@ from typing import Any  # WHY: dependencies are duck-typed injection surfaces.
 
 from src.utils.rate_limiting import AdaptivePacer  # WHY: quota-aware pacing replaces the fixed sleep calls.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 # --- Module-level dependency container (populated by configure_...) ---------
 
 
@@ -71,13 +73,13 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
     @staticmethod
     def create_test_sites_from_csv() -> None:  # WHY: menu 171 destructive workflow entrypoint.
         """Create test sites from NorthAmericanTestSites.csv (DESTRUCTIVE)."""
-        logging.warning("Menu #171 DESTRUCTIVE: Create test sites from CSV operation started")  # WHY: audit start.
+        logger.warning("Menu #171 DESTRUCTIVE: Create test sites from CSV operation started")  # WHY: audit start.
         SiteConfigManager._display_test_sites_header()  # WHY: show scope to operator before prompt.
         if not SiteConfigManager._confirm_test_site_creation():  # WHY: bail if user did not type exact keyword.
             return  # WHY: user declined confirmation prompt.
         org_id = _deps().config_utils.get_cached_or_prompted_org_id()  # WHY: resolve target org before any work.
         if not org_id:  # WHY: without an org id nothing can be created safely.
-            logging.error("No organization ID provided - cannot create sites")  # WHY: audit missing org id.
+            logger.error("No organization ID provided - cannot create sites")  # WHY: audit missing org id.
             print(" ERROR: No organization ID provided")  # WHY: operator-visible error line.
             return  # WHY: cannot proceed without org id.
         sites_data = SiteConfigManager._load_test_sites_csv()  # WHY: load rows once for both create + report.
@@ -85,7 +87,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
             return  # WHY: no data means nothing to create.
         created, failed = SiteConfigManager._execute_site_creation(org_id, sites_data)  # WHY: run create loop.
         SiteConfigManager._report_site_creation_results(sites_data, created, failed)  # WHY: summarize + export.
-        logging.warning(  # WHY: audit final tallies for later compliance review.
+        logger.warning(  # WHY: audit final tallies for later compliance review.
             "Menu #171 complete: %s sites created, %s failed", len(created), len(failed)
         )
 
@@ -111,7 +113,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
         )
         if confirmation != "CREATE":  # WHY: exact keyword match prevents accidental typos triggering ops.
             print(" Site creation cancelled - confirmation phrase not matched")  # WHY: inform operator.
-            logging.info("Site creation cancelled by user")  # WHY: audit non-execution.
+            logger.info("Site creation cancelled by user")  # WHY: audit non-execution.
             return False  # WHY: signal decline to caller.
         return True  # WHY: signal proceed.
 
@@ -120,13 +122,13 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
         """Load test sites from CSV file returning None on error."""
         csv_file_path = _deps().file_path_utils.get_csv_path("NorthAmericanTestSites.csv")  # WHY: portable path.
         if not os.path.exists(csv_file_path):  # WHY: fail fast when data file is missing.
-            logging.error("CSV file not found: %s", csv_file_path)  # WHY: audit missing file.
+            logger.error("CSV file not found: %s", csv_file_path)  # WHY: audit missing file.
             print(f" ERROR: CSV file not found: {csv_file_path}")  # WHY: operator-visible error.
             return None  # WHY: signal missing-file failure to caller.
         try:
             with open(csv_file_path, encoding="utf-8") as csv_file:  # WHY: explicit utf-8 avoids locale issues.
                 sites_data = list(csv.DictReader(csv_file))  # WHY: materialize rows for count + iteration.
-            logging.info("Loaded %s sites from CSV file", len(sites_data))  # WHY: audit successful load.
+            logger.info("Loaded %s sites from CSV file", len(sites_data))  # WHY: audit successful load.
             print(f"\n Loaded {len(sites_data)} sites from CSV file")  # WHY: operator feedback on scope.
             return sites_data  # WHY: hand parsed rows back to caller.
         except OSError as read_error:  # WHY: narrow to filesystem errors. Do not swallow programmer errors.
@@ -247,10 +249,10 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
     @staticmethod
     def create_country_rf_templates_and_assign() -> None:  # WHY: Menu 172 top-level entry point.
         """Create country-specific RF templates and assign sites to them (DESTRUCTIVE)."""
-        logging.warning("Menu #172 DESTRUCTIVE: Create country RF templates operation started")  # WHY: audit.
+        logger.warning("Menu #172 DESTRUCTIVE: Create country RF templates operation started")  # WHY: audit.
         SiteConfigManager._display_rf_template_header()  # WHY: banner before any work.
         if not _deps().apisession:  # WHY: guard against unwired dependency graph.
-            logging.error("API session not initialized")  # WHY: audit unwired state.
+            logger.error("API session not initialized")  # WHY: audit unwired state.
             print(" ERROR: Mist API session not initialized")  # WHY: operator error line.
             return  # WHY: cannot proceed without a session.
         org_id = _deps().config_utils.get_cached_or_prompted_org_id()  # WHY: resolve target org id.
@@ -313,7 +315,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
         failed: list[dict[str, Any]],
     ) -> None:
         """Log final tallies for the Menu 108 RF template workflow."""
-        logging.warning(  # WHY: audit final tallies with elevated level so operators see summary.
+        logger.warning(  # WHY: audit final tallies with elevated level so operators see summary.
             "Menu #172 complete: %s templates created, %s sites assigned, %s failed",
             len(created),
             len(success),
@@ -330,7 +332,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
     @staticmethod
     def _fetch_org_sites_for_rf(org_id: str) -> list[dict[str, Any]] | None:  # WHY: fetch helper with narrow errs.
         """Fetch all sites for an org, returning None on failure or empty result."""
-        logging.info("Fetching org sites for RF-template analysis (org_id=%s)", org_id)  # WHY: audit start.
+        logger.info("Fetching org sites for RF-template analysis (org_id=%s)", org_id)  # WHY: audit start.
         try:
             deps = _deps()  # WHY: local reference keeps call chain readable.
             sites_response = deps.mistapi.api.v1.orgs.sites.listOrgSites(  # WHY: page-aware list of org sites.
@@ -344,7 +346,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
         if not sites:  # WHY: no sites means nothing to template.
             print(" No sites found in organization.")  # WHY: legacy message preserved.
             return None  # WHY: nothing to do without any sites.
-        logging.debug("Fetched %d sites for RF-template analysis", len(sites))  # WHY: audit success size.
+        logger.debug("Fetched %d sites for RF-template analysis", len(sites))  # WHY: audit success size.
         print(f" Found {len(sites)} sites in organization")  # WHY: operator feedback.
         return sites  # WHY: hand fetched inventory back to caller.
 
@@ -353,7 +355,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
         sites: list[dict[str, Any]],
     ) -> tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]]]:
         """Bucket sites by uppercase country code. Collect empty-country sites separately."""
-        logging.info("Grouping %d sites by country code", len(sites))  # WHY: audit grouping start.
+        logger.info("Grouping %d sites by country code", len(sites))  # WHY: audit grouping start.
         sites_by_country: dict[str, list[dict[str, Any]]] = {}  # WHY: country -> site descriptors.
         sites_without_country: list[dict[str, Any]] = []  # WHY: sites missing country info.
         for site in sites:  # WHY: single pass bucketing keeps CC=1.
@@ -363,7 +365,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
                 sites_by_country.setdefault(country_code, []).append(site_info)  # WHY: add to country bucket.
             else:  # WHY: track for operator warning.
                 sites_without_country.append(site_info)  # WHY: capture no-country sites separately.
-        logging.debug(  # WHY: audit outcome.
+        logger.debug(  # WHY: audit outcome.
             "Grouped %d countries; %d sites without country",
             len(sites_by_country),
             len(sites_without_country),
@@ -386,7 +388,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
     def _fetch_existing_rf_templates(org_id: str) -> dict[str, str] | None:  # WHY: fetch existing templates.
         """Fetch existing RF templates as a {name: id} map. Return None on API error."""
         print("\n  Step 2: Checking for existing RF templates...")  # WHY: legacy step header preserved.
-        logging.info("Fetching existing RF templates for org_id=%s", org_id)  # WHY: audit start.
+        logger.info("Fetching existing RF templates for org_id=%s", org_id)  # WHY: audit start.
         try:
             deps = _deps()  # WHY: local ref for readability.
             templates_response = deps.mistapi.api.v1.orgs.rftemplates.listOrgRfTemplates(  # WHY: SDK list call.
@@ -402,7 +404,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
             logging.error("Failed to fetch RF templates: %s", error)  # WHY: audit failure.
             return None  # WHY: signal fetch-failure to caller.
         existing_templates = {t.get("name"): t.get("id") for t in existing}  # WHY: name->id lookup table.
-        logging.debug("Loaded %d existing RF templates", len(existing_templates))  # WHY: audit outcome size.
+        logger.debug("Loaded %d existing RF templates", len(existing_templates))  # WHY: audit outcome size.
         return existing_templates  # WHY: hand table back to caller for plan step.
 
     @staticmethod
@@ -661,7 +663,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
     @staticmethod
     def create_ap_model_device_profiles() -> None:
         """Create Device Profile for each unique AP model (DESTRUCTIVE)."""
-        logging.warning("Menu #173 DESTRUCTIVE: Create AP model device profiles operation started")  # WHY: audit.
+        logger.warning("Menu #173 DESTRUCTIVE: Create AP model device profiles operation started")  # WHY: audit.
         SiteConfigManager._display_device_profile_header()  # WHY: banner.
         org_id = _deps().config_utils.get_cached_or_prompted_org_id()  # WHY: resolve target org.
         ap_models, _models_without_info = SiteConfigManager._analyze_ap_models(org_id)  # WHY: gather models.
@@ -678,7 +680,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
             return
         created, failed = SiteConfigManager._execute_profile_creation(org_id, to_create)  # WHY: run creates.
         SiteConfigManager._report_profile_creation_results(created, failed, to_skip)  # WHY: summarize.
-        logging.warning(  # WHY: audit final tallies.
+        logger.warning(  # WHY: audit final tallies.
             "Menu #173 complete: %s profiles created, %s failed", len(created), len(failed)
         )
 
@@ -877,7 +879,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
     @staticmethod
     def assign_aps_to_matching_device_profiles() -> None:
         """Assign AP devices to matching Device Profiles (DESTRUCTIVE)."""
-        logging.warning("Menu #174 DESTRUCTIVE: Assign APs to device profiles operation started")  # WHY: audit.
+        logger.warning("Menu #174 DESTRUCTIVE: Assign APs to device profiles operation started")  # WHY: audit.
         SiteConfigManager._display_profile_assignment_header()  # WHY: banner.
         org_id = _deps().config_utils.get_cached_or_prompted_org_id()  # WHY: resolve target org.
         SiteConfigManager._run_profile_assignment_workflow(org_id)  # WHY: single-responsibility inner runner.
@@ -901,7 +903,7 @@ class SiteConfigManager:  # WHY: umbrella namespace for the four menu entrypoint
             return
         success, failed = SiteConfigManager._execute_profile_assignment(org_id, matched)  # WHY: run assigns.
         SiteConfigManager._report_profile_assignment_results(success, failed, unmatched, no_model)  # WHY: report.
-        logging.warning(  # WHY: audit final tallies.
+        logger.warning(  # WHY: audit final tallies.
             "Menu #174 complete: %s APs assigned, %s failed", len(success), len(failed)
         )
 
