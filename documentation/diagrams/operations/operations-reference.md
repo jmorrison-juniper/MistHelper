@@ -85,9 +85,13 @@ journey
 ## Destructive Operation Safety Requirements
 
 Requirements that MUST be met before any destructive operation executes. The
-destructive set is menus 154-187, 189-191, 194, and 206-208. It is not one
+destructive set is menus 154-187, 189-191, 194, 206-208, and 239. It is not one
 unbroken block, so do not treat any range boundary as a shortcut. Menus 188 and
 193 sit inside those numbers and are safe, and menu 192 is interactive.
+
+Warning: menu 239 sits far from the other destructive numbers. It starts the
+upgrade capture portal on port 8056, and it drives a firmware upgrade for the
+selected site. Issue #2825 records the gap that left it out of this list.
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {
@@ -100,7 +104,7 @@ unbroken block, so do not treat any range boundary as a shortcut. Menus 188 and
   'fontFamily': 'ui-monospace, monospace'
 }}}%%
 flowchart TB
-    subgraph requirements["Safety Requirements - Menus 154-187, 189-191, 194, 206-208"]
+    subgraph requirements["Safety Requirements - Menus 154-187, 189-191, 194, 206-208, 239"]
         SAF001["SAF-001: Explicit Confirmation<br/>Type exact word to proceed<br/>Risk: HIGH | Verify: test"]
         SAF002["SAF-002: EOF Handling<br/>All input calls handle EOFError<br/>Risk: HIGH | Verify: inspection"]
         SAF003["SAF-003: No Blind Automation<br/>--menu flag requires confirmation<br/>Risk: HIGH | Verify: test"]
