@@ -832,14 +832,14 @@ def _log_probe_failures(results: list[ProbeResult]) -> None:
     Args:
         results: The probe result list returned by ``_run_probes``.
     """
-    for r in results:
-        if not r.responding_protocols:
+    for probe_result in results:  # Use a descriptive name so the log line stays easy to read.
+        if not probe_result.responding_protocols:  # Log only endpoints that produced no usable response.
             logger.debug(
                 "zscaler_probe: no response from %s (role=%s ip=%s notes=%s)",
-                r.fqdn,
-                r.role or "<none>",
-                r.ip or "-",
-                "; ".join(r.notes) or "-",
+                probe_result.fqdn,  # Identify the endpoint that failed every probe.
+                probe_result.role or "<none>",  # Preserve the catalogue role when one exists.
+                probe_result.ip or "-",  # Show DNS success or an explicit placeholder.
+                "; ".join(probe_result.notes) or "-",  # Summarize probe errors without a second lookup.
             )
 
 
