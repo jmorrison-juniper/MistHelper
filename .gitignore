@@ -84,6 +84,9 @@ DEVICE*.csv
 !documentation/APUpgradeSiteListSample.CSV
 !documentation/VCConvertSample.CSV
 !documentation/GatewayTemplateRebootListSample.CSV
+# The skill index names Juniper document titles only. It holds no customer data,
+# so the rule above that blocks a Mist data export does not apply to it.
+!.github/skills/**/references/*.csv
 *.xlsx
 *.xls
 data/
