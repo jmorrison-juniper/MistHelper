@@ -22,6 +22,8 @@ from typing import Any, ClassVar, Final, Protocol  # Record typing, error codes,
 from src.upgrade_portal.runtime.identity import email_digest  # The one address form a log record may hold
 from src.upgrade_portal.runtime.runs import RunStateMachine, RunTransitionError  # Use the canonical final states.
 
+logger = logging.getLogger(__name__)  # Keep log records tied to this module.
+
 # WHAT: the exact text the operator types to confirm a stop.
 # WHY: FR-038b accepts this text and this letter case only. A lower-case word or
 #      a different word must leave the run untouched.
@@ -309,7 +311,7 @@ class StopRequestStore:
         Raises:
             RunNotStoppableError: When the run already reached a final state.
         """
-        logging.info("[STOP] Checking whether run %s is final", run_id)  # Record the stop guard before evaluation.
+        logger.info("[STOP] Checking whether run %s is final", run_id)  # Record the stop guard before evaluation.
         run = self._load_run(run_id)  # Read the shared record before the canonical state decision.
         try:  # A malformed state cannot prove that a destructive stop is safe.
             state = RunStateMachine.read_state(run)  # Coerce the stored text through the canonical state model.
@@ -317,7 +319,7 @@ class StopRequestStore:
             raise RunNotStoppableError("The run state is invalid.") from failure  # Return one safe stop refusal.
         if state in RunStateMachine.TERMINAL:  # The canonical terminal set controls every stop refusal.
             raise RunNotStoppableError(f"The run is final: {state.value}.")  # Refuse every canonical final state.
-        logging.debug("[STOP] Run %s remains stoppable in state %s", run_id, state.value)  # Record the safe result.
+        logger.debug("[STOP] Run %s remains stoppable in state %s", run_id, state.value)  # Record the safe result.
         return run  # A nonfinal run can continue through the stop request path.
 
     def _write_request(self, run: dict[str, Any], request: StopRequest) -> StopRequest:
@@ -343,7 +345,7 @@ class StopRequestStore:
         if not self._store.write_run(run):  # The store reports the true result
             raise StopRequestError("The portal could not write the stop request to the run record.")
         digest = email_digest(request.requested_by)  # An address never reaches a log record
-        logging.debug("[STOP] Run %s holds a stop request from %s", run.get("run_id", ""), digest)
+        logger.debug("[STOP] Run %s holds a stop request from %s", run.get("run_id", ""), digest)
         return request  # The caller reports this value to the operator
 
     def request(self, run_id: str, actor_email: str, confirmation_text: str) -> StopRequest:
@@ -360,13 +362,13 @@ class StopRequestStore:
         Raises:
             ConfirmationRequiredError: When the typed text is not `STOP`.
         """
-        logging.info("[STOP] Operator %s asks to stop run %s", email_digest(actor_email), run_id)  # BEFORE
+        logger.info("[STOP] Operator %s asks to stop run %s", email_digest(actor_email), run_id)  # BEFORE
         if not StopRequestStore.confirmation_matches(confirmation_text):  # FR-038b guards the whole action
             raise ConfirmationRequiredError("The stop control needs the exact text STOP.")
         run = self._load_stoppable_run(run_id)  # Raises when the run is absent or already final
         held = StopRequestStore._read_from_run(run)  # A second click must not replace the first owner
         if held is not None:  # An earlier request already stands
-            logging.info("* Run %s already holds a stop request from %s", run_id, email_digest(held.requested_by))
+            logger.info("* Run %s already holds a stop request from %s", run_id, email_digest(held.requested_by))
             return held  # Report the first request, so the record keeps one owner
         return self._write_request(run, StopRequest.for_operator(actor_email))  # Store the fresh request
 
@@ -383,12 +385,12 @@ class StopRequestStore:
         Raises:
             StopRequestError: When the run holds no stop request.
         """
-        logging.info("[STOP] Recording the stop outcome for run %s", run_id)  # BEFORE the change
+        logger.info("[STOP] Recording the stop outcome for run %s", run_id)  # BEFORE the change
         run = self._load_run(run_id)  # An outcome may arrive after the run reached a final state
         held = StopRequestStore._read_from_run(run)  # The outcome belongs to an existing request
         if held is None:  # A caller asked for an outcome before any operator asked for a stop
             raise StopRequestError(f"The run {run_id} holds no stop request, so it holds no outcome.")
-        logging.info(  # FR-038e: name the counts, so the operator sees the split
+        logger.info(  # FR-038e: name the counts, so the operator sees the split
             "* Run %s stop outcome: %s cancelled, %s already writing",
             run_id,
             len(outcome.cancelled),  # Devices the portal stopped before they started
@@ -425,5 +427,5 @@ class StopRequestStore:
             True when the run record holds a stop request.
         """
         pending = self.read(run_id) is not None  # One read of the shared record
-        logging.debug("[STOP] Run %s stop pending: %s", run_id, pending)  # AFTER the read
+        logger.debug("[STOP] Run %s stop pending: %s", run_id, pending)  # AFTER the read
         return pending  # The driver stops starting further devices

@@ -34,6 +34,8 @@ from typing import Any, ClassVar, Final  # Loose payload typing plus class-level
 
 from src.refactors.connection_pool_executor import ConnectionPoolExecutor  # The one pool the repository owns
 
+logger = logging.getLogger(__name__)  # Keep log records tied to this module.
+
 # WHAT: number of capture call groups the portal runs at one time.
 # WHY: the threading model in plan.md gives capture collection and settle-gate
 #      polling 4 workers each. The shared executor sizes its own threads from
@@ -188,11 +190,11 @@ class CapturePool:
         Returns:
             A count of 1 or more that never rises above ``CAPTURE_WORKER_TARGET``.
         """
-        logging.debug("[CAPTURE-POOL] Resolving the worker count")  # BEFORE: sizing starts
+        logger.debug("[CAPTURE-POOL] Resolving the worker count")  # BEFORE: sizing starts
         connection_cap, fallback_threads = CapturePool._read_thread_settings()  # Late-bound shared settings
         ceiling = connection_cap if connection_cap > 0 else fallback_threads  # An absent cap falls back
         worker_count = max(1, min(CAPTURE_WORKER_TARGET, ceiling))  # Never zero, never above the target or the cap
-        logging.info("* Capture pool: %s workers, connection cap %s", worker_count, ceiling)  # Announce the size
+        logger.info("* Capture pool: %s workers, connection cap %s", worker_count, ceiling)  # Announce the size
         return worker_count  # The caller builds a semaphore of this size
 
     @staticmethod
@@ -218,7 +220,7 @@ class CapturePool:
                 The worker result, or None when the gate drains.
             """
             if not CapturePool.GATE.enter():  # A drain refuses this work item
-                logging.info("* Capture pool drains. The portal skips one work item")  # State the reason
+                logger.info("* Capture pool drains. The portal skips one work item")  # State the reason
                 return None  # The executor counts a falsy result as failed, which is the honest outcome
             try:  # The gate slot must return on every path
                 with budget:  # Hold one portal slot for the whole call
@@ -246,13 +248,13 @@ class CapturePool:
         Returns:
             The successful results and the failed work items, in that order.
         """
-        logging.info("[CAPTURE-POOL] Starting %s work items (%s)", len(work_items), batch_description)  # BEFORE
+        logger.info("[CAPTURE-POOL] Starting %s work items (%s)", len(work_items), batch_description)  # BEFORE
         budget = threading.Semaphore(CapturePool.resolve_worker_count())  # Bound the work in flight
         bounded_worker = CapturePool._build_bounded_worker(worker_function, budget)  # Add the budget and the gate
         successful, failed = ConnectionPoolExecutor.execute(  # The one pool the repository owns
             work_items, bounded_worker, batch_description, retry_function
         )
-        logging.debug("[CAPTURE-POOL] Finished: %s successful, %s failed", len(successful), len(failed))  # AFTER
+        logger.debug("[CAPTURE-POOL] Finished: %s successful, %s failed", len(successful), len(failed))  # AFTER
         return successful, failed  # Both lists, so the caller can report the failures
 
     @staticmethod
@@ -270,14 +272,14 @@ class CapturePool:
         Returns:
             True when no work was in flight before the timeout passed.
         """
-        logging.info("[CAPTURE-POOL] Draining the pool, timeout %s seconds", timeout_seconds)  # BEFORE
+        logger.info("[CAPTURE-POOL] Draining the pool, timeout %s seconds", timeout_seconds)  # BEFORE
         CapturePool.GATE.begin_drain()  # Refuse every later work item
         drained = CapturePool.GATE.wait_for_idle(timeout_seconds)  # Wait, but never past the deadline
         if not drained:  # The deadline passed while work still ran
-            logging.warning(  # Name the count, so an operator can judge the loss
+            logger.warning(  # Name the count, so an operator can judge the loss
                 "! Capture pool holds %s work items after %s seconds", CapturePool.GATE.in_flight(), timeout_seconds
             )
-        logging.debug("[CAPTURE-POOL] Drain finished, drained=%s", drained)  # AFTER
+        logger.debug("[CAPTURE-POOL] Drain finished, drained=%s", drained)  # AFTER
         return drained  # The caller may report the outcome
 
     @staticmethod
@@ -291,11 +293,11 @@ class CapturePool:
             leaves the signal handling with Gunicorn.
         """
         if CapturePool._HOOK_INSTALLED:  # A second registration would drain twice
-            logging.debug("[CAPTURE-POOL] Shutdown hook already installed")  # State why nothing happened
+            logger.debug("[CAPTURE-POOL] Shutdown hook already installed")  # State why nothing happened
             return  # Keep the first registration
         atexit.register(CapturePool.shutdown)  # Run the drain when the process exits normally
         CapturePool._HOOK_INSTALLED = True  # Remember the registration for this process
-        logging.info("* Capture pool shutdown hook installed, drain %s seconds", SHUTDOWN_TIMEOUT_SECONDS)  # Announce
+        logger.info("* Capture pool shutdown hook installed, drain %s seconds", SHUTDOWN_TIMEOUT_SECONDS)  # Announce
 
 
 class BoundedFanOut:
@@ -354,7 +356,7 @@ class BoundedFanOut:
             description: Plain name of the batch.
             error: The fault the call raised.
         """
-        logging.error("! Fan-out call %s of %s failed: %s", name, description, type(error).__name__)  # Name the call
+        logger.error("! Fan-out call %s of %s failed: %s", name, description, type(error).__name__)  # Name the call
 
     @staticmethod
     def _resolve(name: str, future: Future[Any], description: str) -> Any:
@@ -426,9 +428,9 @@ class BoundedFanOut:
         if len(calls) < 2:  # One call or none never pays for a thread
             return BoundedFanOut._run_in_order(calls, description)
         workers = BoundedFanOut.resolve_worker_count(len(calls))  # Bound the work in flight
-        logging.info("[FAN-OUT] Starting %s %s across %s workers", len(calls), description, workers)  # BEFORE
+        logger.info("[FAN-OUT] Starting %s %s across %s workers", len(calls), description, workers)  # BEFORE
         with ThreadPoolExecutor(max_workers=workers, thread_name_prefix=FANOUT_THREAD_PREFIX) as pool:
             pending = {name: pool.submit(call) for name, call in calls.items()}  # Every call starts before any wait
             answers = {name: BoundedFanOut._resolve(name, future, description) for name, future in pending.items()}
-        logging.debug("[FAN-OUT] Finished %s %s", len(answers), description)  # AFTER
+        logger.debug("[FAN-OUT] Finished %s %s", len(answers), description)  # AFTER
         return answers  # The caller reads every name it supplied
