@@ -26,7 +26,7 @@ from src.ssh.connection.connector import SshConnector  # WHY: real SSH connect c
 if TYPE_CHECKING:  # WHY: type-only imports avoid circular runtime import.
     from src.ssh.ssh_runner import SSHConnectionConfig, SSHExecutionConfig  # WHY: legacy config types.
 
-
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 # ---------------------------------------------------------------------------
 # Module-level constants (magic values extracted verbatim from the original)
 # ---------------------------------------------------------------------------
@@ -326,7 +326,7 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
         runner = EnhancedSSHRunner(timeout=request.timeout, logger=logger)  # WHY: owns client lifecycle.
         host_log_file = InteractiveBatchExecutor._build_log_path(request.hostname, logger)  # WHY: sanitised path.
         # WHY: verbatim console status line.
-        logging.info("** [%s] Logging to: %s", request.hostname, host_log_file)
+        logger.info("** [%s] Logging to: %s", request.hostname, host_log_file)
         raw_writer = InteractiveBatchExecutor._make_log_writer(host_log_file, logger)  # WHY: ANSI-cleaning writer.
         writer = InteractiveBatchExecutor._build_scrubbing_writer(raw_writer, request.password)  # WHY: scrub creds.
         writer(_build_header(request.hostname, len(request.commands)))  # WHY: persist header verbatim.
@@ -540,7 +540,7 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
     ) -> None:
         """Emit the verbatim Ctrl+C interrupt lines (console + logger + per-host log)."""
         # WHY: verbatim console interrupt line.
-        logging.info(
+        logger.info(
             "\n[INTERRUPT] [%s] Ctrl+C detected! Stopping interactive session...",
             step_ctx.hostname,
         )
@@ -601,7 +601,7 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
         writer(_STEP_BAR)  # WHY: closing bar (verbatim).
         display_item = InteractiveBatchExecutor._redact_for_display(step_ctx.command)  # WHY: mask pwd.
         # WHY: parity.
-        logging.info(
+        logger.info(
             "* [%s] Executing step %d: %s",
             step_ctx.hostname,
             step_ctx.step_num,
