@@ -16,6 +16,8 @@ import logging  # WHY: Standard library logging for info/debug/error trace
 from collections.abc import Callable  # WHY: UP035 requires collections.abc.Callable
 from typing import Any  # WHY: Generic Any type hint for untyped API payloads
 
+logger = logging.getLogger(__name__)  # Use this module name in log records.
+
 # Module-level constants avoid magic values scattered through the logic.
 _SITES_ANALYSIS_TYPE = "sites"  # WHY: Sentinel driving the sites SLE expansion branch
 _RESULTS_KEY = "results"  # WHY: Nested key that Marvis wraps troubleshoot rows under
@@ -82,12 +84,12 @@ class MarvisDataUtils:  # WHY: Class groups Marvis-to-CSV helpers with injected 
     @staticmethod
     def _log_primary_failure(analysis_type: str, error: Exception) -> None:  # WHY: Split logging out
         """Emit error + info logs describing the fallback transition."""
-        logging.error(  # WHY: Preserve full error context for operator triage
+        logger.error(  # WHY: Preserve full error context for operator triage
             "Error formatting Marvis data for CSV (analysis_type='%s'): %s",
             analysis_type,
             error,
         )
-        logging.info("Falling back to legacy flatten+escape method for Marvis data")  # WHY: Signal fallback
+        logger.info("Falling back to legacy flatten+escape method for Marvis data")  # WHY: Signal fallback
 
     def _run_primary_pipeline(  # WHY: Extract structured formatting from the try/except shell
         self,
@@ -95,15 +97,15 @@ class MarvisDataUtils:  # WHY: Class groups Marvis-to-CSV helpers with injected 
         analysis_type: str,
     ) -> list[dict[str, Any]]:
         """Run the structured format-then-escape pipeline on a normalised list."""
-        logging.info("Starting Marvis CSV formatting for analysis_type='%s'", analysis_type)  # WHY: Trace entry
+        logger.info("Starting Marvis CSV formatting for analysis_type='%s'", analysis_type)  # WHY: Trace entry
         if not api_response_data:  # WHY: None / empty responses short-circuit to []
-            logging.warning("Empty Marvis API response received -- returning empty list")
+            logger.warning("Empty Marvis API response received -- returning empty list")
             return []  # WHY: Empty list keeps callers safe from None-iteration errors
         data_list = self._normalise_to_list(api_response_data)  # WHY: Uniform iteration
         formatted = self._collect_rows(data_list, analysis_type)  # WHY: Dispatch per-item strategy
-        logging.info("Applying multiline escape to %d Marvis rows", len(formatted))  # WHY: Trace escape call
+        logger.info("Applying multiline escape to %d Marvis rows", len(formatted))  # WHY: Trace escape call
         formatted = self._escape_fn(formatted)  # WHY: CSV-safe multiline escaping
-        logging.debug(  # WHY: Post-escape count aids operator verification
+        logger.debug(  # WHY: Post-escape count aids operator verification
             "Marvis data formatting complete: %d rows for analysis_type='%s'",
             len(formatted),
             analysis_type,
@@ -124,7 +126,7 @@ class MarvisDataUtils:  # WHY: Class groups Marvis-to-CSV helpers with injected 
         formatted: list[dict[str, Any]] = []  # WHY: Accumulator for output rows
         for item in data_list:  # WHY: One item can produce one or many rows
             if not isinstance(item, dict):  # WHY: Skip malformed non-dict entries
-                logging.warning(
+                logger.warning(
                     "Unexpected data type in Marvis response: %s -- skipping item",
                     type(item),
                 )
@@ -140,12 +142,12 @@ class MarvisDataUtils:  # WHY: Class groups Marvis-to-CSV helpers with injected 
     ) -> None:
         """Dispatch one response item to the sites expansion or generic flattener."""
         if self._is_sites_expansion(item, analysis_type):  # WHY: Sites SLE branch fans out rows
-            logging.info(  # WHY: Report site count for operator visibility
+            logger.info(  # WHY: Report site count for operator visibility
                 "Processing organization sites SLE data with %d sites",
                 len(item[_RESULTS_KEY]),
             )
             self._expand_sites_rows(item, formatted)  # WHY: Mutates formatted in place
-            logging.info(  # WHY: Report resulting row count after expansion
+            logger.info(  # WHY: Report resulting row count after expansion
                 "Converted %d sites into %d readable rows",
                 len(item[_RESULTS_KEY]),
                 len(formatted),
@@ -303,11 +305,11 @@ class MarvisDataUtils:  # WHY: Class groups Marvis-to-CSV helpers with injected 
         Returns:
             A list of flattened dicts (may be less readable than the primary path).
         """
-        logging.info("Beginning legacy Marvis fallback: normalise to list")  # WHY: Trace fallback entry
+        logger.info("Beginning legacy Marvis fallback: normalise to list")  # WHY: Trace fallback entry
         fallback_data = self._normalise_to_list(api_response_data)  # WHY: Same wrap logic as primary
-        logging.info("Applying flatten to %d legacy Marvis items", len(fallback_data))  # WHY: Trace flatten
+        logger.info("Applying flatten to %d legacy Marvis items", len(fallback_data))  # WHY: Trace flatten
         fallback_data = self._flatten_fn(fallback_data)  # WHY: Injected flatten callable
-        logging.debug("Legacy flatten produced %d rows; applying escape", len(fallback_data))  # WHY: Trace escape
+        logger.debug("Legacy flatten produced %d rows; applying escape", len(fallback_data))  # WHY: Trace escape
         fallback_data = self._escape_fn(fallback_data)  # WHY: Injected escape callable
-        logging.debug("Legacy Marvis fallback complete: %d rows", len(fallback_data))  # WHY: Trace exit
+        logger.debug("Legacy Marvis fallback complete: %d rows", len(fallback_data))  # WHY: Trace exit
         return fallback_data  # WHY: Return fallback rows to caller

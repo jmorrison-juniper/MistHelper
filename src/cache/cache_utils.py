@@ -25,6 +25,8 @@ from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 
+logger = logging.getLogger(__name__)  # Use this module name in log records.
+
 
 class CacheUtils:
     """Centralized cache management utilities.
@@ -55,7 +57,7 @@ class CacheUtils:
         freshness_minutes defaults to CSV_FRESHNESS_MINUTES (.env). Returns True when the file is
         fresh or was regenerated successfully, False if regeneration failed.
         """
-        logging.debug(
+        logger.debug(
             "ENTRY: CacheUtils.check_and_generate_csv(file_name=%s, generate_function=%s, freshness_minutes=%s)",
             file_name,
             generate_function.__name__,
@@ -75,15 +77,15 @@ class CacheUtils:
     def _is_csv_fresh(full_file_path: str, file_name: str, freshness_minutes: int) -> bool:  # Cache freshness check
         """Return True only when the file exists and was modified within freshness_minutes (else regenerate)."""
         if not os.path.exists(full_file_path):  # File missing entirely
-            logging.info("* %s not found. Generating...", file_name)  # Tell operator it will be generated
+            logger.info("* %s not found. Generating...", file_name)  # Tell operator it will be generated
             return False  # Not fresh -- caller regenerates
         try:  # Reading mtime can fail on permission/metadata errors
             file_mtime = datetime.fromtimestamp(os.path.getmtime(full_file_path), UTC)  # Last-modified timestamp
-            logging.debug("File I/O: read mtime for %s: %s", full_file_path, file_mtime)  # Trace the mtime read
+            logger.debug("File I/O: read mtime for %s: %s", full_file_path, file_mtime)  # Trace the mtime read
             if datetime.now(UTC) - file_mtime < timedelta(minutes=freshness_minutes):  # Within the freshness window
-                logging.info("! Using cached %s (fresh)", file_name)  # Tell operator the cache is being used
+                logger.info("! Using cached %s (fresh)", file_name)  # Tell operator the cache is being used
                 return True  # Fresh -- skip regeneration
-            logging.info("* %s is older than %s minutes. Regenerating...", file_name, freshness_minutes)  # Stale notice
+            logger.info("* %s is older than %s minutes. Regenerating...", file_name, freshness_minutes)  # Stale notice
             return False  # Stale -- caller regenerates
         except OSError as error:  # Could not read the file's metadata
             logging.error("File I/O: Failed to read modification time for %s: %s", full_file_path, error)  # Log failure
@@ -93,10 +95,10 @@ class CacheUtils:
     @staticmethod
     def _run_csv_generator(generate_function: Callable, file_name: str) -> bool:  # type: ignore[type-arg]  # Run generator
         """Invoke the generate_function to produce the CSV. Return True on success, False on failure."""
-        logging.info("* Running %s to generate %s...", generate_function.__name__, file_name)  # Log before generating
+        logger.info("* Running %s to generate %s...", generate_function.__name__, file_name)  # Log before generating
         try:  # The generator may raise. Never let that crash the caller
             generate_function()  # Produce or refresh the CSV file
-            logging.info("! %s generated or refreshed.", file_name)  # Confirm success to operator
+            logger.info("! %s generated or refreshed.", file_name)  # Confirm success to operator
             return True  # Generation succeeded
         except Exception as error:  # Generation failed for any reason
             logging.error("Failed to generate %s using %s: %s", file_name, generate_function.__name__, error)  # Log it
@@ -105,7 +107,7 @@ class CacheUtils:
     @staticmethod
     def load_csv_grouped_by_key(filename: str, key: str) -> dict[str, list[dict[str, Any]]]:
         """Load a CSV into a dict keyed by the named column. Value is the list of rows sharing it."""
-        logging.info(
+        logger.info(
             "Loading CSV file '%s' into dictionary keyed by '%s'...", filename, key
         )  # Log before reading the file
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
@@ -117,13 +119,13 @@ class CacheUtils:
             for row in reader:  # Process each CSV row
                 data_key = row.get(key)  # Extract the grouping key value from this row
                 if data_key is None:  # The key column is missing on this row
-                    logging.warning("Row missing key '%s': %s", key, row)  # Warn about the malformed row
+                    logger.warning("Row missing key '%s': %s", key, row)  # Warn about the malformed row
                     continue  # Skip rows that cannot be grouped
                 if data_key not in data_dict:  # First time we've seen this key value
                     data_dict[data_key] = []  # Start a new bucket for it
                 data_dict[data_key].append(row)  # Add this row to its key's bucket
                 row_count += 1  # Tally the ingested row
-            logging.info(
+            logger.info(
                 "Loaded %s rows from '%s'. Found %s unique keys for '%s'.", row_count, filename, len(data_dict), key
             )  # Summary log
         return data_dict  # Return the grouped-by-key dictionary
@@ -133,7 +135,7 @@ class CacheUtils:
         """Return sorted union of keys across every row in every section."""
         fieldnames: set[str] = set()  # Accumulate every distinct key seen across all sections
         for section_name, section in data.items():  # Walk each named section once
-            logging.debug("Processing section '%s' with %s rows.", section_name, len(section))
+            logger.debug("Processing section '%s' with %s rows.", section_name, len(section))
             for row in section:  # Each row contributes its keys to the union
                 fieldnames.update(row.keys())  # Set update is O(k) and dedupes for us
         return sorted(fieldnames)  # Sort so the CSV column order is deterministic
@@ -151,17 +153,17 @@ class CacheUtils:
     @staticmethod
     def write_support_data_to_csv(data: dict[str, list[dict[str, Any]]], filename: str) -> None:
         """Write the support package (dict of section -> rows) to filename under data/."""
-        logging.debug("Preparing to write support package to %s...", filename)  # Log before doing IO
+        logger.debug("Preparing to write support package to %s...", filename)  # Log before doing IO
         fieldnames_sorted = CacheUtils._collect_csv_fieldnames(data)  # Union of keys, deterministic order
-        logging.debug("Final CSV fieldnames: %s", fieldnames_sorted)  # Trace exact header order
+        logger.debug("Final CSV fieldnames: %s", fieldnames_sorted)  # Trace exact header order
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         csv_file_path = mh.FilePathUtils.get_csv_path(filename)  # SECURITY: anchor under data/
         with open(csv_file_path, mode="w", newline="", encoding="utf-8") as file:  # Open for writing
             writer = csv.DictWriter(file, fieldnames=fieldnames_sorted)  # Bind writer to fixed header
             writer.writeheader()  # Emit header before any data rows
             row_count = CacheUtils._write_data_rows_to_csv(writer, data)  # Stream all rows through
-            logging.info("Wrote %s rows to %s for support package.", row_count, csv_file_path)
-        logging.info("Support package written to %s", csv_file_path)  # Final success message
+            logger.info("Wrote %s rows to %s for support package.", row_count, csv_file_path)
+        logger.info("Support package written to %s", csv_file_path)  # Final success message
 
     # Known generated cache CSV filenames -- cleared by Menu 175
     GENERATED_FILES: set[str] = {  # Explicit list of MistHelper-generated cache CSVs to protect non-data files
@@ -206,28 +208,28 @@ class CacheUtils:
     def clear_cache() -> None:  # Menu 175: delete all generated cache CSVs from data/ directory
         """Delete all MistHelper-generated cache CSV files from the data/ directory."""
         data_dir = "data"  # Relative path to data/ consistent with FilePathUtils.get_csv_path()
-        logging.info("Scanning data directory for generated cache CSVs: %s", data_dir)  # Log scan target
+        logger.info("Scanning data directory for generated cache CSVs: %s", data_dir)  # Log scan target
         candidates = CacheUtils._scan_cache_candidates(data_dir)  # List safe-to-delete files (None on scan error)
         if candidates is None:  # Directory could not be listed (already reported by the scanner)
             return  # Abort -- nothing to delete if we cannot list the directory
         if not candidates:  # Nothing to delete -- inform operator and return early
             # WHY (#886 Phase 2): consolidate print+info into single WARNING so operator sees notice
             # on the default root-logger config (INFO is suppressed by default).
-            logging.warning("No generated cache CSV files found to delete.")
+            logger.warning("No generated cache CSV files found to delete.")
             return  # Early return -- nothing to do
-        logging.warning(
+        logger.warning(
             "Found %d generated cache CSV file(s) to delete:", len(candidates)
         )  # Show operator what will be removed (WARNING surfaces on default root-logger)
         for name in sorted(candidates):  # Sort for readable output
-            logging.warning("  %s", name)  # List each file so operator knows exactly what is affected
+            logger.warning("  %s", name)  # List each file so operator knows exactly what is affected
         deleted, errors = CacheUtils._delete_cache_files(data_dir, candidates)  # Delete each file, counting outcomes
         # WHY (#886 Phase 2): consolidate print+info into single WARNING for post-run operator summary.
-        logging.warning("Cache cleared: %d file(s) deleted, %d error(s).", deleted, errors)
+        logger.warning("Cache cleared: %d file(s) deleted, %d error(s).", deleted, errors)
 
     @staticmethod
     def _scan_cache_candidates(data_dir: str) -> list[str] | None:  # List generated cache files, or None on error
         """Return the list of generated cache filenames in data_dir, or None if the directory cannot be listed."""
-        logging.debug("Listing generated cache candidates in %s", data_dir)  # Trace the scan before listing
+        logger.debug("Listing generated cache candidates in %s", data_dir)  # Trace the scan before listing
         try:  # Listing can fail on permissions or a missing directory
             return [
                 name for name in os.listdir(data_dir) if CacheUtils._is_generated_file(name)
@@ -245,10 +247,10 @@ class CacheUtils:
         errors = 0  # Track failures for summary
         for name in candidates:  # Delete each identified cache file
             full_path = os.path.join(data_dir, name)  # Build the path for deletion
-            logging.info("Deleting cache CSV: %s", full_path)  # Log before deletion for audit trail
+            logger.info("Deleting cache CSV: %s", full_path)  # Log before deletion for audit trail
             try:  # Individual deletions may fail without aborting the batch
                 os.remove(full_path)  # Delete the file from disk
-                logging.debug("Deleted: %s", full_path)  # Confirm deletion at debug level
+                logger.debug("Deleted: %s", full_path)  # Confirm deletion at debug level
                 deleted += 1  # Increment success counter
             except OSError as delete_error:  # Handle individual file deletion failures
                 logging.error("Failed to delete %s: %s", full_path, delete_error)  # Log failure with path and reason
@@ -263,7 +265,7 @@ class CacheUtils:
     ) -> None:
         """Write address-parse failures to a CSV in data/. Safe no-op when list is empty."""
         if not parse_failures:
-            logging.info("No address parsing failures to document.")
+            logger.info("No address parsing failures to document.")
             return
         try:
             mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
@@ -273,10 +275,10 @@ class CacheUtils:
                 writer.writeheader()  # Header row first
                 for failure in parse_failures:
                     writer.writerow(failure)  # One row per failure record
-            logging.info("Address parsing failures documented in: %s (%s records)", filename, len(parse_failures))
+            logger.info("Address parsing failures documented in: %s (%s records)", filename, len(parse_failures))
             # WHY (#886 Phase 2): consolidate print+info into single WARNING so operator sees notice
             # on the default root-logger config (INFO is suppressed by default).
-            logging.warning("Address parsing failures documented in: %s (%d records)", filename, len(parse_failures))
+            logger.warning("Address parsing failures documented in: %s (%d records)", filename, len(parse_failures))
         except Exception as e:
             logging.error("Failed to create address parse failures CSV: %s", e)
             # WHY (#886 Phase 2): retire print() in favor of logging.error (surfaces on default root-logger).
@@ -287,9 +289,9 @@ class CacheUtils:
         """Return True when filename exists in data/ and is younger than max_age_minutes."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         full_path = mh.FilePathUtils.get_csv_path(filename)  # Resolve path inside data/ directory
-        logging.debug("fast_cache_hit check for %s (max_age=%d min)", filename, max_age_minutes)  # Log check
+        logger.debug("fast_cache_hit check for %s (max_age=%d min)", filename, max_age_minutes)  # Log check
         if not os.path.exists(full_path):  # File not present -- always a miss
-            logging.debug("fast_cache_hit MISS: %s not found", filename)  # Log miss reason
+            logger.debug("fast_cache_hit MISS: %s not found", filename)  # Log miss reason
             return False  # Cache miss -- caller should generate the file
         try:
             age_seconds = time.time() - os.path.getmtime(full_path)  # Seconds since last modification
@@ -297,9 +299,9 @@ class CacheUtils:
             if age_minutes <= max_age_minutes:  # File is within the freshness window
                 # WHY (#886 Phase 2): consolidate print+info into single WARNING so operator sees
                 # the cache-hit notice on the default root-logger config (INFO is suppressed).
-                logging.warning("Using cached %s (%.0f min old) -- skipping re-generation.", filename, age_minutes)
+                logger.warning("Using cached %s (%.0f min old) -- skipping re-generation.", filename, age_minutes)
                 return True  # Cache hit -- caller can skip expensive work
-            logging.debug("fast_cache_hit MISS: %s is stale (%.1f min old)", filename, age_minutes)  # Log stale
+            logger.debug("fast_cache_hit MISS: %s is stale (%.1f min old)", filename, age_minutes)  # Log stale
             return False  # File is too old -- cache miss
         except OSError as stat_error:  # Handle race conditions or permission issues
             logging.warning("fast_cache_hit: could not stat %s: %s", filename, stat_error)  # Log I/O issue
