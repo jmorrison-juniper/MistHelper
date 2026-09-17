@@ -20,6 +20,8 @@ import sys  # WHY: recompute IS_TEST_MODE from sys.argv (no MistHelper backref).
 
 IS_TEST_MODE = "--test" in sys.argv or "--testinteractive" in sys.argv  # WHY: mirror MistHelper.py flag.
 
+logger = logging.getLogger(__name__)  # WHY: name each record for this module, not the root logger.
+
 
 class TimeUtils:
     """Centralized time-related utilities.
@@ -45,8 +47,8 @@ class TimeUtils:
     def log_dynamic_lookback(context: str, hours: int) -> None:
         """Helper to produce a consistent log line when dynamic lookback applies."""
         if IS_TEST_MODE:  # Surface the reduced window prominently during tests
-            logging.info(
+            logger.info(
                 "[TEST MODE] Using reduced lookback window of %sh for %s (normally 24h)", hours, context
             )  # Visible test-mode notice
         else:  # Production: keep the note at debug level
-            logging.debug("Using standard lookback window of %sh for %s", hours, context)  # Quiet production notice
+            logger.debug("Using standard lookback window of %sh for %s", hours, context)  # Quiet production notice

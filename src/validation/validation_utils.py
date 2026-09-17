@@ -14,6 +14,8 @@ import ipaddress  # WHY: literal IP address parsing for ping-target validation.
 import logging  # WHY: shared logger for validation-failure audit trail.
 import re  # WHY: hostname regex enforcement.
 
+logger = logging.getLogger(__name__)  # WHY: name each record for this module, not the root logger.
+
 
 class ValidationUtils:
     """Centralized validation utilities for input validation and sanitization.
@@ -31,11 +33,11 @@ class ValidationUtils:
         """
         if site_id is None:  # WHY: reject a missing site_id.
             error_msg = f"! site_id is None in {function_name}. Cannot make API call."
-            logging.error(error_msg)  # WHY: log before raising.
+            logger.error(error_msg)  # WHY: log before raising.
             raise ValueError(error_msg)  # WHY: abort the call with context.
         if isinstance(site_id, str) and site_id.strip() == "":  # WHY: reject empty/whitespace.
             error_msg = f"! site_id is empty string in {function_name}. Cannot make API call."
-            logging.error(error_msg)  # WHY: log before raising.
+            logger.error(error_msg)  # WHY: log before raising.
             raise ValueError(error_msg)  # WHY: abort the call.
         return True  # WHY: site_id passed validation.
 
@@ -48,11 +50,11 @@ class ValidationUtils:
         """
         if device_id is None:  # WHY: reject a missing device_id.
             error_msg = f"! device_id is None in {function_name}. Cannot make API call."
-            logging.error(error_msg)  # WHY: log before raising.
+            logger.error(error_msg)  # WHY: log before raising.
             raise ValueError(error_msg)  # WHY: abort the call with context.
         if isinstance(device_id, str) and device_id.strip() == "":  # WHY: reject empty/whitespace.
             error_msg = f"! device_id is empty string in {function_name}. Cannot make API call."
-            logging.error(error_msg)  # WHY: log before raising.
+            logger.error(error_msg)  # WHY: log before raising.
             raise ValueError(error_msg)  # WHY: abort the call.
         return True  # WHY: device_id passed validation.
 

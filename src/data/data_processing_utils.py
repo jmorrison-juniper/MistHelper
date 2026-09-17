@@ -21,6 +21,8 @@ import json  # json.loads fallback for stringified JSON payloads.
 import logging  # Structured action logging per Constitution VII.
 from typing import Any  # Broad typing for arbitrary field values.
 
+logger = logging.getLogger(__name__)  # Name each record for this module, not the root logger.
+
 
 class DataProcessingUtils:
     """Centralized data-transformation utilities (canonical home in ``src/data/``).
@@ -70,7 +72,7 @@ class DataProcessingUtils:
         flattened = []  # Collect flattened rows.
         for entry in data:  # Process each record.
             if not isinstance(entry, dict):  # Skip non-dict records defensively.
-                logging.debug("Skipping non-dictionary entry: %s", type(entry).__name__)  # Trace skipped entry.
+                logger.debug("Skipping non-dictionary entry: %s", type(entry).__name__)  # Trace skipped entry.
                 continue  # Move to next record.
             flattened.append(DataProcessingUtils._flatten_entry(entry))  # Delegate per-entry flattening.
         return flattened  # Return all flattened rows.
@@ -138,7 +140,7 @@ class DataProcessingUtils:
         for entry in data:  # Process each record.
             for key, value in entry.items():  # Walk each field.
                 if isinstance(value, (list, tuple, set)):  # Only convert collections.
-                    logging.debug("Converting list/tuple/set at key '%s' to string", key)  # Trace the conversion.
+                    logger.debug("Converting list/tuple/set at key '%s' to string", key)  # Trace the conversion.
                     entry[key] = ",".join(map(str, value))  # Join as CSV string.
         return data  # Return converted records.
 

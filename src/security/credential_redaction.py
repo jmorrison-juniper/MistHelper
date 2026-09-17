@@ -18,6 +18,8 @@ import copy  # Deep copy so the caller keeps an unchanged input record.
 import logging  # Action logging, per the project observability rule.
 from typing import Any  # The Mist payload shape is dynamic, so the values stay Any.
 
+logger = logging.getLogger(__name__)  # Name each record for this module, not the root logger.
+
 
 class CredentialRedactor:
     """Replace every credential value in a Mist settings record with a fixed token.
@@ -111,14 +113,14 @@ class CredentialRedactor:
             A deep copy with every credential value replaced by the token. The
             input record is never changed.
         """
-        logging.debug("Redacting credentials in one settings record")  # BEFORE the walk.
+        logger.debug("Redacting credentials in one settings record")  # BEFORE the walk.
         if not isinstance(record, (dict, list)):  # A scalar carries no key to test.
             return record  # Return it unchanged.
         safe_record = copy.deepcopy(record)  # Copy first, so the caller keeps the original.
         hits: list[str] = []  # Collect each redacted path for the log record.
         CredentialRedactor._redact_in_place(safe_record, hits)  # Do the walk.
         if hits:  # Only log when the record really carried a credential.
-            logging.info(  # AFTER the walk. Log the paths, never the values.
+            logger.info(  # AFTER the walk. Log the paths, never the values.
                 "Redacted %s credential field(s) before export: %s",
                 len(hits),
                 ", ".join(sorted(hits)),
@@ -135,7 +137,7 @@ class CredentialRedactor:
         Returns:
             A new list of redacted copies. The input list is never changed.
         """
-        logging.info("Redacting credentials in %s settings record(s)", len(records))  # BEFORE.
+        logger.info("Redacting credentials in %s settings record(s)", len(records))  # BEFORE.
         safe_records = [CredentialRedactor.redact(record) for record in records]  # Redact each one.
-        logging.debug("Redaction complete for %s record(s)", len(safe_records))  # AFTER.
+        logger.debug("Redaction complete for %s record(s)", len(safe_records))  # AFTER.
         return safe_records  # Hand back the safe list.
