@@ -55,9 +55,9 @@ class LocalTestShardRunner:
         """Run every chunk and print one final summary line."""
         import time
 
-        logging.info("Building the local test shard chunks for %s", self.shard)  # Log before path discovery.
+        logger.info("Building the local test shard chunks for %s", self.shard)  # Log before path discovery.
         chunks = self._build_chunks()  # Build deterministic chunks from the working tree.
-        logging.debug("Built %d local test shard chunk(s)", len(chunks))  # Log the measured chunk count.
+        logger.debug("Built %d local test shard chunk(s)", len(chunks))  # Log the measured chunk count.
         started = time.monotonic()  # Use a monotonic clock for elapsed time.
         for index, chunk in enumerate(chunks, start=1):  # Run chunks in a fixed order for repeatability.
             code = self._run_chunk(index, len(chunks), chunk)  # Execute one bounded pytest command.
@@ -90,7 +90,7 @@ class LocalTestShardRunner:
 
     def _children(self, path: Path) -> list[TestChunk]:
         """Return stable child test paths, splitting large portal folders."""
-        logging.info("Reading test paths under %s", path)  # Log before the directory scan.
+        logger.info("Reading test paths under %s", path)  # Log before the directory scan.
         children = sorted(path.iterdir(), key=lambda child: child.name)  # Keep the order stable across runs.
         files: list[Path] = []  # Keep sibling files together, because legacy tests share module setup.
         tests: list[TestChunk] = []  # Collect the pytest targets for this path.
@@ -105,7 +105,7 @@ class LocalTestShardRunner:
                 tests.append(TestChunk((child,)))  # Run the package as one bounded pytest chunk.
         if files:  # Direct files inside a portal folder still need bounded batches.
             tests[0:0] = self._file_chunks(files)  # Put direct files before package folders.
-        logging.debug("Found %d test path(s) under %s", len(tests), path)  # Log the scan result.
+        logger.debug("Found %d test path(s) under %s", len(tests), path)  # Log the scan result.
         return tests  # The caller runs the stable list.
 
     def _file_chunks(self, files: list[Path]) -> list[TestChunk]:
@@ -123,7 +123,7 @@ class LocalTestShardRunner:
         ignores = tuple(path.relative_to(self.root) for path in chunk.ignores)  # Print short ignored paths.
         label = self._chunk_label(relative, ignores)  # Build one readable chunk label.
         command = self._pytest_command(relative, ignores)  # Build the subprocess argument list without a shell.
-        logging.info("Running pytest chunk %d of %d: %s", index, total, label)  # Log before execution.
+        logger.info("Running pytest chunk %d of %d: %s", index, total, label)  # Log before execution.
         print(f"local-shard {self.shard}: chunk {index}/{total} {label}", flush=True)  # Show progress.
         try:  # A chunk timeout must become a clear exit code.
             completed = subprocess.run(  # Run pytest as a child so the wall-clock guard can stop it.
@@ -136,7 +136,7 @@ class LocalTestShardRunner:
             logging.error("Pytest chunk timed out after %d seconds: %s", self.chunk_timeout, label)
             print(f"local-shard {self.shard}: timed out after {self.chunk_timeout}s at {label}", flush=True)
             return 124  # Use the common timeout exit code.
-        logging.debug("Pytest chunk %s exited with code %d", label, completed.returncode)  # Log the result.
+        logger.debug("Pytest chunk %s exited with code %d", label, completed.returncode)  # Log the result.
         return completed.returncode  # Propagate the pytest result.
 
     def _pytest_command(self, relative: tuple[Path, ...], ignores: tuple[Path, ...]) -> list[str]:
