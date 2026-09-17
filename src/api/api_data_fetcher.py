@@ -26,6 +26,8 @@ from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class APIDataFetcher:
     """Fetches data from Mist API, processes it, and exports to CSV/SQLite.
@@ -68,12 +70,12 @@ class APIDataFetcher:
             self._fetch_api_data()  # Fetch from the API.
 
             if self.rawdata is None or len(self.rawdata) == 0:  # No data returned.
-                logging.warning("! No data returned from API for %s. Skipping.", self.title)  # warn no data.
-                logging.debug("EXIT: APIDataFetcher.execute - no data")  # Trace early exit.
+                logger.warning("! No data returned from API for %s. Skipping.", self.title)  # warn no data.
+                logger.debug("EXIT: APIDataFetcher.execute - no data")  # Trace early exit.
                 return  # Skip export.
 
             self._export_and_display_data()  # Export and display.
-            logging.debug("EXIT: APIDataFetcher.execute - success")  # Trace success.
+            logger.debug("EXIT: APIDataFetcher.execute - success")  # Trace success.
 
         except Exception as error:  # Handle run failure.
             self._handle_outer_exception(error)  # Log/report the failure.
@@ -86,7 +88,7 @@ class APIDataFetcher:
     def _log_entry(self) -> None:  # Log fetch parameters.
         """Log entry point with parameters."""
         api_name = self.api_call.__name__  # API callable name.
-        logging.debug(  # Trace the entry.
+        logger.debug(  # Trace the entry.
             "ENTRY: APIDataFetcher(title=%s, api_call=%s, filename=%s, sort_key=%s, kwargs=%s)",
             self.title,
             api_name,
@@ -96,7 +98,7 @@ class APIDataFetcher:
         )
         # WHY (#886 Phase 2): consolidated print()+logging.info into a single WARNING so the title
         # remains operator-visible without duplicating notices on the terminal.
-        logging.warning("Starting data fetch: %s", self.title)  # Fetch-start notice (operator-visible).
+        logger.warning("Starting data fetch: %s", self.title)  # Fetch-start notice (operator-visible).
 
     # =========================================================================
     # API CALL METHODS
@@ -106,7 +108,7 @@ class APIDataFetcher:
         """Make API call and retrieve paginated results with retry on timeout."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         api_name = self.api_call.__name__  # API callable name.
-        logging.debug("Making API call: %s with kwargs: %s", api_name, self.kwargs)  # Trace the call.
+        logger.debug("Making API call: %s with kwargs: %s", api_name, self.kwargs)  # Trace the call.
 
         response = self._call_api_with_retry(api_name)  # Call with retry.
         self._apply_rate_limiting()  # Throttle after the call.
@@ -115,7 +117,7 @@ class APIDataFetcher:
         try:
             self.rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page through all rows.
             record_count = len(self.rawdata) if self.rawdata else 0  # Count retrieved rows.
-            logging.debug("API call successful, retrieved %s raw records", record_count)  # Trace the count.
+            logger.debug("API call successful, retrieved %s raw records", record_count)  # Trace the count.
         except KeyError as error:  # Malformed response key.
             self._handle_key_error(response, error)  # Try to recover data.
         except Exception as error:  # Other API failure.
@@ -135,7 +137,7 @@ class APIDataFetcher:
             if attempt < max_retries:  # More attempts left.
                 delay = retry_delay * (2**attempt)  # Exponential backoff.
                 APIDataFetcher._log_retry_attempt(api_name, attempt, delay)  # Log + print + sleep.
-        logging.error("API call %s failed after %s attempts", api_name, max_retries + 1)
+        logger.error("API call %s failed after %s attempts", api_name, max_retries + 1)
         return last_response  # Return last response.
 
     @staticmethod
@@ -144,7 +146,7 @@ class APIDataFetcher:
         max_retries = runtime_settings.API_REQUEST_MAX_RETRIES  # Read retry ceiling without importing MistHelper.
         # WHY (#886 Phase 2): retired duplicate print(); logging.warning below already reaches the
         # operator terminal via the WARNING-level default handler.
-        logging.warning(  # Warn and back off (operator-visible).
+        logger.warning(  # Warn and back off (operator-visible).
             "API call %s failed (attempt %s/%s) - retrying in %.0fs",
             api_name,
             attempt + 1,
@@ -173,20 +175,20 @@ class APIDataFetcher:
         self.smoothed, delay = mh.RateLimitingUtils.get_rate_limited_delay(
             self.smoothed, mh.apisession, api_usage_cache.api_usage_cache
         )
-        logging.debug("Applying rate limit delay: %.2fs", delay)  # Trace the delay.
+        logger.debug("Applying rate limit delay: %.2fs", delay)  # Trace the delay.
         time.sleep(delay)  # Apply the delay.
 
     def _log_response_structure(self, response: Any) -> None:  # Trace the response shape.
         """Log API response structure for debugging."""
-        logging.debug("API response type: %s", type(response))  # Trace response type.
+        logger.debug("API response type: %s", type(response))  # Trace response type.
         if not hasattr(response, "data"):  # No data attribute.
             return  # Nothing to inspect.
 
-        logging.debug("Response.data type: %s", type(response.data))  # Trace data type.
+        logger.debug("Response.data type: %s", type(response.data))  # Trace data type.
         if isinstance(response.data, dict):  # Dict payload.
-            logging.debug("Response.data keys: %s", list(response.data.keys()))  # Trace dict keys.
+            logger.debug("Response.data keys: %s", list(response.data.keys()))  # Trace dict keys.
         elif isinstance(response.data, list):  # List payload.
-            logging.debug("Response.data is list with %s items", len(response.data))  # Trace list size.
+            logger.debug("Response.data is list with %s items", len(response.data))  # Trace list size.
 
     # =========================================================================
     # ERROR HANDLING METHODS
@@ -194,7 +196,7 @@ class APIDataFetcher:
 
     def _handle_key_error(self, response: Any, error: KeyError) -> None:  # Recover from missing keys.
         """Handle missing 'results' key or other structure issues."""
-        logging.error("API response structure error - missing key: %s", error)  # log key error.
+        logger.error("API response structure error - missing key: %s", error)  # log key error.
         self._log_response_error_details(response)  # Log response details.
 
         recovered_data = self._attempt_data_recovery(response)  # Try to salvage rows.
@@ -208,12 +210,12 @@ class APIDataFetcher:
     def _log_response_error_details(self, response: Any) -> None:  # Log response diagnostics.
         """Log detailed response information during error handling."""
         has_data = hasattr(response, "data")  # Has a data attribute?
-        logging.error("Response details: type=%s, hasattr(data)=%s", type(response), has_data)  # log details.
+        logger.error("Response details: type=%s, hasattr(data)=%s", type(response), has_data)  # log details.
 
         if has_data:  # Inspect the data.
-            logging.error("Response.data type=%s", type(response.data))  # log data type.
+            logger.error("Response.data type=%s", type(response.data))  # log data type.
             if isinstance(response.data, dict):  # Dict payload.
-                logging.error("Available keys: %s", list(response.data.keys()))  # log keys.
+                logger.error("Available keys: %s", list(response.data.keys()))  # log keys.
 
     def _attempt_data_recovery(self, response: Any) -> list[dict[str, Any]] | None:  # Salvage rows from odd shapes.
         """Attempt to recover data from alternate response structures."""
@@ -223,11 +225,11 @@ class APIDataFetcher:
         if isinstance(response.data, dict):  # Dict payload.
             if "data" in response.data:  # Nested data key.
                 recovered = response.data.get("data", [])  # Pull nested rows.
-                logging.info("Recovered %s records from response.data['data']", len(recovered))  # log recovered.
+                logger.info("Recovered %s records from response.data['data']", len(recovered))  # log recovered.
                 return recovered  # type: ignore[no-any-return]
 
         if isinstance(response.data, list):  # List payload.
-            logging.info("Recovered %s records from response.data (list)", len(response.data))  # log recovered list.
+            logger.info("Recovered %s records from response.data (list)", len(response.data))  # log recovered list.
             return response.data  # Use the list directly.
 
         return None  # Nothing to recover.
@@ -237,25 +239,25 @@ class APIDataFetcher:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY (#886 Phase 2): promoted print() + logging.info to WARNING so the recovery notice
         # remains operator-visible without duplicate terminal output.
-        logging.warning("API returned unexpected structure. Recovered %s records.", len(self.rawdata))
+        logger.warning("API returned unexpected structure. Recovered %s records.", len(self.rawdata))
         api_name = self.api_call.__name__  # API callable name.
         mh.DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)
-        logging.warning("Recovered data saved to %s (%s rows)", self.filename, len(self.rawdata))
+        logger.warning("Recovered data saved to %s (%s rows)", self.filename, len(self.rawdata))
 
     def _handle_no_recovery(self) -> None:  # Report unrecoverable response.
         """Handle case where no data could be recovered."""
         # WHY (#886 Phase 2): print() replaced with logging.error so the failure notice stays
         # operator-visible via the ERROR-level default handler.
-        logging.error("API response missing expected 'results' key. No data could be recovered.")
-        logging.error("Unable to recover any data from malformed response for %s", self.title)  # log no recovery.
-        logging.debug("EXIT: APIDataFetcher - structure error, no recovery")  # Trace exit.
+        logger.error("API response missing expected 'results' key. No data could be recovered.")
+        logger.error("Unable to recover any data from malformed response for %s", self.title)  # log no recovery.
+        logger.debug("EXIT: APIDataFetcher - structure error, no recovery")  # Trace exit.
 
     def _handle_api_exception(self, error: Exception) -> None:  # Handle a fetch exception.
         """Handle exceptions during API data retrieval."""
         # WHY (#886 Phase 2): retired duplicate print(). The logging.error calls below already
         # surface the failure via the ERROR-level default handler.
-        logging.error("Exception occurred during API data retrieval: %s", error)  # log exception.
-        logging.error("Exception type: %s", type(error).__name__)  # log type.
+        logger.error("Exception occurred during API data retrieval: %s", error)  # log exception.
+        logger.error("Exception type: %s", type(error).__name__)  # log type.
 
         if self._is_rate_limit_error(error):  # Rate limited?
             self._handle_rate_limit()  # Save partial and stop.
@@ -271,16 +273,16 @@ class APIDataFetcher:
     def _handle_rate_limit(self) -> None:  # Save partial on rate limit.
         """Handle HTTP 429 rate limit error."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.warning("API rate limit (HTTP 429) reached. Saving partial results and exiting.")  # warn rate limit.
+        logger.warning("API rate limit (HTTP 429) reached. Saving partial results and exiting.")  # warn rate limit.
 
         if self.rawdata:  # Have partial data?
             api_name = self.api_call.__name__  # API callable name.
             mh.DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)
             # WHY (#886 Phase 2): consolidated print()+logging.info into a single WARNING so the
             # partial-save notice stays operator-visible without duplicate terminal output.
-            logging.warning("Partial data saved: %s records written to %s", len(self.rawdata), self.filename)
+            logger.warning("Partial data saved: %s records written to %s", len(self.rawdata), self.filename)
 
-        logging.debug("EXIT: APIDataFetcher - rate limited")  # Trace exit.
+        logger.debug("EXIT: APIDataFetcher - rate limited")  # Trace exit.
 
     def _emergency_save_and_raise(self, error: Exception) -> None:  # Save partial then re-raise.
         """Save partial data before re-raising exception."""
@@ -291,26 +293,26 @@ class APIDataFetcher:
                 mh.DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)
                 # WHY (#886 Phase 2): consolidated print()+logging.info into a single WARNING so
                 # the emergency-save notice remains operator-visible via the default handler.
-                logging.warning("Emergency save: %s partial records written to %s", len(self.rawdata), self.filename)
+                logger.warning("Emergency save: %s partial records written to %s", len(self.rawdata), self.filename)
             except Exception as save_error:  # Save failed.
                 logging.error("Failed to save partial data during error handling: %s", save_error)  # log save fail.
 
-        logging.debug("EXIT: APIDataFetcher - API error")  # Trace exit.
+        logger.debug("EXIT: APIDataFetcher - API error")  # Trace exit.
         raise error  # Re-raise the original.
 
     def _handle_outer_exception(self, error: Exception) -> None:  # Handle a top-level error.
         """Handle exceptions at the top level."""
-        logging.error("! Error during data fetch for %s: %s", self.title, error)  # log error.
-        logging.error("Exception type: %s, Traceback info available in logs", type(error).__name__)  # log type.
+        logger.error("! Error during data fetch for %s: %s", self.title, error)  # log error.
+        logger.error("Exception type: %s, Traceback info available in logs", type(error).__name__)  # log type.
 
         if self.rawdata:  # Have partial data?
             self._save_partial_data_on_error(error)  # Save what we have.
         else:
             # WHY (#886 Phase 2): print() replaced with logging.warning so operator terminal
             # still surfaces the "nothing collected" notice via the default WARNING handler.
-            logging.warning("No data was collected before the error occurred")
+            logger.warning("No data was collected before the error occurred")
 
-        logging.debug("EXIT: APIDataFetcher - error")  # Trace exit.
+        logger.debug("EXIT: APIDataFetcher - error")  # Trace exit.
 
     def _save_partial_data_on_error(self, error: Exception) -> None:  # Persist partial rows on error.
         """Save partial data when outer exception occurs."""
@@ -320,15 +322,15 @@ class APIDataFetcher:
             mh.DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)
             # WHY (#886 Phase 2): consolidated logging.info + 4 print() calls into WARNING lines
             # so the "partial data saved" banner remains operator-visible without duplicates.
-            logging.warning("Partial results saved to %s (%s rows)", self.filename, len(self.rawdata))
-            logging.warning("PARTIAL DATA SAVED")
-            logging.warning(
+            logger.warning("Partial results saved to %s (%s rows)", self.filename, len(self.rawdata))
+            logger.warning("PARTIAL DATA SAVED")
+            logger.warning(
                 "Despite the error, %s records were successfully saved to %s",
                 len(self.rawdata),
                 self.filename,
             )
-            logging.warning("Error: %s", str(error))
-            logging.warning("You can retry the operation later to get remaining data")
+            logger.warning("Error: %s", str(error))
+            logger.warning("You can retry the operation later to get remaining data")
         except Exception as save_error:  # Save failed.
             # WHY (#886 Phase 2): consolidated print() with logging.error so the critical failure
             # surfaces once through the ERROR-level default handler.
@@ -342,7 +344,7 @@ class APIDataFetcher:
     def _export_and_display_data(self) -> None:  # Export then show a table.
         """Export data and display in table format."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Fetched %s raw records from API.", len(self.rawdata))  # log raw count.
+        logger.info("Fetched %s raw records from API.", len(self.rawdata))  # log raw count.
 
         api_name = self.api_call.__name__  # API callable name.
         mh.DataExporter.export_with_processing(
@@ -350,7 +352,7 @@ class APIDataFetcher:
         )
         # WHY (#886 Phase 2): print() replaced with logging.warning so the export-count notice
         # remains operator-visible via the WARNING-level default handler.
-        logging.warning("%s records exported to %s", len(self.rawdata), self.filename)
+        logger.warning("%s records exported to %s", len(self.rawdata), self.filename)
 
         self._display_table()  # Render the table.
 
@@ -358,10 +360,10 @@ class APIDataFetcher:
         """Prepare and display data in PrettyTable format."""
         data = self._prepare_data_for_display()  # Normalize rows.
         fields = DataProcessingUtils.get_unique_keys(data)
-        logging.debug("Unique fields for table: %s", fields)  # Trace fields.
+        logger.debug("Unique fields for table: %s", fields)  # Trace fields.
 
         table = self._build_pretty_table(data, fields)  # Build the table.
-        logging.debug("\n%s", table.get_string())  # Log the table.
+        logger.debug("\n%s", table.get_string())  # Log the table.
 
     def _prepare_data_for_display(self) -> list[dict[str, Any]]:  # Filter, sort, flatten rows.
         """Prepare raw data for table display."""

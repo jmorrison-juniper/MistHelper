@@ -19,6 +19,8 @@ import mistapi.api.v1.sites.gatewaytemplates  # Site gateway-template endpoint n
 import mistapi.api.v1.sites.networks  # Site networks endpoint namespace
 import mistapi.api.v1.sites.servicepolicies  # Site service-policies endpoint namespace
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 _API_PAGE_LIMIT = 1000  # Standard pagination cap for org-level Mist list endpoints
 
 
@@ -61,16 +63,16 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
         """
         try:
             org_id = self._get_org_id()  # Resolve org ID via injected callable
-            logging.info("Fetching org networks for tenant info from org_id: %s", org_id)  # Trace request
+            logger.info("Fetching org networks for tenant info from org_id: %s", org_id)  # Trace request
             response = mistapi.api.v1.orgs.networks.listOrgNetworks(
                 self._session, org_id, limit=_API_PAGE_LIMIT
             )  # Fetch all org networks from Mist API
             if not (hasattr(response, "data") and response.data):  # Defensive: response may lack data
-                logging.warning("No org networks found or response data is empty")  # Surface empty result
+                logger.warning("No org networks found or response data is empty")  # Surface empty result
                 return []  # Callers treat empty list as "no tenants found"
-            logging.debug("Received %d org networks from API", len(response.data))  # Payload size trace
+            logger.debug("Received %d org networks from API", len(response.data))  # Payload size trace
             tenant_list = sorted(self._extract_tenants_from_networks(response.data))  # Dedupe + sort
-            logging.info("Found %d unique org-network tenants: %s", len(tenant_list), tenant_list)  # Report
+            logger.info("Found %d unique org-network tenants: %s", len(tenant_list), tenant_list)  # Report
             return tenant_list  # Sorted list handed back to caller
         except Exception as error:  # Broad guard: never propagate API failures to the UI
             logging.error("Error fetching org tenants from networks: %s", error)  # Log root cause
@@ -86,16 +88,16 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
             List of tenant names found in site derived networks, or empty list if error.
         """
         try:
-            logging.info("Fetching site derived networks for tenant info from site_id: %s", site_id)  # Trace
+            logger.info("Fetching site derived networks for tenant info from site_id: %s", site_id)  # Trace
             response = mistapi.api.v1.sites.networks.listSiteNetworksDerived(
                 self._session, site_id
             )  # Fetch site-derived network list from Mist API
             if not (hasattr(response, "data") and response.data):  # Guard against missing/empty payload
-                logging.warning("No site derived networks found or response data is empty")  # Empty trace
+                logger.warning("No site derived networks found or response data is empty")  # Empty trace
                 return []  # Fail-safe empty result
-            logging.debug("Received %d site derived networks from API", len(response.data))  # Size trace
+            logger.debug("Received %d site derived networks from API", len(response.data))  # Size trace
             tenant_list = sorted(self._extract_tenants_from_networks(response.data))  # Dedupe + sort
-            logging.info("Found %d unique site-network tenants: %s", len(tenant_list), tenant_list)  # Report
+            logger.info("Found %d unique site-network tenants: %s", len(tenant_list), tenant_list)  # Report
             return tenant_list  # Sorted list handed back to caller
         except Exception as error:  # Broad guard mirrors organization_tenants for symmetry
             logging.error("Error fetching site tenants from derived networks: %s", error)  # Log root cause
@@ -117,7 +119,7 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
             if site_id:  # Only fetch site policies when a site_id is provided
                 tenant_names.update(self._fetch_site_policy_tenants(site_id))  # Site-scope contributions
             tenant_list = sorted(tenant_names)  # Deterministic order for UI + tests
-            logging.info(
+            logger.info(
                 "Found %d unique tenants across service policies: %s", len(tenant_list), tenant_list
             )  # Emit final union count for operator visibility
             return tenant_list  # Sorted list handed back to caller
@@ -141,7 +143,7 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
             if site_id:  # Only fetch site templates when a site_id is provided
                 tenant_names.update(self._fetch_site_template_tenants(site_id))  # Site-scope contributions
             tenant_list = sorted(tenant_names)  # Deterministic order for UI + tests
-            logging.info(
+            logger.info(
                 "Found %d unique tenants across gateway templates: %s", len(tenant_list), tenant_list
             )  # Emit final union count for operator visibility
             return tenant_list  # Sorted list handed back to caller
@@ -224,7 +226,7 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
             router.get("tenants", []), tenant_names
         )  # Named tenant references
         _add_valid_names(tenant_names, router.get("tenant_profiles", {}))  # Profile keys are tenant IDs
-        logging.debug(
+        logger.debug(
             "Extracted %d router tenants for template '%s'", len(tenant_names), tmpl_name
         )  # Diagnostic trace with template context
         return tenant_names  # Fully populated set returned to caller
@@ -236,7 +238,7 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
         for network in networks:  # Iterate each network block in the template
             if isinstance(network, dict):  # Guard: skip any non-dict entries
                 _add_valid_names(tenant_names, network.get("tenants", {}))  # Each dict key is a tenant name
-        logging.debug(
+        logger.debug(
             "Extracted %d network tenants for template '%s'", len(tenant_names), tmpl_name
         )  # Diagnostic trace with template context
         return tenant_names  # Fully populated set returned to caller
@@ -266,14 +268,14 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
     def _fetch_org_policy_tenants(self, org_id: str) -> set[str]:  # Org service-policies API wrapper
         """Fetch and extract tenant names from org-level service policies."""
         try:
-            logging.info("Fetching org service policies for tenant info from org_id: %s", org_id)  # Request trace
+            logger.info("Fetching org service policies for tenant info from org_id: %s", org_id)  # Request trace
             response = mistapi.api.v1.orgs.servicepolicies.listOrgServicePolicies(
                 self._session, org_id, limit=_API_PAGE_LIMIT
             )  # Org service policies endpoint
             if not (hasattr(response, "data") and response.data):  # Guard against missing/empty payload
-                logging.warning("No org service policies found or response data is empty")  # Empty trace
+                logger.warning("No org service policies found or response data is empty")  # Empty trace
                 return set()  # Fail-safe empty set
-            logging.debug("Received %d org service policies", len(response.data))  # Payload size trace
+            logger.debug("Received %d org service policies", len(response.data))  # Payload size trace
             return self._extract_tenants_from_policies(response.data)  # Parse into deduped set
         except Exception as error:  # Broad guard: policy endpoint may 404 on legacy orgs
             logging.warning("Could not fetch org service policies: %s", error)  # Warn rather than error
@@ -282,14 +284,14 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
     def _fetch_site_policy_tenants(self, site_id: str) -> set[str]:  # Site service-policies API wrapper
         """Fetch and extract tenant names from site-level derived service policies."""
         try:
-            logging.info("Fetching site service policies for tenant info from site_id: %s", site_id)  # Request trace
+            logger.info("Fetching site service policies for tenant info from site_id: %s", site_id)  # Request trace
             response = mistapi.api.v1.sites.servicepolicies.listSiteServicePoliciesDerived(
                 self._session, site_id
             )  # Site service policies endpoint
             if not (hasattr(response, "data") and response.data):  # Guard against missing/empty payload
-                logging.warning("No site service policies found or response data is empty")  # Empty trace
+                logger.warning("No site service policies found or response data is empty")  # Empty trace
                 return set()  # Fail-safe empty set
-            logging.debug("Received %d site service policies", len(response.data))  # Payload size trace
+            logger.debug("Received %d site service policies", len(response.data))  # Payload size trace
             return self._extract_tenants_from_policies(response.data)  # Parse into deduped set
         except Exception as error:  # Broad guard mirrors _fetch_org_policy_tenants for symmetry
             logging.warning("Could not fetch site service policies: %s", error)  # Warn rather than error
@@ -298,14 +300,14 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
     def _fetch_org_template_tenants(self, org_id: str) -> set[str]:  # Org gateway-templates API wrapper
         """Fetch and extract tenant names from org-level gateway templates."""
         try:
-            logging.info("Fetching org gateway templates for tenant info from org_id: %s", org_id)  # Request trace
+            logger.info("Fetching org gateway templates for tenant info from org_id: %s", org_id)  # Request trace
             response = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(
                 self._session, org_id, limit=_API_PAGE_LIMIT
             )  # Org templates endpoint
             if not (hasattr(response, "data") and response.data):  # Guard against missing/empty payload
-                logging.warning("No org gateway templates found or response data is empty")  # Empty trace
+                logger.warning("No org gateway templates found or response data is empty")  # Empty trace
                 return set()  # Fail-safe empty set
-            logging.debug("Received %d org gateway templates", len(response.data))  # Payload size trace
+            logger.debug("Received %d org gateway templates", len(response.data))  # Payload size trace
             return self._extract_tenants_from_templates(response.data)  # Parse into deduped set
         except Exception as error:  # Broad guard: template endpoint may 404 on legacy orgs
             logging.warning("Could not fetch org gateway templates: %s", error)  # Warn rather than error
@@ -314,14 +316,14 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
     def _fetch_site_template_tenants(self, site_id: str) -> set[str]:  # Site gateway-templates API wrapper
         """Fetch and extract tenant names from site-level derived gateway templates."""
         try:
-            logging.info("Fetching site gateway templates for tenant info from site_id: %s", site_id)  # Request trace
+            logger.info("Fetching site gateway templates for tenant info from site_id: %s", site_id)  # Request trace
             response = mistapi.api.v1.sites.gatewaytemplates.listSiteGatewayTemplatesDerived(
                 self._session, site_id
             )  # Site templates endpoint
             if not (hasattr(response, "data") and response.data):  # Guard against missing/empty payload
-                logging.warning("No site gateway templates found or response data is empty")  # Empty trace
+                logger.warning("No site gateway templates found or response data is empty")  # Empty trace
                 return set()  # Fail-safe empty set
-            logging.debug("Received %d site gateway templates", len(response.data))  # Payload size trace
+            logger.debug("Received %d site gateway templates", len(response.data))  # Payload size trace
             return self._extract_tenants_from_templates(response.data)  # Parse into deduped set
         except Exception as error:  # Broad guard mirrors _fetch_org_template_tenants for symmetry
             logging.warning("Could not fetch site gateway templates: %s", error)  # Warn rather than error

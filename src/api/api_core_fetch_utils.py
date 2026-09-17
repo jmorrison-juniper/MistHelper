@@ -24,6 +24,8 @@ from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
     """Core API Fetch Utilities.
@@ -71,5 +73,5 @@ class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
     @staticmethod
     def get_api_response_data(response: Any) -> Any:
         """Return a mistapi response's .data payload, or the response itself when .data is absent."""
-        logging.debug("Unwrapping API response payload (type=%s)", type(response).__name__)  # Trace unwrap calls
+        logger.debug("Unwrapping API response payload (type=%s)", type(response).__name__)  # Trace unwrap calls
         return getattr(response, "data", response)  # mistapi carries parsed JSON on .data. Fall back to the raw object
