@@ -10,6 +10,7 @@ Mist API call is mocked, so no call reaches the network.
 from __future__ import annotations  # WHY: allow the PEP 604 union syntax in the annotations.
 
 import csv  # WHY: the CSV fixture writes real files the reader must parse.
+import logging  # WHY: caplog assertions need the standard logging levels.
 from types import SimpleNamespace  # WHY: the dependency doubles need named attributes.
 from typing import Any  # WHY: the fixtures return loosely typed doubles.
 from unittest.mock import MagicMock, patch  # WHY: MagicMock builds the doubles, patch swaps them.
@@ -374,6 +375,31 @@ def test_apply_skips_a_port_that_is_absent_from_the_config(wired: Any) -> None:
 
     assert modified == []  # WHY: no port was modified.
     assert "wan_probe_override" not in port_config["ge-0/0/9"]  # WHY: no patch landed.
+
+
+def test_apply_log_does_not_claim_device_success_before_failed_write(
+    wired: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A failed device write must not leave a pre-write success line."""
+    manager = _prepare_manager(wired)  # WHY: use the real preparation and commit helpers.
+    failed_response = SimpleNamespace(status_code=500)  # WHY: force the API write failure branch.
+    wired.update_device.return_value = failed_response  # WHY: the patched endpoint returns failure.
+    entry = _override_entry()  # WHY: one gateway with one WAN override exercises the path.
+    device = {"device_name": "Gateway-1", "site_id": "site-1", "device_id": "gw-1"}  # WHY: commit context.
+    device_config = {"port_config": {"ge-0/0/0": {"usage": "wan"}}}  # WHY: mutable config for the write.
+    result = {"ports_updated": []}  # WHY: the commit helper records the final status here.
+    caplog.set_level(logging.DEBUG)  # WHY: capture the pre-write preparation line and the failure result.
+
+    result["ports_updated"] = manager._apply_probe_to_ports(  # WHY: prepare the payload before the write.
+        device_config["port_config"], entry["overridden_wan_ports"], "Gateway-1"
+    )
+    manager._commit_device_update(device, device_config, False, result)  # WHY: run the failed write branch.
+    messages = "\n".join(record.getMessage() for record in caplog.records)  # WHY: compare rendered log text.
+
+    assert result["status"] == "FAILED"  # WHY: the failed API response must remain visible to callers.
+    assert result["error"] == "API returned status 500"  # WHY: the operator needs the exact failed status.
+    assert "Device Gateway-1: Updated ge-0/0/0 probe config" not in messages  # WHY: no success claim before proof.
+    assert "Device Gateway-1: Prepared ge-0/0/0 probe config for API update" in messages  # WHY: pre-log remains.
 
 
 def test_extract_keeps_only_wan_ports_with_a_dict_settings_block(wired: Any) -> None:
