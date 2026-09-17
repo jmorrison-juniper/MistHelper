@@ -20,6 +20,8 @@ from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class GatewayHaExporter:
     """Exporter for HA (High-Availability) gateway cluster information.
@@ -63,21 +65,21 @@ class GatewayHaExporter:
         mh.DataExporter.write_with_format_selection(
             flat_rows, filename, api_function_name="listSiteGatewayHaStats"
         )  # Persist to configured backend.
-        logging.info("Exported %d HA gateway records to %s", len(flat_rows), filename)  # Log export success.
+        logger.info("Exported %d HA gateway records to %s", len(flat_rows), filename)  # Log export success.
 
     @staticmethod
     def _collect_ha_gateways(site_id: str) -> list[Any] | None:
         """Fetch site gateway stats and return HA-enabled gateways; ``None`` when none exist (operator notified)."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Fetching gateway device stats for site %s", site_id)  # Trace before API call
+        logger.info("Fetching gateway device stats for site %s", site_id)  # Trace before API call
         stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(mh.apisession, site_id, type="gateway")  # API call
         all_gateways = mh.APICoreFetchUtils.get_api_response_data(stats_resp)  # Unwrap list from response
-        logging.debug("Received %d gateway stat records for site %s", len(all_gateways), site_id)  # Trace count
+        logger.debug("Received %d gateway stat records for site %s", len(all_gateways), site_id)  # Trace count
         ha_gateways = [gw for gw in all_gateways if gw.get("is_ha") is True]  # Filter to HA-enabled gateways
-        logging.info("Found %d HA gateways in site %s", len(ha_gateways), site_id)  # Trace HA gateway count
+        logger.info("Found %d HA gateways in site %s", len(ha_gateways), site_id)  # Trace HA gateway count
         if not ha_gateways:  # No HA gateways -> tell user and signal abort
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info("No HA gateways found for the selected site.")
+            logger.info("No HA gateways found for the selected site.")
             return None
         return ha_gateways  # Caller proceeds with cluster export
 
@@ -85,13 +87,13 @@ class GatewayHaExporter:
     def ha_cluster_info() -> None:  # Export HA cluster info.
         """Export HA gateway cluster info for a selected site (Menu #87)."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Starting Gateway HA Cluster Info export (Menu #87)")  # Trace entry point
+        logger.info("Starting Gateway HA Cluster Info export (Menu #87)")  # Trace entry point
         try:
             org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve or prompt for org ID
-            logging.debug("Gateway HA export resolved org %s", org_id)  # Record resolved org
+            logger.debug("Gateway HA export resolved org %s", org_id)  # Record resolved org
             site_id = mh.PromptUtils.select_site()  # Pick a site (uses SiteList.csv)
             if not site_id:  # User cancelled or no sites
-                logging.warning("No site selected -- aborting HA cluster export")
+                logger.warning("No site selected -- aborting HA cluster export")
                 return
             ha_gateways = GatewayHaExporter._collect_ha_gateways(site_id)  # Fetch + filter + early-exit on none
             if ha_gateways is None:  # Helper already notified user
@@ -111,7 +113,7 @@ class GatewayHaExporter:
                 mh.apisession, site_id, device_id
             )
             ha_data = mh.APICoreFetchUtils.get_api_response_data(ha_resp)  # Unwrap the response body.
-            logging.debug("HA cluster node response for %s: %s", device_id, ha_data)  # Log raw response.
+            logger.debug("HA cluster node response for %s: %s", device_id, ha_data)  # Log raw response.
             if isinstance(ha_data, dict):  # Expect a gateway_cluster object with a "nodes" list.
                 nodes = ha_data.get("nodes", [])  # Extract the nodes array.
                 return {
@@ -132,12 +134,12 @@ class GatewayHaExporter:
             device_id = gateway.get("id", "")  # Get device ID (UUID) from stats record.
             row = {field: gateway.get(field) for field in GatewayHaExporter.HA_STAT_FIELDS}  # Copy HA stat fields.
             row["site_id"] = site_id  # Ensure site_id is always present in the row.
-            logging.info(
+            logger.info(
                 "Fetching HA cluster node info for gateway %s (%s)", gateway.get("name"), device_id
             )  # Log per-device call.
             row.update(GatewayHaExporter._fetch_ha_pair_for_gateway(site_id, device_id))  # Merge node-pair fields.
             rows.append(row)  # Add merged row to results list.
-        logging.debug("Built %d merged HA gateway rows", len(rows))  # Log total built.
+        logger.debug("Built %d merged HA gateway rows", len(rows))  # Log total built.
         return rows  # Return the complete merged dataset.
 
     @staticmethod
@@ -147,17 +149,17 @@ class GatewayHaExporter:
         Args:
             rows: List of merged HA gateway rows to display.
         """
-        logging.info("Printing HA gateway cluster summary table to terminal")  # Log before display
+        logger.info("Printing HA gateway cluster summary table to terminal")  # Log before display
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("\n=== HA Gateway Cluster Summary ===\n")  # Section header for the terminal output
+        logger.info("\n=== HA Gateway Cluster Summary ===\n")  # Section header for the terminal output
         # Build column header string for the HA cluster summary table
         header = (
             f"{'Name':<30} {'Node':<8} {'Status':<12}" f" {'Node0 MAC':<20} {'Node1 MAC':<20} {'Cluster MAC':<18}"
         )  # Column headers
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info(header)  # Print headers to terminal
+        logger.info(header)  # Print headers to terminal
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("-" * len(header))  # Print separator line
+        logger.info("-" * len(header))  # Print separator line
         for row in rows:  # Iterate each HA gateway record
             name = str(row.get("name", ""))[:28]  # Truncate long names for display
             node_name = str(row.get("node_name", ""))  # Which node (node0 / node1)
@@ -166,7 +168,7 @@ class GatewayHaExporter:
             node1_mac = str(row.get("ha_cluster_node1_mac") or "")  # MAC of node1 in the pair
             vc_mac = str(row.get("vc_mac") or "")  # Shared cluster MAC address
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info(
+            logger.info(
                 "%-30s %-8s %-12s %-20s %-20s %-18s",
                 name,
                 node_name,
@@ -176,4 +178,4 @@ class GatewayHaExporter:
                 vc_mac,
             )  # Print row
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("")  # Blank line after table for readability
+        logger.info("")  # Blank line after table for readability

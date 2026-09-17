@@ -11,6 +11,8 @@ from .device_data_fetcher import DeviceDataFetcher  # Live API data fetcher used
 from .override_classifier import OverrideClassifier  # Per-row classifier used in the first and third passes
 from .override_report_writer import OverrideReportWriter  # Final CSV + console output writer
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class WanOverrideWalker:
     """End-to-end orchestrator for `with_wan_overrides`: cache, classify, fetch, report."""
@@ -18,28 +20,28 @@ class WanOverrideWalker:
     @staticmethod
     def walk(fast: bool = False) -> None:
         """Generate the GatewayOverriddenPorts.csv compliance report end-to-end."""
-        logging.info("WAN override walker starting (fast=%s)", fast)  # Trace entry for operator timeline
-        logging.info("Gateway Ports Overridden from Template (Compliance Outliers):")  # Legacy header preserved
-        logging.info(  # Legacy info line preserved verbatim for downstream log parsers
+        logger.info("WAN override walker starting (fast=%s)", fast)  # Trace entry for operator timeline
+        logger.info("Gateway Ports Overridden from Template (Compliance Outliers):")  # Legacy header preserved
+        logger.info(  # Legacy info line preserved verbatim for downstream log parsers
             " Identifying gateway ports with template overrides (outliers for compliance correction)..."
         )
         target_ports = _deps.MIST_WAN_TARGET_PORTS  # Read from configured module-level dependency
         if not target_ports:  # Early exit when operator has not configured WAN ports to audit
-            logging.warning(  # legacy operator banner preserved verbatim for downstream log parsers
+            logger.warning(  # legacy operator banner preserved verbatim for downstream log parsers
                 " MIST_WAN_TARGET_PORTS not configured in .env - skipping port override analysis"
             )
-            logging.warning("MIST_WAN_TARGET_PORTS environment variable not set")  # operator hint in logs
+            logger.warning("MIST_WAN_TARGET_PORTS environment variable not set")  # operator hint in logs
             return  # No work possible without target ports. Abort the walker
         WanOverrideWalker._run_pipeline(fast=fast, target_ports=target_ports)  # Delegate the full pipeline
 
     @staticmethod
     def _run_pipeline(fast: bool, target_ports: list[str]) -> None:
         """Run the three-pass pipeline once target_ports is known to be non-empty."""
-        logging.debug("Pipeline starting for %d target ports (fast=%s)", len(target_ports), fast)  # trace
+        logger.debug("Pipeline starting for %d target ports (fast=%s)", len(target_ports), fast)  # trace
         configs, sites, templates = WanOverrideWalker._load_source_csvs(fast)  # First pass input rows
         lookups = WanOverrideWalker._build_lookups(sites, templates)  # site_id->name + template_id->name maps
         devices_with_overrides = WanOverrideWalker._identify_devices(configs, lookups, target_ports)  # 1st pass
-        logging.info(  # Legacy info log preserved verbatim for downstream log parsers
+        logger.info(  # Legacy info log preserved verbatim for downstream log parsers
             "! Found %d devices with port overrides out of %d total gateway devices",
             len(devices_with_overrides),
             len(configs),
@@ -63,12 +65,12 @@ class WanOverrideWalker:
     ) -> None:  # Extracted so _run_pipeline stays under STRUCT-LENGTH limit.
         """Run second/third passes + report write when overrides are present."""
         # WHY: pulls the post-first-pass block out of _run_pipeline to drop it from 27 to <25 lines.
-        logging.info(  # Legacy info log preserved verbatim for downstream log parsers
+        logger.info(  # Legacy info log preserved verbatim for downstream log parsers
             "! Second pass: Fetching device configs and stats for %d devices with overrides...",
             len(devices_with_overrides),
         )
         cache = DeviceDataFetcher.fetch_all(devices_with_overrides, fast)  # 2nd pass: live device data
-        logging.info(" Third pass: Processing overridden ports with live data...")  # legacy log line preserved
+        logger.info(" Third pass: Processing overridden ports with live data...")  # legacy log line preserved
         entries = WanOverrideWalker._assemble_entries(devices_with_overrides, cache)  # 3rd pass: build rows
         OverrideReportWriter.write_full(  # Persist via DataExporter + print legacy operator summary block
             entries=entries,
@@ -82,7 +84,7 @@ class WanOverrideWalker:
         fast: bool,
     ) -> tuple[list[dict[str, str]], list[dict[str, str]], list[dict[str, str]]]:
         """Refresh CSV caches if stale and return the three lists used by the first pass."""
-        logging.info("Loading source CSVs (AllSiteGatewayConfigs, SiteList_ListAPI, OrgGatewayTemplates)")  # before
+        logger.info("Loading source CSVs (AllSiteGatewayConfigs, SiteList_ListAPI, OrgGatewayTemplates)")  # before
         _deps.CacheUtils.check_and_generate_csv(  # Refresh gateway-device-config cache if missing/stale
             "AllSiteGatewayConfigs.csv",
             lambda: _deps.GatewayExportUtilsRef.device_configs(fast=fast),
@@ -96,13 +98,13 @@ class WanOverrideWalker:
         configs = WanOverrideWalker._read_csv("AllSiteGatewayConfigs.csv")  # Flattened device configs
         sites = WanOverrideWalker._read_csv("SiteList_ListAPI.csv")  # Site lookup source
         templates = WanOverrideWalker._read_csv("OrgGatewayTemplates.csv")  # Template lookup source
-        logging.debug("Loaded %d configs, %d sites, %d templates", len(configs), len(sites), len(templates))
+        logger.debug("Loaded %d configs, %d sites, %d templates", len(configs), len(sites), len(templates))
         return configs, sites, templates  # Hand off to lookup-build + first-pass classification
 
     @staticmethod
     def _read_csv(filename: str) -> list[dict[str, str]]:
         """Read one cached CSV from the project's standard csv path into a list of dicts."""
-        logging.debug("Reading cached CSV %s", filename)  # trace before read
+        logger.debug("Reading cached CSV %s", filename)  # trace before read
         path = _deps.FilePathUtils.get_csv_path(filename)  # Resolve via project path helper
         with open(path, encoding="utf-8") as csvfile:  # UTF-8 matches the writer used elsewhere
             rows = list(csv.DictReader(csvfile))  # Materialize so we can iterate twice if needed
@@ -114,7 +116,7 @@ class WanOverrideWalker:
         templates: list[dict[str, str]],
     ) -> dict[str, dict[str, str]]:
         """Build the three lookup dicts (site->name, site->template_id, template->name) once."""
-        logging.debug("Building site/template lookups from %d sites and %d templates", len(sites), len(templates))
+        logger.debug("Building site/template lookups from %d sites and %d templates", len(sites), len(templates))
         site_lookup = {site.get("id", ""): site.get("name", "Unknown Site") for site in sites}  # site UUID->name
         site_to_template = {  # site UUID -> assigned gateway template UUID (empty string if unassigned)
             site.get("id", ""): site.get("gatewaytemplate_id", "") for site in sites
@@ -135,7 +137,7 @@ class WanOverrideWalker:
         target_ports: list[str],
     ) -> dict[str, dict[str, Any]]:
         """First pass: build the device-with-overrides dict keyed by device_id."""
-        logging.info("First pass: Identifying devices with port overrides...")  # legacy log line preserved
+        logger.info("First pass: Identifying devices with port overrides...")  # legacy log line preserved
         site_lookup = lookups["site_name"]  # Alias for readability of the loop body below
         site_to_template = lookups["site_template"]  # Alias for readability of the loop body below
         template_lookup = lookups["template_name"]  # Alias for readability of the loop body below
@@ -150,7 +152,7 @@ class WanOverrideWalker:
             )
             if entry is not None:  # Helper returns None when the row should be skipped or has no overrides
                 devices_with_overrides[entry["device_id"]] = entry  # Key by device UUID for second-pass fetch
-        logging.debug("Identified %d devices needing live data", len(devices_with_overrides))  # after
+        logger.debug("Identified %d devices needing live data", len(devices_with_overrides))  # after
         return devices_with_overrides  # Hand back to orchestrator for the second-pass fetch
 
     @staticmethod
@@ -232,7 +234,7 @@ class WanOverrideWalker:
         cache: dict[str, tuple[dict[str, Any], dict[str, Any]]],
     ) -> list[dict[str, Any]]:
         """Third pass: build one CSV row per (device, overridden_port) using cached live data."""
-        logging.debug("Assembling entries for %d devices using cached live data", len(devices_with_overrides))
+        logger.debug("Assembling entries for %d devices using cached live data", len(devices_with_overrides))
         entries: list[dict[str, Any]] = []  # Accumulator for the final CSV rows
         for device_id, device_info in devices_with_overrides.items():  # Walk every override-flagged device
             port_configs, interface_stats = cache.get(device_id, ({}, {}))  # Empty dicts when fetch failed
@@ -244,5 +246,5 @@ class WanOverrideWalker:
                     interface_stat=interface_stats.get(port_name, {}),  # Empty dict when stats unavailable
                 )
                 entries.append(entry)  # Accumulate for the report writer
-        logging.info("Assembled %d total override entries", len(entries))  # after action summary
+        logger.info("Assembled %d total override entries", len(entries))  # after action summary
         return entries  # Hand off to OverrideReportWriter.write_full

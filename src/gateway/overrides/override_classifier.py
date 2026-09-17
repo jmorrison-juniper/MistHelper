@@ -5,6 +5,8 @@ from __future__ import annotations  # Defer annotation evaluation for forward re
 import logging  # Standard library structured logging (use %s formatting per project standard)
 from typing import Any  # Generic typing for CSV dict rows and API JSON payloads
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class OverrideClassifier:  # Namespace for stateless override classification helpers.
     """Classify configured ports as overridden vs template-aligned and shape report rows."""
@@ -12,12 +14,12 @@ class OverrideClassifier:  # Namespace for stateless override classification hel
     @staticmethod
     def classify(row: dict[str, Any], target_ports: list[str]) -> list[str]:  # Public entry point.
         """Return the subset of target_ports that show non-default overrides in row."""
-        logging.info("Classifying overrides across %d target ports for one device row", len(target_ports))  # before
+        logger.info("Classifying overrides across %d target ports for one device row", len(target_ports))  # before
         overridden: list[str] = []  # Accumulator for ports whose flattened CSV fields show overrides
         for port_name in target_ports:  # Walk every WAN port the operator marked as managed in .env
             if OverrideClassifier._port_has_override(row, port_name):  # Delegate per-port decision to helper
                 overridden.append(port_name)  # Capture port so the second pass fetches live device data
-        logging.debug("Classified %d overridden ports for row", len(overridden))  # after action summary
+        logger.debug("Classified %d overridden ports for row", len(overridden))  # after action summary
         return overridden  # Caller skips live API calls for any device that returns an empty list here
 
     @staticmethod
@@ -55,7 +57,7 @@ class OverrideClassifier:  # Namespace for stateless override classification hel
         interface_stat: dict[str, Any],
     ) -> dict[str, Any]:  # Public shaper called once per overridden port.
         """Build one CSV row describing a single overridden port using live device data."""
-        logging.debug("Building port entry %s for device %s", port_name, device_info.get("device_name"))  # trace
+        logger.debug("Building port entry %s for device %s", port_name, device_info.get("device_name"))  # trace
         ip_config = port_config.get("ip_config", {})  # IP-related fields nest under ip_config on live device
         config_type_display = OverrideClassifier._format_config_type(ip_config.get("type", ""))  # display label
         port_status = "up" if interface_stat and interface_stat.get("up", False) else "down"  # operational state

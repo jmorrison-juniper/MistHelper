@@ -20,6 +20,9 @@ from typing import Any  # WHY: describe injected/response objects with unknown s
 import mistapi  # WHY: Mist REST helpers for org/gatewaytemplates/sites APIs
 from tqdm import tqdm  # WHY: progress bars for bulk template/site operations
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
+
 _PICOCELL_INSERT_ANCHOR = 13  # WHY: Picocell must land at policy position 14 (0-indexed 13)
 _PICOCELL_INSERT_THRESHOLD = 14  # WHY: below this policy count we just append instead of inserting
 _SMALL_ISLAND_COUNTRIES = frozenset({"BS", "BZ", "CU", "HT", "JM", "DO"})  # WHY: no useful state in address
@@ -65,7 +68,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
     def extract(self) -> None:
         """Menu 105: Extract DIA_Pico and Picocell configs from a template."""
         _print_extract_banner()  # WHY: consistent header for menu operations
-        logging.info("Menu #105: Starting gateway template configuration extraction")  # WHY: menu-level audit trail
+        logger.info("Menu #105: Starting gateway template configuration extraction")  # WHY: menu-level audit trail
         templates = self._fetch_templates()  # WHY: need the org template list to prompt selection
         if not templates:  # WHY: nothing to extract when no templates or fetch failed
             return  # WHY: _fetch_templates already surfaced the reason
@@ -82,7 +85,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
     def apply(self) -> None:
         """Menu 106: Apply extracted configuration to gateway templates."""
         _print_apply_banner()  # WHY: destructive-op header includes explicit warning
-        logging.warning("Menu #106 DESTRUCTIVE: Apply Gateway Template Configuration started")  # WHY: audit trail
+        logger.warning("Menu #106 DESTRUCTIVE: Apply Gateway Template Configuration started")  # WHY: audit trail
         extraction_data = self._load_extraction_file()  # WHY: pick a prior Menu-105 JSON as source
         if not extraction_data:  # WHY: cancelled or no files present
             return  # WHY: helper printed reason
@@ -101,7 +104,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
     def clone_by_location(self) -> None:
         """Menu 111: Clone template per state/country and assign sites."""
         _print_clone_banner()  # WHY: destructive-op header includes explicit warning
-        logging.warning("Menu #111 DESTRUCTIVE: Clone Gateway Templates by " "State/Country operation started")
+        logger.warning("Menu #111 DESTRUCTIVE: Clone Gateway Templates by " "State/Country operation started")
         loaded = self._load_clone_inputs()  # WHY: bundle three loading steps into a single guard
         if loaded is None:  # WHY: any load step aborted the operation
             return  # WHY: helper printed reason
@@ -177,7 +180,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
             templates = mistapi.get_all(response=response, mist_session=self._api)  # WHY: exhaust pagination
             if not templates:  # WHY: empty-org guard
                 print("  No gateway templates found for this organization.")  # WHY: user-facing reason
-                logging.warning("GatewayTemplateConfigManager: No gateway templates found")  # WHY: audit trail
+                logger.warning("GatewayTemplateConfigManager: No gateway templates found")  # WHY: audit trail
                 return None  # WHY: caller aborts on None
             return sorted(templates, key=lambda t: t.get("name", "Unnamed Template").lower())  # WHY: stable ordering
         except Exception as error:  # pylint: disable=broad-exception-caught # WHY: mistapi raises many types
@@ -272,7 +275,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
             with open(json_filepath, "w", encoding="utf-8") as fout:  # WHY: text write with UTC-safe encoding
                 json.dump(extraction, fout, indent=2, ensure_ascii=False)  # WHY: human-readable output
             _print_save_success(json_filepath)  # WHY: reusable success message
-            logging.info("GatewayTemplateConfigManager: Saved extraction to %s", json_filepath)  # WHY: audit trail
+            logger.info("GatewayTemplateConfigManager: Saved extraction to %s", json_filepath)  # WHY: audit trail
         except Exception as error:  # pylint: disable=broad-exception-caught # WHY: filesystem errors vary
             print(f"\n  Error saving extraction file: {error}")  # WHY: user-facing
             logging.error("GatewayTemplateConfigManager: Failed to save JSON: %s", error)  # WHY: audit trail
@@ -472,7 +475,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
         self._save_data(csv_results, output_file)  # WHY: persist via host writer
         success, failed = _count_apply_outcomes(results)  # WHY: counters for summary
         _print_apply_summary(len(results), success, failed, output_file)  # WHY: user-facing summary
-        logging.warning("Menu #106 complete: %s templates updated, %s failed", success, failed)  # WHY: audit trail
+        logger.warning("Menu #106 complete: %s templates updated, %s failed", success, failed)  # WHY: audit trail
 
     # ------------------------------------------------------------------ #
     # Clone-by-location helpers                                           #
@@ -602,7 +605,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
             name = info["name"]  # WHY: candidate template name
             if name in existing_names:  # WHY: idempotency for reruns
                 template_map[name] = existing_names[name]  # WHY: reuse existing id
-                logging.info("Template %s already exists, skipping", name)  # WHY: audit trail
+                logger.info("Template %s already exists, skipping", name)  # WHY: audit trail
                 continue  # WHY: no creation needed
             self._create_single_template(mistapi, name, source_config, template_map)  # WHY: attempt creation
         return template_map  # WHY: caller uses map for assignments
@@ -625,7 +628,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
             if resp.status_code == 200:  # WHY: Mist success code
                 new_id = resp.data.get("id") if hasattr(resp, "data") else ""  # WHY: extract new id safely
                 template_map[name] = new_id  # WHY: record for later assignments
-                logging.info("Created template %s (ID: %s)", name, new_id)  # WHY: audit trail
+                logger.info("Created template %s (ID: %s)", name, new_id)  # WHY: audit trail
         except Exception as error:  # pylint: disable=broad-exception-caught # WHY: mistapi raises many types
             logging.error("Error creating template %s: %s", name, error)  # WHY: audit trail
 
@@ -690,7 +693,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
         self._save_data(site_results, output)  # WHY: persist via host writer
         counts = _count_clone_outcomes(site_results)  # WHY: unified counter helper
         _print_clone_summary(len(to_create), counts, output)  # WHY: user-facing summary
-        logging.warning(  # WHY: audit trail with success/failure counts
+        logger.warning(  # WHY: audit trail with success/failure counts
             "Menu #111 complete: %s sites assigned, %s failed",
             counts["assigned"],
             counts["failed"],
@@ -705,7 +708,7 @@ class GatewayTemplateConfigManager:  # pylint: disable=too-many-instance-attribu
 def _log_fetch_failure(template_name: str, error: Exception) -> None:
     """Emit user + audit output for a failed template fetch."""
     print(f"  Error fetching template configuration: {error}")  # WHY: user-facing
-    logging.error(  # WHY: audit trail
+    logger.error(  # WHY: audit trail
         "GatewayTemplateConfigManager: Failed to fetch %s: %s",
         template_name,
         error,
@@ -715,7 +718,7 @@ def _log_fetch_failure(template_name: str, error: Exception) -> None:
 def _log_invalid_fetch(template_name: str) -> None:
     """Emit user + audit output when a fetch returns an unexpected shape."""
     print("  Error: Template configuration is not in expected format.")  # WHY: user-facing
-    logging.error(  # WHY: audit trail
+    logger.error(  # WHY: audit trail
         "GatewayTemplateConfigManager: Invalid config format for %s",
         template_name,
     )
@@ -776,7 +779,7 @@ def _extract_dia_pico(template_config: dict[str, Any], template_name: str) -> di
     dia_pico = path_prefs.get("DIA_Pico") if isinstance(path_prefs, dict) else None  # WHY: guarded access
     if dia_pico:  # WHY: user-facing found/not-found messaging
         print("  -> Found 'DIA_Pico' in Traffic Steering")  # WHY: positive result
-        logging.info("GatewayTemplateConfigManager: Found DIA_Pico in %s", template_name)  # WHY: audit trail
+        logger.info("GatewayTemplateConfigManager: Found DIA_Pico in %s", template_name)  # WHY: audit trail
     else:
         print("  -> 'DIA_Pico' not found in Traffic Steering")  # WHY: negative result
     return dia_pico  # WHY: caller stores or ignores
@@ -1063,7 +1066,7 @@ def _scan_service_policies(service_policies: Any, template_name: str) -> dict[st
     for policy in service_policies:  # WHY: linear scan. Count is small
         if isinstance(policy, dict) and policy.get("name") == "Picocell":  # WHY: name match anchors identity
             print("  -> Found 'Picocell' in Application Policies")  # WHY: positive result
-            logging.info("GatewayTemplateConfigManager: Found Picocell in %s", template_name)  # WHY: audit
+            logger.info("GatewayTemplateConfigManager: Found Picocell in %s", template_name)  # WHY: audit
             return policy  # WHY: caller receives the block
     return None  # WHY: not found
 

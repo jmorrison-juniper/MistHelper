@@ -6,6 +6,9 @@ import logging  # Standard library structured logging
 from dataclasses import dataclass  # WHY: frozen slotted bundle shrinks wiring signature to one param.
 from typing import Any, Final  # Typing helpers for module-level dependency holders
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
+
 _LOG_CONFIGURED: Final[str] = "Gateway override dependencies configured"  # WHY: single-source log template.
 
 apisession: Any = None  # Mist API session. Set by configure_gateway_override_dependencies
@@ -52,4 +55,4 @@ def configure_gateway_override_dependencies(deps: GatewayOverrideDependencies) -
     MIST_WAN_TARGET_PORTS = deps.mist_wan_target_ports  # Operator-configured target ports
     execute_fn = deps.execute_fn  # Pool-managed parallel runner (renamed from connection_pool_fn per 1012 SC-003)
     GatewayExportUtilsRef = deps.gateway_export_utils_ref  # Gateway export helpers reference
-    logging.debug(_LOG_CONFIGURED)  # Confirm wiring for operator logs
+    logger.debug(_LOG_CONFIGURED)  # Confirm wiring for operator logs
