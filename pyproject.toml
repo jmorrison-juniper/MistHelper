@@ -105,9 +105,11 @@ ste-linter = [
     # without it through the standard-library heuristic backend.
     # After install, download the model: python -m spacy download en_core_web_sm
     "spacy>=3.7.0,<4.0.0",
-    # pdfplumber reads the licensed ASD-STE100 PDF by word position for the
-    # dictionary extraction tool (tools/ste_linter/dictionary/extract.py). It is
-    # needed only to build the local dictionary, not to run the linter.
+    # pdfplumber reads a PDF by word position and by font size. Two tools need it.
+    # tools/ste_linter/dictionary/extract.py reads the licensed ASD-STE100 PDF to
+    # build the local dictionary. scripts/pdf_to_markdown.py converts a Juniper
+    # reference PDF into Markdown. Neither tool runs the linter itself.
+    # requirements-dev.txt pins the version that the test suite uses.
     "pdfplumber>=0.11.0",
 ]
 
