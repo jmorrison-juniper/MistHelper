@@ -6,10 +6,9 @@ Why:
     in `MistHelper.py` builds the same object. So `create_app` takes no
     argument. It reads every setting from the process environment.
 
-    The factory imports each route module late, inside `create_app`, and treats
-    an `ImportError` as survivable. The portal is built in stages, so a route
-    module can arrive after the shell. A missing module writes one warning and
-    the portal starts with the routes that exist.
+    The factory imports each listed route module late, inside `create_app`, and
+    treats an `ImportError` as a build fault. A listed route module is a promise
+    that the portal must keep. A missing module that no list names stays quiet.
 
     Two probe routes answer from the first day. The `GET /healthz` route reports
     that the process is alive and reads no store. The `GET /readyz` route reports
@@ -622,30 +621,28 @@ def close_handle(name: str, handle: object | None) -> None:
         logger.warning("The portal could not close the handle %s.", name)  # Report and continue.
 
 
-def import_route_module(name: str) -> ModuleType | None:
-    """Import one route module and survive a module that does not exist yet.
+def import_route_module(name: str) -> ModuleType:
+    """Import one promised route module.
 
     Why:
-        The portal grows in stages. A route module that Phase 3 has not written
-        must not stop the shell from starting.
+        `BLUEPRINT_NAMES` lists only the routes that this build promises. A
+        promised route module that cannot import must stop startup, because a
+        warning-only skip makes the portal look healthy while an endpoint is
+        absent.
 
     Args:
         name: The module name inside the routes package.
 
     Returns:
-        The module, or None when the import failed.
+        The imported module.
     """
-    try:  # The module may not exist yet.
-        if name == "run_controls":  # This feature keeps its API route beside its values and services.
-            return import_module("src.upgrade_portal.api.run_controls.routes")  # Register the planned API package.
-        return import_module(f"{ROUTES_PACKAGE}.{name}")  # The late import keeps the shell startable.
-    except ImportError as fault:  # A missing module is expected while the portal grows.
-        logger.warning(
-            "The portal could not import the route module %s: %s.",  # Expected while the portal grows.
-            name,
-            fault,
-        )
-        return None  # The caller skips this blueprint and registers the rest.
+    logger.info("Importing the route module %s.", name)  # A listed name is a startup contract.
+    if name == "run_controls":  # This feature keeps its API route beside its values and services.
+        module = import_module("src.upgrade_portal.api.run_controls.routes")  # Register the planned API package.
+    else:  # Ordinary route modules live beside the application route package.
+        module = import_module(f"{ROUTES_PACKAGE}.{name}")  # The late import keeps module load light.
+    logger.debug("Imported the route module %s.", name)  # Confirm that the promised module exists.
+    return module  # Return the module so the caller can find its blueprint.
 
 
 def find_blueprint(module: ModuleType, name: str) -> Blueprint | None:
@@ -672,17 +669,14 @@ def register_one_blueprint(app: Flask, name: str) -> None:
         app: The application to register the blueprint on.
         name: The module name inside the routes package.
     """
-    module = import_route_module(name)  # A module that does not exist yet returns None.
-    if module is None:  # The import failed and already wrote a warning.
-        return  # Skip this stage and keep the portal running.
+    logger.info("Registering the route blueprint %s.", name)  # A listed blueprint must reach Flask.
+    module = import_route_module(name)  # A failed import stops startup and exposes the broken promise.
     blueprint = find_blueprint(module, name)  # Look under each known attribute name.
     if blueprint is None:  # The module imported but published nothing.
-        logger.warning(
-            "The route module %s holds no blueprint. The portal skipped it.",  # A build fault, not a stage gap.
-            name,
-        )
-        return  # Skip this stage and keep the portal running.
+        message = f"The route module {name} holds no blueprint."  # State the exact broken route module.
+        raise RuntimeError(message)  # Stop startup because a listed module must publish a blueprint.
     app.register_blueprint(blueprint)  # The blueprint carries its own URL prefix.
+    logger.debug("Registered the route blueprint %s.", name)  # Confirm that Flask received the blueprint.
 
 
 def register_blueprints(app: Flask) -> None:
@@ -691,8 +685,8 @@ def register_blueprints(app: Flask) -> None:
     Args:
         app: The application to register the blueprints on.
     """
-    for name in BLUEPRINT_NAMES:  # The five stages of the operator journey.
-        register_one_blueprint(app, name)  # A missing module writes a warning and does not stop the loop.
+    for name in BLUEPRINT_NAMES:  # The listed modules are the promised operator journey.
+        register_one_blueprint(app, name)  # A missing listed module stops startup instead of hiding an endpoint.
 
 
 def apply_portal_config(app: Flask, settings: PortalSettings) -> None:

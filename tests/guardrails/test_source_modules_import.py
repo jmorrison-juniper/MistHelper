@@ -25,13 +25,9 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]  # Locate the repository root f
 _SRC_ROOT = _REPO_ROOT / "src"  # Limit the scan to the first-party source tree.
 
 # Each entry names a module that cannot import today, and the issue that holds
-# the repair decision. Issue #2885 covers two orphaned upgrade portal routes.
-# Remove an entry when its repair lands. The register must never grow without a
-# linked issue, because a growing register hides a new defect.
-KNOWN_IMPORT_FAILURES: dict[str, int] = {
-    "src.upgrade_portal.app.routes.audit": 2885,  # Imports `upgrade_portal.audit`, which does not exist.
-    "src.upgrade_portal.app.routes.jwt_auth": 2885,  # Imports `upgrade_portal.auth`, which does not exist.
-}
+# the repair decision. Remove an entry when its repair lands. The register must
+# never grow without a linked issue, because a growing register hides a new defect.
+KNOWN_IMPORT_FAILURES: dict[str, int] = {}
 
 
 class SourceModuleImporter:
