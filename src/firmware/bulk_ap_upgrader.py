@@ -28,6 +28,8 @@ from typing import Any  # WHY: type-erase mistapi session for both prod object a
 # Issue #2006 records what that costs on production hardware.
 from src.firmware.running_version import RunningFirmwareVersionResolver
 
+logger = logging.getLogger(__name__)  # Keep firmware log records tied to this module.
+
 # The value that names a device with no reading from a running-version endpoint.
 # `_partition_devices_by_version` keeps such a device in the upgrade bucket, so
 # no operator skips a device on a value the portal could not confirm.
@@ -96,11 +98,11 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
                 injected callables). Replaces the legacy 10-parameter
                 signature per FR-004 / Constitution I.
         """
-        logging.info("Init upgrader org_id=%s dry_run=%s", config.org_id, config.dry_run)  # WHY: info-before FR-007
+        logger.info("Init upgrader org_id=%s dry_run=%s", config.org_id, config.dry_run)  # WHY: info-before FR-007
         self._init_session_ctx(config)  # WHY: PCPP "Prepare" — session/DI callables live in one helper
         self._init_ap_and_site_state()  # WHY: PCPP "Prepare" — mutable AP/site containers isolated
         self._init_plan_and_results_state()  # WHY: PCPP "Prepare" — plan/result counters isolated
-        logging.debug("Init complete; sites_override=%s", bool(config.sites_override))  # WHY: debug-after FR-007
+        logger.debug("Init complete; sites_override=%s", bool(config.sites_override))  # WHY: debug-after FR-007
 
     def _init_session_ctx(self, config: BulkAPUpgraderConfig) -> None:  # WHY: helper definition (see docstring)
         """Unpack the ``config`` bundle into per-instance session context.
@@ -110,7 +112,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         ``input`` when no ``safe_input_fn`` was supplied so tests that omit
         the seam still work.
         """
-        logging.debug("Init session ctx for org_id=%s", config.org_id)  # WHY: trace which config bootstraps state
+        logger.debug("Init session ctx for org_id=%s", config.org_id)  # WHY: trace which config bootstraps state
         self.org_id = config.org_id  # WHY: attr so downstream helpers reuse existing self.org_id lookups
         self.apisession = config.apisession  # WHY: authenticated session reused by every remote call
         self.sites_override = config.sites_override  # WHY: pre-selected sites bypass interactive prompt
@@ -129,7 +131,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         (steps 1-4). Initializing them empty here means callers can inspect
         state safely between construction and ``execute()``.
         """
-        logging.debug("Init empty AP and site state containers")  # WHY: visible cold-start marker for fresh instance
+        logger.debug("Init empty AP and site state containers")  # WHY: visible cold-start marker for fresh instance
         self.sites_to_upgrade: list[dict[str, Any]] = []  # WHY: filled by _step1_determine_sites once resolved
         self.all_sites_aps: dict[str, Any] = {}  # WHY: site_id -> AP list index used during discovery
         self.all_aps: list[dict[str, Any]] = []  # WHY: flat list of every AP across selected sites
@@ -146,7 +148,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         or the execution phase (steps 8-11). Initializing them empty here
         prevents attribute-error hazards for early-exit paths.
         """
-        logging.debug("Init empty plan and results counters")  # WHY: cheap trace to spot cold-start of a fresh instance
+        logger.debug("Init empty plan and results counters")  # WHY: cheap trace to spot cold-start of a fresh instance
         self.available_versions: list[Any] = []  # WHY: populated in step 4 from firmware inventory API
         self.model_version_ranges: dict[str, list[str]] = {}  # WHY: per-model available versions used in step 5
         self.upgrade_plan: dict[str, dict[str, Any]] = {}  # WHY: model -> {from_version, to_version, ap_ids} plan
@@ -164,7 +166,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         execution) to keep this entry point trivially small and each phase
         independently readable / testable.
         """
-        logging.info("Starting advanced bulk AP firmware upgrade for org_id=%s", self.org_id)  # WHY: info-before FR-007
+        logger.info("Starting advanced bulk AP firmware upgrade for org_id=%s", self.org_id)  # WHY: info-before FR-007
         try:
             self._announce_start()  # WHY: user-facing banner + dry-run notice. Extracted so execute stays flat
             if not self._run_discovery_phase():  # WHY: steps 1-4 populate sites/APs/firmware. May early-exit
@@ -175,7 +177,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         except KeyboardInterrupt:  # WHY: recover from failure
             print("\n Operation cancelled by user.")  # WHY: preserved verbatim per FR-017 observable-equivalence
             logging.info("Bulk AP firmware upgrade cancelled by user interrupt")  # WHY: audit trail for interrupt
-        logging.debug("execute() finished for org_id=%s", self.org_id)  # WHY: debug-after FR-007
+        logger.debug("execute() finished for org_id=%s", self.org_id)  # WHY: debug-after FR-007
 
     def _announce_start(self) -> None:  # WHY: helper definition (see docstring)
         """Emit the workflow-start banner and dry-run notice.
@@ -184,12 +186,12 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         delegation. Preserves the two legacy log lines verbatim so live logs
         remain observationally equivalent (FR-017).
         """
-        logging.info("Starting advanced bulk AP firmware upgrade by site...")  # WHY: preserved verbatim per FR-017
-        logging.debug("BulkAPFirmwareUpgrader.execute() initiated")  # WHY: preserved verbatim per FR-017
-        logging.debug("Using org_id: %s", self.org_id)  # WHY: preserved verbatim per FR-017
+        logger.info("Starting advanced bulk AP firmware upgrade by site...")  # WHY: preserved verbatim per FR-017
+        logger.debug("BulkAPFirmwareUpgrader.execute() initiated")  # WHY: preserved verbatim per FR-017
+        logger.debug("Using org_id: %s", self.org_id)  # WHY: preserved verbatim per FR-017
         if self.dry_run:  # WHY: only surface the banner when dry-run is armed
             print("\n  >> DRY-RUN MODE: No actual upgrades will be performed <<")  # WHY: preserved verbatim per FR-017
-            logging.info("DRY-RUN MODE enabled - no API calls will be made")  # WHY: preserved verbatim per FR-017
+            logger.info("DRY-RUN MODE enabled - no API calls will be made")  # WHY: preserved verbatim per FR-017
 
     def _run_discovery_phase(self) -> bool:  # WHY: helper definition (see docstring)
         """Run discovery steps 1-4 (sites, APs, current firmware, available firmware).
@@ -198,7 +200,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         because the user cancelled or no APs were found). Callers should
         stop the workflow when this returns ``False``.
         """
-        logging.info("Discovery phase start for org_id=%s", self.org_id)  # WHY: info-before FR-007
+        logger.info("Discovery phase start for org_id=%s", self.org_id)  # WHY: info-before FR-007
         if not self._step1_determine_sites():  # WHY: step 1 resolves site list (override/file/interactive)
             return False  # WHY: user cancelled site selection — nothing else to do
         if not self._step2_discover_aps():  # WHY: step 2 pulls APs across selected sites
@@ -209,7 +211,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             return False  # WHY: no versions returned — cannot select upgrade targets
         n_aps = len(self.all_aps)  # WHY: extracted so the debug line stays under the 120-char limit
         n_sites = len(self.sites_to_upgrade)  # WHY: extracted so the debug line stays under the 120-char limit
-        logging.debug("Discovery done: %d APs %d sites", n_aps, n_sites)  # WHY: debug-after FR-007
+        logger.debug("Discovery done: %d APs %d sites", n_aps, n_sites)  # WHY: debug-after FR-007
         return True  # WHY: green-light the planning phase
 
     def _run_planning_phase(self) -> bool:  # WHY: helper definition (see docstring)
@@ -219,14 +221,14 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         plan is empty. Otherwise returns ``True`` and leaves ``self.upgrade_plan``
         + ``self.upgrade_config`` populated for the execution phase.
         """
-        logging.info("Planning phase start for org_id=%s", self.org_id)  # WHY: info-before FR-007
+        logger.info("Planning phase start for org_id=%s", self.org_id)  # WHY: info-before FR-007
         if not self._step5_select_firmware_versions():  # WHY: step 5 picks target version per model
             return False  # WHY: user cancelled or no upgradeable APs
         if not self._step6_configure_upgrade():  # WHY: step 6 chooses strategy / P2P / schedule
             return False  # WHY: user cancelled config
         if not self._step7_confirm_upgrade():  # WHY: step 7 is the final "yes really do it" gate
             return False  # WHY: user declined — do not touch Mist
-        logging.debug("Planning done: plan has %d model groups", len(self.upgrade_plan))  # WHY: debug-after FR-007
+        logger.debug("Planning done: plan has %d model groups", len(self.upgrade_plan))  # WHY: debug-after FR-007
         return True  # WHY: green-light the execution phase
 
     def _run_execution_phase(self) -> None:  # WHY: helper definition (see docstring)
@@ -235,13 +237,13 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         No return value because this phase is terminal — after step 11 the
         run is complete regardless of individual step outcomes.
         """
-        logging.info("Execution phase start for org_id=%s", self.org_id)  # WHY: info-before FR-007
+        logger.info("Execution phase start for org_id=%s", self.org_id)  # WHY: info-before FR-007
         self._step8_execute_upgrades()  # WHY: step 8 fires the actual upgrade API calls (or dry-run stubs)
         self._step9_configure_auto_upgrade()  # WHY: step 9 optionally schedules auto-upgrade rollout
         self._step10_offer_status_check()  # WHY: step 10 offers the post-upgrade status viewer
         self._step11_write_results()  # WHY: step 11 persists the results CSV (last, always runs)
         ok, bad = self.successful_upgrades, self.failed_upgrades  # WHY: alias so debug line fits under 120 chars
-        logging.debug("Execution done: success=%d failed=%d", ok, bad)  # WHY: debug-after FR-007
+        logger.debug("Execution done: success=%d failed=%d", ok, bad)  # WHY: debug-after FR-007
 
     # =========================================================================
     # STEP 1: SITE SELECTION
@@ -258,7 +260,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         self.sites_to_upgrade = self.sites_override or []  # WHY: instance state
         site_names = ", ".join(s.get("name", "?") for s in self.sites_to_upgrade)  # WHY: capture intermediate value
         print(f"\n  Using pre-selected sites: {site_names}")  # WHY: user-facing feedback
-        logging.info("Using %s override sites", len(self.sites_to_upgrade))  # WHY: info log (FR-007)
+        logger.info("Using %s override sites", len(self.sites_to_upgrade))  # WHY: info log (FR-007)
         return bool(self.sites_to_upgrade)  # WHY: surface computed result
 
     def _determine_sites_interactive(self) -> bool:  # WHY: helper definition (see docstring)
@@ -462,7 +464,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         site_id = site_info["id"]  # WHY: local alias for readability across branches
         site_name = site_info["name"]  # WHY: local alias used in every log/print line
         # WHY: FR-007 info-before naming the target site for audit trail
-        logging.info("Fetch APs starting site=%s site_id=%s", site_name, site_id)  # WHY: info log (FR-007)
+        logger.info("Fetch APs starting site=%s site_id=%s", site_name, site_id)  # WHY: info log (FR-007)
         try:
             # WHY: PCPP Compute — one API call fetches all APs at this site
             print(f"   Fetching APs at site '{site_name}'...")  # WHY: user-facing feedback
@@ -472,7 +474,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         except Exception as error:  # API errors surface any way here
             # WHY: PCPP Persist error path — record empty result + error string for tracking
             self._record_site_ap_error(site_id, site_name, error)  # WHY: instance state
-        logging.debug("Fetch APs done site=%s total_all_aps=%s", site_name, len(self.all_aps))  # WHY: debug log (FR-...
+        logger.debug("Fetch APs done site=%s total_all_aps=%s", site_name, len(self.all_aps))  # WHY: debug log (FR-...
 
     def _request_site_aps(self, site_id: str, mistapi: Any) -> list[dict[str, Any]]:  # WHY: helper definition (see d...
         """Call the Mist API and return the paginated AP list (or empty list on none)."""
@@ -526,7 +528,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         }
         print(f"      Failed to fetch APs for site '{site_name}': {error}")  # WHY: user-facing feedback
         # WHY: log error at ERROR level so ops can grep logs for fetch failures
-        logging.error("Fetch APs failed site=%s error=%s", site_name, error)  # WHY: error log
+        logger.error("Fetch APs failed site=%s error=%s", site_name, error)  # WHY: error log
 
     def _display_ap_discovery_summary(self) -> None:  # WHY: helper definition (see docstring)
         """Display AP discovery summary with per-site model breakdown."""
@@ -893,17 +895,17 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
     ) -> bool:
         """PCPP orchestrator: partition devices, record selection, return acceptance flag."""
         target_version = selected.get("version")  # WHY: single lookup of the candidate version string
-        logging.info("apply_version_selection start model=%s v=%s n=%s", model, target_version, len(devices))  # FR-007
+        logger.info("apply_version_selection start model=%s v=%s n=%s", model, target_version, len(devices))  # FR-007
         needing_upgrade, already_at_target = self._partition_devices_by_version(devices, target_version)  # PCPP compute
         if already_at_target:  # WHY: only announce skips when the skip count is non-zero
             print(f"   -> Skipping {len(already_at_target)} device(s) already at {target_version}")  # FR-017 verbatim
             self.skipped_already_at_target += len(already_at_target)  # WHY: aggregate for final summary
         if not needing_upgrade:  # WHY: early return when no work remains after filtering
             print(f"!  All {len(devices)} {model} devices already at {target_version} - nothing to upgrade")  # FR-017
-            logging.debug("apply_version_selection result=skipped model=%s", model)  # WHY: FR-007 debug-after
+            logger.debug("apply_version_selection result=skipped model=%s", model)  # WHY: FR-007 debug-after
             return False  # WHY: signal caller that selection was declined
         self._record_selection_in_plan(model, target_version, selected, needing_upgrade)  # WHY: PCPP persist
-        logging.debug("apply_version_selection result=accepted model=%s n=%s", model, len(needing_upgrade))  # FR-007
+        logger.debug("apply_version_selection result=accepted model=%s n=%s", model, len(needing_upgrade))  # FR-007
         return True  # WHY: signal caller that selection was accepted
 
     def _partition_devices_by_version(  # WHY: helper definition (see docstring)
@@ -912,7 +914,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         target_version: Any,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """Compute helper: split devices into (needing_upgrade, already_at_target)."""
-        logging.info("partition_devices_by_version start target=%s n=%s", target_version, len(devices))  # WHY: FR-007
+        logger.info("partition_devices_by_version start target=%s n=%s", target_version, len(devices))  # WHY: FR-007
         needing_upgrade: list[dict[str, Any]] = []  # WHY: accumulator for devices whose firmware differs from target
         already_at_target: list[dict[str, Any]] = []  # WHY: accumulator for devices already matching target
         for device in devices:  # WHY: single pass over the device list to classify each entry
@@ -922,7 +924,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
                 already_at_target.append(device)  # WHY: classify as no-op
             else:
                 needing_upgrade.append(device)  # WHY: classify as needing upgrade
-        logging.debug("partition result upgrade=%s skip=%s", len(needing_upgrade), len(already_at_target))  # FR-007
+        logger.debug("partition result upgrade=%s skip=%s", len(needing_upgrade), len(already_at_target))  # FR-007
         return needing_upgrade, already_at_target  # WHY: caller consumes both buckets
 
     def _record_selection_in_plan(  # WHY: helper definition (see docstring)
@@ -934,7 +936,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
     ) -> None:
         """Persist helper: write selection into upgrade_plan and echo acceptance banner."""
         # WHY: FR-007 info-before with model + version + device count
-        logging.info(  # WHY: info log (FR-007)
+        logger.info(  # WHY: info log (FR-007)
             "record_selection_in_plan model=%s version=%s upgrade_count=%s",
             model,
             target_version,
@@ -947,7 +949,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         }
         # WHY: FR-017 verbatim acceptance banner preserved from pre-refactor UI
         print(f"! Selected version {target_version} for {model} ({len(needing_upgrade)} devices need upgrade)")
-        logging.debug("record_selection_in_plan committed model=%s", model)  # WHY: FR-007 debug-after
+        logger.debug("record_selection_in_plan committed model=%s", model)  # WHY: FR-007 debug-after
 
     def _validate_upgrade_plan(self) -> bool:
         """Validate and display upgrade plan summary. Prompt only when multi-version."""
@@ -993,12 +995,12 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
     def _select_strategy(self) -> None:  # WHY: helper definition (see docstring)
         """PCPP orchestrator: prompt user for download + reboot strategies and persist upgrade config."""
         # WHY: FR-007 info-before signals entry into strategy selection UI
-        logging.info("select_strategy starting")  # WHY: info log (FR-007)
+        logger.info("select_strategy starting")  # WHY: info log (FR-007)
         download_strategy = self._prompt_download_strategy()  # WHY: Present + Compute — user picks download strategy
         reboot_strategy = self._prompt_reboot_strategy()  # WHY: Present + Compute — user picks reboot strategy
         self._init_upgrade_config(download_strategy, reboot_strategy)  # WHY: Persist selections into instance state
         # WHY: FR-007 debug-after reports the chosen pair for traceability
-        logging.debug(  # WHY: debug log (FR-007)
+        logger.debug(  # WHY: debug log (FR-007)
             "select_strategy result download=%s reboot=%s",
             download_strategy,
             reboot_strategy,
@@ -1007,7 +1009,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
     def _prompt_download_strategy(self) -> str:  # WHY: helper definition (see docstring)
         """Present + Compute: print DOWNLOAD strategy menu, prompt user, return selection name."""
         # WHY: FR-007 info-before signals user is being prompted for download strategy
-        logging.info("prompt_download_strategy starting")  # WHY: info log (FR-007)
+        logger.info("prompt_download_strategy starting")  # WHY: info log (FR-007)
         download_strategies = {  # WHY: constant lookup table maps menu keys to (name, description)
             "1": ("big_bang", "Download all at once - no orchestration"),
             "2": ("serial", "Download one device at a time"),
@@ -1021,13 +1023,13 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         download_choice = self._input_fn("Select download strategy (1-3, default=3 canary): ").strip() or "3"
         download_strategy = download_strategies.get(download_choice, download_strategies["3"])[0]  # WHY: unwrap name
         print(f"! Selected download strategy: {download_strategy.upper()}")  # WHY: FR-017 verbatim echo
-        logging.debug("prompt_download_strategy selected=%s", download_strategy)  # WHY: FR-007 debug-after
+        logger.debug("prompt_download_strategy selected=%s", download_strategy)  # WHY: FR-007 debug-after
         return download_strategy  # WHY: hand chosen strategy name back to orchestrator
 
     def _prompt_reboot_strategy(self) -> str:  # WHY: helper definition (see docstring)
         """Present + Compute: print REBOOT strategy menu, prompt user, return selection name."""
         # WHY: FR-007 info-before signals user is being prompted for reboot strategy
-        logging.info("prompt_reboot_strategy starting")  # WHY: info log (FR-007)
+        logger.info("prompt_reboot_strategy starting")  # WHY: info log (FR-007)
         reboot_strategies = {  # WHY: constant lookup table for reboot strategies (RRM is AP-only)
             "1": ("big_bang", "Reboot all at once"),
             "2": ("serial", "Reboot one at a time"),
@@ -1042,13 +1044,13 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         reboot_choice = self._input_fn("Select reboot strategy (1-4, default=4 rrm): ").strip() or "4"  # WHY: captur...
         reboot_strategy = reboot_strategies.get(reboot_choice, reboot_strategies["4"])[0]  # WHY: unwrap name
         print(f"! Selected reboot strategy: {reboot_strategy.upper()}")  # WHY: FR-017 verbatim echo
-        logging.debug("prompt_reboot_strategy selected=%s", reboot_strategy)  # WHY: FR-007 debug-after
+        logger.debug("prompt_reboot_strategy selected=%s", reboot_strategy)  # WHY: FR-007 debug-after
         return reboot_strategy  # WHY: hand chosen strategy name back to orchestrator
 
     def _init_upgrade_config(self, download_strategy: str, reboot_strategy: str) -> None:  # WHY: helper definition (...
         """Persist helper: seed self.upgrade_config with strategy pair + baseline defaults."""
         # WHY: FR-007 info-before with both chosen strategy names for traceability
-        logging.info(  # WHY: info log (FR-007)
+        logger.info(  # WHY: info log (FR-007)
             "init_upgrade_config download=%s reboot=%s",
             download_strategy,
             reboot_strategy,
@@ -1067,7 +1069,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         }
         # WHY: FR-017 verbatim final-strategy banner preserved from pre-refactor UI
         print(f"\n! Final strategy: Download={download_strategy.upper()}, Reboot={reboot_strategy.upper()}")
-        logging.debug("init_upgrade_config committed keys=%s", len(self.upgrade_config))  # WHY: FR-007 debug-after
+        logger.debug("init_upgrade_config committed keys=%s", len(self.upgrade_config))  # WHY: FR-007 debug-after
 
     def _configure_strategy_options(self) -> None:  # WHY: helper definition (see docstring)
         """Configure strategy-specific options."""
@@ -1154,7 +1156,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
     def _estimate_api_calls(self) -> dict[str, Any]:  # WHY: helper definition (see docstring)
         """PCPP orchestrator: group devices by site then compute call totals + breakdown."""
         # WHY: FR-007 info-before with total plan-model count for observability
-        logging.info("estimate_api_calls plan_models=%s", len(self.upgrade_plan))  # WHY: info log (FR-007)
+        logger.info("estimate_api_calls plan_models=%s", len(self.upgrade_plan))  # WHY: info log (FR-007)
         # WHY: Compute step 1 — group all planned devices into per-site aggregates
         devices_by_site = self._group_plan_by_site()  # WHY: capture intermediate value
         # WHY: Compute step 2 — derive breakdown + total upgrade-call count from grouping
@@ -1166,7 +1168,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             "site_count": len(devices_by_site),  # WHY: site cardinality for banner display
             "breakdown": breakdown,  # WHY: per-site call breakdown list for verbose display
         }
-        logging.debug(  # WHY: FR-007 debug-after with the two headline numbers
+        logger.debug(  # WHY: FR-007 debug-after with the two headline numbers
             "estimate_api_calls result upgrade_calls=%s site_count=%s",
             upgrade_calls,
             len(devices_by_site),
@@ -1176,7 +1178,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
     def _group_plan_by_site(self) -> dict[str, dict[str, Any]]:  # WHY: helper definition (see docstring)
         """Compute helper: fold self.upgrade_plan into a per-site aggregate dict."""
         # WHY: FR-007 info-before signals aggregation phase entry
-        logging.info("group_plan_by_site start plan_models=%s", len(self.upgrade_plan))  # WHY: info log (FR-007)
+        logger.info("group_plan_by_site start plan_models=%s", len(self.upgrade_plan))  # WHY: info log (FR-007)
         devices_by_site: dict[str, dict[str, Any]] = {}  # WHY: accumulator keyed by site_id
         for _model, plan in self.upgrade_plan.items():  # WHY: iterate models to reach their device lists
             version = plan["version"]  # WHY: version needed for per-site version cardinality tally
@@ -1193,7 +1195,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
                 devices_by_site[site_id]["versions"].add(version)  # WHY: track unique target versions per site
                 devices_by_site[site_id]["models"].add(_model)  # WHY: track unique models per site
                 devices_by_site[site_id]["device_count"] += 1  # WHY: running total for the breakdown line
-        logging.debug("group_plan_by_site result sites=%s", len(devices_by_site))  # WHY: FR-007 debug-after
+        logger.debug("group_plan_by_site result sites=%s", len(devices_by_site))  # WHY: FR-007 debug-after
         return devices_by_site  # WHY: caller uses this for both the total and the breakdown
 
     def _compute_upgrade_call_breakdown(  # WHY: helper definition (see docstring)
@@ -1201,7 +1203,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         devices_by_site: dict[str, dict[str, Any]],
     ) -> tuple[int, list[dict[str, Any]]]:
         """Compute helper: turn per-site aggregate dict into (total_calls, breakdown_list)."""
-        logging.info("compute_upgrade_call_breakdown sites=%s", len(devices_by_site))  # WHY: FR-007 info-before
+        logger.info("compute_upgrade_call_breakdown sites=%s", len(devices_by_site))  # WHY: FR-007 info-before
         upgrade_calls = 0  # WHY: running total of upgrade POSTs across sites
         breakdown: list[dict[str, Any]] = []  # WHY: per-site call rows for the display step
         for _site_id, site_info in devices_by_site.items():  # WHY: one iteration per site
@@ -1217,13 +1219,13 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
                     "reason": reason,  # WHY: human-readable reason string
                 }
             )
-        logging.debug("compute_upgrade_call_breakdown calls=%s rows=%s", upgrade_calls, len(breakdown))  # WHY: FR-007
+        logger.debug("compute_upgrade_call_breakdown calls=%s rows=%s", upgrade_calls, len(breakdown))  # WHY: FR-007
         return upgrade_calls, breakdown  # WHY: caller assembles the return payload
 
     def _display_api_call_estimate(self) -> None:  # WHY: helper definition (see docstring)
         """PCPP orchestrator: compute estimate, print headline, breakdown, and auto-upgrade note."""
         # WHY: FR-007 info-before signals API-call estimate display entry
-        logging.info("display_api_call_estimate starting")  # WHY: info log (FR-007)
+        logger.info("display_api_call_estimate starting")  # WHY: info log (FR-007)
         estimate = self._estimate_api_calls()  # WHY: single call collects all display data
         self._print_api_call_headline(estimate)  # WHY: Present step 1 — headline totals
         # WHY: only render per-site breakdown when there is more than one call or site
@@ -1236,7 +1238,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
                 f"   Note: If you configure auto-upgrade (Step 9), add {estimate['auto_upgrade_calls']} more call(s)"
             )
         # WHY: FR-007 debug-after with total call count for traceability
-        logging.debug(  # WHY: debug log (FR-007)
+        logger.debug(  # WHY: debug log (FR-007)
             "display_api_call_estimate result upgrade_calls=%s sites=%s",
             estimate["upgrade_calls"],
             estimate["site_count"],
@@ -1266,7 +1268,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
     def _display_multi_site_summary(self) -> None:  # WHY: helper definition (see docstring)
         """Display comprehensive summary for multi-site upgrades (PCPP orchestrator)."""
         # WHY: FR-007 info-before with plan model count for observability
-        logging.info(  # WHY: info log (FR-007)
+        logger.info(  # WHY: info log (FR-007)
             "Multi-site summary starting plan_models=%s skipped=%s",
             len(self.upgrade_plan),
             self.skipped_already_at_target,
@@ -1278,7 +1280,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         site_summary = self._build_site_summary_index()  # WHY: capture intermediate value
         self._print_site_summary_rows(site_summary)  # WHY: PCPP Present — sorted rows
         self._print_site_summary_totals(site_summary)  # WHY: PCPP Present — totals footer
-        logging.debug("Multi-site summary done sites=%s", len(site_summary))  # WHY: debug log (FR-007)
+        logger.debug("Multi-site summary done sites=%s", len(site_summary))  # WHY: debug log (FR-007)
 
     def _build_site_summary_index(self) -> dict[str, dict[str, Any]]:  # WHY: helper definition (see docstring)
         """Invert the model-indexed upgrade_plan into a site-indexed summary dict."""
@@ -1367,7 +1369,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             print(" Upgrade cancelled.")  # WHY: user-facing feedback
             return False  # WHY: cancel decision
         print(" User confirmed. Proceeding...")  # WHY: user-facing feedback
-        logging.info("User confirmed upgrade for %s devices across %s sites", total, sites_count)  # WHY: audit log
+        logger.info("User confirmed upgrade for %s devices across %s sites", total, sites_count)  # WHY: audit log
         return True  # WHY: accept decision
 
     # =========================================================================
@@ -1450,7 +1452,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         mistapi: Any,
     ) -> None:
         """Execute upgrade when all devices use same version (PCPP orchestrator)."""
-        logging.info("Single-version upgrade start site=%s n=%s", site_name, len(site_data["devices"]))  # WHY: FR-007
+        logger.info("Single-version upgrade start site=%s n=%s", site_name, len(site_data["devices"]))  # WHY: FR-007
         version = next(iter(site_data["models"].values()))["version"]  # WHY: PCPP prepare, shared version
         device_ids = [d.get("id") for d in site_data["devices"] if d.get("id")]  # WHY: filter to concrete ids
         body = self._build_upgrade_body(version, device_ids)  # WHY: PCPP Compute build once
@@ -1458,7 +1460,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             self._log_single_dry_run(site_name, version, device_ids, site_data)  # WHY: banner + counter bump
         else:
             self._post_single_version_upgrade(site_id, site_data, body, mistapi)  # WHY: real mistapi POST
-        logging.debug("Single-version upgrade done site=%s total=%s", site_name, self.successful_upgrades)  # FR-007
+        logger.debug("Single-version upgrade done site=%s total=%s", site_name, self.successful_upgrades)  # FR-007
 
     def _log_single_dry_run(  # WHY: helper definition (see docstring)
         self,
@@ -1471,7 +1473,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         # WHY: user-visible dry-run banner mirrors pre-refactor format for FR-017 equivalence
         print(f"      [DRY-RUN] Would upgrade {len(device_ids)} devices to {version}")  # WHY: user-facing feedback
         # WHY: preserved verbatim from pre-refactor log line to satisfy FR-017 observable equivalence
-        logging.info(  # WHY: info log (FR-007)
+        logger.info(  # WHY: info log (FR-007)
             "DRY-RUN: Would call upgradeSiteDevices for site %s with %s devices",
             site_name,
             len(device_ids),
@@ -1526,7 +1528,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         """Upgrade a group of devices sharing the same target version (PCPP orchestrator)."""
         devices = version_info["devices"]  # WHY: extract group's device list from the tuple/dict
         models = version_info["models"]  # WHY: extract group's model set for progress banner text
-        logging.info("Upgrade version group start site=%s v=%s n=%s", site_name, version, len(devices))  # WHY: FR-007
+        logger.info("Upgrade version group start site=%s v=%s n=%s", site_name, version, len(devices))  # WHY: FR-007
         device_ids = [d.get("id") for d in devices if d.get("id")]  # WHY: PCPP prepare concrete ids
         models_str = ", ".join(models)  # WHY: comma-joined model list for user-visible banner
         body = self._build_upgrade_body(version, device_ids)  # WHY: PCPP compute request body
@@ -1534,7 +1536,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             self._log_dry_run_upgrade(version, site_name, models_str, devices, device_ids)  # WHY: banner path
         else:
             self._invoke_upgrade_api(site_id, version, models_str, devices, body)  # WHY: lazy mistapi call
-        logging.debug("Upgrade group done site=%s v=%s total=%s", site_name, version, self.successful_upgrades)  # WHY
+        logger.debug("Upgrade group done site=%s v=%s total=%s", site_name, version, self.successful_upgrades)  # WHY
 
     def _log_dry_run_upgrade(  # WHY: helper definition (see docstring)
         self,
@@ -1545,11 +1547,11 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         device_ids: list[str | None],
     ) -> None:
         """Emit dry-run banner + counter bump for a version group (no API call)."""
-        logging.info("Dry-run upgrade group v=%s site=%s n=%s", version, site_name, len(device_ids))  # WHY: FR-007
+        logger.info("Dry-run upgrade group v=%s site=%s n=%s", version, site_name, len(device_ids))  # WHY: FR-007
         print(f"         [DRY-RUN] {version}: Would upgrade {len(devices)} devices ({models_str})")  # FR-017 banner
-        logging.info("DRY-RUN upgradeSiteDevices v=%s site=%s n=%s", version, site_name, len(device_ids))  # FR-007
+        logger.info("DRY-RUN upgradeSiteDevices v=%s site=%s n=%s", version, site_name, len(device_ids))  # FR-007
         self.successful_upgrades += len(devices)  # WHY: dry-run still counts to summary totals
-        logging.debug("Dry-run upgrade group done v=%s counted=%s", version, len(devices))  # WHY: FR-007 debug-after
+        logger.debug("Dry-run upgrade group done v=%s counted=%s", version, len(devices))  # WHY: FR-007 debug-after
 
     def _invoke_upgrade_api(  # WHY: helper definition (see docstring)
         self,
@@ -1561,7 +1563,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
     ) -> None:
         """Post the upgrade request, capture upgrade_id, print progress line."""
         # WHY: FR-007 info-before naming the site + version being posted for audit trail
-        logging.info("Invoke upgrade API site=%s version=%s devices=%s", site_id, version, len(devices))  # WHY: info...
+        logger.info("Invoke upgrade API site=%s version=%s devices=%s", site_id, version, len(devices))  # WHY: info...
         import mistapi  # WHY: lazy import matches other sites in this module and keeps param budget <=5
 
         # WHY: sole mutating call in this path — mistapi endpoint per Mist docs
@@ -1573,12 +1575,12 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         self.successful_upgrades += len(devices)  # WHY: increment aggregate counter for summary
         # WHY: user-visible progress line mirrors pre-refactor format for FR-017 equivalence
         print(f"         + {version}: {len(devices)} devices ({models_str})")  # WHY: user-facing feedback
-        logging.debug("Invoke upgrade API done site=%s version=%s ids=%s", site_id, version, len(self.upgrade_ids))
+        logger.debug("Invoke upgrade API done site=%s version=%s ids=%s", site_id, version, len(self.upgrade_ids))
 
     def _build_upgrade_body(self, version: str, device_ids: list[str | None]) -> dict[str, Any]:  # WHY: helper defin...
         """Build upgrade API request body (PCPP orchestrator)."""
         # WHY: FR-007 info-before with version + device count so audit log matches API request
-        logging.info(  # WHY: info log (FR-007)
+        logger.info(  # WHY: info log (FR-007)
             "Build upgrade body version=%s devices=%s strategy=%s",
             version,
             len(device_ids),
@@ -1589,7 +1591,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         self._augment_body_canary(body)  # WHY: PCPP Compute — canary phase config when applicable
         self._augment_body_rrm(body)  # WHY: PCPP Compute — RRM-strategy fields only when strategy=rrm
         self._augment_body_start_time(body)  # WHY: PCPP Compute — scheduled start_time when set
-        logging.debug("Build upgrade body done keys=%s", sorted(body.keys()))  # WHY: debug log (FR-007)
+        logger.debug("Build upgrade body done keys=%s", sorted(body.keys()))  # WHY: debug log (FR-007)
         return body  # WHY: surface computed result
 
     def _build_base_upgrade_body(  # WHY: helper definition (see docstring)
@@ -1648,12 +1650,12 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         status: str,
     ) -> None:
         """Log upgrade results for each device (PCPP Persist row appender)."""
-        logging.info("Log upgrade results start site=%s n=%s status=%s", site_name, len(site_data["devices"]), status)
+        logger.info("Log upgrade results start site=%s n=%s status=%s", site_name, len(site_data["devices"]), status)
         effective_status = f"DRY-RUN: {status}" if self.dry_run else status  # WHY: PCPP compute effective label
         for device in site_data["devices"]:  # WHY: PCPP persist one row per device
             row = self._build_result_row(site_id, site_name, device, effective_status)  # WHY: build row payload
             self.results.append(row)  # WHY: accumulate rows for step 11 CSV export
-        logging.debug("Log upgrade results done site=%s rows=%s", site_name, len(self.results))  # WHY: FR-007
+        logger.debug("Log upgrade results done site=%s rows=%s", site_name, len(self.results))  # WHY: FR-007
 
     def _build_result_row(  # WHY: helper definition (see docstring)
         self,
@@ -1714,16 +1716,16 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
 
     def _fetch_ap_model_families(self) -> dict[str, list[str]]:  # WHY: helper definition (see docstring)
         """Fetch AP model families from Mist const/device_models API (Prepare -> Compute -> Present)."""
-        logging.info("Fetching AP model families from Mist const/device_models")  # WHY: FR-007 info-before
+        logger.info("Fetching AP model families from Mist const/device_models")  # WHY: FR-007 info-before
         print("   Fetching AP model definitions from Mist API...")  # WHY: user-visible progress marker
         raw_models = self._request_device_models()  # WHY: Prepare — isolate the API call for error handling
         if raw_models is None:  # WHY: None sentinel signals request failure. Empty list means real empty payload
             return {}  # WHY: surface computed result
         families = self._group_models_by_ap_type(raw_models)  # WHY: Compute — pure grouping over raw records
-        logging.debug(
+        logger.debug(
             "Fetched %s AP families with %s total models", len(families), sum(len(v) for v in families.values())
         )  # WHY: FR-007 debug-after summarises the aggregate result
-        logging.info(
+        logger.info(
             "Fetched %s AP families with %s total models", len(families), sum(len(v) for v in families.values())
         )  # WHY: preserved verbatim from pre-refactor log line for FR-017 observable equivalence
         return families  # WHY: surface computed result
@@ -1786,25 +1788,23 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
 
     def _offer_additional_model_versions(self, custom_versions: dict[str, str]) -> dict[str, str]:  # WHY: helper def...
         """Offer to configure firmware versions for models not at sites (PCPP)."""
-        logging.info(
-            "Offering additional model versions (existing=%s)", len(custom_versions)
-        )  # WHY: FR-007 info-before
+        logger.info("Offering additional model versions (existing=%s)", len(custom_versions))  # WHY: FR-007 info-before
         self._print_current_model_targets(custom_versions)  # WHY: Present — show current mapping to operator
         if not self._prompt_add_more_models():  # WHY: Prepare — decide whether we solicit additions at all
-            logging.debug("Offer additional models declined by user")  # WHY: FR-007 debug-after (short path)
+            logger.debug("Offer additional models declined by user")  # WHY: FR-007 debug-after (short path)
             return custom_versions  # WHY: surface computed result
         ap_families = self._fetch_ap_model_families()  # WHY: Prepare — need family map before offering choices
         if not ap_families:  # WHY: cannot proceed without a family catalog
             print("   Could not fetch AP model families from API")  # WHY: user-visible fallback notice
-            logging.debug("Offer additional models aborted: no families")  # WHY: FR-007 debug-after
+            logger.debug("Offer additional models aborted: no families")  # WHY: FR-007 debug-after
             return custom_versions  # WHY: surface computed result
         selected_families = self._prompt_family_selection(ap_families)  # WHY: Compute — parse operator picks
         if not selected_families:  # WHY: empty selection falls through unchanged
             print("   No families selected")  # WHY: user-visible confirmation of no-op path
-            logging.debug("Offer additional models: no families selected")  # WHY: FR-007 debug-after
+            logger.debug("Offer additional models: no families selected")  # WHY: FR-007 debug-after
             return custom_versions  # WHY: surface computed result
         result = self._select_versions_by_family(custom_versions, selected_families)  # WHY: Persist choices
-        logging.debug("Offer additional models done total=%s", len(result))  # WHY: FR-007 debug-after
+        logger.debug("Offer additional models done total=%s", len(result))  # WHY: FR-007 debug-after
         return result  # WHY: surface computed result
 
     def _print_current_model_targets(self, custom_versions: dict[str, str]) -> None:  # WHY: helper definition (see d...
@@ -1892,39 +1892,39 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
     ) -> None:
         """PCPP orchestrator: gate on empty family, list versions, delegate to choice helper."""
         # WHY: FR-007 info-before with family and unconfigured-model count
-        logging.info(  # WHY: info log (FR-007)
+        logger.info(  # WHY: info log (FR-007)
             "select_version_for_family start family=%s new_models=%s",
             ap_type,
             len(new_models),
         )
         if not new_models:  # WHY: skip families where every model already has a version chosen
             print(f"\n   {ap_type}: All models already configured - skipping")  # WHY: FR-017 verbatim
-            logging.debug("select_version_for_family result=all_configured family=%s", ap_type)  # debug-after
+            logger.debug("select_version_for_family result=all_configured family=%s", ap_type)  # debug-after
             return  # WHY: nothing to prompt for
         # WHY: Present + Compute step — display family header and derive candidate list
         sorted_versions = self._present_family_candidates(ap_type, new_models)  # WHY: capture intermediate value
         if not sorted_versions:  # WHY: exit when no universal version exists for the family
-            logging.debug("select_version_for_family result=no_universal family=%s", ap_type)  # debug-after
+            logger.debug("select_version_for_family result=no_universal family=%s", ap_type)  # debug-after
             return  # WHY: no candidates available to prompt for
         # WHY: Persist step delegated to helper that prompts and mutates custom_versions
         self._apply_family_version_choice(ap_type, new_models, sorted_versions, custom_versions)  # WHY: instance state
-        logging.debug("select_version_for_family result=prompted family=%s", ap_type)  # WHY: debug-after
+        logger.debug("select_version_for_family result=prompted family=%s", ap_type)  # WHY: debug-after
 
     def _present_family_candidates(self, ap_type: str, new_models: list[str]) -> list[str]:  # WHY: helper definition
         """Present + Compute: print family header and return top-10 sorted universal versions."""
-        logging.info("present_family_candidates family=%s models=%s", ap_type, len(new_models))  # WHY: FR-007
+        logger.info("present_family_candidates family=%s models=%s", ap_type, len(new_models))  # WHY: FR-007
         print(f"\n   Family: {ap_type}")  # WHY: FR-017 verbatim header
         print(f"   Models: {', '.join(new_models)}")  # WHY: model list echo preserved verbatim
         universal = self._find_universal_versions_for_models(set(new_models))  # WHY: intersection across models
         if not universal:  # WHY: no version supports every model in the family
             print(f"   ! No universal version found for all models in {ap_type}")  # WHY: FR-017 verbatim
-            logging.debug("present_family_candidates result=none family=%s", ap_type)  # WHY: FR-007 debug-after
+            logger.debug("present_family_candidates result=none family=%s", ap_type)  # WHY: FR-007 debug-after
             return []  # WHY: caller handles empty list as skip
         sorted_versions = sorted(universal, key=self._version_sort_key, reverse=True)[:10]  # WHY: newest first
         print(f"   Available versions (compatible with ALL {len(new_models)} models):")  # WHY: FR-017 verbatim
         for idx, version in enumerate(sorted_versions, 1):  # WHY: number choices 1..N for prompt
             print(f"      [{idx}] {version}")  # WHY: FR-017 verbatim choice row format
-        logging.debug("present_family_candidates count=%s family=%s", len(sorted_versions), ap_type)  # WHY: FR-007
+        logger.debug("present_family_candidates count=%s family=%s", len(sorted_versions), ap_type)  # WHY: FR-007
         return sorted_versions  # WHY: caller uses this list to bound the prompt range
 
     def _apply_family_version_choice(  # WHY: helper definition (see docstring)
@@ -1935,28 +1935,28 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         custom_versions: dict[str, str],
     ) -> None:
         """PCPP orchestrator: prompt user, validate choice, delegate write to persistence helper."""
-        logging.info("apply_family_version_choice family=%s n=%s", ap_type, len(sorted_versions))  # WHY: FR-007
+        logger.info("apply_family_version_choice family=%s n=%s", ap_type, len(sorted_versions))  # WHY: FR-007
         try:  # WHY: swallow input/EOF interruptions to keep menu resilient
             choice = self._prompt_family_choice(ap_type, len(sorted_versions))  # WHY: Present + Compute
             if choice == "s":  # WHY: user opts to skip this family entirely
                 print(f"   Skipped {ap_type}")  # WHY: FR-017 verbatim skip echo
-                logging.debug("apply_family_version_choice result=skipped family=%s", ap_type)  # WHY: FR-007
+                logger.debug("apply_family_version_choice result=skipped family=%s", ap_type)  # WHY: FR-007
                 return  # WHY: no state to persist for a skip
             if choice.isdigit():  # WHY: only numeric choices map to a version selection
                 self._commit_family_version(ap_type, new_models, sorted_versions, custom_versions, choice)  # persist
         except (EOFError, KeyboardInterrupt, ValueError):  # WHY: preserve pre-refactor lenient error handling
             pass  # WHY: silent no-op keeps UX identical
-        logging.debug("apply_family_version_choice complete family=%s", ap_type)  # WHY: FR-007 debug-after
+        logger.debug("apply_family_version_choice complete family=%s", ap_type)  # WHY: FR-007 debug-after
 
     def _prompt_family_choice(self, ap_type: str, num_candidates: int) -> str:  # WHY: helper definition (see docstring)
         """Present + Compute: read user's family-version choice as a lowercase string."""
         # WHY: FR-007 info-before with family and candidate count
-        logging.info("prompt_family_choice family=%s candidates=%s", ap_type, num_candidates)  # WHY: info log (FR-007)
+        logger.info("prompt_family_choice family=%s candidates=%s", ap_type, num_candidates)  # WHY: info log (FR-007)
         # WHY: prompt string built via f-string concatenation to stay under E501 line limit
         prompt = f"\n   Select version for {ap_type} (1-{num_candidates}), 's' to skip: "  # WHY: capture intermediat...
         raw = self._input_fn(prompt)  # WHY: single injected input call keeps testability
         choice = raw.strip().lower()  # WHY: normalize to lowercase for 's' skip comparison
-        logging.debug("prompt_family_choice raw=%r family=%s", choice, ap_type)  # WHY: FR-007 debug-after
+        logger.debug("prompt_family_choice raw=%r family=%s", choice, ap_type)  # WHY: FR-007 debug-after
         return choice  # WHY: caller inspects for 's' or digit
 
     def _commit_family_version(  # WHY: helper definition (see docstring)
@@ -1969,14 +1969,14 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
     ) -> None:
         """Persist helper: validate numeric choice and copy chosen version into custom_versions."""
         # WHY: FR-007 info-before with family and raw choice for traceability
-        logging.info("commit_family_version family=%s choice=%s", ap_type, choice)  # WHY: info log (FR-007)
+        logger.info("commit_family_version family=%s choice=%s", ap_type, choice)  # WHY: info log (FR-007)
         idx = int(choice) - 1  # WHY: convert 1-based menu index into 0-based list index
         if 0 <= idx < len(sorted_versions):  # WHY: bounds-check protects against out-of-range input
             selected_version = sorted_versions[idx]  # WHY: fetch the chosen version string
             for model in new_models:  # WHY: fan out chosen version to every model in the family
                 custom_versions[model] = selected_version  # WHY: mutate shared dict passed by caller
             print(f"   -> Applied {selected_version} to: {', '.join(new_models)}")  # WHY: FR-017 verbatim echo
-        logging.debug("commit_family_version done family=%s", ap_type)  # WHY: FR-007 debug-after
+        logger.debug("commit_family_version done family=%s", ap_type)  # WHY: FR-007 debug-after
 
     def _find_universal_versions_for_models(self, models: set[str]) -> list[str]:
         """Find firmware versions compatible with all specified models."""
@@ -2022,12 +2022,12 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
 
     def _configure_auto_upgrade_schedule(self) -> dict[str, str]:  # WHY: helper definition (see docstring)
         """Configure auto-upgrade scheduling options (day + time-of-day)."""
-        logging.info("Configuring auto-upgrade schedule (day + time)")  # WHY: FR-007 info-before
+        logger.info("Configuring auto-upgrade schedule (day + time)")  # WHY: FR-007 info-before
         schedule: dict[str, str] = {}  # WHY: accumulator for the two schedule keys we ultimately return
         self._print_schedule_banner()  # WHY: Present — one-time UI header before either prompt
         schedule["day_of_week"] = self._prompt_schedule_day()  # WHY: Prepare/Compute — day pick, default any
         schedule["time_of_day"] = self._prompt_schedule_time()  # WHY: Prepare/Compute — time pick, default any
-        logging.debug(
+        logger.debug(
             "Schedule configured day=%s time=%s", schedule["day_of_week"], schedule["time_of_day"]
         )  # WHY: FR-007 debug-after summarising the chosen schedule
         return schedule  # WHY: surface computed result
@@ -2168,9 +2168,9 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
     def _save_upgrade_tracking(self) -> None:  # WHY: helper definition (see docstring)
         """PCPP orchestrator: guard on empty state, load, append entries, persist to disk."""
         # WHY: FR-007 info-before with upgrade ID count for observability
-        logging.info("save_upgrade_tracking start upgrade_ids=%s", len(self.upgrade_ids))  # WHY: info log (FR-007)
+        logger.info("save_upgrade_tracking start upgrade_ids=%s", len(self.upgrade_ids))  # WHY: info log (FR-007)
         if not self.upgrade_ids:  # WHY: nothing to persist when no upgrades were initiated
-            logging.debug("save_upgrade_tracking result=noop reason=no_upgrade_ids")  # WHY: FR-007 debug-after
+            logger.debug("save_upgrade_tracking result=noop reason=no_upgrade_ids")  # WHY: FR-007 debug-after
             return  # WHY: skip file I/O when there is no state to save
         try:  # WHY: swallow disk errors so a tracking failure never breaks the upgrade run
             tracking_file = "ActiveUpgrades.json"  # WHY: fixed filename shared with other tracking tools
@@ -2180,23 +2180,23 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             self._write_tracking_file(tracking_file, tracking_data)  # WHY: Persist step writes JSON back
         except Exception as error:  # WHY: broad catch matches pre-refactor behavior for FR-017 parity
             logging.warning("Failed to save tracking: %s", error)  # WHY: non-fatal warning per pre-refactor
-        logging.debug("save_upgrade_tracking complete")  # WHY: FR-007 debug-after
+        logger.debug("save_upgrade_tracking complete")  # WHY: FR-007 debug-after
 
     def _load_existing_tracking(self, tracking_file: str) -> list[dict[str, Any]]:  # WHY: helper definition (see doc...
         """Prepare helper: read ActiveUpgrades.json if present, otherwise return empty list."""
         # WHY: FR-007 info-before with target file for traceability
-        logging.info("load_existing_tracking file=%s", tracking_file)  # WHY: info log (FR-007)
+        logger.info("load_existing_tracking file=%s", tracking_file)  # WHY: info log (FR-007)
         tracking_data: list[dict[str, Any]] = []  # WHY: default empty list when file does not yet exist
         if os.path.exists(tracking_file):  # WHY: only attempt read when the file is present
             with open(tracking_file, encoding="utf-8") as fh:  # WHY: utf-8 matches write side
                 tracking_data = json.load(fh)  # WHY: preserve pre-refactor JSON shape verbatim
-        logging.debug("load_existing_tracking rows=%s", len(tracking_data))  # WHY: FR-007 debug-after
+        logger.debug("load_existing_tracking rows=%s", len(tracking_data))  # WHY: FR-007 debug-after
         return tracking_data  # WHY: caller extends this list in place
 
     def _append_upgrade_tracking_entries(self, tracking_data: list[dict[str, Any]]) -> None:  # WHY: helper definitio...
         """Compute helper: append one tracking entry per current upgrade ID."""
         # WHY: FR-007 info-before with current upgrade ID count
-        logging.info("append_upgrade_tracking_entries new=%s", len(self.upgrade_ids))  # WHY: info log (FR-007)
+        logger.info("append_upgrade_tracking_entries new=%s", len(self.upgrade_ids))  # WHY: info log (FR-007)
         for upgrade_id in self.upgrade_ids:  # WHY: one row per successful Mist upgrade POST
             tracking_data.append(  # WHY: preserves pre-refactor row shape for FR-017 parity
                 {
@@ -2208,15 +2208,15 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
                     "status": "initiated",  # WHY: matches pre-refactor initial status token
                 }
             )
-        logging.debug("append_upgrade_tracking_entries done rows=%s", len(tracking_data))  # WHY: debug-after
+        logger.debug("append_upgrade_tracking_entries done rows=%s", len(tracking_data))  # WHY: debug-after
 
     def _write_tracking_file(self, tracking_file: str, tracking_data: list[dict[str, Any]]) -> None:  # WHY: helper d...
         """Persist helper: overwrite ActiveUpgrades.json with the extended tracking list."""
         # WHY: FR-007 info-before with file + row count
-        logging.info("write_tracking_file file=%s rows=%s", tracking_file, len(tracking_data))  # WHY: info log (FR-007)
+        logger.info("write_tracking_file file=%s rows=%s", tracking_file, len(tracking_data))  # WHY: info log (FR-007)
         with open(tracking_file, "w", encoding="utf-8") as fh:  # WHY: utf-8 explicit for cross-platform safety
             json.dump(tracking_data, fh, indent=2)  # WHY: indent=2 preserves human-readable form
-        logging.debug("write_tracking_file complete file=%s", tracking_file)  # WHY: FR-007 debug-after
+        logger.debug("write_tracking_file complete file=%s", tracking_file)  # WHY: FR-007 debug-after
 
     # =========================================================================
     # STEP 11: WRITE RESULTS
@@ -2245,7 +2245,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
     def _step11_write_results(self) -> None:  # WHY: helper definition (see docstring)
         """Write upgrade results to CSV (Prepare -> Persist -> Present)."""
         # WHY: FR-007 info-before with row count and dry-run flag for observability
-        logging.info(  # WHY: info log (FR-007)
+        logger.info(  # WHY: info log (FR-007)
             "Step 11 write_results starting rows=%s dry_run=%s",
             len(self.results),
             self.dry_run,
@@ -2256,7 +2256,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         wrote = self._write_results_csv(filename)  # WHY: PCPP Persist — CSV write isolated for testability
         if wrote:  # WHY: only display success banners when persistence actually succeeded
             self._display_results_summary(filename)  # WHY: PCPP Present — user-visible completion summary
-        logging.debug("Step 11 write_results done wrote=%s file=%s", wrote, filename)  # WHY: FR-007 debug-after
+        logger.debug("Step 11 write_results done wrote=%s file=%s", wrote, filename)  # WHY: FR-007 debug-after
 
     def _build_results_filename(self) -> str:  # WHY: helper definition (see docstring)
         """Compose the results CSV path from first site + timestamp + dry-run tag."""
@@ -2295,4 +2295,4 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             print(f"   Successful: {self.successful_upgrades}")  # WHY: user-facing feedback
             print(f"   Failed: {self.failed_upgrades}")  # WHY: user-facing feedback
         print(f"   Results: {filename}")  # WHY: operator needs the CSV path to review the run
-        logging.info("Upgrade results written to %s", filename)  # WHY: audit trail for support/debug
+        logger.info("Upgrade results written to %s", filename)  # WHY: audit trail for support/debug
