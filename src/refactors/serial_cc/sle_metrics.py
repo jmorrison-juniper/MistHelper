@@ -8,6 +8,8 @@ from typing import Any
 from src.config.source_dependency_resolver import SourceDependencyResolver  # WHY: resolve source dependencies.
 from src.dataclasses.progress_event import ProgressContext  # Issue #470: bundle progress identity for emit_progress_*.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:
     """Resolve MistHelper runtime dependencies without static src imports."""
@@ -67,7 +69,7 @@ class SLEMetricsService:
             specialized_metrics = ["summary"]  # Single specialized metric for the smoke run
             lookback_hours = deps.TimeUtils.get_dynamic_lookback_hours(default_hours=24, test_hours=1)  # Short window
             duration_value = f"{lookback_hours}h"  # Hour-scale duration for fast mode
-            logging.info(
+            logger.info(
                 "Fast mode enabled for option 66: using smoke path (categories=%s, specialized=%s, duration=%s)",
                 sle_categories,
                 specialized_metrics,
@@ -109,9 +111,9 @@ class SLEMetricsService:
         )  # Query org sites SLE for this category
         sites_sle_data = deps.mistapi.get_all(response=response, mist_session=deps.apisession) or []  # Page all
         if not sites_sle_data:  # No sites returned for this category
-            logging.debug("No sites SLE data available for metric: %s with SLE: %s", metric, sle_category)  # Empty
+            logger.debug("No sites SLE data available for metric: %s with SLE: %s", metric, sle_category)  # Empty
             return None  # Category produced no data
-        logging.debug(
+        logger.debug(
             "Retrieved sites SLE for %s/%s (%s sites)", metric, sle_category, len(sites_sle_data)
         )  # Trace success with site count
         return SLEMetricsService._build_sites_aggregated_record(metric, org_id, sle_category, sites_sle_data)
@@ -148,9 +150,9 @@ class SLEMetricsService:
             sle_data["org_id"] = org_id  # Tag the owning org
             sle_data["data_source"] = "org_sle_specialized"  # Tag the data source
             all_sle_data.append(sle_data)  # Accumulate the specialized record
-            logging.debug("Successfully retrieved specialized SLE data for metric: %s", metric)  # Trace success
+            logger.debug("Successfully retrieved specialized SLE data for metric: %s", metric)  # Trace success
             return 1, 0  # One retrieved, none failed
-        logging.debug("No data available for specialized SLE metric: %s", metric)  # Trace empty result
+        logger.debug("No data available for specialized SLE metric: %s", metric)  # Trace empty result
         return 0, 1  # None retrieved, one failed (no data)
 
     @classmethod
@@ -208,11 +210,11 @@ class SLEMetricsService:
                 "summary_calculated": True,
             }  # Build the org-aggregated record (summary always calculated when sites exist)
             all_sle_data.append(org_aggregated)  # Accumulate the aggregated record
-            logging.debug(
+            logger.debug(
                 "Successfully aggregated SLE data for %s sites in category: %s", len(sites_sle_data), sle_category
             )  # Trace success with site count
             return 1, 0  # One retrieved, none failed
-        logging.debug("No sites SLE data available for category: %s", sle_category)  # Trace empty category
+        logger.debug("No sites SLE data available for category: %s", sle_category)  # Trace empty category
         return 0, 1  # None retrieved, one failed (no data)
 
     @classmethod
@@ -251,20 +253,20 @@ class SLEMetricsService:
                 processed, "OrgSLEMetrics.csv", api_function_name="getOrgSle"
             )  # Write the export file
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info(
+            logger.info(
                 "! %s organization SLE data sources exported to OrgSLEMetrics.csv", metrics_retrieved
             )  # User summary
-            logging.info(
+            logger.info(
                 "Exported %s org SLE data points from %s sources to OrgSLEMetrics.csv",
                 len(processed),
                 metrics_retrieved,
             )  # Trace export volume
         else:  # No data collected from any source
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info(
+            logger.info(
                 "! 0 organization SLE metrics exported to OrgSLEMetrics.csv (no data available)"
             )  # User summary
-            logging.warning("No org SLE data available - all sources failed or returned empty")  # Warn on empty run
+            logger.warning("No org SLE data available - all sources failed or returned empty")  # Warn on empty run
             deps.DataExporter.write_with_format_selection(
                 [],
                 "OrgSLEMetrics.csv",
@@ -288,10 +290,10 @@ class SLEMetricsService:
             metrics_retrieved = spec_ok + cat_ok  # Total successful fetches
             metrics_failed = spec_fail + cat_fail  # Total failed fetches
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info(
+            logger.info(
                 "! SLE data retrieval completed: %s successful, %s failed", metrics_retrieved, metrics_failed
             )  # Summary
-            logging.info("Org SLE data: %s retrieved successfully, %s failed", metrics_retrieved, metrics_failed)
+            logger.info("Org SLE data: %s retrieved successfully, %s failed", metrics_retrieved, metrics_failed)
             cls._export_results(deps, all_sle_data, metrics_retrieved)  # Flatten + export (or write empty)
         except Exception as exception:  # Any unexpected top-level failure still writes an empty export
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
@@ -306,8 +308,8 @@ class SLEMetricsService:
         """Run the organization SLE metrics export workflow."""
         deps = _resolve_runtime_dependencies()  # Resolve MistHelper collaborators at call time
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("Export Organization SLE Metrics:")  # User-facing banner
-        logging.info("Starting export of organization SLE metrics...")  # Trace workflow start
+        logger.info("Export Organization SLE Metrics:")  # User-facing banner
+        logger.info("Starting export of organization SLE metrics...")  # Trace workflow start
         org_id = deps.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve target org (cached or prompted)
         config = cls._build_run_config(deps, fast)  # Resolve categories/metrics/duration (honors fast mode)
         total_items = len(config.specialized_metrics) + len(config.sle_categories)  # Total progress work units
@@ -315,10 +317,10 @@ class SLEMetricsService:
         progress.start()  # Emit the progress-start event
         all_sle_data: list[Any] = []  # Accumulates every SLE record across both loops
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info(
+        logger.info(
             "! Retrieving organization SLE data using %s service categories...", len(config.sle_categories)
         )  # Info
-        logging.info(
+        logger.info(
             "! Also attempting %s specialized SLE aggregation metrics...", len(config.specialized_metrics)
         )  # Info
         cls._run_retrieval(deps, org_id, config, all_sle_data, progress)  # Run both loops + export (or empty)

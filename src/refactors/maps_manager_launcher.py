@@ -21,12 +21,14 @@ from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:
     """Resolve source-owned runtime dependencies without static cross-module imports."""
-    logging.info("Resolving MapsManagerLauncher runtime dependencies from MistHelper")  # Log before import
+    logger.info("Resolving MapsManagerLauncher runtime dependencies from MistHelper")  # Log before import
     misthelper_module = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-    logging.debug("MapsManagerLauncher runtime dependencies resolved successfully")  # Log after resolution
+    logger.debug("MapsManagerLauncher runtime dependencies resolved successfully")  # Log after resolution
     return SimpleNamespace(
         misthelper_module=misthelper_module,  # Retained so apisession/ConfigUtils lookups honour monkeypatch
     )
@@ -46,12 +48,12 @@ class MapsManagerLauncher:
 
     def __init__(self) -> None:
         """Initialize launcher with module reference placeholder."""
-        logging.info("MapsManagerLauncher init: starting new launcher instance")  # Log construction start
+        logger.info("MapsManagerLauncher init: starting new launcher instance")  # Log construction start
         self.maps_manager: Any = None  # Populated after successful instantiation of external class
         self.org_id: str = ""  # Populated from cache/prompt via ConfigUtils
         self._external_class: Any = None  # Populated by _import_module on successful import
         self._deps: SimpleNamespace = _resolve_runtime_dependencies()  # Late-bound MistHelper handles
-        logging.debug("MapsManagerLauncher init complete")  # Log after construction
+        logger.debug("MapsManagerLauncher init complete")  # Log after construction
 
     def _apisession(self) -> Any:
         """Return the current MistHelper apisession so monkeypatched values are honoured."""
@@ -63,22 +65,22 @@ class MapsManagerLauncher:
 
     def launch(self) -> None:
         """Main entry point - orchestrates module import and execution."""
-        logging.info("Menu #142: Starting Maps Manager")  # User-visible launch marker preserved from original
+        logger.info("Menu #142: Starting Maps Manager")  # User-visible launch marker preserved from original
         if not self._import_module():  # Bail out early if the external Maps module is unavailable
             return  # Import failure handled inside _import_module
         if not self._get_org_id():  # Bail out early if org id could not be determined
             return  # Org-id failure handled inside _get_org_id
         self._run_interactive_menu()  # Enter the Dash-based interactive menu (blocks until user exits)
-        logging.info("Menu #142: Maps Manager session completed")  # Log clean session close
+        logger.info("Menu #142: Maps Manager session completed")  # Log clean session close
 
     def _import_module(self) -> bool:
         """Import MapsManager from external module with error handling."""
-        logging.info("MapsManagerLauncher: importing MapsManager from src.maps.maps_manager")  # Log pre-import
+        logger.info("MapsManagerLauncher: importing MapsManager from src.maps.maps_manager")  # Log pre-import
         try:  # Wrap the lazy import so ImportError is turned into a user-visible message
             from src.maps.maps_manager import MapsManager as ExternalMapsManager  # PLC0415: lazy on purpose
 
             self._external_class = ExternalMapsManager  # Cache the imported class for later instantiation
-            logging.debug("MapsManagerLauncher: MapsManager import succeeded")  # Log post-import success
+            logger.debug("MapsManagerLauncher: MapsManager import succeeded")  # Log post-import success
             return True  # Signal caller that the external class is ready
         except ImportError as error:  # Missing module or bad install
             self._handle_import_error(error)  # Log and print actionable guidance
@@ -86,18 +88,18 @@ class MapsManagerLauncher:
 
     def _handle_import_error(self, error: ImportError) -> None:
         """Log and display import failure message."""
-        logging.error("Failed to import MapsManager from src/maps/maps_manager.py: %s", error)  # Log the error
+        logger.error("Failed to import MapsManager from src/maps/maps_manager.py: %s", error)  # Log the error
         # User-visible failure banner
-        logging.info("\nERROR: Could not load Maps Manager module.")
+        logger.info("\nERROR: Could not load Maps Manager module.")
         # Suggest the fix
-        logging.info("Ensure src/maps/maps_manager.py exists")
+        logger.info("Ensure src/maps/maps_manager.py exists")
 
     def _get_org_id(self) -> bool:
         """Get organization ID from cache or prompt."""
-        logging.info("MapsManagerLauncher: resolving org id via ConfigUtils")  # Log before prompt/cache lookup
+        logger.info("MapsManagerLauncher: resolving org id via ConfigUtils")  # Log before prompt/cache lookup
         try:  # Wrap prompt so any exception is funneled through the fatal-error handler
             self.org_id = self._config_utils().get_cached_or_prompted_org_id()  # Late-bound ConfigUtils
-            logging.debug("MapsManagerLauncher: org id resolved (present=%s)", bool(self.org_id))  # Log resolution
+            logger.debug("MapsManagerLauncher: org id resolved (present=%s)", bool(self.org_id))  # Log resolution
             return bool(self.org_id)  # Empty string means the user aborted - abort launch
         except Exception as error:  # prompt errors must never crash the menu
             self._handle_fatal_error(error)  # Log traceback and surface user-visible error
@@ -105,18 +107,18 @@ class MapsManagerLauncher:
 
     def _run_interactive_menu(self) -> None:
         """Instantiate and run the Maps Manager interactive menu."""
-        logging.info("MapsManagerLauncher: instantiating external MapsManager and entering menu")  # Log entry
+        logger.info("MapsManagerLauncher: instantiating external MapsManager and entering menu")  # Log entry
         try:  # Wrap instantiation + run so any error is funneled through the fatal-error handler
             if self._external_class is None:  # Defensive - launch() calls _import_module first
                 raise RuntimeError("MapsManagerLauncher._external_class not initialized")  # Explicit error
             self.maps_manager = self._external_class(self._apisession(), self.org_id)  # Late-bound apisession
             self.maps_manager.run_interactive_menu()  # Enter blocking interactive loop (Dash web server)
-            logging.debug("MapsManagerLauncher: interactive menu returned cleanly")  # Log clean return
+            logger.debug("MapsManagerLauncher: interactive menu returned cleanly")  # Log clean return
         except Exception as error:  # runtime errors must never crash the numbered menu
             self._handle_fatal_error(error)  # Log traceback and surface user-visible error
 
     def _handle_fatal_error(self, error: Exception) -> None:
         """Log and display fatal error message."""
-        logging.error("Error running Maps Manager: %s", error, exc_info=True)  # Log with traceback for postmortem
+        logger.error("Error running Maps Manager: %s", error, exc_info=True)  # Log with traceback for postmortem
         # Surface error to user without stack details
-        logging.info("\nERROR: %s", error)
+        logger.info("\nERROR: %s", error)

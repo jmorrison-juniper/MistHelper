@@ -35,12 +35,14 @@ from src.refactors.mist_site_exclude_prefix import (  # 1015 T-15: canonical con
     MIST_SITE_EXCLUDE_PREFIX,
 )
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:
     """Resolve source-owned runtime dependencies without static cross-module imports."""
-    logging.info("Resolving WAN2MigrationLauncher runtime dependencies from MistHelper")  # Log before import
+    logger.info("Resolving WAN2MigrationLauncher runtime dependencies from MistHelper")  # Log before import
     misthelper_module = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-    logging.debug("WAN2MigrationLauncher runtime dependencies resolved successfully")  # Log after resolution
+    logger.debug("WAN2MigrationLauncher runtime dependencies resolved successfully")  # Log after resolution
     return SimpleNamespace(
         misthelper_module=misthelper_module,  # Retained so global lookups honour monkeypatch in tests
     )
@@ -64,9 +66,9 @@ class WAN2MigrationLauncher:
 
     def __init__(self) -> None:
         """Initialize launcher with late-bound MistHelper handles."""
-        logging.info("WAN2MigrationLauncher init: starting new launcher instance")  # Log construction start
+        logger.info("WAN2MigrationLauncher init: starting new launcher instance")  # Log construction start
         self._deps: SimpleNamespace = _resolve_runtime_dependencies()  # Late-bound MistHelper handles
-        logging.debug("WAN2MigrationLauncher init complete")  # Log after construction
+        logger.debug("WAN2MigrationLauncher init complete")  # Log after construction
 
     def _misthelper(self) -> Any:
         """Return the current MistHelper module so monkeypatched attributes are honoured."""
@@ -74,18 +76,18 @@ class WAN2MigrationLauncher:
 
     def launch(self) -> None:
         """Main entry point - wire dependencies and run WAN2 migration."""
-        logging.info("Menu #149: Starting WAN2 Migration")  # User-visible launch marker
+        logger.info("Menu #149: Starting WAN2 Migration")  # User-visible launch marker
         try:  # Wrap the full flow so any runtime error is funneled through the fatal-error handler
             self._wire_dependencies()  # Publish MistHelper globals into the canonical manager module
             manager = self._build_manager()  # Instantiate the canonical WAN2MigrationManager
             manager.set_site_variable()  # Run the WAN2 site-variable flow (blocks until user exits)
-            logging.debug("Menu #149: WAN2 migration session returned cleanly")  # Log clean session close
+            logger.debug("Menu #149: WAN2 migration session returned cleanly")  # Log clean session close
         except Exception as error:  # runtime errors must never crash the numbered menu
             self._handle_fatal_error(error)  # Log traceback and surface user-visible error
 
     def _wire_dependencies(self) -> None:
         """Configure the canonical wan2_migration_manager module with MistHelper runtime globals."""
-        logging.info("WAN2MigrationLauncher: wiring runtime dependencies into wan2_migration_manager")  # Log wire start
+        logger.info("WAN2MigrationLauncher: wiring runtime dependencies into wan2_migration_manager")  # Log wire start
         misthelper = self._misthelper()  # Cache module handle for the ten attribute lookups below
         from src.gateway import (
             wan2_migration_manager as wan2_module,  # lazy import keeps startup path light
@@ -105,21 +107,21 @@ class WAN2MigrationLauncher:
                 site_exclude_prefix=MIST_SITE_EXCLUDE_PREFIX,  # 1015 T-15: canonical import.
             )
         )
-        logging.debug("WAN2MigrationLauncher: runtime dependencies wired successfully")  # Log wire completion
+        logger.debug("WAN2MigrationLauncher: runtime dependencies wired successfully")  # Log wire completion
 
     def _build_manager(self) -> Any:
         """Instantiate the canonical WAN2MigrationManager with dependencies already wired."""
-        logging.info("WAN2MigrationLauncher: instantiating canonical WAN2MigrationManager")  # Log build start
+        logger.info("WAN2MigrationLauncher: instantiating canonical WAN2MigrationManager")  # Log build start
         from src.gateway.wan2_migration_manager import (
             WAN2MigrationManager,  # lazy import mirrors _wire_dependencies
         )
 
         manager = WAN2MigrationManager()  # Canonical class. Constructor pulls wired module globals
-        logging.debug("WAN2MigrationLauncher: WAN2MigrationManager instantiated successfully")  # Log build finish
+        logger.debug("WAN2MigrationLauncher: WAN2MigrationManager instantiated successfully")  # Log build finish
         return manager  # Return the ready-to-run manager to launch()
 
     def _handle_fatal_error(self, error: Exception) -> None:
         """Log and display fatal error message."""
-        logging.error("Error running WAN2 Migration: %s", error, exc_info=True)  # Log with traceback for postmortem
+        logger.error("Error running WAN2 Migration: %s", error, exc_info=True)  # Log with traceback for postmortem
         # WHY: operator-visible error surface (replaces prior print()).
-        logging.warning("ERROR: %s", error)
+        logger.warning("ERROR: %s", error)

@@ -32,6 +32,8 @@ from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 _MH = SourceDependencyResolver  # Use the source resolver for lazy host and source dependency access.
 
 
@@ -57,36 +59,36 @@ class AppContext:
 
     def clear_session(self) -> None:
         """Clear the active session state before a new login starts."""
-        logging.info("Clearing the active Mist session context")  # Log before changing session state.
+        logger.info("Clearing the active Mist session context")  # Log before changing session state.
         self.apisession = None  # Drop the old session so a new login cannot reuse it.
         self.org_id = None  # Drop the old organization because it belongs to the old session.
         self.msp_privileges = []  # Drop old MSP grants because they belong to the old session.
         self.selected_msp = None  # Drop the old MSP selection because it belongs to the old session.
         self.session_configured = False  # Allow the next session to receive one configuration pass.
-        logging.debug("The active Mist session context is clear")  # Log after the context reset.
+        logger.debug("The active Mist session context is clear")  # Log after the context reset.
 
     def restore_session(self, session: Any, organization_id: str | None, grants: list[dict[str, Any]]) -> None:
         """Restore a prior session after an interactive login failure."""
-        logging.info("Restoring the prior Mist session context")  # Log before putting the prior state back.
+        logger.info("Restoring the prior Mist session context")  # Log before putting the prior state back.
         self.apisession = session  # Restore the prior session so the menu can continue.
         self.org_id = organization_id  # Restore the prior organization with the prior session.
         self.msp_privileges = grants  # Restore the grants that match the prior session.
         self.session_configured = bool(session)  # Mark an existing session as already configured.
-        logging.debug("The prior Mist session context was restored: %s", bool(session))  # Log without secrets.
+        logger.debug("The prior Mist session context was restored: %s", bool(session))  # Log without secrets.
 
     def apply_msp_selection(self, state: dict[str, Any]) -> None:
         """Apply a selector state bag to this context."""
-        logging.info("Applying the selected MSP and organization to the context")  # Log before state transfer.
+        logger.info("Applying the selected MSP and organization to the context")  # Log before state transfer.
         self.apisession = state.get("apisession")  # Preserve a selector-driven session change.
         self.mistapi = state.get("mistapi")  # Preserve the SDK module that served the selector.
         self.msp_privileges = state.get("msp_privileges", self.msp_privileges)  # Preserve detected grants.
         self.selected_msp = state.get("selected_msp", self.selected_msp)  # Preserve the selected MSP.
         self.org_id = state.get("org_id", self.org_id)  # Preserve the selected organization.
-        logging.debug("The MSP selector applied an organization: %s", bool(self.org_id))  # Log the safe result.
+        logger.debug("The MSP selector applied an organization: %s", bool(self.org_id))  # Log the safe result.
 
     def as_selector_state(self) -> dict[str, Any]:
         """Return the mutable state bag used by the current selector seam."""
-        logging.info("Building the MSP selector state from the context")  # Log before creating the seam payload.
+        logger.info("Building the MSP selector state from the context")  # Log before creating the seam payload.
         state = {
             "apisession": self.apisession,  # Give the selector the current session reference.
             "mistapi": self.mistapi,  # Give the selector the SDK module reference.
@@ -94,7 +96,7 @@ class AppContext:
             "selected_msp": self.selected_msp,  # Give the selector the current MSP selection.
             "org_id": self.org_id,  # Give the selector the current organization.
         }
-        logging.debug("The MSP selector state has an organization: %s", bool(state["org_id"]))  # Log no secret data.
+        logger.debug("The MSP selector state has an organization: %s", bool(state["org_id"]))  # Log no secret data.
         return state  # The selector mutates this short-lived dictionary.
 
 
@@ -112,9 +114,9 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
         """Store the startup mode and parse command-line input when the CLI host asks for it."""
         self.parse_cli = parse_cli  # Store the mode so web bootstrap never reads process argv.
         self.argv = tuple(sys.argv[1:] if argv is None else argv)  # Snapshot argv so the parse input stays stable.
-        logging.info("Selecting the bootstrap application context")  # Log before choosing the context owner.
+        logger.info("Selecting the bootstrap application context")  # Log before choosing the context owner.
         self.context = context if context is not None else AppContext()  # Isolate default state for each invocation.
-        logging.debug("The bootstrap application context is selected: %s", id(self.context))  # Log safe identity.
+        logger.debug("The bootstrap application context is selected: %s", id(self.context))  # Log safe identity.
         self.parsed_args = (  # Keep one stored Namespace for every later startup decision.
             self._parse_arguments() if parse_cli else self._build_web_args()
         )
@@ -160,9 +162,9 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
 
     def _activate_context(self) -> None:
         """Make this bootstrap context the active legacy bridge context."""
-        logging.info("Activating the bootstrap application context")  # Log before changing the active state owner.
+        logger.info("Activating the bootstrap application context")  # Log before changing the active state owner.
         MainEntrypoint.activate_context(self.context)  # Route legacy module views to this invocation's context.
-        logging.debug("The bootstrap application context is active: %s", id(self.context))  # Log the safe identity.
+        logger.debug("The bootstrap application context is active: %s", id(self.context))  # Log the safe identity.
 
     def _run_common_startup(self) -> None:
         """Run the import-time side effects in a fixed explicit order."""
@@ -210,26 +212,26 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
 
             _MH.LogSanitizer = LogSanitizer  # Keep the historical module name available after bootstrap.
             logging.getLogger().addFilter(LogSanitizer())  # Redact tokens and passwords at the root logger.
-            logging.debug("The mistapi log sanitizer is installed")  # Confirm that redaction is active.
+            logger.debug("The mistapi log sanitizer is installed")  # Confirm that redaction is active.
         except ImportError:  # The installed mistapi version lacks the sanitizer.
             logging.debug("The mistapi log sanitizer is not available")  # Record the safe no-op.
 
     def _check_data_directory(self) -> None:
         """Validate the runtime data directory after logging exists."""
-        logging.info("Checking the MistHelper data directory")  # Log before the write-permission check.
+        logger.info("Checking the MistHelper data directory")  # Log before the write-permission check.
         _MH.DataDirectoryChecker("data").check()  # Keep the existing container safety check.
-        logging.debug("The MistHelper data directory check passed")  # Log the successful check.
+        logger.debug("The MistHelper data directory check passed")  # Log the successful check.
 
     def _load_environment_file(self) -> None:
         """Load `.env` for startup settings if python-dotenv is available."""
-        logging.info("Loading the optional environment file")  # Log before reading optional startup configuration.
+        logger.info("Loading the optional environment file")  # Log before reading optional startup configuration.
         try:  # python-dotenv can be absent before the dependency check repairs the environment.
             from dotenv import load_dotenv  # Import lazily so module import stays side-effect free.
 
             _MH.load_dotenv = load_dotenv  # Keep the historical module global bound to the real loader.
             _MH.DOTENV_AVAILABLE = True  # Publish that python-dotenv served the startup load.
             load_dotenv()  # Preserve the historical .env loading behavior during startup.
-            logging.debug("The optional environment file load step finished")  # Log the successful load attempt.
+            logger.debug("The optional environment file load step finished")  # Log the successful load attempt.
         except Exception as error:  # Fall back when dotenv is absent or cannot read the file.
             _MH.DOTENV_AVAILABLE = False  # Publish that the fallback loader served the startup load.
             _MH._fallback_load_dotenv()  # Preserve the manual .env parser path during explicit startup.
@@ -238,23 +240,23 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
     def _run_dependency_check_if_needed(self) -> None:
         """Run the early dependency check unless the parsed CLI requests a skip."""
         if getattr(self.parsed_args, "skip_deps", False):  # Honor the stored parse result for the skip path.
-            logging.info("Skipping the early dependency check because --skip-deps is set")  # Explain the skip.
-            logging.debug("The early dependency check did not run")  # Confirm no dependency action ran.
+            logger.info("Skipping the early dependency check because --skip-deps is set")  # Explain the skip.
+            logger.debug("The early dependency check did not run")  # Confirm no dependency action ran.
             return  # Stop before any file, network, or subprocess dependency work.
-        logging.info("Running the early dependency check")  # Log before package validation.
+        logger.info("Running the early dependency check")  # Log before package validation.
         _MH._early_dependency_check()  # Preserve the existing dependency orchestrator behavior.
-        logging.debug("The early dependency check finished")  # Log after package validation.
+        logger.debug("The early dependency check finished")  # Log after package validation.
 
     def _build_import_manager(self) -> None:
         """Create the import manager without a second logging configuration."""
-        logging.info("Creating the global import manager")  # Log before constructing dependency state.
+        logger.info("Creating the global import manager")  # Log before constructing dependency state.
         manager_class = getattr(_MH, "Global" + "ImportManager")  # Respect the import graph boundary test.
         _MH.import_manager = manager_class(setup_logging=False)  # Avoid a second logging.basicConfig call.
-        logging.debug("The global import manager is ready")  # Log that deferred imports can run.
+        logger.debug("The global import manager is ready")  # Log that deferred imports can run.
 
     def _publish_runtime_configuration(self) -> None:
         """Publish startup configuration values that import no longer reads."""
-        logging.info("Publishing runtime configuration from the startup environment")  # Log before env reads.
+        logger.info("Publishing runtime configuration from the startup environment")  # Log before env reads.
         config = _MH.import_manager.get_configuration()  # Read manager values after .env loading has finished.
         _MH.config = config  # Keep the historical module global available for readers.
         _MH.CSV_FRESHNESS_MINUTES = int(config["csv_freshness_minutes"])  # Preserve the cached CSV setting.
@@ -264,7 +266,7 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
         _MH.AUTO_UPGRADE_DEPENDENCIES = bool(config["auto_upgrade_dependencies"])  # Preserve the dependency setting.
         _MH.UPGRADE_CHECK_TIMEOUT = int(config["upgrade_check_timeout"])  # Preserve the subprocess timeout setting.
         self._publish_request_configuration()  # Publish request and fast-mode settings as a separate small block.
-        logging.debug("Runtime configuration published with CSV freshness %s", _MH.CSV_FRESHNESS_MINUTES)  # Summarize.
+        logger.debug("Runtime configuration published with CSV freshness %s", _MH.CSV_FRESHNESS_MINUTES)  # Summarize.
 
     def _publish_request_configuration(self) -> None:
         """Publish request and fast-mode configuration from the startup environment."""
@@ -285,7 +287,7 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
 
     def _publish_fast_mode_configuration(self) -> None:
         """Publish the fast-mode settings so the source packages read no MistHelper attribute."""
-        logging.info("Publishing the fast mode configuration for the source readers")  # Log before the publish.
+        logger.info("Publishing the fast mode configuration for the source readers")  # Log before the publish.
         fast_settings = cast(
             Any,
             importlib.import_module(
@@ -299,7 +301,7 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
         )  # Publish retry worker count for src readers.
         fast_settings.FAST_MODE_RETRY_MAX_RETRIES = _MH.FAST_MODE_RETRY_MAX_RETRIES  # Publish retry pass count.
         fast_settings.FAST_MODE_FALLBACK_THREADS = _MH.FAST_MODE_FALLBACK_THREADS  # Publish fallback workers.
-        logging.debug("Published the fast mode retry count %s", _MH.FAST_MODE_MAX_RETRIES)  # Log the published result.
+        logger.debug("Published the fast mode retry count %s", _MH.FAST_MODE_MAX_RETRIES)  # Log the published result.
 
     def _publish_page_limit_configuration(self) -> None:
         """Publish the configured Mist API page limit after startup begins."""
@@ -313,7 +315,7 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
 
     def _publish_site_exclude_prefix(self) -> None:
         """Publish the site exclude prefix to modules that cached the direct import."""
-        logging.info("Publishing the site exclude prefix")  # Log before the bootstrap writes the filter.
+        logger.info("Publishing the site exclude prefix")  # Log before the bootstrap writes the filter.
         prefix_module = cast(  # Type the dynamic module as mutable for the copied prefix value.
             Any, importlib.import_module("src.refactors.mist_site_exclude_prefix")
         )
@@ -322,7 +324,7 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
         for module_name in self._site_prefix_consumer_names():  # Update each extracted module that copied the value.
             module = cast(Any, importlib.import_module(module_name))  # Resolve the already-imported consumer module.
             module.MIST_SITE_EXCLUDE_PREFIX = prefix_value  # Keep copied filters consistent with the canonical owner.
-        logging.debug(  # Log how many modules received the filter value.
+        logger.debug(  # Log how many modules received the filter value.
             "Published the site exclude prefix to %s modules",
             len(self._site_prefix_consumer_names()) + 1,
         )
@@ -341,8 +343,8 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
         if MainEntrypoint._needs_startup_session(self.parsed_args):  # Use the stored args for the session decision.
             _MH._establish_mist_session(self.parsed_args)  # Authenticate before live API modes use Mist Cloud.
             return  # Avoid the offline-test log when a session was created.
-        logging.info("SYSTEMATIC_TEST: No API token found; deferring Mist session for offline safe tests")  # Explain.
-        logging.debug("SYSTEMATIC_TEST: Mist session was not built for offline --test")  # Confirm no session work.
+        logger.info("SYSTEMATIC_TEST: No API token found; deferring Mist session for offline safe tests")  # Explain.
+        logger.debug("SYSTEMATIC_TEST: Mist session was not built for offline --test")  # Confirm no session work.
 
 
 class MainEntrypoint:  # CLI main entry-point seam
@@ -358,14 +360,14 @@ class MainEntrypoint:  # CLI main entry-point seam
     @classmethod
     def activate_context(cls, context: AppContext) -> None:
         """Set the active context that legacy MistHelper module views use."""
-        logging.info("Setting the active application context")  # Log before replacing the active context.
+        logger.info("Setting the active application context")  # Log before replacing the active context.
         cls.context = context  # Point legacy context reads at the invocation that owns the startup work.
-        logging.debug("The active application context is set: %s", id(cls.context))  # Log a non-secret identifier.
+        logger.debug("The active application context is set: %s", id(cls.context))  # Log a non-secret identifier.
 
     @classmethod
     def _needs_startup_session(cls, args: Any) -> bool:
         """Return whether this invocation must build a Mist API session before dispatch."""
-        logging.info("Checking whether startup needs a Mist API session")  # Explain the branch decision before it runs.
+        logger.info("Checking whether startup needs a Mist API session")  # Explain the branch decision before it runs.
         is_systematic_test = bool(  # Detect both test modes because both can report credential skips.
             getattr(args, "test", False) or getattr(args, "testinteractive", False)
         )
@@ -374,18 +376,18 @@ class MainEntrypoint:  # CLI main entry-point seam
         )
         has_token = bool(_MH._systematic_test_has_api_token())  # Use the same token test as the test runner.
         needs_session = not (is_offline_test and not has_token)  # Keep every token-backed path unchanged.
-        logging.debug("Startup session requirement resolved to %s", needs_session)  # Record the decision result.
+        logger.debug("Startup session requirement resolved to %s", needs_session)  # Record the decision result.
         return needs_session  # Let run() keep the startup order explicit.
 
     @classmethod
     def run(cls) -> None:  # CLI entrypoint
         """Main entry point for MistHelper CLI application."""
-        logging.debug("ENTRY: main()")  # Log application entry point.
-        logging.info("Creating a fresh application context for the CLI invocation")  # Log before state allocation.
+        logger.debug("ENTRY: main()")  # Log application entry point.
+        logger.info("Creating a fresh application context for the CLI invocation")  # Log before state allocation.
         context = AppContext()  # Create fresh state so this invocation cannot inherit a prior session.
-        logging.debug("Created the CLI application context: %s", id(context))  # Log the non-secret context identity.
-        logging.info("Creating the CLI application bootstrap")  # Log before parsing and startup preparation.
+        logger.debug("Created the CLI application context: %s", id(context))  # Log the non-secret context identity.
+        logger.info("Creating the CLI application bootstrap")  # Log before parsing and startup preparation.
         bootstrap = ApplicationBootstrap(context=context)  # Parse the command line once with invocation state.
-        logging.debug("The CLI application bootstrap is ready")  # Log after startup preparation is ready.
+        logger.debug("The CLI application bootstrap is ready")  # Log after startup preparation is ready.
         args = bootstrap.bootstrap_for_cli()  # Run explicit startup and keep the stored Namespace for dispatch.
         _MH._dispatch_main_mode(args)  # Choose and run the right mode (test, TUI, web portal, CLI, interactive).
