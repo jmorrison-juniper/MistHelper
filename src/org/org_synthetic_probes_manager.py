@@ -38,6 +38,7 @@ from src.utils.zscaler_catalogue import (  # WHY: menu 206 consumes refreshed Zs
     ensure_fresh,
     promote_cache_document,
 )
+
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 
 _DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"  # WHY: catalogue files live under data.
