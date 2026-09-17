@@ -17,6 +17,7 @@ import uuid  # WHY: unique ids for new validation paths
 from dataclasses import dataclass  # WHY: group related parameters into frozen configs
 from typing import TYPE_CHECKING, Any  # WHY: opaque manager + type-permissive Dash callback args
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 if TYPE_CHECKING:  # WHY: keep dash imports lazy at runtime
     from collections.abc import Callable  # WHY: type hint for dispatch table values
 
@@ -93,7 +94,7 @@ class _ViewerDrawing:  # WHY: wrapper class hosting the drawing-tools callback c
             return "", no_update  # WHY: empty Span + no cache-bust change
         _s, _c, dp_clicks, _dw, dwl_clicks, _dz, mode, zone, fig, cfg, cache = args  # WHY: unpack 11 Dash args
         button_id = ctx.triggered[0]["prop_id"].split(".")[0]  # WHY: component id that fired
-        logging.info(  # WHY: audit which button fired and the click counts
+        logger.info(  # WHY: audit which button fired and the click counts
             "Drawing tools callback triggered: button_id=%s, del_path_clicks=%s, del_wall_clicks=%s",
             button_id,
             dp_clicks,
@@ -154,7 +155,7 @@ class _ViewerDrawing:  # WHY: wrapper class hosting the drawing-tools callback c
         from dash import html, no_update  # WHY: Dash components only needed on this branch
 
         msg = "Use the eraser tool in the toolbar to clear drawings from the map"  # WHY: user guidance
-        logging.info("Drawing tool: Clear local drawings requested")  # WHY: audit user action
+        logger.info("Drawing tool: Clear local drawings requested")  # WHY: audit user action
         return html.Span(msg, style={"color": "#ffc107"}), no_update  # WHY: yellow hint + no cache bump
 
     def _handle_save_shape(self, request: _ShapeSaveRequest, cfg: _DrawingConfig) -> tuple[Any, Any]:
@@ -213,7 +214,7 @@ class _ViewerDrawing:  # WHY: wrapper class hosting the drawing-tools callback c
     ) -> tuple[Any, Any]:  # WHY: split zone POST + rendering from guard clauses
         """Build the zone payload, POST to Mist, and render the response Span."""
         zone_data = self._build_zone_payload(last_shape, zone_name, cfg.map_id, cfg.ppm)  # WHY: shape -> API body
-        logging.info("Drawing tool: Creating zone '%s' at site %s", zone_name, cfg.site_id)  # WHY: audit start
+        logger.info("Drawing tool: Creating zone '%s' at site %s", zone_name, cfg.site_id)  # WHY: audit start
         response = self._state.mistapi_ref.api.v1.sites.zones.createSiteZone(  # WHY: Mist API write
             self._state.api_session_ref, cfg.site_id, zone_data
         )
@@ -259,7 +260,7 @@ class _ViewerDrawing:  # WHY: wrapper class hosting the drawing-tools callback c
     ) -> tuple[Any, Any]:  # WHY: split wall PATCH + rendering from guard clause
         """Build wall update payload, PATCH to Mist, and render the response Span."""
         x0, y0, x1, y1 = self._extract_wall_endpoints(last_shape)  # WHY: pixel coords, not meters
-        logging.info(  # WHY: audit segment coordinates
+        logger.info(  # WHY: audit segment coordinates
             "Drawing tool: Saving wall segment from (%.1f, %.1f) to (%.1f, %.1f) pixels", x0, y0, x1, y1
         )
         existing_wall_path = self._fetch_existing_wall_path(cfg)  # WHY: read-modify-write pattern
@@ -324,7 +325,7 @@ class _ViewerDrawing:  # WHY: wrapper class hosting the drawing-tools callback c
         if early is not None:  # WHY: guard-clause exit for path/other shapes
             return early
         x0, y0, x1, y1 = self._extract_path_endpoints_meters(last_shape, cfg.ppm)  # WHY: pixel -> meters
-        logging.info("Drawing tool: Fetching existing sitesurvey_path before append")  # WHY: audit start
+        logger.info("Drawing tool: Fetching existing sitesurvey_path before append")  # WHY: audit start
         existing_paths = self._fetch_existing_paths(cfg)  # WHY: read-modify-write pattern
         update_data = self._build_path_update(x0, y0, x1, y1, existing_paths)  # WHY: append + rebuild
         response = self._state.mistapi_ref.api.v1.sites.maps.updateSiteMap(  # WHY: Mist API write
@@ -401,13 +402,13 @@ class _ViewerDrawing:  # WHY: wrapper class hosting the drawing-tools callback c
         from dash import html, no_update  # WHY: Span + no_update needed for both branches
 
         if hasattr(response, "status_code") and response.status_code in spec.success_codes:  # WHY: success path
-            logging.info(spec.audit_success)  # WHY: audit success
+            logger.info(spec.audit_success)  # WHY: audit success
             return (
                 html.Span(spec.success_msg, style={"color": "#28a745", "fontWeight": "bold"}),
                 {"trigger": current_trigger + 1},
             )
         error_msg = getattr(response, "text", str(response))  # WHY: error body or repr
-        logging.error("%s - %s", spec.audit_failure, error_msg)  # WHY: audit failure
+        logger.error("%s - %s", spec.audit_failure, error_msg)  # WHY: audit failure
         return (
             html.Span(f"{spec.failure_prefix}: {error_msg[:50]}", style={"color": "#ff4444"}),
             no_update,
@@ -441,15 +442,15 @@ class _ViewerDrawing:  # WHY: wrapper class hosting the drawing-tools callback c
         """Execute a shared updateSiteMap-based collection reset (paths/wayfinding)."""
         from dash import html, no_update  # WHY: exception branch uses Span + no_update
 
-        logging.info(  # WHY: audit trigger
+        logger.info(  # WHY: audit trigger
             "Drawing tool: %s button clicked - site_id=%s, map_id=%s", spec.click_label, cfg.site_id, cfg.map_id
         )
         try:
-            logging.info("Drawing tool: Calling updateSiteMap with %s", spec.payload)  # WHY: audit body
+            logger.info("Drawing tool: Calling updateSiteMap with %s", spec.payload)  # WHY: audit body
             response = self._state.mistapi_ref.api.v1.sites.maps.updateSiteMap(  # WHY: Mist API write
                 self._state.api_session_ref, cfg.site_id, cfg.map_id, spec.payload
             )
-            logging.info(  # WHY: audit response
+            logger.info(  # WHY: audit response
                 "Drawing tool: updateSiteMap response status_code=%s", getattr(response, "status_code", "N/A")
             )
             return self._render_reset_result(response, spec, cfg)  # WHY: render Dash output from response
@@ -463,13 +464,13 @@ class _ViewerDrawing:  # WHY: wrapper class hosting the drawing-tools callback c
         from dash import html, no_update  # WHY: Span + no_update needed for both branches
 
         if hasattr(response, "status_code") and response.status_code == 200:  # WHY: success path
-            logging.info(spec.success_log, cfg.map_id)  # WHY: audit success
+            logger.info(spec.success_log, cfg.map_id)  # WHY: audit success
             return (
                 html.Span(spec.success_msg, style={"color": "#28a745"}),
                 {"trigger": cfg.current_trigger + 1},
             )
         error_msg = getattr(response, "text", str(response))  # WHY: error body or repr
-        logging.error("Drawing tool: %s - %s", spec.failure_prefix, error_msg)  # WHY: audit failure
+        logger.error("Drawing tool: %s - %s", spec.failure_prefix, error_msg)  # WHY: audit failure
         return html.Span(f"Failed: {error_msg[:50]}", style={"color": "#ff4444"}), no_update
 
     def _delete_walls(self, cfg: _DrawingConfig) -> tuple[Any, Any]:
@@ -482,7 +483,7 @@ class _ViewerDrawing:  # WHY: wrapper class hosting the drawing-tools callback c
                 self._state.api_session_ref, cfg.site_id, cfg.map_id, update_data
             )
             if hasattr(response, "status_code") and response.status_code == 200:  # WHY: success path
-                logging.info("Drawing tool: All walls deleted from map %s", cfg.map_id)  # WHY: audit success
+                logger.info("Drawing tool: All walls deleted from map %s", cfg.map_id)  # WHY: audit success
                 return (
                     html.Span("All walls deleted - click Refresh to reload map", style={"color": "#28a745"}),
                     {"trigger": cfg.current_trigger + 1},
@@ -497,14 +498,14 @@ class _ViewerDrawing:  # WHY: wrapper class hosting the drawing-tools callback c
         """Delete every zone on the current map (one DELETE per zone)."""
         from dash import html, no_update  # WHY: exception branch uses Span + no_update
 
-        logging.info(  # WHY: audit trigger
+        logger.info(  # WHY: audit trigger
             "Drawing tool: Delete all zones button clicked - site_id=%s, map_id=%s", cfg.site_id, cfg.map_id
         )
         try:
             map_zones = self._fetch_zones_for_map(cfg)  # WHY: list-and-filter to the current map
             if isinstance(map_zones, tuple):  # WHY: fetch signalled an early Dash response
                 return map_zones
-            logging.warning("Drawing tool: Deleting %s zones from map %s", len(map_zones), cfg.map_id)  # WHY: audit
+            logger.warning("Drawing tool: Deleting %s zones from map %s", len(map_zones), cfg.map_id)  # WHY: audit
             deleted_count, failed_count = self._delete_zones_one_by_one(cfg.site_id, map_zones)  # WHY: loop
             return self._render_delete_zones_result(deleted_count, failed_count, cfg.current_trigger)  # WHY: render
         except Exception as del_error:  # noqa: BLE001 - preserve broad-except behavior
@@ -564,10 +565,10 @@ class _ViewerDrawing:  # WHY: wrapper class hosting the drawing-tools callback c
                 )
                 if hasattr(del_response, "status_code") and del_response.status_code in [200, 204]:  # WHY: success
                     deleted_count += 1  # WHY: bump success counter
-                    logging.info("Drawing tool: Deleted zone '%s'", zone_name)  # WHY: audit success
+                    logger.info("Drawing tool: Deleted zone '%s'", zone_name)  # WHY: audit success
                 else:
                     failed_count += 1  # WHY: bump failure counter
-                    logging.error("Drawing tool: Failed to delete zone '%s'", zone_name)  # WHY: audit failure
+                    logger.error("Drawing tool: Failed to delete zone '%s'", zone_name)  # WHY: audit failure
             except Exception as zone_err:  # noqa: BLE001 - preserve broad-except behavior
                 failed_count += 1  # WHY: bump failure counter on exception
                 logging.error("Drawing tool: Error deleting zone '%s': %s", zone_name, zone_err)  # WHY: audit

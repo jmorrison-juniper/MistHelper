@@ -15,6 +15,7 @@ import logging  # WHY: audit trail for URL-switch diagnostics
 from dataclasses import dataclass  # WHY: frozen value objects collapse parameter counts
 from typing import TYPE_CHECKING, Any  # WHY: opaque manager + type-permissive Dash callback args
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 if TYPE_CHECKING:  # WHY: keep dash imports lazy at runtime
     from dash import Dash  # WHY: annotation reference for register(app)
 
@@ -316,7 +317,7 @@ class _ViewerUrlSwitch:  # WHY: wrapper class hosting the URL-switch callback cl
         if validated is None:  # WHY: config-match, missing site_id, or unknown map -> abort
             return None  # WHY: propagate guard failure
         site_id_local = validated  # WHY: rename for clarity
-        logging.info("URL map switch: Loading map %s (current: %s)", url_map_id, normalized_config.get("map_id"))
+        logger.info("URL map switch: Loading map %s (current: %s)", url_map_id, normalized_config.get("map_id"))
         return url_map_id, site_id_local, normalized_config  # WHY: pass validated triple to caller
 
     def _extract_url_map_id(self, url_search: str | None) -> str | None:  # WHY: extracted for CC reduction
@@ -334,11 +335,11 @@ class _ViewerUrlSwitch:  # WHY: wrapper class hosting the URL-switch callback cl
     ) -> str | None:
         """Return the resolved ``site_id`` if the switch is legal, else ``None``."""
         if url_map_id == normalized_config.get("map_id"):  # WHY: already on this map -> abort
-            logging.debug("URL map switch: URL map_id %s matches config, no switch needed", url_map_id)
+            logger.debug("URL map switch: URL map_id %s matches config, no switch needed", url_map_id)
             return None  # WHY: skip redundant switch
         site_id_local: str | None = normalized_config.get("site_id")  # WHY: site_id required for API calls
         if not site_id_local:  # WHY: guard missing site context
-            logging.warning("URL map switch: site_id not available in config")
+            logger.warning("URL map switch: site_id not available in config")
             return None  # WHY: skip when unresolvable
         if not self._validate_url_map_id(url_map_id, site_id_local, available_maps):  # WHY: allow-list check
             return None  # WHY: reject unknown map
@@ -353,7 +354,7 @@ class _ViewerUrlSwitch:  # WHY: wrapper class hosting the URL-switch callback cl
         """Validate ``url_map_id`` against a fresh API fetch (falls back to store)."""
         valid_map_ids = self._fetch_valid_map_ids(site_id_local, available_maps)  # WHY: fresh ID list
         if url_map_id not in valid_map_ids:  # WHY: reject unknown map
-            logging.warning("URL map switch: Invalid map_id %s", url_map_id)
+            logger.warning("URL map switch: Invalid map_id %s", url_map_id)
             return False  # WHY: fail closed
         return True  # WHY: allow switch to proceed
 
@@ -378,7 +379,7 @@ class _ViewerUrlSwitch:  # WHY: wrapper class hosting the URL-switch callback cl
             logging.warning("URL map switch: Error fetching fresh maps: %s", fetch_err)
             return None  # WHY: signal caller to use fallback store
         if fresh_response.status_code != _HTTP_OK:  # WHY: HTTP gate mirrors original
-            logging.warning("URL map switch: Could not fetch fresh maps, using store")
+            logger.warning("URL map switch: Could not fetch fresh maps, using store")
             return None  # WHY: signal fallback path
         fresh_maps = fresh_response.data if fresh_response.data else []  # WHY: guard None data
         return [m.get("id") for m in fresh_maps]  # WHY: extract id column
@@ -406,7 +407,7 @@ class _ViewerUrlSwitch:  # WHY: wrapper class hosting the URL-switch callback cl
         )
         new_fig = self._build_url_switch_figure(ctx)  # WHY: compose figure from layers
         new_config = self._merge_url_switch_config(config, url_map_id, new_map_data)  # WHY: updated config
-        logging.info("URL map switch: Successfully switched to map '%s'", new_map_data.get("name", _DEFAULT_MAP_NAME))
+        logger.info("URL map switch: Successfully switched to map '%s'", new_map_data.get("name", _DEFAULT_MAP_NAME))
         return new_fig, new_config  # WHY: return figure + updated config store
 
     def _fetch_target_map(self, url_map_id: str, site_id_local: str) -> dict[str, Any] | None:
@@ -415,10 +416,10 @@ class _ViewerUrlSwitch:  # WHY: wrapper class hosting the URL-switch callback cl
             self._state.api_session_ref, site_id_local, url_map_id
         )
         if map_response.status_code != _HTTP_OK:  # WHY: mirror original HTTP gate
-            logging.error("URL map switch: Failed to fetch map - HTTP %s", map_response.status_code)
+            logger.error("URL map switch: Failed to fetch map - HTTP %s", map_response.status_code)
             return None  # WHY: signal caller to skip
         new_map_data: dict[str, Any] = map_response.data  # WHY: explicit annotation coerces Any for strict typing
-        logging.info(  # WHY: mirror original info log with map metadata
+        logger.info(  # WHY: mirror original info log with map metadata
             "URL map switch: Loaded map '%s' (%sx%s, ppm=%s)",
             new_map_data.get("name", _DEFAULT_MAP_NAME),
             new_map_data.get("width", _DEFAULT_MAP_WIDTH),
@@ -779,7 +780,7 @@ class _ViewerUrlSwitch:  # WHY: wrapper class hosting the URL-switch callback cl
         """Fetch RF coverage and add a heatmap trace. Silently logs on failure."""
         site_id_for_coverage = config.get("site_id") or site_id_local  # WHY: mirror original site_id source
         if not site_id_for_coverage:  # WHY: mirror original guard
-            logging.warning("URL map switch: Cannot fetch RF coverage - site_id is None")
+            logger.warning("URL map switch: Cannot fetch RF coverage - site_id is None")
             return
         try:
             coverage_data = self._fetch_url_switch_coverage(url_map_id, site_id_for_coverage)  # WHY: coverage fetch
@@ -793,14 +794,14 @@ class _ViewerUrlSwitch:  # WHY: wrapper class hosting the URL-switch callback cl
         """Hit the RF coverage endpoint. Return parsed data or None on failure/error envelope."""
         coverage_url = f"/api/v1/sites/{site_id_for_coverage}/location/coverage"  # WHY: mirror original path
         coverage_params = dict(_COVERAGE_QUERY_PARAMS, map_id=url_map_id)  # WHY: add map_id to shared params
-        logging.info("URL map switch: Fetching RF coverage for map %s", url_map_id)
+        logger.info("URL map switch: Fetching RF coverage for map %s", url_map_id)
         coverage_response = self._state.api_session_ref.mist_get(coverage_url, query=coverage_params)  # WHY: HTTP call
         if coverage_response.status_code != _HTTP_OK:  # WHY: mirror original HTTP gate
-            logging.warning("URL map switch: RF coverage API returned HTTP %s", coverage_response.status_code)
+            logger.warning("URL map switch: RF coverage API returned HTTP %s", coverage_response.status_code)
             return None
         coverage_data: dict[str, Any] = coverage_response.data  # WHY: explicit annotation coerces Any for strict typing
         if isinstance(coverage_data, dict) and "exception" in coverage_data:  # WHY: error envelope check
-            logging.warning(
+            logger.warning(
                 "URL map switch: RF Coverage backend error - %s",
                 str(coverage_data.get("exception", ""))[:_ERROR_MSG_TRUNCATE],
             )
@@ -817,14 +818,14 @@ class _ViewerUrlSwitch:  # WHY: wrapper class hosting the URL-switch callback cl
         """Build + add the heatmap trace from coverage payload (or log gracefully)."""
         results = coverage_data.get("results", [])  # WHY: list of grid rows
         result_def = coverage_data.get("result_def", [])  # WHY: column-name schema
-        logging.info("URL map switch: RF coverage API returned %d grid points", len(results))
+        logger.info("URL map switch: RF coverage API returned %d grid points", len(results))
         if not results or not result_def:  # WHY: mirror original empty-payload log
-            logging.info("URL map switch: No RF coverage data available for this map (empty results)")
+            logger.info("URL map switch: No RF coverage data available for this map (empty results)")
             return
         indices = self._resolve_url_switch_indices(result_def)  # WHY: (x, y, max_rssi) indices
         grid_data = self._build_url_switch_grid(results, indices, ppm_local)  # WHY: filtered grid
         if not grid_data:  # WHY: mirror original empty-grid log
-            logging.warning("URL map switch: RF coverage - no valid grid data after processing %d points", len(results))
+            logger.warning("URL map switch: RF coverage - no valid grid data after processing %d points", len(results))
             return
         self._add_url_switch_heatmap_trace(fig, grid_data, url_map_id)  # WHY: append heatmap
 
@@ -866,7 +867,7 @@ class _ViewerUrlSwitch:  # WHY: wrapper class hosting the URL-switch callback cl
             max_rssi_val=max(all_rssi),
         )
         _ViewerUrlSwitch._append_heatmap(fig, spec)  # WHY: append trace
-        logging.info(
+        logger.info(
             "URL map switch: Added RF coverage heatmap with %d cells, RSSI range %s to %s dBm (map %s)",
             len(grid_data),
             spec.min_rssi,

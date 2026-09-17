@@ -19,6 +19,7 @@ from collections.abc import Callable  # WHY: opaque manager + type-permissive Da
 from dataclasses import dataclass  # WHY: frozen value objects collapse parameter counts
 from typing import TYPE_CHECKING, Any
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 if TYPE_CHECKING:  # WHY: keep dash imports lazy at runtime
     from dash import Dash  # WHY: annotation reference for register(app)
 
@@ -126,7 +127,7 @@ def _build_refresh_payload(
 ) -> _RefreshPayload:  # WHY: helper for toggle_auto_refresh
     """Return the immutable _RefreshPayload for the given toggle state."""
     if is_enabled:  # WHY: user just armed auto-refresh
-        logging.info("Live data refresh: Auto-refresh ENABLED by user")  # WHY: preserve audit log
+        logger.info("Live data refresh: Auto-refresh ENABLED by user")  # WHY: preserve audit log
         data = {  # WHY: seed both refresh timestamps to "now" so countdowns start full
             "client_last_refresh": current_time,
             "coverage_last_refresh": current_time,
@@ -134,7 +135,7 @@ def _build_refresh_payload(
         return _RefreshPayload(
             disabled=False, refresh_data=data, countdown_text=_INITIAL_COUNTDOWN_TEXT
         )  # WHY: armed payload
-    logging.info("Live data refresh: Auto-refresh DISABLED by user")  # WHY: preserve audit log
+    logger.info("Live data refresh: Auto-refresh DISABLED by user")  # WHY: preserve audit log
     stopped: dict[str, float] = {  # WHY: float dict matches _RefreshPayload's invariant type
         "client_last_refresh": 0.0,
         "coverage_last_refresh": 0.0,
@@ -364,7 +365,7 @@ class _ViewerUI:  # WHY: wrapper class hosting the UI-toggle callback cluster
         if not refresh_name:  # WHY: cancel/confirm paths hide without touching the label
             return style, no_update
         current_map_name = config.get("map_name", "Unknown") if config else "Unknown"  # WHY: display name
-        logging.warning(  # WHY: audit log captures who/what is being deleted
+        logger.warning(  # WHY: audit log captures who/what is being deleted
             "Delete panel opened for map '%s' (ID: %s)",
             current_map_name,
             config.get("map_id") if config else "unknown",
@@ -389,7 +390,7 @@ class _ViewerUI:  # WHY: wrapper class hosting the UI-toggle callback cluster
         if style is None:  # WHY: unknown trigger => keep current style
             return current_style
         if button_id == "clone-btn":  # WHY: only log when the user is opening the panel
-            logging.info("Clone panel opened for map %s", self._state.map_id)  # WHY: audit trail
+            logger.info("Clone panel opened for map %s", self._state.map_id)  # WHY: audit trail
         return style  # WHY: return the resolved style dict
 
     def handle_utilities(
@@ -484,7 +485,7 @@ class _ViewerUI:  # WHY: wrapper class hosting the UI-toggle callback cluster
         origin = _OriginPoint(x=point["x"], y=point["y"])  # WHY: bundle for downstream helpers
         _persist_origin(current_fig, origin)  # WHY: write into layout.meta
         self._update_origin_traces(current_fig, origin.x, origin.y)  # WHY: refresh crosshair traces
-        logging.info("Map origin updated to (%.1f, %.1f)", origin.x, origin.y)  # WHY: preserve audit log
+        logger.info("Map origin updated to (%.1f, %.1f)", origin.x, origin.y)  # WHY: preserve audit log
         status = [  # WHY: confirmation widgets shown to the user
             html.P(f"[OK] Origin set: ({origin.x:.1f}, {origin.y:.1f})", style=_ORIGIN_OK_STYLE),
             html.P("Click button again to exit mode", style=_ORIGIN_HINT_STYLE),
@@ -529,7 +530,7 @@ class _ViewerUI:  # WHY: wrapper class hosting the UI-toggle callback cluster
     def _invoke_map_delete(self, resolved: _DeleteMapConfig, current_trigger: int) -> tuple[Any, Any]:
         """Backup, call Mist deleteSiteMap, and render the response."""
         self._backup_before_delete(resolved.site_id, resolved.map_id, resolved.map_name)  # WHY: safety net
-        logging.warning(  # WHY: destructive-operation audit log
+        logger.warning(  # WHY: destructive-operation audit log
             "DESTRUCTIVE: Deleting map '%s' (ID: %s) from site %s",
             resolved.map_name,
             resolved.map_id,
@@ -542,7 +543,7 @@ class _ViewerUI:  # WHY: wrapper class hosting the UI-toggle callback cluster
 
     def _backup_before_delete(self, site_id: str | None, map_id: str | None, map_name: str) -> Any:
         """Run pre-delete backup and log the outcome. Return backup path or None."""
-        logging.info("Creating safety backup before deleting map '%s'", map_name)  # WHY: audit trail
+        logger.info("Creating safety backup before deleting map '%s'", map_name)  # WHY: audit trail
         backup_path = self._state.maps_manager_ref._backup_map_geometry(  # WHY: MapsManager helper
             api_session=self._state.api_session_ref,
             site_id=site_id,
@@ -551,9 +552,9 @@ class _ViewerUI:  # WHY: wrapper class hosting the UI-toggle callback cluster
             backup_reason="pre_delete",
         )
         if backup_path:  # WHY: backup succeeded
-            logging.info("Pre-delete backup saved: %s", backup_path)  # WHY: path for operator recovery
+            logger.info("Pre-delete backup saved: %s", backup_path)  # WHY: path for operator recovery
         else:
-            logging.warning("Pre-delete backup failed - proceeding with deletion anyway")  # WHY: non-fatal
+            logger.warning("Pre-delete backup failed - proceeding with deletion anyway")  # WHY: non-fatal
         return backup_path  # WHY: return for caller (currently informational only)
 
     @staticmethod
@@ -567,12 +568,12 @@ class _ViewerUI:  # WHY: wrapper class hosting the UI-toggle callback cluster
         from dash import html, no_update  # WHY: local import keeps module import-light
 
         if delete_response.status_code in _SUCCESS_STATUSES:  # WHY: HTTP success codes
-            logging.info("Map '%s' (ID: %s) deleted successfully", map_name, map_id)  # WHY: audit success
+            logger.info("Map '%s' (ID: %s) deleted successfully", map_name, map_id)  # WHY: audit success
             new_cache_bust = {"trigger": current_trigger + 1}  # WHY: increment invalidates caches
             msg = f"Map '{map_name}' deleted! Close this browser tab."  # WHY: user prompt
             style = {"color": "#00ff88", "fontWeight": "bold"}  # WHY: green success color
             return html.Span(msg, style=style), new_cache_bust
-        logging.error("Map deletion failed: HTTP %s", delete_response.status_code)  # WHY: audit failure
+        logger.error("Map deletion failed: HTTP %s", delete_response.status_code)  # WHY: audit failure
         err = html.Span(f"Delete failed: HTTP {delete_response.status_code}", style={"color": "#ff4444"})
         return err, no_update
 
@@ -616,7 +617,7 @@ class _ViewerUI:  # WHY: wrapper class hosting the UI-toggle callback cluster
 
         if not current_zone.get("zone_id"):  # WHY: no zone selected
             return self._render_zone_not_selected(current_zone)  # WHY: prompt user to select one
-        logging.info(  # WHY: audit trail per edit request
+        logger.info(  # WHY: audit trail per edit request
             "Zone management: Edit zone %s requested for map %s",
             current_zone.get("zone_name"),
             self._state.map_id,
@@ -634,7 +635,7 @@ class _ViewerUI:  # WHY: wrapper class hosting the UI-toggle callback cluster
             return self._render_zone_not_selected(current_zone)  # WHY: prompt user to select one
         zone_id = current_zone.get("zone_id")  # WHY: zone UUID for the API delete
         zone_name = current_zone.get("zone_name", "Unknown")  # WHY: display name for logs
-        logging.warning(  # WHY: destructive-action audit log
+        logger.warning(  # WHY: destructive-action audit log
             "Zone management: Deleting zone %s (ID: %s) from site %s",
             zone_name,
             zone_id,
@@ -653,7 +654,7 @@ class _ViewerUI:  # WHY: wrapper class hosting the UI-toggle callback cluster
         del_error: Exception, current_zone: dict[str, Any], html: Any
     ) -> tuple[Any, dict[str, Any]]:
         """Render the error panel and log the stack trace for a zone-delete failure."""
-        logging.exception("Error deleting zone: %s", del_error)  # WHY: capture stack trace
+        logger.exception("Error deleting zone: %s", del_error)  # WHY: capture stack trace
         err_style = {"fontSize": "11px", "color": "#ff4444", "fontWeight": "bold"}  # WHY: red bold
         err = html.P(f"X Error: {str(del_error)[:40]}", style=err_style)  # WHY: truncated message
         return html.Div([err]), current_zone  # WHY: keep selection so user can retry
@@ -666,12 +667,12 @@ class _ViewerUI:  # WHY: wrapper class hosting the UI-toggle callback cluster
         from dash import html  # WHY: html widgets for status output
 
         if delete_response.status_code in _SUCCESS_STATUSES:  # WHY: HTTP success codes
-            logging.info("Zone %s deleted successfully", zone_name)  # WHY: audit success
+            logger.info("Zone %s deleted successfully", zone_name)  # WHY: audit success
             ok_style = {"fontSize": "11px", "color": "#00ff88", "fontWeight": "bold"}  # WHY: green bold
             ok = html.P(f"[OK] Zone deleted: {zone_name}", style=ok_style)  # WHY: success message
             hint = html.P("Refresh the page to update view", style=_ZONE_HINT_STYLE)  # WHY: guidance
             return html.Div([ok, hint]), {"zone_id": None, "zone_name": None}  # WHY: clear selection
-        logging.error("Zone deletion failed: HTTP %s", delete_response.status_code)  # WHY: audit failure
+        logger.error("Zone deletion failed: HTTP %s", delete_response.status_code)  # WHY: audit failure
         err_style = {"fontSize": "11px", "color": "#ff4444", "fontWeight": "bold"}  # WHY: red bold
         err = html.P(f"X Delete failed: HTTP {delete_response.status_code}", style=err_style)
         hint = html.P("Check permissions and try again", style=_ZONE_HINT_STYLE)  # WHY: guidance
