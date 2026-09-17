@@ -40,6 +40,8 @@ from src.data.data_processing_utils import (
 from src.refactors import fast_mode_constants  # WHY: read fast-mode settings from a source module.
 from src.time.time_utils import TimeUtils  # WHY: 1014 P6 direct import (FR-005).
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class OrgDeviceStatsExporter:  # Org device-stats exporters.
     """Organization Device Statistics Exporter.
@@ -57,14 +59,14 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
             mtime = os.path.getmtime(output_file)  # Read file modified time
             age_minutes = (time.time() - mtime) / 60.0  # Compute file age in minutes
             if age_minutes < runtime_settings.CSV_FRESHNESS_MINUTES:  # Cache still fresh
-                logging.info(  # Log cache reuse
+                logger.info(  # Log cache reuse
                     " Fast mode cache hit: %s is fresh (%.1fm < %sm); skipping fetch.",
                     output_file,
                     age_minutes,
                     runtime_settings.CSV_FRESHNESS_MINUTES,
                 )
                 # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-                logging.info("* Fast mode: Using cached %s (age %.1fm)", output_file, age_minutes)  # User notice
+                logger.info("* Fast mode: Using cached %s (age %.1fm)", output_file, age_minutes)  # User notice
                 return True  # Caller skips re-fetch
         except Exception as e:  # Freshness-check error
             logging.debug("Fast mode freshness check failed for %s: %s", output_file, e)  # Log
@@ -77,7 +79,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         output_file = "OrgDeviceStats.csv"  # Output filename
         if OrgDeviceStatsExporter._device_stats_cache_hit(output_file, fast):  # Fast cache check
             return  # Skip re-fetch when cache fresh
-        logging.info("Starting export of organization device statistics...")  # Log start
+        logger.info("Starting export of organization device statistics...")  # Log start
         emitter = mh.PROGRESS_EMITTER  # Capture progress emitter
         if emitter:
             emitter.emit_progress_start("13", "device_stats", 1)  # Emit progress start
@@ -107,14 +109,14 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
             mtime = os.path.getmtime(output_file)  # Read last-modified time
             age_minutes = (time.time() - mtime) / 60.0  # Convert to minutes
             if age_minutes < runtime_settings.CSV_FRESHNESS_MINUTES:  # Fresh cache means skip API
-                logging.info(
+                logger.info(
                     " Fast mode cache hit: %s is fresh (%.1fm < %sm); skipping fetch.",
                     output_file,
                     age_minutes,
                     runtime_settings.CSV_FRESHNESS_MINUTES,
                 )  # Record why no API calls were made
                 # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-                logging.info("* Fast mode: Using cached %s (age %.1fm)", output_file, age_minutes)  # User notice
+                logger.info("* Fast mode: Using cached %s (age %.1fm)", output_file, age_minutes)  # User notice
                 return True  # Caller can return early
         except Exception as exception:  # Cache metadata problems degrade gracefully
             logging.debug("Fast mode freshness check failed for %s: %s", output_file, exception)  # Log fallback
@@ -129,8 +131,8 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         sites = [
             (site.get("id"), site.get("name", "Unknown")) for site in site_data if site.get("id")
         ]  # Normalize into worker tuples
-        logging.info("* Fetched %s sites from API", len(sites))  # API fallback count for cache-miss visibility
-        logging.debug(
+        logger.info("* Fetched %s sites from API", len(sites))  # API fallback count for cache-miss visibility
+        logger.debug(
             "First site sample: %s, type: %s",
             sites[0] if sites else "No sites",
             type(sites[0]) if sites else "N/A",
@@ -146,7 +148,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         else:  # Empty: still emit placeholders so log lines stay parseable
             sample = "No sites"
             sample_type = "N/A"
-        logging.debug("First site sample: %s, type: %s", sample, sample_type)  # Sample for malformed-row debug
+        logger.debug("First site sample: %s, type: %s", sample, sample_type)  # Sample for malformed-row debug
 
     @staticmethod
     def _load_sites_from_cached_csv() -> list[tuple[str | None, str]] | None:
@@ -163,7 +165,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         except Exception as exception:  # Cache read failure -> signal API fallback
             logging.warning("* Could not use cached sites, fetching from API: %s", exception)  # Explain fallback
             return None
-        logging.info("* Loaded %s sites from cached data", len(sites))  # Confirm cached count
+        logger.info("* Loaded %s sites from cached data", len(sites))  # Confirm cached count
         OrgDeviceStatsExporter._log_first_site_sample(sites)  # Debug sample for malformed rows
         return sites
 
@@ -183,7 +185,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
             response = mh.mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(mh.apisession, site_id, limit=1000)
             port_stats = mh.mistapi.get_all(response=response, mist_session=mh.apisession)  # Paginate
         if not isinstance(port_stats, list):  # Defensive type check
-            logging.error(
+            logger.error(
                 "! API returned non-list type for site %s: type=%s, value=%s",
                 site_name,
                 type(port_stats),
@@ -203,8 +205,8 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
             backoff_delay = (  # Build the same exponential curve with source-owned retry settings.
                 fast_mode_constants.FAST_MODE_RETRY_DELAY * (mh.FastModeBackoffMultiplier.VALUE**attempt)
             )
-            logging.warning("! Attempt %s failed for site %s: %s", attempt + 1, site_name, exception)  # Log fail
-            logging.info(
+            logger.warning("! Attempt %s failed for site %s: %s", attempt + 1, site_name, exception)  # Log fail
+            logger.info(
                 "! Retrying in %.1fs (attempt %s/%s)",
                 backoff_delay,
                 attempt + 2,
@@ -212,7 +214,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
             )  # When next retry will occur
             time.sleep(backoff_delay)  # Pause before retry
             return True  # Continue loop
-        logging.error("! Final attempt failed for site %s: %s", site_name, exception)  # Terminal failure
+        logger.error("! Final attempt failed for site %s: %s", site_name, exception)  # Terminal failure
         return False  # No more retries
 
     @staticmethod
@@ -225,14 +227,14 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
                     site_id, site_name, connection_semaphore
                 )
                 if attempt > 0:  # Retries that later succeed get info-level log
-                    logging.info(
+                    logger.info(
                         "! Retry %s successful for site %s (%s records)",
                         attempt,
                         site_name,
                         len(port_stats),
                     )  # Successful retry outcome
                 else:
-                    logging.debug("! Collected %s port stats from site %s", len(port_stats), site_name)  # First-try
+                    logger.debug("! Collected %s port stats from site %s", len(port_stats), site_name)  # First-try
                 return port_stats  # Annotated rows
             except Exception as exception:  # Retry on transient failure
                 if not OrgDeviceStatsExporter._handle_site_port_stats_retry(attempt, site_name, exception):
@@ -247,10 +249,10 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
             result = future.result()  # Resolve retried site rows
             if result:  # Site recovered
                 retry_results.extend(result)  # Merge recovered rows
-                logging.info(" FAST RETRY OK: %s", site_info[1])  # Record recovered site
+                logger.info(" FAST RETRY OK: %s", site_info[1])  # Record recovered site
             else:  # Site still failed logically
                 still_failed.append(site_info)  # Keep for summary
-                logging.warning(" FAST RETRY EMPTY: %s", site_info[1])  # Record unresolved
+                logger.warning(" FAST RETRY EMPTY: %s", site_info[1])  # Record unresolved
         except Exception as exception:  # Future itself raised unexpectedly
             still_failed.append(site_info)  # Preserve in failure list
             logging.error(" FAST RETRY EXC: %s -> %s", site_info[1], exception)  # Log
@@ -284,7 +286,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
             max(1, FAST_MODE_MAX_CONCURRENT_CONNECTIONS - 2),
         )  # Smaller retry pool
         if retry_threads <= 0:  # Defensive guard
-            logging.warning(" FAST MODE: No available threads for retry; skipping retries")  # Explain skip
+            logger.warning(" FAST MODE: No available threads for retry; skipping retries")  # Explain skip
             return [], failed_sites  # Preserve failed sites
         OrgDeviceStatsExporter._dispatch_site_port_retries(
             failed_sites, connection_semaphore, retry_threads, retry_results, still_failed
@@ -298,13 +300,13 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         for index, result_list in enumerate(
             successful_results
         ):  # Inspect each worker result for defensive type handling.
-            logging.debug(
+            logger.debug(
                 "Processing result %s: type=%s, is_list=%s", index, type(result_list), isinstance(result_list, list)
             )  # Log shape of each pooled result before flattening.
             if isinstance(result_list, list):  # Only list payloads are valid worker outputs.
                 all_port_stats.extend(result_list)  # Merge valid site rows into the combined export list.
             else:  # Unexpected worker payloads should be visible but not fatal.
-                logging.warning(
+                logger.warning(
                     "Unexpected result type at index %s: %s, value: %s", index, type(result_list), result_list
                 )  # Surface unexpected worker output for debugging.
         return all_port_stats  # Return flattened org-wide port-stat list for sorting and export.
@@ -314,9 +316,9 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         """Sort, sanitize, and persist collected port-stat rows."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not all_port_stats:  # Empty dataset should skip file creation and clearly tell the operator why.
-            logging.warning(" No port statistics collected. CSV not created.")  # Log absence of exportable data.
+            logger.warning(" No port statistics collected. CSV not created.")  # Log absence of exportable data.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.warning("! No port statistics collected. CSV not created.")  # Tell operator no file was written.
+            logger.warning("! No port statistics collected. CSV not created.")  # Tell operator no file was written.
             return  # Nothing to sort or write.
         try:  # Sorting is best-effort because some rows may lack MACs.
             all_port_stats = sorted(
@@ -330,10 +332,10 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         sanitized = DataProcessingUtils.escape_multiline(flattened)  # type: ignore[no-untyped-call]  # Escape embedded newlines so CSV stays row-stable.
         mh.DataExporter.write_with_format_selection(sanitized, output_file, api_function_name="searchSiteSwOrGwPorts")  # type: ignore[no-untyped-call]  # Persist to configured backend with endpoint metadata.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info(
+        logger.info(
             "! %s port stat records exported to %s", len(all_port_stats), output_file
         )  # Confirm output row count to the operator.
-        logging.info(
+        logger.info(
             "! Port statistics saved to %s (%s records)", output_file, len(all_port_stats)
         )  # Record successful export count in logs.
 
@@ -342,10 +344,10 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         """Defensive guard: fail loudly if start_time is not numeric (catches monkeypatch corruption)."""
         if isinstance(start_time, (int, float)):  # Normal numeric value -- nothing to do.
             return
-        logging.error(
+        logger.error(
             "! CRITICAL: start_time is not a number! type=%s, value=%s", type(start_time), start_time
         )  # Surface impossible state.
-        logging.error("! time module type: %s, time.time type: %s", type(time), type(time.time))  # Debugging context.
+        logger.error("! time module type: %s, time.time type: %s", type(time), type(time.time))  # Debugging context.
         raise TypeError(f"start_time must be a number, got {type(start_time)}")  # Elapsed calc would be invalid.
 
     @staticmethod
@@ -354,7 +356,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         ok_count = len(sites) - len(failed_sites)  # Successful site count.
         fail_count = len(failed_sites)  # Failed site count.
         record_count = len(all_port_stats)  # Total port-stat rows collected.
-        logging.info(
+        logger.info(
             " FAST MODE SUMMARY (port stats): sites_ok=%s sites_fail=%s records=%s elapsed=%.2fs",
             ok_count,
             fail_count,
@@ -362,7 +364,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
             duration,
         )  # Structured run summary.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info(
+        logger.info(
             "* Fast mode: Collected %s port stat records from %s/%s sites in %.1fs",
             record_count,
             ok_count,
@@ -374,7 +376,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
     def _run_fast_device_port_stats(output_file: str) -> None:  # Run fast device port stats.
         """Execute fast-mode site-parallel port stats collection and output."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info(
+        logger.info(
             "* Fast mode: Parallelizing port stats retrieval across sites"
         )  # Announce fast-mode collection strategy.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org ID once before site discovery.
@@ -409,7 +411,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         output_file = "OrgDevicePortStats.csv"  # Stable filename for cache + downstream consumers.
         if OrgDeviceStatsExporter._port_stats_cache_hit(output_file, fast):  # Honor fast cache before API.
             return  # Fresh cache satisfied the request.
-        logging.info("Starting export of organization device port statistics...")  # Log export start.
+        logger.info("Starting export of organization device port statistics...")  # Log export start.
         hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve test-aware lookback window.
         TimeUtils.log_dynamic_lookback("org device port statistics export", hours)  # Record chosen window.
         if fast:  # Fast mode = site-parallel collection.
@@ -432,14 +434,14 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
             mtime = os.path.getmtime(output_file)  # Disk mtime for freshness math.
             age_minutes = (time.time() - mtime) / 60.0  # Age in minutes.
             if age_minutes < runtime_settings.CSV_FRESHNESS_MINUTES:  # Fresh enough to reuse.
-                logging.info(
+                logger.info(
                     " Fast mode cache hit: %s is fresh (%.1fm < %sm); skipping fetch.",
                     output_file,
                     age_minutes,
                     runtime_settings.CSV_FRESHNESS_MINUTES,
                 )  # Structured log.
                 # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-                logging.info("* Fast mode: Using cached %s (age %.1fm)", output_file, age_minutes)  # Operator-facing.
+                logger.info("* Fast mode: Using cached %s (age %.1fm)", output_file, age_minutes)  # Operator-facing.
                 return True
         except Exception as e:  # Freshness check failed -- fall through to fetch.
             logging.debug("Fast mode freshness check failed for %s: %s", output_file, e)  # Debug-only.
@@ -455,7 +457,7 @@ class OrgDeviceStatsExporter:  # Org device-stats exporters.
         output_file = "OrgVPNPeerStats.csv"  # Output filename.
         if OrgDeviceStatsExporter._vpn_peer_stats_cache_hit(output_file, fast):  # Honor fast cache.
             return  # Cache satisfied.
-        logging.info("Starting export of organization VPN peer path statistics...")  # Log start.
+        logger.info("Starting export of organization VPN peer path statistics...")  # Log start.
         emitter = mh.PROGRESS_EMITTER  # Progress emitter (may be None).
         if emitter:  # Emitter present.
             emitter.emit_progress_start("15", "vpn_peer_stats", 1)  # Signal progress start.
