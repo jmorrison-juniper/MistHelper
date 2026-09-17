@@ -24,6 +24,8 @@ from src.data.data_processing_utils import (
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 from src.utils.console import echo  # WHY: 1031 stdout + INFO log helper replaces legacy WARNING-channel echoes.
 
+logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
+
 
 class WiredClientManufacturerReportGenerator:
     """Generates wired client reports filtered by interactive manufacturer selection."""
@@ -35,7 +37,7 @@ class WiredClientManufacturerReportGenerator:
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         records = WiredClientManufacturerReportGenerator._fetch_all_clients(org_id)  # Fetch all clients.
         if not records:  # No records.
-            logging.warning("No wired clients retrieved from API")  # Warn none retrieved.
+            logger.warning("No wired clients retrieved from API")  # Warn none retrieved.
             echo("\n  No wired clients found in the organization.")
             return  # Abort.
         WiredClientManufacturerReportGenerator._write_outputs(records, "")  # Write the full export.
@@ -51,7 +53,7 @@ class WiredClientManufacturerReportGenerator:
         """Fetch all wired clients across the organization without filters."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
-            logging.info("Fetching all organization wired clients for manufacturer report...")  # Log the fetch.
+            logger.info("Fetching all organization wired clients for manufacturer report...")  # Log the fetch.
             echo("\n  Retrieving all wired clients from organization...")
             response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(  # Call the API.
                 mh.apisession,
@@ -59,7 +61,7 @@ class WiredClientManufacturerReportGenerator:
                 limit=1000,
             )
             records = mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page all. Default empty.
-            logging.info("Retrieved %s wired client records", len(records))  # Log the count.
+            logger.info("Retrieved %s wired client records", len(records))  # Log the count.
             echo("  Retrieved %s wired client records", len(records))
             return records  # Return records.
         except Exception as exception:  # Fetch failed.
@@ -81,14 +83,14 @@ class WiredClientManufacturerReportGenerator:
     def _print_manufacturer_table(summary: list[tuple[str, int]]) -> None:
         """Render the manufacturer/count picker table to stdout."""
         total_clients = sum(count for _, count in summary)  # Aggregate total client count for header line.
-        logging.warning(
+        logger.warning(
             "\n  Found %s clients from %s manufacturers\n", total_clients, len(summary)
         )  # Legacy totals echo.
-        logging.warning("  %-5s %-45s %8s", "#", "Manufacturer", "Count")  # Column header.
-        logging.warning("  %s %s %s", "-" * 5, "-" * 45, "-" * 8)  # Separator row.
+        logger.warning("  %-5s %-45s %8s", "#", "Manufacturer", "Count")  # Column header.
+        logger.warning("  %s %s %s", "-" * 5, "-" * 45, "-" * 8)  # Separator row.
         for index, (manufacturer, count) in enumerate(summary, 1):  # List each manufacturer.
             display_name = manufacturer[:44]  # Truncate long names so column stays aligned.
-            logging.warning("  %-5s %-45s %8s", index, display_name, count)  # Legacy row echo routed via logger.
+            logger.warning("  %-5s %-45s %8s", index, display_name, count)  # Legacy row echo routed via logger.
 
     @staticmethod
     def _parse_manufacturer_choice(choice: str, summary: list[tuple[str, int]]) -> str | None:
@@ -102,7 +104,7 @@ class WiredClientManufacturerReportGenerator:
             return None  # Abort.
         if 1 <= selection_index <= len(summary):  # In valid range.
             selected_manufacturer = summary[selection_index - 1][0]  # Pick the manufacturer name.
-            logging.info("User selected manufacturer: %s", selected_manufacturer)  # Log the choice.
+            logger.info("User selected manufacturer: %s", selected_manufacturer)  # Log the choice.
             return selected_manufacturer  # Return chosen manufacturer.
         echo("  Selection out of range.")
         return None  # Abort.
@@ -161,4 +163,4 @@ class WiredClientManufacturerReportGenerator:
             api_function_name="wiredClientManufacturerReport",
         )
         echo("  Exported to: data/%s.csv", filename)
-        logging.info("Manufacturer report exported: %s records for %s -> %s", len(sanitized), label, filename)
+        logger.info("Manufacturer report exported: %s records for %s -> %s", len(sanitized), label, filename)

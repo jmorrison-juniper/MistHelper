@@ -13,6 +13,8 @@ import importlib  # WHY: dynamically load Unix-only pwd without static Windows-s
 import logging  # WHY: structured trace for container detection lifecycle events.
 import os  # WHY: environment variable + filesystem probes for container detection.
 
+logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
+
 
 class EnvironmentUtils:
     """Centralized environment detection utilities.
@@ -38,7 +40,7 @@ class EnvironmentUtils:
         for explicit_var in EnvironmentUtils.OVERRIDE_ENV_VARS:  # Inspect each override switch.
             value = os.environ.get(explicit_var, "").strip().lower()  # Normalize the configured value.
             if value in EnvironmentUtils.TRUE_VALUES:  # Operator forced container mode on.
-                logging.debug("Container detection: override via %s=%s", explicit_var, value)  # Trace the override.
+                logger.debug("Container detection: override via %s=%s", explicit_var, value)  # Trace the override.
                 return True  # Short-circuit: treat as a container.
         return None  # No override set. Defer to other detectors.
 
@@ -46,7 +48,7 @@ class EnvironmentUtils:
     def _check_dockerenv_file() -> bool:  # Detect Docker's /.dockerenv sentinel file.
         """Check for /.dockerenv sentinel file."""
         if os.path.exists("/.dockerenv"):  # Docker drops this file inside containers.
-            logging.debug("Container detection: /.dockerenv present")  # Trace the positive signal.
+            logger.debug("Container detection: /.dockerenv present")  # Trace the positive signal.
             return True  # Sentinel present means containerized.
         return False  # Absent sentinel is inconclusive here.
 
@@ -55,7 +57,7 @@ class EnvironmentUtils:
         """Check for well-known container environment variables."""
         for env_var in EnvironmentUtils.CONTAINER_ENV_VARS:  # Probe each known runtime variable.
             if os.environ.get(env_var):  # Any non-empty value signals a container.
-                logging.debug("Container detection: environment variable %s present", env_var)  # Trace which one.
+                logger.debug("Container detection: environment variable %s present", env_var)  # Trace which one.
                 return True  # Treat as containerized.
         return False  # None present. Inconclusive here.
 
@@ -67,7 +69,7 @@ class EnvironmentUtils:
                 cgroup_content = cgroup_file.read().lower()
                 for indicator in EnvironmentUtils.CGROUP_INDICATORS:  # Scan cgroup text for each runtime marker.
                     if indicator in cgroup_content:  # Marker substring present in cgroup.
-                        logging.debug("Container detection: cgroup indicator '%s' found", indicator)  # marker found.
+                        logger.debug("Container detection: cgroup indicator '%s' found", indicator)  # marker found.
                         return True  # Containerized: a marker was found.
         except (FileNotFoundError, PermissionError):  # No cgroup file or no access (host/non-Linux).
             pass  # Treat missing cgroup as not-containerized.
@@ -77,7 +79,7 @@ class EnvironmentUtils:
     def _check_runtime_user() -> bool:  # Detect the container's dedicated service user.
         """Check if running as the 'misthelper' user."""
         if os.name != "posix":  # WHY: the image-specific account check only applies to Unix containers.
-            logging.debug(
+            logger.debug(
                 "Container detection: runtime-user check unavailable on this platform"
             )  # WHY: trace the safe fallback.
             return False  # WHY: Windows cannot provide the Unix account identity used by this heuristic.
@@ -93,7 +95,7 @@ class EnvironmentUtils:
         getuid = getattr(os, "getuid", None)  # WHY: protect Windows type stubs from a Unix-only attribute access.
         getpwuid = getattr(pwd_module, "getpwuid", None)  # WHY: avoid static access to a Windows-incomplete pwd stub.
         if not callable(getuid) or not callable(getpwuid):  # WHY: nonstandard runtimes can omit either required lookup.
-            logging.debug(
+            logger.debug(
                 "Container detection: UID account lookup unavailable"
             )  # WHY: trace why the optional detector was skipped.
             return False  # WHY: without both lookups, account resolution is not possible.
@@ -107,7 +109,7 @@ class EnvironmentUtils:
             )  # WHY: record the benign lookup miss.
             return False  # WHY: no matching account means this detector cannot confirm the image user.
         if current_user_name == "misthelper":  # Image runs as the misthelper user.
-            logging.debug("Container detection: running as user 'misthelper'")  # Trace the user-based signal.
+            logger.debug("Container detection: running as user 'misthelper'")  # Trace the user-based signal.
             return True  # Running as misthelper means containerized.
         return False  # User signal absent: inconclusive.
 
@@ -118,7 +120,7 @@ class EnvironmentUtils:
             this_file_dir = os.path.abspath(os.path.dirname(__file__))  # Absolute directory of this module.
             if this_file_dir.startswith("/app") and os.path.exists("/app/MistHelper.py"):  # In the image path.
                 if os.path.exists("/usr/sbin/sshd"):  # Image ships the SSH daemon.
-                    logging.debug("Container detection: /app path with MistHelper.py and sshd present")  # image signal.
+                    logger.debug("Container detection: /app path with MistHelper.py and sshd present")  # image signal.
                     return True  # Layout matches the container image.
         except Exception:  # nosec B110
             pass  # Ignore path-probing errors on host.
@@ -150,5 +152,5 @@ class EnvironmentUtils:
                 return True  # A detector confirmed container
         except Exception as container_detection_error:  # Never let detection crash startup
             logging.debug("Container detection failed with exception: %s", container_detection_error)  # log failure
-        logging.debug("Container detection: no container indicators found - running in direct mode")  # direct mode
+        logger.debug("Container detection: no container indicators found - running in direct mode")  # direct mode
         return False  # Default: not containerized

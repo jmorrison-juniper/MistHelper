@@ -22,6 +22,8 @@ import logging  # Used by every action-log line below per the project's NON-NEGO
 
 from src.utils.tqdm_wrapper import tqdm as _tqdm  # Canonical tqdm handle (T-14) for the availability probe.
 
+logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
+
 
 class InputUtils:
     """Centralized input handling utilities (canonical home in ``src/utils/``).
@@ -42,9 +44,9 @@ class InputUtils:
         effect. The return value is informational.
         """
         if hasattr(_tqdm, "__module__") and _tqdm.__module__.startswith("tqdm"):  # Real tqdm package is active.
-            logging.debug("ensure_tqdm_available: real tqdm package is active")  # Action-log the healthy path.
+            logger.debug("ensure_tqdm_available: real tqdm package is active")  # Action-log the healthy path.
             return True  # Progress bars are functional.
-        logging.warning(  # Warn once that progress bars are degraded to the no-op fallback.
+        logger.warning(  # Warn once that progress bars are degraded to the no-op fallback.
             "ensure_tqdm_available: tqdm fallback in use - progress bars will be disabled"
         )
         return False  # Caller may proceed without progress bars.
@@ -57,7 +59,7 @@ class InputUtils:
         context: str = "unknown",
     ) -> str:
         """Return trimmed user input, degrading to ``default_value`` on EOF/empty."""
-        logging.debug("safe_input entered (context=%s)", context)  # Action-log entry per project rule.
+        logger.debug("safe_input entered (context=%s)", context)  # Action-log entry per project rule.
         try:
             # A bare input() is correct here, because this method IS the safe wrapper.
             user_input = input(prompt).strip()
@@ -67,7 +69,7 @@ class InputUtils:
             return InputUtils._handle_interrupt(context)  # Acknowledge cancellation to caller.
         if not user_input:  # Blank entry -- dispatch to the empty-value resolver.
             return InputUtils._handle_empty(default_value, allow_empty, context)  # Return default/empty per policy.
-        logging.debug("safe_input returned non-empty value (context=%s)", context)  # Action-log normal path.
+        logger.debug("safe_input returned non-empty value (context=%s)", context)  # Action-log normal path.
         return user_input  # Normal path: return the trimmed user response.
 
     @staticmethod
@@ -85,15 +87,15 @@ class InputUtils:
             empty answer, an EOF, and a Ctrl+C all reach this method as an empty
             string, so all three return None.
         """
-        logging.info("Prompting the operator for the MSP identifier")  # Action log before the prompt.
+        logger.info("Prompting the operator for the MSP identifier")  # Action log before the prompt.
         value = InputUtils.safe_input(
             "Enter MSP ID: ",
             allow_empty=False,  # An empty identifier cannot build the API path.
             context="input_utils.msp_id",
         ).strip()
-        logging.debug("Completed the MSP prompt with value_present=%s", bool(value))  # Result trace.
+        logger.debug("Completed the MSP prompt with value_present=%s", bool(value))  # Result trace.
         if not value:  # A blank answer, an EOF, or an interrupt must abort before any API call.
-            logging.info("! No MSP ID supplied. Returning to the menu.")  # User-facing cancel line.
+            logger.info("! No MSP ID supplied. Returning to the menu.")  # User-facing cancel line.
             return None
         return value
 
@@ -102,14 +104,14 @@ class InputUtils:
         """Resolve the empty-input case per default/allow_empty policy."""
         # WHY: extracted to keep safe_input CC<=5 and length<=25 lines.
         if default_value:  # Blank entry but a default is configured.
-            logging.debug(  # Action-log the default substitution for traceability.
+            logger.debug(  # Action-log the default substitution for traceability.
                 "Empty input for %s, using default: '%s'", context, default_value
             )
             return default_value  # Return the caller-supplied default verbatim.
         if allow_empty:  # Blank entry is acceptable here.
-            logging.debug("Empty input for %s allowed by caller", context)  # Action-log no-op return.
+            logger.debug("Empty input for %s allowed by caller", context)  # Action-log no-op return.
             return ""  # Return the empty string as-is.
-        logging.warning(  # Warn so operator sees that an empty answer is not OK here.
+        logger.warning(  # Warn so operator sees that an empty answer is not OK here.
             "Empty input not allowed for %s, returning empty string", context
         )
         return ""  # Signal invalid/empty response to the caller.
@@ -125,7 +127,7 @@ class InputUtils:
             on a raw ``print()``, which #886 Phase 2 (T20) is retiring in
             favour of logger calls across ``src/``.
         """
-        logging.warning(  # Uses warning level so it surfaces on the operator terminal.
+        logger.warning(  # Uses warning level so it surfaces on the operator terminal.
             "[EOF] Input stream closed during %s. Using default value: '%s'",
             context,
             default_value,
@@ -142,7 +144,7 @@ class InputUtils:
             needing INFO enabled -- part of the #886 Phase 2 print-to-logger
             migration for ``src/utils/``.
         """
-        logging.warning(
+        logger.warning(
             "[INTERRUPT] User interrupted %s. Canceling...", context
         )  # Surface at WARNING so operator sees it.
         return ""  # Return empty so the caller can detect the abort.

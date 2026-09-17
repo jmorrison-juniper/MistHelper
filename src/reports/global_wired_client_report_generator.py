@@ -32,6 +32,8 @@ from src.data.data_processing_utils import (
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 from src.utils.console import echo  # WHY: 1031 stdout + INFO log helper replaces legacy WARNING-channel echoes.
 
+logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
+
 
 class GlobalWiredClientReportGenerator:
     """Generates organization-wide wired client reports with operator-based MAC/manufacturer filtering."""
@@ -46,7 +48,7 @@ class GlobalWiredClientReportGenerator:
             return  # Abort.
         records, remote_used = GlobalWiredClientReportGenerator._fetch_clients(org_id, criteria)
         if not records:  # No records.
-            logging.warning("No wired clients retrieved from API")  # Warn none retrieved.
+            logger.warning("No wired clients retrieved from API")  # Warn none retrieved.
             echo("\n  No wired clients found in the organization.")
             return  # Abort.
         matched, metadata = GlobalWiredClientReportGenerator._apply_filters(records, criteria, remote_used)
@@ -92,7 +94,7 @@ class GlobalWiredClientReportGenerator:
             index = int(choice) - 1  # Convert to 0-based catalog index
             if 0 <= index < len(mh.FilterOperatorEngine.OPERATOR_CATALOG):  # Bounds-check parsed index
                 selected = mh.FilterOperatorEngine.OPERATOR_CATALOG[index]  # Resolve catalog entry
-                logging.info("Selected %s operator: %s", field_name, selected)  # Trace operator choice
+                logger.info("Selected %s operator: %s", field_name, selected)  # Trace operator choice
                 return selected  # type: ignore[no-any-return]
         except ValueError:  # Non-numeric input -> treat as invalid
             pass
@@ -123,7 +125,7 @@ class GlobalWiredClientReportGenerator:
         if criteria:  # Have criteria.
             remote_used = GlobalWiredClientReportGenerator._build_remote_params(criteria, remote_params)
         try:
-            logging.info("Fetching organization wired clients...")  # Log the fetch.
+            logger.info("Fetching organization wired clients...")  # Log the fetch.
             echo("\n  Retrieving wired clients from organization...")
             response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(  # Call the API.
                 mh.apisession,
@@ -131,7 +133,7 @@ class GlobalWiredClientReportGenerator:
                 **remote_params,
             )
             records = mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page all. Default empty.
-            logging.info("Retrieved %s wired client records", len(records))  # Log the count.
+            logger.info("Retrieved %s wired client records", len(records))  # Log the count.
             echo("  Retrieved %s wired client records", len(records))
             return records, remote_used  # Return records and flag.
         except Exception as exception:  # Fetch failed.
@@ -152,14 +154,14 @@ class GlobalWiredClientReportGenerator:
             if mac_value:  # A non-empty value was provided
                 params["mac"] = mac_value  # Add the MAC prefilter to the API query params
                 remote_used = True  # Note that a remote prefilter was applied
-                logging.info("Remote prefilter: mac=%s", mac_value)  # Log the applied prefilter
+                logger.info("Remote prefilter: mac=%s", mac_value)  # Log the applied prefilter
         mfg_operator = criteria.get("mfg_operator", "")  # The chosen manufacturer comparison operator
         if mfg_operator in mh.FilterOperatorEngine.REMOTE_PREFILTER_OPERATORS:  # Only push API-supported operators
             mfg_value = criteria.get("mfg_value", "")  # The manufacturer value to prefilter on
             if mfg_value:  # A non-empty value was provided
                 params["manufacture"] = mfg_value  # Add the manufacturer prefilter to the API query params
                 remote_used = True  # Note that a remote prefilter was applied
-                logging.info("Remote prefilter: manufacture=%s", mfg_value)  # Log the applied prefilter
+                logger.info("Remote prefilter: manufacture=%s", mfg_value)  # Log the applied prefilter
         return remote_used  # Report whether any server-side prefilter was used
 
     @staticmethod
@@ -255,7 +257,7 @@ class GlobalWiredClientReportGenerator:
         retrieved_count = metadata["records_retrieved"]  # Retrieved count.
         echo("\n  Matched %s of %s wired client records", matched_count, retrieved_count)
         if matched_count == 0:  # Nothing matched.
-            logging.info("Zero records matched filters -- producing empty outputs")  # Log empty result.
+            logger.info("Zero records matched filters -- producing empty outputs")  # Log empty result.
             echo("  No records matched the specified filters.")
         GlobalWiredClientReportGenerator._write_standard_export(matched)  # Write the CSV export.
         GlobalWiredClientReportGenerator._write_local_report(matched, metadata)  # Write the JSON summary.
@@ -274,7 +276,7 @@ class GlobalWiredClientReportGenerator:
             "GlobalWiredClientReport",
             api_function_name="globalWiredClientReport",
         )
-        logging.info("Standard export: %s records to GlobalWiredClientReport", len(sanitized))  # Log the export.
+        logger.info("Standard export: %s records to GlobalWiredClientReport", len(sanitized))  # Log the export.
 
     @staticmethod
     def _write_local_report(matched: list[dict[str, Any]], metadata: dict[str, Any]) -> None:
@@ -287,7 +289,7 @@ class GlobalWiredClientReportGenerator:
         try:
             with open(report_path, "w", encoding="utf-8") as report_file:  # Open the report file.
                 json.dump(report_payload, report_file, indent=2, default=str)  # Dump JSON.
-            logging.info("Local report artifact written to %s", report_path)  # Log the write.
+            logger.info("Local report artifact written to %s", report_path)  # Log the write.
             echo("  Report summary written to %s", report_path)
         except OSError as error:  # Write failed.
             logging.error("Failed to write local report artifact: %s", error)  # Log the error.

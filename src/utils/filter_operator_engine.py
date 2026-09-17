@@ -15,6 +15,8 @@ import logging  # WHY: validate_operator_value emits a warning for empty value-r
 import re  # WHY: normalize_mac strips MAC delimiters via re.sub.
 from typing import Any  # WHY: operator_map values are heterogeneous lambdas.
 
+logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
+
 
 class FilterOperatorEngine:  # Filter operator evaluation engine.
     """Shared operator catalog, normalization, and evaluation for client search filtering."""
@@ -82,7 +84,7 @@ class FilterOperatorEngine:  # Filter operator evaluation engine.
         """Validate that value-required operators have non-empty normalized values."""
         if operator in FilterOperatorEngine.VALUE_REQUIRED_OPERATORS:  # Value-required operator?
             if not value or not value.strip():  # Missing value.
-                logging.warning(
+                logger.warning(
                     "Operator '%s' for %s requires a non-empty value. Please try again.", operator, field_name
                 )  # Single WARNING (retired duplicate print() per #886 Phase 2) surfaces on operator terminal.
                 return False  # Invalid.
