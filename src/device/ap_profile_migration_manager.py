@@ -24,16 +24,17 @@ Module-import must remain side-effect free (``--help`` guard):
 """
 
 # WHY: PEP 604 unions and forward references keep annotations concise on 3.13+.
-from __future__ import annotations
+from __future__ import annotations  # WHY: Forward references keep destructive manager annotations import-safe.
 
 # WHY: bounded retry backoff and progress-time seams live in stdlib only per the
 # no-new-dependency constraint from plan.md.
 import json  # WHY: backup file writes and loads use only stdlib json.
 import logging  # WHY: progress + destructive-run WARNING land on the module logger.
 import time  # WHY: default sleeper for the bounded retry seam.
+from dataclasses import dataclass  # WHY: group related run state and keep helper signatures small.
 from datetime import UTC, datetime  # WHY: UTC-normalized backup timestamps.
 from pathlib import Path  # WHY: portable filesystem joins for the backup file path.
-from typing import Any
+from typing import Any  # WHY: Mist SDK payloads use dictionary-like API response objects.
 
 # WHY: importing the mistapi sub-modules at module load lets tests monkey-patch
 # them via ``patch("mistapi.api.v1.sites.devices.updateSiteDevice", ...)``.
@@ -44,7 +45,7 @@ from mistapi.api.v1.sites import devices as _mist_site_devices  # WHY: per-site 
 
 # WHY: module logger uses the dotted module path so operators can filter by
 # ``src.device.ap_profile_migration_manager`` in the shared MistHelper logs.
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__name__)  # WHY: Module records identify AP profile migration actions.
 
 # WHY: retry cadence pinned by research.md Decision 2. Two retries -> three total
 # attempts; a change here MUST be reflected in the T013 test assertion.
@@ -61,37 +62,114 @@ _LIMITER_FALLBACK_DELAY: float = 0.75  # seconds
 
 # WHY: fixed backup-file schema version per data-model §1.3. A future format
 # change bumps this integer and the revert refuses unknown values (FR-020).
-_BACKUP_SCHEMA_VERSION = 1
+_BACKUP_SCHEMA_VERSION = 1  # WHY: Revert rejects backups with an unknown schema.
 
 # WHY: progress cadence pinned by research.md Decision 3 -- print at N=1, every
 # _PROGRESS_STRIDE, and at N=total. T015 locks the stride at 10.
-_PROGRESS_STRIDE = 10
+_PROGRESS_STRIDE = 10  # WHY: Operators get bounded progress output during large AP runs.
 
 # WHY: default directory for backup files. The test fixture monkey-patches this
 # to a tmp_path/data so a unit test never scribbles under the repo data/ dir.
-_DATA_DIR = str(Path(__file__).resolve().parent.parent.parent / "data")
+_DATA_DIR = str(Path(__file__).resolve().parent.parent.parent / "data")  # WHY: Backup files stay under data.
 
 # WHY: confirmation keywords per research.md Decision 5 -- uppercase-exact
 # strings so a typo cannot silently arm a destructive run.
-_KEYWORD_LIVE = "MIGRATE"
-_KEYWORD_DRY_RUN = "DRY-RUN"
-_KEYWORD_REVERT = "REVERT"
+_KEYWORD_LIVE = "MIGRATE"  # WHY: A live migration requires an exact typed confirmation.
+_KEYWORD_DRY_RUN = "DRY-RUN"  # WHY: A preview run uses an exact typed confirmation.
+_KEYWORD_REVERT = "REVERT"  # WHY: A revert requires an exact typed confirmation.
 
 # WHY: telemetry file name for the JSONL audit stream (data-model 2.1). Kept as
 # a module constant so tests and production point at the same relative path.
-_REVERT_TELEMETRY_FILENAME = "ap_profile_migration_revert.jsonl"
+_REVERT_TELEMETRY_FILENAME = "ap_profile_migration_revert.jsonl"  # WHY: Revert audit rows use this file.
 
 # WHY: migrate-side JSONL audit stream (addendum FR-A09, TR032). Distinct
 # filename so operators can grep menu-207 runs separately from menu-208 runs.
-_MIGRATE_TELEMETRY_FILENAME = "ap_profile_migration_migrate.jsonl"
+_MIGRATE_TELEMETRY_FILENAME = "ap_profile_migration_migrate.jsonl"  # WHY: Migration audit rows use this file.
 
 # WHY: sentinel return value from ``_revert_one_ap`` when the AP has been
 # deleted from Mist since the migration (data-model 2.2 -- ``missing_count``).
-_REVERT_MISSING = "missing"
+_REVERT_MISSING = "missing"  # WHY: The revert loop treats a deleted AP as recoverable.
 
 # WHY: the mistapi SDK returns an APIResponse for an error status. It does not
 # raise. Any status at or above this floor means the PUT changed nothing.
 _HTTP_ERROR_FLOOR = 400
+
+
+@dataclass
+class APProfileBackupContext:
+    """Input values that form one migration backup payload."""
+
+    org_id: str  # WHY: The backup records the org that owns the migration.
+    source_id: str  # WHY: The backup records the profile that APs leave.
+    source_snapshot: dict[str, Any]  # WHY: The backup preserves the pre-change source profile.
+    target_id: str  # WHY: The backup records the profile that APs enter.
+    target_snapshot: dict[str, Any]  # WHY: The backup preserves the pre-change target profile.
+
+
+@dataclass
+class APProfileReassignmentPlan:
+    """Mutable state for one migration PUT loop."""
+
+    session: Any  # WHY: The PUT loop needs the active Mist API session.
+    ap_records: list[dict[str, Any]]  # WHY: The PUT loop reassigns these AP records in order.
+    target_id: str  # WHY: Each PUT binds the AP to this device profile.
+    backup_path: str  # WHY: The PUT loop updates this backup file after each success.
+    payload: dict[str, Any]  # WHY: The caller and loop share the in-memory backup record.
+    progress_stride: int = _PROGRESS_STRIDE  # WHY: Progress output keeps the existing cadence by default.
+
+
+@dataclass
+class APProfileRevertOutcomeContext:
+    """Mutable state for one AP during a revert loop."""
+
+    mist_session: Any  # WHY: The revert helper needs the active Mist API session.
+    device_id: str  # WHY: The revert helper names the AP in outcome lists and logs.
+    site_id: str  # WHY: The revert PUT requires the AP site identifier.
+    source_id: str  # WHY: The revert PUT restores this device profile.
+    pacing_stats: dict[str, float | int]  # WHY: The revert helper records rate-limit and failure counters.
+
+
+@dataclass
+class APProfileRevertResultLists:
+    """Outcome lists that the revert loop mutates in place."""
+
+    reverted_ids: list[str]  # WHY: Successful AP IDs feed the summary and audit payload.
+    missing_ids: list[str]  # WHY: Missing AP IDs feed the summary and audit payload.
+    failed_ids: list[str]  # WHY: Failed AP IDs feed the summary and audit payload.
+
+
+@dataclass
+class APProfileRunSummary:
+    """Common summary fields for AP profile migration reporting."""
+
+    source_name: str  # WHY: The operator summary needs the source profile name.
+    source_id: str  # WHY: The operator summary and audit need the source profile ID.
+    planned_count: int  # WHY: The operator summary and audit need the intended AP count.
+    backup_path: str  # WHY: The operator summary and audit need the backup path.
+    outcome: str  # WHY: The operator summary and audit need the final run state.
+    pacing_stats: dict[str, float | int]  # WHY: Pacing metrics must stay grouped with the run result.
+
+
+@dataclass
+class APProfileRevertSummary:
+    """Complete result data for one revert command."""
+
+    run: APProfileRunSummary  # WHY: Shared run fields stay in one grouped object.
+    reverted_ids: list[str]  # WHY: The revert summary prints the successful AP count.
+    missing_ids: list[str]  # WHY: The revert summary prints recoverable missing APs.
+    failed_ids: list[str]  # WHY: The revert summary prints APs that need manual repair.
+
+
+@dataclass
+class APProfileMigrationSummary:
+    """Complete result data for one migration command."""
+
+    source_name: str  # WHY: The migration summary prints the source profile name.
+    source_id: str  # WHY: The migration summary prints the source profile ID.
+    target_name: str  # WHY: The migration summary prints the target profile name.
+    target_id: str  # WHY: The migration summary prints the target profile ID.
+    backup_path: str  # WHY: The migration summary prints the backup file path.
+    payload: dict[str, Any]  # WHY: The migration summary reads counts and pacing data from the final payload.
 
 
 class APProfileReassignmentError(RuntimeError):
@@ -248,9 +326,14 @@ class APProfileMigrationManager:
 
         # WHY: build the backup payload BEFORE any PUT so the on-disk file is
         # the single source of truth if the run is interrupted (FR-011).
-        payload = APProfileMigrationManager._build_backup_payload(
-            org_id, source_id, source_snapshot, target_id, target_snapshot, ap_records
+        backup_context = APProfileBackupContext(  # WHY: Group related backup inputs before the payload builder runs.
+            org_id=org_id,  # WHY: Preserve the selected org in the backup file.
+            source_id=source_id,  # WHY: Preserve the source profile ID in the backup file.
+            source_snapshot=source_snapshot,  # WHY: Preserve the source profile snapshot before any PUT.
+            target_id=target_id,  # WHY: Preserve the target profile ID in the backup file.
+            target_snapshot=target_snapshot,  # WHY: Preserve the target profile snapshot before any PUT.
         )
+        payload = APProfileMigrationManager._build_backup_payload(backup_context, ap_records)
         backup_path = APProfileMigrationManager._write_backup_file(payload, _DATA_DIR)
         _LOGGER.info("Backup file written: %s", backup_path)
 
@@ -264,12 +347,14 @@ class APProfileMigrationManager:
         interrupted = False
         try:
             final_payload = APProfileMigrationManager._run_reassignment_loop(
-                mist_session,
-                ap_records,
-                target_id,
-                backup_path,
-                payload,
-                progress_stride=_PROGRESS_STRIDE,
+                APProfileReassignmentPlan(  # WHY: Keep migration loop inputs together for structural compliance.
+                    session=mist_session,  # WHY: The loop needs the active Mist API session.
+                    ap_records=ap_records,  # WHY: The loop reassigns APs in this planned order.
+                    target_id=target_id,  # WHY: The loop assigns each AP to this profile.
+                    backup_path=backup_path,  # WHY: The loop updates this file after each success.
+                    payload=payload,  # WHY: The loop mutates the caller-owned backup payload.
+                    progress_stride=_PROGRESS_STRIDE,  # WHY: Preserve the existing progress cadence.
+                )
             )
         except KeyboardInterrupt:
             # WHY: the loop mutates ``payload`` in place, so it already holds
@@ -287,7 +372,14 @@ class APProfileMigrationManager:
         # never re-read a file that may have been left in a partial state by
         # a fixture-mocked backup writer.
         APProfileMigrationManager._print_migration_summary(
-            source_name, source_id, target_name, target_id, backup_path, final_payload
+            APProfileMigrationSummary(  # WHY: Group printed migration fields for structural compliance.
+                source_name=source_name,  # WHY: The summary prints the source profile name.
+                source_id=source_id,  # WHY: The summary prints the source profile ID.
+                target_name=target_name,  # WHY: The summary prints the target profile name.
+                target_id=target_id,  # WHY: The summary prints the target profile ID.
+                backup_path=backup_path,  # WHY: The summary prints the backup file path.
+                payload=final_payload,  # WHY: The summary reads counts and pacing data from the final payload.
+            )
         )
 
         # WHY: FR-A09 -- one JSONL audit row per migrate invocation. Mirrors
@@ -462,31 +554,27 @@ class APProfileMigrationManager:
 
         outcome = APProfileMigrationManager._compute_revert_outcome(reverted_ids, missing_ids, failed_ids)
 
-        APProfileMigrationManager._print_revert_summary(
-            backup_path=str(backup_path),
-            source_name=source_name,
-            source_id=source_id,
-            planned_count=planned_count,
-            reverted_ids=reverted_ids,
-            missing_ids=missing_ids,
-            failed_ids=failed_ids,
-            outcome=outcome,
-            pacing_stats=pacing_stats,
+        revert_summary = APProfileRevertSummary(  # WHY: Group summary values for printing and audit emission.
+            run=APProfileRunSummary(  # WHY: Shared run metadata stays in one object.
+                source_name=source_name,  # WHY: The operator summary names the source profile.
+                source_id=source_id,  # WHY: The audit row records the restored profile ID.
+                planned_count=planned_count,  # WHY: The audit row records the intended AP count.
+                backup_path=str(backup_path),  # WHY: The audit row records the replayed backup file.
+                outcome=outcome,  # WHY: The audit row records the final revert state.
+                pacing_stats=pacing_stats,  # WHY: The audit row records limiter statistics.
+            ),
+            reverted_ids=reverted_ids,  # WHY: The summary names successful reverts by count.
+            missing_ids=missing_ids,  # WHY: The summary names missing APs when present.
+            failed_ids=failed_ids,  # WHY: The summary names failed APs when present.
         )
+        APProfileMigrationManager._print_revert_summary(revert_summary)
 
         # WHY: FR-025 -- one JSONL audit row per revert invocation. Best-effort
         # write; TelemetryEmitter swallows OSError and logs a warning.
         APProfileMigrationManager._emit_revert_audit(
             APProfileMigrationManager._build_revert_audit_payload(
-                org_id=org_id,
-                backup_path=str(backup_path),
-                source_id=source_id,
-                planned_count=planned_count,
-                reverted_ids=reverted_ids,
-                missing_ids=missing_ids,
-                failed_ids=failed_ids,
-                outcome=outcome,
-                pacing_stats=pacing_stats,
+                org_id,
+                revert_summary,
             )
         )
 
@@ -575,28 +663,25 @@ class APProfileMigrationManager:
             smoothed = APProfileMigrationManager._apply_pacing(smoothed, pacing_stats)
             pacing_stats["puts_issued"] += 1
             APProfileMigrationManager._classify_revert_outcome_for_ap(
-                mist_session=mist_session,
-                device_id=device_id,
-                site_id=str(rec["site_id"]),
-                source_id=source_id,
-                pacing_stats=pacing_stats,
-                reverted_ids=reverted_ids,
-                missing_ids=missing_ids,
-                failed_ids=failed_ids,
+                APProfileRevertOutcomeContext(  # WHY: Keep the AP target and pacing state together.
+                    mist_session=mist_session,  # WHY: The helper needs the active Mist API session.
+                    device_id=device_id,  # WHY: The helper records this AP in exactly one outcome list.
+                    site_id=str(rec["site_id"]),  # WHY: The revert PUT requires the AP site identifier.
+                    source_id=source_id,  # WHY: The revert PUT restores this profile.
+                    pacing_stats=pacing_stats,  # WHY: The helper updates shared pacing counters.
+                ),
+                APProfileRevertResultLists(  # WHY: Group outcome lists without changing their mutation behavior.
+                    reverted_ids=reverted_ids,  # WHY: The helper appends successful AP IDs here.
+                    missing_ids=missing_ids,  # WHY: The helper appends missing AP IDs here.
+                    failed_ids=failed_ids,  # WHY: The helper appends failed AP IDs here.
+                ),
             )
         return reverted_ids, missing_ids, failed_ids, pacing_stats
 
     @staticmethod
     def _classify_revert_outcome_for_ap(
-        *,
-        mist_session: Any,
-        device_id: str,
-        site_id: str,
-        source_id: str,
-        pacing_stats: dict[str, float | int],
-        reverted_ids: list[str],
-        missing_ids: list[str],
-        failed_ids: list[str],
+        context: APProfileRevertOutcomeContext,
+        result_lists: APProfileRevertResultLists,
     ) -> None:
         """Attempt one PUT and route the outcome into the correct id list.
 
@@ -608,25 +693,15 @@ class APProfileMigrationManager:
             can inspect state after the loop finishes.
 
         Args:
-            mist_session: The mistapi API session used for the PUT call.
-            device_id: The AP the caller is attempting to revert.
-            site_id: The site the AP is bound to (needed by
-                ``updateSiteDevice``).
-            source_id: The original source profile ID we are reverting to.
-            pacing_stats: Mutable pacing counters that this helper increments
-                on 429 or on non-429 failure.
-            reverted_ids: Mutable list that receives ``device_id`` on success.
-            missing_ids: Mutable list that receives ``device_id`` when Mist
-                returns the sentinel "AP no longer exists" result.
-            failed_ids: Mutable list that receives ``device_id`` on non-429
-                exceptions.
+            context: Mist API target data and pacing counters for this AP.
+            result_lists: Mutable lists that receive exactly one AP outcome.
         """
         try:
             result = APProfileMigrationManager._revert_one_ap(
-                mist_session,
-                device_id,
-                site_id,
-                source_id,
+                context.mist_session,
+                context.device_id,
+                context.site_id,
+                context.source_id,
             )
         except Exception as exc:  # WHY: tolerant per FR-023.
             # WHY: FR-A04 -- 429 is a throttle signal. Feed the limiter via
@@ -634,13 +709,13 @@ class APProfileMigrationManager:
             # on 429 alone.
             if APProfileMigrationManager._is_429(exc):
                 APProfileMigrationManager._signal_rate_limit_hit()
-                pacing_stats["http_429_seen"] += 1
+                context.pacing_stats["http_429_seen"] += 1
                 return
-            pacing_stats["non_429_failures"] += 1
-            failed_ids.append(device_id)
+            context.pacing_stats["non_429_failures"] += 1
+            result_lists.failed_ids.append(context.device_id)
             _LOGGER.warning(
                 "Revert failed for AP %s after retry exhaustion: %s",
-                device_id,
+                context.device_id,
                 exc,
             )
             return
@@ -648,11 +723,11 @@ class APProfileMigrationManager:
         if result == _REVERT_MISSING:
             # WHY: FR-023 -- the AP no longer exists in Mist; count and
             # continue instead of aborting the run.
-            missing_ids.append(device_id)
-            _LOGGER.warning("AP %s no longer exists in Mist; counted as missing", device_id)
+            result_lists.missing_ids.append(context.device_id)
+            _LOGGER.warning("AP %s no longer exists in Mist; counted as missing", context.device_id)
             return
 
-        reverted_ids.append(device_id)
+        result_lists.reverted_ids.append(context.device_id)
 
     @staticmethod
     def _compute_revert_outcome(
@@ -682,18 +757,7 @@ class APProfileMigrationManager:
         return "failure"
 
     @staticmethod
-    def _print_revert_summary(
-        *,
-        backup_path: str,
-        source_name: str,
-        source_id: str,
-        planned_count: int,
-        reverted_ids: list[str],
-        missing_ids: list[str],
-        failed_ids: list[str],
-        outcome: str,
-        pacing_stats: dict[str, float | int],
-    ) -> None:
+    def _print_revert_summary(summary: APProfileRevertSummary) -> None:
         """Print the operator-facing end-of-run summary for menu 208.
 
         Why:
@@ -703,55 +767,35 @@ class APProfileMigrationManager:
             and gives a single call site to freeze in golden-output tests.
 
         Args:
-            backup_path: Absolute path of the backup file the operator picked.
-            source_name: Human-readable original source profile name.
-            source_id: Original source profile ID.
-            planned_count: Total AP count from the backup's ``aps_planned``.
-            reverted_ids: Successfully reverted device IDs.
-            missing_ids: Device IDs Mist reported as no-longer-existing.
-            failed_ids: Device IDs that failed for non-429 reasons.
-            outcome: The final ``success``/``partial``/``failure`` label from
-                ``_compute_revert_outcome``.
-            pacing_stats: Final pacing counters from the revert loop.
+            summary: Revert result data for the operator-facing summary.
         """
         print("\nRevert summary:")
-        print(f"  Backup file: {backup_path}")
-        print(f"  Source profile: {source_name} (id={source_id})")
-        print(f"  Planned APs: {planned_count}")
-        print(f"  Reverted APs: {len(reverted_ids)}")
-        print(f"  Missing APs: {len(missing_ids)}")
-        print(f"  Failed APs: {len(failed_ids)}")
-        print(f"  Outcome: {outcome}")
-        if missing_ids:
+        print(f"  Backup file: {summary.run.backup_path}")
+        print(f"  Source profile: {summary.run.source_name} (id={summary.run.source_id})")
+        print(f"  Planned APs: {summary.run.planned_count}")
+        print(f"  Reverted APs: {len(summary.reverted_ids)}")
+        print(f"  Missing APs: {len(summary.missing_ids)}")
+        print(f"  Failed APs: {len(summary.failed_ids)}")
+        print(f"  Outcome: {summary.run.outcome}")
+        if summary.missing_ids:
             # WHY: name every missing AP so the operator can hand-fix.
-            print(f"  Missing device_ids: {', '.join(missing_ids)}")
-        if failed_ids:
-            print(f"  Failed device_ids: {', '.join(failed_ids)}")
+            print(f"  Missing device_ids: {', '.join(summary.missing_ids)}")
+        if summary.failed_ids:
+            print(f"  Failed device_ids: {', '.join(summary.failed_ids)}")
 
         # WHY: FR-A09 -- adaptive-rate-limiter telemetry lines. Same text,
         # same order as the migrate-side summary so operators reading both
         # menus see one consistent block.
-        delay_count = int(pacing_stats["delay_count"])
-        delay_mean = (pacing_stats["delay_sum"] / delay_count) if delay_count > 0 else 0.0
-        delay_max = float(pacing_stats["delay_max"])
-        print(f"  Total PUTs issued        : {int(pacing_stats['puts_issued'])}")
-        print(f"  HTTP 429 responses seen  : {int(pacing_stats['http_429_seen'])}")
-        print(f"  Non-429 failures         : {int(pacing_stats['non_429_failures'])}")
+        delay_count = int(summary.run.pacing_stats["delay_count"])
+        delay_mean = (summary.run.pacing_stats["delay_sum"] / delay_count) if delay_count > 0 else 0.0
+        delay_max = float(summary.run.pacing_stats["delay_max"])
+        print(f"  Total PUTs issued        : {int(summary.run.pacing_stats['puts_issued'])}")
+        print(f"  HTTP 429 responses seen  : {int(summary.run.pacing_stats['http_429_seen'])}")
+        print(f"  Non-429 failures         : {int(summary.run.pacing_stats['non_429_failures'])}")
         print(f"  Rate limiter delay (s)   : mean={delay_mean:.3f}  max={delay_max:.3f}")
 
     @staticmethod
-    def _build_revert_audit_payload(
-        *,
-        org_id: str,
-        backup_path: str,
-        source_id: str,
-        planned_count: int,
-        reverted_ids: list[str],
-        missing_ids: list[str],
-        failed_ids: list[str],
-        outcome: str,
-        pacing_stats: dict[str, float | int],
-    ) -> dict[str, Any]:
+    def _build_revert_audit_payload(org_id: str, summary: APProfileRevertSummary) -> dict[str, Any]:
         """Build the JSONL audit payload for a completed revert run.
 
         Why:
@@ -773,26 +817,26 @@ class APProfileMigrationManager:
         Returns:
             The dict that ``_emit_revert_audit`` will write as one JSONL row.
         """
-        delay_count = int(pacing_stats["delay_count"])
-        delay_mean = (pacing_stats["delay_sum"] / delay_count) if delay_count > 0 else 0.0
-        delay_max = float(pacing_stats["delay_max"])
+        delay_count = int(summary.run.pacing_stats["delay_count"])
+        delay_mean = (summary.run.pacing_stats["delay_sum"] / delay_count) if delay_count > 0 else 0.0
+        delay_max = float(summary.run.pacing_stats["delay_max"])
         return {
             "event_type": "ap_profile_migration_revert",
             "timestamp_utc": _utc_iso_timestamp(),
             "org_id": org_id,
-            "backup_file_path": backup_path,
-            "source_profile_id": source_id,
-            "planned_count": planned_count,
-            "reverted_count": len(reverted_ids),
-            "missing_count": len(missing_ids),
-            "failed_count": len(failed_ids),
-            "outcome": outcome,
+            "backup_file_path": summary.run.backup_path,
+            "source_profile_id": summary.run.source_id,
+            "planned_count": summary.run.planned_count,
+            "reverted_count": len(summary.reverted_ids),
+            "missing_count": len(summary.missing_ids),
+            "failed_count": len(summary.failed_ids),
+            "outcome": summary.run.outcome,
             # WHY: FR-A09 -- pacing telemetry sub-dict per
             # data-model-rate-limiting.md section 3.
             "pacing": {
-                "puts_issued": int(pacing_stats["puts_issued"]),
-                "http_429_seen": int(pacing_stats["http_429_seen"]),
-                "non_429_failures": int(pacing_stats["non_429_failures"]),
+                "puts_issued": int(summary.run.pacing_stats["puts_issued"]),
+                "http_429_seen": int(summary.run.pacing_stats["http_429_seen"]),
+                "non_429_failures": int(summary.run.pacing_stats["non_429_failures"]),
                 "delay_seconds_mean": round(delay_mean, 3),
                 "delay_seconds_max": round(delay_max, 3),
             },
@@ -1151,11 +1195,7 @@ class APProfileMigrationManager:
 
     @staticmethod
     def _build_backup_payload(
-        org_id: str,
-        source_id: str,
-        source_snapshot: dict[str, Any],
-        target_id: str,
-        target_snapshot: dict[str, Any],
+        context: APProfileBackupContext,
         ap_records: list[dict[str, Any]],
     ) -> dict[str, Any]:
         """Assemble the backup dict per data-model §1.3.
@@ -1181,12 +1221,12 @@ class APProfileMigrationManager:
         ts = datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
         return {
             "schema_version": _BACKUP_SCHEMA_VERSION,
-            "org_id": org_id,
+            "org_id": context.org_id,
             "migration_timestamp_utc": ts,
-            "source_profile_id": source_id,
-            "target_profile_id": target_id,
-            "source_profile_snapshot": dict(source_snapshot),
-            "target_profile_snapshot": dict(target_snapshot),
+            "source_profile_id": context.source_id,
+            "target_profile_id": context.target_id,
+            "source_profile_snapshot": dict(context.source_snapshot),
+            "target_profile_snapshot": dict(context.target_snapshot),
             "aps_planned": [dict(rec) for rec in ap_records],
             "aps_reassigned": [],
             "outcome": "success",
@@ -1321,13 +1361,7 @@ class APProfileMigrationManager:
 
     @staticmethod
     def _run_reassignment_loop(
-        session: Any,
-        ap_records: list[dict[str, Any]],
-        target_id: str,
-        backup_path: str,
-        payload: dict[str, Any],
-        *,
-        progress_stride: int = _PROGRESS_STRIDE,
+        plan: APProfileReassignmentPlan,
     ) -> dict[str, Any]:
         """Iterate ``ap_records`` and PUT each AP with stop-on-failure semantics.
 
@@ -1359,8 +1393,8 @@ class APProfileMigrationManager:
         """
         # WHY: work on the caller-supplied in-memory dict so tests that patch
         # ``_write_backup_file`` (T011) still exercise the loop end-to-end.
-        backup = payload
-        total = len(ap_records)
+        backup = plan.payload
+        total = len(plan.ap_records)
         # WHY: per-invocation pacing state per plan-rate-limiting.md Q3.
         # ``smoothed`` is the PID limiter's internal EMA of the returned delay;
         # the limiter mutates it across calls. ``pacing_stats`` tracks the
@@ -1374,9 +1408,9 @@ class APProfileMigrationManager:
             "delay_max": 0.0,
             "delay_count": 0,
         }
-        for idx, rec in enumerate(ap_records, start=1):
+        for idx, rec in enumerate(plan.ap_records, start=1):
             # WHY: emit progress at N=1, at every stride boundary, and at N=total.
-            if idx == 1 or idx % progress_stride == 0 or idx == total:
+            if idx == 1 or idx % plan.progress_stride == 0 or idx == total:
                 _LOGGER.info(
                     "Reassigning AP %d of %d: device_id=%s",
                     idx,
@@ -1388,7 +1422,7 @@ class APProfileMigrationManager:
             smoothed = APProfileMigrationManager._apply_pacing(smoothed, pacing_stats)
             pacing_stats["puts_issued"] += 1
             try:
-                APProfileMigrationManager._reassign_one_ap(session, rec, target_id)
+                APProfileMigrationManager._reassign_one_ap(plan.session, rec, plan.target_id)
             except Exception as exc:  # WHY: partial-success record path.
                 # WHY: FR-A04 -- 429 is a throttle signal, not a hard failure.
                 # Feed the cache-invalidation signal to the limiter and keep
@@ -1409,7 +1443,7 @@ class APProfileMigrationManager:
                     "reassigned_count": len(backup["aps_reassigned"]),
                     "planned_count": total,
                 }
-                Path(backup_path).write_text(
+                Path(plan.backup_path).write_text(
                     json.dumps(backup, indent=2, sort_keys=False),
                     encoding="utf-8",
                 )
@@ -1426,7 +1460,7 @@ class APProfileMigrationManager:
             # WHY: append + rewrite after every success so an interrupted
             # revert has an accurate list to roll back.
             backup["aps_reassigned"].append(rec["device_id"])
-            Path(backup_path).write_text(
+            Path(plan.backup_path).write_text(
                 json.dumps(backup, indent=2, sort_keys=False),
                 encoding="utf-8",
             )
@@ -1434,7 +1468,7 @@ class APProfileMigrationManager:
         # WHY: fell through the loop -- every AP succeeded.
         backup["outcome"] = "success"
         backup["failure_detail"] = None
-        Path(backup_path).write_text(
+        Path(plan.backup_path).write_text(
             json.dumps(backup, indent=2, sort_keys=False),
             encoding="utf-8",
         )
@@ -1443,14 +1477,7 @@ class APProfileMigrationManager:
         return backup
 
     @staticmethod
-    def _print_migration_summary(
-        source_name: str,
-        source_id: str,
-        target_name: str,
-        target_id: str,
-        backup_path: str,
-        payload: dict[str, Any],
-    ) -> None:
+    def _print_migration_summary(summary: APProfileMigrationSummary) -> None:
         """Print the end-of-run summary block.
 
         Why:
@@ -1459,31 +1486,26 @@ class APProfileMigrationManager:
             glance without opening the JSON file.
 
         Args:
-            source_name: Human-readable source profile name.
-            source_id: Source profile UUID.
-            target_name: Human-readable target profile name.
-            target_id: Target profile UUID.
-            backup_path: Absolute path to the backup file just written.
-            payload: The final backup dict (post-loop).
+            summary: Migration result data for the operator-facing summary.
         """
-        planned = len(payload.get("aps_planned", []))
-        reassigned = len(payload.get("aps_reassigned", []))
-        outcome = payload.get("outcome", "unknown")
+        planned = len(summary.payload.get("aps_planned", []))
+        reassigned = len(summary.payload.get("aps_reassigned", []))
+        outcome = summary.payload.get("outcome", "unknown")
         print("\nMigration summary:")
-        print(f"  Source profile: {source_name} (id={source_id})")
-        print(f"  Target profile: {target_name} (id={target_id})")
+        print(f"  Source profile: {summary.source_name} (id={summary.source_id})")
+        print(f"  Target profile: {summary.target_name} (id={summary.target_id})")
         print(f"  Planned APs: {planned}")
         print(f"  Reassigned APs: {reassigned}")
         print(f"  Outcome: {outcome}")
-        print(f"  Backup file: {backup_path}")
+        print(f"  Backup file: {summary.backup_path}")
         if outcome != "success":
-            fd = payload.get("failure_detail")
+            fd = summary.payload.get("failure_detail")
             if fd is not None:
                 print(f"  Failed AP: {fd.get('failed_device_id')}  " f"reason: {fd.get('error_message')}")
         # WHY: FR-A09 -- adaptive-rate-limiter telemetry lines. Text and
         # order pinned by data-model-rate-limiting.md section 2 so menus
         # 207 and 208 present one consistent block to the operator.
-        pacing_stats = payload.get("_pacing") or {
+        pacing_stats = summary.payload.get("_pacing") or {
             "puts_issued": 0,
             "http_429_seen": 0,
             "non_429_failures": 0,

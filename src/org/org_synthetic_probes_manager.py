@@ -18,30 +18,34 @@ Module-import must remain side-effect free (--help guard):
     calls live inside functions invoked from the menu dispatch table.
 """
 
-from __future__ import annotations
+from __future__ import annotations  # WHY: PEP 604 unions stay available during type checking.
 
-import json
-import logging
-import math
-from pathlib import Path
-from typing import Any
+import json  # WHY: menu 206 reads and writes catalogue and setting payloads as JSON.
+import logging  # WHY: destructive menu actions must leave an operator trace.
+import math  # WHY: site distance calculations use trigonometric helpers.
+from pathlib import Path  # WHY: data files must use portable path joins.
+from typing import Any  # WHY: Mist API and cache payloads use duck-typed JSON.
 
 # Import mistapi setting/sites modules at module load so tests can monkey-patch
 # them via ``patch.object``. All four are side-effect free re-exports.
-import mistapi
-from mistapi.api.v1.orgs import setting as _mist_setting
-from mistapi.api.v1.orgs import sites as _mist_orgs_sites
-from mistapi.api.v1.sites import setting as _mist_site_setting
+import mistapi  # WHY: pagination helpers come from the installed Mist SDK.
+from mistapi.api.v1.orgs import setting as _mist_setting  # WHY: org setting reads and writes use this SDK module.
+from mistapi.api.v1.orgs import sites as _mist_orgs_sites  # WHY: site override selection lists org sites.
+from mistapi.api.v1.sites import setting as _mist_site_setting  # WHY: site override writes use this SDK module.
 
-from src.utils.zscaler_catalogue import ensure_fresh, promote_cache_document
+from src.utils.input_utils import InputUtils  # WHY: menu 206 prompts must handle EOF in SSH sessions.
+from src.utils.zscaler_catalogue import (  # WHY: menu 206 consumes refreshed Zscaler caches.
+    ensure_fresh,
+    promote_cache_document,
+)
 
-_DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
-_PROBE_SOURCE_FILE = "zscaler_client_connector_probes.json"
-_CENR_SOURCE_FILE = "zscaler_cenr_hostnames.json"
-_TOOL_NAME_PREFIX = "zcc-"
+_DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"  # WHY: catalogue files live under data.
+_PROBE_SOURCE_FILE = "zscaler_client_connector_probes.json"  # WHY: static ZCC role data lives in this file.
+_CENR_SOURCE_FILE = "zscaler_cenr_hostnames.json"  # WHY: refreshed CENR host data lives in this file.
+_TOOL_NAME_PREFIX = "zcc-"  # WHY: tool-authored probes need a stable name prefix.
 _TUNNEL_ZEN_ROLE = "tunnel_zen"  # Only role that expands via CENR hostnames.
-_VLAN_MIN = 1
-_VLAN_MAX = 4094
+_VLAN_MIN = 1  # WHY: IEEE 802.1Q user VLAN identifiers start at 1.
+_VLAN_MAX = 4094  # WHY: IEEE 802.1Q user VLAN identifiers end at 4094.
 _CRITICAL_AGGRESSIVENESS = "high"
 _AUTO_AGGRESSIVENESS = "auto"
 # Priority tiers recognised on READ (schedule/demote decisions). The Mist UI's
@@ -136,6 +140,19 @@ _COUNTRY_CODE_TO_REGION: dict[str, str] = {
 # warning is logged when the fallback fires so operators can spot unmapped
 # country codes and extend ``_COUNTRY_CODE_TO_REGION`` if needed.
 _DEFAULT_REGION = "emea"
+
+
+class SyntheticProbePromptReader:
+    """Read menu 206 prompts through the shared EOF-safe input helper."""
+
+    @staticmethod
+    def read(prompt: str, context: str) -> str:
+        """Return one trimmed operator answer for a named menu 206 prompt."""
+        logging.info("Prompting the operator for %s", context)  # Record the prompt boundary for SSH sessions.
+        answer = InputUtils.safe_input(prompt, context=context)  # Use the shared EOF-safe prompt helper.
+        logging.debug("Completed prompt for %s with answer_present=%s", context, bool(answer))  # Avoid logging values.
+        return answer  # Return the trimmed answer so existing prompt behavior stays unchanged.
+
 
 # Deliberately-unmapped ISO-3166-1 alpha-2 codes. These fall through to
 # ``_DEFAULT_REGION`` today by design (they map onto EMEA's ``.com`` endpoint
@@ -1346,11 +1363,14 @@ def _prompt_vlan_list() -> list[int]:
         valid id is entered.
     """
     while True:
-        raw = input("  Enter VLAN ids (comma-separated, ranges ok e.g. 3-6, each in [1, 4094]): ")
-        is_valid, error, ids = _validate_vlan_input(raw)
+        raw = SyntheticProbePromptReader.read(  # Capture VLAN input without stranding an SSH session on EOF.
+            "  Enter VLAN ids (comma-separated, ranges ok e.g. 3-6, each in [1, 4094]): ",
+            "menu_206_vlan_ids",
+        )
+        is_valid, error, ids = _validate_vlan_input(raw)  # Validate before any Mist setting read or write.
         if is_valid:
-            return ids
-        print(f"  {error}")
+            return ids  # Return only checked VLAN identifiers to the destructive path.
+        print(f"  {error}")  # Keep the previous operator feedback for invalid input.
 
 
 def _fetch_setting(mist_session: Any, org_id: str) -> dict[str, Any]:
@@ -2187,37 +2207,33 @@ def _swap_probes(
     return new_probes
 
 
+def _collect_existing_probe_vlans(existing_tool: dict[str, dict[str, Any]]) -> set[int]:
+    """Return the VLAN union from existing tool-authored probes."""
+    all_vlans: set[int] = set()  # Track unique VLAN IDs across all existing probes.
+    for (
+        probe
+    ) in existing_tool.values():  # Walk only tool-authored probes because foreign probes are preserved separately.
+        for vid in probe.get("vlan_ids") or []:  # Accept absent VLAN lists as empty to preserve legacy prompts.
+            if isinstance(vid, int):  # Ignore malformed VLAN values so the prompt stays read-only.
+                all_vlans.add(vid)  # Store each valid VLAN once for the summary line.
+    return all_vlans  # Return the union so the prompt can show operator context.
+
+
 def _prompt_mode(existing_tool: dict[str, dict[str, Any]]) -> str:
-    """Prompt the operator for merge versus swap.
-
-    Why:
-        Displaying the existing probe count and VLAN union up-front gives
-        the operator the context needed to make the call without needing
-        to walk the setting themselves. Swap is the default because the
-        typical operator intent for this menu is a clean rebuild from
-        the freshly-generated probe set -- merge is the exception path
-        used when preserving hand-added foreign probes matters.
-
-    Args:
-        existing_tool: Tool-authored probes currently on the org.
-
-    Returns:
-        Either ``"merge"`` or ``"swap"``. Empty input returns ``"swap"``.
-    """
-    all_vlans: set[int] = set()
-    for probe in existing_tool.values():
-        for vid in probe.get("vlan_ids") or []:
-            if isinstance(vid, int):
-                all_vlans.add(vid)
+    """Prompt the operator for merge versus swap."""
+    all_vlans = _collect_existing_probe_vlans(existing_tool)  # Show the current VLAN surface before selection.
     print(f"  Existing tool-authored probes: {len(existing_tool)}")
     print(f"  VLAN union across existing probes: {sorted(all_vlans)}")
     while True:
-        choice = input("  Choose action [merge/swap] (default: swap): ").strip().lower()
+        choice = SyntheticProbePromptReader.read(  # Capture merge or swap selection through the EOF-safe helper.
+            "  Choose action [merge/swap] (default: swap): ",
+            "menu_206_merge_swap",
+        ).lower()
         if choice == "":
-            return "swap"
+            return "swap"  # Preserve the default action from the original prompt.
         if choice in ("merge", "swap"):
-            return choice
-        print("  Please answer 'merge' or 'swap'.")
+            return choice  # Return the exact accepted action string used by the caller.
+        print("  Please answer 'merge' or 'swap'.")  # Keep the previous retry message.
 
 
 def _summarise(
@@ -2347,8 +2363,11 @@ def _prompt_confirm(summary: str) -> bool:
     """
     print("  Change summary:")
     print(summary)
-    answer = input("  Proceed with PUT to org settings? [y/N]: ").strip().lower()
-    return answer in ("y", "yes")
+    answer = SyntheticProbePromptReader.read(  # Protect the destructive confirmation from EOF.
+        "  Proceed with PUT to org settings? [y/N]: ",
+        "menu_206_org_put_confirm",
+    ).lower()
+    return answer in ("y", "yes")  # Keep the original yes-only confirmation semantics.
 
 
 def _compute_scheduled_probe_names(
@@ -2694,7 +2713,10 @@ def _prompt_and_apply_site_overrides(
     """
     if not resulting_tool:
         return
-    answer = input("  Configure site-level overrides with these same probes? [y/N]: ").strip().lower()
+    answer = SyntheticProbePromptReader.read(  # Capture optional site override selection through safe input.
+        "  Configure site-level overrides with these same probes? [y/N]: ",
+        "menu_206_site_override_offer",
+    ).lower()
     if answer not in ("y", "yes"):
         logging.info("Operator declined site overrides")
         return
@@ -2787,7 +2809,7 @@ def _sort_sites_for_picker(sites: list[dict[str, Any]]) -> list[dict[str, Any]]:
         A new list of site dicts sorted by (named-first, name-casefold,
         id). The input is not mutated.
     """
-    return sorted(
+    sorted_sites = sorted(  # Build a stable display order without mutating the API result.
         sites,
         key=lambda s: (
             0 if (s.get("name") or "").strip() else 1,
@@ -2795,6 +2817,8 @@ def _sort_sites_for_picker(sites: list[dict[str, Any]]) -> list[dict[str, Any]]:
             s.get("id") or "",
         ),
     )
+    logging.debug("Sorted %d site(s) for the menu 206 picker", len(sorted_sites))  # Record picker list size.
+    return sorted_sites  # Return the sorted copy for the interactive picker.
 
 
 def _pick_site_by_index(
@@ -2939,14 +2963,16 @@ def _prompt_site_indexes(sites: list[dict[str, Any]]) -> list[dict[str, Any]]:
         name = site.get("name") or "(unnamed)"
         site_id = site.get("id", "")
         print(f"    [{idx:>{width}}] {name}  ({site_id})")
-    raw = input(
-        "  Enter comma-separated site indexes (ranges ok e.g. 3-6, 'all' for every site), " "or leave blank to cancel: "
+    raw = SyntheticProbePromptReader.read(  # Capture site index selection through the EOF-safe helper.
+        "  Enter comma-separated site indexes (ranges ok e.g. 3-6, 'all' for every site), "
+        "or leave blank to cancel: ",
+        "menu_206_site_indexes",
     )
-    parts = [item.strip() for item in raw.split(",") if item.strip()]
-    picked_by_id: dict[str, dict[str, Any]] = {}
+    parts = [item.strip() for item in raw.split(",") if item.strip()]  # Preserve comma parsing and blank filtering.
+    picked_by_id: dict[str, dict[str, Any]] = {}  # Keep selection order while deduplicating by site id.
     for part in parts:
-        _apply_picker_token(part, sorted_sites, picked_by_id)
-    return list(picked_by_id.values())
+        _apply_picker_token(part, sorted_sites, picked_by_id)  # Apply ranges, single numbers, and "all".
+    return list(picked_by_id.values())  # Return the selected site dictionaries in operator order.
 
 
 def _put_site_setting(mist_session: Any, site_id: str, body: dict[str, Any]) -> bool:

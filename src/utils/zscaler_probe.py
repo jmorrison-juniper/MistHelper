@@ -57,6 +57,18 @@ Why:
     into ``host:port`` targets.
 """
 
+_ZSCALER_PREFIX_SUBRULES: tuple[tuple[str, str], ...] = (  # WHY: These rules precede the login-or-mobile legacy rule.
+    ("pac", "Zscaler PAC delivery"),  # WHY: PAC hosts must classify before generic Zscaler services.
+    ("gateway", "Zscaler captive-portal gateway"),  # WHY: Gateway hosts explain captive portal checks to operators.
+    ("mobilesupport", "Zscaler support endpoint"),  # WHY: Support hosts carry a distinct operator meaning.
+)
+
+_ZSCALER_SUFFIX_SUBRULES: tuple[tuple[str, str], ...] = (  # WHY: These rules follow the login-or-mobile legacy rule.
+    ("healthapp", "Zscaler health-probe endpoint"),  # WHY: Health-app hosts must not fall through to generic service.
+    ("ecdn", "Zscaler ECDN (update channel)"),  # WHY: ECDN hosts explain update-channel reachability.
+    ("private.zscaler", "Zscaler private/internal"),  # WHY: Private hosts need the most explicit safety label.
+)
+
 
 @dataclass
 class ProbeResult:
@@ -470,20 +482,14 @@ def _classify_zscaler_subrule(fqdn: str) -> str:
         A short human-readable Zscaler sub-class label. Falls back to
         ``"Zscaler service"`` when no more specific rule matches.
     """
-    if "pac" in fqdn:
-        return "Zscaler PAC delivery"
-    if "gateway" in fqdn:
-        return "Zscaler captive-portal gateway"
-    if "mobilesupport" in fqdn:
-        return "Zscaler support endpoint"
+    for needle, label in _ZSCALER_PREFIX_SUBRULES:  # WHY: Preserve the legacy rules before the login-or-mobile check.
+        if needle in fqdn:  # WHY: A matching marker gives the operator the specific endpoint class.
+            return label  # WHY: Return the first legacy-equivalent rule match.
     if "login" in fqdn or "mobile" in fqdn:
-        return "Zscaler enrollment/login"
-    if "healthapp" in fqdn:
-        return "Zscaler health-probe endpoint"
-    if "ecdn" in fqdn:
-        return "Zscaler ECDN (update channel)"
-    if "private.zscaler" in fqdn:
-        return "Zscaler private/internal"
+        return "Zscaler enrollment/login"  # WHY: Preserve the combined login-or-mobile rule before the table walk.
+    for needle, label in _ZSCALER_SUFFIX_SUBRULES:  # WHY: Preserve the legacy rules after the login-or-mobile check.
+        if needle in fqdn:  # WHY: A matching marker gives the operator the specific endpoint class.
+            return label  # WHY: Return the first legacy-equivalent rule match.
     return "Zscaler service"
 
 
@@ -503,15 +509,20 @@ def _classify_generic(fqdn: str, server: str) -> str:
         A short human-readable class label; ``"unknown"`` when no rule
         matches.
     """
-    if "digicert" in fqdn or "digicert" in server:
-        return "DigiCert OCSP/CRL responder"
+    if _is_digicert_responder(fqdn, server):
+        return "DigiCert OCSP/CRL responder"  # WHY: DigiCert responders are certificate infrastructure.
     if fqdn.endswith("google.com"):
-        return "Google captive-portal probe target"
+        return "Google captive-portal probe target"  # WHY: Preserve the exact Google suffix rule.
     if "secb2b" in fqdn:
-        return "Samsung ELM activation (secb2b.com)"
+        return "Samsung ELM activation (secb2b.com)"  # WHY: Preserve the Samsung substring rule.
     if server:
-        return f"Web server ({server})"
-    return "unknown"
+        return f"Web server ({server})"  # WHY: Preserve the server-header fallback for reachable unknown web hosts.
+    return "unknown"  # WHY: No known signal was available for this endpoint.
+
+
+def _is_digicert_responder(fqdn: str, server: str) -> bool:
+    """Return True when the FQDN or the server header identifies DigiCert."""
+    return "digicert" in fqdn or "digicert" in server  # WHY: Preserve the original two-signal DigiCert match.
 
 
 def _matches_cloudfront(fqdn: str, server: str, subj: str) -> bool:
@@ -832,14 +843,14 @@ def _log_probe_failures(results: list[ProbeResult]) -> None:
     Args:
         results: The probe result list returned by ``_run_probes``.
     """
-    for r in results:
-        if not r.responding_protocols:
+    for probe_result in results:  # Use a descriptive name so the log line stays easy to read.
+        if not probe_result.responding_protocols:  # Log only endpoints that produced no usable response.
             logger.debug(
                 "zscaler_probe: no response from %s (role=%s ip=%s notes=%s)",
-                r.fqdn,
-                r.role or "<none>",
-                r.ip or "-",
-                "; ".join(r.notes) or "-",
+                probe_result.fqdn,  # Identify the endpoint that failed every probe.
+                probe_result.role or "<none>",  # Preserve the catalogue role when one exists.
+                probe_result.ip or "-",  # Show DNS success or an explicit placeholder.
+                "; ".join(probe_result.notes) or "-",  # Summarize probe errors without a second lookup.
             )
 
 

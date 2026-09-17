@@ -110,6 +110,24 @@ def _promote_host_entry(entry: str | dict[str, Any]) -> dict[str, Any]:  # WHY: 
     return {"host": str(entry)}  # WHY: Keep behavior.
 
 
+def _promote_host_bag(container: dict[str, Any], bag_key: str) -> None:
+    """Promote one host bag in-place when the named value is a list."""
+    bag = container.get(bag_key)  # WHY: Read the bag once so type checks stay local.
+    if isinstance(bag, list):  # WHY: Only list bags use the v2 or v3 host-entry contract.
+        promoted_bag = [_promote_host_entry(entry) for entry in bag]  # WHY: Preserve entry order during promotion.
+        container[bag_key] = promoted_bag  # WHY: Replace only the normalized bag in the source document.
+
+
+def _promote_city_host_bags(by_city: Any) -> None:  # WHY: Keep city-bag branching out of the document-level walk.
+    """Promote every per-city host bag when ``by_city`` has the expected shape."""
+    if not isinstance(by_city, dict):  # WHY: Hand-authored caches can omit the city map.
+        return  # WHY: A missing city map leaves top-level promotion complete.
+    for city_slot in by_city.values():  # WHY: Each city slot can carry proxy and VPN host bags.
+        if isinstance(city_slot, dict):  # WHY: Ignore malformed slots without failing cache promotion.
+            _promote_host_bag(city_slot, "proxy_hostnames")  # WHY: Keep proxy host shape uniform for city lookups.
+            _promote_host_bag(city_slot, "vpn_hostnames")  # WHY: Keep VPN host shape uniform for city lookups.
+
+
 def _promote_cenr_document(doc: dict[str, Any]) -> dict[str, Any]:  # WHY: Keep behavior.
     """Walk every host bag in a CENR document and promote v2 -> v3 in-place.
 
@@ -126,23 +144,9 @@ def _promote_cenr_document(doc: dict[str, Any]) -> dict[str, Any]:  # WHY: Keep 
     Returns:
         The same ``doc`` after promotion, for chaining convenience.
     """
-    for bag_key in ("proxy_hostnames", "vpn_hostnames"):  # WHY: Keep behavior.
-        bag = doc.get(bag_key)  # WHY: Keep behavior.
-        if isinstance(bag, list):  # WHY: Keep behavior.
-            # Rebuild the bag so every element is a v3 host dict. Preserves
-            # element order (matters for deterministic diff-friendly writes).
-            doc[bag_key] = [_promote_host_entry(entry) for entry in bag]  # WHY: Keep behavior.
-    by_city = doc.get("by_city")  # WHY: Keep behavior.
-    if isinstance(by_city, dict):  # WHY: Keep behavior.
-        for city_slot in by_city.values():  # WHY: Keep behavior.
-            if not isinstance(city_slot, dict):  # WHY: Keep behavior.
-                continue  # WHY: Keep behavior.
-            for bag_key in ("proxy_hostnames", "vpn_hostnames"):  # WHY: Keep behavior.
-                bag = city_slot.get(bag_key)  # WHY: Keep behavior.
-                if isinstance(bag, list):  # WHY: Keep behavior.
-                    # Per-city bags follow the same v2 -> v3 shape rule as
-                    # the top-level bags. Keep the two paths in lockstep.
-                    city_slot[bag_key] = [_promote_host_entry(entry) for entry in bag]  # WHY: Keep behavior.
+    _promote_host_bag(doc, "proxy_hostnames")  # WHY: Normalize the top-level proxy bag before menu 206 reads it.
+    _promote_host_bag(doc, "vpn_hostnames")  # WHY: Normalize the top-level VPN bag before menu 206 reads it.
+    _promote_city_host_bags(doc.get("by_city"))  # WHY: Normalize each city bag without adding nested branches here.
     return doc  # WHY: Keep behavior.
 
 
@@ -162,16 +166,7 @@ def _promote_zcc_document(doc: dict[str, Any]) -> dict[str, Any]:  # WHY: Keep b
     Returns:
         The same ``doc`` after promotion, for chaining convenience.
     """
-    roles = doc.get("roles")  # WHY: Keep behavior.
-    # The on-disk ZCC schema stores ``roles`` as a list of role objects (each
-    # with its own ``fqdns`` bag). Older/hand-authored variants may store it as
-    # a dict keyed by role name. Support both so promotion is shape-agnostic.
-    role_bodies: list[Any] = []  # WHY: Keep behavior.
-    if isinstance(roles, list):  # WHY: Keep behavior.
-        role_bodies = list(roles)  # WHY: Keep behavior.
-    elif isinstance(roles, dict):  # WHY: Keep behavior.
-        role_bodies = list(roles.values())  # WHY: Keep behavior.
-    for role_body in role_bodies:  # WHY: Keep behavior.
+    for role_body in _iter_zcc_role_bodies(doc):  # WHY: Reuse the tolerant role iterator used by observation stamping.
         if not isinstance(role_body, dict):  # WHY: Keep behavior.
             continue  # WHY: Keep behavior.
         fqdns = role_body.get("fqdns")  # WHY: Keep behavior.
