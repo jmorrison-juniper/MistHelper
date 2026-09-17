@@ -78,7 +78,7 @@ class _Wan2VariableIO(_ClusterBase):
         """Emit the 'no templates' message and log line."""
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning(" No gateway templates found.")
-        logging.warning("No gateway templates available for modification")  # WHY: audit line
+        logger.warning("No gateway templates available for modification")  # WHY: audit line
 
     def _filter_excluded_sites(self, all_sites: list[dict[str, str]]) -> list[dict[str, str]]:
         """Remove sites matching the exclusion prefix."""
@@ -99,7 +99,7 @@ class _Wan2VariableIO(_ClusterBase):
             excluded,
             self._site_exclude_prefix,
         )
-        logging.info(
+        logger.info(
             "Menu #104: Excluded %s sites matching prefix '%s' from WAN2 template operation",
             excluded,
             self._site_exclude_prefix,
@@ -110,7 +110,7 @@ class _Wan2VariableIO(_ClusterBase):
         sites: list[dict[str, str]],
     ) -> dict[str, int]:
         """Count how many sites are assigned to each template."""
-        logging.info("Processing %s sites for template assignment counts", len(sites))  # WHY: log scope
+        logger.info("Processing %s sites for template assignment counts", len(sites))  # WHY: log scope
         counts: dict[str, int] = {}  # WHY: template_id -> count map
         for site in sites:  # WHY: iterate every kept site
             tid = site.get("gatewaytemplate_id", "").strip()  # WHY: guard missing field

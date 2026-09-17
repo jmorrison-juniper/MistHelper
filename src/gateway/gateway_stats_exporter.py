@@ -9,6 +9,9 @@ import threading  # WHY: Semaphore bounds concurrent Mist API connections.
 import time  # WHY: sleep between bounded retries when fetching device stats.
 from typing import Any  # WHY: opaque types for injected utility modules.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
+
 # WHY: ConnectionPoolExecutor is DI-injected via the execute_fn slot (1012 SC-003). No direct import needed.
 
 STATS_CSV_FILENAME: str = "AllGatewayDeviceStats.csv"  # WHY: canonical output CSV. Consumed by conflict analysis.
@@ -116,7 +119,7 @@ def _log_retry_failure(  # WHY: consolidate legacy warning phrasing at retry bou
 ) -> None:
     """Emit warning + retry banner preserving legacy phrasing."""
     _, _, device_name, site_name = device_info  # WHY: unpack for log context only.
-    logging.warning(  # WHY: preserve legacy attempt-failed warning phrasing.
+    logger.warning(  # WHY: preserve legacy attempt-failed warning phrasing.
         "! Attempt %s failed for device %s at site %s: %s", attempt + 1, device_name, site_name, exception
     )
 
@@ -126,7 +129,7 @@ def _log_terminal_failure(  # WHY: consolidate legacy error phrasing when retrie
 ) -> None:
     """Emit terminal error log after all retries exhausted."""
     _, _, device_name, site_name = device_info  # WHY: unpack for log context only.
-    logging.error(  # WHY: preserve legacy terminal failure phrasing.
+    logger.error(  # WHY: preserve legacy terminal failure phrasing.
         "! Failed to fetch device stats for %s at site %s after %s attempts: %s",
         device_name,
         site_name,
@@ -142,7 +145,7 @@ def _attempt_fetch_stats(  # WHY: single bounded fetch attempt with validation +
     site_id, device_id, device_name, site_name = device_info  # WHY: unpack for validation + log context.
     ValidationUtils.validate_site_id(site_id, "device_stats")  # WHY: validate before API call.
     ValidationUtils.validate_device_id(device_id, "device_stats")  # WHY: validate before API call.
-    logging.info("Calling getSiteDeviceStats for device %s at site %s", device_name, site_name)  # WHY: pre-log.
+    logger.info("Calling getSiteDeviceStats for device %s at site %s", device_name, site_name)  # WHY: pre-log.
     stats = _call_get_site_device_stats(site_id, device_id, connection_semaphore)  # WHY: bounded API call.
     return _enrich_stats_record(stats, device_info)  # WHY: add identifiers for CSV export.
 
@@ -153,11 +156,11 @@ def _log_attempt_success(  # WHY: log retry vs first-try success distinctly for 
     """Emit success log preserving legacy retry-vs-first-try phrasing."""
     _, _, device_name, site_name = device_info  # WHY: unpack for log context only.
     if attempt > 0:  # WHY: distinguish retry success from first-try success.
-        logging.info(  # WHY: retry-success banner keeps parity with legacy log wording.
+        logger.info(  # WHY: retry-success banner keeps parity with legacy log wording.
             "! Retry %s successful for device %s at site %s", attempt, device_name, site_name
         )
         return  # WHY: retry-success path already logged — skip debug fallthrough.
-    logging.debug(  # WHY: first-try success uses debug so normal runs stay quiet.
+    logger.debug(  # WHY: first-try success uses debug so normal runs stay quiet.
         "! Collected device stats for gateway %s at site %s", device_name, site_name
     )
 
@@ -240,7 +243,7 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
         gateway_devices: list[tuple[str, str, str, str]],
     ) -> list[dict]:
         """Fetch device stats concurrently with a bounded thread pool. Return aggregated results."""
-        logging.info("! Fast mode: Processing %s gateway devices concurrently...", len(gateway_devices))  # WHY: banner.
+        logger.info("! Fast mode: Processing %s gateway devices concurrently...", len(gateway_devices))  # WHY: banner.
         max_workers = min(CONCURRENT_WORKER_CAP, len(gateway_devices))  # WHY: cap workers to avoid conn overuse.
         connection_semaphore = threading.Semaphore(max_workers)  # WHY: bound concurrent API connections.
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:  # WHY: managed pool cleanup.
@@ -254,13 +257,13 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
         gateway_devices: list[tuple[str, str, str, str]], fast: bool
     ) -> list[dict]:
         """Fetch device stats sequentially. Return aggregated results."""
-        logging.info("! Processing %s gateway devices sequentially...", len(gateway_devices))  # WHY: legacy banner.
+        logger.info("! Processing %s gateway devices sequentially...", len(gateway_devices))  # WHY: legacy banner.
         all_stats: list[dict] = []  # WHY: accumulate per-device stats records.
         for index, device_info in enumerate(  # WHY: enumerate to keep legacy "index/total" progress log.
             tqdm(gateway_devices, desc="Gateway Device Stats", unit="device"), 1
         ):
             _, _, device_name, site_name = device_info  # WHY: unpack for progress log.
-            logging.debug(  # WHY: debug-level progress log keeps normal runs quiet.
+            logger.debug(  # WHY: debug-level progress log keeps normal runs quiet.
                 "! Processing device %s/%s: %s at %s", index, len(gateway_devices), device_name, site_name
             )
             result = GatewayStatsExporter._fetch_one_device_stats(device_info, fast)  # WHY: fetch single device.
@@ -278,10 +281,10 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
         all_stats: list[dict], gateway_devices: list[tuple[str, str, str, str]]
     ) -> None:
         """Emit legacy export summary with success/failure tallies."""
-        logging.info(  # WHY: emit CSV path + record count for post-run confirmation.
+        logger.info(  # WHY: emit CSV path + record count for post-run confirmation.
             "! Gateway device statistics saved to %s (%s records).", STATS_CSV_FILENAME, len(all_stats)
         )
-        logging.info(  # WHY: API-optimization banner surfaces device-count served.
+        logger.info(  # WHY: API-optimization banner surfaces device-count served.
             "! API Optimization: Collected detailed stats for %s gateways", len(gateway_devices)
         )
         successful_requests = sum(  # WHY: count non-failed rows for pass/fail tally.
@@ -289,11 +292,11 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
         )
         failed_requests = len(all_stats) - successful_requests  # WHY: compute failure tally.
         if failed_requests > 0:  # WHY: emit warn when any request failed.
-            logging.warning(  # WHY: warn banner surfaces partial-failure count for operator.
+            logger.warning(  # WHY: warn banner surfaces partial-failure count for operator.
                 "! %s requests failed out of %s total", failed_requests, len(all_stats)
             )
             return  # WHY: warn path already logged — skip the all-success info line.
-        logging.info(  # WHY: info banner confirms full-success run for operator.
+        logger.info(  # WHY: info banner confirms full-success run for operator.
             "! All %s requests completed successfully", successful_requests
         )
 
@@ -303,10 +306,10 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
     ) -> None:
         """Flatten, export, and summarize collected gateway device stats."""
         if not all_stats:  # WHY: guard clause — nothing to export.
-            logging.warning(" No gateway device statistics found. CSV not created.")  # WHY: legacy warn banner.
+            logger.warning(" No gateway device statistics found. CSV not created.")  # WHY: legacy warn banner.
             return  # WHY: short-circuit empty payload path.
         sanitized = GatewayStatsExporter._flatten_stats(all_stats)  # WHY: CSV-safe rows.
-        logging.info("Saving sanitized gateway stats to %s", STATS_CSV_FILENAME)  # WHY: pre-save log.
+        logger.info("Saving sanitized gateway stats to %s", STATS_CSV_FILENAME)  # WHY: pre-save log.
         DataExporter.write_with_format_selection(
             sanitized, STATS_CSV_FILENAME, api_function_name="getSiteDeviceStats"
         )  # WHY: persist rows.
@@ -315,15 +318,15 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
     @staticmethod
     def device_stats(fast: bool = False) -> None:  # WHY: public entrypoint for gateway stats export flow.
         """Collect and export detailed gateway device statistics."""
-        logging.info(  # WHY: legacy INFO banner marks start of stats collection run.
+        logger.info(  # WHY: legacy INFO banner marks start of stats collection run.
             "[INFO] Collecting detailed device statistics for all gateways in the org..."
         )
         if fast:  # WHY: legacy banner announcing fast-mode path.
-            logging.info(" Fast mode enabled: Using cached data and concurrent processing")  # WHY: fast-mode banner.
+            logger.info(" Fast mode enabled: Using cached data and concurrent processing")  # WHY: fast-mode banner.
         org_id = ConfigUtils.get_cached_or_prompted_org_id()  # WHY: resolve org id via standard pathway.
         gateway_devices = GatewayExportUtilsRef._get_devices_with_sites(org_id, fast=fast)  # WHY: inventory.
         if not gateway_devices:  # WHY: guard clause — no devices means nothing to export.
-            logging.warning("[WARN] No gateway devices found. Exiting gateway device stats export.")  # WHY: exit warn.
+            logger.warning("[WARN] No gateway devices found. Exiting gateway device stats export.")  # WHY: exit warn.
             return  # WHY: short-circuit empty-inventory path.
         if fast and len(gateway_devices) > CONCURRENT_FAST_THRESHOLD:  # WHY: switch to threads for large fleets.
             all_stats = GatewayStatsExporter._process_devices_concurrent(gateway_devices)  # WHY: concurrent path.
@@ -338,14 +341,14 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
         if CacheUtils.check_and_generate_csv(
             output_file, lambda: GatewayStatsExporter.device_stats(fast=fast)
         ):  # WHY: cache hit returns True. Miss regenerates via the lambda.
-            logging.info("! %s already exists and is fresh - using cached data", output_file)
+            logger.info("! %s already exists and is fresh - using cached data", output_file)
             return
-        logging.info("! %s was generated or refreshed", output_file)
+        logger.info("! %s was generated or refreshed", output_file)
 
     @staticmethod
     def wan_port_conflicts() -> None:
         """Analyze gateway WAN ports for internal IP conflicts and export report."""
-        logging.info(" Starting WAN port IP conflict analysis for individual gateway devices...")
+        logger.info(" Starting WAN port IP conflict analysis for individual gateway devices...")
         gateway_data = GatewayStatsExporter._load_gateway_stats_for_conflicts()  # WHY: load base CSV.
         if not gateway_data:  # WHY: guard clause — nothing to analyze.
             return
@@ -363,7 +366,7 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
         try:
             with open(stats_path, encoding="utf-8") as csvfile:  # WHY: UTF-8 by convention for CSV cache.
                 gateway_data = list(csv.DictReader(csvfile))  # WHY: materialise rows for repeated iteration.
-            logging.info("! Loaded %s gateway device records for analysis", len(gateway_data))
+            logger.info("! Loaded %s gateway device records for analysis", len(gateway_data))
             return gateway_data
         except Exception as exception:  # pylint: disable=broad-exception-caught  # WHY: preserve legacy message.
             logging.error("! Failed to load %s: %s", stats_file, exception)
@@ -374,7 +377,7 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
     @staticmethod
     def _analyze_all_gateway_conflicts(gateway_data: list[dict]) -> list[dict]:
         """Analyze all gateway rows for WAN IP duplication conflicts."""
-        logging.info(" Analyzing individual gateways for internal WAN port IP conflicts...")
+        logger.info(" Analyzing individual gateways for internal WAN port IP conflicts...")
         conflicts_found: list[dict] = []  # WHY: accumulator for all per-device conflict records.
         for index, row in enumerate(gateway_data):  # WHY: single pass across gateway rows.
             device_conflicts = GatewayStatsExporter._analyze_device_ip_conflicts(row, index)
@@ -421,7 +424,7 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
             if len(ports) <= 1:  # WHY: single-port entries are not conflicts.
                 continue
             conflicts.append({"value": ip_address, "ports": ports})  # WHY: keep as structured record.
-            logging.warning(  # WHY: preserve legacy per-conflict warning line.
+            logger.warning(  # WHY: preserve legacy per-conflict warning line.
                 "! IP conflict in %s: %s on ports %s", device_name, ip_address, ", ".join(ports)
             )
         return conflicts
@@ -450,47 +453,47 @@ class GatewayStatsExporter:  # WHY: namespace class kept for legacy call-sites i
     def _export_conflict_results(conflicts_found: list[dict]) -> None:
         """Persist and display WAN conflict analysis results."""
         if not conflicts_found:  # WHY: guard clause — nothing to export or display.
-            logging.info(" No internal WAN port IP conflicts found")
+            logger.info(" No internal WAN port IP conflicts found")
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info(" No internal WAN port IP conflicts found - healthy WAN port configurations")
+            logger.info(" No internal WAN port IP conflicts found - healthy WAN port configurations")
             return
         conflicts_found.sort(key=lambda x: (x.get("device_name", ""), x.get("port_name", "")))  # WHY: stable.
         DataExporter.write_with_format_selection(
             conflicts_found, CONFLICTS_CSV_FILENAME, api_function_name="getSiteDeviceStats"
         )  # WHY: persist rows.
         unique_gateways = {row.get("device_name", UNKNOWN_LABEL) for row in conflicts_found}  # WHY: dedupe.
-        logging.info("! Exported %s conflicts from %s gateways", len(conflicts_found), len(unique_gateways))
+        logger.info("! Exported %s conflicts from %s gateways", len(conflicts_found), len(unique_gateways))
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info(
+        logger.info(
             "! WAN port IP conflicts exported to %s (%s records)",
             CONFLICTS_CSV_FILENAME,
             len(conflicts_found),
         )
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("! Summary: %s gateways with IP conflicts", len(unique_gateways))
+        logger.info("! Summary: %s gateways with IP conflicts", len(unique_gateways))
         GatewayStatsExporter._display_conflict_samples(conflicts_found)  # WHY: emit operator-facing sample.
 
     @staticmethod
     def _display_conflict_samples(conflicts_found: list[dict]) -> None:
         """Print a short conflict sample section for quick operator review."""
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("\n  Sample WAN Port IP Conflicts Found:")
+        logger.info("\n  Sample WAN Port IP Conflicts Found:")
         for idx, record in enumerate(conflicts_found[:SAMPLE_CONFLICT_LIMIT], 1):  # WHY: top-N sample only.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info(
+            logger.info(
                 "%2d. %s (%s)",
                 idx,
                 record.get("device_name", UNKNOWN_LABEL),
                 record.get("site_name", UNKNOWN_SITE_NAME),
             )
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info(
+            logger.info(
                 "    Port %s has IP %s",
                 record.get("port_name", UNKNOWN_LABEL),
                 record.get("port_ip", UNKNOWN_LABEL),
             )
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info("    Conflicts with: %s\n", record.get("conflict_with_ports", UNKNOWN_LABEL))
+            logger.info("    Conflicts with: %s\n", record.get("conflict_with_ports", UNKNOWN_LABEL))
         if len(conflicts_found) > SAMPLE_CONFLICT_LIMIT:  # WHY: only emit trailer when truncation happened.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info("... and %s more conflicted ports", len(conflicts_found) - SAMPLE_CONFLICT_LIMIT)
+            logger.info("... and %s more conflicted ports", len(conflicts_found) - SAMPLE_CONFLICT_LIMIT)

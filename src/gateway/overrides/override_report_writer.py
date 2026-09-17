@@ -8,6 +8,9 @@ from typing import Any  # Generic typing for the per-port entry dicts
 
 from . import _deps  # Sibling runtime dependency container set by configure_gateway_override_dependencies
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
+
 OUTPUT_FILENAME = "GatewayOverriddenPorts.csv"  # Single source of truth for the report file name
 
 _EMPTY_FIELDNAMES: list[str] = [  # Header layout preserved verbatim from the original analyzer
@@ -37,18 +40,18 @@ class OverrideReportWriter:
     @staticmethod
     def write_empty() -> None:
         """Write a header-only CSV and print the compliant-fleet message when no overrides exist."""
-        logging.info(  # Legacy log preserved verbatim for downstream log parsers
+        logger.info(  # Legacy log preserved verbatim for downstream log parsers
             " No template overrides found - all gateways are compliant with their assigned templates!"
         )
         output_path = _deps.FilePathUtils.get_csv_path(OUTPUT_FILENAME)  # Resolves data/ output dir
         with open(output_path, mode="w", newline="", encoding="utf-8") as csvfile:  # Truncate-and-write CSV
             writer = csv.DictWriter(csvfile, fieldnames=_EMPTY_FIELDNAMES)  # DictWriter for header-only output
             writer.writeheader()  # Header row only. No data rows are written when fleet is fully compliant
-        logging.debug("Header-only CSV written to %s", output_path)  # Confirm write completed for operator log
+        logger.debug("Header-only CSV written to %s", output_path)  # Confirm write completed for operator log
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("! Gateway override report written to %s", OUTPUT_FILENAME)
+        logger.info("! Gateway override report written to %s", OUTPUT_FILENAME)
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info(" No template overrides found - all gateways are compliant with their assigned templates!")
+        logger.info(" No template overrides found - all gateways are compliant with their assigned templates!")
 
     @staticmethod
     def write_full(
@@ -58,13 +61,13 @@ class OverrideReportWriter:
         target_ports: list[str],
     ) -> None:
         """Write entries via DataExporter and print the legacy operator-facing summary block."""
-        logging.info("Writing %d override entries to %s", len(entries), OUTPUT_FILENAME)  # before action
+        logger.info("Writing %d override entries to %s", len(entries), OUTPUT_FILENAME)  # before action
         _deps.DataExporter.write_with_format_selection(
             entries,
             OUTPUT_FILENAME,
             api_function_name="getSiteDeviceStats",
         )  # Multi-backend writer (CSV/SQLite/etc)
-        logging.debug("Override entries persisted via DataExporter")  # after action confirmation
+        logger.debug("Override entries persisted via DataExporter")  # after action confirmation
         OverrideReportWriter._log_summary(entries, total_gateways, devices_with_overrides_count)  # Legacy logs
         OverrideReportWriter._print_summary(  # Legacy operator-facing console block
             entries=entries,
@@ -84,13 +87,13 @@ class OverrideReportWriter:
             gateways_with_overrides = len({entry["device_id"] for entry in entries})  # Unique device_id count
         else:
             gateways_with_overrides = 0  # No entries means zero gateways had overrides (sanity for log line)
-        logging.info(  # Legacy info log preserved verbatim for downstream log parsers
+        logger.info(  # Legacy info log preserved verbatim for downstream log parsers
             "! Gateway override report written to %s with %d overridden ports from %d gateway devices.",
             OUTPUT_FILENAME,
             len(entries),
             gateways_with_overrides,
         )
-        logging.info(  # Legacy info log preserved verbatim for downstream log parsers
+        logger.info(  # Legacy info log preserved verbatim for downstream log parsers
             "! API Optimization: Made device config/stats calls for only %d devices instead of all %d devices",
             devices_with_overrides_count,
             total_gateways,
@@ -125,24 +128,24 @@ class OverrideReportWriter:
         """Emit the legacy console summary lines given precomputed stats."""
         saved_calls = total_gateways - devices_with_overrides_count  # API calls saved by the override pre-filter
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("! Gateway override report written to %s", OUTPUT_FILENAME)
+        logger.info("! Gateway override report written to %s", OUTPUT_FILENAME)
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info(
+        logger.info(
             "! Found %d overridden ports across %d of %d gateway devices",
             total_overridden_ports,
             gateways_with_overrides,
             total_gateways,
         )
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info(
+        logger.info(
             "! API Optimization: Only fetched live data for %d devices with overrides (saved %d unnecessary API calls)",
             devices_with_overrides_count,
             saved_calls,
         )
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("! Target ports analyzed: %s", ", ".join(target_ports))
+        logger.info("! Target ports analyzed: %s", ", ".join(target_ports))
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-        logging.info("! These are outliers that may need correction to match template configuration")
+        logger.info("! These are outliers that may need correction to match template configuration")
         if total_overridden_ports == 0:  # Repeat compliant-fleet message when full path produces zero rows
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.info(" No template overrides found - all gateways are compliant with their assigned templates!")
+            logger.info(" No template overrides found - all gateways are compliant with their assigned templates!")

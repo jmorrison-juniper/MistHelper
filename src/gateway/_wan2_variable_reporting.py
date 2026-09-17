@@ -13,6 +13,8 @@ from typing import Any  # WHY: result payloads are heterogenous dicts
 
 from ._wan2_variable_cluster import _ClusterBase  # WHY: parent-proxy pattern shared with peers
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class _Wan2VariableReporting(_ClusterBase):
     """Audit reports + final-summary helpers."""
@@ -164,7 +166,7 @@ class _Wan2VariableReporting(_ClusterBase):
         devices_needing_migration: list[dict[str, Any]],
     ) -> None:
         """Log operation summary for audit trail."""
-        logging.warning(
+        logger.warning(
             "Menu #104 DESTRUCTIVE operation complete (%s mode): %s templates updated, %s failed",
             self._operation_mode.upper(),
             success_count,
@@ -174,7 +176,7 @@ class _Wan2VariableReporting(_ClusterBase):
             return  # WHY: no additional log needed
         dev_ok = sum(1 for r in device_results if r["status"] == "SUCCESS")  # WHY: success counter
         dev_fail = len(device_results) - dev_ok  # WHY: derive failure count
-        logging.warning(
+        logger.warning(
             "Device override migration (%s mode): %s successful, %s failed",
             self._operation_mode.upper(),
             dev_ok,

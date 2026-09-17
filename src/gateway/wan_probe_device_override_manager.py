@@ -11,6 +11,9 @@ from typing import Any  # WHY: opaque types for injected utility modules.
 
 from tqdm import tqdm  # WHY: progress bar for per-site and per-device loops.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
+
 apisession: Any = None  # WHY: Mist API session slot populated at wiring time.
 ConfigUtils: Any = None  # WHY: config helpers (org id + stop-signal check).
 CacheUtils: Any = None  # WHY: CSV cache generator for exported data.
@@ -53,9 +56,7 @@ def configure_wan_probe_device_override_dependencies(  # WHY: wire module-level 
     dependencies: WANProbeDeviceOverrideDependencies,
 ) -> None:
     """Configure runtime dependencies from MistHelper orchestration layer."""
-    logging.info(
-        "Wiring WAN probe device override deps (prefix=%r)", dependencies.site_exclude_prefix
-    )  # WHY: log wire.
+    logger.info("Wiring WAN probe device override deps (prefix=%r)", dependencies.site_exclude_prefix)  # WHY: log wire.
     globals().update(  # WHY: bulk-assign module slots without listing 10 explicit globals.
         {
             "apisession": dependencies.apisession,  # WHY: expose API session at module scope.
@@ -160,16 +161,14 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
         print(f"    Probe IPs: {self.probe_ips}")  # WHY: echo configured probe IPs.
         print(f"    Probe Profile: {self.probe_profile}")  # WHY: echo configured probe profile.
         print(HEADER_RULE)  # WHY: close configuration echo block.
-        logging.warning(
-            "Menu #167 DESTRUCTIVE: Configure WAN Probe on Device Port Overrides started"
-        )  # WHY: audit log.
+        logger.warning("Menu #167 DESTRUCTIVE: Configure WAN Probe on Device Port Overrides started")  # WHY: audit log.
 
     def _initialize(self) -> bool:  # WHY: initialization gate — resolves org id.
         """Initialize org_id. Returns True on success."""
         self.org_id = ConfigUtils.get_cached_or_prompted_org_id()  # WHY: cached-or-prompted resolution.
         if not self.org_id:  # WHY: empty org id means we cannot proceed.
             print(" Failed to get organization ID.")  # WHY: user-facing diagnostic.
-            logging.error("Menu #167: Could not obtain org_id")  # WHY: audit log.
+            logger.error("Menu #167: Could not obtain org_id")  # WHY: audit log.
             return False
         return True
 
@@ -183,12 +182,10 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
         self.templates = self._read_csv_rows("OrgGatewayTemplates.csv")  # WHY: load template rows.
         if not self.templates:  # WHY: no templates → cannot proceed.
             print(" No gateway templates found.")  # WHY: user-facing diagnostic.
-            logging.warning("Menu #167: No gateway templates available")  # WHY: audit log.
+            logger.warning("Menu #167: No gateway templates available")  # WHY: audit log.
             return False
         self.sites = self._read_csv_rows("SiteList.csv")  # WHY: load site rows.
-        logging.info(
-            "Loaded %s gateway templates and %s sites", len(self.templates), len(self.sites)
-        )  # WHY: audit log.
+        logger.info("Loaded %s gateway templates and %s sites", len(self.templates), len(self.sites))  # WHY: audit log.
         return True
 
     @staticmethod
@@ -205,7 +202,7 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
         selection = self._prompt_template_selection()  # WHY: capture and normalise operator input.
         if selection == CANCEL_TOKEN:  # WHY: explicit cancel keyword short-circuits selection.
             print(" Operation cancelled.")  # WHY: user-facing diagnostic.
-            logging.info("Menu #167 cancelled by user at template selection")  # WHY: audit log.
+            logger.info("Menu #167 cancelled by user at template selection")  # WHY: audit log.
             return False
         return self._resolve_template_selection(selection, template_list)  # WHY: parse + validate numeric input.
 
@@ -276,7 +273,7 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
         self.selected_template = template_list[idx]  # WHY: commit operator choice to instance state.
         template_name = self.selected_template["name"]  # WHY: cached for logging output below.
         print(f"\n  Selected template: {template_name}")  # WHY: echo choice back to operator.
-        logging.info("Menu #167: Selected template %s", template_name)  # WHY: audit log.
+        logger.info("Menu #167: Selected template %s", template_name)  # WHY: audit log.
         return True
 
     def _find_template_sites(self) -> bool:  # WHY: expand selected template into concrete site list.
@@ -291,10 +288,10 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
         ]
         if not self.template_sites:  # WHY: no sites → cannot proceed further.
             print(f"\n  No sites found using template '{template_name}'.")  # WHY: user-facing diagnostic.
-            logging.warning("Menu #167: No sites using template %s", template_name)  # WHY: audit log.
+            logger.warning("Menu #167: No sites using template %s", template_name)  # WHY: audit log.
             return False
         print(f"\n  Found {len(self.template_sites)} sites using template '{template_name}'")  # WHY: progress echo.
-        logging.info("Found %s sites using template %s", len(self.template_sites), template_name)  # WHY: audit log.
+        logger.info("Found %s sites using template %s", len(self.template_sites), template_name)  # WHY: audit log.
         return True
 
     @staticmethod
@@ -311,18 +308,18 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
         if not all_gateways:  # WHY: nothing to inspect — emit diagnostics and return.
             print(f"\n  No gateway devices found in the {len(self.template_sites)} sites using this template.")
             print("  Gateways must be assigned to sites before checking for port overrides.")  # WHY: hint operator.
-            logging.info("Menu #167: No gateway devices found in template sites")  # WHY: audit log.
+            logger.info("Menu #167: No gateway devices found in template sites")  # WHY: audit log.
             return []
         print(f"\n  Found {len(all_gateways)} gateway devices. Checking for WAN port overrides...")  # WHY: progress.
         devices = self._collect_devices_with_overrides(all_gateways)  # WHY: filter to overridden-only set.
         if not devices:  # WHY: no device-level overrides — short-circuit.
             print(f"\n  No WAN port overrides found on the {len(all_gateways)} gateway devices.")  # WHY: diagnostic.
             print("  All devices are using template-level WAN configuration.")  # WHY: hint operator.
-            logging.info("Menu #167: No devices with WAN port overrides found")  # WHY: audit log.
+            logger.info("Menu #167: No devices with WAN port overrides found")  # WHY: audit log.
             return []
         total_ports = sum(len(d["overridden_wan_ports"]) for d in devices)  # WHY: aggregate port count.
         print(f"\n  Found {len(devices)} devices with {total_ports} overridden WAN ports")  # WHY: progress echo.
-        logging.info("Found %s devices with %s overridden WAN ports", len(devices), total_ports)  # WHY: audit log.
+        logger.info("Found %s devices with %s overridden WAN ports", len(devices), total_ports)  # WHY: audit log.
         return devices
 
     def _scan_template_sites_for_gateways(self) -> list[dict[str, Any]]:
@@ -340,7 +337,7 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
         site_id = site_info["site_id"]  # WHY: site UUID for API call + reporting.
         site_name = site_info["site_name"]  # WHY: site name preserved for downstream report rows.
         try:
-            logging.info("Listing gateway devices for site %s", site_name)  # WHY: pre-call log.
+            logger.info("Listing gateway devices for site %s", site_name)  # WHY: pre-call log.
             resp = mistapi.api.v1.sites.devices.listSiteDevices(  # WHY: enumerate gateways at this site.
                 apisession, site_id, type="gateway", limit=1000
             )
@@ -348,7 +345,7 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
         except Exception as error:  # pylint: disable=broad-exception-caught
             logging.warning("Error scanning site %s: %s", site_name, error)  # WHY: per-site failure is non-fatal.
             return []
-        logging.debug("Site %s returned %s gateway entries", site_name, len(devices))  # WHY: post-call log.
+        logger.debug("Site %s returned %s gateway entries", site_name, len(devices))  # WHY: post-call log.
         return [
             {"device": device, "site_id": site_id, "site_name": site_name}  # WHY: wrap with site metadata.
             for device in devices  # WHY: iterate each gateway record.
@@ -450,7 +447,7 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
         ).strip()
         if confirmation != APPLY_CONFIRM_TOKEN:  # WHY: require exact uppercase APPLY.
             print(" Operation cancelled.")  # WHY: user-facing diagnostic.
-            logging.info("Menu #167 cancelled by user at final confirmation")  # WHY: audit log.
+            logger.info("Menu #167 cancelled by user at final confirmation")  # WHY: audit log.
             return False
         return True
 
@@ -488,7 +485,7 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
         result: dict[str, Any],
     ) -> None:
         """Execute the fetch/patch/commit pipeline for a single device."""
-        logging.info("Updating WAN probe overrides for device %s", result["device_name"])  # WHY: pre-action log.
+        logger.info("Updating WAN probe overrides for device %s", result["device_name"])  # WHY: pre-action log.
         device_config = self._fetch_device_config(device, result)  # WHY: fetch + validate device config.
         if device_config is None:  # WHY: validation failed — result already set, exit early.
             return
@@ -503,7 +500,7 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
             return
         result["ports_updated"] = ports_modified  # WHY: record names of mutated ports.
         self._commit_device_update(device, device_config, dry_run, result)  # WHY: push or dry-run.
-        logging.debug("Device %s update result: %s", result["device_name"], result["status"])  # WHY: post-log.
+        logger.debug("Device %s update result: %s", result["device_name"], result["status"])  # WHY: post-log.
 
     def _initial_device_result(self, device: dict[str, Any]) -> dict[str, Any]:  # nosec B101
         """Return a fresh result skeleton for one device update attempt."""
@@ -522,7 +519,7 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
     @staticmethod
     def _fetch_device_config(device: dict[str, Any], result: dict[str, Any]) -> dict[str, Any] | None:
         """Fetch device config from Mist and verify it has a usable port_config."""
-        logging.debug("Fetching device config for %s", device["device_name"])  # WHY: pre-call log.
+        logger.debug("Fetching device config for %s", device["device_name"])  # WHY: pre-call log.
         resp = mistapi.api.v1.sites.devices.getSiteDevice(  # WHY: full device config from Mist.
             apisession, device["site_id"], device["device_id"]
         )
@@ -558,7 +555,7 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
                 "probe_profile": self.probe_profile,  # WHY: current profile value.
             }
             ports_modified.append(port_name)  # WHY: record success for this port.
-            logging.debug("Device %s: Updated %s probe config", device_name, port_name)  # WHY: audit log.
+            logger.debug("Device %s: Updated %s probe config", device_name, port_name)  # WHY: audit log.
         return ports_modified
 
     @staticmethod
@@ -572,20 +569,20 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
         device_name = device["device_name"]  # WHY: cached for logging.
         if dry_run:  # WHY: skip the actual API write in dry-run mode.
             result["status"] = "DRY-RUN"  # WHY: mark simulated outcome.
-            logging.info("DRY-RUN: Would update device %s ports: %s", device_name, result["ports_updated"])
+            logger.info("DRY-RUN: Would update device %s ports: %s", device_name, result["ports_updated"])
             return
-        logging.info("Updating device %s via Mist API", device_name)  # WHY: pre-call log.
+        logger.info("Updating device %s via Mist API", device_name)  # WHY: pre-call log.
         update_resp = mistapi.api.v1.sites.devices.updateSiteDevice(  # WHY: write back patched config.
             apisession, device["site_id"], device["device_id"], body=device_config
         )
-        logging.debug("Device %s update API status=%s", device_name, update_resp.status_code)  # WHY: post-call log.
+        logger.debug("Device %s update API status=%s", device_name, update_resp.status_code)  # WHY: post-call log.
         if update_resp.status_code == HTTP_OK:  # WHY: success path.
             result["status"] = "SUCCESS"  # WHY: record success outcome.
-            logging.info("Successfully updated device %s", device_name)  # WHY: audit log.
+            logger.info("Successfully updated device %s", device_name)  # WHY: audit log.
             return
         result["status"] = "FAILED"  # WHY: non-200 → mark failed.
         result["error"] = f"API returned status {update_resp.status_code}"  # WHY: capture status code.
-        logging.error("Failed to update device %s: %s", device_name, update_resp.status_code)  # WHY: audit log.
+        logger.error("Failed to update device %s: %s", device_name, update_resp.status_code)  # WHY: audit log.
 
     def _generate_report(self, results: list[dict[str, Any]], dry_run: bool) -> None:  # nosec B101
         """Generate and display final report."""
@@ -597,16 +594,16 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
         print(f"\n  Report saved to: {AUDIT_OUTPUT_FILE}")  # WHY: echo audit file path.
         print(HEADER_RULE)  # WHY: close banner.
         success_count = self._count_success(results)  # WHY: successful updates only.
-        logging.warning("Menu #167 DESTRUCTIVE operation complete: %s devices updated", success_count)  # WHY: audit.
+        logger.warning("Menu #167 DESTRUCTIVE operation complete: %s devices updated", success_count)  # WHY: audit.
 
     def _write_audit_csv(self, results: list[dict[str, Any]]) -> None:  # WHY: isolate CSV export side effect.
         """Serialise per-device results to the audit CSV via the injected exporter."""
         report_data = self._build_report_rows(results)  # WHY: CSV-shaped rows per device.
-        logging.info("Saving WAN probe override audit CSV: %s", AUDIT_OUTPUT_FILE)  # WHY: pre-write log.
+        logger.info("Saving WAN probe override audit CSV: %s", AUDIT_OUTPUT_FILE)  # WHY: pre-write log.
         DataExporter.write_with_format_selection(
             report_data, AUDIT_OUTPUT_FILE, api_function_name="getSiteDeviceWanProbeOverrides"
         )  # type: ignore[no-untyped-call]
-        logging.debug("Audit CSV saved (rows=%s)", len(report_data))  # WHY: post-write log.
+        logger.debug("Audit CSV saved (rows=%s)", len(report_data))  # WHY: post-write log.
 
     def _emit_summary(  # WHY: dispatch dry-run vs apply summary printer.
         self,

@@ -40,7 +40,7 @@ class _Wan2VariableDevice(_ClusterBase):
         )
         self._print_device_migration_header()  # WHY: mode banner
         affected, site_to_template = self._build_affected_site_set(sites, migrated_template_ids)
-        logging.info(
+        logger.info(
             "Device migration scope: %s sites using migrated templates (out of %s total sites)",
             len(affected),
             len(sites),
@@ -97,7 +97,7 @@ class _Wan2VariableDevice(_ClusterBase):
         """Classify a single site row, updating affected/site_to_template."""
         name = site.get("name", "").strip()  # WHY: name feeds exclude prefix check
         if self._is_excluded_site_name(name):  # WHY: SECURITY excludes handled via helper
-            logging.debug("Skipping excluded site %s from device migration scope", name)  # WHY: trace skip
+            logger.debug("Skipping excluded site %s from device migration scope", name)  # WHY: trace skip
             return  # WHY: drop excluded site entirely
         sid = site.get("id", "").strip()  # WHY: sid required for API scan
         tid = site.get("gatewaytemplate_id", "").strip()  # WHY: tid required for template correlation
@@ -126,7 +126,7 @@ class _Wan2VariableDevice(_ClusterBase):
             unit="site",
         ):  # WHY: progress bar over sites
             self._scan_one_site(sid, site_to_template, mistapi_mod, devices)  # WHY: extracted for CC budget
-        logging.info(
+        logger.info(
             "Found %s devices with %s overrides needing migration",
             len(devices),
             self._search_pattern,
@@ -169,7 +169,7 @@ class _Wan2VariableDevice(_ClusterBase):
             return None  # WHY: nothing to migrate
         if not any(k == search or k.startswith(f"{search}.") for k in port_config):  # WHY: fast filter
             return None  # WHY: device does not carry an override on the search pattern
-        logging.info("Found device '%s' with %s override at site %s", name, search, site_id)  # WHY: audit
+        logger.info("Found device '%s' with %s override at site %s", name, search, site_id)  # WHY: audit
         return {
             "site_id": site_id,  # WHY: needed for update API path
             "device_id": did,  # WHY: needed for update API path
@@ -244,7 +244,7 @@ class _Wan2VariableDevice(_ClusterBase):
         did = device_info["device_id"]  # WHY: reused across trace + API call
         sid = device_info["site_id"]  # WHY: needed for API path
         name = device_info["device_name"]  # WHY: log label
-        logging.debug("Fetching device config for %s (%s)", name, did)  # WHY: trace call site
+        logger.debug("Fetching device config for %s (%s)", name, did)  # WHY: trace call site
         resp = mistapi_mod.api.v1.sites.devices.getSiteDevice(self._apisession, sid, did)
         config = getattr(resp, "data", {})  # WHY: guard missing .data attr
         if not isinstance(config, dict):  # WHY: skip malformed device rows
@@ -272,11 +272,11 @@ class _Wan2VariableDevice(_ClusterBase):
         name = device_info["device_name"]  # WHY: reused in both branches
         if self._dry_run:  # WHY: dry-run bypasses API mutation
             result["status"] = "DRY-RUN"  # WHY: report path
-            logging.info(
+            logger.info(
                 "DRY-RUN: Would migrate port overrides for device %s: %s", name, result["ports_migrated"]
             )  # WHY: audit
             return  # WHY: no API call in dry-run
-        logging.debug("Updating device %s via API", name)  # WHY: trace call site
+        logger.debug("Updating device %s via API", name)  # WHY: trace call site
         update_resp = mistapi_mod.api.v1.sites.devices.updateSiteDevice(
             self._apisession, device_info["site_id"], device_info["device_id"], body=config
         )  # WHY: single mistapi update call
@@ -287,11 +287,11 @@ class _Wan2VariableDevice(_ClusterBase):
         """Populate result status/error from a device update response."""
         if update_resp.status_code == 200:  # WHY: 200 == success per Mist API
             result["status"] = "SUCCESS"  # WHY: report path
-            logging.info("Successfully migrated port overrides for device %s", name)  # WHY: audit success
+            logger.info("Successfully migrated port overrides for device %s", name)  # WHY: audit success
             return  # WHY: no error data to record
         result["status"] = "FAILED"  # WHY: any non-200 is a failure
         result["error"] = f"API returned status" f" {update_resp.status_code}"  # WHY: preserve original text
-        logging.error("Failed to update device %s: status %s", name, update_resp.status_code)  # WHY: audit
+        logger.error("Failed to update device %s: status %s", name, update_resp.status_code)  # WHY: audit
 
     @staticmethod
     def _rename_port_keys(
@@ -308,7 +308,7 @@ class _Wan2VariableDevice(_ClusterBase):
                 continue  # WHY: leave untouched
             port_config[new_key] = port_config.pop(key)  # WHY: rename preserves value
             renamed.append(f"{key}->{new_key}")  # WHY: diff line for report
-            logging.debug("Device %s: Renamed %s to %s", device_name, key, new_key)  # WHY: trace
+            logger.debug("Device %s: Renamed %s to %s", device_name, key, new_key)  # WHY: trace
         return renamed  # WHY: caller stores on result
 
     def _run_device_migrations(
@@ -320,7 +320,7 @@ class _Wan2VariableDevice(_ClusterBase):
         if not devices_needing_migration:  # WHY: empty list -> emit no-op message and return
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.info("\n  No devices with ge-0/0/1 overrides found - no device migrations needed")
-            logging.info("No device-level override migrations required")  # WHY: audit no-op
+            logger.info("No device-level override migrations required")  # WHY: audit no-op
             return []  # WHY: nothing to report
         self._print_device_migration_intro(len(devices_needing_migration))  # WHY: extracted for length
         results = self._dispatch_device_migration(devices_needing_migration, fast)  # WHY: extracted for CC
@@ -364,7 +364,7 @@ class _Wan2VariableDevice(_ClusterBase):
         logger.info("  Failed: %s", failed)
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("  Device migration report: GatewayDevice_WAN2_Override_Migration.csv")
-        logging.info("Device override migration: %s successful, %s failed", success, failed)  # WHY: audit
+        logger.info("Device override migration: %s successful, %s failed", success, failed)  # WHY: audit
 
     def _migrate_devices_fast(self, devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Migrate devices using connection pool (fast mode)."""
@@ -373,14 +373,14 @@ class _Wan2VariableDevice(_ClusterBase):
         count = len(devices)  # WHY: banner count
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n  !? Fast mode enabled: Processing %s devices with connection pooling", count)
-        logging.info("Fast mode: Using connection pool for %s device migrations", count)  # WHY: audit
+        logger.info("Fast mode: Using connection pool for %s device migrations", count)  # WHY: audit
         results, failed = self._pool_fn(
             work_items=devices,
             worker_function=self._migrate_single_device_override,
             batch_description="devices",
         )  # WHY: hand off to injected pool executor
         if failed:  # WHY: pool reports failed items separately
-            logging.warning("Fast mode: %s device migrations failed", len(failed))  # WHY: audit
+            logger.warning("Fast mode: %s device migrations failed", len(failed))  # WHY: audit
         return list(results)  # WHY: caller expects a list
 
     def _migrate_devices_sequential(
@@ -390,7 +390,7 @@ class _Wan2VariableDevice(_ClusterBase):
     ) -> list[dict[str, Any]]:
         """Migrate devices sequentially."""
         self._print_sequential_banner(len(devices), fast)  # WHY: extracted for CC/length budget
-        logging.info("Sequential mode: Processing %s devices one at a time", len(devices))  # WHY: audit
+        logger.info("Sequential mode: Processing %s devices one at a time", len(devices))  # WHY: audit
         dummy_semaphore = threading.Semaphore(1)  # WHY: worker expects semaphore even in seq mode
         results: list[dict[str, Any]] = []  # WHY: accumulator for return
         for device_info in tqdm(
