@@ -4,19 +4,88 @@ Date: 2026-09-17.
 
 This audit reviewed the remote branches under `preservation/*` and `recovery/*`.
 The count before the audit was 119 branches.
-The count after the audit was 119 branches.
+The count after the audit was 0 branches.
+
+Every one of those 119 commits still exists. A tag holds each one. Read
+"The tag archive" below before you look for a branch that is no longer there.
 
 ## Result summary
 
-| Group | Count | Action |
-| - | -: | - |
-| `CONTAINED` | 0 | Delete no branch. |
-| `SUPERSEDED` | 0 | Delete no branch. |
-| `UNIQUE` | 119 | Keep all branches. |
+The first pass of this audit deleted no branch, because its content comparison
+did not finish. A second pass replaced that pass. This section records the
+second pass.
 
-No branch was deleted in this batch.
-The content comparison did not finish inside the required report window.
-The safety rule requires `UNIQUE` when the audit cannot decide.
+A faster comparison finished the measurement. For each branch the comparison
+read the merge base with `main`, listed the files the branch changed, and
+compared the object identifier of each file against the `main` version.
+
+| Group | Count | Meaning |
+| - | -: | - |
+| `DIFFERS` | 108 | At least one changed file does not match `main`. |
+| `NO_BASE` | 7 | The branch shares no merge base with `main`. |
+| `CONTAINED` | 2 | Every changed file matches `main` exactly. |
+| `NO_CHANGE` | 2 | The branch changed no file against its merge base. |
+
+Only 4 of the 119 branches proved safe to delete on content alone. A bulk delete
+of the other 115 was not safe, and a branch-by-branch judgment needed a reader.
+
+## The tag archive
+
+The audit took a third path instead of a delete or a keep. It moved every
+branch to a tag.
+
+A tag holds a commit for as long as the repository lives, exactly as a branch
+does. A tag does not appear in a branch list, so the branch list became short
+without the loss of a single commit.
+
+The steps ran in this order.
+
+1. Read the commit identifier of each of the 119 branches.
+2. Create one tag for each branch, named `archive/<the branch name>`.
+3. Push every tag to `origin`.
+4. Read the tags back from `origin` and compare each commit identifier against
+   the branch it came from. The comparison reported 0 tags missing and 0 tags
+   with a wrong commit identifier.
+5. Confirm that no worktree and no open pull request used any of the branches.
+   The check reported 0 blocked branches.
+6. Delete the 119 branches. The delete reported 119 successes and 0 failures.
+
+The tag push and the verification both finished before the first delete ran.
+
+## Recover a branch from its tag
+
+```powershell
+git fetch origin --tags
+git branch <the branch name> archive/<the branch name>
+git push origin <the branch name>
+```
+
+For example, this command restores one rescued stash.
+
+```powershell
+git branch preservation/rescue-stash-main-1-20260912 archive/preservation/rescue-stash-main-1-20260912
+```
+
+Warning: do not delete a tag under `archive/`. Each tag is the only remaining
+reference to its commit. A deleted tag lets the garbage collector remove the
+commit, and no other copy exists.
+
+## Why the easy tests give a wrong answer here
+
+A reader who repeats this audit will meet two traps.
+
+A difference against `main` reports every branch as different. The branches date
+from 2026-09-11 through 2026-09-14, and `main` gained thousands of changes after
+that date. The difference measures the growth of `main`, not the content of the
+branch.
+
+A count of unique commits also misleads. This repository squashes every merge,
+so a branch whose work already reached `main` still shows its original commits
+as unique. The measurement reported 55 branches with exactly one unique commit.
+
+The comparison that works reads the merge base first, then compares only the
+files that the branch itself changed.
+
 
 ## Repeat commands
 
