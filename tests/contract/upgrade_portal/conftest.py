@@ -21,6 +21,7 @@ from typing import Any
 
 import pytest
 
+from src.upgrade_portal.app.routes import auth  # The auth route owns the dependency row seam key.
 from tests.support.lock_store_double import FakeLockStore  # The store stand-in that keeps every test off Redis.
 
 logger = logging.getLogger(__name__)
@@ -235,6 +236,7 @@ def portal_app() -> Any:
     logger.info("Build the capture portal application for a contract test")  # WHY: ASCII, %s style, no credential.
     app = factory.create_app()
     app.config.update(TESTING=True)  # WHY: Test mode reports the real exception instead of a 500 page.
+    app.config[auth.DEPENDENCY_ROWS_KEY] = []  # Contract tests drive routes, not live store probes.
     app.config["ORG_UPGRADE_WRITES_ENABLED"] = True
     app.config[LAUNCHER_KEY] = None  # WHY: No contract test may start a real run driver thread.
     app.config[STOP_RUNNER_KEY] = None  # WHY: No contract test may send a real cancel to the cloud.
