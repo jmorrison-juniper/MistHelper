@@ -178,3 +178,15 @@ def tmp_jsonl_file(tmp_data_dir):
 def isolate_working_directory(tmp_path, monkeypatch):
     """Ensure tests never write to the real data/ directory."""
     monkeypatch.chdir(tmp_path)
+
+
+@pytest.fixture(autouse=True)
+def isolate_config_utils_state():
+    """Ensure tests never inherit an organization cache or Mist API session."""
+    from src.config.config_utils import ConfigUtils  # Import lazily so the environment guard runs first.
+
+    ConfigUtils._org_id_cache = None  # Clear a prior organization without reading the runtime context.
+    ConfigUtils._apisession = None  # Clear a prior session without reading the runtime context.
+    yield  # Run the test with only the state that the test creates.
+    ConfigUtils._org_id_cache = None  # Remove the organization without reading the runtime context.
+    ConfigUtils._apisession = None  # Remove the session without reading the runtime context.

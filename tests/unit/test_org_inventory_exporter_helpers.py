@@ -15,6 +15,7 @@ import csv
 import logging
 import os
 from collections import defaultdict
+from types import SimpleNamespace
 
 import pytest
 
@@ -442,12 +443,12 @@ def test_display_gateways_summary_table_emits_debug_log(caplog: pytest.LogCaptur
 
 # ---------------------------------------------------------------------------
 # _flatten_sort_export_devices / _flatten_sort_export_gateways
-# (need DataExporter mock via monkeypatch on MistHelper module)
+# (need DataExporter mock through the source resolver seam)
 # ---------------------------------------------------------------------------
 
 
 class _RecordingDataExporter:
-    """Stand-in for MistHelper.DataExporter capturing write calls."""
+    """Stand-in for the source resolver DataExporter that captures write calls."""
 
     calls: list[tuple[list, str, str | None]] = []
 
@@ -456,11 +457,30 @@ class _RecordingDataExporter:
         cls.calls.append((list(rows), filename, api_function_name))  # Record the strategy name too.
 
 
+@pytest.fixture
+def _source_resolver_double(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
+    """Provide source resolver state that each exporter helper test owns."""
+    from src.config.config_utils import ConfigUtils  # Import the source state owner used by the exporter.
+    from src.export import org_inventory_exporter as mod  # Import the module so the resolver seam can be patched.
+
+    session = object()  # Create a per-test Mist session double for ConfigUtils and the resolver.
+    ConfigUtils.set_apisession(session)  # Give ConfigUtils the session that this test owns.
+    ConfigUtils.set_cached_org_id("org-1")  # Give APIDataFetcher an org without reaching the prompt.
+    resolver = SimpleNamespace(  # Build only the attributes that these exporter helper tests read.
+        APIDataFetcher=_RecordingFetcher,
+        ConfigUtils=ConfigUtils,
+        DataExporter=_RecordingDataExporter,
+        PROGRESS_EMITTER=None,
+        apisession=session,
+    )
+    monkeypatch.setattr(mod, "SourceDependencyResolver", resolver)  # Patch the seam that the exporter reads.
+    return resolver  # Let each test set the emitter or fetcher behavior it needs.
+
+
 def test_flatten_sort_export_devices_sorts_by_site_and_writes_csv(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    _source_resolver_double: SimpleNamespace, caplog: pytest.LogCaptureFixture
 ) -> None:
     _RecordingDataExporter.calls = []
-    monkeypatch.setattr(MistHelper, "DataExporter", _RecordingDataExporter)
     devices = [
         {"name": "d2", "site_name": "Zeta"},
         {"name": "d1", "site_name": "Alpha"},
@@ -473,10 +493,9 @@ def test_flatten_sort_export_devices_sorts_by_site_and_writes_csv(
 
 
 def test_flatten_sort_export_gateways_sorts_by_site_and_writes_csv(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    _source_resolver_double: SimpleNamespace, caplog: pytest.LogCaptureFixture
 ) -> None:
     _RecordingDataExporter.calls = []
-    monkeypatch.setattr(MistHelper, "DataExporter", _RecordingDataExporter)
     gateways = [
         {"name": "g2", "site_name": "Zeta"},
         {"name": "g1", "site_name": "Alpha"},
@@ -634,7 +653,7 @@ def test_emit_combined_inventory_outputs_writes_all_three_artifacts(tmp_path) ->
 
 
 class _RecordingFetcher:
-    """Test double for MistHelper.APIDataFetcher that records init args + execute()."""
+    """Test double for the source resolver APIDataFetcher that records calls."""
 
     calls: list[dict] = []
 
@@ -646,7 +665,7 @@ class _RecordingFetcher:
 
 
 class _RecordingEmitter:
-    """Test double for MistHelper.PROGRESS_EMITTER capturing start/complete calls."""
+    """Test double for the source resolver PROGRESS_EMITTER progress calls."""
 
     def __init__(self) -> None:
         self.starts: list[tuple] = []
@@ -659,16 +678,16 @@ class _RecordingEmitter:
         self.completes.append((ctx, done, cancelled, elapsed))
 
 
-def _install_fetcher_and_emitter(monkeypatch) -> _RecordingEmitter:
-    _RecordingFetcher.calls = []
-    emitter = _RecordingEmitter()
-    monkeypatch.setattr(MistHelper, "APIDataFetcher", _RecordingFetcher, raising=True)
-    monkeypatch.setattr(MistHelper, "PROGRESS_EMITTER", emitter, raising=True)
-    return emitter
+def _install_fetcher_and_emitter(source_resolver_double: SimpleNamespace) -> _RecordingEmitter:
+    _RecordingFetcher.calls = []  # Clear earlier calls so this test owns the assertion state.
+    emitter = _RecordingEmitter()  # Build a per-test progress emitter double.
+    source_resolver_double.APIDataFetcher = _RecordingFetcher  # Route the exporter through the fetcher double.
+    source_resolver_double.PROGRESS_EMITTER = emitter  # Route the exporter through the emitter double.
+    return emitter  # Return the emitter so the test can assert progress events.
 
 
-def test_inventory_menu12_dispatches_via_apidatafetcher(monkeypatch) -> None:
-    emitter = _install_fetcher_and_emitter(monkeypatch)
+def test_inventory_menu12_dispatches_via_apidatafetcher(_source_resolver_double: SimpleNamespace) -> None:
+    emitter = _install_fetcher_and_emitter(_source_resolver_double)
     OrgInventoryExporter.inventory()
     assert len(_RecordingFetcher.calls) == 1
     call = _RecordingFetcher.calls[0]
@@ -681,16 +700,16 @@ def test_inventory_menu12_dispatches_via_apidatafetcher(monkeypatch) -> None:
     assert len(emitter.completes) == 1
 
 
-def test_inventory_menu12_skips_emitter_when_absent(monkeypatch) -> None:
-    _RecordingFetcher.calls = []
-    monkeypatch.setattr(MistHelper, "APIDataFetcher", _RecordingFetcher, raising=True)
-    monkeypatch.setattr(MistHelper, "PROGRESS_EMITTER", None, raising=True)
+def test_inventory_menu12_skips_emitter_when_absent(_source_resolver_double: SimpleNamespace) -> None:
+    _RecordingFetcher.calls = []  # Clear earlier calls so this test owns the assertion state.
+    _source_resolver_double.APIDataFetcher = _RecordingFetcher  # Route the exporter through the fetcher double.
+    _source_resolver_double.PROGRESS_EMITTER = None  # Verify the no-emitter branch.
     OrgInventoryExporter.inventory()
     assert _RecordingFetcher.calls[0]["_executed"] is True
 
 
-def test_devices_menu17_dispatches_via_apidatafetcher(monkeypatch) -> None:
-    emitter = _install_fetcher_and_emitter(monkeypatch)
+def test_devices_menu17_dispatches_via_apidatafetcher(_source_resolver_double: SimpleNamespace) -> None:
+    emitter = _install_fetcher_and_emitter(_source_resolver_double)
     OrgInventoryExporter.devices()
     call = _RecordingFetcher.calls[0]
     assert call["filename"] == "OrgDevices.csv"
@@ -700,10 +719,10 @@ def test_devices_menu17_dispatches_via_apidatafetcher(monkeypatch) -> None:
     assert emitter.starts == [("17", "devices", 1)]
 
 
-def test_devices_menu17_skips_emitter_when_absent(monkeypatch) -> None:
-    _RecordingFetcher.calls = []
-    monkeypatch.setattr(MistHelper, "APIDataFetcher", _RecordingFetcher, raising=True)
-    monkeypatch.setattr(MistHelper, "PROGRESS_EMITTER", None, raising=True)
+def test_devices_menu17_skips_emitter_when_absent(_source_resolver_double: SimpleNamespace) -> None:
+    _RecordingFetcher.calls = []  # Clear earlier calls so this test owns the assertion state.
+    _source_resolver_double.APIDataFetcher = _RecordingFetcher  # Route the exporter through the fetcher double.
+    _source_resolver_double.PROGRESS_EMITTER = None  # Verify the no-emitter branch.
     OrgInventoryExporter.devices()
     assert _RecordingFetcher.calls[0]["_executed"] is True
 
