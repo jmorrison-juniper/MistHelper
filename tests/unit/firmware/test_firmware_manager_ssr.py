@@ -1579,6 +1579,9 @@ class TestRunSSRSiteUpgradeFlow:
             "_validate_ssr_devices_for_version",
             lambda *_a: ([], ["d1"]),
         )
+        monkeypatch.setattr(
+            mgr, "_fetch_site_running_versions", lambda *_a: {}
+        )  # WHY: this test validates SSR flow after the version overlay succeeds
         api_mock = MagicMock()
         monkeypatch.setattr(mgr, "_call_ssr_upgrade_api", api_mock)
         site_result: dict[str, Any] = {"upgrade_initiated": False, "site_name": "S1"}
@@ -1593,6 +1596,9 @@ class TestRunSSRSiteUpgradeFlow:
     def test_happy_path_calls_api_and_tallies(self, monkeypatch: pytest.MonkeyPatch) -> None:
         mgr = _make_manager()
         monkeypatch.setattr(mgr, "_discover_site_ssr_devices", lambda *_a: [{"id": "d1"}])
+        monkeypatch.setattr(
+            mgr, "_fetch_site_running_versions", lambda *_a: {}
+        )  # WHY: this test validates the upgrade call after the version overlay succeeds
         monkeypatch.setattr(mgr, "_validate_ssr_devices_for_version", lambda *_a: (["d1"], []))
         monkeypatch.setattr(
             mgr,

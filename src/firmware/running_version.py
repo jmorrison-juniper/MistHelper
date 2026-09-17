@@ -133,7 +133,7 @@ class RunningFirmwareVersionResolver:
             response = stats_fn(
                 self._apisession, site_id, type="all", limit=DEFAULT_STATS_PAGE_LIMIT
             )  # WHY: type=all keeps switches and gateways in the result
-        except Exception as error:  # WHY: a broad guard keeps the caller on its fallback path
+        except RuntimeError as error:  # WHY: mistapi raises runtime faults for API transport limits
             logging.error("Failed to read %s for site %s: %s", SITE_STATS_ENDPOINT, site_id, error)  # WHY: audit
             return {}  # WHY: an empty map tells the caller that no running version was read
         rows = self._rows_from_response(response, site_id)  # WHY: one helper handles the status and payload shape
