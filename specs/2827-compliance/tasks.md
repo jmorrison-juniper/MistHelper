@@ -17,7 +17,7 @@
 
 ## Phase 3. Validation and delivery
 
-- [ ] T010 Run the repository validation commands from the issue.
-- [ ] T011 Add one changelog fragment for issues #2827 and #2828.
+- [x] T010 Run the repository validation commands from the issue.
+- [x] T011 Add one changelog fragment for issues #2827 and #2828.
 - [ ] T012 Commit, push, and open one pull request.
 - [ ] T013 Watch required checks and add `auto-merge` only if all checks pass.

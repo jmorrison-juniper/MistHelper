@@ -1455,9 +1455,10 @@ class APProfileMigrationManager:
     def _migration_pacing_stats(payload: dict[str, Any]) -> dict[str, float | int]:
         """Return migration pacing statistics with the existing zero fallback."""
         pacing_stats = payload.get("_pacing")  # Read the ephemeral summary data from the in-memory payload.
+        defaults = APProfileMigrationManager._new_pacing_stats()  # Preserve zero defaults for missing pacing keys.
         if isinstance(pacing_stats, dict):  # Preserve existing values when the loop attached them.
-            return pacing_stats  # Return the loop counters without copying legacy behavior.
-        return APProfileMigrationManager._new_pacing_stats()  # Use the existing zero-counter shape as fallback.
+            defaults.update(pacing_stats)  # Preserve partial dict behavior by filling absent keys.
+        return defaults  # Return a complete counter set for output formatting.
 
     @staticmethod
     def _print_migration_failure(payload: dict[str, Any], outcome: Any) -> None:
