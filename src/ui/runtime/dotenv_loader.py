@@ -28,7 +28,7 @@ class DotenvLoader:  # WHY: extracted from MistHelperTUI._load_dotenv_only (was 
             with open(DOTENV_FILENAME, encoding="utf-8", errors="ignore") as handle:  # WHY: forgiving decode
                 for raw_line in handle:  # Walk every line in the file
                     self._parse_line(raw_line, dotenv_dict)  # Append the parsed key to dict
-        except Exception as error:  # Match original tolerant behavior
+        except OSError as error:  # Only file read failures keep the tolerant behavior.
             logging.warning("TUI: Could not read .env file: %s", error)  # WHY: warn but continue
         logger.debug("TUI: loaded %d .env values", len(dotenv_dict))  # Action log after read
         if self._tui.debug_mode:  # Echo loaded keys in debug mode

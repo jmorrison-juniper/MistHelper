@@ -192,7 +192,7 @@ class SFPTransceiverDataProcessor:
             logging.error("File I/O: CSV processing error: %s", e)  # Log parse error
             logging.debug("EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - CSV error")  # Trace
             raise  # Re-raise to caller
-        except Exception as e:  # Any other unexpected failure during the merge
+        except (OSError, KeyError) as e:  # Surface expected file and CSV header failures outside the earlier catches
             logging.error("File I/O: Unexpected error during transceiver merge: %s", e)  # Log unexpected
             logging.debug("EXIT: SFPTransceiverDataProcessor.merge_transceiver_data - unexpected error")  # Trace
             raise  # Re-raise to caller

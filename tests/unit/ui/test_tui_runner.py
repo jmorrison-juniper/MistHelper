@@ -98,8 +98,16 @@ def test_render_loop_breaks_when_quit_requested(tui_stub) -> None:
 def test_teardown_terminal_swallows_restore_failure(tui_stub) -> None:
     """Restore errors must not propagate from teardown."""
     tui_stub.IS_WINDOWS = False  # Unix path
-    tui_stub.termios.tcsetattr.side_effect = RuntimeError("restore-fail")  # Force failure
+    tui_stub.termios.tcsetattr.side_effect = OSError("restore-fail")  # Force a terminal I/O failure
     TuiRunner(tui_stub)._teardown_terminal()  # Should not raise
+
+
+def test_teardown_terminal_propagates_unexpected_restore_failure(tui_stub) -> None:
+    """A non-terminal restore error reaches the caller."""
+    tui_stub.IS_WINDOWS = False  # Use the Unix branch that calls tcsetattr.
+    tui_stub.termios.tcsetattr.side_effect = RuntimeError("restore-fail")  # Force an unexpected fault.
+    with pytest.raises(RuntimeError, match="restore-fail"):  # The narrowed handler must not hide the fault.
+        TuiRunner(tui_stub)._teardown_terminal()  # Run the restore path.
 
 
 def test_teardown_terminal_windows_noop(tui_stub) -> None:

@@ -43,7 +43,7 @@ class FunctionExecutor:  # WHY: extracted from MistHelperTUI to own Live-mode ex
         logger.info("TUI: starting execution of %s", func_name)  # Action log before signature probe
         try:
             self._prepare_parameter_list(func)  # Build tui.param_list / function_params
-        except Exception as error:  # Signature probing can fail on builtins
+        except (TypeError, ValueError) as error:  # Signature probing can fail on builtins.
             tui.output_lines = [f"[ERROR] Failed to prepare execution: {error}"]  # WHY: surface probe failure
             logging.exception("TUI: Failed to prepare execution of %s: %s", func_name, error)  # WHY: log traceback
             return  # WHY: probe failed, cannot execute

@@ -67,7 +67,7 @@ class LevelDiscoverer:
         """Inspect attribute ``name`` and append a module/function record."""
         try:
             item = getattr(module, name)  # Pull the attribute value
-        except Exception as error:  # Defensive: skip on access error
+        except AttributeError as error:  # Skip attributes that the module does not expose cleanly.
             logging.debug("TUI: Skipping %s: %s", name, error)
             return
         if inspect.ismodule(item):  # Sub-module branch

@@ -92,7 +92,7 @@ def _check_runtime_user() -> bool:  # WHY: image-conventional user identity prob
         import pwd  # Unix only. Import lazily to keep Windows imports clean.
 
         current_user_name = pwd.getpwuid(os.getuid()).pw_name  # type: ignore[attr-defined]
-    except Exception:  # Non-Unix or lookup failure
+    except (ImportError, AttributeError, KeyError):  # Non-Unix import, missing getuid, or unknown uid
         logger.debug("Container detection: user lookup failed (non-Unix or unavailable)")  # Trace fallback
         return False  # WHY: cannot confirm without a valid uid
     if current_user_name == "misthelper":  # Canonical account name baked into our image
@@ -105,7 +105,7 @@ def _check_app_path() -> bool:  # WHY: composite /app + sshd layout fingerprint
     """Return True when this module lives under /app alongside sshd (container layout)."""
     try:  # Some importers (frozen apps) may not expose __file__
         this_file_dir = os.path.abspath(os.path.dirname(__file__))  # Absolute path of this module
-    except Exception:  # __file__ missing or unreadable
+    except NameError:  # Frozen importers can omit __file__ from the module globals
         logger.debug("Container detection: path heuristic check failed")  # Trace fallback
         return False  # WHY: cannot evaluate layout without a real path
     # All three signals must align to avoid false positives on host

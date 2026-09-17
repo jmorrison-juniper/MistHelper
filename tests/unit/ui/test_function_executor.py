@@ -84,7 +84,7 @@ def test_start_handles_signature_failure(tui_stub) -> None:
     # Use a builtin that inspect.signature cannot introspect on Windows for some types:
     tui_stub.dotenv_values = {}  # No autofill
     executor = FunctionExecutor(tui_stub)
-    executor._prepare_parameter_list = MagicMock(side_effect=RuntimeError("sig fail"))
+    executor._prepare_parameter_list = MagicMock(side_effect=ValueError("sig fail"))
     executor.start({"name": "bad", "object": lambda: None})  # type: ignore[arg-type]
     assert any("Failed to prepare execution" in line for line in tui_stub.output_lines)
 
