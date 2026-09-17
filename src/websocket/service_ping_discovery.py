@@ -6,6 +6,7 @@ import logging  # WHY: emit before/after action logs for discovery and prompts.
 from dataclasses import dataclass  # WHY: frozen dataclass keeps injected deps immutable.
 from typing import Any  # WHY: injected utility modules are opaque to type checker.
 
+logger = logging.getLogger(__name__)  # WHY: Use the module logger for non-exception log entries.
 apisession: Any = None  # WHY: lazily-bound apisession assigned via configure_* injection.
 mistapi: Any = None  # WHY: lazily-bound mistapi module assigned via injection.
 APITenantFetchUtils: Any = None  # WHY: lazily-bound tenant utility class.
@@ -129,14 +130,14 @@ class ServicePingDiscoveryMixin:  # WHY: define ServicePingDiscoveryMixin type.
 
     def _retrieve_device_config(self) -> dict[str, Any]:  # WHY: define _retrieve_device_config helper.
         """Call getSiteDevice and return the config payload dict."""
-        logging.info(
+        logger.info(
             "Fetching device configuration for site %s device %s", self.site_id, self.device_id
         )  # WHY: before-action log for API call.
         response = mistapi.api.v1.sites.devices.getSiteDevice(
             apisession, self.site_id, self.device_id
         )  # WHY: single mist API round trip for device config.
         device_config = getattr(response, "data", {})  # WHY: tolerate responses without data attribute.
-        logging.debug(
+        logger.debug(
             "Device configuration retrieved with %d top-level keys", len(device_config.keys())
         )  # WHY: after-action summary.
         self._debug_print(f"Device config keys: {list(device_config.keys())}")  # WHY: verbose debug detail.
@@ -148,11 +149,11 @@ class ServicePingDiscoveryMixin:  # WHY: define ServicePingDiscoveryMixin type.
         """Extract tenant and service names from device configuration payload."""
         tenants_set: set[str] = set()  # WHY: dedup discovered tenant names across sections.
         services_set: set[str] = set()  # WHY: dedup discovered service names across sections.
-        logging.info("Extracting tenants/services from service_policies + routing_instances")  # WHY: log.
+        logger.info("Extracting tenants/services from service_policies + routing_instances")  # WHY: log.
         self._collect_from_service_policies(config, tenants_set, services_set)  # WHY: policy walker.
         self._collect_from_routing_instances(config, tenants_set)  # WHY: routing walker.
         self._collect_from_router_config(config.get("router", {}), tenants_set, services_set)  # WHY: router.
-        logging.debug(
+        logger.debug(
             "Raw discovery counts: tenants=%d services=%d", len(tenants_set), len(services_set)
         )  # WHY: after-action raw count summary before filtering system names.
         self.device_tenants = self._sorted_non_system(tenants_set)  # WHY: strip system, sort deterministic.
@@ -255,7 +256,7 @@ class ServicePingDiscoveryMixin:  # WHY: define ServicePingDiscoveryMixin type.
 
     def _retrieve_device_stats(self) -> dict[str, Any]:  # WHY: define _retrieve_device_stats helper.
         """Call getSiteDeviceStats and return the stats payload dict."""
-        logging.info(
+        logger.info(
             "Fetching device stats for service discovery on site %s device %s",
             self.site_id,
             self.device_id,
@@ -264,7 +265,7 @@ class ServicePingDiscoveryMixin:  # WHY: define ServicePingDiscoveryMixin type.
             apisession, self.site_id, self.device_id
         )  # WHY: single mist API round trip for device stats.
         stats_data = getattr(response, "data", {})  # WHY: tolerate responses without data attribute.
-        logging.debug(
+        logger.debug(
             "Device stats retrieved with %d top-level keys", len(stats_data.keys())
         )  # WHY: after-action summary.
         self._debug_print(f"Stats keys: {list(stats_data.keys())}")  # WHY: verbose debug detail.

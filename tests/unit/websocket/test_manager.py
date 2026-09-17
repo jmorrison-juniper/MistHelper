@@ -26,7 +26,7 @@ import logging
 import sys
 import threading
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
@@ -112,23 +112,27 @@ def test_is_debug_env_flag_set_false_when_absent_or_other() -> None:
 
 
 def test_log_ws_error_prints_and_logs_without_traceback_when_not_debug(caplog: pytest.LogCaptureFixture) -> None:
-    """log_ws_error emits an error banner and calls logging.error; no traceback when debug=False."""
+    """log_ws_error writes an error banner and calls logger.error without a traceback."""
     caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
     with (
-        patch.object(manager_mod.logging, "error") as mock_err,
+        patch.object(manager_mod.logger, "error", wraps=manager_mod.logger.error) as mock_err,
         patch.object(manager_mod.traceback, "print_exc") as mock_tb,
     ):
         manager_mod.log_ws_error("boom", debug_mode=False)
     assert "! boom" in caplog.text
     assert "[DEBUG] Exception details:" not in caplog.text
-    mock_err.assert_called_once_with("boom")
+    mock_err.assert_has_calls([call("! %s", "boom"), call("boom")])
+    assert mock_err.call_count == 2
     mock_tb.assert_not_called()
 
 
 def test_log_ws_error_prints_traceback_when_debug(caplog: pytest.LogCaptureFixture) -> None:
-    """log_ws_error with debug_mode=True dumps traceback in addition to the banner."""
+    """log_ws_error with debug_mode=True writes a traceback after the banner."""
     caplog.set_level(logging.DEBUG, logger=_MANAGER_LOGGER)
-    with patch.object(manager_mod.logging, "error"), patch.object(manager_mod.traceback, "print_exc") as mock_tb:
+    with (
+        patch.object(manager_mod.logger, "error", wraps=manager_mod.logger.error),
+        patch.object(manager_mod.traceback, "print_exc") as mock_tb,
+    ):
         manager_mod.log_ws_error("boom", debug_mode=True)
     assert "! boom" in caplog.text
     assert "[DEBUG] Exception details:" in caplog.text
