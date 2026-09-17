@@ -39,7 +39,7 @@ import time  # Measures the wait of a pending second factor with a monotonic clo
 from collections.abc import Callable, Mapping  # Types each injected seam and safe cloud records.
 from dataclasses import dataclass  # Builds the two small records of this module.
 from importlib import import_module  # Imports the cloud library late, never at load.
-from typing import Any  # A cloud session and an injected seam are both free-form.
+from typing import Any, cast  # A cloud session and an injected seam are both free-form.
 
 from flask import Blueprint, Response, current_app, has_app_context, jsonify, render_template, request  # The framework.
 from jinja2 import TemplateNotFound  # Marks a template that a later module still builds.
@@ -72,6 +72,7 @@ TWO_FACTOR_TEMPLATE = "auth/twofactor.html"  # The second factor page.
 FALLBACK_TEMPLATE = "layout.html"  # The shell page, shown while an auth template is still missing.
 
 DEPENDENCY_DOWN = "down"  # The one preflight state that turns the dependency panel into a warning.
+DEPENDENCY_ROWS_KEY = "DEPENDENCY_ROWS"  # Tests inject rows here, so a page render opens no socket.
 
 SIGNIN_TITLE = "Sign in"  # The heading and the tab text of the sign-in page.
 TWO_FACTOR_TITLE = "Second factor"  # The heading and the tab text of the second factor page.
@@ -725,8 +726,16 @@ def dependency_rows() -> list[dict[str, str]]:
     try:  # A settings fault or a probe fault must not stop the operator signing in.
         from ...runtime.dependencies import reading_rows, run_preflight  # Deferred, so a fault stays local.
 
+        configured = current_app.config.get(DEPENDENCY_ROWS_KEY) if has_app_context() else None  # Test seam.
+        if configured is not None:  # An explicit empty list means the test wants no dependency panel.
+            rows = cast(list[dict[str, str]], list(configured))  # Keep the public return type precise.
+            logger.debug("auth: using %d injected dependency row(s)", len(rows))  # Report test seam use.
+            return rows  # The caller receives deterministic rows and no socket probe runs.
+        logger.info("auth: probing the portal dependencies for the sign-in page")  # Log the visible probe.
         settings = load_settings()  # The same settings the portal itself uses, so no address can differ.
-        return reading_rows(run_preflight(settings.arango, settings.redis))  # Probe, then flatten for the page.
+        rows = reading_rows(run_preflight(settings.arango, settings.redis))  # Probe, then flatten for the page.
+        logger.debug("auth: built %d dependency row(s) for the sign-in page", len(rows))  # Report row count.
+        return rows  # The page reads only plain rows, never settings.
     except Exception:  # WHY: the sign-in form outranks the banner, so every fault degrades.
         logger.exception("auth: the dependency preflight failed, so the page shows no dependency panel")
         return []  # An empty list hides the panel and leaves the form untouched.

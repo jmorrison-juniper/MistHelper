@@ -245,6 +245,7 @@ def auth_app() -> Iterator[Flask]:
     """
     app = Flask(__name__)  # A bare application, so no other blueprint can change an answer.
     app.config.update(TESTING=True, SECRET_KEY=FAKE_SECRET, WTF_CSRF_ENABLED=False)  # Test settings alone.
+    app.config[auth.DEPENDENCY_ROWS_KEY] = []  # The route test needs no dependency probe or socket.
     app.register_blueprint(auth.auth_bp)  # The routes under test.
     auth._PENDING.clear()  # A leftover wait from an earlier test must not change a branch.
     yield app  # The test runs here.

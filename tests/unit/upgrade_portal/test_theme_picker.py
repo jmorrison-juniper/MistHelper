@@ -23,6 +23,7 @@ import pytest  # The test framework of the project.
 from flask import Flask  # The application type of the portal.
 
 from src.upgrade_portal.app import config, factory  # The units under test.
+from src.upgrade_portal.app.routes import auth  # The sign-in page owns the dependency row seam key.
 
 THEME_LINK_ID = 'id="theme-css"'  # `layout.html` marks the one theme link with this identifier.
 NEUTRAL_FILE = "themes/default.css"  # The file that the neutral name reaches.
@@ -45,6 +46,7 @@ def portal_app() -> Flask:
     """
     application: Flask = factory.create_app()  # The real factory, so the processor registers for real.
     application.config.update(TESTING=True)  # A fault then reports itself instead of a 500 page.
+    application.config[auth.DEPENDENCY_ROWS_KEY] = []  # The theme tests must not probe local stores.
     return application
 
 

@@ -116,6 +116,17 @@ python -m ruff check MistHelper.py    # Lint check. Must pass clean.
 python -m black --check MistHelper.py # Format check. Drop --check to auto-fix.
 ```
 
+On Windows, use the bounded local shard runner for full local test evidence.
+It splits the large portal test trees and prints one final summary line.
+Measured on 2026-09-17 in the OneDrive worktree, the unit shard took
+1179.3 seconds and the contract, guardrail, and integration shard took
+366.3 seconds.
+
+```powershell
+python scripts\run_local_test_shard.py unit --chunk-timeout 900 --test-timeout 120
+python scripts\run_local_test_shard.py other --chunk-timeout 900 --test-timeout 120
+```
+
 Build and run the container on your own machine. Podman builds the same
 image that the registry builds.
 
