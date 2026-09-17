@@ -14,8 +14,10 @@ from datetime import UTC, datetime
 from heapq import nlargest
 from urllib.parse import urlsplit
 
+
 from flask import Blueprint, current_app, jsonify, render_template
 
+logger = logging.getLogger(__name__)  # Use a module logger so records include this module name.
 dashboard_bp = Blueprint("dashboard", __name__)
 
 _start_time = time.time()
@@ -52,9 +54,9 @@ def health():
     """
     # WHY: a container probe calls this route every few seconds. An INFO line
     # for each call floods the log and hides the real operation records.
-    logging.debug("Liveness probe received a request")
+    logger.debug("Liveness probe received a request")
     uptime = int(time.time() - _start_time)  # WHY: arithmetic only keeps the reply free of disk cost.
-    logging.debug("Liveness probe reports alive after %d seconds", uptime)  # WHY: record the reply value.
+    logger.debug("Liveness probe reports alive after %d seconds", uptime)  # WHY: record the reply value.
     return jsonify(
         {
             "status": "healthy",  # WHY: existing monitors match on this exact word.
@@ -85,13 +87,13 @@ def ready():
         "data_directory": data_dir,  # WHY: repeat the directory under test for a remote reader.
         "uptime_seconds": int(time.time() - _start_time),  # WHY: correlate the failure with a restart.
     }
-    logging.debug("Readiness probe replies %d with %d failed checks", status_code, len(failed))
+    logger.debug("Readiness probe replies %d with %d failed checks", status_code, len(failed))
     return jsonify(payload), status_code
 
 
 def _run_readiness_checks(data_dir: str, apisession) -> dict:
     """Run every readiness check and return one result for each check."""
-    logging.info("Readiness probe starts the resource checks")  # WHY: mark the start of the check run.
+    logger.info("Readiness probe starts the resource checks")  # WHY: mark the start of the check run.
     checks = {
         "data_directory_writable": _check_data_dir_writable(data_dir),  # WHY: the documented failure.
         "mist_api_session": _check_mist_api_session(apisession),  # WHY: a broken session blocks every operation.
@@ -102,14 +104,14 @@ def _run_readiness_checks(data_dir: str, apisession) -> dict:
     elif output_format == POLYGLOT_OUTPUT_FORMAT:  # WHY: polyglot writes to both configured services.
         checks["arangodb"] = _check_arangodb()  # WHY: validate the document backend before accepting traffic.
         checks["redis"] = _check_redis()  # WHY: validate the time-series and JSON backend before accepting traffic.
-    logging.debug("Readiness probe completed %d checks", len(checks))  # WHY: record the check count.
+    logger.debug("Readiness probe completed %d checks", len(checks))  # WHY: record the check count.
     return checks
 
 
 def _configured_output_format() -> str:
     """Return the normalized output format selected by the process environment."""
     output_format = os.environ.get("OUTPUT_FORMAT", "sqlite").strip().lower()  # WHY: preserve the portal default.
-    logging.debug("Readiness probe uses output format %s", output_format)  # WHY: make backend selection observable.
+    logger.debug("Readiness probe uses output format %s", output_format)  # WHY: make backend selection observable.
     return output_format
 
 
@@ -135,14 +137,14 @@ def _check_redis() -> dict:
 
 def _check_backend_socket(backend: str, host: str, port: int) -> dict:
     """Return a readiness result for a configured TCP backend."""
-    logging.info("Readiness probe tests %s at %s:%s", backend, host, port)  # WHY: log before the network action.
+    logger.info("Readiness probe tests %s at %s:%s", backend, host, port)  # WHY: log before the network action.
     try:
         with socket.create_connection((host, port), timeout=READINESS_QUERY_TIMEOUT_SECONDS):  # WHY: bound probe time.
             result = {"ok": True, "detail": f"{backend} answered at {host}:{port}"}
     except OSError as exc:
         logging.warning("Readiness probe cannot reach %s at %s:%s: %s", backend, host, port, exc)
         result = {"ok": False, "detail": f"cannot reach {backend} at {host}:{port}: {exc}"}
-    logging.debug("Readiness probe completed %s check with ok=%s", backend, result["ok"])  # WHY: record the result.
+    logger.debug("Readiness probe completed %s check with ok=%s", backend, result["ok"])  # WHY: record the result.
     return result
 
 
@@ -155,13 +157,13 @@ def _check_data_dir_writable(data_dir: str) -> dict:
     """Test write access to the data directory with a temporary file."""
     # WHY: os.path.join builds a path that works on Windows and in the container.
     probe_path = os.path.join(data_dir, READINESS_PROBE_PREFIX + uuid.uuid4().hex)
-    logging.info("Readiness probe tests write access in %s", data_dir)  # WHY: log before the disk write.
+    logger.info("Readiness probe tests write access in %s", data_dir)  # WHY: log before the disk write.
     try:
         _write_and_remove_probe_file(probe_path)  # WHY: only a real write proves the mount is writable.
     except OSError as exc:
         logging.warning("Readiness probe cannot write in %s: %s", data_dir, exc)  # WHY: name the failure.
         return {"ok": False, "detail": f"cannot write in {data_dir}: {exc}"}
-    logging.debug("Readiness probe wrote and removed %s", probe_path)  # WHY: record the successful write.
+    logger.debug("Readiness probe wrote and removed %s", probe_path)  # WHY: record the successful write.
     return {"ok": True, "detail": f"write access confirmed in {data_dir}"}
 
 
@@ -177,15 +179,15 @@ def _check_sqlite_database(data_dir: str) -> dict:
     db_path = os.path.join(data_dir, SQLITE_DATABASE_FILENAME)  # WHY: os.path.join fits both platforms.
     if not os.path.isfile(db_path):
         # WHY: the portal creates the database on demand, so an absent file is not a fault.
-        logging.debug("Readiness probe found no database at %s", db_path)
+        logger.debug("Readiness probe found no database at %s", db_path)
         return {"ok": True, "detail": "database file not created yet"}
-    logging.info("Readiness probe opens the database at %s", db_path)  # WHY: log before the connection.
+    logger.info("Readiness probe opens the database at %s", db_path)  # WHY: log before the connection.
     try:
         _query_sqlite_database(db_path)  # WHY: one query proves the file opens and answers.
     except sqlite3.Error as exc:
         logging.warning("Readiness probe cannot read %s: %s", db_path, exc)  # WHY: name the failure.
         return {"ok": False, "detail": f"cannot read {db_path}: {exc}"}
-    logging.debug("Readiness probe read the database at %s", db_path)  # WHY: record the successful read.
+    logger.debug("Readiness probe read the database at %s", db_path)  # WHY: record the successful read.
     return {"ok": True, "detail": "database answered a query"}
 
 
@@ -204,10 +206,10 @@ def _query_sqlite_database(db_path: str) -> None:
 
 def _check_mist_api_session(apisession) -> dict:
     """Test the stored Mist API session state without a network call."""
-    logging.info("Readiness probe inspects the Mist API session state")  # WHY: log before the read.
+    logger.info("Readiness probe inspects the Mist API session state")  # WHY: log before the read.
     if apisession is None:
         # WHY: the portal serves the data browser with no session, so an absent session is not a fault.
-        logging.debug("Readiness probe found no Mist API session")
+        logger.debug("Readiness probe found no Mist API session")
         return {"ok": True, "detail": "no Mist API session configured"}
     # WHY: mistapi 0.63+ stores the cloud host on the private `_cloud_uri` attribute and
     # exposes it only through `get_cloud()`. A public `host` attribute never exists on that
@@ -218,17 +220,17 @@ def _check_mist_api_session(apisession) -> dict:
     else:
         host = getattr(apisession, "host", "")  # WHY: fall back for a simple test double.
     if not host:
-        logging.warning("Readiness probe found a Mist API session with no cloud host")  # WHY: name the failure.
+        logger.warning("Readiness probe found a Mist API session with no cloud host")  # WHY: name the failure.
         return {"ok": False, "detail": "Mist API session has no cloud host"}
-    logging.debug("Readiness probe found the Mist cloud host %s", host)  # WHY: record the configured host.
+    logger.debug("Readiness probe found the Mist cloud host %s", host)  # WHY: record the configured host.
     return {"ok": True, "detail": f"Mist API session targets {host}"}
 
 
 def _build_data_summary(data_dir: str) -> dict:
     """Build summary statistics for the data directory."""
-    logging.info("Dashboard data summary scan starts for %s", data_dir)  # Log before the directory scan.
+    logger.info("Dashboard data summary scan starts for %s", data_dir)  # Log before the directory scan.
     file_count, recent_files = _scan_data_summary(data_dir, limit=5)  # Count files and keep only displayed rows.
-    logging.debug(  # Log the result without file contents.
+    logger.debug(  # Log the result without file contents.
         "Dashboard data summary found %d file(s) and %d recent file(s)",
         file_count,
         len(recent_files),

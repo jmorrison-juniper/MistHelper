@@ -23,8 +23,10 @@ import hmac
 import logging
 from typing import Any
 
+
 from flask import Blueprint, current_app, jsonify, request
 
+logger = logging.getLogger(__name__)  # Use a module logger so records include this module name.
 webhook_bp = Blueprint("webhooks", __name__)
 
 # WHY: one name for the config key stops a typo from disabling the check.
@@ -76,16 +78,16 @@ def _reject_unverified_request() -> tuple | None:
     """
     secret = _get_configured_secret()
     if not secret:
-        logging.error(
+        logger.error(
             "Webhook rejected: WEBHOOK_SECRET is not configured, so the portal cannot identify the sender"
         )  # WHY: a static message names the cause without passing a secret-named value into the log.
         return jsonify({"error": "webhook receiver is not configured"}), 503
     body = request.get_data()  # WHY: the digest covers the raw bytes, not the parsed JSON.
-    logging.info("Verifying the webhook signature for a body of %d bytes", len(body))
+    logger.info("Verifying the webhook signature for a body of %d bytes", len(body))
     if not _verify_signature(body, request.headers.get(SIGNATURE_HEADER, ""), secret):
-        logging.warning("Webhook rejected: the signature does not match the body")
+        logger.warning("Webhook rejected: the signature does not match the body")
         return jsonify({"error": "invalid signature"}), 403
-    logging.debug("Webhook signature verified for a body of %d bytes", len(body))
+    logger.debug("Webhook signature verified for a body of %d bytes", len(body))
     return None
 
 
@@ -97,7 +99,7 @@ def receive_webhook() -> tuple:
         return rejection
     payload = request.get_json(silent=True)  # WHY: parse only after the body proves authentic.
     if not payload:
-        logging.warning("Webhook rejected: the signed body is not valid JSON")
+        logger.warning("Webhook rejected: the signed body is not valid JSON")
         return jsonify({"error": "invalid JSON"}), 400
     _dispatch_payload(payload)
     return jsonify({"status": "ok"}), 200
@@ -107,14 +109,14 @@ def _dispatch_payload(payload: dict) -> None:
     """Send one verified payload to the handler that matches its topic."""
     topic = payload.get("topic", "")
     router = _get_router()
-    logging.info("Dispatching a verified webhook payload for topic '%s'", topic)
+    logger.info("Dispatching a verified webhook payload for topic '%s'", topic)
     if topic == "audits":
         _handle_audit(router, payload)
     elif topic in _STATS_TOPICS:
         _handle_stats(router, payload)
     else:
-        logging.debug("Unhandled webhook topic: %s", topic)
-    logging.debug("Dispatch complete for topic '%s'", topic)
+        logger.debug("Unhandled webhook topic: %s", topic)
+    logger.debug("Dispatch complete for topic '%s'", topic)
 
 
 def _handle_audit(router: Any | None, payload: dict) -> None:
