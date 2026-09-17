@@ -4,19 +4,23 @@ description: >-
   Use when a user asks how to harden, secure, reset, enroll, or audit a Junos
   device that MistHelper can touch. Use for credentials, SSH access, ZTP,
   zeroize, generated configuration commands, device registration, destructive
-  operations, and secret logging. Require repository evidence first, then Junos
-  documentation for each device command or statement. Exclude generic Junos
-  hardening that has no connection to MistHelper.
-argument-hint: State the device family, Junos train, MistHelper path, and the action under review.
+  operations, secret logging, hardening checklists, and DISA STIG rules.
+  Require repository evidence first, then Junos documentation for each device
+  command or statement.
+argument-hint: State the device family, Junos train, MistHelper path, and the control or action under review.
 ---
 
-# Harden Junos devices through MistHelper
+# Harden a Junos device through MistHelper
 
 Use this skill when MistHelper touches a Junos device or gives device security
 advice. Start with the repository rule, then cite the Junos source.
 
 This skill does not authorize a live change. A live change needs the normal
 MistHelper issue, branch, review, and confirmation process.
+
+The verified snapshot date is 2026-09-16. The skill holds 67 baseline controls
+and 181 DISA STIG rules. These counts describe the staged documents. They do not
+describe the current Juniper site.
 
 ## 1. Decide whether this skill applies
 
@@ -27,10 +31,13 @@ Use this skill for these requests:
 - A Junos command that can erase data, reset a device, or change access.
 - A rule about secret storage, secret logging, or operator display.
 - A review of a MistHelper change that affects Junos device security.
+- A hardening control from the Juniper checklist.
+- A DISA STIG rule for an EX switch.
+
+Caution: the STIG reference applies to EX switches. If the device is an MX router or an SRX firewall, use its platform STIG before you act.
 
 Do not use this skill for these requests:
 
-- A complete Junos security baseline that is not tied to MistHelper.
 - A firewall policy design that does not use a MistHelper path.
 - A live Mist API request. Use `managing-mist-api` for that task.
 - A Python speed change. Use `optimizing-python` for that task.
@@ -42,10 +49,14 @@ Read only the reference that the question needs.
 
 | Task | Reference | Result |
 | - | - | - |
-| Choose the source and cite it. | [Source index](./references/source-index.md) | A source, a train, and a path. |
-| Apply repository security law. | [Repository decisions](./references/repository-decisions.md) | A safe MistHelper answer. |
-| Check Junos commands and statements. | [Junos verified rules](./references/junos-verified-rules.md) | A command or statement with a source. |
-| Report gaps and validation. | [Validation and gaps](./references/validation-and-gaps.md) | A verified or unverified claim list. |
+| Choose the source and cite it. | [Corpus operations](./references/corpus-operations.md) | A source, a train, and a path from the source selection section. |
+| Apply repository security law. | [Baseline controls](./references/baseline-controls.md) | A safe MistHelper answer from the repository decision section. |
+| Check Junos commands and statements. | [Baseline controls](./references/baseline-controls.md) | A command or statement from the verified Junos rule section. |
+| Apply a hardening control from the checklist. | [Baseline controls](./references/baseline-controls.md) | The control, the command, the reason, the risk, and the citation. |
+| Review a configuration against the 67 controls. | [Baseline controls](./references/baseline-controls.md) | A pass, fail, or not-assessable result for each control. |
+| Answer a DISA STIG question, or map a failure to a rule. | [STIG rules](./references/stig-rules.md) | The rule identifier, severity, check, and fix. |
+| Search or refresh the staged corpus. | [Corpus operations](./references/corpus-operations.md) | The corpus root, archive code, gap status, and rebuild procedure. |
+| Report gaps and validation. | [Verification](./references/verification.md) | A verified or unverified claim list. |
 
 If two sources conflict, use this order:
 
@@ -55,20 +66,41 @@ If two sources conflict, use this order:
 4. The local Junos command help file for a command name check.
 5. Issue text or prior notes, marked as unverified until a source confirms them.
 
-## 3. Build the answer
+## 3. Search the staged corpus
+
+The corpus root is `C:\Users\jmorrison\Downloads\juniper-doc-archives\`.
+This root is outside the repository. The repository holds no Juniper document.
+
+Use this procedure when the curated reference does not give enough detail.
+
+1. Read [Corpus operations](./references/corpus-operations.md) and find the archive code.
+2. Search the security subset first.
+3. Search the full unique set only when the first search fails.
+4. Open the document below the corpus root.
+5. Quote the source statement. Keep the quote short.
+6. Name the document, the Junos train, and the source location in the answer.
+
+If the corpus root is absent, state that the corpus is absent. Then give the
+rebuild procedure from [Corpus operations](./references/corpus-operations.md).
+Continue to answer from the curated reference files.
+
+## 4. Build the answer
+
+Every answer holds these parts:
 
 1. State the MistHelper path that the answer affects.
-2. State the Junos command, statement, or device action.
+2. State the Junos command, statement, control, or device action.
 3. Name the Junos train or release note from the source.
 4. Cite the repository file and line for each MistHelper rule.
 5. Cite the Juniper page for each Junos rule.
 6. Mark each missing source as unverified.
+7. Give the evidence command that proves the device state.
 
 Use obvious placeholders in examples. Use `device.example.invalid`,
 `192.0.2.10`, and `REPLACE_WITH_TOKEN`. Do not use a real hostname, address,
 credential, serial number, or customer name.
 
-## 4. Apply the MistHelper safety rules
+## 5. Apply the MistHelper safety rules
 
 These rules are repository law.
 
@@ -82,19 +114,6 @@ These rules are repository law.
 
 Warning: a wrong hardening step can lock the operator out of a production
 device. Do not give the step unless a cited source verifies it.
-
-## 5. Handle the ZTP password path
-
-Menu 144 gets a one-time ZTP credential. MistHelper prints the credential only
-when stdout is a live terminal. A redirect, a pipe, or a recorded session
-receives a withheld notice.
-
-When you answer a ZTP question, say these points:
-
-1. The ZTP credential is a secret.
-2. The operator can view it only on a live terminal or in the Mist portal.
-3. Logs must record the render decision, not the credential.
-4. A non-terminal stream must receive the withheld notice.
 
 ## 6. Handle destructive actions
 

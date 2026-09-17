@@ -1,0 +1,184 @@
+{
+  "workflow": "speckit",
+  "specName": "Hardening Junos Skill",
+  "branch": "docs/2754-hardening-junos-skill",
+  "decisions": [
+    {
+      "decision": "Corpus scope: index the 757 security relevant unique documents, and keep the full set of 4,007 unique documents as a second search area.",
+      "why": "The security subset covers the skill domain. The remainder answers an adjacent question."
+    },
+    {
+      "decision": "Storage split: the repository holds the skill only, within a budget of 400 KB across 10 files or less. The 744 MB of converted Markdown stays outside the repository at the corpus root.",
+      "why": "The largest existing skill is 140 KB. The repository is OneDrive synced. The converted text is also copyrighted."
+    },
+    {
+      "decision": "Retrieval: a router SKILL.md, a curated reference set, one index file, and a written search procedure. No helper script is committed.",
+      "why": "This mirrors managing-mist-api. An agent reads a small router first, then opens only the reference that the task needs."
+    },
+    {
+      "decision": "Conversion quality: ten acceptance rules, a floor of 200 characters per page, and a manual audit of 30 documents.",
+      "why": "The converter has a known weakness on cover pages."
+    },
+    {
+      "decision": "Deduplication: the newest readable train wins, with fallback to the next newest readable train. The index records the train used, the newest train available, and a supersedes field.",
+      "why": "A document repeats across trains 21.1 to 26.2, and the newest copy is not always readable."
+    },
+    {
+      "decision": "The index holds 775 rows, not 757. Membership is: the catalog security flag (710), the FR-007 term match on the file name (38), and a named checklist-need list (27), minus 8 documents below the 200-characters-per-page floor.",
+      "why": "No rule reproduces 757. The term rule alone misses routing-policy.pdf, network-mgmt.pdf, time-mgmt.pdf, icmp.pdf, junos-install-upgrade.pdf, and the routing protocol guides, which 6 of the 8 checklist sections need."
+    },
+    {
+      "decision": "The skill never cites a path below documentation/references/. It cites a public URL first and the corpus root path second, which follows the 15 committed noc-runbooks.",
+      "why": "git check-ignore shows .gitignore line 28 ignores that directory because it holds verbatim vendor text. git ls-files returns 0 files, and Test-Path returns False in a fresh worktree."
+    },
+    {
+      "decision": "Upgrade the committed scripts/pdf_to_markdown.py so the documented rebuild command reproduces the staged corpus. The skill folder still ships documentation only.",
+      "why": ".gitignore lines 20 to 28 already promise that command. The committed script writes a flat page dump with no front matter and no heading detection, so the promise is false today."
+    },
+    {
+      "decision": "Use pdfplumber for the upgraded converter. Do not add PyMuPDF. Check V15 tests the structural contract of 30 sample files, not a byte match against the staged corpus.",
+      "why": "PyMuPDF is dual licensed under AGPL-3.0, and container-build.yml pushes to ghcr.io, which is distribution. pdfplumber is MIT, pyproject.toml already declares it, and the char size key gives the font size that the heading rule needs at about 5 times slower, which is 0.3 hours for a full rebuild."
+    },
+    {
+      "decision": "Phase 2 runs in a fixed order: upgrade and gate scripts/pdf_to_markdown.py (T009-T023), rebuild the corpus (T024), sweep the heading share of every rebuilt file against a ceiling of 25 percent (T025), re-measure the character density and the 200-character quality floor (T026), record the measured row count (T027), then build the index (T028-T030).",
+      "why": "The index describes the corpus. A row count or a quality band taken from the old corpus is wrong after the reader changes from PyMuPDF to pdfplumber. The heading share gate runs before the re-measure, because a wrong body size corrupts every rebuilt file, and an index built on a corrupt corpus is worthless. 1 file or more above the ceiling returns the work to T012."
+    },
+    {
+      "decision": "The index row count is planned at 775. A count between 767 and 778 after the rebuild is acceptable and does not need a new plan.",
+      "why": "The band comes from the measured density. 8 documents sit between 200 and 250 characters for each page, and 3 sit between 150 and 200, so the reader change can move those 11 rows across the floor."
+    },
+    {
+      "decision": "The PDF library question is closed. pdfplumber supplies the 3 capabilities that the converter needs: heading detection from the char size value, a bold subheading from a char fontname value that holds bold, and line grouping from page.extract_text_lines(). Write no task that evaluates a PDF library, and write no task that compares two readers.",
+      "why": "A working prototype ran against pki.pdf from train 26.2 on 2026-09-16 and measured each capability. The body size is 10.0, measured over all 168 pages. The fonts are Lato-Bold, Lato-Regular, and Lato-Light. Each line from extract_text_lines() carries its chars, so a per-line size is available. The char attributes are fontname, size, text, top, upright, and x0, which covers the whole heading rule."
+    },
+    {
+      "decision": "The prototype output supports the 767 to 778 row band. It does not replace the re-measure at T026.",
+      "why": "The prototype wrote 54,978 characters over 40 pages against 55,870 from PyMuPDF for the same pages, which is a difference of 1.6 percent, and it found 55 headings and 127 list items. The band depends on the whole corpus, not on one document."
+    },
+    {
+      "decision": "The body size question is closed by measurement. The body size of pki.pdf is 10.0, measured over all 168 pages. The 9.0 figure is superseded, not range correct. The converter counts the size of every page of a document before it classifies any line, and it computes the body size for each document. It never samples a page range, and it never writes a constant threshold.",
+      "why": "The 9.0 figure came from a 12 page sample of the cover, the notices, and the contents, which hold 8,334 of 196,350 characters, or 4.2 percent. A body size that is 1 point too small marks 659 of 1,001 lines as headings, which is 65.8 percent, against 55 lines, which is 5.5 percent. Body text at 10.0 points clears a threshold of 9.72 points, so every ordinary line is promoted. The failure is silent: it raises no exception, and the file size barely changes. T025 gates the rebuild on this error, and T012 carries the never sample rule with 2 named tests."
+    }
+  ],
+  "currentStep": "tasks",
+  "status": "ready-to-implement",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-09-16T18:03:50.308Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-09-16T18:47:57.262Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-09-16T20:01:34.032Z"
+    }
+  ],
+  "telemetryInstanceId": "ad2c2ae0-32a5-4e62-b224-493e2d613680",
+  "verified": [
+    {
+      "what": "Requirements checklist for the spec",
+      "result": "All items pass.",
+      "command": "specs/2754-hardening-junos-skill/checklists/requirements.md"
+    },
+    {
+      "what": "Repository STE linter score for spec.md",
+      "result": "96 out of 100, which is above the floor of 80."
+    },
+    {
+      "what": "STE linter score for the plan artifacts",
+      "result": "plan 98, research 99, data-model 100, quickstart 99, contracts 99. All above the floor of 80.",
+      "command": "python -m tools.ste_linter --min-score 80 @((Get-ChildItem specs/2754-hardening-junos-skill -Recurse -Filter *.md).FullName)"
+    },
+    {
+      "what": "Index size and row count",
+      "result": "775 rows at 70.0 KB, plus an 11.1 KB archive-code table. Below the 90 KB per-file limit.",
+      "command": "Measured against the catalog of 4,006 documents. All 4,006 rows cost 1,202 KB, and the 718-row lean set costs 109 KB."
+    },
+    {
+      "what": "DISA STIG rule count and severity split",
+      "result": "181 rules: 25 high, 122 medium, 34 low. Full rule text is 485 KB, so each rule ships condensed.",
+      "command": "Counted Rule elements in the 3 XCCDF files under extracted/U_Juniper_EX_Switches_Y26M07_STIG/"
+    },
+    {
+      "what": "The ignored vendor corpus policy",
+      "result": ".gitignore:28 ignores documentation/references/. 0 files tracked there, against 15 tracked noc-runbooks.",
+      "command": "git check-ignore -v documentation/references/hardening/hardening-junos-devices-checklist.md"
+    },
+    {
+      "what": "The committed converter gap",
+      "result": "pdf_to_markdown.py writes # stem, a Source file line, and ## Page N. It has no front matter, no heading detection, and needs an undeclared pypdf.",
+      "command": "Read scripts/pdf_to_markdown.py and pyproject.toml"
+    },
+    {
+      "what": "The PDF library options",
+      "result": "pymupdf 1.28.2 (AGPL, used for the staged corpus), pdfplumber 0.11.10 (MIT, already declared), pypdf 6.16.2 (no font size).",
+      "command": "python -c importlib.metadata.version for each library"
+    },
+    {
+      "what": "The PyMuPDF license and the distribution condition",
+      "result": "Dual Licensed - GNU AFFERO GPL 3.0 or Artifex Commercial License. container-build.yml sets REGISTRY: ghcr.io and push: true.",
+      "command": "importlib.metadata.metadata('pymupdf')['License'] and a read of the workflow"
+    },
+    {
+      "what": "pdfplumber gives the font size and the speed cost",
+      "result": "Sizes 9.0 to 30.0 on 12 pages of pki.pdf, with a modal size of 9.0. Superseded on 2026-09-16: that 12 page sample reads the front matter, not the body. The body size is 10.0 over all 168 pages. The speed figure stands at 18.0 pages per second against 88.8 for PyMuPDF, which is about 5 times slower.",
+      "command": "Timed both readers over the same 12 pages"
+    },
+    {
+      "what": "Front matter field frequency in 400 staged files",
+      "result": "source_file and pages 100 percent, creationDate 98.8, modDate 98.5, title 87.8, author 68.0, subject 11.2. Only 2 fields are always present.",
+      "command": "Parsed the front matter of a 400 file random sample"
+    },
+    {
+      "what": "Index rows near the quality floor",
+      "result": "8 documents sit between 200 and 250 characters for each page, and 3 sit between 150 and 200. A reader change can move up to 11 of the 775 rows.",
+      "command": "Banded the character density of the selection from the conversion manifest"
+    },
+    {
+      "what": "The generated task list",
+      "result": "71 tasks from T001 to T071 at 56.3 KB, in 7 phases of 8, 24, 7, 8, 6, 6, and 12 tasks. 16 tasks carry the parallel mark. The MVP scope is 39 tasks.",
+      "command": "Counted the task lines, the [P] marks, and the phase headings in specs/2754-hardening-junos-skill/tasks.md"
+    },
+    {
+      "what": "The pdfplumber prototype against pki.pdf from train 26.2",
+      "result": "Every technical unknown of the converter is closed on 2026-09-16. The run wrote 54,978 characters over 40 pages against 55,870 from PyMuPDF, a difference of 1.6 percent, and it found 55 headings and 127 list items. It also found 2 defects. A folio line such as ii or iii survives, and extract_text_lines() merges a table of contents into one paragraph. Each defect now has a named acceptance test: test_folio_line_removed at T019 and test_contents_row_stays_on_one_line at T020.",
+      "command": "Ran the prototype, and read the Closed unknowns section of specs/2754-hardening-junos-skill/tasks.md"
+    },
+    {
+      "what": "The body size of pki.pdf by page range, and the cost of the wrong value",
+      "result": "Pages 1 to 12 give a modal size of 9.0 over 8,334 characters. Pages 1 to 40 give 10.0 over 44,358. Pages 1 to 100 give 10.0 over 119,219. The whole 168 page document gives 10.0 over 196,350. The front matter is 4.2 percent of the characters, and it sets the sampled value. Over the first 40 pages, a body size of 9.0 sets the level 4 threshold at 9.72 points and marks 659 of 1,001 lines as headings, which is 65.8 percent. The correct 10.0 sets the threshold at 10.80 points and marks 55 lines, which is 5.5 percent.",
+      "command": "Counted char[\"size\"] over each range of pki.pdf from train 26.2, then ran the heading rule at both thresholds over the first 40 pages"
+    },
+    {
+      "what": "The correction of the spec artifacts for the body size",
+      "result": "Done. research.md Decision 15 replaces the sentence that called 9.0 the body text with a dated correction block that holds the 4 range table, the 65.8 against 5.5 percent impact table, and the never sample rule. plan.md marks the font size row of the verified claims table as superseded and points at Decision 15.",
+      "command": "Read Decision 15 of specs/2754-hardening-junos-skill/research.md and the Verified claims table of specs/2754-hardening-junos-skill/plan.md"
+    }
+  ],
+  "step_summaries": {
+    "specify": {
+      "summary": "The spec for the hardening-junos project skill is written and validated. It settles the corpus scope, the storage split, the retrieval design, the conversion quality criteria, and the deduplication rule.",
+      "key_finding": "The corpus is too large for the repository, so the skill holds curated guidance plus one index, and the bulk text stays on disk outside the repository."
+    },
+    "plan": {
+      "summary": "The implementation plan and its design artifacts are written and then revised against 3 repository facts. The skill ships 6 files at about 262 KB. The corpus of 744 MB stays outside the repository, and the plan upgrades the committed converter.",
+      "key_finding": "documentation/references/ is ignored on purpose, so the repository already runs the vendor-text policy that the spec proposes. The committed scripts/pdf_to_markdown.py must be upgraded with pdfplumber, not PyMuPDF, because the container image is a distribution and the AGPL applies."
+    },
+    "tasks": {
+      "summary": "tasks.md is written and then revised twice: 71 tasks from T001 to T071, at 56.3 KB, in 7 phases. Phase 1 Setup holds 8 tasks (T001-T008). Phase 2 Foundational holds 24 (T009-T032). Phase 3 User Story 1 (P1, MVP) holds 7 (T033-T039). Phase 4 User Story 2 (P2) holds 8 (T040-T047). Phase 5 User Story 3 (P3) holds 6 (T048-T053). Phase 6 User Story 4 (P4) holds 6 (T054-T059). Phase 7 Polish holds 12 (T060-T071). 16 tasks carry the parallel mark. The MVP is Phase 1 plus Phase 2 plus Phase 3, which is 39 tasks. The next action is /speckit.implement.",
+      "key_finding": "The second revision closes the 9.0 against 10.0 body size conflict, and the conflict hid a whole defect class. The body size of pki.pdf is 10.0 over all 168 pages, and 9.0 is superseded. A sampled body size that is 1 point too small promotes 65.8 percent of the lines to headings against 5.5 percent, and it raises no exception. The revision adds T025, which sweeps the heading share of every rebuilt file against a ceiling of 25 percent. It runs before the density re-measure, because an index built on a corrupt corpus is worthless, and 1 file or more above the ceiling returns the work to T012. T012 now holds the never sample rule and the per document rule, with the tests test_body_size_is_computed_not_constant and test_body_size_uses_every_page. T023 grew from 5 tests to 6, and T056 writes the ceiling into corpus-operations.md. Every task from the old T025 onward shifted up by 1, so the re-measure is T026, the record step is T027, and the index build is T028-T030."
+    }
+  }
+}
