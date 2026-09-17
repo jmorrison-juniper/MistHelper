@@ -57,6 +57,7 @@ class MarkdownTextRules:
         "\u2013": "-",  # an en dash reads as a hyphen in a command example
         "\u2014": "-",  # an em dash reads as a hyphen in a command example
         "\u00a0": " ",  # a no-break space hides a word boundary from a search
+        "\ufffd": "",  # the reader writes this mark when a glyph has no mapping
     }
     BULLETS = "\u2022\u2023\u25aa\u25cf\u25e6\u2043\u00b7\uf0b7\uf0a7"  # the glyphs that start a list item
     FOLIO = re.compile(r"^(?:x{0,3}(?:ix|iv|v?i{0,3})|\d{1,4}|page\s+\d{1,4}|\d{1,4}\s+of\s+\d{1,4})$", re.IGNORECASE)
@@ -277,7 +278,8 @@ class PdfMarkdownConverter:
         source = self._relative_source()  # the citation names a path below the corpus root
         fields = [f'source_file: "{source}"']  # this field appears in 100 percent of the files
         for key, name in self.FIELDS.items():  # a PDF without an author gives no author field
-            value = " ".join(metadata.get(key, "").split())  # a metadata value can hold a newline
+            raw = " ".join(metadata.get(key, "").split())  # a metadata value can hold a newline
+            value = self.RULES.normalize(raw) if raw else ""  # the body rules also clean a title
             fields += [f'{name}: "{value.replace(chr(34), chr(39))}"'] if value else []  # keep the YAML valid
         fields.append(f"pages: {pages}")  # this field appears in 100 percent of the files
         return "---\n" + "\n".join(fields) + "\n---\n\n"

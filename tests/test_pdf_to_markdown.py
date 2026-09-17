@@ -411,3 +411,23 @@ class TestPartConverter:
         _, total, body_size = PdfLineReader(source).measure()  # the call under test
         assert total == 12, f"the measure pass must count every page: {total}"
         assert body_size == 10.0, f"the body size must be the body, not the contents: {body_size}"
+
+
+class TestGlyphsInMetadata:
+    """Prove that the glyph rules reach the front matter and the unmapped mark."""
+
+    def test_front_matter_holds_no_curly_mark(self, tmp_path: Path) -> None:
+        """A curly mark in the PDF metadata must reach the file as a plain mark."""
+        # The fixture writer stores metadata in latin-1, which holds no curly mark,
+        # so this test drives the front matter builder with the metadata directly.
+        converter = PdfMarkdownConverter(tmp_path / "x.pdf", tmp_path / "x.md")
+        head = converter._front_matter({"Title": "The Operator\u2019s Guide"}, 3)
+        assert "\u2019" not in head, f"a curly mark must not survive: {head!r}"
+        assert "Operator's Guide" in head, f"the plain mark must replace it: {head!r}"
+
+    def test_unmapped_glyph_mark_is_removed(self) -> None:
+        """The reader writes U+FFFD for a glyph with no mapping, so the rule drops it."""
+        rules = MarkdownTextRules()  # the rules hold no state
+        cleaned = rules.normalize("set system host-name \ufffdlab-router")
+        assert "\ufffd" not in cleaned, f"the unmapped mark must go: {cleaned!r}"
+        assert cleaned == "set system host-name lab-router", f"the command must stay: {cleaned!r}"
