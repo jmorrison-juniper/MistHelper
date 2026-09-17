@@ -28,6 +28,8 @@ from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: canonical flatten and escape helpers keep CSV output consistent with peers.
 
+logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
+
 
 class SiteApplicationListExporter:
     """Site application list exporter.
@@ -52,7 +54,7 @@ class SiteApplicationListExporter:
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No applications, so inform the operator and return.
-            logging.info("! No application data found for this site")  # ASCII-only user notice.
+            logger.info("! No application data found for this site")  # ASCII-only user notice.
             return
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested dicts for CSV.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # Make multiline values CSV-safe.
@@ -60,10 +62,10 @@ class SiteApplicationListExporter:
         mh.DataExporter.write_with_format_selection(  # Persist through the CSV, SQLite, or Arango selector.
             sanitized_data, filename, api_function_name="getSiteApplicationList"
         )
-        logging.debug(  # Post-call count trace per the action-logging rule.
+        logger.debug(  # Post-call count trace per the action-logging rule.
             "getSiteApplicationList persisted %d rows to %s", len(rawdata), filename
         )
-        logging.info("! %d application records exported to %s", len(rawdata), filename)  # User notice with count.
+        logger.info("! %d application records exported to %s", len(rawdata), filename)  # User notice with count.
 
     @staticmethod
     def application_list() -> None:
@@ -74,14 +76,14 @@ class SiteApplicationListExporter:
             shared helper so behavior matches the peer site-scoped exports.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Site Application List:")  # Menu header echoed to the operator.
-        logging.info("Starting the getSiteApplicationList export...")  # Pre-call trace.
+        logger.info("Site Application List:")  # Menu header echoed to the operator.
+        logger.info("Starting the getSiteApplicationList export...")  # Pre-call trace.
         resolved = mh.SiteDeviceExporter._resolve_site_for_stats("application list")  # Shared site prompt.
         if resolved is None:  # The operator declined, and the shared helper already logged the reason.
             return
         site_id, site_name = resolved  # Unpack the resolved identifiers for the API call.
         try:
-            logging.info("Calling getSiteApplicationList for site_id=%s (%s)", site_id, site_name)  # Pre-call log.
+            logger.info("Calling getSiteApplicationList for site_id=%s (%s)", site_id, site_name)  # Pre-call log.
             response = mistapi.api.v1.sites.wxtags.getSiteApplicationList(  # SDK call for the site application list.
                 mh.apisession, site_id
             )

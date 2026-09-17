@@ -35,6 +35,8 @@ from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 
+logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
+
 # The operationId that selects the primary-key strategy for the written row.
 _OPERATION = "verifySelfEmail"
 
@@ -63,7 +65,7 @@ class SelfAccountExporter:
                 context="verify_self_email.token",
             )
         ).strip()  # WHY: strip whitespace around the pasted token.
-        logging.debug("Token prompt answered (length=%d)", len(token))  # Length only, never the token.
+        logger.debug("Token prompt answered (length=%d)", len(token))  # Length only, never the token.
         return token
 
     @staticmethod
@@ -86,10 +88,10 @@ class SelfAccountExporter:
             code and never retries.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Calling verifySelfEmail for the configured account")  # Pre-call log, no token.
+        logger.info("Calling verifySelfEmail for the configured account")  # Pre-call log, no token.
         response = mistapi.api.v1.self.update.verifySelfEmail(mh.apisession, token)  # The single SDK call.
         detail = SelfAccountExporter._detail(response.data)  # WHY: a 400 body carries the reason.
-        logging.debug("verifySelfEmail returned status=%s", response.status_code)  # Post-call trace.
+        logger.debug("verifySelfEmail returned status=%s", response.status_code)  # Post-call trace.
         return response.status_code, detail
 
     @staticmethod
@@ -107,7 +109,7 @@ class SelfAccountExporter:
             "detail": detail,  # WHY: a 400 message such as "invalid token".
             "verified_at_utc": datetime.now(UTC).isoformat(),  # WHY: audit timestamp.
         }
-        logging.debug("Built 1 verifySelfEmail audit row")  # Post-build count trace.
+        logger.debug("Built 1 verifySelfEmail audit row")  # Post-build count trace.
         return row
 
     @staticmethod
@@ -122,7 +124,7 @@ class SelfAccountExporter:
         mh.DataExporter.write_with_format_selection(  # Persist through the CSV, SQLite, or Arango selector.
             [row], filename, api_function_name=_OPERATION
         )
-        logging.debug("%s persisted 1 row to %s", _OPERATION, filename)  # Post-call count.
+        logger.debug("%s persisted 1 row to %s", _OPERATION, filename)  # Post-call count.
 
     @staticmethod
     def verify_email() -> None:
@@ -134,13 +136,13 @@ class SelfAccountExporter:
             the menu.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Email Change Token Verification:")  # Menu header echoed to the operator.
+        logger.info("Email Change Token Verification:")  # Menu header echoed to the operator.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve which org to scope to.
         if not org_id:  # The resolver already logged the cancellation.
             return
         token = SelfAccountExporter._prompt_token()  # Read the token once.
         if not token:  # An empty answer cancels before any API call.
-            logging.info("! No token provided. Returning to the menu.")  # User-facing cancel.
+            logger.info("! No token provided. Returning to the menu.")  # User-facing cancel.
             return
         try:
             status_code, detail = SelfAccountExporter._verify(token)  # The single SDK call.
@@ -149,9 +151,9 @@ class SelfAccountExporter:
             logging.info("! Email change token verification failed: %s", e)  # ASCII-only user notice.
             return
         if status_code == 200:
-            logging.info("! Email address updated - the token was valid")  # ASCII-only success notice.
+            logger.info("! Email address updated - the token was valid")  # ASCII-only success notice.
         else:
-            logging.info(  # WHY: the 400 body names the reason.
+            logger.info(  # WHY: the 400 body names the reason.
                 "! Email change token verification failed (status %s): %s",
                 status_code,
                 detail or "no detail",

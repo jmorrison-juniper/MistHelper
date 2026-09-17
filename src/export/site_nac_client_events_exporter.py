@@ -27,6 +27,8 @@ from src.data.data_processing_utils import (
     DataProcessingUtils,
 )  # WHY: canonical flatten/escape helpers. Keeps CSV output consistent with peers.
 
+logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
+
 
 class SiteNacClientEventsExporter:
     """Site NAC Client Events search exporter.
@@ -56,7 +58,7 @@ class SiteNacClientEventsExporter:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not rawdata:  # No NAC client event rows for this site -- inform the operator and return.
             # WHY: ASCII-only user notice.
-            logging.info("! No NAC client event data found for this site")
+            logger.info("! No NAC client event data found for this site")
             return
         flattened_data = DataProcessingUtils.flatten_nested_fields(rawdata)  # Flatten nested dicts for CSV.
         sanitized_data = DataProcessingUtils.escape_multiline(flattened_data)  # CSV-safe multiline escape.
@@ -64,11 +66,11 @@ class SiteNacClientEventsExporter:
         mh.DataExporter.write_with_format_selection(  # Persist through CSV/SQLite/Arango backend selector.
             sanitized_data, filename, api_function_name="searchSiteNacClientEvents"
         )
-        logging.debug(  # DEBUG-level count trace per Action Logging principle (post-call).
+        logger.debug(  # DEBUG-level count trace per Action Logging principle (post-call).
             "searchSiteNacClientEvents persisted %d rows to %s", len(rawdata), filename
         )
         # WHY: user notice with count.
-        logging.info("! %d NAC client event records exported to %s", len(rawdata), filename)
+        logger.info("! %d NAC client event records exported to %s", len(rawdata), filename)
 
     @staticmethod
     def nac_client_events() -> None:
@@ -82,8 +84,8 @@ class SiteNacClientEventsExporter:
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: menu header echoed to operator.
-        logging.info("Site NAC Client Events Search:")
-        logging.info(  # INFO trace before the API call per Action Logging principle (pre-call).
+        logger.info("Site NAC Client Events Search:")
+        logger.info(  # INFO trace before the API call per Action Logging principle (pre-call).
             "Starting searchSiteNacClientEvents export..."
         )
         resolved = mh.SiteDeviceExporter._resolve_site_for_stats(  # Prompt + org/site resolution (shared).
@@ -93,7 +95,7 @@ class SiteNacClientEventsExporter:
             return
         site_id, site_name = resolved  # Unpack resolved identifiers for the API call.
         try:
-            logging.info(  # INFO trace immediately before the SDK call (with site context).
+            logger.info(  # INFO trace immediately before the SDK call (with site context).
                 "Calling searchSiteNacClientEvents for site_id=%s (%s)", site_id, site_name
             )
             response = mistapi.api.v1.sites.nac_clients.searchSiteNacClientEvents(  # SDK call -- defaults for filters.
