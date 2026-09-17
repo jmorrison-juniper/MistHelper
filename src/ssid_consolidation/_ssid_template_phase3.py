@@ -33,6 +33,7 @@ from typing import Any  # WHY: broad typing for opaque cache / row payloads
 
 from ._ssid_template_cluster import _ClusterBase  # WHY: shared parent-proxy wrapper
 
+logger = logging.getLogger(__name__)  # WHY: Use the module logger for non-exception log entries.
 # ---------------------------------------------------------------------------
 # Module-level constants (magic value hoisting)
 # ---------------------------------------------------------------------------
@@ -175,7 +176,7 @@ def _assign_matrix_sites(
 
 def _display_group_plan(plan: dict[str, Any]) -> None:  # WHY: exported for tests + re-export
     """Print the group assignment plan."""
-    logging.warning("Site Group Plan:")  # WHY: section header for the console preview
+    logger.warning("Site Group Plan:")  # WHY: section header for the console preview
     for group in plan.get("groups", []):  # WHY: preview one group entry at a time
         _print_group_header(group)  # WHY: header line with exists/create + site count
         _print_group_preview(group)  # WHY: bounded preview of member sites
@@ -185,16 +186,16 @@ def _print_group_header(group: dict[str, Any]) -> None:  # WHY: extracted from _
     """Print a single group header row (status + site count)."""
     status = "exists" if group["exists"] else "to create"  # WHY: preview action verb
     site_count = len(group["sites"])  # WHY: total members before truncation
-    logging.warning("%s (%s) - %d sites", group["group_name"], status, site_count)  # WHY: single header line
+    logger.warning("%s (%s) - %d sites", group["group_name"], status, site_count)  # WHY: single header line
 
 
 def _print_group_preview(group: dict[str, Any]) -> None:  # WHY: extracted from _display_group_plan
     """Print a bounded preview of a group's assigned sites."""
     sites = group["sites"]  # WHY: alias for readability
     for site in sites[:_DISPLAY_SITE_LIMIT]:  # WHY: bound console noise per group
-        logging.warning("- %s", site["site_name"])  # WHY: one visible site name per line
+        logger.warning("- %s", site["site_name"])  # WHY: one visible site name per line
     if len(sites) > _DISPLAY_SITE_LIMIT:  # WHY: only mention overflow when it exists
-        logging.warning("... and %d more", len(sites) - _DISPLAY_SITE_LIMIT)  # WHY: overflow marker
+        logger.warning("... and %d more", len(sites) - _DISPLAY_SITE_LIMIT)  # WHY: overflow marker
 
 
 def _build_assign_results(
@@ -340,8 +341,8 @@ class _SsidTemplatePhase3Cluster(_ClusterBase):  # WHY: exported for parent __in
 
 def _log_phase3_start() -> None:  # WHY: extracted from phase3_site_groups
     """Print the banner and emit the startup log line for Phase 3."""
-    logging.warning(_PHASE3_HEADER)  # WHY: user-facing banner marks phase entry
-    logging.info(_PHASE3_START_LOG)  # WHY: telemetry alongside the banner
+    logger.warning(_PHASE3_HEADER)  # WHY: user-facing banner marks phase entry
+    logger.info(_PHASE3_START_LOG)  # WHY: telemetry alongside the banner
 
 
 def _ensure_single_group(
@@ -351,7 +352,7 @@ def _ensure_single_group(
 ) -> None:  # WHY: extracted from _ensure_groups_exist loop
     """Create the group when missing. Otherwise log the reuse."""
     if group["exists"]:  # WHY: reuse existing groups without hitting mistapi
-        logging.info(_GROUP_EXISTS_LOG, group["group_name"], group["group_id"])  # WHY: audit trail
+        logger.info(_GROUP_EXISTS_LOG, group["group_name"], group["group_id"])  # WHY: audit trail
         return  # WHY: skip create call when already present
     create_fn(group, parent.org_id, parent.apisession)  # WHY: parent owns creator (mistapi patched there)
 

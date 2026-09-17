@@ -22,6 +22,7 @@ from src.websocket.manager import (  # WHY: WebSocket lifecycle + error utilitie
     select_ws_site,
 )
 
+logger = logging.getLogger(__name__)  # WHY: Use the module logger for non-exception log entries.
 _DEFAULT_PING_TARGET = "8.8.8.8"  # WHY: legacy default destination preserved verbatim.
 _DEFAULT_PING_COUNT = 4  # WHY: legacy default packet count preserved verbatim.
 _MIN_PING_COUNT = 1  # WHY: inclusive lower bound enforced on user input.
@@ -67,7 +68,7 @@ class PingDeviceExecutor:  # WHY: orchestrates ping-over-WebSocket diagnostic wo
 
     def execute(self, deps: WebSocketCmdDeps) -> None:  # WHY: top-level workflow entry.
         """Top-level entry: prompt user, run ping, render results."""
-        logging.info("Starting WebSocket ping operation...")  # WHY: action log at workflow start.
+        logger.info("Starting WebSocket ping operation...")  # WHY: action log at workflow start.
         debug_mode = detect_debug_mode()  # WHY: honor --debug / -d flag once per run.
         self._emit_debug_banner(debug_mode)  # WHY: mirror legacy debug banner + trace lines.
         websocket_manager: WebSocketManager | None = None  # WHY: tracked for finally cleanup.
@@ -78,7 +79,7 @@ class PingDeviceExecutor:  # WHY: orchestrates ping-over-WebSocket diagnostic wo
             logging.debug("EXIT: ping_device_websocket - error")  # WHY: trace marker preserved.
         finally:  # WHY: always release WS resources on any exit path.
             cleanup_ws_connection(websocket_manager, debug_mode)  # WHY: disconnect if connected.
-            logging.debug("EXIT: ping_device_websocket")  # WHY: trace marker preserved.
+            logger.debug("EXIT: ping_device_websocket")  # WHY: trace marker preserved.
 
     @staticmethod
     def _emit_debug_banner(debug_mode: bool) -> None:
@@ -86,8 +87,8 @@ class PingDeviceExecutor:  # WHY: orchestrates ping-over-WebSocket diagnostic wo
         if debug_mode:  # WHY: legacy raises root logger level + prints banner.
             logging.getLogger().setLevel(logging.DEBUG)  # WHY: surface DEBUG records.
             print("[DEBUG] DEBUG MODE ENABLED")  # WHY: user-facing banner kept verbatim.
-        logging.info("Starting WebSocket ping operation...")  # WHY: legacy duplicate log preserved.
-        logging.debug("ENTER: ping_device_websocket")  # WHY: trace marker kept verbatim.
+        logger.info("Starting WebSocket ping operation...")  # WHY: legacy duplicate log preserved.
+        logger.debug("ENTER: ping_device_websocket")  # WHY: trace marker kept verbatim.
 
     def _run_workflow(self, deps: WebSocketCmdDeps, debug_mode: bool) -> WebSocketManager | None:
         """Prompt user, dispatch ping, render output. Return WS manager for cleanup."""
@@ -128,14 +129,14 @@ class PingDeviceExecutor:  # WHY: orchestrates ping-over-WebSocket diagnostic wo
             _PROMPT_TARGET, context=_INPUT_CONTEXT
         ).strip()  # WHY: drop incidental whitespace from prompt response.
         target_host = target_input or _DEFAULT_PING_TARGET  # WHY: apply legacy default.
-        logging.debug("Validating ping target host=%s", target_host)  # WHY: log before check.
+        logger.debug("Validating ping target host=%s", target_host)  # WHY: log before check.
         if not deps.validate_target_fn(target_host):  # WHY: reject unsafe / malformed hosts.
             print(f"! Invalid ping target: {target_host}")  # WHY: legacy phrasing preserved.
-            logging.warning("Rejected invalid ping target host=%s", target_host)  # WHY: log.
+            logger.warning("Rejected invalid ping target host=%s", target_host)  # WHY: log.
             return None  # WHY: caller aborts workflow.
         if debug_mode:  # WHY: legacy debug echo of the chosen host.
             print(f"[DEBUG] Target host = {target_host}")  # WHY: legacy phrasing preserved.
-        logging.debug("Ping target accepted host=%s", target_host)  # WHY: log after success.
+        logger.debug("Ping target accepted host=%s", target_host)  # WHY: log after success.
         return target_host  # WHY: validated host returned to caller.
 
     def _prompt_ping_count(self, deps: WebSocketCmdDeps, debug_mode: bool) -> int:
@@ -159,7 +160,7 @@ class PingDeviceExecutor:  # WHY: orchestrates ping-over-WebSocket diagnostic wo
             return _DEFAULT_PING_COUNT  # WHY: legacy fallback preserved.
         if parsed_count < _MIN_PING_COUNT or parsed_count > _MAX_PING_COUNT:  # WHY: guard.
             print(_MSG_RANGE_COUNT)  # WHY: legacy phrasing preserved.
-            logging.warning("Rejected out-of-range ping count=%d", parsed_count)  # WHY: log.
+            logger.warning("Rejected out-of-range ping count=%d", parsed_count)  # WHY: log.
             return _DEFAULT_PING_COUNT  # WHY: legacy fallback preserved.
         return parsed_count  # WHY: accepted value path.
 
@@ -176,9 +177,9 @@ class PingDeviceExecutor:  # WHY: orchestrates ping-over-WebSocket diagnostic wo
         if not websocket_manager.connect_and_subscribe(  # WHY: subscribe to WS stream.
             request.site_id, request.device_id, request.debug_mode
         ):
-            logging.warning("WebSocket connect+subscribe failed for ping")  # WHY: log on fail.
+            logger.warning("WebSocket connect+subscribe failed for ping")  # WHY: log on fail.
             return websocket_manager  # WHY: hand to finally for cleanup.
-        logging.debug("WebSocket connect+subscribe succeeded for ping")  # WHY: log on success.
+        logger.debug("WebSocket connect+subscribe succeeded for ping")  # WHY: log on success.
         context = _PostContext(request=request, websocket_manager=websocket_manager)  # WHY: bundle.
         session_id = self._post_ping_command(context)  # WHY: POST + demux session id.
         if session_id is None:  # WHY: POST failed. Helper already disconnected.
@@ -197,7 +198,7 @@ class PingDeviceExecutor:  # WHY: orchestrates ping-over-WebSocket diagnostic wo
         print(f"-> Ping count: {request.ping_count}")  # WHY: legacy banner preserved.
         print("-> Establishing WebSocket connection...")  # WHY: legacy banner preserved.
         websocket_manager = WebSocketManager(request.deps.apisession)  # WHY: per-run manager.
-        logging.info(  # WHY: action log before connect+subscribe.
+        logger.info(  # WHY: action log before connect+subscribe.
             "Connecting WebSocket for ping site=%s device=%s",
             request.site_id,
             request.device_id,
@@ -231,7 +232,7 @@ class PingDeviceExecutor:  # WHY: orchestrates ping-over-WebSocket diagnostic wo
     def _announce_post(request: _PingRequest) -> None:
         """Emit the legacy status line + optional debug payload echo before POST."""
         print("-> Issuing ping command...")  # WHY: legacy status line preserved.
-        logging.debug(  # WHY: action log before HTTP POST.
+        logger.debug(  # WHY: action log before HTTP POST.
             "Ping payload prepared host=%s count=%d", request.target_host, request.ping_count
         )
         if request.debug_mode:  # WHY: legacy debug echo of the payload.
@@ -261,20 +262,20 @@ class PingDeviceExecutor:  # WHY: orchestrates ping-over-WebSocket diagnostic wo
     ) -> None:
         """Wait for the ping result on the WS, then render it or report timeout."""
         self._announce_wait(session_id, debug_mode)  # WHY: legacy banner + debug lines.
-        logging.info(  # WHY: action log before blocking wait.
+        logger.info(  # WHY: action log before blocking wait.
             "Awaiting ping result session=%s", session_id[:_SESSION_PREVIEW_LEN]
         )
         ping_result = websocket_manager.wait_for_command_result(  # WHY: block on WS result.
             session_id, timeout_seconds=_WS_RESULT_TIMEOUT
         )
-        logging.debug("Ping wait completed; has_result=%s", ping_result is not None)  # WHY: after-log for wait outcome.
+        logger.debug("Ping wait completed; has_result=%s", ping_result is not None)  # WHY: after-log for wait outcome.
         if debug_mode:  # WHY: legacy debug echo of wait outcome + shape.
             self._echo_wait_outcome(ping_result)  # WHY: emit legacy debug lines.
         if ping_result:  # WHY: success path renders captured payload.
             self._render_ping_result(ping_result, target_host)  # WHY: legacy render block.
             return  # WHY: done rendering.
         print(_MSG_TIMEOUT)  # WHY: legacy phrasing preserved.
-        logging.warning("WebSocket ping operation timed out")  # WHY: after log on timeout.
+        logger.warning("WebSocket ping operation timed out")  # WHY: after log on timeout.
         dump_ws_debug_state(websocket_manager, debug_mode)  # WHY: surface WS state for triage.
 
     @staticmethod
@@ -304,7 +305,7 @@ class PingDeviceExecutor:  # WHY: orchestrates ping-over-WebSocket diagnostic wo
         if not raw_output and not other_output:  # WHY: surface empty-result diagnostic.
             self._render_empty_result(ping_result)  # WHY: emit legacy phrasing block.
         print(_HEADER_SEPARATOR)  # WHY: legacy visual closer preserved.
-        logging.info(  # WHY: final action log on successful render.
+        logger.info(  # WHY: final action log on successful render.
             "WebSocket ping completed successfully for %s", target_host
         )
 
