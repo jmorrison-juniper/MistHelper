@@ -34,6 +34,12 @@ import venv
 from pathlib import Path
 from urllib.parse import urlparse
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]  # Find the root before importing repository packages.
+if str(REPOSITORY_ROOT) not in sys.path:  # A script run adds scripts to sys.path, not always the repository root.
+    sys.path.insert(0, str(REPOSITORY_ROOT))  # Make the tools package importable during a fresh bootstrap.
+
+from tools.venv_health import VirtualEnvironmentHealthCheck  # Check package records after pip installs packages.
+
 LOGGER = logging.getLogger("bootstrap_worktree")
 
 # The requirement files that the script installs, in this order. The script
@@ -223,6 +229,22 @@ class WorktreeBootstrapper:
         LOGGER.debug("The %s browser is ready", PLAYWRIGHT_BROWSER)
         return True  # The browser tests can now open a page.
 
+    def check_environment_health(self) -> None:
+        """Report corrupt package install records without stopping setup."""
+        LOGGER.info("Checking virtual environment package install records.")  # Log before the filesystem health scan.
+        try:  # The bootstrap must continue even if this optional local guard breaks.
+            report = VirtualEnvironmentHealthCheck.inspect_venv(self.venv_dir)  # Scan the environment this script owns.
+        except Exception as error:  # Catch all guard defects because bootstrap must remain available.
+            LOGGER.warning("Warning: the virtual environment health check failed: %s", error)  # Name the guard fault.
+            LOGGER.warning("The bootstrap continues because this check must not block setup.")  # State safe behavior.
+            return  # Keep the bootstrap available for future agents even when the guard has a defect.
+        for message in report.messages():  # Print the measured count and the repair command when needed.
+            if report.corrupt_count:  # Corrupt records need a warning so a developer sees the repair.
+                LOGGER.warning("%s", message)  # Use warning severity so the corrupt package list stands out.
+                continue  # Keep warning severity for each corrupt-environment line.
+            LOGGER.info("%s", message)  # A healthy environment is normal setup output.
+        LOGGER.debug("The health check found %d corrupt record(s).", report.corrupt_count)
+
     def _install_environment(self) -> dict[str, str]:
         """Build the environment that the pip subprocess reads."""
         environment = dict(os.environ)  # Copy the caller environment, because pip needs the rest of it.
@@ -364,7 +386,7 @@ def main(argv: list[str] | None = None) -> int:
     """Run the bootstrap and return the exit code of the script."""
     logging.basicConfig(level=logging.INFO, format="%(message)s")  # Show one plain line for each step.
     args = build_parser().parse_args(argv)  # Read the command line of the caller.
-    root = Path(__file__).resolve().parents[1]  # The worktree root holds the scripts directory.
+    root = REPOSITORY_ROOT  # Reuse the root that also made repository package imports safe.
     LOGGER.info("Preparing the worktree at %s", root)
     bootstrapper = WorktreeBootstrapper(root)  # Build the object that owns every step.
     try:  # Report a failed step as one clear message, because the user reads the console.
@@ -373,6 +395,7 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, RuntimeError) as error:  # A file error or a failed install stops the script.
         LOGGER.error("The bootstrap failed: %s", error)
         return 1  # Report the failure to the shell.
+    bootstrapper.check_environment_health()  # Warn about corrupt package records without blocking setup.
     browser_ready = bootstrapper.install_browser_driver()  # Download the browser the e2e tests drive.
     report_result(bootstrapper, installed, browser_ready)  # Tell the user which interpreter to activate.
     account_checker = GitHubAccountChecker()  # Build the checker that owns repository credential setup.

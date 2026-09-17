@@ -11,6 +11,8 @@ import time
 import uuid
 from queue import Empty, Full, Queue
 
+logger = logging.getLogger(__name__)  # Use a module logger so records include this module name.
+
 
 class PortalEventBus:
     """Publish-subscribe event bus for SSE streaming.
@@ -70,9 +72,9 @@ class PortalEventBus:
         """
         # WHY: guard against a duplicate thread when a caller builds the app twice.
         if self._heartbeat_thread is not None and self._heartbeat_thread.is_alive():
-            logging.debug("Event bus heartbeat already running; start() ignored")
+            logger.debug("Event bus heartbeat already running; start() ignored")
             return
-        logging.info("Starting event bus heartbeat thread")
+        logger.info("Starting event bus heartbeat thread")
         self._stop_event.clear()  # WHY: allow a restart after a previous stop().
         self._heartbeat_thread = threading.Thread(
             target=self._heartbeat_loop,
@@ -80,7 +82,7 @@ class PortalEventBus:
             name="portal-heartbeat",
         )
         self._heartbeat_thread.start()
-        logging.debug("Event bus heartbeat thread started")
+        logger.debug("Event bus heartbeat thread started")
 
     def stop(self) -> None:
         """Stop the heartbeat timer, wait for the thread, and clean up.
@@ -89,14 +91,14 @@ class PortalEventBus:
         so a caller that stops the bus can trust that no further heartbeat
         event will publish.
         """
-        logging.info("Stopping event bus heartbeat thread")
+        logger.info("Stopping event bus heartbeat thread")
         self._stop_event.set()  # WHY: wakes the loop out of its wait at once.
         thread = self._heartbeat_thread
         if thread is not None:
             # WHY: join so stop() does not return while the thread still runs.
             thread.join(timeout=self.STOP_JOIN_TIMEOUT_S)
             if thread.is_alive():
-                logging.warning(
+                logger.warning(
                     "Event bus heartbeat thread did not stop within %.1f s",
                     self.STOP_JOIN_TIMEOUT_S,
                 )
@@ -104,7 +106,7 @@ class PortalEventBus:
         with self._lock:
             subscriber_count = len(self._subscribers)
             self._subscribers.clear()
-        logging.debug("Event bus stopped and dropped %d subscriber(s)", subscriber_count)
+        logger.debug("Event bus stopped and dropped %d subscriber(s)", subscriber_count)
         self._log_drop_summary()  # Report the final loss total, because the rate limit can hide it.
 
     def subscribe(self, run_id: str = None) -> str:
@@ -192,7 +194,7 @@ class PortalEventBus:
         total = self.dropped_event_count  # Read the combined total for both loss paths.
         if total < self._next_drop_log_at:
             return  # Stay silent until the total reaches the next threshold.
-        logging.warning(
+        logger.warning(
             "Web portal event bus dropped %d server-sent event(s): %d evicted oldest, "
             "%d rejected newest. A subscriber reads the stream too slowly.",
             total,
@@ -211,9 +213,9 @@ class PortalEventBus:
         """
         total = self.dropped_event_count  # Read the combined total for both loss paths.
         if total == 0:
-            logging.debug("Event bus dropped no server-sent event")  # Confirm a clean run.
+            logger.debug("Event bus dropped no server-sent event")  # Confirm a clean run.
             return
-        logging.warning(
+        logger.warning(
             "Event bus dropped %d server-sent event(s) in total: %d evicted oldest, %d rejected newest",
             total,
             self._evicted_event_count,
@@ -262,7 +264,7 @@ class PortalEventBus:
                 },
             )
             self._cleanup_stale_subscribers()  # WHY: drop subscribers older than one hour.
-        logging.debug("Event bus heartbeat loop exited on stop request")
+        logger.debug("Event bus heartbeat loop exited on stop request")
 
     def _count_active(self) -> int:
         """Count currently active subscribers."""
@@ -276,4 +278,4 @@ class PortalEventBus:
             stale = [sid for sid, info in self._subscribers.items() if info["created_at"] < cutoff]
             for sid in stale:
                 del self._subscribers[sid]
-                logging.info("Cleaned up stale SSE subscriber %s", sid[:8])
+                logger.info("Cleaned up stale SSE subscriber %s", sid[:8])

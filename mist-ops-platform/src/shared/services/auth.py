@@ -26,12 +26,13 @@ from typing import Any
 
 import mistapi
 
-from src.shared.mist.endpoints import MistEndpointService
+from src.shared.mist.endpoints import HTTP_SUCCESS_MAX_EXCLUSIVE, MistEndpointService
 from src.shared.mist.session import MistSessionFactory, get_session_factory
 
 logger = logging.getLogger(__name__)
 
 PRIVILEGE_CACHE_TTL = 300  # A verification result stays valid for 5 minutes.
+HTTP_SERVER_ERROR_MIN = 500  # The first HTTP 5xx code means the Mist service failed.
 
 
 class MistApiUnavailableError(RuntimeError):
@@ -102,22 +103,38 @@ class AuthService:
 
     def _fetch_self(self, token: str) -> MistPrivileges:
         """Call GET /api/v1/self to retrieve privileges."""
-        try:
-            session = mistapi.APISession(
-                host="api.mist.com",
-                apitoken=token,
+        try:  # WHY: convert transport failures into the portal unavailable path.
+            session = mistapi.APISession(  # WHY: build the validation session.
+                host="api.mist.com",  # WHY: the auth check uses the default Mist cloud host.
+                apitoken=token,  # WHY: validate the caller-supplied token without logging it.
             )
-            mist_service = MistEndpointService(session)  # Wraps the SDK call in the registry.
-            result = mist_service.list_all_entities(
-                "self_identity",
-                {},
+            mist_service = MistEndpointService(session)  # WHY: reuse registry behavior.
+            result = mist_service.list_all_entities(  # WHY: read /self.
+                "self_identity",  # WHY: registry entry points at GET /api/v1/self.
+                {},  # WHY: the self endpoint needs no path identifiers.
             )
         except Exception as error:  # WHY: the SDK raises transport types this module cannot name.
             # WHY: a transport fault is not a bad token. The caller must answer 503, not 401.
             logger.warning("The Mist privilege lookup failed to reach the Mist API.")
             raise MistApiUnavailableError(str(error)) from error
-        data = result.data[0] if result.data else {}  # An empty answer means Mist said no.
-        return self._parse_privileges(data)
+        if not result.success:  # WHY: HTTP failures carry no valid privilege record.
+            return self._handle_self_failure(result.status_code)  # WHY: split 4xx from 5xx.
+        data = (  # WHY: an empty success list means Mist returned no user.
+            result.data[0] if isinstance(result.data, list) and result.data else {}
+        )
+        return self._parse_privileges(data)  # WHY: normalize the /self body.
+
+    @staticmethod
+    def _handle_self_failure(status_code: int) -> MistPrivileges:
+        """Return or raise for a failed /self response."""
+        if status_code < HTTP_SUCCESS_MAX_EXCLUSIVE:  # WHY: 3xx or lower is unexpected here.
+            logger.warning("The Mist privilege lookup returned unexpected status %s.", status_code)
+            raise MistApiUnavailableError(f"Mist API returned unexpected status {status_code}")
+        if status_code < HTTP_SERVER_ERROR_MIN:  # WHY: 4xx means Mist rejected the token.
+            logger.info("Mist rejected the token with status %s.", status_code)
+            return MistPrivileges()  # WHY: the caller maps empty privileges to unauthorized.
+        logger.warning("The Mist privilege lookup failed with status %s.", status_code)
+        raise MistApiUnavailableError(f"Mist API returned status {status_code}")
 
     @staticmethod
     def _parse_privileges(data: dict[str, Any]) -> MistPrivileges:

@@ -15,8 +15,10 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import wait as wait_for_futures
 from typing import Any
 
+
 from src.utils.operation_registry import OperationRegistry
 
+logger = logging.getLogger(__name__)  # Use a module logger so records include this module name.
 CATEGORY_RANGES = [
     (1, 4, "Core Organization"),
     (5, 8, "WebSocket Device Commands"),
@@ -85,7 +87,7 @@ def _read_positive_int_env(name: str, default: int) -> int:
         return default  # Keep the default, because an unusable value must not remove the cap.
     if value < 1:
         # Report the bad value, because a cap below one would discard every record.
-        logging.warning("Ignoring %s: the value %d is below the minimum of 1", name, value)
+        logger.warning("Ignoring %s: the value %d is below the minimum of 1", name, value)
         return default  # Keep the default, because the cap must hold at least one item.
     return value  # Accept the override, because the value is usable.
 
@@ -377,12 +379,12 @@ class OperationExecutor:
         self._configure_limits()  # Read the caps once, so every run shares one setting.
         cpu_count = os.cpu_count() or 2
         max_workers = max(1, cpu_count - 1)
-        logging.info("Operation pool: %d workers (CPUs detected: %d)", max_workers, cpu_count)
+        logger.info("Operation pool: %d workers (CPUs detected: %d)", max_workers, cpu_count)
         self._pool = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="op")
 
     def _configure_limits(self) -> None:
         """Read the run registry memory caps from the environment."""
-        logging.info("Reading the web portal run registry memory caps")  # Log before the read.
+        logger.info("Reading the web portal run registry memory caps")  # Log before the read.
         # Each cap reads one variable and falls back to the documented default.
         self._log_max_entries = _read_positive_int_env("PORTAL_RUN_LOG_MAX_ENTRIES", DEFAULT_RUN_LOG_MAX_ENTRIES)
         self._history_max = _read_positive_int_env("PORTAL_RUN_HISTORY_MAX", DEFAULT_RUN_HISTORY_MAX)
@@ -393,7 +395,7 @@ class OperationExecutor:
             "PORTAL_OPERATION_SHUTDOWN_GRACE_SECONDS", DEFAULT_OPERATION_SHUTDOWN_GRACE_SECONDS
         )
         # Record the result, so an operator can confirm the caps the portal applied.
-        logging.debug(
+        logger.debug(
             "Run caps: %d log entries, %d finished runs, %d seconds of retention, %d output files, "
             "%d second shutdown grace period",
             self._log_max_entries,
@@ -453,7 +455,7 @@ class OperationExecutor:
             stop_path = os.path.join(os.getcwd(), "stop_loop.txt")
             with open(stop_path, "w", encoding="utf-8") as fh:
                 fh.write("stop requested by web portal\n")
-            logging.info("Stop signal sent for run %s (stop_loop.txt created)", run_id)
+            logger.info("Stop signal sent for run %s (stop_loop.txt created)", run_id)
         except OSError as exc:
             logging.warning("Could not create stop_loop.txt: %s", exc)
         return {"status": "stop_requested", "run_id": run_id}
@@ -466,7 +468,7 @@ class OperationExecutor:
         """
         with self._lock:
             if self._shutdown_done:  # A prior call already drained the pool, so skip the repeat work.
-                logging.debug("Operation pool already shut down, skipping repeat call")
+                logger.debug("Operation pool already shut down, skipping repeat call")
                 return
             self._shutdown_done = True  # Mark shutdown first, so a second call returns above.
             # Collect only the futures still in flight, so a finished run is not awaited again.
@@ -477,16 +479,16 @@ class OperationExecutor:
             ]
         # Fall back to the configured default, so a caller need not pass a value.
         wait_seconds = self._shutdown_grace_seconds if grace_seconds is None else grace_seconds
-        logging.info(
+        logger.info(
             "Stopping the operation pool: %d run(s) in flight, %s second grace period", len(pending), wait_seconds
         )
         # Bound the wait, so one stuck run cannot hang the whole shutdown path.
         done, not_done = wait_for_futures(pending, timeout=wait_seconds)
         if not_done:
             # Warn, because an operator must know a run did not finish before the pool closed.
-            logging.warning("Operation pool shutdown: %d run(s) still in flight after the grace period", len(not_done))
+            logger.warning("Operation pool shutdown: %d run(s) still in flight after the grace period", len(not_done))
         self._pool.shutdown(wait=False)  # Release the worker threads now, the wait above already bounded the delay.
-        logging.info("Operation pool stopped: %d of %d run(s) finished cleanly", len(done), len(pending))
+        logger.info("Operation pool stopped: %d of %d run(s) finished cleanly", len(done), len(pending))
 
     def build_category_list(self, menu_actions: dict) -> list:
         """Build categorized operation list for the UI."""
@@ -554,7 +556,7 @@ class OperationExecutor:
         An unregistered key, an unparseable key, and any category outside
         `PORTAL_RUNNABLE_CATEGORIES` all return False.
         """
-        logging.info("Portal checks whether it may run operation %s", menu_number)
+        logger.info("Portal checks whether it may run operation %s", menu_number)
         category = OperationRegistry.skip_category(menu_number)  # Authoritative safety verdict.
         num = self._parse_menu_number(menu_number)  # None when int() cannot read the key.
         allowed = (
@@ -562,7 +564,7 @@ class OperationExecutor:
             and num is not None  # A key the page cannot place must never run.
             and num < DESTRUCTIVE_THRESHOLD  # Keep the existing narrower bound, so no operation is added.
         )
-        logging.debug("Portal verdict for operation %s: category=%s allowed=%s", menu_number, category, allowed)
+        logger.debug("Portal verdict for operation %s: category=%s allowed=%s", menu_number, category, allowed)
         return allowed
 
     @staticmethod
@@ -630,7 +632,7 @@ class OperationExecutor:
             remaining = len(self._runs)  # Read the size inside the lock, because another thread can add a run.
         if stale:
             # Log the removal, so an operator can explain a run record that left the portal.
-            logging.info("Removed %d finished operation runs, %d runs remain", len(stale), remaining)
+            logger.info("Removed %d finished operation runs, %d runs remain", len(stale), remaining)
 
     def _select_stale_runs(self, finished: list) -> list:
         """Return the identifiers of the finished runs the portal may drop.

@@ -10,11 +10,13 @@ import logging
 import os
 from typing import Any
 
+
 from flask import Flask, Response, send_from_directory
 
 from web_portal.services.config import PortalConfigLoader, SecurityMiddleware, ThemeManager
 from web_portal.services.input_hook import InputInterceptor
 
+logger = logging.getLogger(__name__)  # Use a module logger so records include this module name.
 FAVICON_ROUTE = "/favicon.ico"  # Browsers and crawlers request this fixed path.
 FAVICON_ASSET = "favicon.svg"  # Reuse the icon that issue 2398 added.
 FAVICON_MIMETYPE = "image/svg+xml"  # Tell clients that the icon is an SVG document.
@@ -77,13 +79,13 @@ class WebPortalApp:
             markup. The route reuses the shipped SVG icon, so those clients
             do not create a 404 log line.
         """
-        logging.info("Registering the web portal favicon route")  # Log before the route table change.
+        logger.info("Registering the web portal favicon route")  # Log before the route table change.
         app.add_url_rule(  # Add the direct route without changing the static folder behavior.
             FAVICON_ROUTE,
             endpoint="favicon",
             view_func=WebPortalApp._serve_favicon,
         )
-        logging.debug("Registered the web portal favicon route")  # Confirm the route table change.
+        logger.debug("Registered the web portal favicon route")  # Confirm the route table change.
 
     @staticmethod
     def _serve_favicon() -> Response:
@@ -93,7 +95,7 @@ class WebPortalApp:
             The page keeps the SVG icon declaration. This route serves the same
             file when a client requests the legacy path directly.
         """
-        logging.info("Serving the web portal favicon")  # Log before Flask reads the static asset.
+        logger.info("Serving the web portal favicon")  # Log before Flask reads the static asset.
         response = send_from_directory(  # Serve the existing asset through Flask static helpers.
             WebPortalApp._get_static_dir(),
             FAVICON_ASSET,
@@ -102,7 +104,7 @@ class WebPortalApp:
         )
         response.cache_control.public = True  # Allow shared caches to keep this immutable asset briefly.
         response.cache_control.max_age = FAVICON_CACHE_SECONDS  # Keep the cache header explicit for tests.
-        logging.debug("Served the web portal favicon with status %s", response.status_code)  # Log the result.
+        logger.debug("Served the web portal favicon with status %s", response.status_code)  # Log the result.
         return response  # Return the prepared asset response to the client.
 
     @staticmethod
@@ -128,16 +130,16 @@ class WebPortalApp:
         enabled = raw_enabled.strip().lower() == "true"  # WHY: only the exact word "true" turns the route on.
         app.config[WEBHOOK_ENABLED_CONFIG_KEY] = enabled
         app.config[WEBHOOK_SECRET_CONFIG_KEY] = os.environ.get(WEBHOOK_SECRET_CONFIG_KEY, "").strip()
-        logging.info("Webhook receiver enabled=%s", enabled)  # WHY: log the setting, never the secret.
+        logger.info("Webhook receiver enabled=%s", enabled)  # WHY: log the setting, never the secret.
         if app.config[WEBHOOK_SECRET_CONFIG_KEY]:  # WHY: a branch reports the state without logging the value.
-            logging.debug("Webhook receiver found a configured secret")
+            logger.debug("Webhook receiver found a configured secret")
         elif enabled:
-            logging.error(
+            logger.error(
                 "Webhook receiver is enabled, but WEBHOOK_SECRET is empty. "
                 "The portal rejects every webhook with code 503 until you set the secret."
             )  # WHY: an operator must see the cause before the first 503 reply arrives.
         else:
-            logging.debug("Webhook receiver is off and holds no secret")
+            logger.debug("Webhook receiver is off and holds no secret")
 
     @staticmethod
     def _inject_dependencies(
@@ -158,7 +160,7 @@ class WebPortalApp:
         event_bus = PortalEventBus()
         event_bus.start()
         app.config["EVENT_BUS"] = event_bus
-        logging.info("Event bus started for SSE streaming")  # Report that the event bus is ready for portal requests.
+        logger.info("Event bus started for SSE streaming")  # Report that the event bus is ready for portal requests.
 
     @staticmethod
     def _setup_theme_manager(app: Flask, config: dict) -> None:
@@ -173,7 +175,7 @@ class WebPortalApp:
         """Apply security middleware to the Flask app."""
         middleware = SecurityMiddleware()
         middleware.apply(app, config.get("allowed_ips", []))
-        logging.info("Security middleware applied")
+        logger.info("Security middleware applied")
 
     @staticmethod
     def _register_blueprints(app: Flask) -> None:
@@ -206,7 +208,7 @@ class WebPortalApp:
         from web_portal.routes.webhooks import WEBHOOK_ENABLED_CONFIG_KEY, webhook_bp
 
         if not app.config.get(WEBHOOK_ENABLED_CONFIG_KEY, False):
-            logging.info("Webhook receiver is disabled, so the portal does not serve /api/webhook")
+            logger.info("Webhook receiver is disabled, so the portal does not serve /api/webhook")
             return
 
         app.register_blueprint(webhook_bp)
@@ -220,7 +222,7 @@ class WebPortalApp:
             # the sender here, and it is the stronger control, because it
             # covers the raw body as well as the sender.
             csrf.exempt(webhook_bp)
-        logging.debug("Webhook receiver registered at POST /api/webhook")
+        logger.debug("Webhook receiver registered at POST /api/webhook")
 
     @staticmethod
     def _register_context_processor(app: Flask) -> None:
@@ -248,9 +250,9 @@ class WebPortalApp:
         call runs every registered ``atexit`` callback before the worker
         process ends.
         """
-        logging.info("Registering the web portal shutdown hook")  # Log before the registration.
+        logger.info("Registering the web portal shutdown hook")  # Log before the registration.
         atexit.register(WebPortalApp.shutdown_app, app)  # Run shutdown_app once, when the process exits.
-        logging.debug("Web portal shutdown hook registered")
+        logger.debug("Web portal shutdown hook registered")
 
     @staticmethod
     def shutdown_app(app: Flask) -> None:
@@ -262,30 +264,30 @@ class WebPortalApp:
         """
         if app.config.get(WebPortalApp.SHUTDOWN_DONE_CONFIG_KEY):
             # A prior call already ran, so skip the repeat work.
-            logging.debug("Web portal shutdown already ran, skipping repeat call")
+            logger.debug("Web portal shutdown already ran, skipping repeat call")
             return
-        logging.info("Shutting down the web portal")  # One INFO line at the start, an operator can see it begin.
+        logger.info("Shutting down the web portal")  # One INFO line at the start, an operator can see it begin.
         app.config[WebPortalApp.SHUTDOWN_DONE_CONFIG_KEY] = True  # Mark done first, so a second call returns above.
         WebPortalApp._stop_event_bus(app)
         WebPortalApp._stop_operation_executor(app)
-        logging.info("Web portal shutdown complete")  # One INFO line at the end, an operator can see a clean stop.
+        logger.info("Web portal shutdown complete")  # One INFO line at the end, an operator can see a clean stop.
 
     @staticmethod
     def _stop_event_bus(app: Flask) -> None:
         """Stop the heartbeat thread if the app started an event bus."""
         event_bus = app.config.get("EVENT_BUS")  # An app that never started a bus has nothing to stop.
         if event_bus is None:
-            logging.debug("No event bus to stop")
+            logger.debug("No event bus to stop")
             return
         event_bus.stop()  # Join the heartbeat thread, so it does not outlive the app.
-        logging.debug("Event bus stopped")
+        logger.debug("Event bus stopped")
 
     @staticmethod
     def _stop_operation_executor(app: Flask) -> None:
         """Stop the operation pool if the app built one on first use."""
         executor = app.config.get("OPERATION_EXECUTOR")  # No operation ever ran, so there is nothing to drain.
         if executor is None:
-            logging.debug("No operation executor to stop")
+            logger.debug("No operation executor to stop")
             return
         executor.shutdown()  # Wait for in-flight runs, then release the worker threads.
-        logging.debug("Operation executor stopped")
+        logger.debug("Operation executor stopped")
