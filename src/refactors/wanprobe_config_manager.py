@@ -424,7 +424,9 @@ class WANProbeConfigManager:  # WAN probe config manager (Menu 166 destructive e
                     "probe_profile": self.probe_profile,
                 }
                 interfaces_modified.append(port_name)  # Mark it modified.
-                logger.debug("Template %s: Updated %s probe config", template_name, port_name)  # Trace the update.
+                logger.debug(  # Trace only the local payload preparation before the API write proves the outcome.
+                    "Template %s: Prepared %s probe config for API update", template_name, port_name
+                )
         return interfaces_modified  # Ports that received a probe override
 
     def _persist_template_update(
