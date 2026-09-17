@@ -1692,3 +1692,86 @@ class TestAdditionalCoverage:
             {"name": "Office B", "id": "s2"},
         ]
         BulkSwitchFirmwareUpgrader._display_site_list(sites)
+
+
+class TestBlindHandlerNarrowing:
+    """Programming errors must surface on switch firmware upgrade paths."""
+
+    def test_validate_organization_surfaces_programming_error(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
+        """A malformed organization SDK call must raise."""
+        mock_mistapi = sys.modules["mistapi"]  # WHY: use the module-level SDK stand-in.
+        mock_mistapi.api.v1.orgs.orgs.getOrg.side_effect = TypeError("bad signature")  # WHY: simulate SDK misuse.
+        with pytest.raises(TypeError, match="bad signature"):  # WHY: prove the blind handler no longer hides it.
+            upgrader._validate_organization()  # WHY: exercise the narrowed handler.
+        mock_mistapi.api.v1.orgs.orgs.getOrg.side_effect = None  # WHY: keep later tests isolated.
+
+    def test_interactive_site_selection_surfaces_programming_error(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
+        """A malformed site-list SDK call must raise."""
+        mock_mistapi = sys.modules["mistapi"]  # WHY: use the module-level SDK stand-in.
+        mock_mistapi.api.v1.orgs.sites.listOrgSites.side_effect = TypeError(
+            "bad signature"
+        )  # WHY: simulate SDK misuse.
+        with pytest.raises(TypeError, match="bad signature"):  # WHY: prove the caller learns about the defect.
+            upgrader._interactive_site_selection()  # WHY: exercise the narrowed handler.
+        mock_mistapi.api.v1.orgs.sites.listOrgSites.side_effect = None  # WHY: keep later tests isolated.
+
+    def test_specific_site_parser_surfaces_unexpected_programming_error(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        upgrader: BulkSwitchFirmwareUpgrader,
+    ) -> None:
+        """Only value parse errors should return an invalid-selection result."""
+        monkeypatch.setattr(
+            upgrader, "_resolve_site_tokens", MagicMock(side_effect=TypeError("bad state"))
+        )  # WHY: simulate a defect outside user parsing.
+        with pytest.raises(TypeError, match="bad state"):  # WHY: prove unexpected defects raise.
+            upgrader._parse_specific_sites([{"id": "s1", "name": "Site 1"}])  # WHY: exercise the narrowed handler.
+
+    def test_switch_inventory_surfaces_programming_error(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        upgrader: BulkSwitchFirmwareUpgrader,
+    ) -> None:
+        """A malformed inventory seam must raise."""
+        monkeypatch.setattr(
+            upgrader, "_call_inventory_api", MagicMock(side_effect=TypeError("bad signature"))
+        )  # WHY: simulate SDK misuse behind the seam.
+        with pytest.raises(TypeError, match="bad signature"):  # WHY: prove the caller learns about the defect.
+            upgrader._fetch_switch_inventory()  # WHY: exercise the narrowed handler.
+
+    def test_firmware_api_fetch_surfaces_programming_error(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
+        """A malformed firmware SDK call must raise."""
+        mock_mistapi = sys.modules["mistapi"]  # WHY: use the module-level SDK stand-in.
+        endpoint = (
+            mock_mistapi.api.v1.orgs.devices.listOrgAvailableDeviceVersions
+        )  # WHY: keep the long mock path readable.
+        endpoint.side_effect = TypeError("bad signature")  # WHY: simulate the class that #2741 exposed.
+        with pytest.raises(TypeError, match="bad signature"):  # WHY: prove the caller learns about the defect.
+            upgrader._fetch_firmware_from_api()  # WHY: exercise the narrowed handler.
+        endpoint.side_effect = None  # WHY: keep later tests isolated.
+
+    def test_execute_upgrades_surfaces_programming_error(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        upgrader: BulkSwitchFirmwareUpgrader,
+    ) -> None:
+        """The aggregate executor must not hide malformed per-site code."""
+        upgrader.selected_sites = [{"id": "s1", "name": "Site 1"}]  # WHY: provide one site for the loop.
+        monkeypatch.setattr(
+            upgrader, "_process_site", MagicMock(side_effect=TypeError("bad state"))
+        )  # WHY: simulate a programmer defect.
+        with pytest.raises(TypeError, match="bad state"):  # WHY: prove the defect reaches the caller.
+            upgrader._execute_upgrades()  # WHY: exercise the narrowed handler.
+
+    def test_process_site_surfaces_programming_error(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        upgrader: BulkSwitchFirmwareUpgrader,
+    ) -> None:
+        """A malformed site upgrade helper must raise."""
+        upgrader._initialize_results()  # WHY: _process_site needs the result container.
+        monkeypatch.setattr(
+            upgrader, "_run_site_upgrade", MagicMock(side_effect=TypeError("bad state"))
+        )  # WHY: simulate a programmer defect.
+        with pytest.raises(TypeError, match="bad state"):  # WHY: prove the defect reaches the caller.
+            upgrader._process_site(1, {"id": "s1", "name": "Site 1"})  # WHY: exercise the narrowed handler.

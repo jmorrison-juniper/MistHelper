@@ -370,7 +370,7 @@ class DeviceRebootManager:  # Device reboot manager.
             print("   Reboot command sent successfully")
             logging.info("! Reboot sent for '%s': %s", device["device_name"], status)  # Log after the call.
             return status  # Return the parsed status.
-        except Exception as error:  # API failure.
+        except RuntimeError as error:  # API runtime failure.
             print(f"   Failed to send reboot: {error}")
             logging.error("! Failed to reboot '%s': %s", device["device_name"], error)
             return f"ERROR: {error}"  # Capture the error for the result row.

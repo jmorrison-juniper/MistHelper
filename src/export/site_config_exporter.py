@@ -42,7 +42,7 @@ class SiteConfigExporter:
             )
             sites = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page all rows.
             return next((site["name"] for site in sites if site["id"] == site_id), site_id)  # Match → name.
-        except Exception as exception:  # Name lookup failed.
+        except RuntimeError as exception:  # Name lookup failed at runtime.
             logging.error("Error getting site name for WLAN export: %s", exception)  # Log the error.
             return site_id  # Fall back to id.
 
@@ -57,7 +57,7 @@ class SiteConfigExporter:
                 resolve=True,
             )
             return mistapi.get_all(response=derived_response, mist_session=mh.apisession)  # Page all rows.
-        except Exception as exception:  # Derived fetch failed → site-local fallback.
+        except RuntimeError as exception:  # Derived fetch failed at runtime and needs site-local fallback.
             logging.warning(
                 "Failed to fetch derived WLANs for site %s, falling back to site-local WLANs: %s",
                 site_id,

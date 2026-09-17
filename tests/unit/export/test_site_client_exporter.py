@@ -515,3 +515,13 @@ class TestGetSiteBeacon:
         wired_deps["RateLimitingUtils"].get_rate_limited_delay.assert_not_called()  # WHY: adaptive delay only on 429.
         wired_deps["DataExporter"].write_with_format_selection.assert_not_called()  # WHY: failed fetch never persists.
         wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon.assert_called_once()  # WHY: no retries on non-429.
+
+    def test_retry_helper_surfaces_programming_error(self, wired_deps: dict[str, Any]) -> None:
+        """A malformed getSiteBeacon SDK call must raise from the retry helper."""
+        endpoint = wired_deps["mistapi"].api.v1.sites.beacons.getSiteBeacon  # WHY: keep the mock path readable.
+        endpoint.side_effect = TypeError("bad signature")  # WHY: simulate SDK misuse.
+        with pytest.raises(TypeError, match="bad signature"):  # WHY: prove the caller learns about the defect.
+            SiteClientExporter._fetch_site_beacon_with_retry(  # WHY: exercise the narrowed handler directly.
+                "site-123",
+                "beacon-456",
+            )
