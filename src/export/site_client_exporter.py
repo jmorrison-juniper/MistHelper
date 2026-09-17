@@ -277,7 +277,7 @@ class SiteClientExporter:
                     len(rows),
                 )  # WHY: post-call summary.
                 return rows  # WHY: successful fetch ends retry loop immediately.
-            except Exception as exception:  # WHY: capture API failures for retry/abort decisioning.
+            except RuntimeError as exception:  # WHY: capture runtime API failures for retry/abort decisioning.
                 logging.error(
                     "getSiteBeacon API call failed on attempt %d/%d: %s",
                     attempt + 1,

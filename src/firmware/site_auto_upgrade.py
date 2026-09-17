@@ -324,7 +324,7 @@ class SiteAutoUpgradeConfigurator:
             self.all_sites.sort(key=lambda s: s.get("name", "").lower())  # WHY: stable alpha ordering.
             print(f"  + Found {len(self.all_sites)} site(s)")  # WHY: confirm the site count.
             return True  # WHY: step 1 succeeded.
-        except Exception as exc:  # WHY: fetch may raise any mistapi error - treat as failure.
+        except RuntimeError as exc:  # WHY: mistapi runtime faults must report failure.
             print(f"  X Error fetching sites: {exc}")  # WHY: tell operator the error.
             logging.error(  # WHY: action-log the fetch failure.
                 "SiteAutoUpgradeConfigurator: Failed to fetch sites: %s", exc
@@ -432,7 +432,7 @@ class SiteAutoUpgradeConfigurator:
 
             response = sites_setting_api.getSiteSetting(self.apisession, site_id)  # WHY: fetch the site settings.
             return self._extract_auto_upgrade_from_response(response)  # WHY: extract block via helper.
-        except Exception as exc:  # WHY: settings read may raise mistapi errors - non-fatal.
+        except RuntimeError as exc:  # WHY: mistapi runtime faults may leave pre-fill empty.
             logging.debug("Could not fetch current site settings: %s", exc)  # WHY: trace and continue.
             return {}  # WHY: pre-fill best-effort. Empty on failure.
 
@@ -521,7 +521,7 @@ class SiteAutoUpgradeConfigurator:
                 print("  X Failed to fetch available versions")  # WHY: tell operator.
                 return None  # WHY: signal failure.
             return response.data if isinstance(response.data, list) else []  # WHY: normalize list payload.
-        except Exception as exc:  # WHY: fetch may raise mistapi errors - treat as failure.
+        except RuntimeError as exc:  # WHY: mistapi runtime faults must report failure.
             print(f"  X Error fetching firmware versions: {exc}")  # WHY: tell operator.
             logging.error(  # WHY: action-log the fetch failure.
                 "SiteAutoUpgradeConfigurator: Failed to fetch versions: %s", exc
@@ -1365,7 +1365,7 @@ def _apply_settings_to_single_site(
     try:
         _perform_site_settings_update(site_name, site_id, settings, apisession, dry_run)  # WHY: do work.
         return True  # WHY: success (dry-run or real).
-    except Exception as exc:  # WHY: apply may raise mistapi errors - treat as failure.
+    except RuntimeError as exc:  # WHY: mistapi runtime faults must report failure.
         print(f"    [FAIL] {site_name}: {exc}")  # WHY: report the failure.
         logging.error(  # WHY: action-log the failure.
             "Failed to configure auto-upgrade for site %s: %s", site_name, exc
@@ -1590,7 +1590,7 @@ def _fetch_reference_org_version_list(
         response = org_devices_api.listOrgAvailableDeviceVersions(  # WHY: list AP versions.
             apisession, org_id, type="ap"
         )
-    except Exception as error:  # WHY: fetch may raise mistapi errors - treat as failure.
+    except RuntimeError as error:  # WHY: mistapi runtime faults must report failure.
         print(f"  X Error fetching firmware versions: {error}")  # WHY: tell operator.
         return None  # WHY: signal failure.
     if not response or not hasattr(response, "data"):  # WHY: guard empty response.

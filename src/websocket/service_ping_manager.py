@@ -263,7 +263,7 @@ class ServicePingManager(ServicePingDiscoveryMixin):  # WHY: define ServicePingM
             response = mistapi.api.v1.sites.devices.servicePingFromSsr(  # WHY: dispatch call inline.
                 apisession, self.site_id, self.device_id, payload
             )
-        except Exception as error:  # WHY: any api failure must be surfaced without crashing menu.
+        except RuntimeError as error:  # WHY: mistapi runtime faults must be surfaced without crashing menu.
             print(f"Error issuing Service Ping command via mistapi: {error}")  # WHY: user-visible.
             logging.error("Service ping error: %s", error)  # WHY: log error for post-mortem.
             self._debug_print(f"mistapi exception details: {type(error).__name__}: {error}")

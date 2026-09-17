@@ -130,7 +130,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
         try:  # WHY: guard against network / auth failures from mistapi.
             org_info = mistapi.api.v1.orgs.orgs.getOrg(self.apisession, self.org_id)  # WHY: fetch org record.
             return self._process_org_response(org_info)  # WHY: split branching into helper for CC.
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except RuntimeError as exc:  # pylint: disable=broad-exception-caught
             print(f"X  Error validating organization: {exc}")  # WHY: surface exception to console.
             self.logger.error("Organization validation failed: %s", exc)  # WHY: log root cause.
             return False  # WHY: failed validation blocks the workflow.
@@ -181,7 +181,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
             all_sites = sites_response.data  # WHY: API returns raw list of site dicts.
             print(f"!? Found {len(all_sites)} total sites")  # WHY: give operator scope preview.
             return self._prompt_site_selection(all_sites)  # WHY: delegate menu handling.
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except RuntimeError as exc:  # pylint: disable=broad-exception-caught
             print(f"X  Error during site discovery: {exc}")  # WHY: surface failure to console.
             self.logger.error("Site discovery failed: %s", exc)  # WHY: trace for debugging.
             return {"error": f"Site discovery error: {exc}"}  # WHY: caller sees precise error.
@@ -240,7 +240,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
         site_input = self.safe_input_fn("Sites: ", context="bulk_switch_site_list")
         try:  # WHY: any parse error must degrade gracefully.
             self.selected_sites = self._resolve_site_tokens(site_input, all_sites)  # WHY: pure helper.
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except ValueError as exc:  # WHY: user site tokens fail with parse errors only.
             print(f"X  Invalid site selection: {exc}")  # WHY: user sees exact parse failure.
             return {"error": "Invalid site selection"}  # WHY: caller-visible error.
         print(f"-> Selected {len(self.selected_sites)} sites")  # WHY: echo selection count.
@@ -406,7 +406,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
         print("\n-> Discovering available switch firmware versions...")  # WHY: progress cue.
         try:  # WHY: guard against transient inventory API failures.
             switches = self._call_inventory_api()  # WHY: fetch inventory list from Mist.
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except RuntimeError as exc:  # pylint: disable=broad-exception-caught
             print(f"X  Error fetching switch inventory: {exc}")  # WHY: user-visible failure.
             self.logger.error("Switch inventory fetch failed: %s", exc)  # WHY: log root cause.
             return False  # WHY: cannot proceed without inventory.
@@ -545,7 +545,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
                 type="switch",
             )
             return self._handle_firmware_response(versions_response)  # WHY: interpret result.
-        except Exception as api_error:  # pylint: disable=broad-exception-caught
+        except RuntimeError as api_error:  # pylint: disable=broad-exception-caught
             self.logger.error("Failed to query switch firmware versions: %s", api_error)  # WHY: audit.
             print(f"X  Error querying firmware versions: {api_error}")  # WHY: user-visible.
             return []  # WHY: empty list halts the workflow gracefully.
@@ -840,7 +840,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
                 self._process_site(site_index, site_info)  # WHY: per-site orchestration.
             self._finalize_results()  # WHY: stamp end-time and summary.
             return self.upgrade_results  # WHY: caller sees aggregate results.
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except RuntimeError as exc:  # pylint: disable=broad-exception-caught
             return self._handle_critical_error(exc)  # WHY: surface as structured error dict.
 
     def _initialize_results(self) -> None:
@@ -871,7 +871,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
         self._log_site_progress(site_index, site_name, site_id)  # WHY: echo progress.
         try:  # WHY: contain per-site errors so other sites still run.
             self._run_site_upgrade(site_id, site_name)  # WHY: perform actual work.
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except RuntimeError as exc:  # pylint: disable=broad-exception-caught
             self._record_site_error(site_id, site_name, str(exc))  # WHY: record exception per site.
         self.upgrade_results["sites_processed"] += 1  # WHY: count regardless of outcome.
 

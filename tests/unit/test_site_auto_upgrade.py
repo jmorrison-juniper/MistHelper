@@ -2425,3 +2425,81 @@ class TestDisplayMspPreApplySummary:
         )
         captured = capsys.readouterr()
         assert "auto-detected" in captured.out.lower() or "Latest stable" in captured.out
+
+
+class TestBlindHandlerNarrowing:
+    """Programming errors must surface on AP auto-upgrade paths."""
+
+    def test_step1_fetch_sites_surfaces_programming_error(self, mock_deps):
+        """A malformed injected site fetch must raise."""
+        mock_deps["fetch_sites_fn"].side_effect = TypeError("bad signature")  # WHY: simulate a programming error.
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])  # WHY: build the system under test.
+        with pytest.raises(TypeError, match="bad signature"):  # WHY: prove the caller learns about the defect.
+            cfg._step1_fetch_sites()  # WHY: exercise the narrowed handler.
+
+    def test_site_settings_read_surfaces_programming_error(self, mock_deps):
+        """A malformed site settings SDK call must raise."""
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])  # WHY: build the system under test.
+        with patch.dict(
+            sys.modules,
+            _mist_modules(
+                **{
+                    "mistapi.api.v1.sites.setting": MagicMock(
+                        getSiteSetting=MagicMock(side_effect=TypeError("bad signature")),
+                    ),
+                }
+            ),
+        ):
+            with pytest.raises(TypeError, match="bad signature"):  # WHY: prove the caller learns about the defect.
+                cfg._read_site_settings_payload("site-1")  # WHY: exercise the narrowed handler.
+
+    def test_available_versions_fetch_surfaces_programming_error(self, mock_deps):
+        """A malformed available-versions SDK call must raise."""
+        cfg = SiteAutoUpgradeConfigurator(org_id="org-1", deps=mock_deps["deps"])  # WHY: build the system under test.
+        with patch.dict(
+            sys.modules,
+            _mist_modules(
+                **{
+                    "mistapi.api.v1.orgs.devices": MagicMock(
+                        listOrgAvailableDeviceVersions=MagicMock(side_effect=TypeError("bad signature")),
+                    ),
+                }
+            ),
+        ):
+            with pytest.raises(TypeError, match="bad signature"):  # WHY: prove the caller learns about the defect.
+                cfg._fetch_available_versions_payload()  # WHY: exercise the narrowed handler.
+
+    def test_apply_single_site_surfaces_programming_error(self):
+        """A malformed settings update must raise."""
+        with patch.dict(
+            sys.modules,
+            _mist_modules(
+                **{
+                    "mistapi.api.v1.sites.setting": MagicMock(
+                        updateSiteSettings=MagicMock(side_effect=TypeError("bad signature")),
+                    ),
+                }
+            ),
+        ):
+            with pytest.raises(TypeError, match="bad signature"):  # WHY: prove the caller learns about the defect.
+                _sau_mod._apply_settings_to_single_site(
+                    {"id": "site-1", "name": "Site 1"},
+                    {},
+                    MagicMock(),
+                    False,
+                )  # WHY: exercise the narrowed handler.
+
+    def test_reference_org_versions_surfaces_programming_error(self):
+        """A malformed MSP firmware SDK call must raise."""
+        with patch.dict(
+            sys.modules,
+            _mist_modules(
+                **{
+                    "mistapi.api.v1.orgs.devices": MagicMock(
+                        listOrgAvailableDeviceVersions=MagicMock(side_effect=TypeError("bad signature")),
+                    ),
+                }
+            ),
+        ):
+            with pytest.raises(TypeError, match="bad signature"):  # WHY: prove the caller learns about the defect.
+                _sau_mod._fetch_reference_org_version_list(MagicMock(), "org-1")  # WHY: exercise the narrowed handler.
