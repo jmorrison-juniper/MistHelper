@@ -100,3 +100,24 @@ when the platform or train is part of the decision.
 
 SNMP examples use one supplemental staged guide outside the manifest. The
 manifest contained many SNMP references but no current SNMP operations guide.
+
+### The CLI command dictionary is absent
+
+The skill indexes the Junos OS CLI User Guide, which explains the CLI modes, the
+pipe, the commit, the rollback, and the configuration group. The corpus does not
+hold the converted CLI Reference, which is the exhaustive dictionary of every
+command and every statement.
+
+The source PDF exists in four trains, at 81 MB for train 23.4 through 95 MB for
+train 26.2. The converter reached 22 GB of memory on the smallest copy and did
+not finish, so no train converted. Three attempts gave the same result.
+
+| Subject | Source | State |
+| - | - | - |
+| CLI modes, pipe, commit, rollback, groups | `cli` and `cli-evo` | Indexed |
+| Every command and statement, with each option | `cli-reference` | Absent |
+
+Warning: do not state that a command option exists because this skill does not
+list it. The skill holds the user guide, not the dictionary. If a task needs the
+full option set of a command, read the CLI Reference on the Juniper
+documentation site, or run `help reference <command>` on the device.
