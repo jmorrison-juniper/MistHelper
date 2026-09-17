@@ -563,10 +563,12 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         gateway_mac = self.normalize_mac_address(gateway_mac)  # WHY: normalize before payload use
         # CodeQL py/clear-text-logging-sensitive-data. Verdict: accepted_with_rationale.
         # Reviewed 2026-08-22. A gateway MAC is a device identifier, and this tool exists to
-        # report device identity. The operator needs the MAC to match a log line to a capture.
+        # report device identity. The one-way key lets an operator correlate a capture without the raw MAC.
         # The line runs at DEBUG level and writes to the local log file on the operator host.
         # Review again if the log ships to a remote collector, or if this line adds a secret.
-        logger.debug("Selected and normalized gateway MAC: %s", gateway_mac)  # WHY: audit final MAC value
+        from src.utils.logger_utils import private_digest  # WHY: protect the private device identifier in logs.
+
+        logger.debug("Selected and normalized gateway MAC key: %s", private_digest(gateway_mac))  # WHY: audit safely.
         logger.debug("Prompting for port selection from gateway")  # WHY: audit next interactive step
         port_selection_result = (
             _get_prompt_network_device_utils().select_ports_from_device(  # WHY: interactive port picker
@@ -655,10 +657,12 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         switch_mac = self.normalize_mac_address(switch_mac)  # WHY: normalize before API call to match payload format
         # CodeQL py/clear-text-logging-sensitive-data. Verdict: accepted_with_rationale.
         # Reviewed 2026-08-22. A switch MAC is a device identifier, and this tool exists to
-        # report device identity. The operator needs the MAC to match a log line to a capture.
+        # report device identity. The one-way key lets an operator correlate a capture without the raw MAC.
         # The line runs at DEBUG level and writes to the local log file on the operator host.
         # Review again if the log ships to a remote collector, or if this line adds a secret.
-        logger.debug("Selected and normalized switch MAC: %s", switch_mac)  # WHY: audit final MAC value
+        from src.utils.logger_utils import private_digest  # WHY: protect the private device identifier in logs.
+
+        logger.debug("Selected and normalized switch MAC key: %s", private_digest(switch_mac))  # WHY: audit safely.
         return switch_mac  # WHY: hand normalized MAC back to caller
 
     def _switch_gather_params(self) -> dict[str, Any] | None:
@@ -869,10 +873,12 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         ap_mac = self.normalize_mac_address(ap_mac)  # WHY: normalize before payload use
         # CodeQL py/clear-text-logging-sensitive-data. Verdict: accepted_with_rationale.
         # Reviewed 2026-08-22. An AP MAC is a device identifier, and this tool exists to
-        # report device identity. The operator needs the MAC to match a log line to a capture.
+        # report device identity. The one-way key lets an operator correlate a capture without the raw MAC.
         # The line runs at DEBUG level and writes to the local log file on the operator host.
         # Review again if the log ships to a remote collector, or if this line adds a secret.
-        logger.debug("Selected and normalized AP MAC: %s", ap_mac)  # WHY: audit final MAC value
+        from src.utils.logger_utils import private_digest  # WHY: protect the private device identifier in logs.
+
+        logger.debug("Selected and normalized AP MAC key: %s", private_digest(ap_mac))  # WHY: audit safely.
         return ap_mac  # WHY: hand normalized MAC back
 
     def _start_site_scan_capture(self) -> None:
