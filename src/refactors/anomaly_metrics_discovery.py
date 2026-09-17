@@ -21,6 +21,7 @@ from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 
+logger = logging.getLogger(__name__)  # Keep refactor logs tied to this module.
 _MH = SourceDependencyResolver  # Use the source resolver for lazy dependency access.
 
 
@@ -75,7 +76,7 @@ class AnomalyMetricsDiscovery:
     @classmethod
     def _handle_missing_csv(cls) -> list[dict[str, Any]]:
         """Handle case when ConstInsightMetrics.csv is not found."""
-        logging.warning(
+        logger.warning(
             "ConstInsightMetrics.csv not found. Please export organization constants first (menu option 11)."
         )  # Guide operator toward the export menu that produces the CSV
         return cls.FALLBACK_METRICS.copy()  # Defensive copy so callers can mutate without side effects
@@ -123,7 +124,7 @@ class AnomalyMetricsDiscovery:
         metrics.sort(
             key=lambda x: (not x.get("priority", False), x["metric_name"])
         )  # False<True keeps priority items first
-        logging.info(
+        logger.info(
             "Found %s potential anomaly metrics from ConstInsightMetrics.csv", len(metrics)
         )  # Log discovery count
         return metrics  # Return sorted list to caller

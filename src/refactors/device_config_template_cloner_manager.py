@@ -21,6 +21,7 @@ from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 
+logger = logging.getLogger(__name__)  # Keep refactor logs tied to this module.
 _MH = SourceDependencyResolver  # Use the source resolver for lazy dependency access.
 
 
@@ -33,7 +34,7 @@ class DeviceConfigTemplateClonerManager:  # Device config template cloner.
     @staticmethod
     def clone() -> None:  # Clone a config.
         """Menu 194: Fetch gateway device config and create a new org-level gateway template."""
-        logging.info("Starting DeviceConfigTemplateClonerManager.clone workflow")  # Trace entry per Constitution VII
+        logger.info("Starting DeviceConfigTemplateClonerManager.clone workflow")  # Trace entry per Constitution VII
         from src.gateway.device_template_cloner import (  # pylint: disable=import-outside-toplevel
             DeviceConfigTemplateClonerManager as Impl,  # Import extracted implementation class
         )
@@ -48,13 +49,13 @@ class DeviceConfigTemplateClonerManager:  # Device config template cloner.
             save_data_fn=_MH.DataExporter.write_with_format_selection,  # Pass CSV writer for persistence
             write_csv_fn=_MH.DataExporter.write_with_format_selection,  # Pass PK-aware format-selecting writer
         )
-        logging.debug("DeviceTemplateClonerDeps bundle constructed")  # Trace successful deps build
+        logger.debug("DeviceTemplateClonerDeps bundle constructed")  # Trace successful deps build
 
         org_id = _MH.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org_id from cache or prompt user
-        logging.info("Resolved org_id=%s for template cloning", org_id)  # Trace resolved org context
+        logger.info("Resolved org_id=%s for template cloning", org_id)  # Trace resolved org context
 
         Impl(
             org_id=org_id,  # Pass resolved org_id to the impl constructor
             deps=deps,  # Inject the frozen deps bundle
         ).clone()  # Delegate all business logic to extracted implementation
-        logging.debug("DeviceConfigTemplateClonerManager.clone workflow finished")  # Trace completion
+        logger.debug("DeviceConfigTemplateClonerManager.clone workflow finished")  # Trace completion

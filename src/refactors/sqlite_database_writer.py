@@ -25,12 +25,14 @@ from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 
+logger = logging.getLogger(__name__)  # Keep refactor logs tied to this module.
+
 
 def _resolve_runtime_dependencies() -> SimpleNamespace:
     """Resolve source-owned runtime dependencies without static cross-module imports."""
-    logging.info("Resolving SQLiteDatabaseWriter runtime dependencies from MistHelper")  # Log before import
+    logger.info("Resolving SQLiteDatabaseWriter runtime dependencies from MistHelper")  # Log before import
     misthelper_module = SourceDependencyResolver.active_dependency_host()  # WHY: preserve fake-host test seams.
-    logging.debug("SQLiteDatabaseWriter runtime dependencies resolved successfully")  # Log after resolution
+    logger.debug("SQLiteDatabaseWriter runtime dependencies resolved successfully")  # Log after resolution
     return SimpleNamespace(
         DatabaseSchemaUtils=misthelper_module.DatabaseSchemaUtils,  # DDL builder + PK/index strategy picker
         DataProcessingUtils=misthelper_module.DataProcessingUtils,  # JSON flatten + escape helpers
@@ -57,7 +59,7 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
         api_function_name: str | None = None,
     ) -> None:
         """Initialize writer with data, table name, and optional API function name."""
-        logging.info(  # Log construction with row/table context for traceability
+        logger.info(  # Log construction with row/table context for traceability
             "SQLiteDatabaseWriter init: rows=%s table=%s api_fn=%s",
             len(data) if data else 0,  # Guard against None while still capturing the count for logs
             table_name,  # Target table name
@@ -73,7 +75,7 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
         self.connection: sqlite3.Connection | None = None  # Lazy DB connection.
         self.cursor: sqlite3.Cursor | None = None  # Lazy DB cursor.
         self._deps: SimpleNamespace = _resolve_runtime_dependencies()  # Late-bound MistHelper handles
-        logging.debug("SQLiteDatabaseWriter init complete for table %s", table_name)  # Log after construction
+        logger.debug("SQLiteDatabaseWriter init complete for table %s", table_name)  # Log after construction
 
     def _database_path(self) -> str:
         """Return the current DATABASE_PATH from MistHelper so monkeypatched values are honoured."""
@@ -96,7 +98,7 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
     def _log_entry(self) -> None:  # Log write parameters.
         """Log entry point with input parameters."""
         row_count = len(self.data) if self.data else 0  # Count rows for the log.
-        logging.debug(  # Trace the write entry.
+        logger.debug(  # Trace the write entry.
             "ENTRY: SQLiteDatabaseWriter.write(data_rows=%s, table_name=%s, api_function_name=%s) at %s",
             row_count,
             self.table_name,
@@ -113,24 +115,24 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
     def _validate_data(self) -> bool:  # Ensure data is a non-empty list.
         """Validate that data is a non-empty list."""
         if not self.data:  # No rows to write.
-            logging.warning(  # Warn that the writer was called with no rows to persist
+            logger.warning(  # Warn that the writer was called with no rows to persist
                 "No data provided to write to table %s at %s", self.table_name, self.timestamp
             )
-            logging.debug("EXIT: SQLiteDatabaseWriter.write - no data to write")  # Trace early exit.
+            logger.debug("EXIT: SQLiteDatabaseWriter.write - no data to write")  # Trace early exit.
             return False  # Reject empty data.
         if not isinstance(self.data, list):  # Data must be a list.
-            logging.error(  # Log a hard type mismatch so callers see the actual type name
+            logger.error(  # Log a hard type mismatch so callers see the actual type name
                 "Invalid data type: expected list, got %s at %s", type(self.data), self.timestamp
             )
-            logging.debug("EXIT: SQLiteDatabaseWriter.write - invalid data type")  # Trace early exit.
+            logger.debug("EXIT: SQLiteDatabaseWriter.write - invalid data type")  # Trace early exit.
             return False  # Reject wrong type.
         return True  # Data is valid.
 
     def _validate_table_name(self) -> bool:  # Ensure a usable table name.
         """Validate that table name is a non-empty string."""
         if not self.table_name or not isinstance(self.table_name, str):  # Name must be a non-empty str.
-            logging.error("Invalid table name: %s at %s", self.table_name, self.timestamp)  # Log the bad name.
-            logging.debug("EXIT: SQLiteDatabaseWriter.write - invalid table name")  # Trace early exit.
+            logger.error("Invalid table name: %s at %s", self.table_name, self.timestamp)  # Log the bad name.
+            logger.debug("EXIT: SQLiteDatabaseWriter.write - invalid table name")  # Trace early exit.
             return False  # Reject bad name.
         return True  # Name is valid.
 
@@ -139,7 +141,7 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
         if not self.api_function_name:  # Only when unset.
             # Infer the caller-frame API function name via MistHelper's existing utility
             self.api_function_name = self._deps.DatabaseSchemaUtils.determine_api_function_name_from_context()
-        logging.debug(  # Trace the resolved name.
+        logger.debug(  # Trace the resolved name.
             "Processing %s rows for table %s using API function %s at %s",
             len(self.data),
             self.table_name,
@@ -154,11 +156,11 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
         if str(db_dir_path) == "" or db_dir_path.exists():  # Empty parent or already present.
             return True  # Directory ready.
         try:
-            logging.info(  # Log before creating the directory to preserve action-order tracing
+            logger.info(  # Log before creating the directory to preserve action-order tracing
                 "Creating database directory: %s at %s", db_dir_path, self.timestamp
             )
             db_dir_path.mkdir(parents=True, exist_ok=True)  # Create the directory (idempotent)
-            logging.debug(  # Log after creation success
+            logger.debug(  # Log after creation success
                 "Database directory created: %s at %s", db_dir_path, self.timestamp
             )
             return True  # Directory ready.
@@ -175,7 +177,7 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
             self.processed_data = self._deps.DataProcessingUtils.escape_multiline(
                 self.data
             )  # Sanitise multi-line values
-            logging.debug("Successfully processed data for SQLite compatibility at %s", self.timestamp)  # Trace ok.
+            logger.debug("Successfully processed data for SQLite compatibility at %s", self.timestamp)  # Trace ok.
             return True  # Processing succeeded.
         except Exception as error:  # Processing failed.
             logging.error("Failed to process data: %s at %s", error, self.timestamp)  # Log the failure.
@@ -187,10 +189,10 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
         try:
             self.fields = self._deps.DataProcessingUtils.get_unique_keys(self.processed_data)  # Collect all keys used
             if not self.fields:  # Need at least one field.
-                logging.error(  # Log a hard failure when the row set carries no columns
+                logger.error(  # Log a hard failure when the row set carries no columns
                     "No fields found in data for table %s at %s", self.table_name, self.timestamp
                 )
-                logging.debug("EXIT: SQLiteDatabaseWriter.write - no fields")  # Trace early exit.
+                logger.debug("EXIT: SQLiteDatabaseWriter.write - no fields")  # Trace early exit.
                 return False  # Abort: no fields.
             api_func_name = self.api_function_name if self.api_function_name else ""  # Default empty name.
             self.strategy = self._deps.DatabaseSchemaUtils.get_endpoint_strategy(  # Pick the PK/index strategy
@@ -205,14 +207,14 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
 
     def _log_strategy_info(self) -> None:  # Log strategy and fields.
         """Log strategy selection details."""
-        logging.info(  # Log the strategy summary.
+        logger.info(  # Log the strategy summary.
             "Using hybrid SQLite strategy '%s' for table %s: %s",
             self.strategy["type"],
             self.table_name,
             self.strategy["description"],
         )
-        logging.debug("Database fields determined: %s at %s", self.fields, self.timestamp)  # Trace the field list.
-        logging.debug(  # Trace strategy details.
+        logger.debug("Database fields determined: %s at %s", self.fields, self.timestamp)  # Trace the field list.
+        logger.debug(  # Trace strategy details.
             "Endpoint %s mapped to %s strategy - eliminates need for artificial api_id fields",
             self.api_function_name,
             self.strategy["type"],
@@ -227,7 +229,7 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
             safe_fields = self._prepare_safe_fields()  # Sanitize column names.
             successful_inserts = self._insert_all_rows(insert_mode, safe_fields)  # Insert all rows.
             self._commit_and_verify(successful_inserts)  # Commit and verify counts.
-            logging.debug("EXIT: SQLiteDatabaseWriter.write - success")  # Trace success.
+            logger.debug("EXIT: SQLiteDatabaseWriter.write - success")  # Trace success.
             return True  # Write succeeded.
         except sqlite3.Error as error:  # Handle SQLite errors.
             self._handle_sqlite_error(error)  # Log and rollback.
@@ -241,10 +243,10 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
     def _connect_to_database(self) -> None:  # Open a SQLite connection.
         """Connect to SQLite database."""
         database_path = self._database_path()  # Resolve DATABASE_PATH at call-time for monkeypatch support
-        logging.debug("Attempting to connect to database: %s at %s", database_path, self.timestamp)  # Trace connect.
+        logger.debug("Attempting to connect to database: %s at %s", database_path, self.timestamp)  # Trace connect.
         self.connection = sqlite3.connect(database_path)  # Open the database file.
         self.cursor = self.connection.cursor()  # Create a cursor.
-        logging.info("Successfully connected to database: %s at %s", database_path, self.timestamp)  # Log connection.
+        logger.info("Successfully connected to database: %s at %s", database_path, self.timestamp)  # Log connection.
 
     def _create_table_and_indexes(self) -> None:  # Create table then indexes.
         """Create table with strategy-appropriate schema and indexes."""
@@ -262,7 +264,7 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
             self.table_name, self.fields, self.strategy
         )
         self.cursor.execute(create_table_sql)  # Execute DDL to create or verify the table structure
-        logging.debug(  # Trace the DDL.
+        logger.debug(  # Trace the DDL.
             "Table %s created/verified with hybrid %s schema - using natural business keys from API",
             self.table_name,
             self.strategy["type"],
@@ -276,7 +278,7 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
         for index_sql in index_sqls:  # Create each index.
             self.cursor.execute(index_sql)  # Execute the index DDL.
         if index_sqls:  # Only log when indexes exist.
-            logging.debug(  # Trace index creation.
+            logger.debug(  # Trace index creation.
                 "Created %s performance indexes for table %s with %s strategy",
                 len(index_sqls),
                 self.table_name,
@@ -287,14 +289,14 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
         """Determine insert strategy based on schema type."""
         assert self.cursor is not None, "Database cursor not initialized"  # nosec B101
         if self.strategy["type"] in ["natural_pk", "composite_pk"]:  # Keyed tables upsert.
-            logging.debug(  # Trace upsert mode.
+            logger.debug(  # Trace upsert mode.
                 "Using REPLACE mode for %s strategy - enables efficient upsert operations with natural keys",
                 self.strategy["type"],
             )
             return "INSERT OR REPLACE"  # Upsert on conflict.
         safe_table = self._get_safe_table_name()  # Sanitize for the clear.
         self.cursor.execute(f"DELETE FROM {safe_table}")  # nosec B608
-        logging.debug("Cleared existing data and using INSERT mode for auto-increment fallback strategy")  # fallback.
+        logger.debug("Cleared existing data and using INSERT mode for auto-increment fallback strategy")  # fallback.
         return "INSERT"  # Plain insert (cleared table).
 
     def _get_safe_table_name(self) -> str:  # Sanitize the table name.
@@ -342,7 +344,7 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
     def _log_sample_insert(self, idx: int, insert_mode: str) -> None:  # Extract to keep parent under 25 lines
         """Log the first three inserts for diagnostics without spamming the log for large batches."""
         if idx < 3:  # Sample-log the first rows.
-            logging.debug(  # Trace a sample insert.
+            logger.debug(  # Trace a sample insert.
                 "Row %s inserted into %s using %s at %s",
                 idx,
                 self.table_name,
@@ -352,7 +354,7 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
 
     def _log_row_failure(self, idx: int, error: Exception) -> None:  # Extract to keep parent under 25 lines
         """Log a per-row insertion failure so the batch can continue while retaining triage context."""
-        logging.error(  # Log the per-row failure with the row index for triage
+        logger.error(  # Log the per-row failure with the row index for triage
             "Failed to insert row %s into %s: %s at %s",
             idx,
             self.table_name,
@@ -387,7 +389,7 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
         assert self.connection is not None, "Database connection not initialized"  # nosec B101
         assert self.cursor is not None, "Database cursor not initialized"  # nosec B101
         self.connection.commit()  # Persist the transaction.
-        logging.info(  # Log inserts committed.
+        logger.info(  # Log inserts committed.
             "Successfully wrote %s/%s rows to table %s in database %s using %s strategy at %s",
             successful_inserts,
             len(self.processed_data),
@@ -399,7 +401,7 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
         safe_table_name = self._get_safe_table_name()  # Sanitize for the count query.
         self.cursor.execute(f"SELECT COUNT(*) FROM {safe_table_name}")  # nosec B608
         row_count = self.cursor.fetchone()[0]  # Read the verified count.
-        logging.info(  # Log the verified count.
+        logger.info(  # Log the verified count.
             "Database verification: %s rows confirmed in table %s at %s",
             row_count,
             self.table_name,
@@ -408,22 +410,22 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
 
     def _handle_sqlite_error(self, error: sqlite3.Error) -> None:  # Log and roll back SQLite errors.
         """Handle SQLite-specific errors with rollback."""
-        logging.error(  # Log the SQLite driver error verbatim with context
+        logger.error(  # Log the SQLite driver error verbatim with context
             "SQLite error when writing to %s: %s at %s", self.table_name, error, self.timestamp
         )
         self._rollback_transaction()  # Undo partial writes.
-        logging.debug("EXIT: SQLiteDatabaseWriter.write - SQLite error")  # Trace early exit.
+        logger.debug("EXIT: SQLiteDatabaseWriter.write - SQLite error")  # Trace early exit.
 
     def _handle_unexpected_error(self, error: Exception) -> None:  # Log and roll back other errors.
         """Handle unexpected errors with rollback."""
-        logging.error(  # Log any non-SQLite exception with context for post-mortem triage
+        logger.error(  # Log any non-SQLite exception with context for post-mortem triage
             "Unexpected error when writing to table %s: %s at %s",
             self.table_name,
             error,
             self.timestamp,
         )
         self._rollback_transaction()  # Undo partial writes.
-        logging.debug("EXIT: SQLiteDatabaseWriter.write - unexpected error")  # Trace early exit.
+        logger.debug("EXIT: SQLiteDatabaseWriter.write - unexpected error")  # Trace early exit.
 
     def _rollback_transaction(self) -> None:  # Roll back the transaction.
         """Rollback transaction if connection exists."""
@@ -431,7 +433,7 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
             return  # No connection open.
         try:
             self.connection.rollback()  # Undo uncommitted writes.
-            logging.debug("Transaction rolled back for table %s at %s", self.table_name, self.timestamp)  # Trace undo.
+            logger.debug("Transaction rolled back for table %s at %s", self.table_name, self.timestamp)  # Trace undo.
         except Exception as rollback_error:  # Rollback itself failed.
             logging.error("Failed to rollback transaction: %s at %s", rollback_error, self.timestamp)  # rollback fail.
 
@@ -441,7 +443,7 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
             return  # No connection open.
         try:
             self.connection.close()  # Release the connection.
-            logging.debug("Database connection closed for table %s at %s", self.table_name, self.timestamp)  # closed.
+            logger.debug("Database connection closed for table %s at %s", self.table_name, self.timestamp)  # closed.
         except Exception as error:  # Close failed.
             logging.error("Failed to close database connection: %s at %s", error, self.timestamp)  # log close error.
 

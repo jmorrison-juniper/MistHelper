@@ -18,6 +18,8 @@ from __future__ import annotations  # Enable postponed evaluation for forward-re
 import logging  # Structured action logging required by coding standards
 from typing import Any  # Loose typing for the pass-through *args/**kwargs
 
+logger = logging.getLogger(__name__)  # Keep refactor logs tied to this module.
+
 
 class KeyboardListener:  # Manager class owning the listen_keyboard() no-op stub (PR-13 extraction)
     """Keyboard listener stub for legacy call sites of the removed feature.
@@ -51,10 +53,10 @@ class KeyboardListener:  # Manager class owning the listen_keyboard() no-op stub
         Returns:
             None: There is no listener object to return.
         """
-        logging.info(  # Log entry so any lingering caller is visible in ops logs
+        logger.info(  # Log entry so any lingering caller is visible in ops logs
             "KeyboardListener.listen invoked (no-op stub; feature removed)"
         )
-        logging.debug(  # Log exit with arg-count summary for postmortem tracing without leaking values
+        logger.debug(  # Log exit with arg-count summary for postmortem tracing without leaking values
             "KeyboardListener.listen returning None args_len=%d kwargs_keys=%s",
             len(args),  # Positional-arg count without dumping the arg values themselves
             sorted(kwargs.keys()),  # Sorted key list keeps log ordering deterministic
