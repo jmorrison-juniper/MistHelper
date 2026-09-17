@@ -566,6 +566,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         # report device identity. The operator needs the MAC to match a log line to a capture.
         # The line runs at DEBUG level and writes to the local log file on the operator host.
         # Review again if the log ships to a remote collector, or if this line adds a secret.
+        # lgtm[py/clear-text-logging-sensitive-data] The value is a device MAC that the operator selected.
         logger.debug("Selected and normalized gateway MAC: %s", gateway_mac)  # WHY: audit final MAC value
         logger.debug("Prompting for port selection from gateway")  # WHY: audit next interactive step
         port_selection_result = (
@@ -658,6 +659,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         # report device identity. The operator needs the MAC to match a log line to a capture.
         # The line runs at DEBUG level and writes to the local log file on the operator host.
         # Review again if the log ships to a remote collector, or if this line adds a secret.
+        # lgtm[py/clear-text-logging-sensitive-data] The value is a device MAC that the operator selected.
         logger.debug("Selected and normalized switch MAC: %s", switch_mac)  # WHY: audit final MAC value
         return switch_mac  # WHY: hand normalized MAC back to caller
 
@@ -872,6 +874,7 @@ class PacketCaptureManager:  # WHY: primary orchestrator for Mist packet-capture
         # report device identity. The operator needs the MAC to match a log line to a capture.
         # The line runs at DEBUG level and writes to the local log file on the operator host.
         # Review again if the log ships to a remote collector, or if this line adds a secret.
+        # lgtm[py/clear-text-logging-sensitive-data] The value is a device MAC that the operator selected.
         logger.debug("Selected and normalized AP MAC: %s", ap_mac)  # WHY: audit final MAC value
         return ap_mac  # WHY: hand normalized MAC back
 
