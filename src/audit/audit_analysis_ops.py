@@ -32,7 +32,7 @@ class AuditAnalysisOps:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if mh.IS_TEST_MODE:  # Use a fixed time range so --test runs without interactive input.
             return "7d"  # Default to 7 days in test mode. Skips the safe_input prompt.
-        logger.warning(  # Uses warning level so the hint shows by default (#886).
+        logger.info(  # Use INFO because the console handler now shows operator guidance without false warnings.
             "Time range examples: 7d, 4w, 3m, 1y, 6w-2w (6 weeks ago to 2 weeks ago)"
         )
         raw = mh.InputUtils.safe_input("Enter time range [7d]: ", context="audit_analysis")
@@ -63,10 +63,10 @@ class AuditAnalysisOps:
         renderer = AuditReportRenderer()  # Initialize report generator.
         md_path = os.path.join("data", "OrgAuditAnalysis.md")  # Mermaid timeline output path.
         renderer.render_mermaid(analysis, md_path)
-        logger.warning("Mermaid report: %s", md_path)  # Uses warning level so the operator sees the path (#886).
+        logger.info("Mermaid report: %s", md_path)  # Use INFO for a normal report path that needs visibility.
         html_path = os.path.join("data", "OrgAuditAnalysis.html")  # Interactive HTML output path.
         renderer.render_html(analysis, html_path)
-        logger.warning("HTML report: %s", html_path)  # Uses warning level so the operator sees the path (#886).
+        logger.info("HTML report: %s", html_path)  # Use INFO for a normal report path that needs visibility.
 
     @staticmethod
     def audit_log_analysis() -> None:
@@ -84,16 +84,16 @@ class AuditAnalysisOps:
         except ValueError as exc:
             logging.error("Invalid time range: %s", exc)
             return
-        logger.warning(  # Uses warning level so the range shows by default (#886).
+        logger.info(  # Use INFO because fetching a chosen range is progress, not a fault.
             "Fetching audit logs for: %s", time_range.description
         )
         entries = AuditAnalysisOps._fetch_filtered_audit_entries(org_id, time_range)  # API call + paginate.
         if entries is None:  # API failed (already logged inside helper).
             return
-        logger.warning("Retrieved %d raw entries", len(entries))  # Uses warning level so it shows by default (#886).
+        logger.info("Retrieved %d raw entries", len(entries))  # Use INFO for a normal fetch count.
         log_filter = AuditLogFilter()  # Noise filter.
         filtered, stats = log_filter.filter_with_stats(entries)  # Remove noise entries with stats.
-        logger.warning(  # Uses warning level so the operator sees the stats (#886).
+        logger.info(  # Use INFO for normal filter statistics that should stay visible.
             "Filtered: %d kept, %d noise removed", stats["kept_count"], stats["removed_count"]
         )
         analyzer = AuditLogAnalyzer()  # Pattern analyzer.
