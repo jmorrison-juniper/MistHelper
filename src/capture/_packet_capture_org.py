@@ -15,6 +15,8 @@ from __future__ import annotations  # WHY: postponed evaluation consistent with 
 import logging  # WHY: capture-lifecycle audit trail
 from typing import Any, cast  # WHY: opaque manager plus typed cast for lazy proxy returns
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 def _pc() -> Any:  # WHY: lazy accessor exposing packet_capture module for name lookup
     """Return the ``packet_capture`` module for test-patchable name lookup.
@@ -89,7 +91,7 @@ class PacketCaptureOrg:  # WHY: wraps org/MxEdge capture helpers extracted from 
             return None  # WHY: signal fetch failure to caller
         if not mxedges:  # WHY: empty inventory is treated as a soft failure by callers
             print("\n! No MxEdges found for this organization")  # WHY: preserve legacy user message
-            logging.warning("Menu #10: No MxEdges found")  # WHY: keep legacy audit trail
+            logger.warning("Menu #10: No MxEdges found")  # WHY: keep legacy audit trail
             return None  # WHY: signal empty inventory as None
         return cast(list[dict[str, Any]], mxedges)  # WHY: mistapi returns list[dict] via untyped SDK
 
@@ -165,7 +167,7 @@ class PacketCaptureOrg:  # WHY: wraps org/MxEdge capture helpers extracted from 
             return None  # WHY: signal invalid input to caller
         if not 0 <= idx < count:  # WHY: bounds check with legacy warning line
             print(f"\n! Invalid index {idx}. Please select from 0-{count - 1}")  # nosec B608 # WHY: user error
-            logging.warning("Menu #10: Invalid MxEdge index: %s", idx)  # WHY: legacy audit log
+            logger.warning("Menu #10: Invalid MxEdge index: %s", idx)  # WHY: legacy audit log
             return None  # WHY: signal out-of-range index to caller
         return idx  # WHY: valid index returned to caller
 
@@ -244,7 +246,7 @@ class PacketCaptureOrg:  # WHY: wraps org/MxEdge capture helpers extracted from 
             return None  # WHY: propagate cancel to caller
         if not port_input:  # WHY: legacy path when user submits empty response
             print("\n! Port selection is required. Please select a port index.")  # WHY: legacy user error line
-            logging.warning("Menu #10: No port selected")  # WHY: legacy audit log
+            logger.warning("Menu #10: No port selected")  # WHY: legacy audit log
             return None  # WHY: signal empty selection to caller
         return self._resolve_port_index(port_list, port_input)  # WHY: parse and validate index
 
@@ -277,7 +279,7 @@ class PacketCaptureOrg:  # WHY: wraps org/MxEdge capture helpers extracted from 
             return None  # WHY: signal parse failure to caller
         if not 0 <= idx < len(port_list):  # WHY: legacy bounds check with warning
             print(f"\n! Invalid index {idx} (valid range: 0-{len(port_list) - 1})")  # WHY: legacy user error line
-            logging.warning("Menu #10: Invalid port index: %s", idx)  # WHY: legacy audit log
+            logger.warning("Menu #10: Invalid port index: %s", idx)  # WHY: legacy audit log
             return None  # WHY: signal out-of-range index to caller
         selected_port = port_list[idx]  # WHY: resolve chosen index to the port name
         print(f"    -> Selected port: {selected_port}")  # WHY: confirm to user
@@ -387,7 +389,7 @@ class PacketCaptureOrg:  # WHY: wraps org/MxEdge capture helpers extracted from 
     @staticmethod
     def log_loop_stop(iteration: int) -> None:
         """Log loop-stop summary after keyboard interrupt in loop mode."""
-        logging.info("Capture loop stopped by user after %s iterations", iteration)  # WHY: legacy log line
+        logger.info("Capture loop stopped by user after %s iterations", iteration)  # WHY: legacy log line
 
     def build_org_payload(
         self,
@@ -465,7 +467,7 @@ class PacketCaptureOrg:  # WHY: wraps org/MxEdge capture helpers extracted from 
         """Execute org-level packet capture via API."""
         try:  # WHY: broad guard preserves legacy user-friendly error handling
             print("\n> Starting organization packet capture...")  # WHY: legacy progress line
-            logging.info("Initiating org capture with payload: %s", payload)  # WHY: audit log
+            logger.info("Initiating org capture with payload: %s", payload)  # WHY: audit log
             response = _pc().mistapi.api.v1.orgs.pcaps.startOrgPacketCapture(  # WHY: primary start endpoint
                 self.mist_session, self.org_id, payload
             )
@@ -485,7 +487,7 @@ class PacketCaptureOrg:  # WHY: wraps org/MxEdge capture helpers extracted from 
         print(f"  Format: {result.get('format', 'unknown')}")  # WHY: echo negotiated format
         print(f"  Duration: {result.get('duration', 0)} seconds")  # WHY: echo negotiated duration
         print(f"  Expires: {result.get('expiry', 'unknown')}")  # WHY: echo capture TTL
-        logging.info("Org capture started: capture_id=%s", capture_id)  # WHY: legacy log line
+        logger.info("Org capture started: capture_id=%s", capture_id)  # WHY: legacy log line
         capture_format = result.get("format", "pcap")  # WHY: default pcap matches API behavior
         self._dispatch_org_capture_format(capture_format, capture_id, result)  # WHY: pcap vs stream branch
         self._export_capture_info_to_csv(result, "org", self.org_id)  # WHY: legacy CSV export step
@@ -509,7 +511,7 @@ class PacketCaptureOrg:  # WHY: wraps org/MxEdge capture helpers extracted from 
         print(f"\n! Failed to start capture: {response.status_code}")  # WHY: legacy user message
         error_details = response.data if hasattr(response, "data") else "No error details available"  # WHY: fallback
         print(f"  Error details: {error_details}")  # WHY: surface API error body
-        logging.error("Capture failed: %s - %s", response.status_code, error_details)  # WHY: legacy log
+        logger.error("Capture failed: %s - %s", response.status_code, error_details)  # WHY: legacy log
 
     def export_capture_info_to_csv(
         self,
@@ -524,6 +526,6 @@ class PacketCaptureOrg:  # WHY: wraps org/MxEdge capture helpers extracted from 
             api_name = "startSitePacketCapture" if scope == "site" else "startOrgPacketCapture"  # WHY: legacy tag
             _lazy_data_exporter().write_with_format_selection([export_data], filename, api_function_name=api_name)
             print(f"\n* Capture info exported to: {filename}")  # WHY: legacy confirmation
-            logging.info("Capture info exported to %s", filename)  # WHY: audit log line
+            logger.info("Capture info exported to %s", filename)  # WHY: audit log line
         except Exception as error:  # pylint: disable=broad-exception-caught
             logging.exception("Failed to export capture info: %s", error)  # WHY: legacy traceback log

@@ -8,6 +8,8 @@ import time  # WHY: capture wall-clock timestamps and sleep between loop iterati
 from dataclasses import dataclass  # WHY: dataclasses reduce boilerplate for manager + loop state bundles
 from typing import Any  # WHY: manager duck-typed to avoid cyclic import with PacketCaptureManager
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 _DOWNLOAD_FOLDER_NAME = "data"  # WHY: relative folder under cwd where completed pcaps are stored
 _DEFAULT_LOOP_DURATION = 60  # WHY: fallback capture duration when payload omits an explicit value
 _BANNER_WIDTH = 60  # WHY: character width for iteration start/end separator banners
@@ -54,7 +56,7 @@ class SiteCaptureLoopRunner:  # WHY: orchestrator delegating capture steps to a 
         state.iteration += 1  # WHY: bump counter first so iteration number is 1-based in logs
         loop_start = time.time()  # WHY: mark iteration start to compute the accurate sleep budget later
         # WHY: preserve iteration header banner verbatim. Route through logger for capture/redirection.
-        logging.info("\n%s\nLoop Iteration #%s\n%s", _ITER_BANNER, state.iteration, _ITER_BANNER)
+        logger.info("\n%s\nLoop Iteration #%s\n%s", _ITER_BANNER, state.iteration, _ITER_BANNER)
         completed = self.manager._fetch_completed_pcaps(site_id, state.iteration)  # WHY: gather ready pcaps
         self.manager._download_manager.download_pending_pcaps(  # WHY: download all currently-ready pcaps
             completed, state.download_folder
@@ -66,8 +68,8 @@ class SiteCaptureLoopRunner:  # WHY: orchestrator delegating capture steps to a 
             self._attempt_capture(site_id, payload, state)  # WHY: delegate attempt + timestamp update
         sleep_time = self.manager._calc_loop_sleep(wait_time, time.time() - loop_start)  # WHY: adaptive nap
         # WHY: preserve iteration close banner + nap notice verbatim. Route through logger.
-        logging.info("\n%s\nLoop iteration #%s complete", _ITER_BANNER, state.iteration)
-        logging.info("Waiting %.0f seconds before next check...\n%s\n", sleep_time, _ITER_BANNER)
+        logger.info("\n%s\nLoop iteration #%s complete", _ITER_BANNER, state.iteration)
+        logger.info("Waiting %.0f seconds before next check...\n%s\n", sleep_time, _ITER_BANNER)
         time.sleep(sleep_time)  # WHY: honor cooldown plus remaining sleep budget before next iteration
 
     def _attempt_capture(  # WHY: pack capture-attempt call and last_capture_time update into one helper
@@ -81,7 +83,7 @@ class SiteCaptureLoopRunner:  # WHY: orchestrator delegating capture steps to a 
     def _handle_user_interrupt(self, iteration: int) -> None:  # WHY: isolate exit-path IO to one helper
         """Print the interrupt banner and notify the manager of graceful loop termination."""
         # WHY: preserve interrupt banner + iteration count + reassurance line verbatim. Route through logger.
-        logging.info("\n\n%s\n%s\n%s", _INTERRUPT_BANNER, _LOOP_INTERRUPT_TITLE, _INTERRUPT_BANNER)
-        logging.info("  Completed %s loop iteration(s)", iteration)
-        logging.info("  All available PCAPs have been downloaded\n  Exiting gracefully...")
+        logger.info("\n\n%s\n%s\n%s", _INTERRUPT_BANNER, _LOOP_INTERRUPT_TITLE, _INTERRUPT_BANNER)
+        logger.info("  Completed %s loop iteration(s)", iteration)
+        logger.info("  All available PCAPs have been downloaded\n  Exiting gracefully...")
         self.manager._log_loop_stop(iteration)  # WHY: notify manager for structured audit/telemetry logging
