@@ -16,9 +16,11 @@ import pytest  # WHY: pytest monkeypatch fixture for os.environ selector control
 from src.dataclasses.progress_event import TestSummary  # WHY: assert summary payload without ceremony
 from src.troubleshooting.interactive_test_runner import (
     InteractiveTestRunner,
+    PromptResolutionError,
     SuiteContext,
     SuiteTallies,
     TestSiteSelectorUnresolved,  # WHY: #1637 fail-closed selector contract exception.
+    UnattendedInteractiveInputProvider,
 )
 from src.utils.menu_entry import MenuEntry  # WHY: test fixtures must use the production row model.
 
@@ -100,8 +102,8 @@ class _OperationRegistryStub:
         return "skip"
 
     @staticmethod
-    def skip_category(_option):
-        return "interactive"
+    def skip_category(option):
+        return "interactive_safe" if option == "1" else "interactive"  # WHY: candidate option must pass validation.
 
 
 class _RegistryWithSkip:
@@ -122,6 +124,54 @@ class _RegistryWithSkip:
     @staticmethod
     def skip_category(_option):
         return "interactive"
+
+
+class _UnsafeRegistryStub:
+    """Registry stub that attempts to pass a destructive option to the runner."""
+
+    @staticmethod
+    def interactive_safe_options(_all_options):
+        return ["154"]  # WHY: simulate a corrupted filter that exposes a firmware operation.
+
+    @staticmethod
+    def is_interactive_safe(option):
+        return option == "154"  # WHY: force the candidate list to contain the unsafe option.
+
+    @staticmethod
+    def skip_reason(_option):
+        return "DESTRUCTIVE: AP firmware upgrade operation"  # WHY: match the production destructive marker.
+
+    @staticmethod
+    def skip_category(_option):
+        return "destructive"  # WHY: prove the second safety check refuses this category.
+
+
+class _EmptyRegistryStub:
+    """Registry stub that returns no interactive-safe operations."""
+
+    @staticmethod
+    def interactive_safe_options(_all_options):
+        return []  # WHY: simulate the exact guard defect where the run measures nothing.
+
+    @staticmethod
+    def is_interactive_safe(_option):
+        return False  # WHY: keep every menu entry out of the exercise set.
+
+    @staticmethod
+    def skip_reason(_option):
+        return ""  # WHY: force fallback skip-reason generation for safe entries.
+
+    @staticmethod
+    def skip_category(_option):
+        return "safe"  # WHY: model a safe option skipped by --testinteractive.
+
+
+class _InputUtilsStub:
+    """Prompt utility stub that can be patched and restored by the runner."""
+
+    @staticmethod
+    def safe_input(_prompt, default_value="", allow_empty=True, context="unknown"):
+        return "operator"  # WHY: distinguish the restored operator path from generated test answers.
 
 
 def _make_runner(
@@ -368,6 +418,86 @@ def test_run_option_loop_records_failure_via_telemetry() -> None:
     event_types = [event[0] for event in emitter.events]  # WHY: verify start+fail sequence
     assert "start" in event_types
     assert "fail" in event_types
+
+
+def test_unattended_input_provider_uses_prompt_defaults() -> None:
+    """Unattended provider returns explicit defaults before using generated answers."""
+    provider = UnattendedInteractiveInputProvider("60")  # WHY: bind diagnostics to a menu option.
+    answer = provider.answer("Enter a site index: ", default_value="3", context="site")  # WHY: default wins.
+    assert answer == "3"  # WHY: prompt defaults are the safest unattended answer.
+
+
+def test_unattended_input_provider_generates_common_answers() -> None:
+    """Unattended provider generates deterministic answers for common prompt shapes."""
+    provider = UnattendedInteractiveInputProvider("229")  # WHY: menu 229 needs a zone-type prompt answer.
+    assert provider.answer("Enter zone type, zones or rssizones: ", context="zones") == "zones"  # WHY: exact rule.
+    assert provider.answer("Select device index: ", context="device") == "0"  # WHY: first zero-based row.
+    assert provider.answer("Proceed? (y/N): ", context="confirm") == "n"  # WHY: optional actions stay disabled.
+
+
+def test_unattended_input_provider_fails_unresolved_required_prompt() -> None:
+    """Unattended provider raises when a required prompt has no safe generated answer."""
+    provider = UnattendedInteractiveInputProvider("209")  # WHY: option id must appear in the exception text.
+    with pytest.raises(PromptResolutionError):  # WHY: unresolved prompts must fail instead of hanging.
+        provider.answer("Enter beacon identifier: ", allow_empty=False, context="beacon")  # WHY: no fixture value.
+
+
+def test_invoke_option_installs_and_restores_input_provider() -> None:
+    """Runner replaces safe_input only for the operation invocation."""
+    captured = {"answer": ""}  # WHY: collect the generated answer from the handler.
+
+    def _prompting_handler() -> None:
+        captured["answer"] = _InputUtilsStub.safe_input("Select device index: ", context="device")
+
+    menu_actions = {"1": _entry("1", _prompting_handler, "Prompting")}
+    runner = _make_runner(menu_actions=menu_actions)
+    runner.input_utils = _InputUtilsStub  # WHY: inject a patchable prompt seam for this test.
+    runner._invoke_option("1", "site-1")
+    assert captured["answer"] == "0"  # WHY: handler received the generated unattended answer.
+    assert _InputUtilsStub.safe_input("prompt") == "operator"  # WHY: normal EOF-safe prompt path was restored.
+
+
+def test_execute_refuses_destructive_candidate(caplog: pytest.LogCaptureFixture) -> None:
+    """execute() refuses a destructive option even if a registry filter exposes it."""
+    called = {"value": False}  # WHY: prove the destructive handler is never invoked.
+
+    def _destructive_handler() -> None:
+        called["value"] = True  # WHY: this must stay false when safety works.
+
+    menu_actions = {"154": _entry("154", _destructive_handler, "AP firmware upgrade")}
+    runner = _make_runner(menu_actions=menu_actions, registry=_UnsafeRegistryStub)
+    with caplog.at_level(logging.ERROR):
+        result = runner.execute()
+    assert result is False  # WHY: safety refusal must fail the suite.
+    assert called["value"] is False  # WHY: destructive handler must not execute unattended.
+    assert "Refusing menu option 154" in caplog.text  # WHY: refusal text names the blocked menu number.
+
+
+def test_execute_fails_when_zero_operations_selected(caplog: pytest.LogCaptureFixture) -> None:
+    """execute() returns False when the run would exercise zero operations."""
+    runner = _make_runner(registry=_EmptyRegistryStub)
+    with caplog.at_level(logging.ERROR):
+        result = runner.execute()
+    assert result is False  # WHY: a run that measures nothing must not report green.
+    assert "zero interactive-safe operations selected" in caplog.text  # WHY: guard output names the zero count.
+
+
+def test_execute_without_api_session_emits_credential_skips(caplog: pytest.LogCaptureFixture) -> None:
+    """execute() reports credential skips when no startup API session exists."""
+    runner = _make_runner()
+    runner.apisession = None  # WHY: simulate no-token startup bypass before site resolution.
+    with caplog.at_level(logging.WARNING):
+        result = runner.execute()
+    assert result is False  # WHY: zero exercised operations must fail even with honest credential skips.
+    assert "Requires MIST_APITOKEN or MIST_API_TOKEN" in caplog.text  # WHY: skip reason names capability.
+    assert "Exercised operations: 0" in caplog.text  # WHY: summary proves the suite measured no operation.
+
+
+def test_skip_reason_for_safe_option_uses_non_empty_fallback() -> None:
+    """Skipped safe options report why --testinteractive does not run them."""
+    runner = _make_runner(registry=_EmptyRegistryStub)
+    reason = runner._skip_reason_for_option("1")
+    assert "Covered by --test" in reason  # WHY: every skip needs a concrete capability reason.
 
 
 def test_run_option_loop_skips_options_missing_from_menu() -> None:
