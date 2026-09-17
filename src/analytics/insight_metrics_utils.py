@@ -23,6 +23,8 @@ from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 
+logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
+
 
 class InsightMetricsUtils:  # Insight-metrics helpers.
     """Utilities for working with Mist insight metrics.
@@ -39,12 +41,12 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         # WHY: Preserve user-facing banner. Emit via logging for structured output.
-        logging.info("Export Available Insight Metrics:")
+        logger.info("Export Available Insight Metrics:")
         # WHY: Preserve user-facing note verbatim.
-        logging.info("! Note: This function now uses the dynamic comprehensive const export system")
+        logger.info("! Note: This function now uses the dynamic comprehensive const export system")
         # WHY: Preserve user-facing note verbatim.
-        logging.info("! For best results, consider using Menu 82: Export All Const Definitions")
-        logging.info("Legacy const insight metrics export called - using ConstDefinitionsExporter class")
+        logger.info("! For best results, consider using Menu 82: Export All Const Definitions")
+        logger.info("Legacy const insight metrics export called - using ConstDefinitionsExporter class")
 
         exporter = mh.ConstDefinitionsExporter(mh.apisession)  # type: ignore[no-untyped-call]
         exporter.export_all()  # Run the dynamic export.
@@ -52,10 +54,10 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
         insight_metrics_file = os.path.join("data", "ConstInsightMetrics.csv")  # Expected output file.
         if os.path.exists(insight_metrics_file):  # File present.
             # WHY: Preserve user-facing success message verbatim.
-            logging.info("! ConstInsightMetrics.csv is available in the dynamic export results")
+            logger.info("! ConstInsightMetrics.csv is available in the dynamic export results")
         else:
             # WHY: Preserve user-facing warning verbatim. Semantic level is warning.
-            logging.warning("! Warning: ConstInsightMetrics.csv was not created during dynamic export")
+            logger.warning("! Warning: ConstInsightMetrics.csv was not created during dynamic export")
 
     @staticmethod
     def _should_skip_row(metric_name: str, scopes: str) -> bool:
@@ -87,12 +89,12 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
         normalized_target_scope = (target_scope or "").strip().lower()  # Normalize the target scope.
         try:
             if not os.path.exists(csv_path):  # File missing.
-                logging.warning("ConstInsightMetrics.csv not found at %s", csv_path)  # Warn it is missing.
+                logger.warning("ConstInsightMetrics.csv not found at %s", csv_path)  # Warn it is missing.
                 return []  # Return empty.
             with open(csv_path, encoding="utf-8") as csvfile:  # Open the CSV.
                 reader = csv.DictReader(csvfile)  # Parse rows.
                 metrics_for_scope = InsightMetricsUtils._collect_metrics_for_scope(reader, normalized_target_scope)
-            logging.debug(  # Trace the count.
+            logger.debug(  # Trace the count.
                 "Found %s metrics for scope '%s': %s", len(metrics_for_scope), target_scope, metrics_for_scope
             )
             return metrics_for_scope  # Return the metrics.
@@ -114,7 +116,7 @@ class InsightMetricsUtils:  # Insight-metrics helpers.
     @staticmethod
     def _log_normalization_summary(metric_type: str, normalized_data: dict[str, list]) -> None:  # type: ignore[type-arg]
         """Emit debug trace of normalized metric counts per bucket."""
-        logging.debug(  # Trace the parse.
+        logger.debug(  # Trace the parse.
             "Normalized metric %s: %s summary, %s time series, %s results, %s sites",
             metric_type,  # Metric type label.
             len(normalized_data["summary"]),  # Summary row count.

@@ -18,6 +18,8 @@ import csv  # CSV writer for optional header row in create_csv_template.
 import logging  # Structured action logging per Constitution VII.
 import os  # Filesystem primitives for data/ directory management.
 
+logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
+
 
 class FilePathUtils:
     """Centralized file path utilities for consistent data directory handling.
@@ -59,7 +61,7 @@ class FilePathUtils:
                 if headers:  # Only write a header row when headers were provided.
                     writer = csv.writer(f)  # Wrap the handle in a CSV writer.
                     writer.writerow(headers)  # Emit the single header row.
-            logging.info("Created template file: %s", file_path)  # Record the created placeholder.
+            logger.info("Created template file: %s", file_path)  # Record the created placeholder.
             return file_path  # Hand the path back to the caller.
         except Exception as error:  # Never leave a partial file without surfacing the cause.
             logging.error("Failed to create template file %s: %s", filename, error)  # Log the failure cause.
