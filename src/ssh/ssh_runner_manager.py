@@ -20,6 +20,7 @@ from src.ssh.config.env_loader import EnvSshConfigLoader  # WHY: T013a extracted
 from src.ssh.runtime.app_runner import AppRunner  # WHY: T013d concrete CLI orchestrator, no facade.
 from src.utils.console import echo  # WHY: spec 1031 console echo keeps stdout text and drops the WARNING level.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 _PROGRESS_MENU_ID = "97"  # WHY: sentinel menu id shared by start/complete progress emissions.
 _PROGRESS_OPERATION = "ssh_runner"  # WHY: progress operation label used by telemetry sinks.
 _DEFAULT_SSH_PORT = 22  # WHY: standard SSH port for network devices.
@@ -61,7 +62,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
         try:
             SSHRunnerManager._print_banner()  # WHY: user-facing banner + info log.
             success = SSHRunnerManager._run_interactive_workflow(deps)  # WHY: main success-path orchestration.
-            logging.debug("Interactive SSH runner finished (success=%s)", success)  # WHY: post-action log.
+            logger.debug("Interactive SSH runner finished (success=%s)", success)  # WHY: post-action log.
             SSHRunnerManager._emit_completion(emitter, op_start, cancelled=not success)  # WHY: telemetry.
             return success  # WHY: propagate workflow success/failure back to menu dispatcher.
         except KeyboardInterrupt:  # WHY: user pressed Ctrl-C during the run.
@@ -77,9 +78,9 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
     @staticmethod
     def _print_banner() -> None:  # WHY: extracted banner keeps interactive() below 25 lines.
         """Print the SSH runner banner and emit the pre-action info log."""
-        logging.warning("\n>> Enhanced SSH Command Runner")  # WHY: user-facing banner.
-        logging.warning("=" * 60)  # WHY: visual divider matches other menu screens.
-        logging.info("Starting interactive SSH runner workflow")  # WHY: pre-action log.
+        logger.warning("\n>> Enhanced SSH Command Runner")  # WHY: user-facing banner.
+        logger.warning("=" * 60)  # WHY: visual divider matches other menu screens.
+        logger.info("Starting interactive SSH runner workflow")  # WHY: pre-action log.
 
     @staticmethod
     def _run_interactive_workflow(deps: SSHRunnerManagerDeps) -> bool:  # WHY: prompt-and-execute orchestration.
@@ -115,11 +116,11 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
         # these two values. The operator must read the plan before a bulk SSH run, so the
         # project keeps both records. Next review trigger: a change that adds a password
         # argument to _echo_plan, or a new alert on this function.
-        logging.info("Echoing the resolved SSH execution plan to the operator")  # WHY: pre-action log.
+        logger.info("Echoing the resolved SSH execution plan to the operator")  # WHY: pre-action log.
         echo("!? Target hosts: %s", ", ".join(hosts))  # WHY: the operator confirms the target list before the run.
         echo("!? Username: %s", username)  # WHY: the operator confirms the login account before the run.
         echo("!? Commands: %s command(s)", len(commands) if commands else 0)  # WHY: the operator confirms the count.
-        logging.debug("Echoed plan for %d host(s)", len(hosts))  # WHY: post-action log with the host count.
+        logger.debug("Echoed plan for %d host(s)", len(hosts))  # WHY: post-action log with the host count.
 
     @staticmethod
     def _emit_completion(emitter: Any, op_start: float, cancelled: bool) -> None:  # WHY: telemetry helper.
@@ -151,14 +152,14 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
     @staticmethod
     def _print_by_template_banner() -> None:  # WHY: extracted banner block for by_gateway_template().
         """Print the gateway-template SSH runner banner."""
-        logging.info("Starting SSH runner targeting gateways by template...")  # WHY: pre-action log.
-        logging.warning("SSH Runner - Gateway Template Targeting:")  # WHY: user-facing banner.
-        logging.warning("=" * 60)  # WHY: visual divider.
+        logger.info("Starting SSH runner targeting gateways by template...")  # WHY: pre-action log.
+        logger.warning("SSH Runner - Gateway Template Targeting:")  # WHY: user-facing banner.
+        logger.warning("=" * 60)  # WHY: visual divider.
 
     @staticmethod
     def _refresh_gateway_export(deps: SSHRunnerManagerDeps, fast: bool) -> None:  # WHY: keep cache logic isolated.
         """Ensure GatewayManagementIPs.csv is present/current before selection."""
-        logging.warning("  1. Ensuring gateway management IP data is current...")  # WHY: user-facing status.
+        logger.warning("  1. Ensuring gateway management IP data is current...")  # WHY: user-facing status.
         deps.cache_utils.check_and_generate_csv(  # WHY: regenerate on first-run/stale cache.
             "GatewayManagementIPs.csv",
             lambda: deps.gateway_export_utils.management_ips(fast=fast),
@@ -178,7 +179,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
         filtered = SSHRunnerManager._filter_gateways(gateways, selected_template)  # WHY: apply status filter.
         if not filtered:  # WHY: no online gateways with valid IPs.
             # WHY: notice operator that filtering produced no valid targets.
-            logging.warning("! No online gateways with management IPs found for '%s'", selected_template)
+            logger.warning("! No online gateways with management IPs found for '%s'", selected_template)
             return None  # WHY: nothing to run without any targets.
         return selected_template, filtered  # WHY: pass both back so caller does not re-derive them.
 
@@ -191,7 +192,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
         commands: Any,
     ) -> tuple[Any, Any, Any, Any]:
         """Interactively collect missing SSH configuration data."""
-        logging.info(  # WHY: Wave-1 entry envelope required by guardrail tests.
+        logger.info(  # WHY: Wave-1 entry envelope required by guardrail tests.
             "Entering _collect_missing_data (hosts_in=%s username_in=%s commands_in=%s)",
             bool(hosts),
             bool(username),
@@ -202,7 +203,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
             return None, None, None, None  # WHY: sentinel tuple contract expected by callers/tests.
         hosts, username, password = resolved  # WHY: unpack the required trio.
         commands = commands or SSHRunnerManager._prompt_commands(deps)  # WHY: optional. Empty is acceptable.
-        logging.info(  # WHY: Wave-1 exit envelope required by guardrail tests.
+        logger.info(  # WHY: Wave-1 exit envelope required by guardrail tests.
             "Exiting _collect_missing_data (commands_count=%s password=***REDACTED***)",
             len(commands),
         )
@@ -237,8 +238,8 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
             context="ssh_runner_hosts",
         ).strip()
         if not host_input:  # WHY: empty response → user is cancelling.
-            logging.warning("X  SSH host is required")  # WHY: user-visible cancel notice.
-            logging.info("Exiting SSHRunnerManager._collect_missing_data: cancelled (no hosts provided)")  # WHY: log.
+            logger.warning("X  SSH host is required")  # WHY: user-visible cancel notice.
+            logger.info("Exiting SSHRunnerManager._collect_missing_data: cancelled (no hosts provided)")  # WHY: log.
             return None  # WHY: signal cancel to caller.
         return [host.strip() for host in host_input.split(",") if host.strip()]  # WHY: split, trim, drop empties.
 
@@ -248,8 +249,8 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
         # WHY: safe_input is Any-typed via deps. Cast to str for mypy strict (no-any-return).
         username: str = str(deps.input_utils.safe_input("Enter SSH username: ", context="ssh_runner_username")).strip()
         if not username:  # WHY: cancel path.
-            logging.warning("X  SSH username is required")
-            logging.info("Exiting SSHRunnerManager._collect_missing_data: cancelled (no username provided)")
+            logger.warning("X  SSH username is required")
+            logger.info("Exiting SSHRunnerManager._collect_missing_data: cancelled (no username provided)")
             return None
         return username
 
@@ -263,15 +264,15 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
             logging.info("Exiting SSHRunnerManager._collect_missing_data: cancelled (EOF/interrupt on password prompt)")
             return None
         if not password:  # WHY: empty password → cancel.
-            logging.warning("X  SSH password is required")
-            logging.info("Exiting SSHRunnerManager._collect_missing_data: cancelled (no password provided)")
+            logger.warning("X  SSH password is required")
+            logger.info("Exiting SSHRunnerManager._collect_missing_data: cancelled (no password provided)")
             return None
         return password
 
     @staticmethod
     def _prompt_commands(deps: SSHRunnerManagerDeps) -> list[str]:  # WHY: optional one-shot command prompt.
         """Prompt operator for an optional one-shot command. Return list (may be empty)."""
-        logging.warning("\nNo commands configured. Enter command or press Enter for CSV fallback:")
+        logger.warning("\nNo commands configured. Enter command or press Enter for CSV fallback:")
         choice = deps.input_utils.safe_input("Command: ", context="ssh_runner_command_prompt").strip()
         return [choice] if choice else []  # WHY: empty list lets the caller fall back to CSV-loaded commands.
 
@@ -368,7 +369,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
             ) as file_handle:
                 gateways = list(csv.DictReader(file_handle))  # WHY: DictReader gives row dicts keyed by header.
             if not gateways:  # WHY: empty CSV → nothing to show.
-                logging.warning("! No gateway data found.")
+                logger.warning("! No gateway data found.")
                 return None
             return gateways
         except FileNotFoundError:  # WHY: missing CSV → user-facing error, safe abort.
@@ -380,7 +381,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
         """Display templates and get user selection."""
         templates = SSHRunnerManager._collect_template_names(gateways)  # WHY: dedup + sort template names.
         if not templates:  # WHY: nothing to choose from.
-            logging.warning("! No gateway templates found.")
+            logger.warning("! No gateway templates found.")
             return None
         SSHRunnerManager._print_template_menu(templates, gateways)  # WHY: show numbered menu with counts.
         selection = deps.input_utils.safe_input(  # WHY: capture operator's choice (number or name fragment).
@@ -388,8 +389,8 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
             context="ssh_runner_template_selection",
         ).strip()
         if not selection:  # WHY: empty input → cancel.
-            logging.warning("\n! Operation cancelled.")
-            logging.info("Template selection cancelled (empty/EOF/interrupt) - SSH/container safe exit")
+            logger.warning("\n! Operation cancelled.")
+            logger.info("Template selection cancelled (empty/EOF/interrupt) - SSH/container safe exit")
             return None
         return SSHRunnerManager._resolve_template_selection(selection, templates)  # WHY: numeric or fuzzy lookup.
 
@@ -407,10 +408,10 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
     @staticmethod
     def _print_template_menu(templates: list[str], gateways: Any) -> None:  # WHY: menu rendering.
         """Print the numbered template menu with per-template total/online counts."""
-        logging.warning("\n  2. Available gateway templates:")  # WHY: section header (preserves prior numbering).
+        logger.warning("\n  2. Available gateway templates:")  # WHY: section header (preserves prior numbering).
         for index, name in enumerate(templates, 1):  # WHY: 1-based numbering for user input parity.
             total, online = SSHRunnerManager._count_template_gateways(name, gateways)  # WHY: helper for counts.
-            logging.warning("     %2d. %s (%s total, %s online)", index, name, total, online)
+            logger.warning("     %2d. %s (%s total, %s online)", index, name, total, online)
 
     @staticmethod
     def _count_template_gateways(template_name: str, gateways: Any) -> tuple[int, int]:  # WHY: keeps menu CC low.
@@ -428,7 +429,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
             return SSHRunnerManager._resolve_template_by_substring(selection, templates)  # WHY: fallback text match.
         if 0 <= idx < len(templates):  # WHY: valid numeric index.
             return templates[idx]
-        logging.warning("! Invalid selection.")  # WHY: out of range.
+        logger.warning("! Invalid selection.")  # WHY: out of range.
         return None
 
     @staticmethod
@@ -438,9 +439,9 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
         if len(matches) == 1:  # WHY: unambiguous → accept.
             return matches[0]
         if len(matches) > 1:  # WHY: ambiguous → list candidates.
-            logging.warning("! Ambiguous: %s", ", ".join(matches))
+            logger.warning("! Ambiguous: %s", ", ".join(matches))
         else:  # WHY: no match at all.
-            logging.warning("! Template '%s' not found.", selection)
+            logger.warning("! Template '%s' not found.", selection)
         return None
 
     @staticmethod
@@ -464,17 +465,17 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
     def _display_filtered_gateways(gateways: Any) -> None:  # WHY: renders confirmed target set.
         """Display filtered gateway information."""
         # WHY: user-facing header.
-        logging.warning("\n  3. Found %s online gateways with management IPs:", len(gateways))
+        logger.warning("\n  3. Found %s online gateways with management IPs:", len(gateways))
         for gateway in gateways:  # WHY: iterate rows so operator can eyeball the target list before confirming.
             name = gateway.get("Gateway Name", _UNKNOWN_TEMPLATE)  # WHY: fall back to sentinel for display.
             ip_address = gateway.get(_MANAGEMENT_IP_KEY)  # WHY: IP was validated earlier by the filter.
             site = gateway.get("Site Name", _UNKNOWN_TEMPLATE)  # WHY: fall back to sentinel when unknown.
-            logging.warning("     - %-15s | %-15s | %s", name, ip_address, site)
+            logger.warning("     - %-15s | %-15s | %s", name, ip_address, site)
 
     @staticmethod
     def _confirm_execution(deps: SSHRunnerManagerDeps, count: int) -> bool:  # WHY: guarded consent gate.
         """Get user confirmation before SSH execution."""
-        logging.info(  # WHY: Wave-1 entry envelope required by guardrail tests.
+        logger.info(  # WHY: Wave-1 entry envelope required by guardrail tests.
             "Entering SSHRunnerManager._confirm_execution: requesting confirmation for %s gateways",
             count,
         )
@@ -487,12 +488,12 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
             .lower()
         )
         if not confirm:  # WHY: empty input → treat as cancel per historical semantics.
-            logging.warning("\n! Operation cancelled.")
-            logging.info("SSH execution confirmation cancelled (empty/EOF/interrupt) - SSH/container safe exit")
-            logging.info("Exiting SSHRunnerManager._confirm_execution: result=cancelled")
+            logger.warning("\n! Operation cancelled.")
+            logger.info("SSH execution confirmation cancelled (empty/EOF/interrupt) - SSH/container safe exit")
+            logger.info("Exiting SSHRunnerManager._confirm_execution: result=cancelled")
             return False
         result = confirm in _YES_RESPONSES  # WHY: table-driven set removes explicit ["y", "yes"] literal.
-        logging.info("Exiting SSHRunnerManager._confirm_execution: result=%s", result)
+        logger.info("Exiting SSHRunnerManager._confirm_execution: result=%s", result)
         return result
 
     @staticmethod
@@ -503,7 +504,7 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
     ) -> None:
         """Execute SSH commands on filtered gateways."""
         _ = deps  # WHY: retained for signature parity with earlier deps-based helpers.
-        logging.warning("\n  4. Loading SSH configuration...")  # WHY: user-facing status step marker.
+        logger.warning("\n  4. Loading SSH configuration...")  # WHY: user-facing status step marker.
         try:
             resolved = SSHRunnerManager._resolve_by_template_config()  # WHY: encapsulate config resolution.
             if resolved is None:  # WHY: any missing piece → skip execution (message already printed).
@@ -523,19 +524,19 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
         """Load SSH creds + commands (from .env + CSV fallback). Return None on missing data."""
         ssh_config = EnvSshConfigLoader().load()  # WHY: T013a extracted .env loader.
         if not ssh_config.get("username") or not ssh_config.get("password"):  # WHY: mandatory fields missing.
-            logging.warning("! SSH credentials not found in .env file.")
+            logger.warning("! SSH credentials not found in .env file.")
             return None
         commands = ssh_config.get("commands", []) or CommandCsvLoader().load()  # WHY: env first, CSV fallback.
         if not commands:  # WHY: no commands anywhere → nothing to execute.
-            logging.warning("! No SSH commands found.")
+            logger.warning("! No SSH commands found.")
             return None
         return ssh_config["username"], ssh_config["password"], commands  # WHY: return resolved trio.
 
     @staticmethod
     def _echo_by_template_plan(management_ips: Any, commands: Any) -> None:  # WHY: extracted echo keeps caller lean.
         """Echo the by-template execution plan to the operator."""
-        logging.warning("  - Target hosts: %s gateways", len(management_ips))  # WHY: user-facing summary.
-        logging.warning("  - Commands: %s", len(commands))
+        logger.warning("  - Target hosts: %s gateways", len(management_ips))  # WHY: user-facing summary.
+        logger.warning("  - Commands: %s", len(commands))
 
     @staticmethod
     def _run_by_template_batch(  # WHY: builds request bundle and delegates to MultiHostRunner.
@@ -566,11 +567,11 @@ class SSHRunnerManager:  # WHY: staticmethod facade preserves the MistHelper pub
     ) -> None:
         """Print the summary of the by-template SSH run and emit an info log."""
         successful = results.get("successful", 0)  # WHY: default 0 when runner did not populate the key.
-        logging.warning("\n! SSH execution completed:")  # WHY: user-facing summary header.
-        logging.warning("  - Template: %s", template_name)  # WHY: echo target template for the record.
-        logging.warning("  - Successful: %s", successful)  # WHY: echo success count.
-        logging.warning("  - Failed: %s", results.get("failed", 0))  # WHY: echo failure count.
-        logging.info(  # WHY: audit log for post-hoc reporting.
+        logger.warning("\n! SSH execution completed:")  # WHY: user-facing summary header.
+        logger.warning("  - Template: %s", template_name)  # WHY: echo target template for the record.
+        logger.warning("  - Successful: %s", successful)  # WHY: echo success count.
+        logger.warning("  - Failed: %s", results.get("failed", 0))  # WHY: echo failure count.
+        logger.info(  # WHY: audit log for post-hoc reporting.
             "SSH by template: %s, %s/%s successful",
             template_name,
             successful,

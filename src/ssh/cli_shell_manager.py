@@ -35,6 +35,7 @@ except ImportError:  # pyte not installed
     pyte = None  # type: ignore[assignment]
     _has_pyte = False
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 _RECEIVER_JOIN_TIMEOUT_SEC = 5.0  # WHY: bound the shutdown wait so a stuck socket cannot hang the menu.
 
 
@@ -90,17 +91,17 @@ class CLIShellManager:
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
-            logging.info("Creating a CLI shell session for device %s", device_id)  # WHY: audit before API call.
+            logger.info("Creating a CLI shell session for device %s", device_id)  # WHY: audit before API call.
             response = mistapi.api.v1.sites.devices.createSiteDeviceShellSession(  # WHY: match mistapi 0.64.0.
                 mh.apisession,
                 site_id,
                 device_id,
                 body=dict(CLIShellManager._DEFAULT_SHELL_BODY),
             )
-            logging.debug("CLI shell session API returned status %s", getattr(response, "status_code", "unknown"))
+            logger.debug("CLI shell session API returned status %s", getattr(response, "status_code", "unknown"))
             shell_data = response.data if isinstance(response.data, dict) else {}  # WHY: protect URL extraction.
             shell_url = str(shell_data.get("url") or "")  # WHY: return a stable string for the WebSocket opener.
-            logging.debug("CLI shell session URL present: %s", bool(shell_url))  # WHY: show result without the token.
+            logger.debug("CLI shell session URL present: %s", bool(shell_url))  # WHY: show result without the token.
             return shell_url or None  # WHY: preserve the caller contract when the cloud returns no URL.
         except TypeError:  # WHY: signature drift is a programming error, not an operator failure.
             logging.exception(  # WHY: preserve the stack trace for a developer repair.
@@ -117,7 +118,7 @@ class CLIShellManager:
         cols, rows = shutil.get_terminal_size()  # Read terminal size.
         resize_msg = json.dumps({"resize": {"width": cols, "height": rows}})  # Build the resize msg.
         if debug:  # Verbose troubleshooting output is enabled.
-            logging.debug("[DEBUG] Sending resize: %s", resize_msg)  # WHY: trace terminal-resize control (was print()).
+            logger.debug("[DEBUG] Sending resize: %s", resize_msg)  # WHY: trace terminal-resize control (was print()).
         ws.send(resize_msg)  # Tell the remote PTY about the new terminal dimensions.
 
     @staticmethod
@@ -136,7 +137,7 @@ class CLIShellManager:
         if isinstance(data, bytes):  # Binary frames need decoding to text.
             data = data.decode("utf-8", errors="ignore")  # Decode as UTF-8, dropping invalid bytes.
         if debug:  # Verbose troubleshooting output is enabled.
-            logging.debug("[DEBUG] Raw recv: %r", data)  # WHY: trace raw received payload (was print()).
+            logger.debug("[DEBUG] Raw recv: %r", data)  # WHY: trace raw received payload (was print()).
         if data and isinstance(data, str):  # We have a non-empty text frame to render.
             # WHY: cast narrows Any->str for mypy strict (no-any-return). Runtime check above ensures str.
             return str(data)  # Renderable text.
@@ -159,7 +160,7 @@ class CLIShellManager:
     @staticmethod
     def _shell_handle_exit_key(ws: Any) -> None:
         """Handle the '~' exit key by closing the WebSocket socket."""
-        logging.warning("\n## Exit from shell ##")  # WHY: user-visible exit banner (was print()).
+        logger.warning("\n## Exit from shell ##")  # WHY: user-visible exit banner (was print()).
         if ws.sock is not None:  # Socket present.
             ws.sock.shutdown(2)  # Stop the socket.
             ws.sock.close()  # Close the socket.
@@ -176,7 +177,7 @@ class CLIShellManager:
         data = f"\00{mapped_key}"  # Frame the data.
         data_byte = bytes(map(ord, data))  # Immutable bytes: send_binary(payload: bytes) requires bytes.
         if debug:  # Debug mode.
-            logging.debug("[DEBUG] Sending: %r", data)  # WHY: trace outgoing keystroke payload (was print()).
+            logger.debug("[DEBUG] Sending: %r", data)  # WHY: trace outgoing keystroke payload (was print()).
         try:  # The socket may drop mid-send.
             ws.send_binary(data_byte)  # Send the bytes.
         except Exception as exception:  # Send failed.
@@ -192,14 +193,14 @@ class CLIShellManager:
         operator leaves the shell. The caller receives the thread so that it can
         join the thread after it closes the socket.
         """
-        logging.info("Starting the CLI shell receive thread")  # WHY: audit the thread start.
+        logger.info("Starting the CLI shell receive thread")  # WHY: audit the thread start.
         receiver = threading.Thread(  # WHY: the receive loop must not block the keyboard listener.
             target=functools.partial(CLIShellManager._shell_receive_loop, ws, stream, screen, debug),
             name="cli-shell-receiver",  # WHY: a named thread makes a stack dump readable.
             daemon=True,  # WHY: a daemon thread never blocks the interpreter exit.
         )
         receiver.start()  # WHY: begin reading frames from the remote PTY.
-        logging.debug("CLI shell receive thread started (alive=%s)", receiver.is_alive())  # WHY: result summary.
+        logger.debug("CLI shell receive thread started (alive=%s)", receiver.is_alive())  # WHY: result summary.
         return receiver  # WHY: the caller joins this thread during shutdown.
 
     @staticmethod
@@ -210,13 +211,13 @@ class CLIShellManager:
         live thread. A long NOC shift opens many sessions and the process then
         reaches the open file limit.
         """
-        logging.info("Closing the CLI shell WebSocket")  # WHY: audit before the close.
+        logger.info("Closing the CLI shell WebSocket")  # WHY: audit before the close.
         try:  # WHY: the socket may already be closed by the exit key handler.
             ws.close()  # WHY: closing wakes the blocked recv() so the receive thread can end.
         except Exception as close_error:  # cleanup must never mask the session outcome.
             logging.debug("CLI shell WebSocket close failed: %s", close_error)  # WHY: trace only.
         receiver.join(timeout=_RECEIVER_JOIN_TIMEOUT_SEC)  # WHY: bound the wait so a stuck socket cannot hang exit.
-        logging.debug("CLI shell shutdown done (receiver_alive=%s)", receiver.is_alive())  # WHY: result summary.
+        logger.debug("CLI shell shutdown done (receiver_alive=%s)", receiver.is_alive())  # WHY: result summary.
 
     @staticmethod
     def _run_interactive(shell_url: str, debug: bool = False) -> None:
@@ -224,13 +225,13 @@ class CLIShellManager:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not _has_pyte or pyte is None:  # pyte (terminal emulation) is required.
             # WHY: user-visible install hint (was print()).
-            logging.warning("! Terminal emulation requires pyte. Install: pip install pyte")
+            logger.warning("! Terminal emulation requires pyte. Install: pip install pyte")
             return  # Abort.
         if debug:  # Debug mode.
             websocket.enableTrace(True)  # Trace the WebSocket.
-        logging.warning(" Connecting to WebSocket shell...")  # WHY: user-visible connect banner (was print()).
+        logger.warning(" Connecting to WebSocket shell...")  # WHY: user-visible connect banner (was print()).
         ws = websocket.create_connection(shell_url)  # Open the WebSocket.
-        logging.warning(" Connected.")  # WHY: user-visible connected banner (was print()).
+        logger.warning(" Connected.")  # WHY: user-visible connected banner (was print()).
         screen = pyte.Screen(80, 40)  # Virtual screen.
         stream = pyte.Stream(screen)  # Terminal stream.
         CLIShellManager._shell_resize_terminal(ws, debug)  # Send initial terminal dimensions to the remote PTY.
@@ -239,7 +240,7 @@ class CLIShellManager:
             time.sleep(1)  # Wait for connect before waking the prompt.
             ws.send_binary(bytes(map(ord, "\00\n\n")))  # Send a wakeup. Bytes (not bytearray) matches send_binary.
             if debug:  # Debug mode.
-                logging.debug("[DEBUG] Sent wakeup sequence to Juniper SSRs")  # WHY: trace wakeup handshake.
+                logger.debug("[DEBUG] Sent wakeup sequence to Juniper SSRs")  # WHY: trace wakeup handshake.
             mh.KeyboardListener().listen(  # Block on keyboard input, forwarding each key to the PTY.
                 on_release=functools.partial(CLIShellManager._shell_send_key, ws, debug),
                 delay_second_char=0,
