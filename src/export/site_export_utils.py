@@ -11,6 +11,8 @@ from src.export.site_insights_exporter import (  # WHY: reuse insights exporter 
     SiteInsightsExporter,
 )
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 _LIMIT_DEFAULT: int = 1000  # WHY: default page size for mistapi list endpoints.
 _LOOKBACK_DEFAULT_HOURS: int = 24  # WHY: default dynamic lookback window (hours).
 _LOOKBACK_MIN_HOURS: int = 1  # WHY: minimum floor for dynamic lookback.
@@ -137,14 +139,12 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
     ) -> Any:  # WHY: paged fetch helper for site endpoints.
         """Call site API respecting limit support and return paginated rawdata."""
         if _api_supports_limit(api_call):  # WHY: branch on limit-kwarg support to avoid TypeError.
-            logging.info(
+            logger.info(
                 "Calling %s with limit=%s for site %s", api_call.__name__, _LIMIT_DEFAULT, site_id
             )  # WHY: audit pre-call.
             response = api_call(self.apisession, site_id, limit=_LIMIT_DEFAULT, **api_kwargs)  # WHY: paged call.
         else:
-            logging.debug(
-                "API function %s does not support 'limit' parameter", api_call.__name__
-            )  # WHY: audit unpaged.
+            logger.debug("API function %s does not support 'limit' parameter", api_call.__name__)  # WHY: audit unpaged.
             response = api_call(self.apisession, site_id, **api_kwargs)  # WHY: call without limit.
         return self.mistapi.get_all(response=response, mist_session=self.apisession)  # WHY: full pagination.
 
@@ -167,8 +167,8 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
             row = [item.get(field, "") for field in table.field_names]  # WHY: row in stable order.
             table.add_row(row)  # WHY: append to table.
         # WHY: legacy debug console output preserved via INFO-level structured emit.
-        logging.info("%s", table)
-        logging.debug("Site data displayed in table format (debug mode).")  # WHY: audit debug render.
+        logger.info("%s", table)
+        logger.debug("Site data displayed in table format (debug mode).")  # WHY: audit debug render.
 
     def _write_site_report(  # WHY: single-endpoint export helper reused by many exports.
         self,
@@ -191,7 +191,7 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
         site_id = self.PromptUtils.select_site()  # WHY: operator picks target site.
         if site_id:  # WHY: happy-path return when a valid site is chosen.
             return site_id  # WHY: valid selection.
-        logging.error(abort_message)  # WHY: preserve legacy abort log.
+        logger.error(abort_message)  # WHY: preserve legacy abort log.
         return None  # WHY: signal caller to bail out.
 
     def _run_dynamic_event_export(
@@ -237,14 +237,14 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
                 rows, filename, api_function_name="listSiteSlesMetrics"
             )  # WHY: persist rows.
             # WHY: preserve legacy operator record-count notice verbatim.
-            logging.info("! %s records exported to data\\%s", len(rows), filename)
-            logging.info(
+            logger.info("! %s records exported to data\\%s", len(rows), filename)
+            logger.info(
                 "Exported %s site SLE metric insight records to %s", len(rows), filename
             )  # WHY: success audit log.
             return  # WHY: skip empty-file emission when rows exist.
         # WHY: preserve legacy empty-payload operator notice verbatim.
-        logging.warning("! 0 records exported to data\\%s (no metrics available)", filename)
-        logging.warning("No site SLE metric insight data available for site %s", site_name)  # WHY: warn empty.
+        logger.warning("! 0 records exported to data\\%s (no metrics available)", filename)
+        logger.warning("No site SLE metric insight data available for site %s", site_name)  # WHY: warn empty.
         self.DataExporter.write_with_format_selection(
             [], filename, api_function_name="listSiteSlesMetrics"
         )  # WHY: still emit empty file for pipeline.
@@ -260,9 +260,9 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
     def _resolve_site_name(self, site_id: str) -> str:  # WHY: class-side name resolver with legacy log format.
         """Resolve human-readable site name from org sites list. Fall back to site_id."""
         try:
-            logging.info("Fetching org sites to resolve site name for %s", site_id)  # WHY: pre-API log.
+            logger.info("Fetching org sites to resolve site name for %s", site_id)  # WHY: pre-API log.
             site_name = self._fetch_org_site_name(site_id)  # WHY: shared org-name lookup.
-            logging.debug("Resolved site_name=%s for site_id=%s", site_name, site_id)  # WHY: post-log.
+            logger.debug("Resolved site_name=%s for site_id=%s", site_name, site_id)  # WHY: post-log.
             return site_name  # WHY: hand back to caller.
         except Exception as e:  # WHY: preserve legacy broad-except behavior.
             logging.error("Error getting site name: %s", e)  # WHY: preserve legacy error string.
@@ -272,11 +272,11 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
         self, api_call: Any, site_id: str, api_kwargs: dict[str, Any]
     ) -> Any:  # WHY: bridge to fetch helper with logs.
         """Invoke site API call, respecting limit-parameter support. Return paginated rawdata."""
-        logging.debug(
+        logger.debug(
             "Making site-specific API call: %s with site_id: %s", api_call.__name__, site_id
         )  # WHY: pre-call log.
         rawdata = self._fetch_site_data(api_call, site_id, api_kwargs)  # WHY: shared fetch + paginate.
-        logging.debug("Retrieved rawdata with %s records", len(rawdata) if rawdata else 0)  # WHY: count log.
+        logger.debug("Retrieved rawdata with %s records", len(rawdata) if rawdata else 0)  # WHY: count log.
         return rawdata  # WHY: return paginated rawdata.
 
     def _display_or_log_results(
@@ -286,33 +286,33 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
         if self.check_fn():  # WHY: debug operators see full table dump.
             self._emit_debug_table(data)  # WHY: extract debug rendering into helper.
             return  # WHY: skip completion log after debug render.
-        logging.info(
+        logger.info(
             "Site %s export completed - %s records saved to %s.", data_type, len(data), filename
         )  # WHY: legacy completion line.
 
     def _export_data(self, api_call: Any, data_type: str, sort_key: str = "name", **api_kwargs: Any) -> None:
         """Generic function to export site-specific data to CSV."""
-        logging.info("Starting export of site %s...", data_type)
+        logger.info("Starting export of site %s...", data_type)
         site_id = self._prompt_site_or_abort("No site selected. Exiting.")  # WHY: shared prompt + abort.
         if site_id is None:
             return  # WHY: abort when operator declines.
         site_name = self._resolve_site_name(site_id)  # WHY: resolve for filename + log.
-        logging.info("Exporting %s for site: %s", data_type, site_name)
+        logger.info("Exporting %s for site: %s", data_type, site_name)
         filename = _build_export_filename(data_type, site_name)  # WHY: legacy CamelCase filename.
         try:
             rawdata = self._call_site_api(api_call, site_id, api_kwargs)  # WHY: fetch site data.
             if rawdata is None:
-                logging.warning("! No data returned from API for %s at site %s. Skipping.", data_type, site_name)
+                logger.warning("! No data returned from API for %s at site %s. Skipping.", data_type, site_name)
                 return  # WHY: abort on empty response.
-            logging.info("Fetched %s raw records for %s from site %s.", len(rawdata), data_type, site_name)
+            logger.info("Fetched %s raw records for %s from site %s.", len(rawdata), data_type, site_name)
             data = self._prepare_rows(rawdata, sort_key)  # WHY: sort, flatten, escape.
-            logging.info("Saving exported site data to %s", filename)  # WHY: pre-save log.
+            logger.info("Saving exported site data to %s", filename)  # WHY: pre-save log.
             self.DataExporter.write_with_format_selection(
                 data, filename, api_function_name=api_call.__name__
             )  # WHY: legacy writer entry.
             # WHY: preserve legacy operator record-count notice verbatim.
-            logging.info("! %s records exported to %s", len(data), _resolve_site_display_path(filename))
-            logging.info("Site %s data written to %s (%s rows).", data_type, filename, len(data))
+            logger.info("! %s records exported to %s", len(data), _resolve_site_display_path(filename))
+            logger.info("Site %s data written to %s (%s rows).", data_type, filename, len(data))
             self._display_or_log_results(data, data_type, filename)  # WHY: display or log.
         except Exception as e:
             logging.error("! Error during site %s export for %s: %s", data_type, site_name, e)
@@ -320,7 +320,7 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
 
     def insights(self) -> None:
         """Export SLE metric availability for a selected site."""
-        logging.info("Starting export of site SLE metric insights...")
+        logger.info("Starting export of site SLE metric insights...")
         site_id = self._prompt_site_or_abort("No site selected. Exiting.")  # WHY: shared prompt.
         if site_id is None:
             return  # WHY: abort when operator declines.
@@ -385,7 +385,7 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
 
     def site_stats(self) -> None:
         """Export aggregate health and capacity statistics for a selected site to SiteSiteStats.csv."""
-        logging.info("Starting export of site statistics...")
+        logger.info("Starting export of site statistics...")
         site_id = self._prompt_site_or_abort("No site selected. Aborting site stats export.")  # WHY: shared prompt.
         if site_id is None:
             return  # WHY: abort when operator declines.
@@ -396,13 +396,13 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
                 "SiteSiteStats.csv",
                 "getSiteStats",
             )
-            logging.info("Exported %d site stats records to %s", count, "SiteSiteStats.csv")
+            logger.info("Exported %d site stats records to %s", count, "SiteSiteStats.csv")
         except Exception as exception:
             logging.exception("Failed to export site stats: %s", exception)  # WHY: preserve legacy log.
 
     def gateway_metrics(self) -> None:
         """Export gateway performance metrics summary for a selected site to SiteGatewayMetrics.csv."""
-        logging.info("Starting export of site gateway metrics...")
+        logger.info("Starting export of site gateway metrics...")
         site_id = self._prompt_site_or_abort(
             "No site selected. Aborting gateway metrics export."
         )  # WHY: shared prompt.
@@ -415,13 +415,13 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
                 "SiteGatewayMetrics.csv",
                 "getSiteGatewayMetrics",
             )
-            logging.info("Exported %d gateway metric records to %s", count, "SiteGatewayMetrics.csv")
+            logger.info("Exported %d gateway metric records to %s", count, "SiteGatewayMetrics.csv")
         except Exception as exception:
             logging.exception("Failed to export gateway metrics: %s", exception)  # WHY: preserve legacy log.
 
     def switches_metrics(self) -> None:
         """Export switch performance metrics summary for a selected site to SiteSwitchesMetrics.csv."""
-        logging.info("Starting export of site switches metrics...")
+        logger.info("Starting export of site switches metrics...")
         site_id = self._prompt_site_or_abort(
             "No site selected. Aborting switches metrics export."
         )  # WHY: shared prompt.
@@ -434,13 +434,13 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
                 "SiteSwitchesMetrics.csv",
                 "getSiteSwitchesMetrics",
             )
-            logging.info("Exported %d switches metric records to %s", count, "SiteSwitchesMetrics.csv")
+            logger.info("Exported %d switches metric records to %s", count, "SiteSwitchesMetrics.csv")
         except Exception as exception:
             logging.exception("Failed to export switches metrics: %s", exception)  # WHY: preserve legacy log.
 
     def beacons_stats(self) -> None:
         """Export BLE beacon statistics for a selected site to SiteBeaconsStats.csv."""
-        logging.info("Starting export of site BLE beacon statistics...")
+        logger.info("Starting export of site BLE beacon statistics...")
         self._export_data(  # WHY: generic exporter path.
             api_call=self.mistapi.api.v1.sites.stats.listSiteBeaconsStats,
             data_type="beacons stats",
@@ -449,7 +449,7 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
 
     def wxrules_usage(self) -> None:
         """Export WxLAN rule usage statistics for a selected site to SiteWxrulesUsage.csv."""
-        logging.info("Starting export of site WxLAN rules usage statistics...")
+        logger.info("Starting export of site WxLAN rules usage statistics...")
         site_id = self._prompt_site_or_abort("No site selected. Aborting WxRules usage export.")  # WHY: shared prompt.
         if site_id is None:
             return  # WHY: abort when operator declines.
@@ -460,13 +460,13 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
                 "SiteWxrulesUsage.csv",
                 "getSiteWxRulesUsage",
             )
-            logging.info("Exported %d WxRules usage records to %s", count, "SiteWxrulesUsage.csv")
+            logger.info("Exported %d WxRules usage records to %s", count, "SiteWxrulesUsage.csv")
         except Exception as exception:
             logging.exception("Failed to export WxRules usage: %s", exception)  # WHY: preserve legacy log.
 
     def assets_stats(self) -> None:
         """Export asset statistics for a selected site to SiteAssetsStats.csv."""
-        logging.info("Starting export of site asset statistics...")
+        logger.info("Starting export of site asset statistics...")
         self._export_data(  # WHY: generic exporter path.
             api_call=self.mistapi.api.v1.sites.stats.listSiteAssetsStats,
             data_type="assets stats",
@@ -475,7 +475,7 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
 
     def current_channel_planning(self) -> None:
         """Export current RRM channel and power plan per AP radio for a selected site."""
-        logging.info("Starting export of site current channel planning (RRM)...")
+        logger.info("Starting export of site current channel planning (RRM)...")
         site_id = self._prompt_site_or_abort(
             "No site selected. Aborting channel planning export."
         )  # WHY: shared prompt.
@@ -492,7 +492,7 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
             self.DataExporter.write_with_format_selection(
                 rows, filename, api_function_name="getSiteCurrentChannelPlanning"
             )
-            logging.info("Exported %d channel planning records to %s", len(rows), filename)
+            logger.info("Exported %d channel planning records to %s", len(rows), filename)
         except Exception as exception:
             logging.exception("Failed to export channel planning: %s", exception)  # WHY: preserve legacy log.
 
