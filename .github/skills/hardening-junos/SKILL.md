@@ -34,6 +34,8 @@ Use this skill for these requests:
 - A hardening control from the Juniper checklist.
 - A DISA STIG rule for an EX switch.
 
+Caution: the STIG reference applies to EX switches. If the device is an MX router or an SRX firewall, use its platform STIG before you act.
+
 Do not use this skill for these requests:
 
 - A firewall policy design that does not use a MistHelper path.
@@ -47,14 +49,14 @@ Read only the reference that the question needs.
 
 | Task | Reference | Result |
 | - | - | - |
-| Choose the source and cite it. | [Source index](./references/source-index.md) | A source, a train, and a path. |
-| Apply repository security law. | [Repository decisions](./references/repository-decisions.md) | A safe MistHelper answer. |
-| Check Junos commands and statements. | [Junos verified rules](./references/junos-verified-rules.md) | A command or statement with a source. |
+| Choose the source and cite it. | [Corpus operations](./references/corpus-operations.md) | A source, a train, and a path from the source selection section. |
+| Apply repository security law. | [Baseline controls](./references/baseline-controls.md) | A safe MistHelper answer from the repository decision section. |
+| Check Junos commands and statements. | [Baseline controls](./references/baseline-controls.md) | A command or statement from the verified Junos rule section. |
 | Apply a hardening control from the checklist. | [Baseline controls](./references/baseline-controls.md) | The control, the command, the reason, the risk, and the citation. |
 | Review a configuration against the 67 controls. | [Baseline controls](./references/baseline-controls.md) | A pass, fail, or not-assessable result for each control. |
 | Answer a DISA STIG question, or map a failure to a rule. | [STIG rules](./references/stig-rules.md) | The rule identifier, severity, check, and fix. |
 | Search or refresh the staged corpus. | [Corpus operations](./references/corpus-operations.md) | The corpus root, archive code, gap status, and rebuild procedure. |
-| Report gaps and validation. | [Validation and gaps](./references/validation-and-gaps.md) and [Verification](./references/verification.md) | A verified or unverified claim list. |
+| Report gaps and validation. | [Verification](./references/verification.md) | A verified or unverified claim list. |
 
 If two sources conflict, use this order:
 
