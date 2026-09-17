@@ -39,6 +39,8 @@ from src.utils.zscaler_catalogue import (  # WHY: menu 206 consumes refreshed Zs
     promote_cache_document,
 )
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 _DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"  # WHY: catalogue files live under data.
 _PROBE_SOURCE_FILE = "zscaler_client_connector_probes.json"  # WHY: static ZCC role data lives in this file.
 _CENR_SOURCE_FILE = "zscaler_cenr_hostnames.json"  # WHY: refreshed CENR host data lives in this file.
@@ -152,14 +154,14 @@ class SyntheticProbeSettingApplier:
         vlan_ids: list[int],
     ) -> dict[str, Any]:
         """Return the org setting body with the refreshed probe set."""
-        logging.info("Building the org synthetic-probe setting body")  # Record the payload build boundary.
+        logger.info("Building the org synthetic-probe setting body")  # Record the payload build boundary.
         body: dict[str, Any] = json.loads(json.dumps(setting)) if setting else {}  # Deep-copy settings before mutation.
         synthetic = SyntheticProbeSettingApplier._synthetic_section(body)  # Get or create the synthetic_test block.
         existing_tests = SyntheticProbeSettingApplier._existing_tests(synthetic)  # Preserve valid existing tests.
         synthetic["custom_probes"] = combined_probes  # Replace only the managed custom-probes section.
         tests = _merge_zcc_criticals_into_tests(existing_tests, combined_probes, vlan_ids)  # Refresh schedules.
         synthetic["tests"] = tests  # Attach the refreshed schedule rows.
-        logging.debug("Built org setting body with probe_count=%s", len(combined_probes))  # Record payload size.
+        logger.debug("Built org setting body with probe_count=%s", len(combined_probes))  # Record payload size.
         return body  # Return the PUT body for the caller.
 
     @staticmethod
@@ -183,10 +185,10 @@ class SyntheticProbeSettingApplier:
     @staticmethod
     def write_setting(mist_session: Any, org_id: str, body: dict[str, Any]) -> Any:
         """Write one org setting update through the Mist SDK."""
-        logging.info("Calling updateOrgSettings for org_id=%s", org_id)  # Record the outbound Mist write.
+        logger.info("Calling updateOrgSettings for org_id=%s", org_id)  # Record the outbound Mist write.
         response = _mist_setting.updateOrgSettings(mist_session, org_id, body)  # Send the exact updated setting body.
         status = getattr(response, "status_code", None)  # Read the status for safe logging.
-        logging.debug("updateOrgSettings returned status=%s", status)  # Record the status.
+        logger.debug("updateOrgSettings returned status=%s", status)  # Record the status.
         return response  # Return the SDK response for status handling.
 
     @staticmethod
@@ -194,14 +196,14 @@ class SyntheticProbeSettingApplier:
         """Print the existing update result text for the operator."""
         status = getattr(response, "status_code", None)  # Read the SDK status safely.
         if status is not None and (status < 200 or status >= 300):  # Preserve the previous non-2xx refusal branch.
-            logging.error("updateOrgSettings HTTP %s", status)  # Record the failed Mist write status.
+            logger.error("updateOrgSettings HTTP %s", status)  # Record the failed Mist write status.
             print(f"  updateOrgSettings failed with HTTP {status}")  # Preserve the operator-visible failure text.
             return  # Return before printing success rows.
         probe_count = len(combined_probes)  # Reuse the count in output and logs.
         print(f"  updateOrgSettings succeeded ({probe_count} probes written)")  # Preserve the success summary text.
         SyntheticProbeSettingApplier._print_probe_names(combined_probes)  # Preserve the sorted per-probe output.
-        logging.info("Wrote %d probes via updateOrgSettings", probe_count)  # Record the successful write count.
-        logging.debug("Completed updateOrgSettings report for org_id=%s", org_id)  # Record report completion.
+        logger.info("Wrote %d probes via updateOrgSettings", probe_count)  # Record the successful write count.
+        logger.debug("Completed updateOrgSettings report for org_id=%s", org_id)  # Record report completion.
 
     @staticmethod
     def _print_probe_names(combined_probes: dict[str, dict[str, Any]]) -> None:
@@ -223,7 +225,7 @@ class SyntheticProbeSettingApplier:
             if template_lan_networks:  # Carry a LAN network template when a surviving row supplied one.
                 new_row["lan_networks"] = list(template_lan_networks)  # Copy LAN network IDs into the new row.
             surviving.append(new_row)  # Append in stable scheduled-name order.
-        logging.debug("Appended %d synthetic probe test rows", len(scheduled_names))  # Record emitted row count.
+        logger.debug("Appended %d synthetic probe test rows", len(scheduled_names))  # Record emitted row count.
         return surviving  # Return the caller-owned list to preserve behavior.
 
 
@@ -233,9 +235,9 @@ class SyntheticProbePromptReader:
     @staticmethod
     def read(prompt: str, context: str) -> str:
         """Return one trimmed operator answer for a named menu 206 prompt."""
-        logging.info("Prompting the operator for %s", context)  # Record the prompt boundary for SSH sessions.
+        logger.info("Prompting the operator for %s", context)  # Record the prompt boundary for SSH sessions.
         answer = InputUtils.safe_input(prompt, context=context)  # Use the shared EOF-safe prompt helper.
-        logging.debug("Completed prompt for %s with answer_present=%s", context, bool(answer))  # Avoid logging values.
+        logger.debug("Completed prompt for %s with answer_present=%s", context, bool(answer))  # Avoid logging values.
         return answer  # Return the trimmed answer so existing prompt behavior stays unchanged.
 
 
@@ -876,15 +878,15 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
             from ``_load_probe_sources``).
         ValueError: If either curated JSON file is malformed.
     """
-    logging.info("Menu 206: starting org Zscaler synthetic-probe manager")
-    logging.debug("ENTRY: manage_org_synthetic_probes(org_id=%s)", org_id)
+    logger.info("Menu 206: starting org Zscaler synthetic-probe manager")
+    logger.debug("ENTRY: manage_org_synthetic_probes(org_id=%s)", org_id)
 
     sources = _load_probe_sources(_DEFAULT_DATA_DIR)
     # NOTE(1025-US1): dedup state for the load-time CENR WARNING lives here so
     # its lifetime is bounded by the invocation (data-model.md §3 INV-D1;
     # FR-012 requires re-emission across back-to-back operator runs).
     warned_cenr_hosts: set[str] = set()  # mutable dedup set, empty per run
-    logging.info(  # Constitution VII: BEFORE the load-time diff
+    logger.info(  # Constitution VII: BEFORE the load-time diff
         "computing load-time CENR missing-host set for org_id=%s",
         org_id,
     )
@@ -895,7 +897,7 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
         ),
         warned_cenr_hosts,  # dedup state -- mutated in place
     )
-    logging.debug(  # Constitution VII: AFTER the load-time emission
+    logger.debug(  # Constitution VII: AFTER the load-time emission
         "load-time CENR check complete; warned_cenr_hosts=%s",
         len(warned_cenr_hosts),
     )
@@ -925,7 +927,7 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
                 # other synced field are already aligned. If a probe lost
                 # critical status upstream we still need to write.
                 print("  No changes required -- newly-entered VLANs already covered.")
-                logging.info("Merge no-op: entered VLANs already covered by all probes")
+                logger.info("Merge no-op: entered VLANs already covered by all probes")
                 return
             resulting_tool = merged_tool
         else:
@@ -937,7 +939,7 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
     summary = _summarise(resulting_tool, tool_authored, demoted_foreign, foreign)
     if not _prompt_confirm(summary):
         print("  Operation cancelled -- no changes were made.")
-        logging.info("Operator declined final confirmation; no PUT issued")
+        logger.info("Operator declined final confirmation; no PUT issued")
         return
 
     # Foreign demotions are merged with the tool-authored set so demoted
@@ -957,7 +959,7 @@ def manage_org_synthetic_probes(mist_session: Any, org_id: str) -> None:
         warned_unmapped_codes,  # threaded from load-time scope so lifetime is bounded by this invocation
     )
 
-    logging.debug("EXIT: manage_org_synthetic_probes - success")
+    logger.debug("EXIT: manage_org_synthetic_probes - success")
 
 
 def _load_probe_sources(data_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -1124,13 +1126,13 @@ def _compute_missing_cenr_hosts(
         set when every catalogue host has an observation (FR-001 zero-emission
         edge case).
     """
-    logging.info(  # Constitution VII action-logging: BEFORE the diff
+    logger.info(  # Constitution VII action-logging: BEFORE the diff
         "computing missing CENR hosts: catalogue=%s observed=%s",
         len(catalogue_hosts),
         len(cenr_observations),
     )
     missing = frozenset(catalogue_hosts - cenr_observations)  # set difference -> frozen
-    logging.debug(  # Constitution VII action-logging: AFTER with result summary
+    logger.debug(  # Constitution VII action-logging: AFTER with result summary
         "computed missing CENR hosts: %s missing",
         len(missing),
     )
@@ -1158,14 +1160,14 @@ def _emit_load_time_cenr_warning(
         warned_cenr_hosts: Per-invocation dedup set. Hosts added here are
             skipped on any subsequent call within the same invocation.
     """
-    logging.info(  # Constitution VII: BEFORE the emission decision
+    logger.info(  # Constitution VII: BEFORE the emission decision
         "evaluating CENR load-time warning: missing=%s already_warned=%s",
         len(missing_hosts),
         len(warned_cenr_hosts),
     )
     unwarned = missing_hosts - warned_cenr_hosts  # subtract already-emitted hosts
     if not unwarned:  # zero-emission edge case (FR-001) or repeat call within run
-        logging.debug(  # Constitution VII: AFTER, no-op branch
+        logger.debug(  # Constitution VII: AFTER, no-op branch
             "CENR load-time warning: no unwarned missing hosts; skipping emission",
         )
         return  # nothing to warn about
@@ -1175,13 +1177,13 @@ def _emit_load_time_cenr_warning(
     # Single WARNING record naming every host, matching log_record_shape.md §1.3.
     # ASCII-only tokens (CENR, using-catalogue-default-URLs) so ``grep -c CENR``
     # in the operator smoke sequence stays deterministic (SC-001).
-    logging.warning(  # exactly-one-per-run WARNING per contract §1.3
+    logger.warning(  # exactly-one-per-run WARNING per contract §1.3
         "CENR observations missing for %s catalogue host(s); using catalogue-default URLs: %s",
         len(ordered),
         ", ".join(ordered),
     )
     warned_cenr_hosts.update(unwarned)  # mark as warned so a duplicate call is a no-op
-    logging.debug(  # Constitution VII: AFTER, emission branch
+    logger.debug(  # Constitution VII: AFTER, emission branch
         "CENR load-time warning emitted for %s hosts; warned_cenr_hosts now %s",
         len(ordered),
         len(warned_cenr_hosts),
@@ -1226,7 +1228,7 @@ def _compute_unmapped_country_codes(
         code is classified (FR-005 zero-emission edge case for the LATAM
         fixture after T020).
     """
-    logging.info(  # Constitution VII action-logging: BEFORE the scan
+    logger.info(  # Constitution VII action-logging: BEFORE the scan
         "computing unmapped country codes: sites=%s region_map=%s gap_set=%s",
         len(sites),
         len(region_map),
@@ -1246,7 +1248,7 @@ def _compute_unmapped_country_codes(
             continue
         seen.add(code)  # genuinely unclassified -> record for warning
     unmapped = frozenset(seen)  # freeze so callers cannot smuggle in extras
-    logging.debug(  # Constitution VII: AFTER with unique-code count
+    logger.debug(  # Constitution VII: AFTER with unique-code count
         "computed unmapped country codes: %s unique code(s)",
         len(unmapped),
     )
@@ -1278,14 +1280,14 @@ def _emit_load_time_country_code_warning(
             same invocation. FR-012: caller supplies a fresh empty set per
             run. State MUST NOT persist across runs.
     """
-    logging.info(  # Constitution VII: BEFORE the emission decision
+    logger.info(  # Constitution VII: BEFORE the emission decision
         "evaluating country_code load-time warning: unmapped=%s already_warned=%s",
         len(unmapped_codes),
         len(warned_unmapped_codes),
     )
     unwarned = unmapped_codes - warned_unmapped_codes  # subtract codes already emitted this run
     if not unwarned:  # zero-emission (FR-005 LATAM path) or repeat call within run
-        logging.debug(  # Constitution VII: AFTER, no-op branch
+        logger.debug(  # Constitution VII: AFTER, no-op branch
             "country_code load-time warning: no unwarned unmapped codes; skipping emission",
         )
         return  # nothing to warn about
@@ -1296,13 +1298,13 @@ def _emit_load_time_country_code_warning(
     # so the operator knows exactly which routing decision was made. ASCII
     # tokens only (``country_code``, ``defaulting to region``) so the grep
     # anchor stays deterministic (SC-002, log_record_shape.md §2.4).
-    logging.warning(  # exactly-one-per-run WARNING per contract §2.4
+    logger.warning(  # exactly-one-per-run WARNING per contract §2.4
         "country_code(s) %s not mapped; defaulting to region %r",
         ", ".join(ordered),
         _DEFAULT_REGION,
     )
     warned_unmapped_codes.update(unwarned)  # mark as warned so a duplicate call is a no-op
-    logging.debug(  # Constitution VII: AFTER, emission branch
+    logger.debug(  # Constitution VII: AFTER, emission branch
         "country_code load-time warning emitted for %s code(s); warned_unmapped_codes now %s",
         len(ordered),
         len(warned_unmapped_codes),
@@ -1420,11 +1422,11 @@ def _fetch_setting(mist_session: Any, org_id: str) -> dict[str, Any]:
         The parsed JSON payload of ``getOrgSettings`` (defensively an
         empty dict if the API returned no body).
     """
-    logging.debug("Calling getOrgSettings(org_id=%s)", org_id)
+    logger.debug("Calling getOrgSettings(org_id=%s)", org_id)
     response = _mist_setting.getOrgSettings(mist_session, org_id)
     data = getattr(response, "data", None)
     if not isinstance(data, dict):
-        logging.warning("getOrgSettings returned non-dict payload; treating as empty")
+        logger.warning("getOrgSettings returned non-dict payload; treating as empty")
         return {}
     return data
 
@@ -1657,7 +1659,7 @@ def _promote_first_probe_to_critical(
     for probe_name, probe in result.items():
         if probe_name.startswith(slug_prefix):
             probe["aggressiveness"] = _CRITICAL_AGGRESSIVENESS
-            logging.warning(
+            logger.warning(
                 "Role %s: critical_fqdn %r not found; promoted %s to critical",
                 role_name,
                 critical_target,
@@ -1940,7 +1942,7 @@ def _pick_zens_from_in_country(
         return sorted(in_country.keys())
     if site_coords is not None:
         return _nearest_zens_from_pool(in_country, site_coords, _ZEN_NEAREST_COUNT)
-    logging.info(
+    logger.info(
         "Site missing latlng but has country %s with %d ZEN locations; " "scheduling all in-country ZENs",
         normalised_cc,
         len(location_groups),
@@ -1985,7 +1987,7 @@ def _resolve_zen_cities_for_site(
     if not isinstance(city_metadata, dict) or not city_metadata:
         # No metadata available -- fail closed (skip ZEN scheduling)
         # rather than emit undefined probes.
-        logging.warning("ZEN scheduling skipped: city_metadata missing from CENR file")
+        logger.warning("ZEN scheduling skipped: city_metadata missing from CENR file")
         return []
     country_code = site.get("country_code")
     normalised_cc = country_code.strip().upper() if isinstance(country_code, str) else ""
@@ -1997,7 +1999,7 @@ def _resolve_zen_cities_for_site(
 
     if site_coords is not None:
         # Rule 4: no country match but we know where the site is.
-        logging.info(
+        logger.info(
             "Site country %r has no ZEN presence; falling back to nearest " "%d global ZENs by geodesic distance",
             country_code,
             _ZEN_NEAREST_COUNT,
@@ -2005,7 +2007,7 @@ def _resolve_zen_cities_for_site(
         return _nearest_zens_from_pool(city_metadata, site_coords, _ZEN_NEAREST_COUNT)
 
     # Rule 5: nothing to work with.
-    logging.warning(
+    logger.warning(
         "ZEN scheduling skipped for site id=%r: no country_code match and " "no latlng",
         site.get("id"),
     )
@@ -2335,7 +2337,7 @@ def _demote_stale_critical(
             demoted = dict(probe)
             demoted["aggressiveness"] = _AUTO_AGGRESSIVENESS
             result[name] = demoted
-            logging.info(
+            logger.info(
                 "Demoting foreign critical probe %r (aggressiveness -> auto)",
                 name,
             )
@@ -2411,7 +2413,7 @@ def _is_prior_zcc_test_row(row: dict[str, Any]) -> bool:
     row_name = row.get("name")  # Read the optional row name.
     if not isinstance(row_name, str) or not row_name.startswith(_TOOL_NAME_PREFIX):  # Keep foreign rows.
         return False  # Preserve the row when it is not tool-authored.
-    logging.info("Dropping legacy tool-authored tests[] row %r (aggregate-row migration)", row_name)  # Record drop.
+    logger.info("Dropping legacy tool-authored tests[] row %r (aggregate-row migration)", row_name)  # Record drop.
     return True  # Drop the legacy aggregate row.
 
 
@@ -2527,16 +2529,16 @@ def _merge_zcc_criticals_into_tests(
     extra_regular_names: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Emit one ``tests[]`` row per scheduled ZCC probe."""
-    logging.info("Merging scheduled ZCC probes into synthetic tests")  # Record the schedule merge boundary.
+    logger.info("Merging scheduled ZCC probes into synthetic tests")  # Record the schedule merge boundary.
     schedule = _compute_scheduled_probe_names(combined_probes, extra_regular_names)  # Select probes.
     critical_names, regular_names = schedule  # Name each scheduled group for existing order.
     surviving = _filter_surviving_test_rows(existing_tests)  # Preserve foreign rows after cleanup.
     scheduled_names = critical_names + regular_names  # Preserve the existing critical-before-regular order.
     if not scheduled_names:  # Return the preserved foreign rows when no ZCC probe needs scheduling.
-        logging.debug("No scheduled ZCC probe rows were needed")  # Record the no-op schedule result.
+        logger.debug("No scheduled ZCC probe rows were needed")  # Record the no-op schedule result.
         return surviving  # Preserve the existing no-op return value.
     result = SyntheticProbeSettingApplier.append_scheduled_rows(surviving, scheduled_names, vlan_ids)  # Append rows.
-    logging.debug("Merged %d scheduled ZCC probes into tests", len(scheduled_names))  # Record scheduled count.
+    logger.debug("Merged %d scheduled ZCC probes into tests", len(scheduled_names))  # Record scheduled count.
     return result  # Return the merged test rows.
 
 
@@ -2548,11 +2550,11 @@ def _apply(
     vlan_ids: list[int],
 ) -> None:
     """PUT the updated setting block via ``updateOrgSettings``."""
-    logging.info("Preparing org synthetic-probe update for org_id=%s", org_id)  # Record the write workflow start.
+    logger.info("Preparing org synthetic-probe update for org_id=%s", org_id)  # Record the write workflow start.
     body = SyntheticProbeSettingApplier.build_body(setting, combined_probes, vlan_ids)  # Build the PUT body.
     response = SyntheticProbeSettingApplier.write_setting(mist_session, org_id, body)  # Send one Mist setting update.
     SyntheticProbeSettingApplier.report_result(response, org_id, combined_probes)  # Print the existing result text.
-    logging.debug("Completed org synthetic-probe update for org_id=%s", org_id)  # Record the write workflow end.
+    logger.debug("Completed org synthetic-probe update for org_id=%s", org_id)  # Record the write workflow end.
 
 
 def _prompt_and_apply_site_overrides(
@@ -2615,7 +2617,7 @@ def _prompt_and_apply_site_overrides(
         "menu_206_site_override_offer",
     ).lower()
     if answer not in ("y", "yes"):
-        logging.info("Operator declined site overrides")
+        logger.info("Operator declined site overrides")
         return
     sites = _list_org_sites(mist_session, org_id)
     if not sites:
@@ -2627,7 +2629,7 @@ def _prompt_and_apply_site_overrides(
     # ``_build_region_probes``. Emitting here (rather than per-site in the
     # resolver) collapses N warnings into 1 (or K, one per distinct
     # unmapped code) and satisfies FR-004 / FR-010 / SC-002.
-    logging.info(  # Constitution VII: BEFORE the load-time country_code diff
+    logger.info(  # Constitution VII: BEFORE the load-time country_code diff
         "computing load-time country_code unmapped set for %d sites",
         len(sites),
     )
@@ -2639,7 +2641,7 @@ def _prompt_and_apply_site_overrides(
         ),
         warned_unmapped_codes,  # dedup state -- mutated in place
     )
-    logging.debug(  # Constitution VII: AFTER the load-time emission
+    logger.debug(  # Constitution VII: AFTER the load-time emission
         "load-time country_code check complete; warned_unmapped_codes=%s",
         len(warned_unmapped_codes),
     )
@@ -2714,7 +2716,7 @@ def _sort_sites_for_picker(sites: list[dict[str, Any]]) -> list[dict[str, Any]]:
             s.get("id") or "",
         ),
     )
-    logging.debug("Sorted %d site(s) for the menu 206 picker", len(sorted_sites))  # Record picker list size.
+    logger.debug("Sorted %d site(s) for the menu 206 picker", len(sorted_sites))  # Record picker list size.
     return sorted_sites  # Return the sorted copy for the interactive picker.
 
 
@@ -2740,7 +2742,7 @@ def _pick_site_by_index(
             operator input order is preserved.
     """
     if idx < 1 or idx > len(sorted_sites):
-        logging.warning("Ignoring out-of-range site index: %d", idx)
+        logger.warning("Ignoring out-of-range site index: %d", idx)
         return
     candidate = sorted_sites[idx - 1]
     site_id = candidate.get("id")
@@ -2778,7 +2780,7 @@ def _expand_range_token(
         logging.warning("Ignoring unparseable site index range token: %r", part)
         return
     if lo > hi:
-        logging.warning("Ignoring reversed site index range: %r", part)
+        logger.warning("Ignoring reversed site index range: %r", part)
         return
     for idx in range(lo, hi + 1):
         _pick_site_by_index(idx, sorted_sites, picked_by_id)
@@ -2901,7 +2903,7 @@ def _put_site_setting(mist_session: Any, site_id: str, body: dict[str, Any]) -> 
     status = getattr(put_response, "status_code", None)
     if status is not None and not 200 <= status < 300:
         print(f"  Site {site_id}: updateSiteSettings HTTP {status}")
-        logging.error("updateSiteSettings(%s) HTTP %s", site_id, status)
+        logger.error("updateSiteSettings(%s) HTTP %s", site_id, status)
         return False
     return True
 
@@ -2978,10 +2980,10 @@ def _apply_to_site(
     """
     site_id = site.get("id")
     if not isinstance(site_id, str) or not site_id:
-        logging.error("Site override skipped: site dict missing id (%r)", site)
+        logger.error("Site override skipped: site dict missing id (%r)", site)
         return
     country_code = site.get("country_code")
-    logging.info(
+    logger.info(
         "Applying site override to site_id=%s country_code=%r",
         site_id,
         country_code,
@@ -3018,7 +3020,7 @@ def _apply_to_site(
         extra_regular_names=[*region_probes.keys(), *zen_probe_names],
     )
 
-    logging.debug(
+    logger.debug(
         "Calling updateSiteSettings(site_id=%s, probe_count=%d)",
         site_id,
         len(combined),
