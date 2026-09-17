@@ -15,6 +15,8 @@ from pathlib import Path
 import html2text
 import requests
 
+logger = logging.getLogger(__name__)  # Use a module logger so tests can identify this log source.
+
 BASE_URL = "https://docs.128technology.com/docs/"
 ARTICLE_PATTERN = re.compile(r"<article\b.*</article>", re.DOTALL)
 
@@ -29,13 +31,13 @@ class SsrDocumentPage:
 
     def fetch(self) -> int:
         """Download the page, convert it, and return the byte count written."""
-        logging.info("Downloading SSR page %s", self.slug)  # Announce the network call
+        logger.info("Downloading SSR page %s", self.slug)  # Announce the network call
         html = self._download()  # Retrieve the rendered page
-        logging.debug("Received %d bytes of HTML", len(html))  # Record the response size
-        logging.info("Converting page %s to Markdown", self.slug)  # Announce the transform
+        logger.debug("Received %d bytes of HTML", len(html))  # Record the response size
+        logger.info("Converting page %s to Markdown", self.slug)  # Announce the transform
         self.output_path.write_text(self._convert(html), encoding="utf-8")  # One atomic write
         written = self.output_path.stat().st_size  # Measure the stored reference
-        logging.debug("Wrote %d bytes to %s", written, self.output_path)  # Record the result
+        logger.debug("Wrote %d bytes to %s", written, self.output_path)  # Record the result
         return written  # The caller reports this size to the operator
 
     def _download(self) -> str:
@@ -75,10 +77,10 @@ class SsrDocumentSet:
         self.output_dir.mkdir(parents=True, exist_ok=True)  # Create the folder on first run
         for slug in self.SLUGS:  # Fetch the pages one at a time to stay polite to the server
             written = SsrDocumentPage(slug, self.output_dir).fetch()  # Do the work
-            logging.info("Saved %s.md (%d bytes)", slug, written)  # Report each file
+            logger.info("Saved %s.md (%d bytes)", slug, written)  # Report each file
         return len(self.SLUGS)  # Total count for the final summary
 
 
 if __name__ == "__main__":
     COUNT = SsrDocumentSet(Path("documentation") / "references" / "ssr").run()
-    logging.info("Saved %d SSR reference pages", COUNT)  # Final summary for the operator
+    logger.info("Saved %d SSR reference pages", COUNT)  # Final summary for the operator
