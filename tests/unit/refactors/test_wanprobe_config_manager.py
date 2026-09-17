@@ -370,6 +370,34 @@ def test_apply_wan_probe_overrides_skips_missing_ports() -> None:
     assert modified == ["ge-0/0/0"]
 
 
+def test_apply_log_does_not_claim_template_success_before_failed_write(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A failed template write must not leave a pre-write success line."""
+    _install_fake_mh(monkeypatch)  # WHY: replace the MistHelper dependency graph with local doubles.
+    update_response = SimpleNamespace(status_code=500)  # WHY: force the API write failure branch.
+    update_mock = MagicMock(return_value=update_response)  # WHY: make the failed response repeatable.
+    monkeypatch.setattr(gwt_api, "updateOrgGatewayTemplate", update_mock)  # WHY: block live Mist API writes.
+    manager = WANProbeConfigManager()  # WHY: use the real local preparation logic.
+    manager.org_id = "org-1"  # WHY: the update endpoint requires an organization id.
+    manager.probe_ips = ["1.1.1.1"]  # WHY: a non-empty payload exercises the preparation log.
+    manager.probe_profile = "lte"  # WHY: the prepared payload carries the selected probe profile.
+    template = {"name": "T1", "wan_interfaces": [{"port_name": "ge-0/0/0"}]}  # WHY: one target port is enough.
+    port_config = {"ge-0/0/0": {"usage": "wan"}}  # WHY: the target exists in the mutable config.
+    caplog.set_level(logging.DEBUG)  # WHY: capture the pre-write preparation line and the failure result.
+
+    modified = manager._apply_wan_probe_overrides(template, port_config)  # WHY: prepare the payload only.
+    status, error = manager._persist_template_update(  # WHY: run the write branch that reports HTTP failure.
+        {"id": "tpl-1", "name": "T1"}, port_config, dry_run=False, interfaces_modified=modified
+    )
+    messages = "\n".join(record.getMessage() for record in caplog.records)  # WHY: compare rendered log text.
+
+    assert status == "FAILED"  # WHY: the failed API response must remain visible to callers.
+    assert "500" in error  # WHY: the operator needs the HTTP status that blocked the write.
+    assert "Template T1: Updated ge-0/0/0 probe config" not in messages  # WHY: no success claim before proof.
+    assert "Template T1: Prepared ge-0/0/0 probe config for API update" in messages  # WHY: announcement remains.
+
+
 # ---------------------------------------------------------------------------
 # _persist_template_update
 # ---------------------------------------------------------------------------
