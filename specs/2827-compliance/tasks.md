@@ -13,7 +13,7 @@
 - [x] T006 Refactor AP profile summary and pacing helpers without changing behavior.
 - [x] T007 Refactor AP backup payload and file-name helpers without changing behavior.
 - [x] T008 Refactor org synthetic probe setting update code into a semantic class.
-- [ ] T009 Re-run analyzer and confirm both files improve.
+- [x] T009 Re-run analyzer and confirm both files improve.
 
 ## Phase 3. Validation and delivery
 

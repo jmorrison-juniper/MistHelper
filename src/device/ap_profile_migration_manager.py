@@ -1619,91 +1619,84 @@ class APProfileMigrationManager:
 
     @staticmethod
     def _validate_backup_top_level(payload: dict[str, Any]) -> None:
-        """Enforce data-model 1.6 rules 1 through 3 on the backup top level.
+        """Enforce data-model rules 1 through 3 on the backup top level."""
+        logging.info("Validating AP profile backup top-level fields")  # Record the schema validation boundary.
+        APProfileMigrationManager._require_backup_version(payload)  # Validate the schema version first.
+        APProfileMigrationManager._require_backup_string_fields(payload)  # Validate required string fields next.
+        APProfileMigrationManager._require_backup_plan_list(payload)  # Validate the planned AP list last.
+        logging.debug("Validated AP profile backup top-level fields")  # Record validation completion.
 
-        Why:
-            Isolates the schema-version + required-string-field + planned-list
-            checks so ``_load_and_validate_backup`` stays under the Radon
-            complexity gate.
-
-        Args:
-            payload: The parsed backup dict.
-
-        Returns:
-            None.
-
-        Raises:
-            ValueError: When schema_version is wrong, a required string
-                field is missing or empty, or ``aps_planned`` is missing or
-                not a JSON array.
-        """
-        version = payload.get("schema_version")
-        if version != _BACKUP_SCHEMA_VERSION:
+    @staticmethod
+    def _require_backup_version(payload: dict[str, Any]) -> None:
+        """Validate the backup schema version."""
+        version = payload.get("schema_version")  # Read the schema version field from the backup.
+        if version != _BACKUP_SCHEMA_VERSION:  # Refuse unknown backup schemas before any AP changes.
             raise ValueError(f"schema_version must be {_BACKUP_SCHEMA_VERSION}; got {version!r}")
-        for field in ("org_id", "source_profile_id", "target_profile_id", "migration_timestamp_utc"):
-            value = payload.get(field)
-            if not isinstance(value, str) or not value.strip():
+
+    @staticmethod
+    def _require_backup_string_fields(payload: dict[str, Any]) -> None:
+        """Validate required top-level string fields."""
+        fields = ("org_id", "source_profile_id", "target_profile_id", "migration_timestamp_utc")  # Preserve order.
+        for field in fields:  # Validate fields in the original message order.
+            value = payload.get(field)  # Read the field value for shape validation.
+            if not isinstance(value, str) or not value.strip():  # Require a non-empty string value.
                 raise ValueError(f"required field {field!r} must be a non-empty string")
-        planned = payload.get("aps_planned")
-        if planned is None:
+
+    @staticmethod
+    def _require_backup_plan_list(payload: dict[str, Any]) -> None:
+        """Validate that ``aps_planned`` exists and is a list."""
+        planned = payload.get("aps_planned")  # Read the planned AP list from the backup.
+        if planned is None:  # Preserve the specific missing-field message.
             raise ValueError("required field 'aps_planned' is missing")
-        if not isinstance(planned, list):
+        if not isinstance(planned, list):  # Preserve the specific type message.
             raise ValueError("required field 'aps_planned' must be a JSON array")
 
     @staticmethod
     def _validate_planned_records(planned: list[Any]) -> None:
-        """Enforce data-model 1.6 rule 4 on every ``aps_planned`` entry.
+        """Enforce data-model rule 4 on every ``aps_planned`` entry."""
+        logging.info("Validating %d planned AP records from backup", len(planned))  # Record validation scope.
+        for idx, rec in enumerate(planned):  # Preserve the original record order in error messages.
+            APProfileMigrationManager._validate_planned_record(idx, rec)  # Validate one AP record.
+        logging.debug("Validated %d planned AP records from backup", len(planned))  # Record validation count.
 
-        Why:
-            Each APRecord must have non-empty ``device_id``, ``site_id``,
-            and ``mac``. Extracting the loop keeps the caller's CC low.
+    @staticmethod
+    def _validate_planned_record(index: int, record: Any) -> None:
+        """Validate one planned AP record from the backup file."""
+        if not isinstance(record, dict):  # Require object shape for each AP plan row.
+            raise ValueError(f"aps_planned[{index}] must be a JSON object")
+        for field in ("device_id", "site_id", "mac"):  # Preserve required-field validation order.
+            APProfileMigrationManager._validate_planned_field(index, record, field)  # Validate one field.
 
-        Args:
-            planned: The list of AP records from the backup file.
-
-        Returns:
-            None.
-
-        Raises:
-            ValueError: When any entry is not a dict or any required
-                sub-field is missing or empty.
-        """
-        for idx, rec in enumerate(planned):
-            if not isinstance(rec, dict):
-                raise ValueError(f"aps_planned[{idx}] must be a JSON object")
-            for sub in ("device_id", "site_id", "mac"):
-                v = rec.get(sub)
-                if not isinstance(v, str) or not v.strip():
-                    raise ValueError(f"aps_planned[{idx}].{sub} must be a non-empty string")
+    @staticmethod
+    def _validate_planned_field(index: int, record: dict[str, Any], field: str) -> None:
+        """Validate one required field in a planned AP record."""
+        value = record.get(field)  # Read the AP record field value.
+        if not isinstance(value, str) or not value.strip():  # Require a non-empty string value.
+            raise ValueError(f"aps_planned[{index}].{field} must be a non-empty string")
 
     @staticmethod
     def _validate_reassigned_list(reassigned: Any, planned: list[Any]) -> None:
-        """Enforce data-model 1.6 rule 5 on ``aps_reassigned``.
-
-        Why:
-            Every entry of ``aps_reassigned`` must be a string and must
-            appear as a ``device_id`` in ``aps_planned``. Guards against
-            hand-edited backups that reference APs not in the plan.
-
-        Args:
-            reassigned: The value of the ``aps_reassigned`` field.
-            planned: The list of AP records (already validated).
-
-        Returns:
-            None.
-
-        Raises:
-            ValueError: When the field is not a list, an entry is not a
-                string, or an entry is not present in ``aps_planned``.
-        """
-        if not isinstance(reassigned, list):
+        """Enforce data-model rule 5 on ``aps_reassigned``."""
+        logging.info("Validating AP profile reassignment list")  # Record reassigned-list validation boundary.
+        if not isinstance(reassigned, list):  # Require list shape before iterating entries.
             raise ValueError("field 'aps_reassigned' must be a JSON array of strings")
-        planned_ids = {str(rec.get("device_id", "")) for rec in planned}
-        for entry in reassigned:
-            if not isinstance(entry, str):
-                raise ValueError("aps_reassigned entries must be strings")
-            if entry not in planned_ids:
-                raise ValueError(f"aps_reassigned contains id {entry!r} not present in aps_planned")
+        planned_ids = APProfileMigrationManager._planned_device_ids(planned)  # Build the valid ID set.
+        for entry in reassigned:  # Validate reassigned IDs in their stored order.
+            APProfileMigrationManager._validate_reassigned_entry(entry, planned_ids)  # Validate one reassigned ID.
+        logging.debug("Validated %d reassigned AP IDs", len(reassigned))  # Record validation count.
+
+    @staticmethod
+    def _planned_device_ids(planned: list[Any]) -> set[str]:
+        """Return the device IDs that appear in the planned AP list."""
+        return {str(record.get("device_id", "")) for record in planned}  # Preserve prior set construction.
+
+    @staticmethod
+    def _validate_reassigned_entry(entry: Any, planned_ids: set[str]) -> None:
+        """Validate one reassigned AP ID against the planned AP set."""
+        if not isinstance(entry, str):  # Require string entries before membership checks.
+            raise ValueError("aps_reassigned entries must be strings")
+        if entry not in planned_ids:  # Refuse a reassigned AP that does not appear in the plan.
+            raise ValueError(f"aps_reassigned contains id {entry!r} not present in aps_planned")
 
     @staticmethod
     def _validate_snapshot_ids(payload: dict[str, Any]) -> None:
