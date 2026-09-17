@@ -255,7 +255,7 @@ def test_log_classification_emits_when_debug_on() -> None:
     fake = _make_mh(debug=True)
     with (
         patch.object(brwcm, "SourceDependencyResolver", fake),
-        patch.object(brwcm.logging, "debug") as mock_debug,
+        patch.object(brwcm.logger, "debug") as mock_debug,
     ):
         manager._log_radius_wlan_classification("NEEDS_UPDATE", {"ssid": "Y"})
     mock_debug.assert_called_once()
@@ -544,7 +544,7 @@ def test_simulate_wlan_update_debug_on_logs_payload() -> None:
     fake = _make_mh(debug=True)
     with (
         patch.object(brwcm, "SourceDependencyResolver", fake),
-        patch.object(brwcm.logging, "debug") as mock_debug,
+        patch.object(brwcm.logger, "debug") as mock_debug,
     ):
         manager._simulate_wlan_update({"id": "w", "ssid": "SS"}, {"k": "v"})
     mock_debug.assert_called()

@@ -29,6 +29,8 @@ from src.config.source_dependency_resolver import (
 )
 from src.utils.rate_limiting import AdaptivePacer  # WHY: quota-aware pacing for the bulk WLAN timer PUT loop.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class BulkRadiusWLANConfigManager:
     """Bulk configuration of RADIUS authentication timer settings for org WLANs.
@@ -94,7 +96,7 @@ class BulkRadiusWLANConfigManager:
         self.target_timeout = int(os.getenv("RADIUS_AUTH_TIMEOUT", "3"))
         self.target_retries = int(os.getenv("RADIUS_AUTH_RETRIES", "2"))
         self.target_fast_dot1x = os.getenv("RADIUS_FAST_DOT1X", "true").lower() == "true"
-        logging.debug(
+        logger.debug(
             "Loaded RADIUS config: timeout=%s, retries=%s, fast_dot1x=%s",
             self.target_timeout,
             self.target_retries,
@@ -125,7 +127,7 @@ class BulkRadiusWLANConfigManager:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         self.org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()
         if not self.org_id:
-            logging.error("Could not determine organization ID")
+            logger.error("Could not determine organization ID")
             print("\n[!] Unable to determine organization ID. Exiting.")
             return False
         return True
@@ -134,17 +136,17 @@ class BulkRadiusWLANConfigManager:
         """Fetch all WLANs in the organization using listOrgWlans API."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         print("[*] Scanning organization for WLANs...")
-        logging.info("Fetching org WLANs for org_id: %s", self.org_id)
+        logger.info("Fetching org WLANs for org_id: %s", self.org_id)
         try:
             response = mistapi.api.v1.orgs.wlans.listOrgWlans(mh.apisession, self.org_id)
             if response.status_code != 200:
-                logging.error("Failed to fetch org WLANs: HTTP %s", response.status_code)
+                logger.error("Failed to fetch org WLANs: HTTP %s", response.status_code)
                 print(f"\n[!] Failed to fetch WLANs: HTTP {response.status_code}")
                 return False
             self.all_wlans = response.data
             if mh.IsDebugMode.check():  # Dump per-WLAN payload only when debug mode is enabled
-                logging.debug("API response data (%s WLANs): %s", len(self.all_wlans), self.all_wlans)
-            logging.info("Found %s total WLANs in organization", len(self.all_wlans))
+                logger.debug("API response data (%s WLANs): %s", len(self.all_wlans), self.all_wlans)
+            logger.info("Found %s total WLANs in organization", len(self.all_wlans))
             print(f"[+] Found {len(self.all_wlans)} total WLANs in organization")
             return True
         except Exception as e:
@@ -178,7 +180,7 @@ class BulkRadiusWLANConfigManager:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if not mh.IsDebugMode.check():  # Only emit when verbose mode is on
             return
-        logging.debug(
+        logger.debug(
             "%s: %s - timeout=%s, retries=%s, fast=%s",
             status,
             wlan.get("ssid"),
@@ -208,7 +210,7 @@ class BulkRadiusWLANConfigManager:
             self._add_inheritance_metadata(wlan)  # Decorate with template/org inheritance info
             self._classify_radius_wlan(wlan)  # Sort into compliant vs needs-update bucket
         total_radius = len(self.radius_wlans) + len(self.compliant_wlans)  # Combined RADIUS WLAN count
-        logging.info(
+        logger.info(
             "Found %s RADIUS WLANs: %s needing config, %s compliant",
             total_radius,
             len(self.radius_wlans),
@@ -381,19 +383,19 @@ class BulkRadiusWLANConfigManager:
             pacer.pace()  # WHY: quota-aware wait replaces the fixed sleep between WLAN writes.
         result_label = "DRY-RUN complete" if self.dry_run else "Update complete"  # Final verb.
         print(f"\n[+] {result_label}: {success_count} successful, {fail_count} failed")  # Show totals.
-        logging.info("%s: %s success, %s failed", result_label, success_count, fail_count)  # Log totals.
+        logger.info("%s: %s success, %s failed", result_label, success_count, fail_count)  # Log totals.
 
     def _update_one_wlan(self, idx: int, wlan: dict[str, Any]) -> bool:
         """Update (or simulate) a single WLAN. Return True on success/simulated success."""
         wlan_id = wlan.get("id")  # Unique WLAN ID needed for the update call.
         ssid = wlan.get("ssid", "Unknown")  # SSID for user-facing messages.
         if not wlan_id:  # Defensive: the WLAN record lacks an ID.
-            logging.error("Missing WLAN ID for %s", ssid)  # Log the missing identifier.
+            logger.error("Missing WLAN ID for %s", ssid)  # Log the missing identifier.
             self._record_change(wlan, "failed", "Missing WLAN ID")  # Audit the failure.
             return False  # Treat as failure.
         payload = self._build_radius_payload()  # Build the timer-only update body.
         print(f"  [{idx}/{len(self.selected_wlans)}] Updating {ssid}...", end=" ")  # Progress line.
-        logging.info(  # Log before the update, noting dry-run vs real.
+        logger.info(  # Log before the update, noting dry-run vs real.
             "%s org WLAN %s (%s) with payload: %s",
             "DRY-RUN: Would update" if self.dry_run else "Updating",
             wlan_id,
@@ -419,7 +421,7 @@ class BulkRadiusWLANConfigManager:
         print("DRY-RUN (would update)")  # Show that no real change was made.
         self._record_change(wlan, "DRY-RUN", "")  # Record the simulated change.
         if mh.IsDebugMode.check():  # Only dump payload when debugging.
-            logging.debug("DRY-RUN payload for %s: %s", ssid, payload)  # Log the would-be payload.
+            logger.debug("DRY-RUN payload for %s: %s", ssid, payload)  # Log the would-be payload.
         return True  # Count the simulation as a success.
 
     def _call_wlan_update_api(self, wlan: dict[str, Any], payload: dict[str, Any]) -> bool:
@@ -435,11 +437,11 @@ class BulkRadiusWLANConfigManager:
                 print("OK")  # Complete the progress line with success.
                 self._record_change(wlan, "success", "")  # Audit the successful change.
                 if mh.IsDebugMode.check():  # Debug-only response dump.
-                    logging.debug("API response for %s: %s", ssid, response.data)  # Log body.
+                    logger.debug("API response for %s: %s", ssid, response.data)  # Log body.
                 return True  # Real success.
             print(f"FAILED (HTTP {response.status_code})")  # Complete the progress line with failure.
             self._record_change(wlan, "failed", f"HTTP {response.status_code}")  # Audit failure.
-            logging.error("Failed to update %s: HTTP %s", ssid, response.status_code)  # Log HTTP error.
+            logger.error("Failed to update %s: HTTP %s", ssid, response.status_code)  # Log HTTP error.
             return False  # API failure.
         except Exception as e:  # Update call raised.
             print(f"ERROR ({e})")  # Complete the progress line with the error.
@@ -471,9 +473,9 @@ class BulkRadiusWLANConfigManager:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         all_radius = self.radius_wlans + self.compliant_wlans  # Every RADIUS WLAN discovered this scan
         if not all_radius:  # Nothing was pulled -> nothing to snapshot
-            logging.debug("No RADIUS WLANs to snapshot; skipping scan export")  # Trace the empty case
+            logger.debug("No RADIUS WLANs to snapshot; skipping scan export")  # Trace the empty case
             return  # No snapshot to write
-        logging.info("Exporting scan snapshot for %s RADIUS WLAN(s)", len(all_radius))  # Before-action log
+        logger.info("Exporting scan snapshot for %s RADIUS WLAN(s)", len(all_radius))  # Before-action log
         scan_timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")  # Human-readable scan time stamped on each row
         rows = [self._build_snapshot_row(wlan, scan_timestamp) for wlan in all_radius]  # Flatten each WLAN to a row
         file_stamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")  # Compact stamp for a unique, non-overwriting filename
@@ -486,10 +488,10 @@ class BulkRadiusWLANConfigManager:
         )
         if ok:  # The export succeeded
             print(f"[+] Scan snapshot of {len(rows)} RADIUS WLAN(s) saved to data/{filename}")  # Show the location
-            logging.info("Scan snapshot written to data/%s (%s rows)", filename, len(rows))  # After-action log
+            logger.info("Scan snapshot written to data/%s (%s rows)", filename, len(rows))  # After-action log
         else:  # The export failed (permissions, disk, or backend error)
             print("[!] Failed to save scan snapshot (see log for details)")  # Inform the operator of the failure
-            logging.error("Failed to write RADIUS WLAN scan snapshot to %s", filename)  # Log the failure
+            logger.error("Failed to write RADIUS WLAN scan snapshot to %s", filename)  # Log the failure
 
     def _build_snapshot_row(self, wlan: dict[str, Any], scan_timestamp: str) -> dict[str, Any]:
         """Flatten one RADIUS WLAN into an examinable snapshot row with value-presence flags."""
@@ -541,7 +543,7 @@ class BulkRadiusWLANConfigManager:
                 writer.writeheader()  # Write the column header row
                 writer.writerows(self.change_records)  # Write every recorded change
             print(f"\n[+] Audit trail exported to: {filepath}")
-            logging.info("Audit trail exported to %s with %s records", filepath, len(self.change_records))
+            logger.info("Audit trail exported to %s with %s records", filepath, len(self.change_records))
         except Exception as e:  # Writing the CSV failed (permissions, disk, and so on)
             print(f"\n[!] Failed to export audit trail: {e}")
             logging.error("Failed to export audit trail: %s", e)
@@ -561,7 +563,7 @@ class BulkRadiusWLANConfigManager:
     def manage(self, dry_run: bool = False) -> None:
         """Main entry point - orchestrates the bulk RADIUS WLAN configuration."""
         self.dry_run = dry_run  # Remember whether this run only simulates changes.
-        logging.info("Starting Bulk RADIUS WLAN Configuration (Menu 122)")  # Announce workflow start.
+        logger.info("Starting Bulk RADIUS WLAN Configuration (Menu 122)")  # Announce workflow start.
         if not self._scan_and_prepare():  # Display + org + scan + filter + snapshot + empty guard.
             return  # Abort on any precondition failure.
         if self._handle_all_compliant():  # Every RADIUS WLAN already at target settings.
@@ -585,7 +587,7 @@ class BulkRadiusWLANConfigManager:
         total_radius = len(self.radius_wlans) + len(self.compliant_wlans)  # Total RADIUS WLANs.
         if total_radius == 0:  # No RADIUS WLANs exist in the org.
             print("\n[*] No RADIUS-enabled WLANs found in the organization.")  # Inform the user.
-            logging.info("No RADIUS WLANs found in organization")  # Log the empty result.
+            logger.info("No RADIUS WLANs found in organization")  # Log the empty result.
             return False  # Nothing to do.
         return True  # Ready to proceed to the apply phase.
 
@@ -594,7 +596,7 @@ class BulkRadiusWLANConfigManager:
         if not self.radius_wlans and self.compliant_wlans:  # Every RADIUS WLAN already meets target.
             self._display_wlans()  # Still show the table for transparency.
             print("[*] All RADIUS WLANs are already at target settings. No changes needed.")  # Inform.
-            logging.info("All RADIUS WLANs already compliant - no changes needed")  # Log the no-op.
+            logger.info("All RADIUS WLANs already compliant - no changes needed")  # Log the no-op.
             return True  # Caller should short-circuit.
         return False  # Need to proceed to selection.
 
@@ -610,7 +612,7 @@ class BulkRadiusWLANConfigManager:
         selected_indices = self._parse_selection(selection)  # Parse into 0-based indices.
         if selected_indices is None:  # User explicitly cancelled (for example, 'q').
             print("\n[*] Operation cancelled by user.")  # Acknowledge.
-            logging.info("Menu 122 cancelled by user at selection prompt")  # Log cancellation.
+            logger.info("Menu 122 cancelled by user at selection prompt")  # Log cancellation.
             return None  # Abort.
         if not selected_indices:  # Selection parsed to no valid indices.
             print("\n[!] Invalid selection. Please use valid indices.")  # Reject input.
@@ -627,9 +629,9 @@ class BulkRadiusWLANConfigManager:
         confirm = mh.InputUtils.safe_input("  > ", context="apply_confirm")  # Read confirmation.
         if confirm.strip() != "APPLY":  # Not the exact confirmation word.
             print("\n[*] Operation cancelled by user.")  # Acknowledge cancellation.
-            logging.info("Bulk RADIUS config cancelled by user")  # Log cancellation.
+            logger.info("Bulk RADIUS config cancelled by user")  # Log cancellation.
             return  # Abort without making changes.
         self._apply_changes()  # Apply (or simulate) the timer changes.
         self._export_audit_trail()  # Write the before/after audit trail to CSV.
         print("\n[+] Bulk RADIUS WLAN configuration completed.")  # Tell the user it finished.
-        logging.info("Bulk RADIUS WLAN Configuration completed successfully")  # Log completion.
+        logger.info("Bulk RADIUS WLAN Configuration completed successfully")  # Log completion.
