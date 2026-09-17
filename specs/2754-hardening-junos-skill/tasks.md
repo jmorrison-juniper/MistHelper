@@ -122,34 +122,34 @@ Markdown files only.
 
 **Purpose**: Build the file skeleton, the repository guards, and the corpus prerequisites.
 
-- [ ] T001 Create the folder tree `.github/skills/hardening-junos/references/`
+- [X] T001 Create the folder tree `.github/skills/hardening-junos/references/` (delivered: .github/skills/hardening-junos/references/)
   - `Verify:` `Get-ChildItem $skill -Recurse -Directory | Select-Object Name` gives `references`.
 
-- [ ] T002 [P] Create `.github/skills/hardening-junos/SKILL.md` with the 3 front matter fields `name`, `description`, and `argument-hint`, plus the snapshot statement for 2026-09-16
+- [X] T002 [P] Create `.github/skills/hardening-junos/SKILL.md` with the 3 front matter fields `name`, `description`, and `argument-hint`, plus the snapshot statement for 2026-09-16 (delivered: .github/skills/hardening-junos/SKILL.md, verify gave True True True)
   - The `name` value must equal the folder name `hardening-junos`, from FR-003 and the front matter table in `contracts/skill-interface.md`.
   - `Verify:` `python -c "import re,io;t=io.open(r'.github/skills/hardening-junos/SKILL.md',encoding='utf-8').read();print(all(k in t.split('---')[1] for k in ('name:','description:','argument-hint:')), 'hardening-junos' in t, '2026-09-16' in t)"` gives `True True True`.
 
-- [ ] T003 [P] Create the 4 reference Markdown files `references/baseline-controls.md`, `references/stig-rules.md`, `references/corpus-operations.md`, and `references/verification.md`, each with a title, a purpose sentence, the snapshot date 2026-09-16, and an empty `Sources` section
+- [X] T003 [P] Create the 4 reference Markdown files `references/baseline-controls.md`, `references/stig-rules.md`, `references/corpus-operations.md`, and `references/verification.md`, each with a title, a purpose sentence, the snapshot date 2026-09-16, and an empty `Sources` section (delivered: .github/skills/hardening-junos/references/*.md, 4 files)
   - The router points at each file, so each file must exist before T031 writes the routing table.
   - `Verify:` `Get-ChildItem "$skill/references" -Filter *.md | Measure-Object` gives `Count : 4`.
 
-- [ ] T004 [P] Create `.github/skills/hardening-junos/references/corpus-index.csv` with the single header row `file,title,group,train,pages,archive,origin,gap` and LF line endings
+- [X] T004 [P] Create `.github/skills/hardening-junos/references/corpus-index.csv` with the single header row `file,title,group,train,pages,archive,origin,gap` and LF line endings (delivered: .github/skills/hardening-junos/references/corpus-index.csv, verify gave 0 and the 8 column header)
   - `Verify:` `python -c "b=open(r'.github/skills/hardening-junos/references/corpus-index.csv','rb').read();print(b.count(b'\r'), b.decode('utf-8').splitlines()[0])"` gives `0 file,title,group,train,pages,archive,origin,gap`.
 
-- [ ] T005 [P] Add the corpus root guard block to `.gitignore`, below the existing block at lines 20 to 28
+- [X] T005 [P] Add the corpus root guard block to `.gitignore`, below the existing block at lines 20 to 28 (delivered: .gitignore lines 30 to 44; git check-ignore named .gitignore:41. Condition: git check-ignore cannot test a path outside the worktree, so check V12 tests a path inside the worktree)
   - Ignore `juniper-doc-archives/`, `**/markdown/`, `**/extracted/`, and `*.pdf`. Name the rebuild command `python scripts/pdf_to_markdown.py`, which matches the style of the existing block.
   - Record this condition in the task note: `git check-ignore` cannot test a path outside the worktree, so check V12 tests a path inside the worktree instead.
   - `Verify:` `git check-ignore -v juniper-doc-archives/markdown/x.md` names the new `.gitignore` line.
 
-- [ ] T006 [P] Confirm the PDF library declaration in `pyproject.toml`
+- [X] T006 [P] Confirm the PDF library declaration in `pyproject.toml` (delivered: pyproject.toml line 111 gives pdfplumber>=0.11.0; no pymupdf and no fitz match)
   - `pdfplumber>=0.11.0` must be present. PyMuPDF must be absent. Add no dependency.
   - `Verify:` `Select-String -Path pyproject.toml -Pattern 'pdfplumber|pymupdf|fitz' -AllMatches` gives `pdfplumber>=0.11.0` and no other match.
 
-- [ ] T007 [P] Extend the writing gate in `.github/workflows/ste-lint.yml`
+- [X] T007 [P] Extend the writing gate in `.github/workflows/ste-lint.yml` (delivered: .github/workflows/ste-lint.yml; verify gave True and the run list names the 5 Markdown files)
   - Add `.github/skills/**/*.md` to the `paths` trigger. Add the 5 skill Markdown files to the `run` list of the grade step. Do not add the CSV file, because the linter returns exit code 2 for it.
   - `Verify:` `python -c "import yaml;d=yaml.safe_load(open('.github/workflows/ste-lint.yml',encoding='utf-8'));print('.github/skills/**/*.md' in d[True]['pull_request']['paths'])"` gives `True`.
 
-- [ ] T008 [P] Confirm the staged corpus prerequisites by reading `$env:JUNIPER_CORPUS_ROOT\markdown\_conversion-manifest.json`
+- [X] T008 [P] Confirm the staged corpus prerequisites by reading `$env:JUNIPER_CORPUS_ROOT\markdown\_conversion-manifest.json` (delivered: measured 511674 pages, {'skipped': 3, 'converted': 4004}, 4007 Markdown files, 4006 catalog rows, 378 inventory rows)
   - Confirm 4,007 Markdown files, 511,674 pages, and the status counts of 4,004 converted and 3 skipped. Confirm that `corpus-catalog.csv` holds 4,006 rows and that `selection-inventory.csv` holds 378 archive rows.
   - `Verify:` `python -c "import json,os;m=json.load(open(os.path.join(os.environ['JUNIPER_CORPUS_ROOT'],'markdown','_conversion-manifest.json'),encoding='utf-8'));print(m['pages'],m['status_counts'])"` gives `511674 {'skipped': 3, 'converted': 4004}`.
 
@@ -168,7 +168,7 @@ unknown until T026 ends.
 
 ### Block A: The converter contract test
 
-- [ ] T009 Write the PDF fixture builder and the structural contract test in `tests/test_pdf_to_markdown.py`
+- [X] T009 Write the PDF fixture builder and the structural contract test in `tests/test_pdf_to_markdown.py` (delivered: tests/test_pdf_to_markdown.py; the first run gave 5 failed, and the first failure named the missing front matter)
   - Test the 5 rows of the check V15 table: the front matter holds `source_file` and `pages` always and the other 5 fields when the metadata gives them, the `pages` value equals the source page count, the file holds 1 heading or more and 6 headings or less before the first page marker, the text gives 200 characters or more for each page, and the file holds no ligature and no curly quotation mark.
   - The test must fail against the current flat page dump. That failure proves the measured gap in plan section 7.
   - `Verify:` `pytest tests/test_pdf_to_markdown.py -q` fails, and the failure names the missing front matter.
@@ -179,15 +179,15 @@ Every task in this block edits `scripts/pdf_to_markdown.py`. No task in this blo
 `[P]`, because they all touch one file. Keep the classes `PdfMarkdownConverter` and
 `PdfMarkdownCommand`. Add no new module and no wrapper function.
 
-- [ ] T010 Replace `pypdf` with `pdfplumber` in the imports and the module docstring of `scripts/pdf_to_markdown.py`
+- [X] T010 Replace `pypdf` with `pdfplumber` in the imports and the module docstring of `scripts/pdf_to_markdown.py` (delivered: scripts/pdf_to_markdown.py; the pypdf, pymupdf and fitz match count is 0)
   - The docstring must stop asking the reader to install an undeclared package.
   - `Verify:` `Select-String -Path scripts/pdf_to_markdown.py -Pattern 'pypdf|pymupdf|fitz' | Measure-Object` gives `Count : 0`.
 
-- [ ] T011 Add the YAML front matter writer to `scripts/pdf_to_markdown.py`
+- [X] T011 Add the YAML front matter writer to `scripts/pdf_to_markdown.py` (delivered: scripts/pdf_to_markdown.py; -k front_matter gave 1 passed)
   - Write `source_file` and `pages` always. Write `title`, `author`, `subject`, `creationDate`, and `modDate` when the PDF metadata gives them. FR-025 and FR-026 set the rule.
   - `Verify:` `pytest tests/test_pdf_to_markdown.py -q -k front_matter` passes.
 
-- [ ] T012 Add the font size heading rule to `scripts/pdf_to_markdown.py`
+- [X] T012 Add the font size heading rule to `scripts/pdf_to_markdown.py` (delivered: scripts/pdf_to_markdown.py; -k heading gave 4 passed. Measured refinement: the modal size alone fails, because a code listing at 7 points can hold more characters than the prose at 10 points. DO_IPsec_VPNs_2018.pdf then gave a 47.0 percent heading share. The body size is now the tallest size that carries a tenth of the characters or more, counted over every page, with the modal size as the fallback. The same document then gave 1.4 percent)
   - The prototype closed this rule. Group the page with `page.extract_text_lines()`, which gives each line with its `chars`. Take the modal `char["size"]` as the body size. Promote a line above the body size to a heading. Mark a bold subheading when `char["fontname"]` holds `bold`, which matches `Lato-Bold` against `Lato-Regular` and `Lato-Light`.
   - **Accumulate the size count over every page of the document before you classify any line.** Never read the body size from a sample, from the first N pages, or from a page range. A future contributor will want to sample a 500 page document for speed. The reason to refuse: the front matter uses a smaller size than the body, so a sample returns the front matter size and silently promotes the whole document.
   - **Compute the body size for each document. Never write a constant threshold.** The body size of `pki.pdf` is 10.0, measured over all 168 pages. The superseded figure of 9.0 came from a 12 page sample of the cover, the notices, and the contents, which hold 4.2 percent of the characters. `research.md` Decision 15 holds the correction and the 4 range measurements.
@@ -199,27 +199,27 @@ Every task in this block edits `scripts/pdf_to_markdown.py`. No task in this blo
     - `test_body_size_uses_every_page` builds a fixture whose first pages use a smaller size than its body, which is the normal shape of a Juniper guide. It asserts that the converter returns the body size and not the front matter size. It asserts that 25 percent or less of the output lines are headings.
     - A run against `pki.pdf` gives about 55 headings over the first 40 pages, which is 5.5 percent of 1,001 lines.
 
-- [ ] T013 Add the running header and page number removal to `scripts/pdf_to_markdown.py`
+- [X] T013 Add the running header and page number removal to `scripts/pdf_to_markdown.py` (delivered: scripts/pdf_to_markdown.py; -k header gave 1 passed)
   - Remove a line that repeats at the top of each page. Remove a line that holds a page number alone. FR-030 sets the rule.
   - `Verify:` `pytest tests/test_pdf_to_markdown.py -q -k header` passes.
 
-- [ ] T014 Add the glyph rules to `scripts/pdf_to_markdown.py`
+- [X] T014 Add the glyph rules to `scripts/pdf_to_markdown.py` (delivered: scripts/pdf_to_markdown.py; -k glyph gave 3 passed, and pki.pdf gave 234 list items)
   - Change a bullet glyph to a Markdown list item. Normalize a ligature and a curly quotation mark. FR-031 sets the rule.
   - `Verify:` `pytest tests/test_pdf_to_markdown.py -q -k glyph` passes, and a run against `pki.pdf` gives about 127 list items over the first 40 pages.
 
-- [ ] T015 Keep a command block and a table readable in `scripts/pdf_to_markdown.py`
+- [X] T015 Keep a command block and a table readable in `scripts/pdf_to_markdown.py` (delivered: scripts/pdf_to_markdown.py; -k layout gave 1 passed)
   - Hold the reading order of a configuration example. FR-032 sets the rule.
   - `Verify:` `pytest tests/test_pdf_to_markdown.py -q -k layout` passes.
 
-- [ ] T016 Add the character density floor and the `review` status to `scripts/pdf_to_markdown.py`
+- [X] T016 Add the character density floor and the `review` status to `scripts/pdf_to_markdown.py` (delivered: scripts/pdf_to_markdown.py; -k density gave 2 passed)
   - Divide the character count by the page count. Set the status `review` below 200. FR-027 sets the rule.
   - `Verify:` `pytest tests/test_pdf_to_markdown.py -q -k density` passes.
 
-- [ ] T017 Add the worker pool and the `--workers` option to `PdfMarkdownCommand` in `scripts/pdf_to_markdown.py`
+- [X] T017 Add the worker pool and the `--workers` option to `PdfMarkdownCommand` in `scripts/pdf_to_markdown.py` (delivered: scripts/pdf_to_markdown.py; --help names --workers and states the processor count default)
   - The default worker count is the processor count. Plan section 7 sets the rule.
   - `Verify:` `python scripts/pdf_to_markdown.py --help` names `--workers`, and the help text states the default.
 
-- [ ] T018 Write the conversion manifest in `scripts/pdf_to_markdown.py`
+- [X] T018 Write the conversion manifest in `scripts/pdf_to_markdown.py` (delivered: scripts/pdf_to_markdown.py; -k manifest gave 1 passed)
   - Write one row for each source file with its status, its page count, and its character count. FR-033 sets the rule.
   - `Verify:` `pytest tests/test_pdf_to_markdown.py -q -k manifest` passes.
 
@@ -229,20 +229,20 @@ The prototype ran against `pki.pdf` from train 26.2 and found 2 defects. Each ta
 one defect and adds a named acceptance test. Both tasks edit `scripts/pdf_to_markdown.py` and
 `tests/test_pdf_to_markdown.py`, so neither carries `[P]`.
 
-- [ ] T019 Add the folio line rule to `scripts/pdf_to_markdown.py` and the named test `test_folio_line_removed` to `tests/test_pdf_to_markdown.py`
+- [X] T019 Add the folio line rule to `scripts/pdf_to_markdown.py` and the named test `test_folio_line_removed` to `tests/test_pdf_to_markdown.py` (delivered: scripts/pdf_to_markdown.py and tests/test_pdf_to_markdown.py; the named test passed, and pki.md gave [])
   - Defect 1: a folio line survives. The prototype wrote `ii` and `iii` into the output. The staged converter dropped a short line that matched a roman numeral or a page label pattern. The `pdfplumber` converter needs the same rule.
   - Drop a short line that holds a roman numeral alone, an arabic page number alone, or a page label such as `Page 12` or `12 of 40`. Keep a line that holds real text, so a list item such as `ii. Set the policy` survives.
   - This rule sits beside the page number removal in T013. Keep it in the same method group, and keep the method at 25 lines or less.
   - `Verify:` `pytest tests/test_pdf_to_markdown.py -q -k test_folio_line_removed` passes, and `python -c "import re,io;t=io.open('out/pki.md',encoding='utf-8').read();print([l for l in t.splitlines() if re.fullmatch(r'\s*[ivxlcdm]+\s*',l,re.I)])"` gives `[]`.
 
-- [ ] T020 Add the contents row rule to `scripts/pdf_to_markdown.py` and the named test `test_contents_row_stays_on_one_line` to `tests/test_pdf_to_markdown.py`
+- [X] T020 Add the contents row rule to `scripts/pdf_to_markdown.py` and the named test `test_contents_row_stays_on_one_line` to `tests/test_pdf_to_markdown.py` (delivered: scripts/pdf_to_markdown.py and tests/test_pdf_to_markdown.py; the named test passed. Choice: split a joined run on the page number pattern. A tolerance change moves every body line, and the split touches a line with 2 page numbers or more only)
   - Defect 2: `page.extract_text_lines()` merges a table of contents into one paragraph. The staged output kept one contents entry for each line.
   - Fix it one of two ways. Set the line grouping tolerance so a contents row stays on its own line. Or split a joined run on the page number pattern, which is a dot leader or a run of spaces that ends in a page number. Choose the way that keeps the body text unchanged, and state the choice in the task note.
   - `Verify:` `pytest tests/test_pdf_to_markdown.py -q -k test_contents_row_stays_on_one_line` passes, and the contents page of `pki.pdf` gives one output line for each contents entry, not one paragraph.
 
 ### Block C: The converter gates
 
-- [ ] T021 Run the 5 Python gates on `scripts/pdf_to_markdown.py` and `tests/test_pdf_to_markdown.py`
+- [X] T021 Run the 5 Python gates on `scripts/pdf_to_markdown.py` and `tests/test_pdf_to_markdown.py` (delivered: ruff 0, black 0, mypy 0, bandit 0, coverage 95.92 percent. Condition: [tool.ruff] excludes scripts and [tool.bandit] omits scripts, so each command names the file)
   - `Verify:` each of these gives 0 violations, and the last gives 80 percent coverage or more.
 
     ```powershell
@@ -255,11 +255,11 @@ one defect and adds a named acceptance test. Both tasks edit `scripts/pdf_to_mar
 
   - Record this condition in the task note: `[tool.ruff]` sets `extend-exclude = ["scripts"]` and `[tool.bandit]` omits `scripts`, so the repository gate does not cover this file. The command above names the file, so the gate runs.
 
-- [ ] T022 Audit `scripts/pdf_to_markdown.py` against the non-negotiable repository rules
+- [X] T022 Audit `scripts/pdf_to_markdown.py` against the non-negotiable repository rules (delivered: the audit gave []; no function holds more than 5 parameters or more than 25 lines)
   - Confirm an inline comment on every executable line. Confirm an `info` log before each operation and a `debug` log after it. Confirm 5 parameters or less and 25 lines or less for each function. Confirm that no wrapper function exists.
   - `Verify:` `python -c "import ast,io;s=io.open(r'scripts/pdf_to_markdown.py',encoding='utf-8').read();t=ast.parse(s);f=[(n.name,len(n.args.args),n.end_lineno-n.lineno+1) for n in ast.walk(t) if isinstance(n,ast.FunctionDef)];print([x for x in f if x[1]>5 or x[2]>25])"` gives `[]`.
 
-- [ ] T023 Convert 30 sample PDF files with the upgraded `scripts/pdf_to_markdown.py` and test each output against the check V15 contract
+- [X] T023 Convert 30 sample PDF files with the upgraded `scripts/pdf_to_markdown.py` and test each output against the check V15 contract (delivered: 30 of 30 sample files satisfy the 6 tests; the heading share is 1.0 to 13.9 percent, median 4.0 percent)
   - Select 10 documents from the security subset, 10 documents with many tables, and 10 documents with a complex cover page. `DO_ContrailRHOSP.pdf` is a known hard cover page.
   - Add the heading share as a 6th test. A file where more than 25 percent of the lines are headings fails, because that share signals a body size error. The measured values are 5.5 percent for a correct body size and 65.8 percent for a body size that is 1 point too small.
   - Do not compare the output against the staged Markdown byte for byte. Two readers do not agree byte for byte.
@@ -304,7 +304,7 @@ one defect and adds a named acceptance test. Both tasks edit `scripts/pdf_to_mar
 
 ### Block F: The router contract
 
-- [ ] T031 [P] Write the 5-row routing table in `.github/skills/hardening-junos/SKILL.md`
+- [X] T031 [P] Write the 5-row routing table in `.github/skills/hardening-junos/SKILL.md` (delivered: .github/skills/hardening-junos/SKILL.md; the routing row count is 5)
   - Each row gives a task, a reference file, and the required result. Copy the 5 rows from the routing table in `contracts/skill-interface.md`. This matches `managing-mist-api`.
   - This task touches `SKILL.md` only, so it can run beside T024 to T030.
   - `Verify:` `(Select-String -Path "$skill/SKILL.md" -Pattern '^\| .*references/').Count` gives `5`.

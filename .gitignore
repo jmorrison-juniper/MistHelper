@@ -27,6 +27,22 @@ data/ste_dictionary.json
 #   python scripts/pdf_to_markdown.py <downloaded.pdf>
 documentation/references/
 
+# Juniper hardening corpus - do not redistribute (Juniper Networks copyright).
+# Issue #2754 staged 9,337 extracted PDF files and 4,006 converted Markdown files
+# below the corpus root. The corpus root is the JUNIPER_CORPUS_ROOT setting, and
+# it sits outside the worktree. The corpus measures 744 MB, so it never enters
+# the repository. The distilled skill at .github/skills/hardening-junos/ is
+# committed instead.
+# Rebuild the corpus with:
+#   python scripts/pdf_to_markdown.py <downloaded.pdf>
+# The rules below guard against a corpus copy inside the worktree. git applies an
+# ignore rule to an untracked path only. The one tracked PDF file therefore stays
+# tracked.
+juniper-doc-archives/
+**/markdown/
+**/extracted/
+*.pdf
+
 .env.local
 .env.production
 .env.staging
