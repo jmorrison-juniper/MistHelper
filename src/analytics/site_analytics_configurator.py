@@ -7,6 +7,8 @@ from dataclasses import dataclass  # WHY: frozen dependency container avoids >5-
 from datetime import UTC, datetime  # WHY: timestamped export filenames disambiguate runs.
 from typing import Any  # WHY: Mist API responses are heterogeneous dicts.
 
+logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
+
 _SEPARATOR: str = "=" * 60  # WHY: shared 60-char rule used across UI banners.
 _CONFIRM_TOKEN: str = "CONFIGURE"  # WHY: exact confirmation keyword required from the operator.
 _SUMMARY_PREVIEW_LIMIT: int = 10  # WHY: cap preview list length to avoid console flooding.
@@ -78,7 +80,7 @@ class SiteAnalyticsConfigurator:  # WHY: static namespace collecting configurato
     def execute(deps: SiteAnalyticsConfiguratorDeps) -> None:  # WHY: single public workflow entry point.
         """Main entry point for site analytics configuration."""  # WHY: docstring anchors public role.
         SiteAnalyticsConfigurator._print_banner()  # WHY: warn operator before destructive action.
-        logging.info("Starting site analytics configuration scan...")  # WHY: audit trail start marker.
+        logger.info("Starting site analytics configuration scan...")  # WHY: audit trail start marker.
         current_org_id = deps.get_org_id_fn()  # WHY: resolve org context before hitting Mist API.
         if not current_org_id:  # WHY: no org context means nothing to do.
             print("! No organization selected. Exiting.")  # WHY: user-visible reason for early return.
@@ -118,17 +120,17 @@ class SiteAnalyticsConfigurator:  # WHY: static namespace collecting configurato
             return False  # WHY: treat disconnect as declined.
         if confirmation != _CONFIRM_TOKEN:  # WHY: any deviation from token declines the operation.
             print("! Operation cancelled - confirmation not provided")  # WHY: user-visible cancellation.
-            logging.warning("Site analytics configuration cancelled by user")  # WHY: audit trail decline marker.
+            logger.warning("Site analytics configuration cancelled by user")  # WHY: audit trail decline marker.
             return False  # WHY: declined path.
         return True  # WHY: operator confirmed with exact token.
 
     @staticmethod
     def _scan_for_deviations(org_id: str, deps: SiteAnalyticsConfiguratorDeps) -> list[dict[str, Any]]:
         """Scan all sites and identify those deviating from standard configuration."""  # WHY: scan orchestrator.
-        logging.info("Fetching all sites for analytics configuration scan...")  # WHY: audit start.
+        logger.info("Fetching all sites for analytics configuration scan...")  # WHY: audit start.
         sites = deps.all_sites_fn(org_id)  # WHY: pull inventory once via injected fetcher.
         if not sites:  # WHY: nothing to scan when org has no sites.
-            logging.warning("No sites found in organization.")  # WHY: surface empty-inventory case.
+            logger.warning("No sites found in organization.")  # WHY: surface empty-inventory case.
             return []  # WHY: short-circuit with empty deviation list.
         print(f"! Scanning {len(sites)} sites for configuration deviations...")  # WHY: progress hint.
         deviations: list[dict[str, Any]] = []  # WHY: accumulator collecting drift records.
@@ -152,7 +154,7 @@ class SiteAnalyticsConfigurator:  # WHY: static namespace collecting configurato
             logging.warning("Error scanning %s: %s", site_name, error)  # WHY: continue with next site on error.
             return None  # WHY: treat as unfetchable.
         if response.status_code != _HTTP_OK:  # WHY: non-200 means we cannot trust settings payload.
-            logging.warning("Failed to fetch settings for %s: HTTP %s", site_name, response.status_code)
+            logger.warning("Failed to fetch settings for %s: HTTP %s", site_name, response.status_code)
             return None  # WHY: skip site with API error.
         return response.data if isinstance(response.data, dict) else {}  # WHY: defensive shape check.
 
@@ -162,7 +164,7 @@ class SiteAnalyticsConfigurator:  # WHY: static namespace collecting configurato
         site_id = site.get("id")  # WHY: primary key needed for API + downstream reporting.
         site_name = site.get("name", "Unnamed Site")  # WHY: display label with fallback.
         if not isinstance(site_id, str) or not site_id:  # WHY: guard against malformed inventory rows.
-            logging.warning("Invalid site_id for %s", site_name)  # WHY: expose bad rows in log.
+            logger.warning("Invalid site_id for %s", site_name)  # WHY: expose bad rows in log.
             return None  # WHY: skip un-addressable site.
         settings = SiteAnalyticsConfigurator._fetch_scan_settings(site_id, site_name, deps)  # WHY: GET helper.
         if settings is None:  # WHY: fetch helper already logged the failure reason.
@@ -501,11 +503,11 @@ class SiteAnalyticsConfigurator:  # WHY: static namespace collecting configurato
         )
         if update_response.status_code == _HTTP_OK:  # WHY: 200 means the API accepted the update.
             result["status"] = "SUCCESS"  # WHY: mark success for reporting.
-            logging.info("Updated %s: %s", site_name, ", ".join(result["sections_updated"]))  # WHY: audit trail.
+            logger.info("Updated %s: %s", site_name, ", ".join(result["sections_updated"]))  # WHY: audit trail.
             return  # WHY: happy path complete.
         result["status"] = "FAILED"  # WHY: non-200 means the update did not stick.
         result["error"] = f"API returned {update_response.status_code}"  # WHY: propagate HTTP status.
-        logging.error("Failed to update %s: HTTP %s", site_name, update_response.status_code)  # WHY: audit trail.
+        logger.error("Failed to update %s: HTTP %s", site_name, update_response.status_code)  # WHY: audit trail.
 
     @staticmethod
     def _apply_site_config(site: dict[str, Any], deps: SiteAnalyticsConfiguratorDeps) -> dict[str, Any]:
@@ -566,4 +568,4 @@ class SiteAnalyticsConfigurator:  # WHY: static namespace collecting configurato
         deps.save_data_fn(rows, filename, api_function_name="site_analytics_results")  # WHY: persist rows.
         print(f"! Results exported to {filename}")  # WHY: surface path to operator.
         success_total = sum(1 for result in results if result["status"] == "SUCCESS")  # WHY: audit tally.
-        logging.info("Site analytics configuration complete. %d sites updated.", success_total)  # WHY: end audit.
+        logger.info("Site analytics configuration complete. %d sites updated.", success_total)  # WHY: end audit.

@@ -21,6 +21,8 @@ from dataclasses import dataclass, field  # WHY: config + address/skip bundling 
 from difflib import SequenceMatcher  # WHY: string-ratio helper used by org-name similarity
 from typing import Any
 
+from src.utils.tls_policy import TLSVerificationPolicy  # One control for certificate verification.
+
 try:  # WHY: HTTP client is optional so the module imports on minimal installs
     import requests  # WHY: bound at module scope for patch-friendliness in tests
 except ImportError:  # pragma: no cover  # WHY: fall through to None on stripped envs
@@ -34,8 +36,6 @@ except ImportError:  # pragma: no cover  # WHY: absence is non-fatal
     urllib3 = None  # type: ignore[assignment]  # WHY: sentinel checked before disabling warnings
     _has_urllib3 = False  # WHY: skip suppression path when the module is missing
 
-from src.utils.tls_policy import TLSVerificationPolicy  # One control for certificate verification.
-
 try:  # WHY: rapidfuzz is optional. Degrade to difflib on absence
     from rapidfuzz import fuzz  # WHY: faster token-sort ratio when available
 except ImportError:  # pragma: no cover  # WHY: keep import graph optional
@@ -45,6 +45,8 @@ try:  # WHY: scourgify is optional. Heuristic parser handles the rest
     from scourgify import normalize_address_record  # WHY: high-quality USPS-style parse
 except ImportError:  # pragma: no cover  # WHY: fall back to heuristic parser
     normalize_address_record = None  # WHY: sentinel checked before use
+
+logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
 
 
 @dataclass
@@ -322,7 +324,7 @@ class AddressUtils:
     ) -> dict[str, Any]:
         """Parse address components with defensive heuristics."""
         if debug:  # WHY: trace the raw input when debugging the parser
-            logging.debug("PARSE_ADDRESS: Input: '%s'", address_string)
+            logger.debug("PARSE_ADDRESS: Input: '%s'", address_string)
         result = AddressUtils._empty_parse_result(address_string)  # WHY: base result skeleton (all fields unset)
         reason = AddressUtils._unparseable_reason(address_string)  # WHY: detect empty/placeholder input early
         if reason:  # WHY: known-unparseable input short-circuits
@@ -368,7 +370,7 @@ class AddressUtils:
         """Enhanced address parsing using usaddress-scourgify with heuristic fallback."""
         if normalize_address_record is None:  # WHY: optional dependency missing -> heuristic parser
             if debug:  # WHY: trace the missing-dependency fallback
-                logging.debug("USADDRESS_PARSE: usaddress-scourgify not available")
+                logger.debug("USADDRESS_PARSE: usaddress-scourgify not available")
             return AddressUtils._parse_components(address_string, debug=debug)  # WHY: heuristic fallback path
         return AddressUtils._scourgify_parse(address_string, debug)  # WHY: library-backed parse with fallback
 
@@ -377,7 +379,7 @@ class AddressUtils:
         """Parse via usaddress-scourgify, falling back to the heuristic parser on any error."""
         try:  # WHY: library parsing can raise on malformed input
             if debug:  # WHY: trace the parse attempt when debugging
-                logging.debug("USADDRESS_PARSE: Attempting for: '%s'", address_string)
+                logger.debug("USADDRESS_PARSE: Attempting for: '%s'", address_string)
             parsed = normalize_address_record(address_string)  # WHY: normalize via the optional library
             return AddressUtils._build_scourgify_result(parsed, address_string)  # WHY: shape into result dict
         except Exception:  # nosec B110  # WHY: any library error degrades to the heuristic parser
@@ -451,7 +453,7 @@ class AddressUtils:
         parse_status = _check_parse_status(mist_address, comparison_address, field_weights)  # WHY: parseability check
         if not parse_status["mist_parseable"] or not parse_status["comparison_parseable"]:  # WHY: unparseable input
             if debug:  # WHY: trace the unparseable short-circuit
-                logging.debug("ENHANCED_COMPARE: Unparseable: %s", parse_status)
+                logger.debug("ENHANCED_COMPARE: Unparseable: %s", parse_status)
             return AddressUtils._unparseable_comparison_result(  # WHY: zero-similarity result
                 field_weights, parse_status
             )
@@ -564,7 +566,7 @@ def _parse_address_parts(
     result["is_parseable"] = True  # WHY: successful parse
     result["parse_reason"] = "success"  # WHY: label the success branch
     if debug:  # WHY: trace parsed result when debugging
-        logging.debug("PARSE_ADDRESS: Parsed result: %s", result)
+        logger.debug("PARSE_ADDRESS: Parsed result: %s", result)
     return result  # WHY: fully-populated parse result
 
 
@@ -631,7 +633,7 @@ def _check_single_skip(
     """Check one skip entry against comparison address."""
     if comp == skip.fields:  # WHY: dataclass equality replaces 4 explicit field compares
         if debug:  # WHY: trace exact-match skips when debugging
-            logging.debug("ADDRESS_SKIP: Exact match - %s", comp.address)
+            logger.debug("ADDRESS_SKIP: Exact match - %s", comp.address)
         return True, skip.reason  # WHY: exact hit wins
     return _check_partial_skip(comp, skip, debug)  # WHY: try partial/wildcard match next
 
@@ -676,7 +678,7 @@ def _check_partial_skip(
         return False, ""  # WHY: nothing to skip
     if _is_sufficient_match(matching, skip_list):  # WHY: apply the wildcard/majority policy
         if debug:  # WHY: trace partial-match skips when debugging
-            logging.debug("ADDRESS_SKIP: Partial match - %s", comp.address)
+            logger.debug("ADDRESS_SKIP: Partial match - %s", comp.address)
         return True, skip.reason  # WHY: sufficient match -> skip with the entry's reason
     return False, ""  # WHY: match count did not clear the sufficiency bar
 
@@ -724,7 +726,7 @@ def _compare_fields(
         if similarity < threshold * 0.75:  # WHY: 75% of threshold flags as failed
             failed.append(field_name)  # WHY: track for caller diagnostics
         if debug:  # WHY: verbose trace when debugging comparisons
-            logging.debug(
+            logger.debug(
                 "ENHANCED_COMPARE: %s similarity: %.1f%% (threshold: %.1f%%)",
                 field_name,
                 similarity,
@@ -880,9 +882,9 @@ class NominatimValidator:
     ) -> None:
         """Log entry point with input parameters."""
         if self.debug:  # WHY: only pay for logging when debug is on
-            logging.debug("ENTRY: NominatimValidator.validate()")
-            logging.debug("  mist_address: %s", mist_address)
-            logging.debug("  comparison_address: %s", comparison_address)
+            logger.debug("ENTRY: NominatimValidator.validate()")
+            logger.debug("  mist_address: %s", mist_address)
+            logger.debug("  comparison_address: %s", comparison_address)
 
     def _build_address_string(
         self,

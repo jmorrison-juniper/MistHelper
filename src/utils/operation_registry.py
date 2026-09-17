@@ -25,6 +25,8 @@ from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+.
 import logging  # WHY: warn when an option is not registered so drift is detectable in test logs.
 from collections.abc import Iterable  # WHY: accept any iterable of option strings in the option-list helpers.
 
+logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
+
 # WHY: `dict[str, str]` covers both {"category": ...} and {"category": ..., "skip_reason": ...} entries.
 _OptionEntry = dict[str, str]
 
@@ -614,7 +616,7 @@ class OperationRegistry:
         if entry is not None:
             return entry
         # WHY: fail closed - an unknown option must never be treated as safe-to-run automatically.
-        logging.warning(
+        logger.warning(
             "OperationRegistry: option %s not registered, failing closed as 'unregistered' (not run)", option
         )
         return {

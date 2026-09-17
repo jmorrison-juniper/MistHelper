@@ -23,10 +23,12 @@ import os
 import re
 import uuid
 
+
 from flask import Flask, abort, request
 
 from src.utils.environment_utils import EnvironmentUtils
 
+logger = logging.getLogger(__name__)  # Use a module logger so records include this module name.
 # The networks that a workstation serves when the operator sets no allowlist.
 # A browser on the same machine uses one of these two addresses.
 LOOPBACK_FALLBACK_NETWORKS = ("127.0.0.0/8", "::1/128")
@@ -106,7 +108,7 @@ class PortalConfigLoader:
         """Validate hex color format, return default on failure."""
         if re.match(r"^#[0-9A-Fa-f]{6}$", color):
             return color
-        logging.warning("Invalid PORTAL_ACCENT_COLOR '%s', using default", color)
+        logger.warning("Invalid PORTAL_ACCENT_COLOR '%s', using default", color)
         return "#0077B6"
 
     def _validate_port(self, port_str: str) -> int:
@@ -117,7 +119,7 @@ class PortalConfigLoader:
                 return port
         except ValueError:
             pass
-        logging.warning("Invalid WEB_PORT '%s', using default 8055", port_str)
+        logger.warning("Invalid WEB_PORT '%s', using default 8055", port_str)
         return 8055
 
     @staticmethod
@@ -125,7 +127,7 @@ class PortalConfigLoader:
         """Parse a comma-separated list of addresses or CIDR ranges."""
         if not ip_string.strip():
             return []  # An empty setting yields an empty list, which the caller reads as "not configured".
-        logging.info("Parsing the %s setting", setting_name)
+        logger.info("Parsing the %s setting", setting_name)
         networks = []
         for position, entry in enumerate(ip_string.split(","), start=1):
             entry = entry.strip()  # Trim the spaces that an operator leaves around a comma.
@@ -141,7 +143,7 @@ class PortalConfigLoader:
                     position,
                     setting_name,
                 )
-        logging.debug("Parsed %d networks from the %s setting", len(networks), setting_name)
+        logger.debug("Parsed %d networks from the %s setting", len(networks), setting_name)
         return networks
 
 
@@ -166,7 +168,7 @@ class SecurityMiddleware:
 
     def apply(self, app: Flask, allowed_ips: list, trusted_proxies: list | None = None) -> None:
         """Register all security hooks on the Flask app."""
-        logging.info("Applying the portal security controls to the Flask application")
+        logger.info("Applying the portal security controls to the Flask application")
         # Resolve the trusted proxies first, because the allowlist hook reads them.
         self._trusted_proxies = self._resolve_trusted_proxies(trusted_proxies)
         # Resolve the allowlist next, because an empty setting needs a safe fallback.
@@ -174,7 +176,7 @@ class SecurityMiddleware:
         self._register_csp_headers(app)
         self._register_ip_allowlist(app, effective_ips)
         self._configure_csrf(app)
-        logging.debug(
+        logger.debug(
             "Applied the portal security controls with %d allowed networks and %d trusted proxies",
             len(effective_ips),
             len(self._trusted_proxies),
@@ -184,11 +186,11 @@ class SecurityMiddleware:
         """Return the networks that the portal serves after the fallback runs."""
         if allowed_ips:
             # The operator named the networks, so the portal obeys the setting.
-            logging.debug("Using the %d networks that the operator configured", len(allowed_ips))
+            logger.debug("Using the %d networks that the operator configured", len(allowed_ips))
             return allowed_ips
         if self._public_access_is_allowed():
             # The operator chose an open portal, so the log records the choice.
-            logging.warning(
+            logger.warning(
                 "Warning: the portal serves every source address, because %s is set. "
                 "The portal has no user authentication. Any caller who reaches the port "
                 "gets every page. Set PORTAL_ALLOWED_IPS instead, for example %s.",
@@ -214,7 +216,7 @@ class SecurityMiddleware:
         # loopback only rule would make every existing deployment unreachable.
         sources = PRIVATE_FALLBACK_NETWORKS if in_container else LOOPBACK_FALLBACK_NETWORKS
         scope = "the private network ranges" if in_container else "the loopback address"
-        logging.warning(
+        logger.warning(
             "Warning: the portal has no user authentication and no configured allowlist. "
             "The portal now serves %s only. Set PORTAL_ALLOWED_IPS to the networks that "
             "need access, for example %s. To serve every source address on purpose, set "
@@ -225,7 +227,7 @@ class SecurityMiddleware:
         )
         # Every entry is a fixed constant, so the parser cannot raise an error.
         networks = [ipaddress.ip_network(entry) for entry in sources]
-        logging.debug("Built a fallback allowlist of %d networks", len(networks))
+        logger.debug("Built a fallback allowlist of %d networks", len(networks))
         return networks
 
     def _resolve_trusted_proxies(self, trusted_proxies: list | None) -> list:
@@ -255,7 +257,7 @@ class SecurityMiddleware:
             # `_resolve_effective_allowlist` already logged that choice.
             return
 
-        logging.info("Registering the portal IP allowlist with %d networks", len(allowed_ips))
+        logger.info("Registering the portal IP allowlist with %d networks", len(allowed_ips))
 
         @app.before_request
         def check_ip_allowlist():
@@ -263,12 +265,12 @@ class SecurityMiddleware:
             client_ip = self._resolve_client_ip(peer_ip)  # Only a trusted proxy can name a different client.
             if not self._ip_matches_any(client_ip, allowed_ips):
                 # The message names both addresses, so the audit trail keeps the real source.
-                logging.warning("Blocked request from client %s with peer %s", client_ip, peer_ip)
+                logger.warning("Blocked request from client %s with peer %s", client_ip, peer_ip)
                 abort(403)
             # Debug level keeps the allowed path quiet, because every request reaches this line.
-            logging.debug("Allowed request from client %s with peer %s", client_ip, peer_ip)
+            logger.debug("Allowed request from client %s with peer %s", client_ip, peer_ip)
 
-        logging.debug("Registered the portal IP allowlist")
+        logger.debug("Registered the portal IP allowlist")
 
     def _configure_csrf(self, app: Flask) -> None:
         """Initialize CSRF protection via flask-wtf."""
@@ -294,7 +296,7 @@ class SecurityMiddleware:
             return peer_ip  # The trusted proxy sent no header, so the peer is the client.
         # The rightmost entry is the address the trusted proxy observed. A caller controls the entries to its left.
         client_ip = forwarded.split(",")[-1].strip()
-        logging.debug("Trusted proxy %s reported client %s", peer_ip, client_ip)
+        logger.debug("Trusted proxy %s reported client %s", peer_ip, client_ip)
         return client_ip
 
     def _ip_matches_any(self, client_ip: str, networks: list) -> bool:
@@ -346,7 +348,7 @@ class ThemeManager:
         """Read .css files from themes directory into metadata."""
         themes = []
         if not os.path.isdir(self._themes_dir):
-            logging.warning("Themes directory not found: %s", self._themes_dir)
+            logger.warning("Themes directory not found: %s", self._themes_dir)
             return themes
         for filename in sorted(os.listdir(self._themes_dir)):
             if not filename.endswith(".css"):
@@ -371,7 +373,7 @@ class ThemeManager:
                 found = True
                 break
         if not found and self._themes:
-            logging.warning(
+            logger.warning(
                 "Default theme '%s' not found, falling back to '%s'",
                 self._default_theme,
                 self._themes[0]["name"],

@@ -14,11 +14,17 @@ import os
 import sys
 from typing import Any
 
+logger = logging.getLogger(__name__)  # The module logger keeps web startup records scoped to this entry point.
+
 # Ensure project root is on sys.path so MistHelper imports resolve
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from src.refactors.main_entrypoint import ApplicationBootstrap  # Explicit bootstrap keeps MistHelper import passive.
-from web_portal.app import WebPortalApp
+ApplicationBootstrap: Any = importlib.import_module(  # Load after sys.path update without a late import.
+    "src.refactors.main_entrypoint"
+).ApplicationBootstrap
+WebPortalApp: Any = importlib.import_module(
+    "web_portal.app"
+).WebPortalApp  # Load the portal factory after sys.path update.
 
 _MISTHELPER_MODULE: Any = importlib.import_module("MistHelper")  # Import root once for the bound source host.
 _MISTHELPER_MODULE_NAME = _MISTHELPER_MODULE.__name__  # Keep the import visible to static analysis.
@@ -41,11 +47,11 @@ def _bootstrap_api_session() -> tuple[Any, str]:
         if os.path.isfile(env_file):
             apisession = mistapi.APISession(env_file=env_file)
             apisession.login()
-            logging.info("WSGI: API session authenticated from .env")
+            logger.info("WSGI: API session authenticated from .env")
         else:
             apisession = mistapi.APISession()
             apisession.login()
-            logging.info("WSGI: API session authenticated from environment")
+            logger.info("WSGI: API session authenticated from environment")
         org_id = os.environ.get("MIST_ORG_ID", "")
         if not org_id and apisession:
             org_id = _resolve_org_id(apisession)
@@ -86,7 +92,7 @@ def _load_menu_actions(wsgi_session: Any, wsgi_org_id: str) -> Any:
         if wsgi_org_id:
             _MISTHELPER_MODULE.org_id = wsgi_org_id
             os.environ["ORG_ID"] = wsgi_org_id
-        logging.info("WSGI: MistHelper imported - %d menu actions loaded", len(_MISTHELPER_MODULE.menu_actions))
+        logger.info("WSGI: MistHelper imported - %d menu actions loaded", len(_MISTHELPER_MODULE.menu_actions))
         return _MISTHELPER_MODULE.menu_actions
     except Exception as exc:
         logging.warning("WSGI: MistHelper import failed (%s) - using static registry", exc)

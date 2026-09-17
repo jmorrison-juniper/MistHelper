@@ -21,7 +21,7 @@ from src.export.org_inventory_exporter import (
     OrgInventoryExporter,  # WHY: 1015 T-06 canonical import (eliminates mh.OrgInventoryExporter).
 )
 
-logger = logging.getLogger(__name__)  # WHY: module-scoped logger routes former print notices for capture/redirection.
+logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
 
 
 class DataCollectionManager:
@@ -47,7 +47,7 @@ class DataCollectionManager:
     @staticmethod
     def continuous_loop() -> None:  # Run the collection loop.
         """Menu 76: continuously collect site/inventory/device-stat/port-stat/VPN-peer data until stop."""
-        logging.info("Starting DataCollectionManager.continuous_loop")  # Log start.
+        logger.info("Starting DataCollectionManager.continuous_loop")  # Log start.
         DataCollectionManager._print_continuous_loop_banner()  # Show the user what's happening.
         loop_count = 0  # Iteration counter.
         try:
@@ -116,7 +116,7 @@ class DataCollectionManager:
         - Device info, stats, port stats
         - Gateway speedtest results
         """
-        logging.info("DataCollectionManager.generate_support_packages starting")  # Log start.
+        logger.info("DataCollectionManager.generate_support_packages starting")  # Log start.
 
         # Ensure all required data is fresh
         DataCollectionManager._refresh_support_data()  # Refresh support data.
@@ -127,7 +127,7 @@ class DataCollectionManager:
         # Generate packages for sites with alarms or events
         DataCollectionManager._generate_site_packages(data_sources)  # Generate per-site packages.
 
-        logging.info("Support packages generated for applicable sites.")  # Log completion.
+        logger.info("Support packages generated for applicable sites.")  # Log completion.
 
     @staticmethod
     def _refresh_support_data() -> None:  # Refresh required CSV files.
@@ -179,7 +179,7 @@ class DataCollectionManager:
             has_events = bool(data_sources["events_data"].get(site_id))  # Has events?
 
             if not has_alarms and not has_events:  # Nothing to report.
-                logging.info("Skipping site %s - no alarms or events", site_id)  # Log the skip.
+                logger.info("Skipping site %s - no alarms or events", site_id)  # Log the skip.
                 continue  # Skip it.
 
             support_data = {  # Build the support data.
@@ -193,4 +193,4 @@ class DataCollectionManager:
 
             filename = f"SupportPackage_{site_id}.csv"  # Build the CSV name.
             mh.CacheUtils.write_support_data_to_csv(support_data, filename)  # Write the package.
-            logging.info("Support package written for site %s", site_id)  # Log the write.
+            logger.info("Support package written for site %s", site_id)  # Log the write.
