@@ -8,14 +8,30 @@
 
 Add one project skill at `.github/skills/hardening-junos/`.
 The skill holds a router file, four Markdown references, and one index file.
-The total size is 400 KB or less.
+The total size is 400 KB or less. The shipped index holds 78 rows at 6.9 KB.
 
 The skill answers a hardening question with a control, a Junos command, a reason, and a
 citation. The curated references hold the answers. The index holds the location of each
-source document. The converted corpus of 744 MB stays outside the repository.
+source document. The converted corpus stays outside the repository. The rebuild writes the committed
+`pdfplumber` output to `markdown2/`.
 
 A person measured every number in this plan on 2026-09-16.
 The `Verified claims` section gives the command for each number.
+
+
+## Correction record for 2026-09-16
+
+This section records values that changed after the first plan.
+Do not use the old values as targets.
+
+| Subject | Old claim | Shipped value | Measurement that replaces it |
+| - | - | - | - |
+| Index row count | 775 rows and 70.0 KB | 78 rows and 6.9 KB | The old file-name rule returned 738 rows across all Juniper products. Only 43 rows named a Junos train. The shipped rule selects the Junos device archive first, then the document. It returns 78 rows. |
+| Junos relevance | 43 train rows from the old set, which is 6 percent | 46 train rows from the shipped set, which is 59 percent | The corpus holds 315 unique Junos device documents after deduplication. Of those documents, 78 carry a security subject. |
+| Converter source | The staged corpus came from PyMuPDF | The committed converter uses `pdfplumber`, and the rebuild writes `markdown2/` | PyMuPDF carries the GNU Affero GPL 3.0. The project pushes a container image to `ghcr.io`, so the repository uses the MIT `pdfplumber` package. |
+| Rebuild speed | 2.0 and 3.5 pages for each second, which implied about 18 minutes | 2.0 and 3.5 pages for each second on real documents | A full rebuild of 511,674 pages takes about 2 hours with 26 workers. The first 12 page sample was 6 to 10 times optimistic. |
+| Heading rule | The most common font size was the body size | The tallest size with at least 10 percent of the characters is the body size | `subscriber-mgmt-sessions.pdf` train 26.2 has a 54 to 46 split between 9 point text and 10 point text. The old rule selected 9 points and marked 46.4 percent of text as headings. |
+| Test proof | 17 tests passed | 18 tests pass, and injected defects fail | A 2 page injected sample fails 5 tests. A line weighted histogram fails `test_body_size_survives_a_bimodal_document`. |
 
 ## Technical Context
 
@@ -40,8 +56,8 @@ An agent reads 12 KB before it selects a reference.
 in each folder. No Juniper PDF file enters the repository. No bulk Juniper text enters the
 repository.
 
-**Scale/Scope**: 6 skill files, 67 baseline controls, 181 STIG rules, and 775 index rows.
-The index covers 141,372 pages of source material.
+**Scale/Scope**: 6 skill files, 67 baseline controls, 181 STIG rules, and 78 index rows.
+The shipped index covers 315 unique Junos device documents after deduplication.
 
 ## Constitution Check
 
@@ -115,10 +131,10 @@ rows, controls, or rules.
 | `SKILL.md` | 12 KB | 11 KB | 8 routing rows | Front matter, routing table, safety rules, and the answer contract. |
 | `references/baseline-controls.md` | 85 KB | 62 KB | 67 controls | One entry for each checklist item, with the Junos command, the reason, the risk, the recovery step, and the citation. |
 | `references/stig-rules.md` | 60 KB | 50 KB | 181 rules | One condensed row for each DISA rule, plus the map to the 8 checklist sections. |
-| `references/corpus-index.csv` | 85 KB | 70.0 KB | 775 rows | The document index. The `contracts/corpus-index.md` file holds its schema. |
+| `references/corpus-index.csv` | 85 KB | 6.9 KB | 78 rows | The document index. The `contracts/corpus-index.md` file holds its schema. |
 | `references/corpus-operations.md` | 60 KB | 51 KB | 165 archive codes | The corpus root setting, the search procedure, the refresh procedure, the deduplication rule, the acceptance rules, the gap register, and the archive table of 28.8 KB with a public URL for each archive. |
 | `references/verification.md` | 25 KB | 18 KB | 13 checks | The evidence commands and the acceptance scenarios. |
-| **Total** | **327 KB** | **262 KB** | | The limit is 400 KB. |
+| **Total** | **327 KB** | **198.9 KB or less** | | The limit is 400 KB. |
 
 The budget leaves 73 KB of headroom. The largest file stays below the 90 KB limit in FR-006.
 The skill holds 6 files, which meets the limit of 10 files in FR-005.
@@ -130,38 +146,37 @@ release-note fragment. Section 7 covers the first three.
 
 ## 2. The index format
 
-The index is one CSV file with a header row and 775 data rows.
-The chosen column set measures **70.0 KB**. The archive table adds 28.8 KB in
-`corpus-operations.md`, which gives 98.8 KB in total.
+The index is one CSV file with a header row and 78 data rows.
+The shipped file measures **6.9 KB**. The contract in `contracts/corpus-index.md`
+sets invariant I1 to 78 rows and 8 columns.
+
+### Correction on 2026-09-16
+
+The first plan selected documents by matching each file name against the term list across all
+4,006 converted documents. That rule returned 738 rows. Only 43 of those rows named a Junos
+train, which is 6 percent. Most rows named another product, such as `SRC-DOC-CD`, Contrail,
+or Anuta ATOM.
+
+The shipped rule selects the Junos device archive first, then selects each security document.
+The corpus holds 315 unique Junos device documents after deduplication. Of those documents,
+78 carry a security subject. The shipped index gives 46 rows with a train, which is 59
+percent. All 8 topic groups hold at least one row.
+
+The old claim was 775 rows at 70.0 KB. The new value is 78 rows at 6.9 KB. The replacement
+measurement is the 14 check suite. It proves that each row resolves to both a Markdown file
+and a source PDF.
 
 ### Measured variants
 
-A person built a catalog from the front matter of all 4,006 converted documents. A person then
-measured the CSV size of each variant. The first 5 rows use CRLF line endings. The last 3 rows
-use LF line endings, which the contract requires. LF saves 1 byte for each row.
+A person measured these variants before delivery. The table keeps the old results as rejected
+measurements, because they explain why the shipped rule changed.
 
 | Variant | Rows | Columns | Size | Verdict |
 | - | - | - | - | - |
-| All documents, all 9 catalog columns | 4,006 | 9 | 1,202 KB | 3.0 times the whole budget |
-| All documents, slim columns | 4,006 | 4 | 593 KB | 1.5 times the whole budget |
-| Security subset, all 9 catalog columns | 718 | 9 | 224 KB | It fits, but it leaves 176 KB |
-| Security subset, slim columns | 718 | 4 | 111 KB | It fits, and it leaves 289 KB |
-| Security subset, lean columns | 718 | 3 | 109 KB | The third column saves only 2 KB |
-| **Chosen: 775 rows with an archive code** | **775** | **8** | **70.0 KB** | **Selected** |
-| The chosen set with a full `markdown_path` | 775 | 8 | 145.4 KB | Above the 90 KB file limit |
-| The chosen set with an untruncated title | 775 | 8 | 70.6 KB | The cut to 70 characters saves 0.6 KB |
-
-The slim column set is `title`, `train`, `pages`, and `markdown_path`. The lean column set
-drops `pages`.
-
-The measurement confirms Decision 1 of the specification. The full set of 4,006 documents does
-not fit. Even the slim column set at 593 KB is larger than the whole budget, before the router
-file and the reference files count against it. The security subset is the only scope that
-fits.
-
-The chosen set beats the lean variant by 39 KB. It also carries 57 more rows and 5 more
-columns. The `markdown_path` column causes the difference. A full path costs 145.4 KB for 775
-rows, because the average directory is 53 characters and the longest is 76 characters.
+| All converted documents, all 9 catalog columns | 4,006 | 9 | 1,202 KB | Rejected. It is 3.0 times the whole budget. |
+| Old file-name term rule across all products | 738 | 8 | Not shipped | Rejected. Only 43 rows named a Junos train. |
+| Old selected set with an archive code | 775 | 8 | 70.0 KB | Rejected. It sent readers to many non-Junos guides. |
+| Shipped Junos security set | 78 | 8 | 6.9 KB | Selected. It fits the skill and stays on topic. |
 
 ### Columns
 
@@ -172,48 +187,23 @@ rows, because the average directory is 53 characters and the longest is 76 chara
 | `group` | `G1` to `G8` | `G6` | The topic group. The 8 groups match the 8 sections of the committed checklist. |
 | `train` | Text | `26.2` or `-` | The Junos train. The value is `-` when the archive is not a train archive. |
 | `pages` | Integer | `1154` | The page count of the source PDF. |
-| `archive` | `A001` to `A165` | `A006` | The archive code. The code table in `corpus-operations.md` gives the directory. |
-| `origin` | `f`, `t`, or `e` | `t` | The reason that the row is in the index. |
+| `archive` | Text | `A006` | The archive code. The code table gives the directory. |
+| `origin` | Text | `t` | The reason that the row is in the index. |
 | `gap` | `-`, `c`, or `s` | `-` | The gap flag. The gap register gives the detail. |
 
-A reader builds the two paths from the row. The rule holds for all 775 rows.
+A reader builds the two paths from the row.
 
 - The PDF path is `<archive>/<file>.pdf`.
-- The Markdown path is `markdown/<archive>/<file>.md`.
+- The Markdown path is `markdown2/<archive>/<file>.md` for the rebuilt corpus.
 
 Both paths are relative to the corpus root, as FR-017 requires. The index holds no absolute
 path.
 
-### Row count and membership
+### Why the shorter index is safer
 
-A row enters the index when the document passes one of three rules and also passes the
-quality floor.
-
-| Rule | Code | Rows | Definition |
-| - | - | - | - |
-| Security flag | `f` | 710 | The corpus catalog marks the document as security relevant. |
-| Term match | `t` | 38 | The file name holds one of the 28 terms in FR-007, and the flag is absent. |
-| Checklist need | `e` | 27 | A named document that a checklist section needs. The term rule misses it. |
-| **Total** | | **775** | |
-
-The quality floor removes 8 documents. Each removed document gives less than 200 characters
-for each page, which FR-027 forbids. The index records no row for them.
-
-The checklist need rule is new. The plan adds it, because measurement shows that the term
-rule alone misses the primary Junos source for 6 of the 8 checklist sections. The
-`Decision 2` entry in `research.md` holds the evidence.
-
-### Why the archive table is separate
-
-The 775 rows hold only 165 distinct directories. A measured run gives 145.4 KB with a full
-`markdown_path` column and 70.0 KB with a 4-character code. The code therefore saves 75.4 KB
-and keeps the file below the 90 KB limit in FR-006. The Five-Item Rule also forbids a sixth
-file in `references/`.
-
-The table costs 28.8 KB, because it carries a fourth column. That column holds the public URL
-of each archive, which follows the citation rule in section 3a. A measured run shows that 162
-of the 165 archives have a URL in `selection-inventory.csv`. The 3 archives without a URL are
-the bundles that a person added by hand.
+A short Junos index is safer than a large mixed index. A junior engineer must not receive an
+Anuta ATOM or legacy SRC guide for a Junos hardening question. The shipped index is smaller
+because it removes those products before it applies the security subject rule.
 
 ## 3. The source of each reference file
 
@@ -229,8 +219,8 @@ receive it, and a new worktree does not receive it. A measured test in this work
 | - | - | - |
 | `baseline-controls.md` | The Juniper hardening checklist poster, at <https://www.juniper.net/assets/kr/kr/local/pdf/books/tw-hardening-junos-devices-checklist.pdf>, for the 67 items and the 8 sections. The corpus copy is `extracted/TW_HardeningJunosDevices_2ndEd/TW_HardeningJunosDevices_2ndEd_Checklist.pdf`. `extracted/TW_HardeningJunosDevices_2ndEd/TW_HardeningJunosDevices_2ndEd.pdf` gives the reason of each control, at 152 pages. `AppendixB_MediumSecuritySampleConfig.rtf` gives the sample configuration. | An author writes one entry for each of the 67 items. The author confirms each Junos command against the newest train document in the table below. The author writes the command, not a copy of the book text. |
 | `stig-rules.md` | The 3 XCCDF files in `extracted/U_Juniper_EX_Switches_Y26M07_STIG/`. The public download page is <https://public.cyber.mil/stigs/>. | A parser reads the `Rule` elements. It writes the identifier, the severity, the title, a one-line check, and a one-line fix. The full rule text stays in the XCCDF file. |
-| `corpus-index.csv` | The front matter of each file under `markdown/`, and `markdown/_conversion-manifest.json`. | A build applies the 3 membership rules and the quality floor. It writes 775 rows. |
-| `corpus-operations.md` | `extraction-report.json`, `selection-inventory.csv`, and `markdown/_conversion-manifest.json`. | The author writes the procedures. The author copies no document text. The archive table carries the public URL of each archive. |
+| `corpus-index.csv` | The front matter of each file under `markdown2/`, and `markdown2/_conversion-manifest.json`. | A build applies the Junos archive rule and the quality floor. It writes 78 rows. |
+| `corpus-operations.md` | `extraction-report.json`, `selection-inventory.csv`, and `markdown2/_conversion-manifest.json`. | The author writes the procedures. The author copies no document text. The archive table carries the public URL of each archive. |
 | `verification.md` | This plan and `quickstart.md`. | The author writes the commands and the expected results. |
 
 ## 3a. The citation rule
@@ -290,10 +280,10 @@ The tasks phase must not report success until every check passes.
 | V2. Total size | `'{0:N0} KB' -f ((Get-ChildItem .github/skills/hardening-junos -Recurse -File \| Measure-Object Length -Sum).Sum / 1KB)` | 400 KB or less. |
 | V3. File count and file size | `Get-ChildItem .github/skills/hardening-junos -Recurse -File \| Select-Object Name, Length` | 6 files. Each file is 90 KB or less. |
 | V4. Folder width | `Get-ChildItem .github/skills/hardening-junos/references \| Measure-Object` | 5 children or less. |
-| V5. Index shape | A `csv.DictReader` count of rows and columns | 775 rows and 8 columns. |
+| V5. Index shape | A `csv.DictReader` count of rows and columns | 78 rows and 8 columns. |
 | V6. No absolute path | `Select-String -Path .github/skills/hardening-junos/references/corpus-index.csv -Pattern '[A-Za-z]:\\\|^/'` | No match. |
 | V7. Citation resolution | A script that joins 50 sampled rows to the corpus root and tests each path | 50 of 50 paths exist. 0 broken paths. |
-| V8. Index and manifest agreement | A script that compares each index row against `markdown/_conversion-manifest.json` | 0 missing files. 0 status mismatches. |
+| V8. Index and manifest agreement | A script that compares each index row against `markdown2/_conversion-manifest.json` | 0 missing files. 0 status mismatches. |
 | V9. STIG coverage | A count of distinct rule identifiers in `stig-rules.md` | 181 identifiers. 25 high, 122 medium, and 34 low. |
 | V10. Checklist coverage | A count of control identifiers in `baseline-controls.md` | 67 controls in 8 sections. Each control holds one citation. |
 | V11. Corpus absent | Set the corpus root to a folder that does not exist. Ask 5 hardening questions. | 5 answers. Each answer states that the corpus is absent. 0 failures. |
@@ -352,7 +342,7 @@ The repository never receives these items.
 | `markdown/` | 744 MB in 4,007 files | The corpus root |
 | `extracted/` | 30,751 files, with 9,337 PDF files | The corpus root |
 | `archives/` | 324 compressed originals | The corpus root |
-| The provenance records | `manifest.json`, `selection-inventory.csv`, `extraction-report.json`, `corpus-catalog.csv`, `corpus-catalog.json`, and `markdown/_conversion-manifest.json` | The corpus root |
+| The provenance records | `manifest.json`, `selection-inventory.csv`, `extraction-report.json`, `corpus-catalog.csv`, `corpus-catalog.json`, and `markdown2/_conversion-manifest.json` | The corpus root |
 | The crawler and the catalog builder | Not measured | A temporary folder. The spec puts them out of scope. The procedures below replace them. |
 
 The corpus root is a setting. The default value is
@@ -364,7 +354,7 @@ and how to change it. A `.gitignore` rule guards against an accidental commit.
 The catalog builder is a throwaway script. The repository does not hold it, and it does not
 need to. The converter is a different case, because `scripts/pdf_to_markdown.py` is committed
 and section 7 covers it. `corpus-operations.md` therefore states the index procedure, and the
-procedure needs no script. The input is the YAML front matter of each file under `markdown/`.
+procedure needs no script. The input is the YAML front matter of each file under `markdown2/`.
 
 The front matter holds 7 fields at most. It holds `source_file` and `pages` in every file. It
 holds `title`, `author`, `subject`, `creationDate`, and `modDate` when the PDF metadata gives
@@ -384,7 +374,7 @@ from the path and from the file name.
 
 Steps:
 
-1. Read the front matter of each file under `markdown/`. The corpus holds 4,006 files.
+1. Read the front matter of each file under `markdown2/`. The corpus holds 4,006 files.
 2. Count the characters of each file. Divide by `pages`. Drop a document below 200 characters
    for each page. A measured run drops 8 documents from the subset.
 3. Apply the 3 membership rules. The result is 775 documents.
@@ -440,7 +430,7 @@ to reproduce the data, and it leaves the `.gitignore` promise false. The plan re
 | Bullets | A glyph becomes a Markdown list item | Unchanged | A glyph becomes a list item |
 | Running header and page number | Removed | Kept | Removed |
 | Ligature and curly quotation mark | Normalized | Unchanged | Normalized |
-| Throughput | 88.8 to 109.4 pages for each second | One file at a time, in one process | 18.0 to 21.6 pages for each second, across a worker pool |
+| Throughput | 88.8 to 109.4 pages for each second | One file at a time, in one process | 2.0 and 3.5 pages for each second, across a worker pool |
 
 A measurement of 400 staged files gives the field frequency of the front matter. `source_file`
 and `pages` appear in 100 percent of the files. `creationDate` appears in 98.8 percent,
@@ -472,7 +462,7 @@ holds the measurement and the reasons.
 
 | Library | License | Font size access | Measured speed | Verdict |
 | - | - | - | - | - |
-| pdfplumber 0.11.10 | MIT, and `pyproject.toml` already declares it | Yes, through the `size` key of each `char` object | 18.0 to 21.6 pages for each second | Selected |
+| pdfplumber 0.11.10 | MIT, and `pyproject.toml` already declares it | Yes, through the `size` key of each `char` object | 2.0 and 3.5 pages for each second | Selected |
 | PyMuPDF 1.28.2 | Dual Licensed, GNU Affero GPL 3.0 or an Artifex commercial license | Yes | 88.8 to 109.4 pages for each second | Rejected. The container image is a distribution. |
 | pypdf 6.16.2 | BSD | No | Not measured | It cannot detect a heading. |
 
@@ -480,8 +470,8 @@ The selection adds no new dependency. It also removes the license risk, because
 `.github/workflows/container-build.yml` sets `REGISTRY: ghcr.io` and `push: true`. A push to a
 public registry is distribution, which is the condition that the AGPL acts on.
 
-The cost is about 13 minutes. A full rebuild of 511,674 pages across 26 workers takes about
-0.3 hours with `pdfplumber`, against about 5 minutes with PyMuPDF. A reader runs the rebuild
+The cost is about 2 hours. A full rebuild of 511,674 pages across 26 workers takes about 2 hours with
+`pdfplumber`, against about 5 minutes with PyMuPDF. A reader runs the rebuild
 once.
 
 ### Two readers, one honest statement
@@ -491,20 +481,51 @@ nothing, and it carries no license problem. It matches the way the repository ge
 `data/ste_dictionary.json` locally and never commits it.
 
 The committed converter uses `pdfplumber`. The two readers do not agree byte for byte. Check
-V15 therefore tests the structural contract, not the bytes. When the converter lands, the
-converter task rebuilds the corpus with `pdfplumber`, so that one reader produces all of it.
+V15 therefore tests the structural contract, not the bytes. The converter task rebuilds the corpus with `pdfplumber` into `markdown2/`,
+so that one reader produces all of it.
 
 The rebuild can move a row across the quality floor, because a different reader gives a
 different character count. A measurement of the character density shows 8 documents between
-200 and 250 characters for each page, and 3 documents between 150 and 200. Up to 11 rows of
-775 can move, which is 1.4 percent. The tasks phase measures the row count again after the
-rebuild.
+200 and 250 characters for each page, and 3 documents between 150 and 200. The rebuild now gives 78 rows. The tasks phase recorded that final row count.
 
 ### Gates
 
 The converter adds the 5 Python gates to the verification list. Check V14 gives the commands
 for Ruff, Black, mypy, Bandit, and pytest. Check V15 proves that the output of 30 sample
 documents satisfies the structural contract.
+
+## 7a. The heading rule correction
+
+The old heading rule used the most common font size as the body size. That rule fails when a
+document has two text populations with similar line counts.
+
+Measured on `subscriber-mgmt-sessions.pdf`:
+
+| Train | Lines at 9 points | Lines at 10 points | Size chosen | Heading share |
+| - | - | - | - | - |
+| 21.1 | 32,748 | 55,633 | 10.0, correct | 5.8 percent |
+| 26.2 | 43,666 | 36,491 | 9.0, wrong | 46.4 percent |
+
+The 54 to 46 split flips the old choice. The threshold falls, and body text becomes a
+heading. The converter raises no error, and the file size changes little.
+
+The shipped rule takes the tallest size that carries 10 percent or more of the characters,
+counted over every page. The same document then gives 8.7 percent headings. Across 1,855
+rebuilt documents, the median heading share is 4.4 percent by character. The earlier corpus
+had a median of 32.7 percent, and 1,456 of 2,106 documents broke the 25 percent ceiling.
+
+Two documents remain near 26 percent: `bgp.md` and `is-is.md`. Both read their body size
+correctly at 10.0 points. The density is real reference book structure, not a reading fault.
+
+## 7b. The test proof correction
+
+The old test suite had 17 tests. Those tests passed against both forbidden defects. Each
+fixture repeated one sentence, so the running header rule deleted all body text before the
+heading share was measured. The assertions stayed pinned at one sixth of the body size.
+
+The repaired suite has 18 tests. An injected 2 page sample fails 5 tests, including
+`test_body_size_uses_every_page`. An injected line weighted histogram fails
+`test_body_size_survives_a_bimodal_document`. This proves that the guard can fail.
 
 ## Verified claims
 
@@ -514,24 +535,24 @@ A person ran each command on 2026-09-16 in the worktree at
 | Claim | Evidence command | Result |
 | - | - | - |
 | The corpus holds 4,007 converted Markdown files. | `(Get-ChildItem -Recurse -File -Filter *.md "<root>\markdown").Count` | `4007` |
-| The conversion covered 511,674 pages. | Read `pages` in `markdown/_conversion-manifest.json` | `511674` |
+| The conversion covered 511,674 pages. | Read `pages` in `markdown2/_conversion-manifest.json` | `511674` |
 | The conversion reports 4,004 converted and 3 skipped. | Read `status_counts` in the same file | `{'skipped': 3, 'converted': 4004}` |
 | The deduplication skipped 5,330 duplicate copies. | Read `selection` in the same file | `duplicates_skipped: 5330` |
 | A catalog of 4,006 rows exists at the corpus root. | `csv.DictReader` count of `corpus-catalog.csv` | `4006` rows and 9 columns |
 | The catalog marks 718 documents as security relevant. | Count rows where `security` is `True` | `718` |
 | The FR-007 term rule matches 734 file names. | Substring test of the 28 terms | `734` |
-| The union of both rules gives 756 documents and 181.0 MB. | Union count and a sum of the `kb` column | `756` and `181.0 MB` |
+| The old union of both rules gave 756 documents and 181.0 MB. | Union count and a sum of the `kb` column | Rejected for the shipped index |
 | 8 selected documents fall below the character floor. | `chars / pages < 200` from the conversion manifest | `8` |
-| The index holds 775 rows after the floor and the checklist need rule. | The full membership rule | `775` rows, 710 flag, 38 term, 27 checklist |
-| The index costs 70.0 KB and needs 165 archive codes. | Write the rows to a buffer and measure the length | `70.0 KB` and `165` codes |
+| The index holds 78 rows after the Junos archive rule. | The shipped membership rule | `78` rows at 6.9 KB |
+| The index costs 6.9 KB. | Write the rows to a buffer and measure the length | `6.9 KB` |
 | An index of all 4,006 documents does not fit. | Measure the 9 column set and the slim column set | `1,202 KB` and `593 KB`, against a budget of 400 KB |
 | The security subset fits in the budget. | Measure the 9 column set and the slim column set for 718 rows | `224 KB` and `111 KB` |
-| The archive code saves 75.4 KB. | Measure the chosen column set with a full `markdown_path` | `145.4 KB` against `70.0 KB` |
-| The cut of the title to 70 characters saves 0.6 KB. | Measure the chosen column set with a full title | `70.6 KB` against `70.0 KB` |
-| LF line endings save 0.8 KB. | Measure the chosen column set with CRLF | `70.8 KB` against `70.0 KB` |
+| The archive code keeps the shipped index small. | Measure the shipped CSV | `6.9 KB` |
+| The title cut remains part of the index rule. | Read the column contract | `title` is 70 characters or less |
+| LF line endings remain required. | Read the column contract | LF line endings |
 | The archive table costs 28.8 KB with the URL column. | Write the 165 rows as a Markdown table, with and without the URL | `11.1 KB` for 3 columns and `28.8 KB` for 4 columns |
-| The path rule holds for every selected row. | Compare `markdown_path` against `markdown/` plus the PDF path | `0` failures |
-| Only 48 index rows carry a Junos train. | Count rows where `train` is not empty | `48` of `775` |
+| The path rule holds for every selected row. | Compare `markdown_path` against `markdown2/` plus the PDF path | `0` failures |
+| 46 index rows carry a Junos train. | Count rows where `train` is not empty | `46` of `78` |
 | The STIG bundle holds 181 rules. | Count `Rule` elements in the 3 XCCDF files | `24` plus `55` plus `102` |
 | The STIG severity split is 25 high, 122 medium, and 34 low. | Read the `severity` attribute of each rule | `{'high': 25, 'medium': 122, 'low': 34}` |
 | The full STIG rule text is 485 KB. | Sum the title, check, and fix text length | `485.0 KB`, which is more than the whole budget |
@@ -556,11 +577,11 @@ A person ran each command on 2026-09-16 in the worktree at
 | The container workflow distributes the image. | Read `.github/workflows/container-build.yml` | `REGISTRY: ghcr.io` and `push: true` |
 | `pyproject.toml` already declares pdfplumber. | Search `pyproject.toml` | `"pdfplumber>=0.11.0"` |
 | pdfplumber gives the font size that the heading rule needs. | Read the `size` key of each `char` object across 12 pages of `pki.pdf` | The sizes `9.0, 10.0, 10.3, 11.0, 12.9, 14.0, 20.0, 26.0, 30.0`. **Superseded on 2026-09-16.** That 12 page sample gives a modal size of `9.0`, which is the front matter size. The whole 168 page document gives `10.0`, which is the body size. Research Decision 15 holds the correction. |
-| pdfplumber is about 5 times slower. | Time both readers over the same 12 pages | `18.0` against `88.8` pages for each second. A second run gave `21.6` against `109.4`. |
+| pdfplumber is slower on real documents than the first sample showed. | Time 2 real documents | `2.0` and `3.5` pages for each second. The first 12 page sample was 6 to 10 times optimistic. |
 | Only 2 front matter fields are always present. | Read the front matter of a 400 file sample | `source_file` and `pages` at 100 percent. `title` at 87.8 percent. `author` at 68.0 percent. `subject` at 11.2 percent. |
-| Up to 11 index rows can move across the quality floor. | Band the character density of the selection | `8` documents between 200 and 250, and `3` between 150 and 200 |
-| The staged conversion ran at about 1,612 pages for each second. | Divide `pages` by `seconds` in the conversion manifest | `511674 / 317.4`, across 26 workers |
-| No test covers the converter today. | Search `tests/` for a converter test | `0` files, against 23 test files in the folder |
+| The shipped rebuild fixed the index count. | Count the shipped CSV rows | `78` rows |
+| The committed converter rebuild takes about 2 hours. | Time real documents and extrapolate 511,674 pages across 26 workers | `2.0` and `3.5` pages for each second on real documents |
+| The repaired converter suite proves the guard can fail. | Inject both forbidden defects | 18 tests pass. The injected 2 page sample fails 5 tests. The injected bimodal histogram fails 1 test. |
 | 162 of the 165 archives have a public URL. | Join the archive list to `selection-inventory.csv` | `162` of `165`. The archive table costs 28.8 KB. |
 | The repository runs 5 Python gates. | Read `documentation/quality-gates.md` | Ruff, Black, mypy, pytest with 80 percent coverage, and Bandit |
 
@@ -574,8 +595,8 @@ tasks phase must update the specification counts or record an accepted variance.
 
 | Item | Specification | Measured | Action |
 | - | - | - | - |
-| Security relevant documents | 757 (FR-019, SC-009) | 756 by the same union rule. The catalog holds 4,006 rows, because one document has no catalog row. | Use 775 index rows, which adds the 27 checklist need documents and removes 8 low quality documents. Record the change in the specification. |
-| Security subset file count | 743 files and 181 MB | 756 files and 181.0 MB | Record the measured value. |
+| Security relevant documents | 757 (FR-019, SC-009) | 78 shipped index rows. The old broad rule returned mostly non-Junos documents. | Use 78 index rows, which selects the Junos device archive before the security subject. Record the change in the specification. |
+| Security subset file count | 743 files and 181 MB | 78 shipped index rows at 6.9 KB | Record the shipped value. |
 | Front matter fields | 8 fields, including `train`, `sha256`, `converter_version`, `converted_at`, and `status` (FR-025) | 7 fields, without those 5 | The index carries `train`, `pages`, and the gap flag. `corpus-operations.md` states the front matter contract for the next conversion run. A re-conversion of 4,007 files is out of scope. |
 | Skipped documents | 3 documents that the conversion skipped (FR-048) | All 3 hold readable Markdown and a correct page count. The `skipped` status means that the output already existed. | Record all 3 in the gap register with the state `converted earlier`. |
 | Fallback trains | Trains 21.1 to 24.4 hold a valid copy (FR-046) | The extraction report states 21.1 to 24.2 in one field and 21.1 to 24.4 in another. The catalog took one document from 24.2 and the other from 24.4. | Record the fallback train for each document, not one range for both. |
@@ -594,12 +615,12 @@ tasks phase must update the specification counts or record an accepted variance.
 | The STIG bundle covers the EX switch. | A reader can apply a rule to an MX or SRX device without a test. | `stig-rules.md` states the platform limit in its first paragraph. |
 | The converter upgrade adds Python code to the deliverable. | The 5 Python gates now apply, and the work grows. | Section 7 states the scope, the gates, and the library. The skill folder still holds documentation only. |
 | The staged corpus and the committed converter use two different readers. | The output does not match byte for byte. | Check V15 tests the structural contract. The converter task rebuilds the corpus with `pdfplumber` after the gates pass. |
-| A different reader gives a different character count. | A document can cross the 200 character floor in either direction. | A measurement finds 8 documents between 200 and 250, and 3 between 150 and 200. Up to 11 rows of 775 can move. The tasks phase measures the row count again after the rebuild. |
+| A different reader gives a different character count. | A document can cross the 200 character floor in either direction. | The shipped rebuild gives 78 rows. The tasks phase recorded that final count. |
 
 ## Complexity Tracking
 
 | Violation | Why needed | Simpler alternative rejected because |
 | - | - | - |
 | `.github/skills/` grows from 5 children to 6 children, which breaks the Five-Item Rule. | The agent runtime discovers a skill at `.github/skills/<name>/SKILL.md`. A skill must be a direct child of that folder. | A nested folder, such as `.github/skills/network/hardening-junos/`, hides the skill from discovery. A merge into `managing-mist-api` mixes two domains and breaks the 90 KB file limit. The remediation action is a separate issue that groups the 6 skills after the runtime supports a nested path. |
-| The skill ships one CSV file, and the writing gate cannot grade it. | 775 rows in a Markdown table cost about 85 KB and approach the 90 KB file limit. The CSV costs 70.0 KB. | A Markdown table is larger and slower to parse. The CSV holds no authored prose, so checks V5 to V8 replace the writing gate for that file. |
+| The skill ships one CSV file, and the writing gate cannot grade it. | 78 rows in the CSV cost 6.9 KB and stay below the 90 KB file limit. | A Markdown table is larger and slower to parse. The CSV holds no authored prose, so checks V5 to V8 replace the writing gate for that file. |
 | The feature folder `specs/2754-hardening-junos-skill/` holds 8 children. | The SpecKit template sets the layout. Every other feature folder in `specs/` uses the same names. | A nested folder breaks the SpecKit commands, which read `spec.md`, `plan.md`, and `tasks.md` at a fixed depth. This is established repository practice and grandfathered debt. |

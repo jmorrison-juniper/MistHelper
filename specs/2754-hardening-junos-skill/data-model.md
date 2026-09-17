@@ -11,7 +11,7 @@ entity is a row in a CSV file or an entry in a Markdown file.
 | - | - | - |
 | Skill | `.github/skills/hardening-junos/` | 1 |
 | Corpus root | A setting in `references/corpus-operations.md` | 1 |
-| Index entry | A row in `references/corpus-index.csv` | 775 against the staged corpus |
+| Index entry | A row in `references/corpus-index.csv` | 78 in the shipped index |
 | Archive code | A row in the code table in `references/corpus-operations.md` | 165 |
 | Topic group | A section in `references/baseline-controls.md` | 8 |
 | Baseline control | An entry in `references/baseline-controls.md` | 67 |
@@ -29,8 +29,8 @@ The skill is the folder and its files.
 | Router file | `SKILL.md` | 12 KB or less, from FR-002. |
 | Reference folder | `references/` | 5 children or less, from the Five-Item Rule. |
 | File count | 6 | 10 or less, from FR-005. |
-| Total size | 262 KB expected | 400 KB or less, from FR-005. |
-| Largest file | `corpus-index.csv`, 70.0 KB | 90 KB or less, from FR-006. |
+| Total size | Less than 400 KB | 400 KB or less, from FR-005. |
+| Largest file | `corpus-index.csv`, 6.9 KB | 90 KB or less, from FR-006. |
 | Snapshot date | `2026-09-16` | Each file states it, from FR-053. |
 
 ## Corpus root
@@ -39,8 +39,8 @@ The skill is the folder and its files.
 | - | - | - |
 | Default value | `C:\Users\jmorrison\Downloads\juniper-doc-archives` | FR-016 sets the default. |
 | State | `present` or `absent` | The skill tests one known path. |
-| Child folders | `markdown/`, `extracted/`, `archives/` | The rebuild procedure recreates them. |
-| Provenance files | `manifest.json`, `selection-inventory.csv`, `extraction-report.json`, `corpus-catalog.csv`, `corpus-catalog.json`, `markdown/_conversion-manifest.json` | They stay outside the repository. |
+| Child folders | `markdown2/`, `extracted/`, `archives/` | The rebuild procedure recreates them. |
+| Provenance files | `manifest.json`, `selection-inventory.csv`, `extraction-report.json`, `corpus-catalog.csv`, `corpus-catalog.json`, `markdown2/_conversion-manifest.json` | They stay outside the repository. |
 
 State behavior:
 
@@ -57,7 +57,7 @@ One row for one unique document. The `contracts/corpus-index.md` file holds the 
 | `file` | Text | `user-access` | The PDF file name without the extension. It is unique across the index. |
 | `title` | Text | `Junos OS User Access and Authentication User Guide` | 70 characters or less. The value comes from the PDF metadata. |
 | `group` | `G1` to `G8` | `G6` | Exactly one group, from FR-021. |
-| `train` | Text | `26.2` or `-` | A Junos train or `-`. 48 rows hold a train. |
+| `train` | Text | `26.2` or `-` | A Junos train or `-`. 46 rows hold a train. |
 | `pages` | Integer | `1154` | 1 or more. The value must match the conversion manifest. |
 | `archive` | `A001` to `A165` | `A006` | The code must exist in the code table. |
 | `origin` | `f`, `t`, or `e` | `t` | The membership rule that admitted the row. |
@@ -69,7 +69,7 @@ Rules:
 - The index holds no absolute path, from FR-017.
 - A document below 200 characters for each page does not enter the index, from FR-027.
 - The PDF path is `<archive>/<file>.pdf`.
-- The Markdown path is `markdown/<archive>/<file>.md`.
+- The Markdown path is `markdown2/<archive>/<file>.md`.
 
 ## Archive code
 
@@ -100,7 +100,7 @@ The 8 groups match the 8 sections of the committed checklist.
 | `G8` | Firewall filter | 6 | About 32 |
 
 The group rule reads the file name first. It reads the title second. It assigns `G1` when
-neither text matches. A measured run assigned 3 rows by the default. The item counts sum to
+neither text matches. A measured run confirms that each group holds at least one row. The item counts sum to
 67.
 
 ## Baseline control

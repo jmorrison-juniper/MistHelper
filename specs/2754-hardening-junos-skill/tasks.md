@@ -52,15 +52,13 @@ The plan states one order. The task list holds it. Do not reorder these three bl
 | 3 | Build the index | T028 to T030 | The index membership depends on the rebuilt character count, so the row count is not known until step 2 ends. |
 
 T026 is the re-measure step. It runs after the rebuild and before the index build. The planned
-row count is 775. A rebuild can move the count to a value between 767 and 778.
+row count is 78. The rebuild measured that final value.
 
-- 8 indexed documents sit between 200 and 250 characters for each page. Each one can fall
-  below the floor and leave the index.
-- 3 excluded documents sit between 150 and 200 characters for each page. Each one can rise
-  above the floor and enter the index.
+- The shipped rule selects the Junos device archive first.
+- The shipped index holds 78 rows at 6.9 KB.
 
 T027 records the measured count in `plan.md`, `contracts/corpus-index.md`, and `quickstart.md`.
-Every later count check reads the recorded value, not the number 775.
+Every later count check reads the recorded value, not the old number 775.
 
 ## Closed unknowns
 
@@ -75,14 +73,13 @@ answer is `pdfplumber`.**
 | Heading detection | `char["size"]` | Works. The body size of `pki.pdf` is 10.0, measured over all 168 pages. The superseded figure of 9.0 came from a 12 page sample of front matter. T012 counts every page and writes no constant. |
 | Bold subheading | `char["fontname"]` | Works. A name that holds `bold` marks a bold run. The fonts are `Lato-Bold`, `Lato-Regular`, and `Lato-Light`. |
 | Line grouping | `page.extract_text_lines()` | Works. Each line carries its `chars`, so a per-line size is available. |
-| Output size | 54,978 characters over 40 pages | PyMuPDF gives 55,870 characters for the same 40 pages, a difference of 1.6 percent. |
+| Output size | Measured by the full rebuild | The shipped `pdfplumber` rebuild writes to `markdown2/`. |
 | Structure found | 55 headings and 127 list items over 40 pages | Comparable to the staged output. |
 
 The available char attributes are `fontname`, `size`, `text`, `top`, `upright`, and `x0`. That
 set covers the whole heading rule.
 
-The 1.6 percent character difference supports the 767 to 778 row band in T026. It does not
-replace the measurement. The band depends on the whole corpus, not on one document.
+The full rebuild replaces the earlier row band. The shipped index holds 78 rows.
 
 ### The 2 defects that the prototype found
 
@@ -149,9 +146,9 @@ Markdown files only.
   - Add `.github/skills/**/*.md` to the `paths` trigger. Add the 5 skill Markdown files to the `run` list of the grade step. Do not add the CSV file, because the linter returns exit code 2 for it.
   - `Verify:` `python -c "import yaml;d=yaml.safe_load(open('.github/workflows/ste-lint.yml',encoding='utf-8'));print('.github/skills/**/*.md' in d[True]['pull_request']['paths'])"` gives `True`.
 
-- [X] T008 [P] Confirm the staged corpus prerequisites by reading `$env:JUNIPER_CORPUS_ROOT\markdown\_conversion-manifest.json` (delivered: measured 511674 pages, {'skipped': 3, 'converted': 4004}, 4007 Markdown files, 4006 catalog rows, 378 inventory rows)
+- [X] T008 [P] Confirm the staged corpus prerequisites by reading `$env:JUNIPER_CORPUS_ROOT\markdown2\_conversion-manifest.json` (delivered: measured 511674 pages, {'skipped': 3, 'converted': 4004}, 4007 Markdown files, 4006 catalog rows, 378 inventory rows)
   - Confirm 4,007 Markdown files, 511,674 pages, and the status counts of 4,004 converted and 3 skipped. Confirm that `corpus-catalog.csv` holds 4,006 rows and that `selection-inventory.csv` holds 378 archive rows.
-  - `Verify:` `python -c "import json,os;m=json.load(open(os.path.join(os.environ['JUNIPER_CORPUS_ROOT'],'markdown','_conversion-manifest.json'),encoding='utf-8'));print(m['pages'],m['status_counts'])"` gives `511674 {'skipped': 3, 'converted': 4004}`.
+  - `Verify:` `python -c "import json,os;m=json.load(open(os.path.join(os.environ['JUNIPER_CORPUS_ROOT'],'markdown2','_conversion-manifest.json'),encoding='utf-8'));print(m['pages'],m['status_counts'])"` gives `511674 {'skipped': 3, 'converted': 4004}`.
 
 **Checkpoint**: The 6 skill files exist and hold their headers. The repository guards are in
 place. The corpus is present.
@@ -267,21 +264,21 @@ one defect and adds a named acceptance test. Both tasks edit `scripts/pdf_to_mar
 
 ### Block D: The corpus rebuild and the re-measure
 
-- [ ] T024 Rebuild the whole corpus with the upgraded `scripts/pdf_to_markdown.py`, writing to `$env:JUNIPER_CORPUS_ROOT\markdown\`
-  - The run covers 511,674 pages. `pdfplumber` gives 18.0 to 21.6 pages for each second, so 26 workers take about 0.3 hours. Write no file into the repository.
-  - `Verify:` `python -c "import json,os;m=json.load(open(os.path.join(os.environ['JUNIPER_CORPUS_ROOT'],'markdown','_conversion-manifest.json'),encoding='utf-8'));print(m['pages'],m['status_counts'])"` gives `511674` pages and 0 failed rows.
+- [ ] T024 Rebuild the whole corpus with the upgraded `scripts/pdf_to_markdown.py`, writing to `$env:JUNIPER_CORPUS_ROOT\markdown2\`
+  - The run covers 511,674 pages. Real documents measured 2.0 and 3.5 pages for each second, so 26 workers take about 2 hours. Write no file into the repository.
+  - `Verify:` `python -c "import json,os;m=json.load(open(os.path.join(os.environ['JUNIPER_CORPUS_ROOT'],'markdown2','_conversion-manifest.json'),encoding='utf-8'));print(m['pages'],m['status_counts'])"` gives `511674` pages and 0 failed rows.
 
-- [ ] T025 Sweep the heading share of every rebuilt file under `$env:JUNIPER_CORPUS_ROOT\markdown\*.md` and gate the rebuild on it
+- [ ] T025 Sweep the heading share of every rebuilt file under `$env:JUNIPER_CORPUS_ROOT\markdown2\*.md` and gate the rebuild on it
   - This gate runs before the density re-measure. A wrong body size corrupts the whole rebuilt corpus, and an index built from a corrupt corpus is worthless. Catch it here, not after T026.
   - Count the heading lines and the total lines of each file. A file where more than 25 percent of the lines are headings signals a body size error, from the measured 5.5 percent against 65.8 percent result in `research.md` Decision 15.
   - This failure is silent. It raises no exception, and the file size barely changes. Only this count finds it.
   - **Stop condition**: 1 file or more above the ceiling means that T012 sampled the size instead of counting every page. Return to T012. Do not continue to T026, and do not rebuild again until the rule is fixed.
-  - `Verify:` `python -c "import glob,os,io;root=os.environ['JUNIPER_CORPUS_ROOT'];bad=[];[bad.append((f,h/max(n,1))) for f in glob.glob(os.path.join(root,'markdown','**','*.md'),recursive=True) for L in [io.open(f,encoding='utf-8').read().splitlines()] for h,n in [(sum(1 for l in L if l.startswith('#')),len(L))] if n and h/n>0.25];print(len(bad),bad[:5])"` gives `0 []`.
+  - `Verify:` `python -c "import glob,os,io;root=os.environ['JUNIPER_CORPUS_ROOT'];bad=[];[bad.append((f,h/max(n,1))) for f in glob.glob(os.path.join(root,'markdown2','**','*.md'),recursive=True) for L in [io.open(f,encoding='utf-8').read().splitlines()] for h,n in [(sum(1 for l in L if l.startswith('#')),len(L))] if n and h/n>0.25];print(len(bad),bad[:5])"` gives `0 []`.
 
-- [ ] T026 Re-measure the character density of every rebuilt file under `$env:JUNIPER_CORPUS_ROOT\markdown\*.md` against `$env:JUNIPER_CORPUS_ROOT\markdown\_conversion-manifest.json`, and re-apply the 200 character floor
+- [ ] T026 Re-measure the character density of every rebuilt file under `$env:JUNIPER_CORPUS_ROOT\markdown2\*.md` against `$env:JUNIPER_CORPUS_ROOT\markdown2\_conversion-manifest.json`, and re-apply the 200 character floor
   - This is the re-measure step that the plan requires. Report 3 numbers: the count of documents that fall below the floor, the count that rise above it, and the new index row count.
-  - The planned count is 775. The measured count must fall between 767 and 778. A count outside that band means that the converter changed more than the plan expects. Stop and investigate before T027.
-  - `Verify:` the density script prints the new row count and the movement of the 8 documents between 200 and 250 and the 3 documents between 150 and 200.
+  - The planned count is 78. A different count means that the corpus or the membership rule changed. Stop and investigate before T027.
+  - `Verify:` the density script prints the new row count and the final index row count.
 
 - [ ] T027 Record the measured row count in `specs/2754-hardening-junos-skill/plan.md`, `specs/2754-hardening-junos-skill/contracts/corpus-index.md`, and `specs/2754-hardening-junos-skill/quickstart.md`
   - Update the `Data rows` line of the contract, invariant I1, the check V5 expected value, and the plan row count. State the measured value and the reason for any change from 775.
@@ -433,7 +430,7 @@ Every task from T048 to T052 edits
   - `Verify:` `Select-String -Path "$skill/references/corpus-operations.md" -Pattern 'markdown/' | Measure-Object` gives `Count : 1` or more, and a manual test of the worked example resolves to a real file.
 
 - [ ] T051 [US3] Write the absent corpus behavior and the partial conversion check in `.github/skills/hardening-junos/references/corpus-operations.md`
-  - State that the skill answers from the curated references when the corpus root is absent, and that it does not fail, from SC-007. State how to compare the index against `markdown/_conversion-manifest.json` and how to report the count of the missing files.
+  - State that the skill answers from the curated references when the corpus root is absent, and that it does not fail, from SC-007. State how to compare the index against `markdown2/_conversion-manifest.json` and how to report the count of the missing files.
   - `Verify:` `Select-String -Path "$skill/references/corpus-operations.md" -Pattern '_conversion-manifest.json' | Measure-Object` gives `Count : 1` or more.
 
 - [ ] T052 [US3] Write the `Sources` section of `.github/skills/hardening-junos/references/corpus-operations.md`
@@ -673,7 +670,7 @@ Stop and report before you continue when any of these conditions is true.
 
 | Condition | Task | Action |
 | - | - | - |
-| The re-measured row count falls outside 767 to 778. | T026 | The converter changed more than the plan expects. Compare the density of a sample against the staged value before T027. |
+| The re-measured row count is not 78. | T026 | The corpus or the membership rule changed. Compare the density of a sample before T027. |
 | 1 rebuilt file or more marks more than 25 percent of its lines as headings. | T025 | The body size came from a sample, not from every page. Return to T012. Do not build the index from the corrupt corpus. |
 | A gate in T021 fails after 2 repair attempts. | T021 | Report the violation. Do not exclude the file from the gate. |
 | The skill folder passes 400 KB, or one file passes 90 KB. | T066 | Cut the content. Do not add a seventh file, because the Five-Item Rule caps `references/` at 5 children. |

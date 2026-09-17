@@ -16,14 +16,30 @@
 | Separator | A comma |
 | Quotation | A double quotation mark, only when a field holds a comma or a quotation mark |
 | Header | One header row with the 8 column names |
-| Data rows | 775, measured against the staged corpus. A rebuild can move up to 11 rows. |
-| Size | 70.0 KB measured. The budget is 85 KB. |
+| Data rows | 78, measured against the shipped index. |
+| Size | 6.9 KB measured. The budget is 85 KB. |
+
+
+
+## Correction on 2026-09-16
+
+The old contract required exactly 775 data rows. The shipped index holds 78 data rows at
+6.9 KB. The old rule matched each file name against the term list across all 4,006 converted
+documents. It returned 738 rows, but only 43 rows named a Junos train, which is 6 percent.
+
+The shipped rule selects the Junos device archive first, then selects each security document.
+The corpus holds 315 unique Junos device documents after deduplication. Of those documents,
+78 carry a security subject. The shipped index holds 46 train rows, which is 59 percent.
+All 8 topic groups hold at least one row.
+
+The 14 index checks pass with the new count. One check proves that each row resolves to both
+a Markdown file and a source PDF. Keep every invariant except the old I1 count.
 
 ## Regeneration input
 
 The catalog builder is a throwaway script. The repository does not hold it. A reader rebuilds
-the file from the YAML front matter of each document under `markdown/`. The PDF conversion
-uses the committed `scripts/pdf_to_markdown.py`, which section 7 of the plan upgrades.
+the file from the YAML front matter of each document under `markdown2/`. The PDF conversion
+uses the committed `scripts/pdf_to_markdown.py`. The rebuilt corpus writes to `markdown2/`.
 
 | Front matter field | Present | Index column |
 | - | - | - |
@@ -83,10 +99,10 @@ A reader builds both paths from the row and the archive code table.
 
 ```text
 PDF path      = <directory of archive> + "/" + <file> + ".pdf"
-Markdown path = "markdown/" + <directory of archive> + "/" + <file> + ".md"
+Markdown path = "markdown2/" + <directory of archive> + "/" + <file> + ".md"
 ```
 
-Both paths are relative to the corpus root. A test of this rule against all 775 selected rows
+Both paths are relative to the corpus root. A test of this rule against all 78 selected rows
 gave 0 failures.
 
 Example:
@@ -95,7 +111,7 @@ Example:
 Row:      user-access,Junos OS User Access and Authentication User Guide,G6,26.2,1154,A006,t,-
 A006:     extracted/juniper-PDFs-junos-262/juniper-PDFs-junos-262
 PDF:      extracted/juniper-PDFs-junos-262/juniper-PDFs-junos-262/user-access.pdf
-Markdown: markdown/extracted/juniper-PDFs-junos-262/juniper-PDFs-junos-262/user-access.md
+Markdown: markdown2/extracted/juniper-PDFs-junos-262/juniper-PDFs-junos-262/user-access.md
 ```
 
 ## The archive table
@@ -125,7 +141,7 @@ The tasks phase must prove each invariant. `quickstart.md` gives the command.
 
 | # | Invariant | Source |
 | - | - | - |
-| I1 | The file holds 775 data rows and 8 columns. | FR-019 |
+| I1 | The file holds 78 data rows and 8 columns. | FR-019 |
 | I2 | Each `file` value is unique. | FR-036 |
 | I3 | No field holds an absolute path, a drive letter, or a leading slash. | FR-017 |
 | I4 | Each `group` value is one of `G1` to `G8`. | FR-021 |

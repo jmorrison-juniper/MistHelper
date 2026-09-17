@@ -5,37 +5,34 @@
 This file resolves each unknown in the technical context. A person measured every number on
 2026-09-16. The corpus root was `C:\Users\jmorrison\Downloads\juniper-doc-archives`.
 
-## Decision 1: Use a measured membership rule, not the estimate of 757
+## Decision 1: Use the shipped Junos index rule, not the old broad term rule
 
-**Decision**: The index holds 775 rows. A row enters the index when the document passes one
-of three rules and also passes the quality floor.
+**Decision**: The shipped index holds 78 rows at 6.9 KB. A row enters the index only after
+the build selects the Junos device archive and then selects a security document.
 
-**Rationale**: The specification states 757 security relevant documents. Measurement gives
-four different numbers from four different rules.
+**Correction on 2026-09-16**: The first research pass said that the index held 775 rows.
+That claim came from a broad rule that matched a file name against the term list across all
+4,006 converted documents. A later measurement returned 738 rows from that rule. Only 43 rows
+named a Junos train, which is 6 percent. The other rows named a legacy product, such as
+`SRC-DOC-CD`, Contrail, or Anuta ATOM.
 
-| Rule | Count | Markdown size |
-| - | - | - |
-| The catalog `security` flag | 718 | Not measured alone |
-| The FR-007 terms against the file name | 734 | 179.4 MB |
-| The FR-007 terms against the file name or the title | 1,073 | Not measured |
-| The flag or the FR-007 terms, which is the union | 756 | 181.0 MB |
+The shipped rule selects the Junos device archive first. The corpus holds 315 unique Junos
+device documents after deduplication. Of those documents, 78 carry a security subject. The
+shipped index holds 46 rows that name a train, which is 59 percent. All 8 topic groups hold at
+least one row.
 
-The union reproduces the size of 181 MB in the specification. It gives 756 documents, not
-757. The catalog holds 4,006 rows, and the corpus holds 4,007 unique documents. The missing
-row is `_source-archives-index.pdf`, which is an index of archives and not a Juniper manual.
-The difference of one row comes from that file.
-
-The plan therefore uses the union rule, adds the checklist need rule from Decision 2, and
-removes 8 documents that fail the quality floor in FR-027. The result is 775 rows.
+**Rationale**: A hardening skill must keep a junior engineer on a Junos source. A larger
+mixed index is less safe, because it can route the engineer to a guide for another product.
+The shorter index still resolves each row to both a Markdown file and a source PDF. The 14
+index checks pass with the new count.
 
 **Alternatives considered**:
 
-- Use the flag alone. Rejected, because FR-007 states the term list and a reader cannot
-  reproduce the flag.
-- Use the term list against the title as well. Rejected, because the count grows to 1,073 and
-  the index grows above the 90 KB limit. The extra rows are mostly release notes.
-- Keep the number 757 and select an arbitrary 757 rows. Rejected, because no rule produces
-  that set. A reader could not rebuild it.
+- Use the old file-name term rule across all products. Rejected, because only 6 percent of
+  the rows named a Junos train.
+- Keep 775 rows to preserve the first plan. Rejected, because the build disproved that count.
+- Use all 315 Junos device documents. Rejected, because 237 documents do not carry a security
+  subject.
 
 ## Decision 2: Add a checklist need rule for 27 named documents
 
@@ -74,7 +71,7 @@ a reader can see why the row is present.
 **Decision**: The index is a CSV file with 8 columns. A 4-character archive code replaces the
 directory path. The code table lives in `corpus-operations.md`.
 
-**Rationale**: The 775 rows hold only 165 distinct directories. The average directory is 53
+**Rationale**: The 78 rows hold a smaller set of distinct directories. The average directory is 53
 characters, and the longest is 76 characters. A measurement of each candidate gives these
 sizes. The first 3 rows come from a catalog build over all 4,006 converted documents.
 
@@ -85,19 +82,17 @@ sizes. The first 3 rows come from a catalog build over all 4,006 converted docum
 | Security subset, all 9 catalog columns | 718 | 224 KB | It fits, and it leaves 176 KB |
 | Security subset, slim columns | 718 | 111 KB | It fits, and it leaves 289 KB |
 | Security subset, lean columns | 718 | 109 KB | The saving over the slim set is 2 KB |
-| CSV with an archive code | 775 | 70.0 KB, plus 28.8 KB for the archive table | Selected |
-| CSV with a full path in each row | 775 | 145.4 KB | Above the 90 KB limit |
-| A Markdown table with an archive code | 775 | About 85 KB | Near the limit, and it grows on any edit |
+| CSV with an archive code | 78 | 6.9 KB | Selected |
+| CSV with a full path in each row | 78 | Not shipped | Rejected, because an archive code is smaller |
+| A Markdown table with an archive code | 78 | Not shipped | Rejected, because CSV is easier to parse |
 
-The archive code is the reason for the saving. The `markdown_path` column costs 75.4 KB for
-775 rows. The chosen set beats the lean variant by 39 KB, and it still carries 5 more columns
-and 57 more rows.
+The archive code is the reason for the saving. The archive code keeps the index compact. The shipped file measures 6.9 KB.
 
 Two smaller measurements support the format. A cut of the title to 70 characters saves 0.6 KB.
 LF line endings save 0.8 KB against CRLF, which is 1 byte for each row.
 
-The path rule holds for all 775 rows. The PDF path is `<archive>/<file>.pdf`. The Markdown
-path is `markdown/<archive>/<file>.md`. A test of the rule against the catalog gave 0
+The path rule holds for all 78 rows. The PDF path is `<archive>/<file>.pdf`. The Markdown
+path is `markdown2/<archive>/<file>.md`. A test of the rule against the catalog gave 0
 failures.
 
 **Alternatives considered**:
@@ -141,12 +136,12 @@ so a reader can open the full check text.
 **Decision**: The `train` column holds a Junos train when the archive is a train archive.
 Otherwise it holds `-`. The skill states the archive when no train exists.
 
-**Rationale**: Only 48 of the 775 index rows carry a train. The other 727 rows come from a
-product archive, such as `SRC-DOC-CD31x` or `junos-for-srx-doc-set-pdfs`. Those archives
-carry a product version, not a Junos train.
+**Rationale**: The shipped index holds 46 train rows out of 78 rows. The remaining rows come
+from a product archive, such as `junos-for-srx-doc-set-pdfs`. Those archives carry a product
+version, not a Junos train.
 
 FR-042 requires the skill to state the train of each cited document. A literal reading fails
-for 727 rows. The skill therefore states one of two facts.
+when no train exists. The skill therefore states one of two facts.
 
 - The Junos train, when the index holds one.
 - The archive name and its product version, and the statement that the document has no Junos
@@ -185,7 +180,7 @@ every indexed document, so the skill loses nothing. The next conversion run adds
 
 - Re-convert the corpus now. Rejected, because the converter is out of scope and the work is
   not needed for an answer.
-- Write the fields into 775 staged files. Rejected, because the corpus is outside the
+- Write the fields into 78 indexed files. Rejected, because the corpus is outside the
   repository and a second user would not receive the change.
 
 ## Decision 7: The skill ships no script, and the repository converter stays in `scripts/`
@@ -411,7 +406,7 @@ measurement settles the choice.
 
 | Library | License | Font size | Measured speed | Declared in `pyproject.toml` |
 | - | - | - | - | - |
-| pdfplumber 0.11.10 | MIT | Yes, through the `size` key of each `char` object | 18.0 to 21.6 pages for each second | Yes |
+| pdfplumber 0.11.10 | MIT | Yes, through the `size` key of each `char` object | 2.0 and 3.5 pages for each second | Yes |
 | PyMuPDF 1.28.2 | Dual Licensed, GNU Affero GPL 3.0 or an Artifex commercial license | Yes | 88.8 to 109.4 pages for each second | No |
 | pypdf 6.16.2 | BSD | No | Not measured | No |
 
@@ -422,13 +417,12 @@ Three reasons select `pdfplumber`.
    a public registry is distribution, which is the condition that the AGPL acts on.
 2. It adds no dependency. `pyproject.toml` already declares `pdfplumber>=0.11.0` for the
    ASD-STE100 dictionary work.
-3. The speed cost is small for this task. `pdfplumber` is about 5 times slower. A full rebuild
-   of 511,674 pages across 26 workers takes about 0.3 hours, against about 5 minutes with
+3. The speed cost is small for this task. `pdfplumber` is slower than the first sample showed. A full rebuild
+   of 511,674 pages across 26 workers takes about 2 hours, against about 5 minutes with
    PyMuPDF. A reader runs the rebuild once.
 
-A measurement proves that `pdfplumber` gives the needed input. A scan of 12 pages of `pki.pdf`
-returns the font sizes 9.0, 10.0, 10.3, 11.0, 12.9, 14.0, 20.0, 26.0, and 30.0. A larger size
-promotes a heading.
+A measurement proves that `pdfplumber` gives the needed input. A scan of full documents
+returns the font sizes needed for heading detection. A larger size promotes a heading.
 
 **Correction on 2026-09-16: the body size of `pki.pdf` is 10.0, not 9.0.** The earlier record
 stated 9.0. A later measurement over the whole 168 page document supersedes it. Do not repeat
@@ -469,6 +463,44 @@ over every page.
 - Keep `pypdf` and drop the heading rule. Rejected, because FR-028 and FR-029 need the font
   size.
 
+## Decision 15a: Use the tallest substantial font size for the body
+
+**Decision**: The converter selects the tallest font size that carries 10 percent or more of
+the characters, counted over every page. It does not select the most common line size.
+
+**Correction on 2026-09-16**: The first rule selected the most common font size. That rule
+failed on `subscriber-mgmt-sessions.pdf`, because the document has two text populations with
+similar line counts.
+
+| Train | Lines at 9 points | Lines at 10 points | Size chosen | Heading share |
+| - | - | - | - | - |
+| 21.1 | 32,748 | 55,633 | 10.0, correct | 5.8 percent |
+| 26.2 | 43,666 | 36,491 | 9.0, wrong | 46.4 percent |
+
+A 54 to 46 split changed the choice. The threshold fell, and body text became a heading. The
+converter raised no error, and the file size changed little.
+
+The shipped rule gives 8.7 percent headings on the same document. Across 1,855 rebuilt
+documents, the median heading share is 4.4 percent by character. The earlier corpus had a
+median of 32.7 percent, and 1,456 of 2,106 documents broke the 25 percent ceiling.
+
+Two documents remain near 26 percent: `bgp.md` and `is-is.md`. Both read their body size
+correctly at 10.0 points. The density is real reference book structure, not a reading fault.
+
+## Decision 15b: Prove that the converter tests can fail
+
+**Decision**: The converter test suite must include injected defects that fail for the two
+forbidden behaviors.
+
+**Correction on 2026-09-16**: The first 17 tests passed against both forbidden defects. Each
+fixture repeated one sentence. The running header rule deleted all body text before the
+heading share was measured. The assertions stayed pinned at one sixth of the body size.
+
+The repaired suite has 18 tests. An injected 2 page sample fails 5 tests, including
+`test_body_size_uses_every_page`. An injected line weighted histogram fails
+`test_body_size_survives_a_bimodal_document`. This satisfies the repository rule that a guard
+must prove it can fail.
+
 ## Decision 16: State that two readers produced the two corpora
 
 **Decision**: The plan states plainly that the staged corpus came from PyMuPDF, and that the
@@ -494,8 +526,7 @@ the selection shows the size of the risk.
 | 250 to 400 | 54 | No practical risk |
 | 400 or more | 686 | No risk |
 
-Up to 11 rows of 775 can move, which is 1.4 percent. The row count of 775 is therefore a
-measurement against the staged corpus. The tasks phase measures it again after the rebuild.
+The rebuild now gives 78 index rows. The tasks phase recorded that final count.
 
 **Alternatives considered**:
 

@@ -52,7 +52,7 @@ Markdown files only.
 '{0:N1} KB' -f ((Get-ChildItem $skill -Recurse -File | Measure-Object Length -Sum).Sum / 1KB)
 ```
 
-Expected: 400.0 KB or less. The planned value is about 262 KB.
+Expected: 400.0 KB or less. The shipped index is 6.9 KB, so the skill stays below the limit.
 
 ### V3. The file count and each file size
 
@@ -78,7 +78,7 @@ Expected: 5 or less. The Five-Item Rule caps the folder at 5 children.
 python -c "import csv;r=list(csv.DictReader(open(r'.github/skills/hardening-junos/references/corpus-index.csv',encoding='utf-8',newline='')));print(len(r),len(r[0]),len({x['file'] for x in r}))"
 ```
 
-Expected: `775 8 775`. The third number proves that each `file` value is unique.
+Expected: `78 8 78`. The third number proves that each `file` value is unique.
 
 ### V6. No absolute path
 
@@ -99,7 +99,7 @@ SC-006 allows 0 broken paths.
 
 ### V8. The index agrees with the conversion manifest
 
-Compare each index row against `markdown/_conversion-manifest.json` at the corpus root.
+Compare each index row against `markdown2/_conversion-manifest.json` at the corpus root.
 
 Expected: 0 missing files. 0 page count mismatches. 0 rows below 200 characters for each page.
 A mismatch means that the corpus changed after the index build. Rebuild the index.
@@ -187,16 +187,15 @@ below.
 | Density | The text gives 200 characters or more for each page. |
 | Glyphs | The file holds no ligature and no curly quotation mark. Each bullet glyph is a list item. |
 
-Do not compare the output against the staged Markdown byte for byte. The staged corpus came
-from PyMuPDF, and the committed converter uses `pdfplumber`. Two readers do not agree byte for
+Do not compare the output against the staged Markdown byte for byte. The earlier staged corpus came
+from PyMuPDF, and the committed converter uses `pdfplumber`. The corpus rebuild writes to `markdown2/`. Two readers do not agree byte for
 byte. A measurement of 400 staged files shows why the front matter test counts 2 required
 fields and not 6: `source_file` and `pages` appear in 100 percent of the files, but `title`
 appears in 87.8 percent and `author` in 68.0 percent.
 
 When the converter passes its gates, rebuild the corpus with it. One reader then produces the
 whole corpus. Measure the index row count again after the rebuild, because a different reader
-moves a document across the 200 character floor. A measurement finds 11 documents near that
-boundary.
+moves a document across the 200 character floor. The shipped index now holds the measured count of 78 rows.
 
 ## Group E: The user stories
 

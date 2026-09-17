@@ -23,7 +23,7 @@ The bulk text stays on disk.
 
 | Question | Decision | Short reason |
 | - | - | - |
-| Corpus scope | Index the 757 security relevant unique documents. Keep the full set of 4,007 unique documents as a second search area. | The security subset covers the skill domain. The remainder answers an adjacent question. |
+| Corpus scope | Index the 78 Junos security documents. Keep the full set of 4,007 unique documents as a second search area. | The shipped rule first selects the Junos device archive, then selects each security document. This avoids legacy product guides. |
 | Storage split | The repository receives the skill files only, and the total is 400 KB or less. The converted Markdown stays outside the repository. | The largest existing skill is 140 KB. The converted text is 744 MB. The repository is OneDrive synced. The text is also copyrighted. |
 | Retrieval | A router file, a curated reference set, one index file, and a written search procedure. This mirrors `managing-mist-api`. | An agent reads a small router first. It opens only the reference that the task needs. |
 | Conversion quality | Ten acceptance rules, a per-page character yield floor, and a manual audit of 30 documents. | The converter has a known weakness on cover pages. |
@@ -43,8 +43,8 @@ A person measured these values on 2026-09-16.
 | Duplicate copies across trains | 5,330, which is 57 percent |
 | Converted Markdown files | 4,004 converted, 3 skipped |
 | Converted Markdown size | 744 MB |
-| Security relevant documents | 757 |
-| Security relevant Markdown size | 181 MB |
+| Security relevant index rows | 78 |
+| Shipped index size | 6.9 KB |
 | DISA STIG rule sets | 3, which are L2S V2R5, NDM V2R5, and RTR V2R1 |
 | DISA STIG rules | 181, which are 24 plus 55 plus 102 |
 | Largest existing skill | `managing-mist-api`, at 140 KB in 6 files |
@@ -52,6 +52,17 @@ A person measured these values on 2026-09-16.
 DISA is the Defense Information Systems Agency.
 STIG is a Security Technical Implementation Guide.
 A train is a Junos release family, such as 26.2.
+
+
+### Correction on 2026-09-16
+
+The old specification said that the index covered 757 security documents. The shipped index
+holds 78 rows at 6.9 KB. The old term rule returned 738 rows across all Juniper products, but
+only 43 rows named a Junos train. The shipped rule selects the Junos device archive first.
+That rule returns 78 rows, and 46 of those rows name a Junos train.
+
+The corpus holds 315 unique Junos device documents after deduplication. Of those documents,
+78 carry a security subject. All 8 topic groups hold at least one row.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -208,11 +219,10 @@ Confirm that the index records the new train. Confirm that the gap register is s
 
 #### Corpus scope
 
-- **FR-007**: The skill MUST index the 757 security relevant unique documents. A security
-  relevant document is a document with a name that matches one of these terms: security,
-  harden, auth, access, firewall, filter, nac, radius, tacacs, 802.1X, cert, pki, crypto,
-  ipsec, vpn, stig, fips, common criteria, aaa, login, password, user, admin, management,
-  snmp, syslog, ntp, and ssh.
+- **FR-007**: The skill MUST index the 78 Junos security documents. The old rule matched
+  the file name against 28 terms across all 4,006 converted documents. That rule returned
+  738 rows, but only 43 rows named a Junos train. The shipped rule selects the Junos device
+  archive first, then selects each security document.
 - **FR-008**: The skill MUST NOT index all 9,337 PDF files. A duplicate copy gives no new fact.
 - **FR-009**: The skill MUST treat the other unique documents as a second search area. The
   skill MUST state when an answer comes from that second area.
@@ -242,8 +252,7 @@ Confirm that the index records the new train. Confirm that the gap register is s
 
 - **FR-018**: The router file MUST hold a routing table. Each row MUST give a task, a
   reference file, and the required result. This matches `managing-mist-api`.
-- **FR-019**: The skill MUST hold one index file. That file MUST list the 757 security
-  relevant documents.
+- **FR-019**: The skill MUST hold one index file. That file MUST list 78 data rows.
 - **FR-020**: Each index row MUST hold these fields: document title, source file name, train,
   relative path, page count, topic group, and gap flag.
 - **FR-021**: The index MUST give each document one topic group. The topic groups MUST match
@@ -369,8 +378,7 @@ Confirm that the index records the new train. Confirm that the gap register is s
   with the corpus root removed gives 0 failures.
 - **SC-008**: The manual audit of 30 documents finds 27 documents or more that pass all 5
   checks. That is 90 percent.
-- **SC-009**: The index holds one row for each of the 757 security relevant documents. It
-  holds 0 second rows for the same document name.
+- **SC-009**: The index holds 78 data rows and 0 second rows for the same document name.
 - **SC-010**: Each file in the skill scores 80 or more on the repository STE linter.
 - **SC-011**: A reviewer who does not know the corpus follows the refresh procedure and adds a
   train without help.
@@ -382,12 +390,12 @@ Confirm that the index records the new train. Confirm that the gap register is s
 
 ### Decision 1: Index the security subset. Keep the rest as a second search area
 
-The skill indexes the 757 security relevant unique documents.
+The skill indexes 78 Junos security documents.
 
 The corpus holds 9,337 PDF files, but only 4,007 names are unique. About 57 percent of the
 files repeat the same document across trains 21.1 to 26.2. A duplicate gives no new fact.
 
-The security subset covers the domain of this skill. It converts to 181 MB in 743 files. The
+The security subset covers the domain of this skill. The shipped index is 6.9 KB and holds 78 data rows. The
 other documents cover routing, MPLS, EVPN, and hardware installation. A hardening question
 rarely needs them. A few questions do need them. A firewall filter on a routing protocol is
 an example. The skill therefore keeps the full unique set as a second search area, and states
@@ -404,16 +412,16 @@ These are the measured conversion sizes.
 | - | - | - | - |
 | All PDF files | 9,337 | About 3.6 GB | About 26,000 |
 | Unique documents | 4,007 | 744 MB | About 5,400 |
-| Security subset | 743 | 181 MB | About 1,300 |
+| Shipped Junos security index | 78 | 6.9 KB | About 49 |
 
-Even the smallest scope is about 1,300 times the largest skill. No scope fits in the
+Even the old security subset was about 1,300 times the largest skill. No scope fits in the
 repository.
 
 Three more reasons support the split.
 
 1. The repository is OneDrive synced. A bulk addition makes a real sync risk.
 2. The Juniper documents are copyrighted. The repository must not hold a bulk copy.
-3. An agent cannot read 181 MB. A small curated reference set is more useful than a large one.
+3. An agent cannot use a large mixed corpus safely. A small Junos index is more useful than a large one.
 
 The repository therefore receives the router file, the reference set, and the index. The
 budget is 400 KB. That is about 2.9 times `managing-mist-api`. That is a fair size for a skill
@@ -485,7 +493,7 @@ in a `supersedes` field. The skill can then state that an older train differs.
   does not hold them. This specification defines the skill and its data contract only.
 - The corpus is a snapshot. It describes Juniper documents as of the stated date. It does not
   describe the current Juniper website.
-- The index uses a compact machine-readable format, so that 757 rows stay below 90 KB.
+- The index uses a compact machine-readable format, so that 78 rows stay below 90 KB.
 - The skill gives advice. A human reviews and applies each change. This follows the
   Safety-First principle in the project constitution.
 
