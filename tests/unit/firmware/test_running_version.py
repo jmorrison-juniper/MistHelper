@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 import src.firmware.firmware_manager as fm_mod
 from src.firmware.firmware_manager import FirmwareManager, FirmwareManagerConfig
 from src.firmware.running_version import (
@@ -86,6 +88,36 @@ def test_fetch_site_running_versions_requests_every_device_type() -> None:
     assert captured["site_id"] == "site-1"
     assert running["dev-1"] == RUNNING_VERSION
     assert running["aabbccddeeff"] == RUNNING_VERSION
+
+
+def test_fetch_site_running_versions_reports_runtime_failure(caplog: Any) -> None:
+    """A mistapi runtime fault must reach the caller as an empty running map."""
+
+    def _failing_stats(session: Any, site_id: str, **kwargs: Any) -> _FakeResponse:
+        """Raise a mistapi runtime-style fault before a response exists."""
+        raise RuntimeError("rate limit reached")  # WHY: simulate the operational failure that the resolver can answer
+
+    resolver = RunningFirmwareVersionResolver(  # WHY: inject the failing callable without a live API request
+        apisession=object(), stats_fn=_failing_stats
+    )
+    with caplog.at_level("ERROR"):  # WHY: capture the report that tells the caller why no running map exists
+        running = resolver.fetch_site_running_versions("site-1")  # WHY: exercise the operational failure path
+    assert running == {}  # WHY: the caller learns that no running version was read
+    assert "Failed to read listSiteDevicesStats for site site-1" in caplog.text  # WHY: the log gives failure context
+
+
+def test_fetch_site_running_versions_surfaces_programming_error() -> None:
+    """A malformed SDK call must raise so a programmer can repair the call site."""
+
+    def _broken_stats(session: Any, site_id: str, **kwargs: Any) -> _FakeResponse:
+        """Raise the same error class as a missing required SDK argument."""
+        raise TypeError("missing required body")  # WHY: simulate a programming error that must not degrade silently
+
+    resolver = RunningFirmwareVersionResolver(  # WHY: inject the broken callable without a live API request
+        apisession=object(), stats_fn=_broken_stats
+    )
+    with pytest.raises(TypeError, match="missing required body"):  # WHY: prove the caller learns about the defect
+        resolver.fetch_site_running_versions("site-1")  # WHY: exercise the programming error path
 
 
 def test_ssr_flow_classifies_on_the_running_version_not_the_stale_one(monkeypatch: Any) -> None:
