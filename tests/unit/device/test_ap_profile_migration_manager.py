@@ -2259,7 +2259,7 @@ def test_interrupted_migration_still_writes_the_audit_row(fake_mh: Any, tmp_path
     def _stop_after_two(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
         """Reassign two APs, then raise the operator interrupt."""
         # WHY: the real loop mutates the payload in place before it stops.
-        payload = _args[4]
+        payload = _args[0].payload
         payload["aps_reassigned"].extend(["d0", "d1"])
         raise KeyboardInterrupt
 
