@@ -7,6 +7,9 @@ from collections.abc import Callable  # Typing for the injected safe_input depen
 
 from src.utils.console import echo  # Stdout echo + INFO log record (feature 1031).
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
+
 MIST_CLOUDS: dict[str, tuple[str, str]] = {  # Selectable Mist clouds keyed by menu number
     "1": ("Global 01", "api.mist.com"),  # Default global cloud
     "2": ("Global 02", "api.gc1.mist.com"),  # Secondary global cluster
@@ -39,7 +42,7 @@ class CloudSelector:
 
         Returns None when the user aborts via EOF (SystemExit).
         """
-        logging.info("Prompting user to choose Mist cloud endpoint")  # Trace prompt start
+        logger.info("Prompting user to choose Mist cloud endpoint")  # Trace prompt start
         self._render_menu()  # Print the numbered cloud menu verbatim
         try:
             cloud_choice = self.safe_input(  # Read EOF-safely so SSH disconnects bail out cleanly
@@ -53,26 +56,26 @@ class CloudSelector:
             cloud_choice = "1"  # Preserve legacy default behaviour
         cloud_name, host = MIST_CLOUDS[cloud_choice]  # Resolve label + host from catalog
         echo("  Using cloud: %s (%s)", cloud_name, host)  # Print + INFO log via 1031 helper
-        logging.warning("")  # Blank spacer matches the original output exactly
-        logging.debug("Cloud selected: %s (%s)", cloud_name, host)  # Trace selection result
+        logger.warning("")  # Blank spacer matches the original output exactly
+        logger.debug("Cloud selected: %s (%s)", cloud_name, host)  # Trace selection result
         return (cloud_name, host)  # Hand off to the login orchestrator
 
     @staticmethod
     def _render_menu() -> None:
         """Print the interactive cloud menu using the legacy formatting."""
-        logging.warning("")  # Leading blank line matches the original banner spacing
-        logging.warning("=" * 60)  # Top divider routed via logger
-        logging.warning("  INTERACTIVE MIST API LOGIN")  # Banner heading routed via logger
-        logging.warning("=" * 60)  # Bottom divider routed via logger
-        logging.warning("")  # Blank spacer matches original output
-        logging.warning(
+        logger.warning("")  # Leading blank line matches the original banner spacing
+        logger.warning("=" * 60)  # Top divider routed via logger
+        logger.warning("  INTERACTIVE MIST API LOGIN")  # Banner heading routed via logger
+        logger.warning("=" * 60)  # Bottom divider routed via logger
+        logger.warning("")  # Blank spacer matches original output
+        logger.warning(
             "  This authentication method uses session/cookie-based login,"
         )  # Legacy explainer routed via logger
-        logging.warning(
+        logger.warning(
             "  which can access MSP-level APIs (unlike org-scoped API tokens)."
         )  # Legacy explainer routed via logger
-        logging.warning("")  # Blank spacer matches original output
-        logging.warning("  Available Mist Clouds:")  # Legacy header routed via logger
+        logger.warning("")  # Blank spacer matches original output
+        logger.warning("  Available Mist Clouds:")  # Legacy header routed via logger
         for key, (name, host) in MIST_CLOUDS.items():  # Iterate catalog in insertion order
-            logging.warning("    %2s. %-12s (%s)", key, name, host)  # Legacy format string preserved exactly
-        logging.warning("")  # Blank spacer matches original output
+            logger.warning("    %2s. %-12s (%s)", key, name, host)  # Legacy format string preserved exactly
+        logger.warning("")  # Blank spacer matches original output
