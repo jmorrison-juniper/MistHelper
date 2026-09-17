@@ -22,6 +22,9 @@ import threading
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest  # WHY: assert that non-transport faults propagate after handler narrowing.
+import requests  # WHY: create concrete transport exceptions for narrowed handler tests.
+
 from src.api.api_fetch_utils import APIFetchUtils
 from tests.support.thread_scoped_sleep import ThreadScopedSleepSpy
 
@@ -85,12 +88,33 @@ def test_organization_services_missing_data_attribute_returns_empty_list() -> No
         assert APIFetchUtils.organization_services() == []
 
 
-def test_organization_services_exception_returns_empty_list() -> None:
-    """Any exception during the API call -> return [] (never crash)."""
-    fake_mh = _make_mh()
-    fake_mh.ConfigUtils.get_cached_or_prompted_org_id.side_effect = RuntimeError("boom")
-    with patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh):
-        assert APIFetchUtils.organization_services() == []
+def test_organization_services_transport_exception_returns_empty_list() -> None:
+    """Transport failure during the API call -> return [] (never crash)."""
+    fake_mh = _make_mh()  # WHY: isolate the resolver from the live application.
+    fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"  # WHY: reach the SDK call.
+    with (  # WHY: patch only the dependencies for this visible behavior.
+        patch(  # WHY: simulate the request-layer failure this handler owns.
+            "src.api.api_fetch_utils.mistapi.api.v1.orgs.services.listOrgServices",
+            side_effect=requests.ConnectionError("boom"),
+        ),
+        patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh),  # WHY: keep the org id stable.
+    ):
+        assert APIFetchUtils.organization_services() == []  # WHY: transport failures still degrade to an empty list.
+
+
+def test_organization_services_non_transport_exception_propagates() -> None:
+    """Non-transport failures must propagate so bad call sites do not hide."""
+    fake_mh = _make_mh()  # WHY: isolate the resolver from the live application.
+    fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"  # WHY: reach the SDK call.
+    with (  # WHY: prove the narrowed handler no longer swallows programming faults.
+        patch(  # WHY: AttributeError matches the hidden SDK defect class from issue #2717.
+            "src.api.api_fetch_utils.mistapi.api.v1.orgs.services.listOrgServices",
+            side_effect=AttributeError("missing sdk method"),
+        ),
+        patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh),  # WHY: keep the org id stable.
+        pytest.raises(AttributeError),  # WHY: the defect must be visible to the caller.
+    ):
+        APIFetchUtils.organization_services()  # WHY: execute the branch under test.
 
 
 # ---------- _normalize_org_services ----------
@@ -139,8 +163,24 @@ def test_fetch_single_site_setting_tags_config_with_ids() -> None:
 def test_fetch_single_site_setting_returns_none_on_exception() -> None:
     """API failure -> return None and log a warning (no raise)."""
     apisession = MagicMock()
-    with patch("src.api.api_fetch_utils.mistapi.api.v1.sites.setting.getSiteSetting", side_effect=RuntimeError("bad")):
+    with patch(
+        "src.api.api_fetch_utils.mistapi.api.v1.sites.setting.getSiteSetting",
+        side_effect=requests.Timeout("bad"),
+    ):
         assert APIFetchUtils._fetch_single_site_setting(apisession, {"id": "s1"}) is None
+
+
+def test_fetch_single_site_setting_non_transport_exception_propagates() -> None:
+    """Non-transport site setting failures must propagate."""
+    apisession = MagicMock()  # WHY: avoid a live Mist API session.
+    with (  # WHY: prove the narrowed handler only owns transport failures.
+        patch(  # WHY: simulate a programming fault that the handler must not hide.
+            "src.api.api_fetch_utils.mistapi.api.v1.sites.setting.getSiteSetting",
+            side_effect=AttributeError("bad sdk path"),
+        ),
+        pytest.raises(AttributeError),  # WHY: callers must see a bad SDK path.
+    ):
+        APIFetchUtils._fetch_single_site_setting(apisession, {"id": "s1"})  # WHY: run the changed handler.
 
 
 # ---------- all_site_settings ----------
@@ -205,9 +245,22 @@ def test_gw_load_inventory_happy_path_returns_paginated_devices() -> None:
 def test_gw_load_inventory_returns_none_on_exception() -> None:
     """Inventory fetch failure -> return None."""
     with patch(
-        "src.api.api_fetch_utils.mistapi.api.v1.orgs.inventory.getOrgInventory", side_effect=RuntimeError("nope")
+        "src.api.api_fetch_utils.mistapi.api.v1.orgs.inventory.getOrgInventory",
+        side_effect=requests.ConnectionError("nope"),
     ):
         assert APIFetchUtils._gw_load_inventory(MagicMock(), "org-1") is None
+
+
+def test_gw_load_inventory_non_transport_exception_propagates() -> None:
+    """Non-transport inventory faults must propagate."""
+    with (  # WHY: prove the narrowed handler does not hide programming faults.
+        patch(  # WHY: simulate an invalid SDK call surface.
+            "src.api.api_fetch_utils.mistapi.api.v1.orgs.inventory.getOrgInventory",
+            side_effect=AttributeError("bad sdk path"),
+        ),
+        pytest.raises(AttributeError),  # WHY: callers must see SDK compatibility defects.
+    ):
+        APIFetchUtils._gw_load_inventory(MagicMock(), "org-1")  # WHY: run the changed handler.
 
 
 # ---------- _gw_load_site_names ----------
@@ -241,6 +294,17 @@ def test_gw_load_site_names_returns_empty_on_missing_file() -> None:
     fake_mh.FilePathUtils.get_csv_path.return_value = "/nonexistent/SiteList.csv"
     with patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh):
         assert APIFetchUtils._gw_load_site_names() == {}
+
+
+def test_gw_load_site_names_non_io_exception_propagates() -> None:
+    """Non-I/O failures must propagate from optional site-name loading."""
+    fake_mh = _make_mh()  # WHY: isolate path resolution from the real application.
+    fake_mh.FilePathUtils.get_csv_path.side_effect = RuntimeError("bad path helper")  # WHY: simulate a code fault.
+    with (  # WHY: patch the dependency and assert the new visible behavior.
+        patch("src.api.api_fetch_utils.SourceDependencyResolver", fake_mh),  # WHY: route through the fake helper.
+        pytest.raises(RuntimeError),  # WHY: the handler must not hide non-I/O defects.
+    ):
+        APIFetchUtils._gw_load_site_names()  # WHY: run the changed handler.
 
 
 # ---------- _gw_build_work_items ----------
@@ -296,8 +360,24 @@ def test_gw_fetch_one_config_missing_data_attr_returns_none() -> None:
 def test_gw_fetch_one_config_exception_returns_none() -> None:
     """Exception in API call -> return None (logged, not raised)."""
     sem = threading.Semaphore(1)
-    with patch("src.api.api_fetch_utils.mistapi.api.v1.sites.devices.getSiteDevice", side_effect=RuntimeError("bad")):
+    with patch(
+        "src.api.api_fetch_utils.mistapi.api.v1.sites.devices.getSiteDevice",
+        side_effect=requests.HTTPError("bad"),
+    ):
         assert APIFetchUtils._gw_fetch_one_config(MagicMock(), ("s1", "d1", "SiteOne"), sem) is None
+
+
+def test_gw_fetch_one_config_non_transport_exception_propagates() -> None:
+    """Non-transport device config failures must propagate."""
+    sem = threading.Semaphore(1)  # WHY: satisfy the method signature without concurrency.
+    with (  # WHY: prove only request-layer failures are converted to None.
+        patch(  # WHY: simulate a programming fault in the SDK call path.
+            "src.api.api_fetch_utils.mistapi.api.v1.sites.devices.getSiteDevice",
+            side_effect=AttributeError("bad sdk path"),
+        ),
+        pytest.raises(AttributeError),  # WHY: callers must see bad SDK paths.
+    ):
+        APIFetchUtils._gw_fetch_one_config(MagicMock(), ("s1", "d1", "SiteOne"), sem)  # WHY: run the changed handler.
 
 
 # ---------- _gw_retry_one_item ----------

@@ -24,6 +24,7 @@ import time  # WHY: exponential backoff sleep between retries.
 from typing import Any  # WHY: return-type annotations for dynamic dicts.
 
 import mistapi  # WHY: dotted-path Mist API resolution + pagination helper.
+import requests  # WHY: Mist API SDK transport failures surface as requests exceptions.
 from tqdm import tqdm  # WHY: progress bar for long-running site/device fetches.
 
 from src.config.source_dependency_resolver import (
@@ -64,7 +65,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
             logger.warning("No organization services found or response data is empty")  # Warn on empty response.
             return []  # No services to return.
 
-        except Exception as error:  # Never crash on API failure.
+        except requests.RequestException as error:  # Handle only transport failures from the Mist API call.
             logging.error("Failed to fetch organization services: %s", error)  # Log the fetch failure.
             return []  # Degrade to empty list.
 
@@ -103,7 +104,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
             config["site_name"] = site_name  # Tag with site name
             logger.info("! Fetched config for site: %s (ID: %s)", site_name, site_id)
             return config
-        except Exception as error:  # Skip sites that fail
+        except requests.RequestException as error:  # Skip a site only when the Mist API request fails.
             logging.warning("! Failed to fetch config for %s (ID: %s): %s", site_name, site_id, error)
             return None
 
@@ -131,7 +132,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
         try:  # The inventory fetch is the one hard dependency. Isolate its failure.
             response = mistapi.api.v1.orgs.inventory.getOrgInventory(apisession, org_id, limit=1000)  # Fetch inventory.
             return mistapi.get_all(response=response, mist_session=apisession)  # Page through all devices.
-        except Exception as error:  # Inventory fetch failed.
+        except requests.RequestException as error:  # Handle only inventory request or pagination transport failures.
             logging.error("! Failed to fetch org inventory: %s", error)  # Log the failure.
             return None  # Signal failure so the caller degrades to an empty result.
 
@@ -144,7 +145,10 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
             with open(site_list_path, encoding="utf-8") as file_handle:  # Read site names from CSV.
                 reader = csv.DictReader(file_handle)  # Parse CSV rows.
                 return {row.get("id"): row.get("name", "Unnamed Site") for row in reader}  # id->name map.
-        except Exception as error:  # CSV missing or unreadable.
+        except (
+            OSError,
+            csv.Error,
+        ) as error:  # Treat only CSV I/O and CSV parser failures as optional enrichment misses.
             logging.warning("! Failed to load SiteList.csv for site names: %s", error)  # Warn names may be unknown.
             return {}  # Degrade to an empty lookup.
 
@@ -180,7 +184,7 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
                     return config  # Return the enriched config.
                 logger.warning("! Empty config for device %s", work_device_id)  # Warn on empty config.
                 return None  # Treat empty config as a miss.
-            except Exception as inner_error:  # Per-device fetch failed.
+            except requests.RequestException as inner_error:  # Per-device transport failure should not abort the batch.
                 logging.error("! Failed to fetch config for device %s: %s", work_device_id, inner_error)  # Log error.
                 return None  # Mark this device failed.
 
