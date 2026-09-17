@@ -1999,6 +1999,83 @@ def confirm_page(run_id: str) -> str:
     )
 
 
+class UpgradeStartInput(NamedTuple):
+    """Validated input for one UpgradeService start call."""
+
+    device_ids: list[str]
+    firmware_version: str
+    strategy: str
+    rollback_enabled: bool
+
+
+class UpgradeStartInputFailure(NamedTuple):
+    """Visible refusal for one missing or invalid upgrade input."""
+
+    field_name: str
+    message: str
+
+
+class UpgradeStartInputValidator:
+    """Reject a destructive upgrade request when a required input is absent."""
+
+    ALLOWED_STRATEGIES = {"serial", "parallel"}  # The service accepts only these execution modes.
+
+    @classmethod
+    def validate(cls, run_id: str, body: Mapping[str, Any] | None) -> UpgradeStartInput | UpgradeStartInputFailure:
+        """Return validated upgrade input, or return a visible refusal."""
+        logger.info("upgrade: validate start input for run %s", run_id)  # Log before the destructive guard.
+        if not isinstance(body, Mapping):  # A missing JSON body carries no safe firmware instruction.
+            return cls._failure(run_id, "json_body")  # Stop at the field that the request lacks.
+        device_ids = cls._device_ids(run_id, body)  # Validate the target list before a cloud write can start.
+        if isinstance(device_ids, UpgradeStartInputFailure):  # The target list is absent or invalid.
+            return device_ids  # Return the exact field name to the route.
+        firmware_version = cls._firmware_version(run_id, body)  # Validate the target image before the write.
+        if isinstance(firmware_version, UpgradeStartInputFailure):  # The target version is absent or invalid.
+            return firmware_version  # Return the exact field name to the route.
+        strategy = cls._strategy(run_id, body)  # Validate the operator-selected execution mode.
+        if isinstance(strategy, UpgradeStartInputFailure):  # The execution mode is absent or invalid.
+            return strategy  # Return the exact field name to the route.
+        rollback_enabled = bool(body.get("rollback_enabled", False))  # False avoids an unapproved rollback action.
+        logger.debug("upgrade: validated start input for run %s with %d devices", run_id, len(device_ids))
+        return UpgradeStartInput(device_ids, firmware_version, strategy, rollback_enabled)
+
+    @staticmethod
+    def _device_ids(run_id: str, body: Mapping[str, Any]) -> list[str] | UpgradeStartInputFailure:
+        """Return the required device list from the request body."""
+        value = body.get("device_ids")  # No default can stand in for the destructive target set.
+        if not isinstance(value, list) or not value:  # A missing or empty list has no safe target.
+            return UpgradeStartInputValidator._failure(run_id, "device_ids")  # Name the absent target list.
+        device_ids = [str(device_id).strip() for device_id in value]  # Normalize IDs before the service call.
+        if not all(device_ids):  # A blank item can misalign status rows and cloud calls.
+            return UpgradeStartInputValidator._failure(run_id, "device_ids")  # Name the faulty target list.
+        return device_ids  # The service receives only non-empty device identifiers.
+
+    @staticmethod
+    def _firmware_version(run_id: str, body: Mapping[str, Any]) -> str | UpgradeStartInputFailure:
+        """Return the required firmware version from the request body."""
+        value = body.get("firmware_version")  # No default can choose a firmware image for the operator.
+        firmware_version = str(value).strip() if value is not None else ""  # Keep absent and blank visibly invalid.
+        if not firmware_version:  # An empty target version can start the wrong destructive path.
+            return UpgradeStartInputValidator._failure(run_id, "firmware_version")  # Name the missing firmware input.
+        return firmware_version  # The service receives the explicit operator choice.
+
+    @classmethod
+    def _strategy(cls, run_id: str, body: Mapping[str, Any]) -> str | UpgradeStartInputFailure:
+        """Return the required upgrade strategy from the request body."""
+        value = body.get("strategy")  # No default can choose serial or parallel for the operator.
+        strategy = str(value).strip() if value is not None else ""  # Keep absent and blank visibly invalid.
+        if strategy not in cls.ALLOWED_STRATEGIES:  # The service must receive one documented strategy.
+            return cls._failure(run_id, "strategy")  # Name the invalid execution mode.
+        return strategy  # The service receives a checked strategy.
+
+    @staticmethod
+    def _failure(run_id: str, field_name: str) -> UpgradeStartInputFailure:
+        """Return a visible validation error for one missing or invalid input."""
+        logger.error("upgrade: %s is missing or invalid for run %s", field_name, run_id)  # Name the exact field.
+        message = f"{field_name} is required for upgrade start"  # The response names the absent input.
+        return UpgradeStartInputFailure(field_name, message)  # The route returns this refusal to the caller.
+
+
 # --------------------------------------------------------------------------
 # Phase 2 T-008/T-009: Upgrade service routes (new paths)
 # --------------------------------------------------------------------------
@@ -2030,41 +2107,31 @@ def start_upgrade_via_service(run_id: str) -> tuple[Response, int]:
     if refusal is not None:  # A reserved operator domain cannot answer for the write.
         return refusal  # Refuse before the service can start a cloud change.
 
-    # WHY: Read the request body to extract upgrade parameters (device IDs, version, strategy, etc)
-    body = request.get_json() or {}  # Parse JSON request body, default to empty dict if parsing fails
-    device_ids = body.get("device_ids", [])  # List of device IDs to upgrade
-    firmware_version = body.get("firmware_version", "")  # Target firmware version for all devices
-    strategy = body.get("strategy", "serial")  # Upgrade strategy: "serial" or "parallel"
-    rollback_enabled = body.get("rollback_enabled", False)  # Whether to enable automatic rollback on failure
-
-    # WHY: Validate required parameters before making any upgrade operations
-    if not run_id or not device_ids or not firmware_version or strategy not in ("serial", "parallel"):
-        logger.warning(
-            "upgrade: invalid parameters for upgrade start: run=%s devices=%s version=%s strategy=%s",
-            run_id,
-            len(device_ids) if isinstance(device_ids, list) else 0,
-            firmware_version,
-            strategy,
-        )
+    body = request.get_json()  # Parse the JSON body without substituting an empty upgrade request.
+    upgrade_input = UpgradeStartInputValidator.validate(run_id, body)  # Reject missing destructive inputs here.
+    if isinstance(upgrade_input, UpgradeStartInputFailure):  # The request lacks a required upgrade input.
         return json_error(
             BAD_REQUEST_STATUS,
             "invalid_parameters",
-            "Missing or invalid parameters: run_id, device_ids, firmware_version, strategy",
+            upgrade_input.message,
         )
 
     try:  # UpgradeService call may fail due to validation, API, or transient errors
         logger.info(
-            "upgrade: start upgrade for run %s with strategy=%s on %d devices", run_id, strategy, len(device_ids)
+            "upgrade: start upgrade for run %s with strategy=%s on %d devices",
+            run_id,
+            upgrade_input.strategy,
+            len(upgrade_input.device_ids),
         )  # BEFORE service call
 
         # WHY: Invoke UpgradeService.start_upgrade() to begin firmware update orchestration
         # Returns upgrade_run record with initial status and per-device state tracking
         upgrade_result = upgrade_service.start_upgrade(
             run_id=run_id,
-            device_ids=device_ids,
-            firmware_version=firmware_version,
-            strategy=strategy,
-            rollback_enabled=rollback_enabled,
+            device_ids=upgrade_input.device_ids,
+            firmware_version=upgrade_input.firmware_version,
+            strategy=upgrade_input.strategy,
+            rollback_enabled=upgrade_input.rollback_enabled,
         )
 
         logger.debug(
@@ -2075,9 +2142,9 @@ def start_upgrade_via_service(run_id: str) -> tuple[Response, int]:
         response_body = {
             "upgrade_id": run_id,  # Use run_id as upgrade identifier
             "status": upgrade_result.get("status", "pending"),  # Current upgrade status
-            "devices_count": len(device_ids),  # Total devices in this upgrade
-            "strategy": strategy,  # Echo back the strategy used
-            "rollback_enabled": rollback_enabled,  # Confirm rollback setting
+            "devices_count": len(upgrade_input.device_ids),  # Total devices in this upgrade
+            "strategy": upgrade_input.strategy,  # Echo back the strategy used
+            "rollback_enabled": upgrade_input.rollback_enabled,  # Confirm rollback setting
         }
         return jsonify(response_body), ACCEPTED_STATUS  # 202 Accepted: async work started
 
