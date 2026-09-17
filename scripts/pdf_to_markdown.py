@@ -177,6 +177,44 @@ class PdfLineReader:
         bold = "bold" in fonts.most_common(1)[0][0].lower() if fonts else False  # Lato-Bold is bold
         return text.strip(), size, bold
 
+    def measure(self) -> tuple[dict[str, str], int, float]:
+        """Return the metadata, the page count, and the body size, holding no page.
+
+        A whole document read keeps every page until the end, so an 81 MB guide
+        reaches more than 20 GB. This pass keeps only a size counter, so memory
+        stays flat. It still reads every page, so the body size never comes from
+        a sample.
+        """
+        logger.info("Measuring the body size of %s", self.source_path)  # announce the first pass
+        pdfplumber: Any = import_module("pdfplumber")  # load the optional dependency only when used
+        sizes: Counter[float] = Counter()  # the size count of every character of every page
+        with pdfplumber.open(str(self.source_path)) as document:  # pdfplumber closes the file
+            metadata = {str(key): str(value) for key, value in document.metadata.items()}
+            total = len(document.pages)  # the part writer needs the count before it splits
+            for index in range(total):  # every page feeds the count, because a sample lies
+                page = document.pages[index]
+                for char in page.chars:  # the character size decides the body size
+                    if str(char.get("text", "")).strip():
+                        sizes[round(float(char["size"]), 1)] += 1
+                page.flush_cache()  # release the page, so the reader does not grow
+        body_size = self._body_size(sizes)  # the count of the whole document gives this value
+        logger.debug("Measured %d pages, body size %s", total, body_size)  # record the result
+        return metadata, total, body_size
+
+    def read_range(self, start: int, stop: int) -> list[list[TextLine]]:
+        """Return the lines of one page range, then release every page it read."""
+        logger.info("Reading pages %d to %d of %s", start + 1, stop, self.source_path)
+        pdfplumber: Any = import_module("pdfplumber")  # load the optional dependency only when used
+        unused: Counter[float] = Counter()  # the size count already came from the first pass
+        pages: list[list[TextLine]] = []  # only this range lives in memory
+        with pdfplumber.open(str(self.source_path)) as document:  # pdfplumber closes the file
+            for index in range(start, stop):
+                page = document.pages[index]
+                pages.append(self._page_lines(page, unused))
+                page.flush_cache()  # release the page inside the range
+        logger.debug("Read %d pages of the range", len(pages))  # record the size of the range
+        return pages
+
 
 class PdfMarkdownConverter:
     """Extract the text of one PDF and write it as a Markdown reference."""
@@ -258,6 +296,65 @@ class PdfMarkdownConverter:
         return {"source": self._relative_source(), "status": status, "pages": pages, "chars": chars}
 
 
+class PdfPartConverter(PdfMarkdownConverter):
+    """Write one Markdown file for each page range of a very large PDF.
+
+    A whole document conversion holds every page until the end. An 81 MB guide
+    then reaches more than 20 GB of memory and never finishes. This converter
+    reads one range at a time, so memory stays near 0.4 GB.
+
+    The output also suits a reader better. A skill opens the range that holds
+    the answer instead of loading one file of many megabytes.
+    """
+
+    def __init__(
+        self, source_path: Path, output_path: Path, source_root: Path | None = None, pages_per_part: int = 250
+    ) -> None:
+        """Store the paths, the citation root, and the page count of each part."""
+        super().__init__(source_path, output_path, source_root)
+        self.pages_per_part = pages_per_part  # the page count that one part file holds
+
+    def convert(self) -> ManifestRow:
+        """Write one part for each page range and return one manifest row."""
+        logger.info("Converting %s in parts of %d pages", self.source_path, self.pages_per_part)
+        reader = PdfLineReader(self.source_path)
+        metadata, total, body_size = reader.measure()  # the first pass holds no page
+        folder = self.output_path.with_suffix("")  # the parts live in a folder named for the file
+        folder.mkdir(parents=True, exist_ok=True)
+        written = self._write_parts(reader, metadata, total, body_size)
+        logger.debug("Wrote %d parts holding %d characters", len(written), sum(written))
+        return self._row(total, sum(written))
+
+    def _write_parts(self, reader: PdfLineReader, metadata: dict[str, str], total: int, body_size: float) -> list[int]:
+        """Write each part file and return the character count of each one."""
+        folder = self.output_path.with_suffix("")  # the same folder that convert made
+        counts: list[int] = []  # one character count for each written part
+        for number, start in enumerate(range(0, total, self.pages_per_part), start=1):
+            stop = min(start + self.pages_per_part, total)
+            pages = reader.read_range(start, stop)  # only this range lives in memory
+            body = self._render_range(pages, start, body_size)
+            head = self._part_front_matter(metadata, number, start, stop)
+            target = folder / f"part-{number:03d}.md"
+            target.write_text(head + body, encoding="utf-8")  # one atomic write for each part
+            counts.append(len(body))
+        return counts
+
+    def _render_range(self, pages: list[list[TextLine]], start: int, body_size: float) -> str:
+        """Return the Markdown of one page range, with the page numbers of the source."""
+        headers = self.RULES.repeated_headers(pages)  # the running header of this range
+        rendered = [
+            self._render_page(lines, start + offset, body_size, headers) for offset, lines in enumerate(pages, 1)
+        ]
+        capped = self.RULES.cap_headings("".join(rendered).splitlines())  # hold the heading share
+        return "\n".join(capped) + "\n"
+
+    def _part_front_matter(self, metadata: dict[str, str], number: int, start: int, stop: int) -> str:
+        """Return the front matter of one part, which names its range in the source."""
+        base = self._front_matter(metadata, stop - start).rstrip()[: -len("---")].rstrip()
+        extra = [f"part: {number}", f'page_range: "{start + 1}-{stop}"']
+        return base + "\n" + "\n".join(extra) + "\n---\n\n"
+
+
 class PdfMarkdownCommand:
     """Parse the command line and convert each PDF that the operator names."""
 
@@ -284,6 +381,10 @@ class PdfMarkdownCommand:
         parser.add_argument("--source-root", default=None, help="The folder that the source_file field is relative to.")
         parser.add_argument("--output-root", default=None, help="The folder that receives the Markdown tree.")
         parser.add_argument("--manifest", default=None, help="The JSON file that receives one row for each source.")
+        part_help = "Page count of one part file. A larger PDF writes a folder of parts."
+        parser.add_argument("--pages-per-part", type=int, default=250, help=part_help)
+        split_help = "Megabyte size above which a PDF writes parts instead of one file."
+        parser.add_argument("--split-above-mb", type=int, default=40, help=split_help)
         arguments = parser.parse_args(argv)  # argparse exits by itself on a bad argument
         if arguments.workers is None:  # only the default path needs the host processor probe
             arguments.workers = self._default_worker_count()  # defer the processor probe to runtime
@@ -311,6 +412,8 @@ class PdfMarkdownCommand:
         source_root = Path(arguments.source_root) if arguments.source_root else None  # citation root
         output_root = Path(arguments.output_root) if arguments.output_root else None  # output tree
         jobs = [(source, source_root, output_root) for source in self._sources(arguments)]
+        split_bytes = arguments.split_above_mb * 1024 * 1024  # a larger file writes parts
+        jobs = [(*job, split_bytes, arguments.pages_per_part) for job in jobs]  # carry both settings
         logger.info("Converting %d PDF files", len(jobs))  # announce the batch before it starts
         if arguments.workers <= 1:  # one worker keeps the traceback of a test in this process
             return [self.convert_one(job) for job in jobs]
@@ -322,13 +425,16 @@ class PdfMarkdownCommand:
             return list(pool.map(self.convert_one, jobs, chunksize=1))  # 1 file for each dispatch balances
 
     @staticmethod
-    def convert_one(job: tuple[str, Path | None, Path | None]) -> ManifestRow:
+    def convert_one(job: tuple[str, Path | None, Path | None, int, int]) -> ManifestRow:
         """Convert one PDF inside a worker process and return its manifest row."""
-        source, source_root, output_root = job  # the pool sends one tuple for each file
+        source, source_root, output_root, split_bytes, pages_per_part = job  # one tuple for each file
         source_path = Path(source)  # pathlib keeps the path correct on Windows and on Linux
         relative = source_path.relative_to(source_root) if source_root else Path(source_path.name)
         output_path = (output_root / relative).with_suffix(".md") if output_root else source_path.with_suffix(".md")
         try:  # one damaged PDF must not stop a run of 4,006 documents
+            if split_bytes and source_path.stat().st_size > split_bytes:
+                # A whole document read of a large guide exhausts memory, so write parts.
+                return PdfPartConverter(source_path, output_path, source_root, pages_per_part).convert()
             return PdfMarkdownConverter(source_path, output_path, source_root).convert()
         except Exception as error:  # pdfminer raises many error types for a damaged file
             logging.error("Failed to convert %s: %s", source_path, error)  # name the file and the cause

@@ -21,6 +21,7 @@ from scripts.pdf_to_markdown import (
     PdfLineReader,
     PdfMarkdownCommand,
     PdfMarkdownConverter,
+    PdfPartConverter,
 )  # import the converter pieces under test
 
 # One drawn line of a fixture page: the text, the font size, and the bold state.
@@ -374,3 +375,39 @@ class TestCommandOutput:
         report = json.loads(manifest.read_text(encoding="utf-8"))  # read the written manifest
         assert len(report["files"]) == 2, f"the manifest needs 1 row for each source: {report}"
         assert report["status_counts"] and report["pages"] == 2, f"the manifest needs the counts: {report}"
+
+
+class TestPartConverter:
+    """Prove that a large document writes parts and still measures every page."""
+
+    @staticmethod
+    def _pages(count: int) -> list[list[TextLine]]:
+        """Return a fixture whose front matter is smaller than its body."""
+        front = [[(f"Contents entry number {number}", 8.0, False)] for number in range(4)]
+        body = [[(f"The operator reads page {number} of the guide.", 10.0, False)] for number in range(count - 4)]
+        return front + body  # the front matter leads, as a real guide does
+
+    def test_part_converter_writes_one_file_for_each_range(self, tmp_path: Path) -> None:
+        """A part run writes one Markdown file for each page range."""
+        source = PdfFixtureBuilder(tmp_path).build("big.pdf", self._pages(10))
+        target = tmp_path / "big.md"  # the folder takes the name of this file
+        row = PdfPartConverter(source, target, None, 4).convert()  # the call under test
+        parts = sorted((tmp_path / "big").glob("part-*.md"))  # the written part files
+        assert len(parts) == 3, f"10 pages in ranges of 4 need 3 parts: {parts}"
+        assert row["pages"] == 10, f"the row must report every page: {row}"
+
+    def test_part_front_matter_names_its_page_range(self, tmp_path: Path) -> None:
+        """Each part states the part number and the page range of the source."""
+        source = PdfFixtureBuilder(tmp_path).build("ranged.pdf", self._pages(10))
+        PdfPartConverter(source, tmp_path / "ranged.md", None, 4).convert()
+        first = (tmp_path / "ranged" / "part-001.md").read_text(encoding="utf-8")
+        second = (tmp_path / "ranged" / "part-002.md").read_text(encoding="utf-8")
+        assert 'page_range: "1-4"' in first, f"the first part covers pages 1 to 4: {first[:200]}"
+        assert 'page_range: "5-8"' in second, f"the second part covers pages 5 to 8: {second[:200]}"
+
+    def test_part_body_size_uses_every_page(self, tmp_path: Path) -> None:
+        """The measure pass reads every page, so the front matter size never wins."""
+        source = PdfFixtureBuilder(tmp_path).build("measured.pdf", self._pages(12))
+        _, total, body_size = PdfLineReader(source).measure()  # the call under test
+        assert total == 12, f"the measure pass must count every page: {total}"
+        assert body_size == 10.0, f"the body size must be the body, not the contents: {body_size}"
