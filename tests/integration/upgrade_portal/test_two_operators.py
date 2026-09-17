@@ -286,7 +286,7 @@ def lock_store() -> FakeLockStore:
 
 
 @pytest.fixture
-def portal_app() -> Flask:
+def portal_app(monkeypatch: pytest.MonkeyPatch) -> Flask:
     """Return the capture portal application in test mode.
 
     Why:
@@ -301,6 +301,7 @@ def portal_app() -> Flask:
         "src.upgrade_portal.app.factory",
         reason="The capture portal application factory is not built yet.",
     )
+    monkeypatch.setenv("MISTHELPER_STANDALONE", "true")  # Skip DNS probes before test seams are installed.
     application: Flask = factory.create_app()  # The real factory, with no argument.
     application.config.update(TESTING=True)  # Test mode reports the real exception instead of a 500 page.
     application.config[auth.DEPENDENCY_ROWS_KEY] = []  # These tests do not measure store reachability.

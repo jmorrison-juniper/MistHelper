@@ -211,7 +211,7 @@ def fake_capture_storage() -> FakeCaptureStorage:
 
 
 @pytest.fixture
-def portal_app() -> Any:
+def portal_app(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Return the capture portal application in test mode.
 
     Why:
@@ -234,6 +234,7 @@ def portal_app() -> Any:
         reason="The capture portal application factory is not built yet.",
     )
     logger.info("Build the capture portal application for a contract test")  # WHY: ASCII, %s style, no credential.
+    monkeypatch.setenv("MISTHELPER_STANDALONE", "true")  # Skip DNS probes before test seams are installed.
     app = factory.create_app()
     app.config.update(TESTING=True)  # WHY: Test mode reports the real exception instead of a 500 page.
     app.config[auth.DEPENDENCY_ROWS_KEY] = []  # Contract tests drive routes, not live store probes.
