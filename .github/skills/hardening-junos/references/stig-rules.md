@@ -1,5 +1,17 @@
 # DISA STIG rules for Juniper EX switches
 
+## Platform scope
+
+These rules come from the EX switch STIG bundle, `U_Juniper_EX_Switches_Y26M07_STIG`.
+The bundle includes Layer 2 Switch V2R5, Network Device Management V2R5, and Router V2R1.
+The Network Device Management set covers device management. Many controls can inform another
+Junos platform. The Layer 2 Switch set covers layer 2 switching. An MX router or an SRX firewall
+can use those functions differently.
+
+If your device is an MX router or an SRX firewall, get the STIG for that platform. This corpus
+does not hold it. When the platform does not match, use this file only as a pointer for questions.
+Verify the rule in the platform STIG before you act.
+
 ## How to use this file
 
 DISA names a Security Technical Implementation Guide, or STIG, as a hardening standard.
