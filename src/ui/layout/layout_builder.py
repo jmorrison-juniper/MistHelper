@@ -10,6 +10,8 @@ import logging
 import shutil
 from typing import Any
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 FIXED_PANEL_HEIGHT = 20  # Stable rendering height
 OUTPUT_PANEL_HEIGHT = 8  # Reserved height for output panel
 LEFT_PANEL_PCT = 0.40  # Left column width % of terminal
@@ -25,7 +27,7 @@ class LayoutBuilder:
     def build(self) -> Any:
         """Return the top-level Rich renderable for the current TUI frame."""
         tui = self._tui  # Local alias
-        logging.info("TUI: building layout (state=%s)", tui.execution_state)  # Action log before composition
+        logger.info("TUI: building layout (state=%s)", tui.execution_state)  # Action log before composition
         from rich.console import Group  # Lazy import — Rich is optional dep
 
         column_width = self._compute_column_width()  # Dynamic left-panel width
@@ -43,7 +45,7 @@ class LayoutBuilder:
             border_style="bright_blue",
             box=tui.box.ROUNDED,
         )
-        logging.debug("TUI: layout build complete")  # Action log after composition
+        logger.debug("TUI: layout build complete")  # Action log after composition
         if tui.execution_state == "viewing_results":  # Results-grid overlay path
             results_layout = self._maybe_wrap_results_grid()
             if results_layout is not None:

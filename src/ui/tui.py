@@ -29,6 +29,8 @@ from src.ui.input_handlers import KeyboardDispatchTable, KeyPoller  # WHY: keyst
 from src.ui.layout import LayoutBuilder, ResultsGridBuilder  # WHY: Rich Panel composition
 from src.ui.runtime import DotenvLoader, LevelDiscoverer, TuiRunner  # WHY: .env, discovery, lifecycle
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 UI_OVERHEAD_ROWS = 10  # Reserved rows for borders/title/help
 
 
@@ -55,8 +57,8 @@ class MistHelperTUI:  # WHY: public TUI entrypoint composing all collaborators
         self.dotenv_values = self._dotenv_loader.load()  # Load .env via collaborator
         self.apisession: Any = None  # Will be set by main script
         if self.debug_mode:  # Optional debug trace
-            logging.debug("TUI_DEBUG: Debug mode ENABLED for TUI navigation")  # Trace when verbose logging active
-        logging.info("TUI_MODE: MistHelperTUI API Explorer initialized")  # Action log after construction
+            logger.debug("TUI_DEBUG: Debug mode ENABLED for TUI navigation")  # Trace when verbose logging active
+        logger.info("TUI_MODE: MistHelperTUI API Explorer initialized")  # Action log after construction
 
     # ---- construction helpers (each CC <= 6) ----------------------------
 
@@ -176,7 +178,7 @@ class MistHelperTUI:  # WHY: public TUI entrypoint composing all collaborators
     def _cancel_execution(self) -> None:
         """Cancel the current function execution and reset prompt state."""
         if self.debug_mode:  # Optional debug trace
-            logging.debug("TUI_DEBUG: Function execution cancelled by user")
+            logger.debug("TUI_DEBUG: Function execution cancelled by user")
         self.execution_state = None  # Drop prompt mode
         self.current_function = None  # Drop function reference
         self.function_params = {}  # Drop captured params

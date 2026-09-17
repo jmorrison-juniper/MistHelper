@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 MAX_SAMPLE_ITEMS = 5  # Default sample-items cap
 
 
@@ -18,7 +20,7 @@ class APIResponseParser:
     def parse(self, result: Any) -> Any:
         """Return ``result.data`` when present. Otherwise ``result`` unchanged."""
         if hasattr(result, "data"):  # mistapi APIResponse shape
-            logging.debug("TUI_DEBUG: Detected APIResponse object, extracting data attribute")
+            logger.debug("TUI_DEBUG: Detected APIResponse object, extracting data attribute")
             return result.data
         return result  # Non-APIResponse passthrough
 
@@ -29,7 +31,7 @@ class HierarchicalFormatter:
     def format_result(self, parsed_data: Any, func_name: str, raw_result: Any = None) -> list[str]:
         """Top-level helper: SUCCESS header + recursive body + size hint."""
         output: list[str] = [f"[SUCCESS] {func_name} completed", ""]  # Banner lines
-        logging.info("TUI: formatting result for %s", func_name)  # Action log before render
+        logger.info("TUI: formatting result for %s", func_name)  # Action log before render
         if raw_result is not None:  # Debug-mode artifact hint
             output.append(f"[dim]Debug: Result saved to data/tui_debug_results/{func_name}_*.json[/dim]")
             output.append("")
@@ -37,7 +39,7 @@ class HierarchicalFormatter:
         if isinstance(parsed_data, (list, dict)) and len(str(parsed_data)) > 500:
             output.append("")
             output.append("[dim]Tip: Full data available in debug log (run with --debug)[/dim]")
-        logging.debug("TUI: result formatting complete for %s", func_name)  # Action log after render
+        logger.debug("TUI: result formatting complete for %s", func_name)  # Action log after render
         return output
 
     # ---- recursive type dispatch -----------------------------------------

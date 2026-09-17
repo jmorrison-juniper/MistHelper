@@ -7,6 +7,8 @@ import inspect
 import logging
 from typing import Any
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 DOC_SHORT_LIMIT = 60  # Max chars to show on the items list
 
 
@@ -23,7 +25,7 @@ class LevelDiscoverer:
         tui.current_items = []  # Reset items list
         module_path = self._compose_module_path()  # Build "mistapi.api.v1[...]" path
         tui.breadcrumb = module_path  # Update header breadcrumb
-        logging.info("TUI: discovering level %s", module_path)  # Action log before import
+        logger.info("TUI: discovering level %s", module_path)  # Action log before import
         module = self._import_module(module_path)  # Import or set error state
         if module is None:  # Import failed -> already set
             return
@@ -34,7 +36,7 @@ class LevelDiscoverer:
         tui.current_items.sort(key=lambda x: (0 if x["type"] == "module" else 1, x["name"]))
         if not tui.current_items:  # Sentinel when nothing was found
             tui.current_items = [{"type": "empty", "name": "(empty)", "description": "No items found at this level"}]
-        logging.debug("TUI: discovery complete - %d items at %s", len(tui.current_items), module_path)
+        logger.debug("TUI: discovery complete - %d items at %s", len(tui.current_items), module_path)
 
     # ---- helpers ---------------------------------------------------------
 

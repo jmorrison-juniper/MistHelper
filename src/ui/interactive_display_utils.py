@@ -19,6 +19,8 @@ from src.refactors.device_data_fetcher import (
     DeviceFetchConfig,
 )  # T-01: DeviceFetchConfig now lives with DeviceDataFetcher.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class InteractiveDisplayUtils:
     """Centralized interactive display utilities.
@@ -31,16 +33,16 @@ class InteractiveDisplayUtils:
     def site_inventory() -> None:
         """Prompt the user to select a site and display its device inventory."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Prompting user to select a site for device inventory view...")  # Log the prompt.
+        logger.info("Prompting user to select a site for device inventory view...")  # Log the prompt.
         # WHY (#886 Phase 2): retire print() in favor of logging.warning so operator sees the
         # header on the default root-logger config (INFO is suppressed by default).
-        logging.warning("Select a Site to View Device Inventory:")  # Header.
+        logger.warning("Select a Site to View Device Inventory:")  # Header.
         site_id = mh.PromptUtils.select_site_id_from_csv()  # Select a site.
         if site_id:  # Site selected.
-            logging.info("User selected site_id: %s for inventory display.", site_id)  # Log the selection.
+            logger.info("User selected site_id: %s for inventory display.", site_id)  # Log the selection.
             mh.SiteDeviceExporter.device_inventory(site_id)
         else:
-            logging.warning("No site selected or invalid input provided for site selection.")  # Warn none selected.
+            logger.warning("No site selected or invalid input provided for site selection.")  # Warn none selected.
 
     @staticmethod
     def device_stats(site_id: str | None = None, device_id: str | None = None) -> None:
@@ -51,7 +53,7 @@ class InteractiveDisplayUtils:
             device_id: Optional device ID (prompts if not provided)
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Prompting user to select a device for detailed statistics view...")  # Log the prompt.
+        logger.info("Prompting user to select a device for detailed statistics view...")  # Log the prompt.
         mh.DeviceDataFetcher(  # Fetch and display.
             DeviceFetchConfig(  # Issue #470: bundle fetch params (T-01: imported from src.refactors).
                 fetch_function=mistapi.api.v1.sites.stats.getSiteDeviceStats,
@@ -61,13 +63,13 @@ class InteractiveDisplayUtils:
                 device_id=device_id,
             )
         ).fetch()
-        logging.info("Completed device_stats execution.")  # Log completion.
+        logger.info("Completed device_stats execution.")  # Log completion.
 
     @staticmethod
     def device_tests() -> None:
         """Prompt user to select a gateway device and display its synthetic test stats."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Prompting user to select a gateway device for synthetic test stats view...")  # Log the prompt.
+        logger.info("Prompting user to select a gateway device for synthetic test stats view...")  # Log the prompt.
         mh.DeviceDataFetcher(  # Fetch and display.
             DeviceFetchConfig(  # Issue #470: bundle fetch params (T-01: imported from src.refactors).
                 fetch_function=mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest,
@@ -76,13 +78,13 @@ class InteractiveDisplayUtils:
                 device_type="gateway",
             )
         ).fetch()
-        logging.info("Completed device_tests execution.")  # Log completion.
+        logger.info("Completed device_tests execution.")  # Log completion.
 
     @staticmethod
     def device_config() -> None:
         """Prompt user to select a device and display its configuration details."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        logging.info("Prompting user to select a device for configuration details view...")  # Log the prompt.
+        logger.info("Prompting user to select a device for configuration details view...")  # Log the prompt.
         mh.DeviceDataFetcher(  # Fetch and display.
             DeviceFetchConfig(  # Issue #470: bundle fetch params (T-01: imported from src.refactors).
                 fetch_function=mistapi.api.v1.sites.devices.getSiteDevice,
@@ -90,4 +92,4 @@ class InteractiveDisplayUtils:
                 description="Fetching device configuration",
             )
         ).fetch()
-        logging.info("Completed device_config execution.")  # Log completion.
+        logger.info("Completed device_config execution.")  # Log completion.

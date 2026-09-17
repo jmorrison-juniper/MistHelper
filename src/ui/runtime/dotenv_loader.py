@@ -6,6 +6,8 @@ import logging  # WHY: action-log before/after every .env read
 import os  # WHY: existence check on the .env file
 from typing import Any  # WHY: TUI back-ref is loosely typed
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 DOTENV_FILENAME = ".env"  # Filename to load from CWD
 
 
@@ -18,7 +20,7 @@ class DotenvLoader:  # WHY: extracted from MistHelperTUI._load_dotenv_only (was 
 
     def load(self) -> dict[str, str]:  # WHY: read .env once at startup
         """Return ``{key: value}`` parsed from ``.env``. Empty dict on failure."""
-        logging.info("TUI: loading .env values")  # Action log before read
+        logger.info("TUI: loading .env values")  # Action log before read
         if not os.path.exists(DOTENV_FILENAME):  # No file -> empty result
             return {}  # WHY: absent .env is not an error, just an empty result
         dotenv_dict: dict[str, str] = {}  # Output accumulator
@@ -28,9 +30,9 @@ class DotenvLoader:  # WHY: extracted from MistHelperTUI._load_dotenv_only (was 
                     self._parse_line(raw_line, dotenv_dict)  # Append the parsed key to dict
         except Exception as error:  # Match original tolerant behavior
             logging.warning("TUI: Could not read .env file: %s", error)  # WHY: warn but continue
-        logging.debug("TUI: loaded %d .env values", len(dotenv_dict))  # Action log after read
+        logger.debug("TUI: loaded %d .env values", len(dotenv_dict))  # Action log after read
         if self._tui.debug_mode:  # Echo loaded keys in debug mode
-            logging.debug(  # WHY: dump keys (not values) for debug visibility
+            logger.debug(  # WHY: dump keys (not values) for debug visibility
                 "TUI_DEBUG: Loaded %d values from .env file: %s",
                 len(dotenv_dict),
                 list(dotenv_dict.keys()),
