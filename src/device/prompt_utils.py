@@ -21,6 +21,8 @@ import mistapi.api.v1.sites.devices  # WHY: Mist Sites Devices API for listing A
 import mistapi.api.v1.sites.stats  # WHY: Mist Sites Stats API for per-port status info
 from prettytable import PrettyTable  # WHY: tabular display for device and port selection lists
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 _MAX_PORTS_PER_CAPTURE = 6  # WHY: Mist API hard cap on concurrent packet-capture ports
 
 # WHY: Junos management/loopback/service interfaces are never valid capture targets.
@@ -133,10 +135,10 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         user_input = self._safe_input(  # WHY: injected input helper handles EOF consistently
             "\nEnter the index number of the AP or 'all': ", context="ap_selection"
         ).strip()
-        logging.debug("User input for AP selection: %s", user_input)  # WHY: log raw input for diagnostics
+        logger.debug("User input for AP selection: %s", user_input)  # WHY: log raw input for diagnostics
         if user_input.lower() == "all":  # WHY: sentinel path -- capture on every AP simultaneously
             print(f"\n! Selected: All APs ({len(devices)} APs)")  # WHY: confirm to operator
-            logging.info("User selected all APs: %d APs", len(devices))  # WHY: audit aggregate selection
+            logger.info("User selected all APs: %d APs", len(devices))  # WHY: audit aggregate selection
             return "ALL_APS"  # WHY: caller checks for this string to enter multi-AP mode
         return self._resolve_mac_choice(user_input, index_map, "AP")  # WHY: single-index resolution
 
@@ -152,7 +154,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         user_input = self._safe_input(  # WHY: injected input helper handles EOF consistently
             "\nEnter the index number of the gateway: ", context="gateway_selection"
         ).strip()
-        logging.debug("User input for gateway selection: %s", user_input)  # WHY: raw input for diagnostics
+        logger.debug("User input for gateway selection: %s", user_input)  # WHY: raw input for diagnostics
         return self._resolve_mac_choice(user_input, index_map, "gateway")  # WHY: single-index resolution
 
     def select_switch_mac(self, site_id: str) -> str | None:  # WHY: interactive switch MAC selection
@@ -167,7 +169,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         user_input = self._safe_input(  # WHY: injected input helper handles EOF consistently
             "\nEnter the index number of the switch: ", context="switch_selection"
         ).strip()
-        logging.debug("User input for switch selection: %s", user_input)  # WHY: raw input for diagnostics
+        logger.debug("User input for switch selection: %s", user_input)  # WHY: raw input for diagnostics
         return self._resolve_mac_choice(user_input, index_map, "switch")  # WHY: single-index resolution
 
     # ------------------------------------------------------------------
@@ -182,7 +184,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         Emits the user-facing 'No <plural> found' / 'Error fetching <plural>' messages
         so callers can simply check for a None result and bail out.
         """
-        logging.info("Fetching %s list for site %s to present selection prompt", plural_label, site_id)  # WHY: audit
+        logger.info("Fetching %s list for site %s to present selection prompt", plural_label, site_id)  # WHY: audit
         try:
             response = mistapi.api.v1.sites.devices.listSiteDevices(  # WHY: single API call for the type
                 self._session, site_id, type=device_type
@@ -194,9 +196,9 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         rawdata = response.data  # WHY: unwrap to the list payload the API returned
         if not rawdata:  # WHY: guard against zero-length inventory before prompting
             print(f"\n! No {plural_label} found at the selected site.")  # WHY: nothing to offer the user
-            logging.warning("No %s found for site_id: %s", plural_label, site_id)  # WHY: audit empty result
+            logger.warning("No %s found for site_id: %s", plural_label, site_id)  # WHY: audit empty result
             return None  # WHY: signal empty inventory to caller
-        logging.debug("Received %d %s for site %s from Mist API", len(rawdata), plural_label, site_id)  # WHY: audit
+        logger.debug("Received %d %s for site %s from Mist API", len(rawdata), plural_label, site_id)  # WHY: audit
         return sorted(rawdata, key=lambda x: x.get("name", ""))  # WHY: alphabetical order aids readability
 
     def _render_device_selection(self, devices: list[Any], header: str) -> dict[int, Any]:  # WHY: shared table renderer
@@ -210,7 +212,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         index_map = self._populate_device_rows(table, devices)  # WHY: rows plus index map for callers
         self._print_selection_banner(header)  # WHY: banner + separators around header text
         print(table)  # WHY: render the selection table to the terminal
-        logging.info("Displaying %s table (%d) -- awaiting input", header, len(devices))  # WHY: audit prompt
+        logger.info("Displaying %s table (%d) -- awaiting input", header, len(devices))  # WHY: audit prompt
         return index_map  # WHY: caller uses this to resolve the entered index
 
     @staticmethod
@@ -243,18 +245,18 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         """Validate a numeric device-selection choice and return the picked MAC, or None."""
         if not user_input.isdigit():  # WHY: only accept numeric index values
             print("\n! Please enter a valid index number")  # WHY: guide operator toward correct input
-            logging.error("Non-numeric %s selection input: %s", kind_label, user_input)  # WHY: audit bad input
+            logger.error("Non-numeric %s selection input: %s", kind_label, user_input)  # WHY: audit bad input
             return None  # WHY: reject non-numeric input
         idx = int(user_input)  # WHY: convert to integer for map lookup
         if idx not in index_map:  # WHY: reject out-of-range indices before dereferencing
             print("\n! Invalid index")  # WHY: guide operator toward correct input
-            logging.error("Invalid %s index entered by user: %d", kind_label, idx)  # WHY: audit bad index
+            logger.error("Invalid %s index entered by user: %d", kind_label, idx)  # WHY: audit bad index
             return None  # WHY: reject out-of-range index
         device = index_map[idx]  # WHY: retrieve the chosen device dict
         mac: str | None = device.get("mac")  # WHY: typed local narrows Any so mypy accepts the return
         name = device.get("name", "Unknown")  # WHY: retrieve name for the confirmation message
         print(f"\n! Selected {kind_label}: {name} (MAC: {mac})")  # WHY: confirm selection to operator
-        logging.info("User selected %s index %d: name=%s mac=%s", kind_label, idx, name, mac)  # WHY: audit
+        logger.info("User selected %s index %d: name=%s mac=%s", kind_label, idx, name, mac)  # WHY: audit
         return mac  # WHY: caller uses this to target the selected device
 
     # ------------------------------------------------------------------
@@ -276,7 +278,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         caller receives ``(selected_ports, available_ports)`` so an empty selection
         can be expanded to every UP port.
         """
-        logging.info("Fetching port information for %s %s at site %s", device_type, device_mac, site_id)
+        logger.info("Fetching port information for %s %s at site %s", device_type, device_mac, site_id)
         try:
             return self._perform_port_selection(site_id, device_mac, device_type, return_available)
         except Exception as error:  # WHY: broad catch keeps flow alive on any API failure
@@ -329,7 +331,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         available = self._filter_and_sort_ports(port_stat)  # WHY: strip mgmt/DOWN and natural sort
         if not available:  # WHY: everything filtered out -- warn once
             print(f"\n! No network ports available for {device_type}: {device_name}")  # WHY: user-facing
-            logging.warning("No user-facing ports found for device %s", device_id)  # WHY: audit trail
+            logger.warning("No user-facing ports found for device %s", device_id)  # WHY: audit trail
         return available, port_to_config, device_name  # WHY: caller decides whether to prompt
 
     def _collect_port_stat_and_config(
@@ -351,7 +353,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
     def _resolve_target_device(self, site_id: str, device_mac: str, device_type: str) -> Any | None:
         """Look up the target device in site inventory by normalised MAC."""
         normalized = _normalize_mac(device_mac)  # WHY: separator-agnostic comparison key
-        logging.debug("Normalised input MAC for comparison: %s", normalized)  # WHY: diagnostics for misses
+        logger.debug("Normalised input MAC for comparison: %s", normalized)  # WHY: diagnostics for misses
         devices_response = mistapi.api.v1.sites.devices.listSiteDevices(  # WHY: fetch all of target type
             self._session, site_id, type=device_type
         )
@@ -359,7 +361,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         device = self._find_device_by_mac(devices, normalized, device_mac)  # WHY: linear scan by MAC
         if device is None:  # WHY: not found -- print helpful diagnostic before returning None
             print(f"\n! Could not find {device_type} with MAC {device_mac}")  # WHY: guide operator
-            logging.error(  # WHY: list observed MACs to help diagnose stale inventory
+            logger.error(  # WHY: list observed MACs to help diagnose stale inventory
                 "Device not found with MAC: %s (normalised: %s). Available: %s",
                 device_mac,
                 normalized,
@@ -372,16 +374,16 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         for dev in devices:  # WHY: linear scan over the inventory list
             dev_mac = dev.get("mac", "")  # WHY: raw MAC from API (may include colons)
             normalized_dev_mac = _normalize_mac(str(dev_mac))  # WHY: identical normalisation as the target
-            logging.debug(  # WHY: each comparison is logged so failed matches are traceable
+            logger.debug(  # WHY: each comparison is logged so failed matches are traceable
                 "Comparing device %s: %s (normalised: %s)",
                 dev.get("name", "Unknown"),
                 dev_mac,
                 normalized_dev_mac,
             )
             if normalized_dev_mac == normalized_target:  # WHY: exact post-normalisation match
-                logging.debug("MAC match found for device: %s", dev.get("name", "Unknown"))  # WHY: audit hit
+                logger.debug("MAC match found for device: %s", dev.get("name", "Unknown"))  # WHY: audit hit
                 return dev  # WHY: first match wins -- MACs are unique in inventory
-        logging.error(  # WHY: log the target MAC so operators can diagnose mismatches
+        logger.error(  # WHY: log the target MAC so operators can diagnose mismatches
             "No device found matching normalised MAC: %s (original: %s)", normalized_target, original_mac
         )
         return None  # WHY: no match found in inventory
@@ -394,7 +396,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
 
     def _fetch_switch_gateway_port_stats(self, site_id: str, device_id: str, device_mac: str) -> dict[str, Any]:
         """Fetch switch/gateway port stats via searchSiteSwOrGwPorts."""
-        logging.info("Fetching switch/gateway port stats via searchSiteSwOrGwPorts for device %s", device_id)
+        logger.info("Fetching switch/gateway port stats via searchSiteSwOrGwPorts for device %s", device_id)
         try:
             response = mistapi.api.v1.sites.stats.searchSiteSwOrGwPorts(  # WHY: dedicated port stats API
                 self._session, site_id, mac=device_mac, limit=1000
@@ -403,7 +405,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
             logging.error("Error fetching switch/gateway port stats: %s", port_search_error)  # WHY: audit
             return {}  # WHY: empty dict signals 'no live stats' to the caller
         results = response.data.get("results", [])  # WHY: unwrap to the list of per-port dicts
-        logging.info("Retrieved %d port stat entries from searchSiteSwOrGwPorts", len(results))  # WHY: audit
+        logger.info("Retrieved %d port stat entries from searchSiteSwOrGwPorts", len(results))  # WHY: audit
         port_stat = self._index_port_results(results)  # WHY: build port_id -> stat map
         self._log_port_stat_summary(port_stat, device_mac)  # WHY: emit info/warn based on outcome
         return port_stat  # WHY: may be empty when device is offline -- caller handles fallback
@@ -422,22 +424,22 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
     def _log_port_stat_summary(port_stat: dict[str, Any], device_mac: str) -> None:
         """Emit info or warn log describing how many port stats were indexed."""
         if port_stat:  # WHY: healthy path -- log count for audit trail
-            logging.info("Converted %d switch/gateway ports to stat dict", len(port_stat))
+            logger.info("Converted %d switch/gateway ports to stat dict", len(port_stat))
         else:  # WHY: warn when API returned data but nothing usable
-            logging.warning("searchSiteSwOrGwPorts returned no usable port data for device %s", device_mac)
+            logger.warning("searchSiteSwOrGwPorts returned no usable port data for device %s", device_mac)
 
     def _fetch_ap_port_stats(self, site_id: str, device_id: str) -> dict[str, Any]:
         """Fetch AP port stats from the port_stat field embedded in device stats."""
-        logging.info("Fetching AP port stats via getSiteDeviceStats for device %s", device_id)  # WHY: audit
+        logger.info("Fetching AP port stats via getSiteDeviceStats for device %s", device_id)  # WHY: audit
         stats_response = mistapi.api.v1.sites.stats.getSiteDeviceStats(  # WHY: AP stats endpoint
             self._session, site_id, device_id
         )
         stats_data = stats_response.data  # WHY: unwrap to the device stats dict
         port_stat = cast("dict[str, Any]", stats_data.get("port_stat", {}))  # WHY: narrow Any for mypy strict
         if port_stat:  # WHY: log presence so operators can confirm live data
-            logging.info("Found port_stat (AP-style) with %d ports", len(port_stat))
+            logger.info("Found port_stat (AP-style) with %d ports", len(port_stat))
         else:  # WHY: warn when the AP has not reported any port stats yet
-            logging.warning("No port_stat found in AP stats for device %s", device_id)
+            logger.warning("No port_stat found in AP stats for device %s", device_id)
         return port_stat  # WHY: empty dict when device is silent -- caller handles fallback
 
     def _fetch_port_config(self, site_id: str, device_id: str) -> dict[str, Any]:
@@ -445,7 +447,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
 
         Falls back to an empty dict if the device config API call fails.
         """
-        logging.debug("Fetching device config for port profiles/descriptions from device %s", device_id)  # WHY: audit
+        logger.debug("Fetching device config for port profiles/descriptions from device %s", device_id)  # WHY: audit
         try:
             device_config_response = mistapi.api.v1.sites.devices.getSiteDevice(  # WHY: full device config
                 self._session, site_id, device_id
@@ -454,7 +456,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
             logging.warning("Could not fetch device config for port details: %s", cfg_error)  # WHY: audit
             return {}  # WHY: empty dict spares callers a None guard
         port_config: dict[str, Any] = device_config_response.data.get("port_config", {})  # WHY: extract section
-        logging.debug("Retrieved port_config with %d entries for device %s", len(port_config), device_id)  # WHY: audit
+        logger.debug("Retrieved port_config with %d entries for device %s", len(port_config), device_id)  # WHY: audit
         return port_config  # WHY: dict keyed by range strings like 'ge-0/0/0-5'
 
     def _build_port_to_config_map(self, port_config: dict[str, Any]) -> dict[str, Any]:
@@ -465,15 +467,15 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         """
         port_to_config: dict[str, Any] = {}  # WHY: output map keyed by individual port name
         if not port_config:  # WHY: no config to expand -- warn once and return
-            logging.warning("No port_config available -- port profiles and descriptions will be missing")
+            logger.warning("No port_config available -- port profiles and descriptions will be missing")
             return port_to_config
-        logging.info("Expanding %d port_config entries to individual port mappings", len(port_config))  # WHY: audit
+        logger.info("Expanding %d port_config entries to individual port mappings", len(port_config))  # WHY: audit
         for port_range_key, cfg in port_config.items():  # WHY: iterate range-keyed config entries
             expanded_ports = self._expand_port_range(port_range_key)  # WHY: use injected expander callable
-            logging.debug("Port config key '%s' expands to %d ports", port_range_key, len(expanded_ports))  # WHY: audit
+            logger.debug("Port config key '%s' expands to %d ports", port_range_key, len(expanded_ports))  # WHY: audit
             for individual_port in expanded_ports:  # WHY: map each individual port to the shared config
                 port_to_config[individual_port] = cfg  # WHY: same dict object -- reads are shared
-        logging.info("Built port_to_config map with %d individual port entries", len(port_to_config))  # WHY: audit
+        logger.info("Built port_to_config map with %d individual port entries", len(port_to_config))  # WHY: audit
         return port_to_config  # WHY: caller uses this for O(1) profile/description lookup
 
     def _build_port_stat_from_config(
@@ -484,12 +486,12 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         device_name: str,
     ) -> dict[str, Any] | None:
         """Build a synthetic port_stat dict from device config when live stats are unavailable."""
-        logging.warning(  # WHY: warn before fallback so operator knows stats are not live
+        logger.warning(  # WHY: warn before fallback so operator knows stats are not live
             "No port_stat from API for device %s -- attempting config-based fallback", device_id
         )
         if not port_config:  # WHY: neither stats nor config -- nothing to show
             self._report_no_port_info(device_type, device_name)  # WHY: user-facing rejection message
-            logging.warning("No port_stat or port_config found for device %s", device_id)  # WHY: audit
+            logger.warning("No port_stat or port_config found for device %s", device_id)  # WHY: audit
             return None
         try:
             return self._synthesize_port_stat_from_config(port_config, device_id)  # WHY: main synthesis path
@@ -506,7 +508,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
 
     def _synthesize_port_stat_from_config(self, port_config: dict[str, Any], device_id: str) -> dict[str, Any]:
         """Iterate configured port ranges and build a synthetic port_stat dict."""
-        logging.info(  # WHY: audit start of synthesis
+        logger.info(  # WHY: audit start of synthesis
             "Building synthetic port_stat from %d port_config entries for device %s",
             len(port_config),
             device_id,
@@ -514,10 +516,10 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         port_stat: dict[str, Any] = {}  # WHY: accumulate one entry per individual port
         for port_range_key, port_cfg in port_config.items():  # WHY: iterate over configured ranges
             expanded_ports = self._expand_port_range(port_range_key)  # WHY: turn range into individual ports
-            logging.debug("Expanded port range '%s' to %d ports", port_range_key, len(expanded_ports))  # WHY: audit
+            logger.debug("Expanded port range '%s' to %d ports", port_range_key, len(expanded_ports))  # WHY: audit
             for individual_port in expanded_ports:  # WHY: create one synthetic entry per port
                 port_stat[individual_port] = self._synthesize_port_entry(port_cfg)  # WHY: fixed shape per port
-        logging.info(  # WHY: audit result size after building synthetic stats
+        logger.info(  # WHY: audit result size after building synthetic stats
             "Built synthetic port_stat with %d individual port entries for device %s",
             len(port_stat),
             device_id,
@@ -546,14 +548,14 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         available: list[tuple[str, Any]] = []  # WHY: accumulate surviving (name, info) tuples
         for port_name, port_info in port_stat.items():  # WHY: iterate over every port in the stat dict
             if _is_management_port(port_name):  # WHY: skip loopback/management/service interfaces
-                logging.debug("Excluding management/service port: %s", port_name)  # WHY: audit exclusion
+                logger.debug("Excluding management/service port: %s", port_name)  # WHY: audit exclusion
                 continue
             if not port_info.get("up", False):  # WHY: DOWN ports cannot be captured -- skip
-                logging.debug("Excluding DOWN port: %s", port_name)  # WHY: audit exclusion
+                logger.debug("Excluding DOWN port: %s", port_name)  # WHY: audit exclusion
                 continue
             available.append((port_name, port_info))  # WHY: keep this UP user-facing port
         result = sorted(available, key=_natural_sort_key)  # WHY: natural sort places ge-0/0/9 before ge-0/0/10
-        logging.debug("Filtered to %d UP user-facing ports after exclusions", len(result))  # WHY: audit
+        logger.debug("Filtered to %d UP user-facing ports after exclusions", len(result))  # WHY: audit
         return result  # WHY: sorted list of (name, info) tuples ready for display
 
     # ------------------------------------------------------------------
@@ -571,7 +573,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         user_input = self._safe_input(  # WHY: injected input helper handles EOF/empty consistently
             "\nEnter your choice (up to 6 ports): ", context="port_selection", allow_empty=True
         ).strip()
-        logging.debug("User input for port selection: %s", user_input)  # WHY: raw input for diagnostics
+        logger.debug("User input for port selection: %s", user_input)  # WHY: raw input for diagnostics
         return self._dispatch_port_input(user_input, request)  # WHY: cancel/all/parse dispatch
 
     def _display_full_port_prompt(self, request: _PortPromptRequest) -> None:
@@ -582,7 +584,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         )
         self._display_port_prompt_header(request, table, using_fallback)  # WHY: banner + table
         self._display_port_selection_options(len(request.available_ports))  # WHY: help block
-        logging.info(
+        logger.info(
             "Displaying port selection table for %s %s (%d UP ports) -- awaiting user input",
             request.device_type,
             request.device_mac,
@@ -593,7 +595,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         """Route port input to cancel, all, or index-parse handling."""
         if user_input.lower() == "c":  # WHY: explicit cancel path
             print("\n! Port selection cancelled")  # WHY: confirm cancellation to operator
-            logging.info("Port selection cancelled by user")  # WHY: audit cancel
+            logger.info("Port selection cancelled by user")  # WHY: audit cancel
             return None
         if not user_input or user_input.lower() == "all":  # WHY: empty/'all' selects every available port
             return self._handle_all_ports_selection(request.available_ports, request.return_available)
@@ -701,12 +703,12 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
                 f"\n! ERROR: Cannot select all {len(available_ports)} ports - API maximum is 6 ports per capture"
             )
             print("  Please select up to 6 specific ports from the list above")  # WHY: guide operator
-            logging.error(  # WHY: audit the violation for later review
+            logger.error(  # WHY: audit the violation for later review
                 "User attempted to select all %d ports -- exceeds API limit of 6", len(available_ports)
             )
             return None
         print(f"\n! Selected ALL {len(available_ports)} ports for capture")  # WHY: confirm selection
-        logging.info("User selected all %d ports (within 6-port limit)", len(available_ports))  # WHY: audit
+        logger.info("User selected all %d ports (within 6-port limit)", len(available_ports))  # WHY: audit
         if return_available:  # WHY: caller wants full list alongside the empty-selection sentinel
             return [], available_ports
         return []  # WHY: empty list signals 'all ports' to the caller
@@ -724,7 +726,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
                 result.add(port_index)
             else:  # WHY: warn the operator so out-of-range indices are surfaced
                 print(f"\n! Warning: Index {port_index} is out of range, skipping")
-                logging.warning("Invalid port index in range: %d", port_index)  # WHY: audit
+                logger.warning("Invalid port index in range: %d", port_index)  # WHY: audit
         return result  # WHY: set of valid indices from this range token
 
     def _collect_selected_indices(self, user_input: str, index_to_port: dict[int, str]) -> set[int] | None:
@@ -747,7 +749,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         if idx in index_to_port:  # WHY: only accept indices within the displayed table
             return {idx}
         print(f"\n! Warning: Index {idx} is out of range, skipping")  # WHY: warn the operator
-        logging.warning("Invalid port index: %d", idx)  # WHY: audit bad index
+        logger.warning("Invalid port index: %d", idx)  # WHY: audit bad index
         return set()  # WHY: empty set contributes nothing to the running union
 
     def _parse_port_indices(
@@ -758,7 +760,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         available_ports: list[tuple[str, Any]],
     ) -> PortSelectionResult:
         """Parse user port index input and return the validated selected port name list."""
-        logging.debug("Parsing port selection input: %s", user_input)  # WHY: raw input for diagnostics
+        logger.debug("Parsing port selection input: %s", user_input)  # WHY: raw input for diagnostics
         selected_indices = self._collect_selected_indices(user_input, index_to_port)  # WHY: to index set
         if selected_indices is None:  # WHY: parse failure -- helper already printed the reason
             return None
@@ -766,7 +768,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         if selected_ports is None:  # WHY: empty selection or 6-port cap exceeded -- helper messaged
             return None
         print(f"\n! Selected {len(selected_ports)} port(s): {', '.join(selected_ports)}")  # WHY: confirm
-        logging.info("User selected ports: %s", selected_ports)  # WHY: audit final selection
+        logger.info("User selected ports: %s", selected_ports)  # WHY: audit final selection
         if return_available:  # WHY: caller wants both the selection and the full available list
             return selected_ports, available_ports
         return selected_ports  # WHY: return just the selected port name list
@@ -777,7 +779,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         """Convert an index set to a sorted port-name list, or None on empty/over-cap."""
         if not selected_indices:  # WHY: no valid indices remained after parsing
             print("\n! No valid ports selected")  # WHY: user-facing rejection
-            logging.error("No valid port indices provided by user")  # WHY: audit empty result
+            logger.error("No valid port indices provided by user")  # WHY: audit empty result
             return None
         selected_ports = [index_to_port[idx] for idx in sorted(selected_indices)]  # WHY: ordered by index
         if len(selected_ports) > _MAX_PORTS_PER_CAPTURE:  # WHY: enforce Mist API hard limit
@@ -785,7 +787,7 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
                 f"\n! ERROR: Selected {len(selected_ports)} ports, but API maximum is 6 ports per capture"
             )
             print("  Please refine your selection to 6 or fewer ports")  # WHY: guide operator
-            logging.error(  # WHY: audit the violation
+            logger.error(  # WHY: audit the violation
                 "User selected %d ports -- exceeds API limit of 6", len(selected_ports)
             )
             return None

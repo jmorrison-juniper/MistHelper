@@ -17,6 +17,8 @@ from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class DeviceUtils:  # Device helper utilities.
     """Centralized device-related utilities for lookups, port parsing, and MAC operations."""
@@ -31,17 +33,17 @@ class DeviceUtils:  # Device helper utilities.
         Returns:
             List of AP MAC addresses, or empty list if error/none found.
         """
-        logging.debug("Fetching all AP MACs for site: %s", site_id)  # Log before AP fetch.
+        logger.debug("Fetching all AP MACs for site: %s", site_id)  # Log before AP fetch.
 
         try:
             apisession = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
             rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap").data
             if not rawdata:  # Handle empty AP set.
-                logging.warning("No APs found for site_id: %s", site_id)  # Log no APs found.
+                logger.warning("No APs found for site_id: %s", site_id)  # Log no APs found.
                 return []  # Return empty list.
 
             ap_macs = [ap.get("mac") for ap in rawdata if ap.get("mac")]  # Collect AP MAC addresses.
-            logging.info("Found %s AP MACs at site", len(ap_macs))  # Log AP MAC count.
+            logger.info("Found %s AP MACs at site", len(ap_macs))  # Log AP MAC count.
             return ap_macs  # Return AP MACs.
 
         except Exception as error:  # Catch fetch errors.
@@ -92,7 +94,7 @@ class DeviceUtils:  # Device helper utilities.
         """Log a warning when ``key`` is used as identifier because ``prior_fields`` were blank."""
         if not prior_fields:  # First-choice field was non-empty. Nothing degraded
             return
-        logging.warning(  # Warn that earlier identifier fields are missing
+        logger.warning(  # Warn that earlier identifier fields are missing
             "Device %s missing %s field, using %s as identifier",  # Format string
             value,
             prior_fields,
@@ -109,5 +111,5 @@ class DeviceUtils:  # Device helper utilities.
                     DeviceUtils._warn_degraded_identifier(value, prior_fields, key)  # Emit only when truly degraded
                 return value  # type: ignore[no-any-return]
         if warn_on_missing:  # All identifier fields blank -- last-resort fallback
-            logging.warning("Device found with no name, serial, or id - using 'UNKNOWN'")  # Final warning
+            logger.warning("Device found with no name, serial, or id - using 'UNKNOWN'")  # Final warning
         return "UNKNOWN"  # Last-resort placeholder id
