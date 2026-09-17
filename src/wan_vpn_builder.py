@@ -21,6 +21,8 @@ import mistapi  # WHY: shared API session helper (get_all pagination).
 import mistapi.api.v1.orgs.deviceprofiles  # WHY: gateway device profile list/get/update endpoints.
 import mistapi.api.v1.orgs.vpns  # WHY: org VPN list/create endpoints.
 
+logger = logging.getLogger(__name__)  # WHY: module logger identifies the WAN VPN builder in shared logs.
+
 # ---------------------------------------------------------------------------
 # Module-level constants (avoid magic literals throughout the module).
 # ---------------------------------------------------------------------------
@@ -84,7 +86,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
         """Static entry point called by menu_actions lambda."""
         org_id = get_org_id_func()  # WHY: resolve org lazily so caching prompt happens only when needed.
         if not org_id:  # WHY: no org selected -> abort with a user-visible reason instead of raising.
-            logging.error("! No organization selected. Exiting.")  # WHY: single-line operator hint before returning.
+            logger.error("! No organization selected. Exiting.")  # WHY: single-line operator hint before returning.
             return  # WHY: nothing more to do without an org context.
         builder = WanVpnBuilder(apisession, org_id, safe_input_func)  # WHY: bind session/org/input for this run.
         builder.run()  # WHY: hand off to the interactive workflow.
@@ -95,10 +97,10 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
 
     def run(self) -> None:  # WHY: top-level orchestrator. Kept small by delegating to focused helpers.
         """Main workflow: fetch, display, build, preview, create."""
-        logging.warning(
+        logger.warning(
             "\n=== WAN Hub-Spoke VPN Builder ==="
         )  # WHY: banner delimits this menu action in the operator log.
-        logging.info("Starting WAN Hub-Spoke VPN Builder")  # WHY: capture entry timestamp for troubleshooting.
+        logger.info("Starting WAN Hub-Spoke VPN Builder")  # WHY: capture entry timestamp for troubleshooting.
 
         profiles = self._load_profiles_or_none()  # WHY: fetch profiles and short-circuit on empty inventory.
         if profiles is None:  # WHY: helper already emitted operator message. Nothing more to do.
@@ -114,7 +116,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
 
         vpn_body = self._build_vpn_body(vpn_name, assignments)  # WHY: assemble API payload from validated inputs.
         if not self._display_preview(vpn_name, vpn_body):  # WHY: require explicit CREATE token before mutating org.
-            logging.warning("  VPN creation cancelled.")  # WHY: operator-visible confirmation of cancellation.
+            logger.warning("  VPN creation cancelled.")  # WHY: operator-visible confirmation of cancellation.
             return  # WHY: honor the operator's decision not to proceed.
 
         self._create_and_optionally_update(vpn_name, vpn_body, assignments)  # WHY: perform side-effects together.
@@ -123,9 +125,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
         """Fetch gateway profiles. Return None and warn if inventory is empty."""
         profiles = self._fetch_profiles()  # WHY: API call is isolated for test-time monkeypatch.
         if not profiles:  # WHY: empty list means org has no gateway profiles -> abort with hint.
-            logging.warning(
-                "! No gateway device profiles found in this organization."
-            )  # WHY: actionable operator hint.
+            logger.warning("! No gateway device profiles found in this organization.")  # WHY: actionable operator hint.
             return None  # WHY: sentinel triggers early return in run().
         return profiles  # WHY: hand the fetched list to the workflow.
 
@@ -159,10 +159,10 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
         if created_vpn is None:  # WHY: creation failed -> do not attempt profile updates.
             return  # WHY: caller already saw an error message from _create_vpn.
         vpn_id = created_vpn.get("id", "")  # WHY: id is required for downstream vpn_paths refs.
-        logging.warning(
+        logger.warning(
             "  VPN '%s' created successfully. ID: %s", vpn_name, vpn_id
         )  # WHY: operator confirmation of success.
-        logging.info("VPN '%s' created with ID %s", vpn_name, vpn_id)  # WHY: audit trail of created id.
+        logger.info("VPN '%s' created with ID %s", vpn_name, vpn_id)  # WHY: audit trail of created id.
         self._prompt_profile_updates(vpn_id, vpn_name, assignments)  # WHY: optional US2 profile linkage.
 
     # ------------------------------------------------------------------
@@ -332,7 +332,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             )  # WHY: only gateway-type profiles are eligible for VPN membership.
             profiles: list[Any] = mistapi.get_all(response=response, mist_session=self.apisession)  # WHY: paginate.
             profiles.sort(key=lambda profile: profile.get("name", "").lower())  # WHY: case-insensitive display order.
-            logging.debug("Fetched %d gateway profiles", len(profiles))  # WHY: %s style logging per project rule.
+            logger.debug("Fetched %d gateway profiles", len(profiles))  # WHY: %s style logging per project rule.
             return profiles  # WHY: sorted list surfaces to run() for display.
         except Exception:  # WHY: single-branch guard so we return [] on any error.
             logging.exception("Failed to fetch device profiles")  # WHY: capture traceback for post-mortem.
@@ -344,7 +344,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
         try:  # WHY: mirror _fetch_profiles' graceful degradation.
             response = mistapi.api.v1.orgs.vpns.listOrgVpns(self.apisession, self.org_id)  # WHY: list org VPNs.
             vpns: list[Any] = mistapi.get_all(response=response, mist_session=self.apisession)  # WHY: paginate.
-            logging.debug("Fetched %d org VPNs", len(vpns))  # WHY: %s style logging per project rule.
+            logger.debug("Fetched %d org VPNs", len(vpns))  # WHY: %s style logging per project rule.
             return vpns  # WHY: caller uses for display + uniqueness check.
         except Exception:  # WHY: keep the workflow going even if the VPN list cannot be fetched.
             logging.exception("Failed to fetch org VPNs")  # WHY: preserve traceback for operator log review.
@@ -358,7 +358,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
         try:  # WHY: convert any API error into a None return so run() can bail out cleanly.
             response = mistapi.api.v1.orgs.vpns.createOrgVpn(self.apisession, self.org_id, body=vpn_body)  # WHY: POST.
             created: dict[str, Any] = response.data if hasattr(response, "data") else response  # WHY: dual shape.
-            logging.info("VPN created via API: %s", created.get("id", ""))  # WHY: id logged for correlation.
+            logger.info("VPN created via API: %s", created.get("id", ""))  # WHY: id logged for correlation.
             return created  # WHY: caller extracts the new vpn id for profile updates.
         except Exception:  # WHY: single-branch guard: any exception -> operator warning + None.
             logging.exception("Failed to create VPN")  # WHY: capture full traceback in operator log.
@@ -372,11 +372,11 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
     def _display_existing_vpns(self, vpns: list[Any]) -> None:  # WHY: read-only display step before naming.
         """Display summary table of existing VPNs."""
         if not vpns:  # WHY: no rows to render -> print a friendly placeholder instead of an empty table.
-            logging.warning(
+            logger.warning(
                 "\n  No existing VPN definitions in this organization."
             )  # WHY: prevent confusing blank output.
             return  # WHY: early return keeps the empty case simple.
-        logging.warning(  # WHY: consolidated header lines emit as a single logging record for atomic output.
+        logger.warning(  # WHY: consolidated header lines emit as a single logging record for atomic output.
             "\n  Existing VPN Definitions (%d):\n  %-4s %-30s %-12s %6s\n  %s %s %s %s",
             len(vpns),
             "#",
@@ -392,12 +392,12 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             name = vpn.get("name", "")  # WHY: default empty avoids KeyError on partial API rows.
             vpn_type = vpn.get("type", "unknown")  # WHY: default keeps column populated on partial API data.
             path_count = len(vpn.get("paths", {}))  # WHY: quick visual signal of VPN size.
-            logging.warning("  %-4d %-30s %-12s %6d", index, name, vpn_type, path_count)  # WHY: aligned row output.
-        logging.warning("")  # WHY: blank line separates table from the next prompt.
+            logger.warning("  %-4d %-30s %-12s %6d", index, name, vpn_type, path_count)  # WHY: aligned row output.
+        logger.warning("")  # WHY: blank line separates table from the next prompt.
 
     def _display_profile_list(self, profiles: list[Any]) -> None:  # WHY: shows inventory prior to role prompt.
         """Show numbered profile list with WAN/LAN interface counts."""
-        logging.warning(  # WHY: consolidated header lines emit as a single logging record.
+        logger.warning(  # WHY: consolidated header lines emit as a single logging record.
             "\n  Gateway Device Profiles (%d):\n  %-4s %-30s %4s %4s\n  %s %s %s %s",
             len(profiles),
             "#",
@@ -416,10 +416,10 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             wan_count = len(wan_list)  # WHY: displayed for operator context.
             lan_count = len(lan_list)  # WHY: displayed for operator context.
             warning = " (!) No WAN interfaces" if wan_count == 0 else ""  # WHY: flag profiles that cannot be hub.
-            logging.warning(
+            logger.warning(
                 "  %-4d %-30s %4d %4d%s", index, name, wan_count, lan_count, warning
             )  # WHY: aligned row output.
-        logging.warning("")  # WHY: blank line separates table from the next prompt.
+        logger.warning("")  # WHY: blank line separates table from the next prompt.
 
     def _display_preview(self, vpn_name: str, vpn_body: dict[str, Any]) -> bool:  # WHY: last chance to bail.
         """Display VPN preview and prompt for CREATE confirmation."""
@@ -436,7 +436,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
         self, vpn_name: str, vpn_body: dict[str, Any], path_count: int
     ) -> None:
         """Print the VPN preview header block and optional path-count warning."""
-        logging.warning(  # WHY: consolidated preview header emits as a single logging record.
+        logger.warning(  # WHY: consolidated preview header emits as a single logging record.
             "\n  === VPN Preview ===\n  Name: %s\n  Type: %s\n  Path Selection: %s\n  Total Paths: %d",
             vpn_name,
             vpn_body.get("type", ""),
@@ -444,7 +444,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             path_count,
         )
         if path_count > self.PATH_WARN_THRESHOLD:  # WHY: flag likely misconfiguration before it hits the API.
-            logging.warning(  # WHY: multi-line warning is easier to scan than one long line.
+            logger.warning(  # WHY: multi-line warning is easier to scan than one long line.
                 "  WARNING: Path count (%d) exceeds %d. This may indicate an unusually large configuration.",
                 path_count,
                 self.PATH_WARN_THRESHOLD,
@@ -453,11 +453,11 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
     @staticmethod
     def _print_preview_paths(paths: dict[str, Any]) -> None:  # WHY: pure printer for the path list.
         """Print the sorted list of generated path keys with pod annotations."""
-        logging.warning("\n  Path Keys:")  # WHY: header labels the list that follows.
+        logger.warning("\n  Path Keys:")  # WHY: header labels the list that follows.
         for key in sorted(paths.keys()):  # WHY: sorted output is easier to eyeball during review.
             pod = paths[key].get("pod", "")  # WHY: default empty string keeps output stable for edge shapes.
-            logging.warning("    %s (pod: %s)", key, pod)  # WHY: indent + annotation aids visual scanning.
-        logging.warning("")  # WHY: blank line separates list from the next prompt.
+            logger.warning("    %s (pod: %s)", key, pod)  # WHY: indent + annotation aids visual scanning.
+        logger.warning("")  # WHY: blank line separates list from the next prompt.
 
     # ------------------------------------------------------------------
     # User interaction — prompts (US1)
@@ -473,13 +473,13 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             ).strip()  # WHY: trim leading/trailing whitespace before validation.
             outcome = self._classify_name(name, lower_names)  # WHY: pure classifier keeps this loop tiny.
             if outcome == "cancel":  # WHY: user typed the cancellation sentinel.
-                logging.warning("  Cancelled.")  # WHY: audible confirmation of cancellation.
+                logger.warning("  Cancelled.")  # WHY: audible confirmation of cancellation.
                 return None  # WHY: signal caller to abort the workflow.
             if outcome == "empty":  # WHY: reject blank so we always send a real value to the API.
-                logging.warning("  VPN name cannot be empty.")  # WHY: guide operator to retype.
+                logger.warning("  VPN name cannot be empty.")  # WHY: guide operator to retype.
                 continue  # WHY: re-prompt without leaving the loop.
             if outcome == "duplicate":  # WHY: prevent silent collision with an existing overlay.
-                logging.warning("  VPN name '%s' already exists. Choose a different name.", name)  # WHY: actionable.
+                logger.warning("  VPN name '%s' already exists. Choose a different name.", name)  # WHY: actionable.
                 continue  # WHY: re-prompt with the same existing_names set.
             return name  # WHY: outcome == 'ok' -> validated name to return.
 
@@ -504,7 +504,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
         profiles: list[Any],
     ) -> list[dict[str, Any]] | None:
         """Prompt user to assign Hub/Spoke/Skip to each profile."""
-        logging.warning("  Assign roles to each profile (H=Hub, S=Spoke, K=Skip):")  # WHY: prompt legend for operators.
+        logger.warning("  Assign roles to each profile (H=Hub, S=Spoke, K=Skip):")  # WHY: prompt legend for operators.
         assignments = [  # WHY: list comprehension pairs each profile with a role decision.
             self._prompt_role_for_profile(index, profile)  # WHY: per-profile prompt lives in its own helper.
             for index, profile in enumerate(profiles, start=1)
@@ -531,9 +531,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             if role is not None:  # WHY: parser returns None only for invalid inputs.
                 pod = 0 if role == ROLE_SKIP else self.POD_DEFAULT  # WHY: skips carry no pod value.
                 return {"profile": profile, "role": role, "pod": pod}  # WHY: assignment shape used everywhere.
-            logging.warning(
-                "    Please enter H (Hub), S (Spoke), or K (Skip)."
-            )  # WHY: guide operator on invalid input.
+            logger.warning("    Please enter H (Hub), S (Spoke), or K (Skip).")  # WHY: guide operator on invalid input.
 
     @staticmethod
     def _parse_role_choice(choice: str) -> str | None:  # WHY: pure parser -- easy to unit test.
@@ -555,13 +553,13 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
         self, profiles: list[Any]
     ) -> list[dict[str, Any]] | None:
         """Ask operator to retry role assignment when every profile was skipped."""
-        logging.warning("  All profiles skipped. At least one must be Hub or Spoke.")  # WHY: explain why we retry.
+        logger.warning("  All profiles skipped. At least one must be Hub or Spoke.")  # WHY: explain why we retry.
         retry = (  # WHY: normalized y/N answer determines whether we loop.
             self._safe_input("  Try again? (y/N): ", context=CTX_RETRY_ROLES).strip().lower()
         )
         if retry == RETRY_YES:  # WHY: recurse to give the operator another chance.
             return self._prompt_role_assignments(profiles)  # WHY: same profiles, fresh set of role decisions.
-        logging.warning("  Cancelled.")  # WHY: operator-visible confirmation of cancel decision.
+        logger.warning("  Cancelled.")  # WHY: operator-visible confirmation of cancel decision.
         return None  # WHY: caller treats None as full workflow cancellation.
 
     def _prompt_pod_values(  # WHY: second phase of assignment collection -- assigns pods to non-skip roles.
@@ -602,7 +600,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             )  # WHY: actionable guidance.
             return None  # WHY: caller sees None and re-prompts.
         if not (self.POD_MIN <= value <= self.POD_MAX):  # WHY: enforce documented pod range.
-            logging.warning(
+            logger.warning(
                 "    Pod must be between %d and %d.", self.POD_MIN, self.POD_MAX
             )  # WHY: actionable guidance.
             return None  # WHY: caller sees None and re-prompts.
@@ -653,7 +651,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             role = assignment["role"]  # WHY: role determines cross-connect emission below.
             self._apply_port_updates(profile_name, vpn_name, role, port_config, suffixes)  # WHY: in-place merge.
             self._push_profile_update(profile_id, fresh_profile)  # WHY: single REST PUT wrapped for patchability.
-            logging.info("Updated profile '%s' with vpn_paths for VPN '%s'", profile_name, vpn_name)  # WHY: audit.
+            logger.info("Updated profile '%s' with vpn_paths for VPN '%s'", profile_name, vpn_name)  # WHY: audit.
             return True  # WHY: caller counts True as one success.
         except Exception:  # WHY: catch-all so a per-profile error does not abort other profiles.
             logging.exception("Failed to update profile '%s'", profile_name)  # WHY: keep traceback for support.
@@ -727,7 +725,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
         if not self._prompt_confirm_profile_updates():  # WHY: honor operator decision before touching profiles.
             return  # WHY: honor a no answer without further prompts.
         success_count, fail_count = self._run_profile_updates(vpn_name, non_skip)  # WHY: helper isolates loop.
-        logging.warning(
+        logger.warning(
             "  Profile updates: %d succeeded, %d failed.", success_count, fail_count
         )  # WHY: summary for operator.
 
@@ -742,7 +740,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             .lower()
         )
         if choice != RETRY_YES:  # WHY: default (N) is safer -- do not mutate profiles unless explicitly asked.
-            logging.warning("  Skipping profile updates.")  # WHY: operator-visible confirmation of the skip.
+            logger.warning("  Skipping profile updates.")  # WHY: operator-visible confirmation of the skip.
             return False  # WHY: caller returns without touching profiles.
         return True  # WHY: explicit y -> proceed with the profile-update loop.
 

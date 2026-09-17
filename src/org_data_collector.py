@@ -88,6 +88,8 @@ import mistapi.api.v1.orgs.wxtunnels  # WHY: WLAN tunnel list endpoint
 if TYPE_CHECKING:  # WHY: Import Callable only for type checking to keep runtime imports minimal
     from collections.abc import Callable
 
+
+logger = logging.getLogger(__name__)  # WHY: module logger identifies this collector in shared logs.
 # --- Module constants ------------------------------------------------------
 _DEFAULT_LIMIT = 1000  # WHY: Paginated APIs default to a 1000-item page for bulk collection
 _DEFAULT_SORT_KEY = "name"  # WHY: Fallback sort key when the operation omits one
@@ -507,7 +509,7 @@ class OrgDataCollector:
         """
         org_id = get_org_id_fn()  # WHY: Resolve org id up front so the confirmation banner reflects it
         total = len(ALL_OPERATIONS)  # WHY: Compute total once for banner text and progress denominator
-        logging.info("Org Data Collector: starting %s operations for org %s", total, org_id)  # WHY: Audit trail
+        logger.info("Org Data Collector: starting %s operations for org %s", total, org_id)  # WHY: Audit trail
         if not _confirm_run(safe_input_fn, total):  # WHY: Abort early if the operator declines the prompt
             return
         totals = _collect_all(export_data_fn, total)  # WHY: Delegate the loop and receive aggregate counters
@@ -522,8 +524,8 @@ def _confirm_run(safe_input_fn: Callable[..., str], total: int) -> bool:
     reply = safe_input_fn(prompt, context="org_data_collector")  # WHY: EOF-safe operator prompt
     if reply.strip().lower() == _CONFIRM_YES:  # WHY: Normalize whitespace/case before comparing
         return True
-    logging.info("Org Data Collector: cancelled by user")  # WHY: Audit trail for the cancel path
-    logging.warning("Cancelled.")  # WHY: Operator-visible cancel confirmation via logger.
+    logger.info("Org Data Collector: cancelled by user")  # WHY: Audit trail for the cancel path
+    logger.warning("Cancelled.")  # WHY: Operator-visible cancel confirmation via logger.
     return False
 
 
@@ -549,7 +551,7 @@ def _maybe_print_category(category: str, previous: str) -> str:
     """Print the category banner when ``category`` differs from ``previous`` and return the new tag."""
     if category == previous:  # WHY: Guard clause avoids reprinting the banner for adjacent same-category ops
         return previous
-    logging.warning("\n%s\n  %s\n%s", _SEPARATOR, category, _SEPARATOR)  # WHY: Category banner via logger.
+    logger.warning("\n%s\n  %s\n%s", _SEPARATOR, category, _SEPARATOR)  # WHY: Category banner via logger.
     return category  # WHY: Return the new tag so the caller updates its watermark
 
 
@@ -562,12 +564,12 @@ def _run_single(
     """Execute one operation and return one of ``_RESULT_OK`` / ``_RESULT_FAILED`` / ``_RESULT_SKIPPED``."""
     api_name = operation.api_call.__name__  # WHY: Human-readable function name for progress + logging
     progress = f"[{index}/{total}]"  # WHY: Pre-format progress token so the print stays a single f-string
-    logging.warning("%s %s (%s)...", progress, api_name, operation.data_type)  # WHY: Progress line via logger.
+    logger.warning("%s %s (%s)...", progress, api_name, operation.data_type)  # WHY: Progress line via logger.
     try:
         export_data_fn(**_build_export_kwargs(operation))  # WHY: Delegate to the shared export pipeline
     except Exception as error:  # WHY: Catch broadly so one flaky API never aborts the entire sweep
         return _report_failure(api_name, error)  # WHY: Emit failure line + log and return the sentinel
-    logging.warning("OK")  # WHY: Trailing status token confirming success via logger.
+    logger.warning("OK")  # WHY: Trailing status token confirming success via logger.
     return _RESULT_OK
 
 
@@ -588,8 +590,8 @@ def _build_export_kwargs(operation: Operation) -> dict[str, Any]:
 def _report_failure(api_name: str, error: BaseException) -> str:
     """Print, log, and return the failure sentinel for a raised exception."""  # WHY: Isolates error-path I/O
     error_name = type(error).__name__  # WHY: Compact class name suffices in the console line
-    logging.warning("FAILED (%s)", error_name)  # WHY: Failure marker via logger.
-    logging.error("Org Data Collector: %s failed: %s: %s", api_name, error_name, error)  # WHY: Full detail log
+    logger.warning("FAILED (%s)", error_name)  # WHY: Failure marker via logger.
+    logger.error("Org Data Collector: %s failed: %s: %s", api_name, error_name, error)  # WHY: Full detail log
     return _RESULT_FAILED
 
 
@@ -597,7 +599,7 @@ def _print_summary(total: int, totals: _RunTotals) -> None:
     """Print collection summary to console and log."""
     minutes, seconds = _split_elapsed(totals.elapsed)  # WHY: Precompute minutes/seconds for banner + log
     _print_summary_banner(total, totals, minutes, seconds)  # WHY: Console section for the operator
-    logging.info(  # WHY: Structured completion record for post-run analysis
+    logger.info(  # WHY: Structured completion record for post-run analysis
         "Org Data Collector: complete -- %s/%s succeeded, %s failed, %sm %ss elapsed",
         totals.succeeded,
         total,
@@ -616,7 +618,7 @@ def _split_elapsed(elapsed: float) -> tuple[int, int]:
 
 def _print_summary_banner(total: int, totals: _RunTotals, minutes: int, seconds: int) -> None:
     """Emit the operator-facing summary banner for the completed run."""  # WHY: Pure console output helper
-    logging.warning(  # WHY: Summary banner via logger. Single call preserves block cohesion.
+    logger.warning(  # WHY: Summary banner via logger. Single call preserves block cohesion.
         "\n%s\n  Org Data Collection Complete\n%s\n"
         "  Total:     %s\n"
         "  Succeeded: %s\n"
