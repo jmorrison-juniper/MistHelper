@@ -10,8 +10,9 @@ configuration, and Junos 26.2 guides.
 Warning: do not paste a full baseline into production without a reviewed change window. A wrong
 management, authentication, or firewall statement can remove access to the device.
 
-Use `commit confirmed 2` for a remote change that can remove access. Confirm access through the
-management path, then run `commit` before the timer expires.
+Use `commit confirmed 2` for a remote change that can remove access. The two-minute timer
+rolls back the candidate configuration if the management session dies. Confirm access through
+the management path, then run `commit` before the timer expires.
 
 ## Contents
 
@@ -60,6 +61,9 @@ Sources: Hardening Junos Devices Checklist, This Week: Hardening Junos Devices, 
 Junos OS ICMP Router Discovery Protocol User Guide, Junos OS Neighbor Discovery User Guide, and
 Junos OS Denial-of-Service Protection User Guide.
 
+Warning: do not change the active management interface address without a second tested path and
+`commit confirmed 2`. You can lose all remote access and need console access.
+
 | ID | Control | Why it matters | Junos statement | Verify |
 | - | - | - | - | - |
 | NET-01 | Use the out-of-band interface for management traffic. | A separate management path keeps device access away from transit traffic. | Configure `fxp0`, `em0`, or `me0` for management, then apply management services there only. | `show interfaces terse fxp0`, `show interfaces terse em0`, or `show interfaces terse me0` |
@@ -95,6 +99,20 @@ System Log Messages Reference.
 Sources: Hardening Junos Devices Checklist, This Week: Hardening Junos Devices, Second Edition,
 Junos OS User Access and Authentication Guide, Junos OS CLI User Guide, and Junos OS NETCONF XML
 Management Protocol Guide.
+
+### Safe order for remote access changes
+
+Use this order for ACC-02 and each access service change that can remove the current session.
+
+1. Configure SSH with `set system services ssh`.
+2. Commit the SSH configuration with `commit`.
+3. Open a second SSH session, and confirm that sign-in works. Keep the first session open.
+4. Disable Telnet only after the SSH test succeeds.
+5. Commit the Telnet change with `commit confirmed 2`. The two-minute timer rolls back the
+   candidate configuration if the management session dies.
+
+Warning: do not disable Telnet on a remote device until a second SSH session works. You can lose
+all remote access and need console access.
 
 | ID | Control | Why it matters | Junos statement | Verify |
 | - | - | - | - | - |
@@ -168,8 +186,12 @@ Denial-of-Service Protection User Guide, and Junos OS Class of Service User Guid
 | FWF-05 | Rate-limit authorized protocols with policers. | Policing protects the routing engine even for allowed traffic. | `set firewall family inet filter protect-re term allow-snmp then policer limit-1m` | `show firewall filter protect-re` and `show policer` |
 | FWF-06 | Add syslog to the final default-deny term. | Logging denied traffic helps the operator find missing terms and scans. | `set firewall family inet filter protect-re term default-deny then syslog` | `show log messages | match protect-re` and `show firewall log` |
 
-Warning: test a new routing-engine filter with console access or `commit confirmed 2`. A missing
-permit term can block SSH, SNMP, NTP, or routing adjacencies.
+Warning: do not apply a default-deny routing-engine filter remotely until required permit terms
+exist and a second session proves access. Use `commit confirmed 2`. A missing term can remove all
+remote access and require console access.
+
+Warning: test FWF-03 source limits with `commit confirmed 2` before you make them permanent. A
+wrong prefix list can block SSH, SNMP, NTP, or routing adjacencies.
 
 ## Sources
 
