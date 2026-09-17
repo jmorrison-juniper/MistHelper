@@ -12,6 +12,8 @@ from collections import deque
 from contextlib import contextmanager
 from typing import Generator
 
+logger = logging.getLogger(__name__)  # Use a module logger so records include this module name.
+
 
 class InputInterceptor:
     """Intercept builtins.input() to feed web-submitted answers.
@@ -32,7 +34,7 @@ class InputInterceptor:
         cls._original_input = builtins.input
         builtins.input = cls._patched_input
         cls._installed = True
-        logging.info("InputInterceptor installed")
+        logger.info("InputInterceptor installed")
 
     @classmethod
     def _patched_input(cls, prompt: str = "") -> str:
@@ -40,7 +42,7 @@ class InputInterceptor:
         queue = getattr(cls._local, "input_queue", None)
         if queue is not None and len(queue) > 0:
             answer = queue.popleft()
-            logging.debug("InputInterceptor: answered '%s'", answer)
+            logger.debug("InputInterceptor: answered '%s'", answer)
             return str(answer)
         if queue is not None and len(queue) == 0:
             raise EOFError("Web input queue exhausted")

@@ -6,7 +6,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.shared.services.auth import AuthService, MistPrivileges
+from src.shared.services.auth import AuthService, MistApiUnavailableError, MistPrivileges
+
+STATUS_UNAUTHORIZED = 401  # Name the HTTP 4xx token rejection used by auth tests.
+STATUS_UNAVAILABLE = 503  # Name the HTTP 5xx service failure used by auth tests.
 
 
 class TestMistPrivileges:
@@ -104,3 +107,55 @@ class TestAuthService:
         self.svc.validate_token("tok-new")
 
         mock_write.assert_called_once()
+
+    @patch("src.shared.services.auth.mistapi.APISession")
+    @patch("src.shared.services.auth.MistEndpointService")
+    def test_fetch_self_returns_empty_privileges_on_401(
+        self,
+        mock_service_cls: MagicMock,
+        mock_session_cls: MagicMock,
+    ) -> None:
+        mock_service = mock_service_cls.return_value  # Use the _fetch_self service double.
+        mock_service.list_all_entities.return_value = MagicMock(  # Return a Mist client error.
+            success=False,  # Prove the failure branch executes.
+            status_code=STATUS_UNAUTHORIZED,  # Exercise the HTTP 4xx token path.
+            data={"detail": "Unauthorized"},  # Keep the Mist body visible.
+        )
+
+        result = self.svc._fetch_self("tok-bad")  # Validate the token upstream.
+
+        assert result == MistPrivileges()  # The caller maps empty privileges to 401.
+        mock_session_cls.assert_called_once_with(  # Verify the token path.
+            host="api.mist.com",
+            apitoken="tok-bad",
+        )
+        mock_service.list_all_entities.assert_called_once_with(  # Verify the /self endpoint.
+            "self_identity",
+            {},
+        )
+
+    @patch("src.shared.services.auth.mistapi.APISession")
+    @patch("src.shared.services.auth.MistEndpointService")
+    def test_fetch_self_raises_unavailable_on_503(
+        self,
+        mock_service_cls: MagicMock,
+        mock_session_cls: MagicMock,
+    ) -> None:
+        mock_service = mock_service_cls.return_value  # Use the _fetch_self service double.
+        mock_service.list_all_entities.return_value = MagicMock(  # Return a Mist server error.
+            success=False,  # Prove the HTTP failure branch executes.
+            status_code=STATUS_UNAVAILABLE,  # Exercise the HTTP 5xx failure path.
+            data={"detail": "Service unavailable"},  # Keep the body distinct.
+        )
+
+        with pytest.raises(MistApiUnavailableError, match="status 503"):  # Assert the signal.
+            self.svc._fetch_self("tok-server-error")  # Call the uncached seam.
+
+        mock_session_cls.assert_called_once_with(  # Verify the token path.
+            host="api.mist.com",
+            apitoken="tok-server-error",
+        )
+        mock_service.list_all_entities.assert_called_once_with(  # Verify the /self endpoint.
+            "self_identity",
+            {},
+        )

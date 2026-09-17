@@ -24,9 +24,13 @@ _ENDPOINT = MistEndpoint(
 )
 
 
-def _make_response(data: list, next_url: str | None = None) -> SimpleNamespace:
+def _make_response(
+    data: object,
+    next_url: str | None = None,
+    status: int = 200,
+) -> SimpleNamespace:
     """Create a mock SDK response object."""
-    return SimpleNamespace(status_code=200, data=data, next=next_url)
+    return SimpleNamespace(status_code=status, data=data, next=next_url)  # Keep status visible.
 
 
 def _run(service: MistEndpointService, mock_func: MagicMock):
@@ -41,6 +45,8 @@ def _run(service: MistEndpointService, mock_func: MagicMock):
 EXPECTED_CALLS_ON_REPEAT = 2
 EXPECTED_CALLS_ON_ALTERNATING_PAIR = 3
 EXPECTED_CALLS_FOR_THREE_PAGES = 3
+STATUS_FORBIDDEN = 403  # Name the HTTP 4xx response that proves client-error handling.
+STATUS_BAD_GATEWAY = 502  # Name the HTTP 5xx response that proves server errors.
 
 
 class TestPaginationCycleGuard:
@@ -146,6 +152,34 @@ class TestPaginationNormalPathIsUnchanged:
 
         assert mock_func.call_count == EXPECTED_CALLS_FOR_THREE_PAGES
         assert result.data == [{"id": "a"}, {"id": "b"}, {"id": "c"}]
+
+    def test_http_4xx_response_stops_with_error_body(self) -> None:
+        """A client error must return the Mist error body instead of a data row."""
+        service = MistEndpointService(MagicMock())  # Avoid a live Mist session.
+        body = {"detail": "Forbidden"}  # Keep the client-error detail visible.
+        response = _make_response(body, status=STATUS_FORBIDDEN)  # Build the 403 response.
+        mock_func = MagicMock(return_value=response)  # Return the client-error page.
+
+        result = _run(service, mock_func)  # Exercise the shared endpoint route.
+
+        assert result.status_code == STATUS_FORBIDDEN  # The caller must see 403.
+        assert result.success is False  # A 4xx response must not look successful.
+        assert result.error == "Forbidden"  # The specific Mist message must survive wrapping.
+        assert result.data == body  # The error body must not become a list record.
+
+    def test_http_5xx_response_stops_with_error_body(self) -> None:
+        """A server error must return the Mist error body instead of a data row."""
+        service = MistEndpointService(MagicMock())  # Avoid a live Mist session.
+        body = {"detail": "Bad gateway"}  # Keep the server-error detail visible.
+        response = _make_response(body, status=STATUS_BAD_GATEWAY)  # Build the 502 response.
+        mock_func = MagicMock(return_value=response)  # Return the server-error page.
+
+        result = _run(service, mock_func)  # Exercise the shared endpoint route.
+
+        assert result.status_code == STATUS_BAD_GATEWAY  # The caller must see 502.
+        assert result.success is False  # A 5xx response must not look successful.
+        assert result.error == "Bad gateway"  # The specific Mist message must survive wrapping.
+        assert result.data == body  # The error body must not become a list record.
 
 
 class TestPaginationEmptyCursor:

@@ -7,7 +7,8 @@ from dataclasses import dataclass  # WHY: frozen slotted deps container
 from datetime import UTC, datetime  # WHY: timestamp for CSV export filenames
 from typing import Any  # WHY: generic hints for opaque mistapi payloads
 
-logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
+logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
+
 
 _TYPE_TO_BUCKET: dict[str, str] = {  # WHY: raw mistapi device.type -> per-site bucket key
     "ap": "aps",
@@ -69,7 +70,7 @@ class SiteInventoryHealthAnalyzer:  # WHY: namespace for the analyzer entry poin
         )
         SiteInventoryHealthAnalyzer._display_results(missing_report, offline_report)  # WHY: console rendering
         SiteInventoryHealthAnalyzer._export_results(missing_report, offline_report, deps)  # WHY: CSV export
-        logging.info("Site inventory health analysis complete.")  # WHY: completion audit trail
+        logger.info("Site inventory health analysis complete.")  # WHY: completion audit trail
 
     @staticmethod
     def _print_header() -> None:  # WHY: extracted header block keeps analyze under length cap
@@ -78,7 +79,7 @@ class SiteInventoryHealthAnalyzer:  # WHY: namespace for the analyzer entry poin
         logger.info("Site Inventory Health Analyzer:")
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("%s", "=" * 60)
-        logging.info("Starting site inventory health analysis...")  # WHY: audit trail entry
+        logger.info("Starting site inventory health analysis...")  # WHY: audit trail entry
 
     @staticmethod
     def _collect_inventory(  # WHY: extracts fetch+group so analyze stays short and flat
@@ -100,7 +101,7 @@ class SiteInventoryHealthAnalyzer:  # WHY: namespace for the analyzer entry poin
         """Fetch all sites in the organization."""
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! Fetching sites...")
-        logging.info("Fetching all organization sites...")  # WHY: pre-action log
+        logger.info("Fetching all organization sites...")  # WHY: pre-action log
         try:
             sites = deps.all_sites_fn(org_id)  # WHY: injected fetcher for testability
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
@@ -115,13 +116,13 @@ class SiteInventoryHealthAnalyzer:  # WHY: namespace for the analyzer entry poin
         """Fetch all devices (inventory) in the organization."""
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! Fetching device inventory...")
-        logging.info("Fetching all organization devices from inventory...")  # WHY: pre-action log
+        logger.info("Fetching all organization devices from inventory...")  # WHY: pre-action log
         try:
             response = deps.mistapi.api.v1.orgs.inventory.getOrgInventory(  # WHY: first page of inventory
                 deps.apisession, org_id, limit=1000
             )
             devices = deps.mistapi.get_all(response=response, mist_session=deps.apisession) or []  # WHY: paginate
-            logging.debug("Fetched %d devices from organization inventory", len(devices))  # WHY: post-action log
+            logger.debug("Fetched %d devices from organization inventory", len(devices))  # WHY: post-action log
             SiteInventoryHealthAnalyzer._print_device_summary(devices)  # WHY: type/connected breakdown
             return devices  # WHY: hand off list to caller for grouping
         except Exception as error:  # Mist SDK raises bare Exception subclasses
@@ -437,4 +438,4 @@ class SiteInventoryHealthAnalyzer:  # WHY: namespace for the analyzer entry poin
         deps.save_data_fn(rows, spec.filename, api_function_name=spec.api_function_name)  # WHY: delegated write
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("! %s report exported to %s", spec.label, spec.filename)
-        logging.info("Exported %d sites to %s", len(rows), spec.filename)  # WHY: audit trail
+        logger.info("Exported %d sites to %s", len(rows), spec.filename)  # WHY: audit trail

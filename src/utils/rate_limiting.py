@@ -16,6 +16,8 @@ from dataclasses import dataclass  # WHY: bundle PID inputs into a frozen slot o
 from datetime import UTC, datetime  # WHY: UTC-anchored hour-boundary detection.
 from typing import Any  # WHY: typed dict payloads flowing through file I/O helpers.
 
+logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
+
 try:  # WHY: numpy is optional. Fall back to pure-Python stdev when absent.
     import numpy as np  # WHY: vectorised std-dev calculation when available.
 
@@ -127,10 +129,10 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
     def _read_tuning_file() -> dict[str, Any] | None:  # WHY: split I/O from parsing so caller handles None default.
         """Read raw tuning-data JSON. Return None on any I/O or decode error."""
         if not os.path.exists(tuning_data_file):  # WHY: absence is the common cold-start case.
-            logging.debug("File I/O: %s does not exist, using defaults", tuning_data_file)  # WHY: trace missing file.
+            logger.debug("File I/O: %s does not exist, using defaults", tuning_data_file)  # WHY: trace missing file.
             return None  # WHY: signal cold-start to caller.
         try:  # WHY: any decode/read failure falls back to defaults.
-            logging.debug("File I/O: Attempting to read PID tuning data from %s", tuning_data_file)  # WHY: entry log.
+            logger.debug("File I/O: Attempting to read PID tuning data from %s", tuning_data_file)  # WHY: entry log.
             with open(tuning_data_file, encoding="utf-8") as file_handle:  # WHY: UTF-8 keeps the JSON portable.
                 parsed: dict[str, Any] = json.load(file_handle)  # WHY: annotate result for downstream narrowing.
                 return parsed  # WHY: surface the decoded tuning-data dict.
@@ -141,7 +143,7 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
     @staticmethod
     def _load_pid_tuning_data() -> dict[str, Any]:  # WHY: public tuning-data loader with sanitised error history.
         """Load PID tuning data from file with comprehensive logging."""
-        logging.debug("ENTRY: RateLimitingUtils._load_pid_tuning_data()")  # WHY: trace entry for diagnostics.
+        logger.debug("ENTRY: RateLimitingUtils._load_pid_tuning_data()")  # WHY: trace entry for diagnostics.
         data = RateLimitingUtils._read_tuning_file()  # WHY: reuse read helper for consistent error handling.
         if data is None:  # WHY: read failed or file missing -> defaults.
             return _defaults()  # WHY: cold-start defaults preserve caller contract.
@@ -151,18 +153,18 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
             RateLimitingUtils._clean_error_values(raw_errors) if isinstance(raw_errors, list) else []
         )  # WHY: guard against corrupted 'error' payloads.
 
-        logging.debug("File I/O: Successfully loaded PID tuning data from %s", tuning_data_file)  # WHY: success trace.
+        logger.debug("File I/O: Successfully loaded PID tuning data from %s", tuning_data_file)  # WHY: success trace.
         return data  # WHY: surface sanitised tuning-data to caller.
 
     @staticmethod
     def _save_pid_tuning_data(data: dict[str, Any]) -> None:  # WHY: durable persistence for tuning state.
         """Save PID tuning data to file with comprehensive logging."""
         keys = list(data.keys()) if data else []  # WHY: log summary avoids leaking full payload.
-        logging.debug("ENTRY: RateLimitingUtils._save_pid_tuning_data(data_keys=%s)", keys)  # WHY: entry trace.
+        logger.debug("ENTRY: RateLimitingUtils._save_pid_tuning_data(data_keys=%s)", keys)  # WHY: entry trace.
         try:  # WHY: caller expects OSError on unwritable paths. Keep raise.
             with open(tuning_data_file, "w", encoding="utf-8") as file_handle:  # WHY: overwrite the prior snapshot.
                 json.dump(data, file_handle, indent=2)  # WHY: indent keeps file diff-friendly.
-            logging.debug("File I/O: Successfully wrote PID tuning data to %s", tuning_data_file)  # WHY: success log.
+            logger.debug("File I/O: Successfully wrote PID tuning data to %s", tuning_data_file)  # WHY: success log.
         except OSError as write_error:  # WHY: narrow catch. Upstream re-raise preserved.
             logging.error("File I/O: Error writing to %s: %s", tuning_data_file, write_error)  # WHY: surface failure.
             raise  # WHY: contract requires caller to see write failures.
@@ -228,7 +230,7 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
                     stripped = line.strip()  # WHY: tolerate trailing whitespace / blank lines.
                     if stripped:  # WHY: skip empty rows without decoding.
                         entries.append(json.loads(stripped))  # WHY: parse each JSONL row into a dict.
-            logging.debug("File I/O: Loaded %d existing entries from %s", len(entries), filepath)  # WHY: trace count.
+            logger.debug("File I/O: Loaded %d existing entries from %s", len(entries), filepath)  # WHY: trace count.
             return entries  # WHY: surface prior history to caller.
         except (json.JSONDecodeError, OSError) as read_error:  # WHY: narrow to expected classes.
             logging.warning("File I/O: Failed to read %s: %s. Starting fresh.", filepath, read_error)  # WHY: warn.
@@ -253,7 +255,7 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
             for entry in entries:  # WHY: JSONL — one JSON object per line.
                 json.dump(entry, file_handle)  # WHY: serialise the row.
                 file_handle.write("\n")  # WHY: newline delimiter defines JSONL format.
-        logging.debug("File I/O: Successfully updated delay metrics in %s", filepath)  # WHY: success trace.
+        logger.debug("File I/O: Successfully updated delay metrics in %s", filepath)  # WHY: success trace.
 
     @staticmethod
     def _append_delay_metrics_log(
@@ -291,7 +293,7 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
             api_usage_cache["last_updated"] = current_time  # WHY: reset cache-age accounting.
             api_usage_cache["perceived_requests"] = 0  # WHY: reset in-flight counter after live refresh.
             api_usage_cache["initialized"] = True  # WHY: mark cache as authoritative.
-            logging.debug(
+            logger.debug(
                 "API usage refreshed: %d/%d requests", api_usage_cache["used"], api_usage_cache["limit"]
             )  # WHY: trace successful refresh.
         except Exception as api_error:  # WHY: mistapi may raise anything. Log and continue with cached values.
@@ -306,7 +308,7 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
         api_usage_cache["used"] += estimated_growth  # WHY: increment usage counter locally.
         api_usage_cache["last_updated"] = current_time  # WHY: advance cache clock so next call estimates delta.
         api_usage_cache["perceived_requests"] += 1  # WHY: track in-flight request count for refresh gating.
-        logging.debug(
+        logger.debug(
             "Using estimated API usage: %d/%d requests", api_usage_cache["used"], api_usage_cache["limit"]
         )  # WHY: trace estimated-mode update.
 
@@ -355,7 +357,7 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
         """
         delay_integral = inputs.delay_integral  # WHY: local mutable copy of integrator.
         if inputs.seconds_elapsed < inputs.previous_elapsed:  # WHY: hour rolled over between calls.
-            logging.info(" Hour boundary crossed. Resetting integral.")  # WHY: surface soft reset for observability.
+            logger.info(" Hour boundary crossed. Resetting integral.")  # WHY: surface soft reset for observability.
             delay_integral *= _HOUR_BOUNDARY_INTEGRAL_SCALE  # WHY: soft reset preserves partial history.
 
         error, base_delay = RateLimitingUtils._pid_error_and_base(inputs)  # WHY: geometry-only calc extracted.
@@ -376,7 +378,7 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
     ) -> None:  # WHY: severity ladder keeps log noise proportionate to backpressure.
         """Log the calculated delay at the appropriate severity level."""
         if sat_delay > _HIGH_DELAY:  # WHY: high-severity branch surfaces backpressure clearly.
-            logging.warning(
+            logger.warning(
                 "High delay: %.3fs (base: %.3fs, error: %.1f, used: %d/%d)",
                 sat_delay,
                 base_delay,
@@ -385,11 +387,11 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
                 limit,
             )  # WHY: warning-level log for high delays.
         elif sat_delay > _MODERATE_DELAY:  # WHY: mid tier logs at info verbosity.
-            logging.info(
+            logger.info(
                 "Moderate delay: %.3fs (used: %d/%d)", sat_delay, used, limit
             )  # WHY: info-level log for moderate delays.
         else:  # WHY: normal path stays at debug to avoid log spam.
-            logging.debug(
+            logger.debug(
                 "Normal delay: %.3fs (used: %d/%d)", sat_delay, used, limit
             )  # WHY: debug-level log for normal delays.
 
@@ -398,7 +400,7 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
         """Compute alpha and normalise to fallback on non-finite results."""
         alpha = RateLimitingUtils._compute_dynamic_alpha(cleaned)  # WHY: dynamic smoothing factor from history.
         if not _is_finite_number(alpha):  # WHY: NaN/Inf must not poison smoothing math.
-            logging.warning("Invalid alpha value: %s. Using fallback 0.3", alpha)  # WHY: surface bad alpha value.
+            logger.warning("Invalid alpha value: %s. Using fallback 0.3", alpha)  # WHY: surface bad alpha value.
             return _ALPHA_FALLBACK  # WHY: safe fallback on non-finite alpha.
         return alpha  # WHY: propagate valid alpha to smoothing step.
 
@@ -420,7 +422,7 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
             sat_delay if smoothed_delay is None else alpha * sat_delay + (1 - alpha) * smoothed_delay
         )  # WHY: first-call bootstrap vs EWMA update.
         delay_in_seconds = max(new_smoothed, _DELAY_HARD_MIN)  # WHY: enforce minimum sleep floor.
-        logging.info("Rate limiting: sleeping for %.3f seconds", delay_in_seconds)  # WHY: surface applied delay.
+        logger.info("Rate limiting: sleeping for %.3f seconds", delay_in_seconds)  # WHY: surface applied delay.
         return new_smoothed, delay_in_seconds, cleaned  # WHY: propagate smoothed state and cleaned history.
 
     @staticmethod
@@ -434,7 +436,7 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
         )
         if not out_of_bounds:  # WHY: guard clause avoids nested reset block.
             return  # WHY: skip reset when gains are healthy.
-        logging.warning(
+        logger.warning(
             "PID gains out of bounds, resetting: k_p=%s, k_i=%s", tuning_data["k_p"], tuning_data["k_i"]
         )  # WHY: audit trail for gain resets.
         tuning_data["k_p"] = _DEFAULT_KP  # WHY: canonical restart proportional gain.
@@ -583,9 +585,9 @@ class RateLimitingUtils:  # WHY: static-method facade groups rate-limit helpers 
         Returns:
             Tuple of (smoothed_delay, delay_in_seconds).
         """
-        logging.debug("ENTRY: get_rate_limited_delay(smoothed_delay=%s)", smoothed_delay)  # WHY: trace entry.
+        logger.debug("ENTRY: get_rate_limited_delay(smoothed_delay=%s)", smoothed_delay)  # WHY: trace entry.
         if api_usage_cache is None:  # WHY: fail-safe when caller omits the shared cache.
-            logging.warning("api_usage_cache not provided, using fallback delay")  # WHY: surface missing cache.
+            logger.warning("api_usage_cache not provided, using fallback delay")  # WHY: surface missing cache.
             return smoothed_delay, _FALLBACK_DELAY  # WHY: cannot run PID without cache. Return safe fallback.
 
         tuning_data = RateLimitingUtils._load_pid_tuning_data()  # WHY: seed tuning state from disk.
@@ -617,7 +619,7 @@ class AdaptivePacer:  # WHY: hold the PID state that a sequential write loop mus
         self._api_usage_cache = api_usage_cache  # WHY: shared cache keeps every menu on one quota view.
         self._enabled = enabled  # WHY: a dry run must not spend wall-clock time on a sleep.
         self._smoothed_delay: float | None = None  # WHY: None marks the first call of this loop.
-        logging.debug(
+        logger.debug(
             "AdaptivePacer created (enabled=%s, cache_present=%s)", enabled, api_usage_cache is not None
         )  # WHY: record the pacing decision for a later audit of a bulk run.
 

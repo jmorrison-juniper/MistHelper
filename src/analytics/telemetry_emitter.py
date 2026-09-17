@@ -19,6 +19,8 @@ from src.dataclasses.progress_event import (
     TestSummary,  # Bundled test-summary counters (issue #470).
 )
 
+logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
+
 
 class TelemetryEmitter:
     """Append-only NDJSON event writer for test and progress telemetry.
@@ -256,7 +258,7 @@ class TelemetryEmitter:
             while len(files) > limit:
                 oldest = files.pop(0)
                 os.remove(oldest)
-                logging.info("TelemetryEmitter: removed old file %s", oldest)
+                logger.info("TelemetryEmitter: removed old file %s", oldest)
         except OSError as exc:
             logging.warning("TelemetryEmitter: retention cleanup failed: %s", exc)
 

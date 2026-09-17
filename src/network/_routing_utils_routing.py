@@ -24,6 +24,8 @@ from typing import TYPE_CHECKING, Any, cast  # WHY: cast narrows Any from parent
 
 from src.network._routing_utils_payload import RoutingPayloadQuery  # WHY: params builder returns one
 
+logger = logging.getLogger(__name__)  # Use this module name in log records.
+
 if TYPE_CHECKING:  # WHY: only needed for static type checkers. Skipped at runtime
     from src.network.routing_utils import RoutingTableContext, RoutingUtils  # WHY: types only
 
@@ -263,7 +265,7 @@ class _RoutingUtilsRouting:  # WHY: cluster wrapper matching the parsing/display
     ) -> str | None:
         """Execute the routing table command via REST API."""
         print("-> Issuing show route command...")  # WHY: UX preserved
-        logging.debug("Route payload: %s", payload)  # WHY: capture payload in logs regardless of debug
+        logger.debug("Route payload: %s", payload)  # WHY: capture payload in logs regardless of debug
         if debug_mode:  # WHY: also echo payload to stdout when debug is on
             print(f"[DEBUG] Route payload = {payload}")  # WHY: legacy debug format
         session_id, error_msg = self._ru._payload._post_device_command(  # WHY: cluster owns POST
@@ -362,8 +364,8 @@ class _RoutingUtilsRouting:  # WHY: cluster wrapper matching the parsing/display
             self._ru.check_fn()
         )  # WHY: capture debug flag once for entire flow (renamed from is_debug_mode_fn per 1012)
         self._ru._setup_debug_mode(debug_mode)  # WHY: hoist logger to DEBUG when needed
-        logging.info("Starting WebSocket show routing table operation...")  # WHY: production log
-        logging.debug("ENTER: execute_show_routing_table")  # WHY: trace marker for debug logs
+        logger.info("Starting WebSocket show routing table operation...")  # WHY: production log
+        logger.debug("ENTER: execute_show_routing_table")  # WHY: trace marker for debug logs
         websocket_manager = None  # WHY: init early so finally-block cleanup is always safe
         try:  # WHY: outer try wraps the whole flow so KeyboardInterrupt/Exception cleanup runs
             websocket_manager = self._run_routing_table_flow(debug_mode)  # WHY: happy path split
@@ -374,7 +376,7 @@ class _RoutingUtilsRouting:  # WHY: cluster wrapper matching the parsing/display
             self._ru._handle_routing_error("routing table", error, debug_mode)  # WHY: shared handler
         finally:  # WHY: always disconnect regardless of success/failure
             self._ru._cleanup_websocket(websocket_manager, debug_mode)  # WHY: shared cleanup
-            logging.debug("EXIT: execute_show_routing_table")  # WHY: trace marker for debug logs
+            logger.debug("EXIT: execute_show_routing_table")  # WHY: trace marker for debug logs
 
     def _run_routing_table_flow(self, debug_mode: bool) -> Any | None:
         """Run the happy-path routing-table flow. Returns the websocket_manager to clean up."""

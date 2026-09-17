@@ -32,6 +32,7 @@ ORG_UUID = UUID("11111111-1111-1111-1111-111111111111")
 STATUS_OK = 200
 STATUS_UNAUTHORIZED = 401
 STATUS_RATE_LIMIT = 429
+STATUS_BAD_GATEWAY = 502  # Name the HTTP 5xx response that proves server-error handling.
 EXPECTED_CALLS = 2
 EXPECTED_SITES = 2
 
@@ -78,6 +79,19 @@ class TestListAllEntitiesStatus:
         assert result.success is False
         assert result.error == "Too many requests"
         assert result.data == body
+
+    def test_server_error_status_is_reported(self) -> None:
+        """A 502 page reports a failure and holds the Mist error body."""
+        service = MistEndpointService(MagicMock())  # Avoid a live Mist session.
+        body = {"detail": "Bad gateway"}  # Keep the server-error detail observable.
+        func = MagicMock(return_value=_response(body, status=STATUS_BAD_GATEWAY))  # Return 502.
+
+        result = _list_sites(service, func)  # Exercise the real list error path.
+
+        assert result.status_code == STATUS_BAD_GATEWAY  # The caller must see the HTTP 5xx status.
+        assert result.success is False  # A server error must not look successful.
+        assert result.error == "Bad gateway"  # The specific Mist message must survive wrapping.
+        assert result.data == body  # The error body must not become a data record.
 
     def test_error_body_is_not_a_data_record(self) -> None:
         """An error body must never appear as one data record."""
