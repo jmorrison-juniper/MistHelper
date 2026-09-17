@@ -43,6 +43,8 @@ from mistapi.api.v1.orgs import deviceprofiles as _mist_deviceprofiles  # WHY: p
 from mistapi.api.v1.orgs import sites as _mist_orgs_sites  # WHY: org-wide site enumeration.
 from mistapi.api.v1.sites import devices as _mist_site_devices  # WHY: per-site AP listing + updateSiteDevice PUT.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 # WHY: module logger uses the dotted module path so operators can filter by
 # ``src.device.ap_profile_migration_manager`` in the shared MistHelper logs.
 _LOGGER = logging.getLogger(__name__)  # WHY: Module records identify AP profile migration actions.
@@ -759,7 +761,7 @@ class APProfileMigrationManager:
     @staticmethod
     def _print_revert_summary(summary: APProfileRevertSummary) -> None:
         """Print the operator-facing end-of-run summary for menu 208."""
-        logging.info("Printing the AP profile revert summary")  # Record the operator summary boundary.
+        logger.info("Printing the AP profile revert summary")  # Record the operator summary boundary.
         print("\nRevert summary:")  # Keep the existing heading text for characterization tests.
         print(f"  Backup file: {summary.run.backup_path}")  # Show the replayed backup path for audit lookup.
         print(f"  Source profile: {summary.run.source_name} (id={summary.run.source_id})")  # Show the restored profile.
@@ -770,7 +772,7 @@ class APProfileMigrationManager:
         print(f"  Outcome: {summary.run.outcome}")  # Show the final state label.
         APProfileMigrationManager._print_revert_detail_ids(summary)  # Print optional AP ID details.
         APProfileMigrationManager._print_pacing_summary(summary.run.pacing_stats)  # Print rate-limit counters.
-        logging.debug("Printed revert summary with outcome=%s", summary.run.outcome)  # Record summary completion.
+        logger.debug("Printed revert summary with outcome=%s", summary.run.outcome)  # Record summary completion.
 
     @staticmethod
     def _print_revert_detail_ids(summary: APProfileRevertSummary) -> None:
@@ -802,7 +804,7 @@ class APProfileMigrationManager:
     @staticmethod
     def _build_revert_audit_payload(org_id: str, summary: APProfileRevertSummary) -> dict[str, Any]:
         """Build the JSONL audit payload for a completed revert run."""
-        logging.info("Building the AP profile revert audit payload")  # Record the audit serialization boundary.
+        logger.info("Building the AP profile revert audit payload")  # Record the audit serialization boundary.
         return {
             "event_type": "ap_profile_migration_revert",
             "timestamp_utc": _utc_iso_timestamp(),
@@ -831,7 +833,7 @@ class APProfileMigrationManager:
             "delay_seconds_mean": round(delay_mean, 3),  # Record rounded average delay.
             "delay_seconds_max": round(delay_max, 3),  # Record rounded maximum delay.
         }
-        logging.debug("Built pacing audit payload with puts_issued=%s", payload["puts_issued"])  # Record size.
+        logger.debug("Built pacing audit payload with puts_issued=%s", payload["puts_issued"])  # Record size.
         return payload  # Return the pacing sub-dict for the caller envelope.
 
     # ------------------------------------------------------------------
@@ -1191,10 +1193,10 @@ class APProfileMigrationManager:
         ap_records: list[dict[str, Any]],
     ) -> dict[str, Any]:
         """Assemble the backup dict per data-model section 1.3."""
-        logging.info("Building the AP profile migration backup payload")  # Record the backup build boundary.
+        logger.info("Building the AP profile migration backup payload")  # Record the backup build boundary.
         ts = datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")  # Use canonical UTC text.
         planned = [dict(rec) for rec in ap_records]  # Copy AP records so later caller mutation cannot alter the backup.
-        logging.debug("Built backup payload inputs with planned_count=%s", len(planned))  # Record payload size.
+        logger.debug("Built backup payload inputs with planned_count=%s", len(planned))  # Record payload size.
         return {
             "schema_version": _BACKUP_SCHEMA_VERSION,
             "org_id": context.org_id,
@@ -1212,14 +1214,14 @@ class APProfileMigrationManager:
     @staticmethod
     def _write_backup_file(payload: dict[str, Any], data_dir: str) -> str:
         """Write ``payload`` to a new backup file and return the absolute path."""
-        logging.info("Writing the AP profile migration backup file")  # Record the backup write boundary.
+        logger.info("Writing the AP profile migration backup file")  # Record the backup write boundary.
         filename = APProfileMigrationManager._backup_filename(payload)  # Build the data-model file name.
         target_dir = Path(data_dir)  # Use pathlib so Windows and Linux builds share one path rule.
         target_dir.mkdir(parents=True, exist_ok=True)  # Ensure a fresh checkout has the data directory.
         target_path = target_dir / filename  # Join the directory and file name safely.
         target_path.write_text(json.dumps(payload, indent=2, sort_keys=False), encoding="utf-8")  # Write readable JSON.
         resolved = str(target_path.resolve())  # Normalize the path for the operator summary and audit.
-        logging.debug("Wrote AP profile migration backup file to %s", resolved)  # Record the written path.
+        logger.debug("Wrote AP profile migration backup file to %s", resolved)  # Record the written path.
         return resolved  # Return the resolved backup path for downstream revert use.
 
     @staticmethod
@@ -1435,7 +1437,7 @@ class APProfileMigrationManager:
     @staticmethod
     def _print_migration_summary(summary: APProfileMigrationSummary) -> None:
         """Print the end-of-run summary block."""
-        logging.info("Printing the AP profile migration summary")  # Record the operator summary boundary.
+        logger.info("Printing the AP profile migration summary")  # Record the operator summary boundary.
         planned = len(summary.payload.get("aps_planned", []))  # Count planned APs from the persisted schema.
         reassigned = len(summary.payload.get("aps_reassigned", []))  # Count successfully reassigned APs.
         outcome = summary.payload.get("outcome", "unknown")  # Read the final state label with the existing fallback.
@@ -1449,7 +1451,7 @@ class APProfileMigrationManager:
         APProfileMigrationManager._print_migration_failure(summary.payload, outcome)  # Print failure detail.
         pacing_stats = APProfileMigrationManager._migration_pacing_stats(summary.payload)  # Read limiter counters.
         APProfileMigrationManager._print_pacing_summary(pacing_stats)  # Print limiter counters.
-        logging.debug("Printed migration summary with outcome=%s", outcome)  # Record summary completion.
+        logger.debug("Printed migration summary with outcome=%s", outcome)  # Record summary completion.
 
     @staticmethod
     def _migration_pacing_stats(payload: dict[str, Any]) -> dict[str, float | int]:
@@ -1621,11 +1623,11 @@ class APProfileMigrationManager:
     @staticmethod
     def _validate_backup_top_level(payload: dict[str, Any]) -> None:
         """Enforce data-model rules 1 through 3 on the backup top level."""
-        logging.info("Validating AP profile backup top-level fields")  # Record the schema validation boundary.
+        logger.info("Validating AP profile backup top-level fields")  # Record the schema validation boundary.
         APProfileMigrationManager._require_backup_version(payload)  # Validate the schema version first.
         APProfileMigrationManager._require_backup_string_fields(payload)  # Validate required string fields next.
         APProfileMigrationManager._require_backup_plan_list(payload)  # Validate the planned AP list last.
-        logging.debug("Validated AP profile backup top-level fields")  # Record validation completion.
+        logger.debug("Validated AP profile backup top-level fields")  # Record validation completion.
 
     @staticmethod
     def _require_backup_version(payload: dict[str, Any]) -> None:
@@ -1655,10 +1657,10 @@ class APProfileMigrationManager:
     @staticmethod
     def _validate_planned_records(planned: list[Any]) -> None:
         """Enforce data-model rule 4 on every ``aps_planned`` entry."""
-        logging.info("Validating %d planned AP records from backup", len(planned))  # Record validation scope.
+        logger.info("Validating %d planned AP records from backup", len(planned))  # Record validation scope.
         for idx, rec in enumerate(planned):  # Preserve the original record order in error messages.
             APProfileMigrationManager._validate_planned_record(idx, rec)  # Validate one AP record.
-        logging.debug("Validated %d planned AP records from backup", len(planned))  # Record validation count.
+        logger.debug("Validated %d planned AP records from backup", len(planned))  # Record validation count.
 
     @staticmethod
     def _validate_planned_record(index: int, record: Any) -> None:
@@ -1678,13 +1680,13 @@ class APProfileMigrationManager:
     @staticmethod
     def _validate_reassigned_list(reassigned: Any, planned: list[Any]) -> None:
         """Enforce data-model rule 5 on ``aps_reassigned``."""
-        logging.info("Validating AP profile reassignment list")  # Record reassigned-list validation boundary.
+        logger.info("Validating AP profile reassignment list")  # Record reassigned-list validation boundary.
         if not isinstance(reassigned, list):  # Require list shape before iterating entries.
             raise ValueError("field 'aps_reassigned' must be a JSON array of strings")
         planned_ids = APProfileMigrationManager._planned_device_ids(planned)  # Build the valid ID set.
         for entry in reassigned:  # Validate reassigned IDs in their stored order.
             APProfileMigrationManager._validate_reassigned_entry(entry, planned_ids)  # Validate one reassigned ID.
-        logging.debug("Validated %d reassigned AP IDs", len(reassigned))  # Record validation count.
+        logger.debug("Validated %d reassigned AP IDs", len(reassigned))  # Record validation count.
 
     @staticmethod
     def _planned_device_ids(planned: list[Any]) -> set[str]:

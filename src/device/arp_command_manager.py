@@ -31,6 +31,8 @@ from src.config.source_dependency_resolver import (
 )
 from src.dataclasses.websocket_stream_target import WebSocketStreamTarget  # Bundle for WS connection identity.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 logger = logging.getLogger(__name__)  # WHY: module-scoped logger routes former print notices for capture/redirection.
 
 
@@ -138,10 +140,10 @@ class ARPCommandManager:  # ARP WebSocket command manager.
 
         def on_error(ws, error):  # WebSocket error handler.
             del ws  # Signature required by websocket-client. Ws unused here.
-            logging.error("! WebSocket error: %s", error)  # Log the error.
+            logger.error("! WebSocket error: %s", error)  # Log the error.
 
         def on_open(ws):  # WebSocket open handler.
-            logging.info(" WebSocket opened. Subscribing...")  # Log the open.
+            logger.info(" WebSocket opened. Subscribing...")  # Log the open.
             ws.send(json.dumps(subscribe_msg))  # Send the subscribe.
 
         return {"on_message": on_message, "on_close": on_close, "on_error": on_error, "on_open": on_open}
@@ -153,11 +155,11 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         while time.time() - start_time < timeout:  # Poll until timeout.
             time.sleep(1)  # Pace the poll.
             if time.time() - state["last_message_time"] > idle_timeout and output_lines:  # Idle with output.
-                logging.info(" Idle timeout reached. Closing WebSocket.")  # Log the idle close.
+                logger.info(" Idle timeout reached. Closing WebSocket.")  # Log the idle close.
                 ws.close()  # Close the socket.
                 break  # Stop polling.
         if ws.keep_running:  # Still running -- hard timeout fired.
-            logging.warning(" Timeout waiting for ARP output.")  # Warn the timeout.
+            logger.warning(" Timeout waiting for ARP output.")  # Warn the timeout.
             ws.close()  # Close the socket.
 
     @staticmethod
@@ -214,7 +216,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         """Handle incoming WebSocket message."""
         last_message_time = time.time()  # Arrival timestamp
         if debug:  # Optional raw-frame trace
-            logging.debug("WebSocket raw message received: %s", message)
+            logger.debug("WebSocket raw message received: %s", message)
         inner_data = ARPCommandManager._safe_parse_ws_arp_payload(message)  # Parse + log-on-fail
         if inner_data is None:  # Parse failed -> caller continues
             return last_message_time, buffer
@@ -223,18 +225,18 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         raw_output = inner_data.get("raw", "")  # Append fragment
         buffer = ARPCommandManager._drain_buffer_to_lines(buffer + raw_output, output_lines)  # Flush full lines
         if debug:  # Size-trace after processing
-            logging.debug("Processed WebSocket data: %s chars", len(raw_output))
+            logger.debug("Processed WebSocket data: %s chars", len(raw_output))
         return last_message_time, buffer
 
     @staticmethod
     def _handle_close(output_lines, debug=False):  # Handle the close.
         """Handle WebSocket close and process output."""
-        logging.info(" WebSocket closed.")  # Log the close.
+        logger.info(" WebSocket closed.")  # Log the close.
         if not output_lines:  # No output captured during this session.
             logger.warning(
                 " No ARP output received for this session."
             )  # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.warning(" No ARP output received for this session.")  # Warn none.
+            logger.warning(" No ARP output received for this session.")  # Warn none.
             return  # Nothing further to process.
         compiled_output = "\n".join(output_lines)  # Join the captured lines into one block.
         ARPCommandManager._save_output(compiled_output)  # type: ignore[no-untyped-call]
@@ -247,7 +249,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
     @staticmethod
     def _render_arp_table(compiled_output, debug):  # Render the parsed ARP output.
         """Parse compiled ARP output and display it as a padded table."""
-        logging.debug("Rendering ARP table from compiled output")  # Trace the render step.
+        logger.debug("Rendering ARP table from compiled output")  # Trace the render step.
         parsed_rows, max_cols = ARPCommandManager._parse_arp_rows(compiled_output)  # type: ignore[no-untyped-call]
         if not parsed_rows:  # No rows parsed -- nothing to tabulate.
             return  # Skip table construction entirely.
@@ -260,7 +262,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
     @staticmethod
     def _parse_arp_rows(compiled_output):  # Parse compiled output into padded rows.
         """Split compiled output into tab-delimited rows padded to a uniform width."""
-        logging.debug("Parsing ARP rows from compiled output")  # Trace the parse step.
+        logger.debug("Parsing ARP rows from compiled output")  # Trace the parse step.
         rows = compiled_output.split("\n")  # Split the block into individual rows.
         parsed_rows = [row.split("\t") for row in rows if row.strip()]  # Split each non-empty row on tabs.
         max_cols = max((len(row) for row in parsed_rows), default=0)  # Widest row determines column count.
@@ -270,7 +272,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
     @staticmethod
     def _pad_rows(parsed_rows, max_cols):  # Pad rows to a uniform width.
         """Pad each row with empty cells until it reaches max_cols columns."""
-        logging.debug("Padding %d ARP rows to %d columns", len(parsed_rows), max_cols)  # Trace the pad step.
+        logger.debug("Padding %d ARP rows to %d columns", len(parsed_rows), max_cols)  # Trace the pad step.
         for row in parsed_rows:  # Pad each row in place.
             while len(row) < max_cols:  # Keep padding until the row is full width.
                 row.append("")  # Append an empty cell.
@@ -282,7 +284,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
             logger.info(
                 "%s", table
             )  # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
-            logging.debug("\n%s", table.get_string())  # Log the table contents.
+            logger.debug("\n%s", table.get_string())  # Log the table contents.
         else:  # Non-debug mode reports only the row count.
             logger.info(
                 "! ARP output received with %d rows.", row_count
@@ -296,7 +298,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
             file_path = mh.FilePathUtils.get_csv_path(filename)  # Build the path.
             with open(file_path, "w", encoding="utf-8") as f:  # Open the file.
                 f.write(compiled_output)  # Write the output.
-            logging.info("! ARP output saved to %s", file_path)  # Log the save.
+            logger.info("! ARP output saved to %s", file_path)  # Log the save.
         except Exception as e:  # Save failed.
             logging.error("! Failed to save ARP output to file: %s", e)  # Log the error.
 

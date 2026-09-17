@@ -28,6 +28,8 @@ import mistapi  # WHY: direct SDK access mirrors parent module's usage
 
 from ._utility_commands_cluster import _ClusterBase  # WHY: shared proxy base
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 # WHY: menu-selected support-file categories exposed to the operator.
 _SUPPORT_FILE_TYPES: tuple[str, ...] = (
     "full",  # WHY: full support bundle (default)
@@ -52,7 +54,7 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
 
     def locate_device(self) -> None:  # WHY: menu 138 entry point for LED blink
         """Menu 138: Locate device by blinking LED."""
-        logging.info("Menu #138: Locate Device")  # WHY: audit menu entry
+        logger.info("Menu #138: Locate Device")  # WHY: audit menu entry
         selection = self._select_site_and_device("locate")  # WHY: pick site + AP/switch
         if not selection:  # WHY: cancelled -> abort
             return  # WHY: no work when operator cancels
@@ -93,7 +95,7 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
 
     def unlocate_device(self) -> None:  # WHY: menu 139 counterpart to locate_device
         """Menu 139: Stop device LED blinking."""
-        logging.info("Menu #139: Unlocate Device")  # WHY: audit menu entry
+        logger.info("Menu #139: Unlocate Device")  # WHY: audit menu entry
         selection = self._select_site_and_device("unlocate")  # WHY: pick site + AP/switch
         if not selection:  # WHY: cancelled -> abort
             return  # WHY: no work when operator cancels
@@ -119,7 +121,7 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
 
     def bounce_port(self) -> None:  # WHY: menu 140 entry for port bounce flow
         """Menu 140: Bounce switch/gateway port (y/N confirmation)."""
-        logging.info("Menu #140: Bounce Port")  # WHY: audit menu entry
+        logger.info("Menu #140: Bounce Port")  # WHY: audit menu entry
         selection = self._select_site_and_device("bounce_port")  # WHY: pick site + device
         if not selection:  # WHY: cancelled -> abort
             return  # WHY: no work when operator cancels
@@ -172,7 +174,7 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
 
     def reprovision_device(self) -> None:
         """Menu 142: Reprovision switch/gateway (y/N confirmation)."""
-        logging.info("Menu #142: Reprovision Device")  # WHY: audit menu entry
+        logger.info("Menu #142: Reprovision Device")  # WHY: audit menu entry
         selection = self._select_site_and_device("reprovision")  # WHY: pick site + device
         if not selection:  # WHY: cancelled -> abort
             return
@@ -209,7 +211,7 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
         Preflight the device's Virtual Chassis (VC) membership before
         calling the readopt API to avoid a 400 response.
         """
-        logging.info("Menu #143: Re-adopt Device")  # WHY: audit menu entry
+        logger.info("Menu #143: Re-adopt Device")  # WHY: audit menu entry
         selection = self._select_site_and_device("readopt", "switch")  # WHY: switch-only op
         if not selection:  # WHY: cancelled -> abort
             return
@@ -257,7 +259,7 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
 
     def get_ztp_password(self) -> None:
         """Menu 144: Get ZTP password for switch/gateway."""
-        logging.info("Menu #144: Get ZTP Password")  # WHY: audit menu entry
+        logger.info("Menu #144: Get ZTP Password")  # WHY: audit menu entry
         selection = self._select_site_and_device("ztp_password")  # WHY: pick site + device
         if not selection:  # WHY: cancelled -> abort
             return
@@ -343,16 +345,16 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
         data = response.data if isinstance(response.data, dict) else {}  # WHY: guard shape
         ztp_credential = data.get("password", str(response.data))  # WHY: prefer dict field
         on_terminal = cls._stdout_is_terminal()  # WHY: a stored stream must not receive the value
-        logging.info("Rendering the ZTP password result, terminal=%s", on_terminal)  # WHY: audit, value excluded
+        logger.info("Rendering the ZTP password result, terminal=%s", on_terminal)  # WHY: audit, value excluded
         if on_terminal:  # WHY: only a live terminal receives the credential
             cls._print_ztp_credential(ztp_credential)  # WHY: operator reads the value on screen
         else:  # WHY: a redirect, a pipe, or a recorded session must not store the value
             cls._print_ztp_withheld()  # WHY: name the alternate sources instead
-        logging.debug("ZTP password render finished, terminal=%s", on_terminal)  # WHY: audit, value excluded
+        logger.debug("ZTP password render finished, terminal=%s", on_terminal)  # WHY: audit, value excluded
 
     def get_config_commands(self) -> None:
         """Menu 145: Get configuration CLI commands for switch."""
-        logging.info("Menu #145: Get Config CLI Commands")  # WHY: audit menu entry
+        logger.info("Menu #145: Get Config CLI Commands")  # WHY: audit menu entry
         selection = self._select_site_and_device("config_cmd", "switch")  # WHY: switch-only op
         if not selection:  # WHY: cancelled -> abort
             return
@@ -391,7 +393,7 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
 
     def upload_support_file(self) -> None:
         """Menu 146: Upload support file from switch/gateway."""
-        logging.info("Menu #146: Upload Support File")  # WHY: audit menu entry
+        logger.info("Menu #146: Upload Support File")  # WHY: audit menu entry
         selection = self._select_site_and_device("support_upload")  # WHY: pick site + device
         if not selection:  # WHY: cancelled -> abort
             return
@@ -454,7 +456,7 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
 
     def poll_switch_stats(self) -> None:
         """Menu 156: Poll fresh statistics from switch."""
-        logging.info("Menu #156: Poll Switch Stats")  # WHY: audit menu entry
+        logger.info("Menu #156: Poll Switch Stats")  # WHY: audit menu entry
         selection = self._select_site_and_device("poll_stats", "switch")  # WHY: switch-only op
         if not selection:  # WHY: cancelled -> abort
             return
@@ -477,7 +479,7 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
 
     def create_device_snapshot(self) -> None:
         """Menu 157: Create device snapshot on switch."""
-        logging.info("Menu #157: Create Device Snapshot")  # WHY: audit menu entry
+        logger.info("Menu #157: Create Device Snapshot")  # WHY: audit menu entry
         selection = self._select_site_and_device("snapshot", "switch")  # WHY: switch-only op
         if not selection:  # WHY: cancelled -> abort
             return

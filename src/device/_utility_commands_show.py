@@ -39,6 +39,8 @@ import mistapi  # WHY: device show / diagnostic SDK calls live under mistapi.api
 from ._utility_commands_cluster import _ClusterBase  # WHY: shared proxy base
 from ._utility_commands_websocket import ExportResultSpec  # WHY: single-arg spec for exporter
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
 
 
@@ -188,7 +190,7 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
 
     def traceroute(self) -> None:
         """Menu 123: Run traceroute from device to destination host."""
-        logging.info("Menu #123: Traceroute from device")  # WHY: menu entry audit trail
+        logger.info("Menu #123: Traceroute from device")  # WHY: menu entry audit trail
         selection = self._select_site_and_device("traceroute")  # WHY: __getattr__ -> selection cluster
         if not selection:  # WHY: user cancelled / no picks
             return  # WHY: nothing to do without a device target
@@ -225,7 +227,7 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
 
     def show_ospf_neighbors(self) -> None:
         """Menu 124: Show OSPF neighbors on SSR/SRX gateway."""
-        logging.info("Menu #124: Show OSPF Neighbors")  # WHY: menu entry audit trail
+        logger.info("Menu #124: Show OSPF Neighbors")  # WHY: menu entry audit trail
         selection = self._select_site_and_device("show_ospf_neighbors", "gateway")  # WHY: gateway-only
         if not selection:  # WHY: user cancelled / no picks
             return  # WHY: nothing to do without a device target
@@ -251,7 +253,7 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
 
     def show_ospf_interfaces(self) -> None:
         """Menu 125: Show OSPF interfaces on SSR/SRX gateway."""
-        logging.info("Menu #125: Show OSPF Interfaces")  # WHY: menu entry audit trail
+        logger.info("Menu #125: Show OSPF Interfaces")  # WHY: menu entry audit trail
         selection = self._select_site_and_device("show_ospf_interfaces", "gateway")  # WHY: gateway-only
         if not selection:  # WHY: user cancelled / no picks
             return  # WHY: nothing to do without a device target
@@ -272,7 +274,7 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
 
     def show_ospf_database(self) -> None:
         """Menu 126: Show OSPF database on SSR/SRX gateway."""
-        logging.info("Menu #126: Show OSPF Database")  # WHY: menu entry audit trail
+        logger.info("Menu #126: Show OSPF Database")  # WHY: menu entry audit trail
         selection = self._select_site_and_device("show_ospf_database", "gateway")  # WHY: gateway-only
         if not selection:  # WHY: user cancelled / no picks
             return  # WHY: nothing to do without a device target
@@ -301,7 +303,7 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
 
     def show_ospf_summary(self) -> None:
         """Menu 127: Show OSPF summary on SSR/SRX gateway."""
-        logging.info("Menu #127: Show OSPF Summary")  # WHY: menu entry audit trail
+        logger.info("Menu #127: Show OSPF Summary")  # WHY: menu entry audit trail
         selection = self._select_site_and_device("show_ospf_summary", "gateway")  # WHY: gateway-only
         if not selection:  # WHY: user cancelled / no picks
             return  # WHY: nothing to do without a device target
@@ -336,7 +338,7 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
 
     def resolve_dns(self) -> None:
         """Menu 135: Test DNS resolution on SSR gateway."""
-        logging.info("Menu #135: Resolve DNS")  # WHY: menu entry audit trail
+        logger.info("Menu #135: Resolve DNS")  # WHY: menu entry audit trail
         selection = self._select_site_and_device("resolve_dns", "gateway")  # WHY: gateway-only
         if not selection:  # WHY: user cancelled / no picks
             return  # WHY: nothing to do without a device target
@@ -347,7 +349,7 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
 
     def monitor_traffic(self) -> None:
         """Menu 136: Monitor traffic on switch/SRX port (streaming)."""
-        logging.info("Menu #136: Monitor Traffic (streaming)")  # WHY: menu entry audit trail
+        logger.info("Menu #136: Monitor Traffic (streaming)")  # WHY: menu entry audit trail
         selection = self._select_site_and_device("monitor_traffic", "switch")  # WHY: switch/SRX only
         if not selection:  # WHY: user cancelled / no picks
             return  # WHY: nothing to do without a device target
@@ -382,7 +384,7 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
 
     def run_top(self) -> None:
         """Menu 137: Run top command on switch/SRX (streaming)."""
-        logging.info("Menu #137: Run Top (streaming)")  # WHY: menu entry audit trail
+        logger.info("Menu #137: Run Top (streaming)")  # WHY: menu entry audit trail
         selection = self._select_site_and_device("run_top", "switch")  # WHY: switch/SRX only
         if not selection:  # WHY: user cancelled / no picks
             return  # WHY: nothing to do without a device target
@@ -402,7 +404,7 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
 
     def show_session(self) -> None:
         """Menu 128: Show sessions on SSR/SRX gateway."""
-        logging.info("Menu #128: Show Sessions")  # WHY: menu entry audit trail
+        logger.info("Menu #128: Show Sessions")  # WHY: menu entry audit trail
         selection = self._select_site_and_device("show_session", "gateway")  # WHY: gateway-only
         if not selection:  # WHY: user cancelled / no picks
             return  # WHY: nothing to do without a device target
@@ -437,7 +439,7 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
 
     def show_service_path(self) -> None:
         """Menu 129: Show service path on SSR gateway."""
-        logging.info("Menu #129: Show Service Path")  # WHY: menu entry audit trail
+        logger.info("Menu #129: Show Service Path")  # WHY: menu entry audit trail
         selection = self._select_site_and_device("show_service_path", "gateway")  # WHY: gateway-only
         if not selection:  # WHY: user cancelled / no picks
             return  # WHY: nothing to do without a device target
@@ -466,7 +468,7 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
 
     def show_bgp_summary(self) -> None:
         """Menu 130: Show BGP summary on switch or gateway."""
-        logging.info("Menu #130: Show BGP Summary")  # WHY: menu entry audit trail
+        logger.info("Menu #130: Show BGP Summary")  # WHY: menu entry audit trail
         selection = self._select_site_and_device("show_bgp_summary")  # WHY: any device type
         if not selection:  # WHY: user cancelled / no picks
             return  # WHY: nothing to do without a device target
@@ -478,7 +480,7 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
 
     def show_arp_table(self) -> None:
         """Menu 131: Show ARP table on switch or gateway."""
-        logging.info("Menu #131: Show ARP Table")  # WHY: menu entry audit trail
+        logger.info("Menu #131: Show ARP Table")  # WHY: menu entry audit trail
         selection = self._select_site_and_device("show_arp_table")  # WHY: any device type
         if not selection:  # WHY: user cancelled / no picks
             return  # WHY: nothing to do without a device target
@@ -490,7 +492,7 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
 
     def show_dhcp_leases(self) -> None:
         """Menu 132: Show DHCP leases on switch or gateway."""
-        logging.info("Menu #132: Show DHCP Leases")  # WHY: menu entry audit trail
+        logger.info("Menu #132: Show DHCP Leases")  # WHY: menu entry audit trail
         selection = self._select_site_and_device("show_dhcp_leases")  # WHY: any device type
         if not selection:  # WHY: user cancelled / no picks
             return  # WHY: nothing to do without a device target
@@ -513,7 +515,7 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
 
     def show_dot1x(self) -> None:
         """Menu 133: Show 802.1X table on switch."""
-        logging.info("Menu #133: Show 802.1X Table")  # WHY: menu entry audit trail
+        logger.info("Menu #133: Show 802.1X Table")  # WHY: menu entry audit trail
         selection = self._select_site_and_device("show_dot1x", "switch")  # WHY: switch-only
         if not selection:  # WHY: user cancelled / no picks
             return  # WHY: nothing to do without a device target
@@ -525,7 +527,7 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
 
     def show_evpn_database(self) -> None:
         """Menu 134: Show EVPN database on switch or gateway."""
-        logging.info("Menu #134: Show EVPN Database")  # WHY: menu entry audit trail
+        logger.info("Menu #134: Show EVPN Database")  # WHY: menu entry audit trail
         selection = self._select_site_and_device("show_evpn_database")  # WHY: any device type
         if not selection:  # WHY: user cancelled / no picks
             return  # WHY: nothing to do without a device target
@@ -541,7 +543,7 @@ class _UtilityCommandsShow(_ClusterBase):  # WHY: cluster wrapper mirroring _Uti
 
     def cable_test(self) -> None:
         """Menu 141: Run cable test on switch port."""
-        logging.info("Menu #141: Cable Test")  # WHY: menu entry audit trail
+        logger.info("Menu #141: Cable Test")  # WHY: menu entry audit trail
         selection = self._select_site_and_device("cable_test", "switch")  # WHY: switch-only
         if not selection:  # WHY: user cancelled / no picks
             return  # WHY: nothing to do without a device target

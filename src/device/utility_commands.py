@@ -32,6 +32,8 @@ from ._utility_commands_websocket import (
     _UtilityCommandsWebsocket,  # WHY: websocket helper cluster (Phase 2 split)
 )
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 # ---------------------------------------------------------------------------
 # Type aliases for dependency injection
 # ---------------------------------------------------------------------------
@@ -78,7 +80,7 @@ def _print_api_error(response: Any, fail_msg: str, status_code: int) -> None:  #
     if detail:  # WHY: append server-side context when available
         error_text += f": {detail}"  # WHY: keep detail on same line for grep-ability
     # WHY: preserve error line verbatim. Route through logger for capture/redirection.
-    logging.error("%s", error_text)  # WHY: single write to keep operator output atomic
+    logger.error("%s", error_text)  # WHY: single write to keep operator output atomic
 
 
 class DeviceUtilityCommands:  # WHY: parent class hosting 35 device-command operations
@@ -182,7 +184,7 @@ class DeviceUtilityCommands:  # WHY: parent class hosting 35 device-command oper
             _print_api_error(response, fail_msg, status)  # WHY: delegate detail extraction
             return False  # WHY: caller treats False as failure
         # WHY: preserve success arrow verbatim. Route through logger for capture/redirection.
-        logging.info("-> %s", success_msg)  # WHY: emit success line
+        logger.info("-> %s", success_msg)  # WHY: emit success line
         return True  # WHY: caller treats True as success
 
     @staticmethod
@@ -196,15 +198,15 @@ class DeviceUtilityCommands:  # WHY: parent class hosting 35 device-command oper
             )  # WHY: try both mistapi error shapes
             if code == 400:  # WHY: 400 == missing service_name/session_ids body key
                 # WHY: preserve error guidance verbatim. Route through logger for capture/redirection.
-                logging.error(
+                logger.error(
                     "! API returned 400. The API expects either"
                     " 'service_name' or 'session_ids' in the"
                     " request body."
                 )  # WHY: teach operator the fix
-                logging.error(
+                logger.error(
                     "  Provide a service name or a comma-separated list of session IDs, and retry."
                 )  # WHY: guide follow-up input
             else:
-                logging.error("! Clear session failed: %s", error)  # WHY: generic fallback
+                logger.error("! Clear session failed: %s", error)  # WHY: generic fallback
         except Exception:  # pylint: disable=broad-exception-caught
             logging.error("! Clear session failed: %s", error)  # WHY: never let error-handler raise
