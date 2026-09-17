@@ -12,6 +12,8 @@ from typing import Any  # WHY: emitter and registry protocols intentionally unco
 
 from src.dataclasses.progress_event import TestSummary  # WHY: reuse issue #470 aggregate telemetry container.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 class TestSiteSelectorUnresolved(RuntimeError):
     """Raised when ``MIST_INTERACTIVE_TEST_SITE`` is set but resolves to no org site.
@@ -92,18 +94,18 @@ class UnattendedInteractiveInputProvider:
 
     def __init__(self, option: str) -> None:
         """Store the menu option so prompt errors identify their source."""
-        logging.info("Creating unattended input provider for option %s", option)  # WHY: log provider setup.
+        logger.info("Creating unattended input provider for option %s", option)  # WHY: log provider setup.
         self.option = option  # WHY: bind prompt decisions to the active menu option for diagnostics.
         self.answers: list[tuple[str, str]] = []  # WHY: keep an auditable prompt-to-answer trace.
-        logging.debug("Unattended input provider ready for option %s", option)  # WHY: log setup result.
+        logger.debug("Unattended input provider ready for option %s", option)  # WHY: log setup result.
 
     def answer(self, prompt: str, default_value: str = "", allow_empty: bool = True, context: str = "unknown") -> str:
         """Return a deterministic answer or raise a prompt-resolution error."""
-        logging.info("Resolving unattended answer for option %s context=%s", self.option, context)  # WHY: trace prompt.
+        logger.info("Resolving unattended answer for option %s context=%s", self.option, context)  # WHY: trace prompt.
         prompt_key = f"{prompt} {context}".lower()  # WHY: merge text and context for robust prompt matching.
         answer = default_value or self._answer_without_default(prompt_key, allow_empty)  # WHY: defaults are safest.
         self.answers.append((context, answer))  # WHY: preserve the generated answer for diagnostics.
-        logging.debug(
+        logger.debug(
             "Resolved unattended answer for option %s context=%s answer_present=%s",
             self.option,
             context,
@@ -165,14 +167,14 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
 
     def _fetch_selector_sites(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch full org site list for selector-based test-site resolution."""
-        logging.info("Selector provided; fetching organization sites for selector match")  # WHY: log before API call.
+        logger.info("Selector provided; fetching organization sites for selector match")  # WHY: log before API call.
         sites_response = self.mistapi_module.api.v1.orgs.sites.listOrgSites(
             self.apisession, org_id, limit=1000
         )  # WHY: fetch full org site set so selector can resolve by id or name.
         sites_data = self.mistapi_module.get_all(
             response=sites_response, mist_session=self.apisession
         )  # WHY: resolve paginated site response into iterable list.
-        logging.debug(
+        logger.debug(
             "Fetched %d sites while resolving selector", len(sites_data) if sites_data else 0
         )  # WHY: log dataset size for selector lookup diagnostics.
         return sites_data  # WHY: hand full list to matcher helper for selector comparison.
@@ -202,7 +204,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             surfaced to the operator before ``TestSiteSelectorUnresolved`` is
             raised.
         """
-        logging.error(
+        logger.error(
             "INTERACTIVE_TEST: MIST_INTERACTIVE_TEST_SITE '%s' did not match any organization site; aborting.",
             site_selector,
         )  # WHY: fail-closed banner (issue #1637).
@@ -237,21 +239,19 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             )  # WHY: fail-closed (issue #1637) — do not silently fall back.
         site_id = matching_site["id"]  # WHY: capture matched site id for downstream operations.
         site_name = matching_site.get("name", "Unknown")  # WHY: capture matched site name for context.
-        logging.warning(
+        logger.warning(
             "   Using test site from MIST_INTERACTIVE_TEST_SITE: %s (%s)",
             site_name,
             site_id,
         )  # WHY: #886 slice 18/N — legacy selector-success message via logging.warning.
-        logging.debug(
+        logger.debug(
             "Selector matched site_id=%s site_name=%s", site_id, site_name
         )  # WHY: log selector match details for traceability.
         return site_id, site_name  # WHY: return resolved selector context to orchestrator.
 
     def _lookup_first_available_site(self, org_id: str) -> tuple[str | None, str]:
         """Return the first available org site for deterministic fallback selection."""
-        logging.info(
-            "Resolving fallback test site using first available org site"
-        )  # WHY: log before fallback API call.
+        logger.info("Resolving fallback test site using first available org site")  # WHY: log before fallback API call.
         sites_response = self.mistapi_module.api.v1.orgs.sites.listOrgSites(
             self.apisession, org_id, limit=1
         )  # WHY: request only the first available site as deterministic fallback.
@@ -261,7 +261,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         site_name = sites_response.data[0].get(
             "name", "Unknown"
         )  # WHY: capture fallback site name for user-visible context.
-        logging.warning(
+        logger.warning(
             "   Using first available test site: %s (%s)",
             site_name,
             site_id,
@@ -270,11 +270,11 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
 
     def _resolve_test_site(self, org_id: str) -> tuple[str | None, str]:
         """Resolve test site from environment selector or first available site."""
-        logging.info("Resolving interactive-test site for org_id=%s", org_id)  # WHY: log entry to test-site resolution.
+        logger.info("Resolving interactive-test site for org_id=%s", org_id)  # WHY: log entry to test-site resolution.
         site_selector = os.getenv(
             "MIST_INTERACTIVE_TEST_SITE", ""
         ).strip()  # WHY: read optional environment override for deterministic test-site selection.
-        logging.debug(
+        logger.debug(
             "Environment selector MIST_INTERACTIVE_TEST_SITE='%s'", site_selector
         )  # WHY: log resolved selector value for diagnostics.
         site_id: str | None = None  # WHY: initialize safe fallback ID used when no site is found.
@@ -287,7 +287,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             site_id, site_name = self._lookup_first_available_site(
                 org_id
             )  # WHY: delegate fallback to first-available-site helper.
-        logging.debug(
+        logger.debug(
             "Resolved interactive test site_id=%s site_name=%s", site_id, site_name
         )  # WHY: log final resolution result for caller context.
         return site_id, site_name  # WHY: return resolved site context used by execute() workflow.
@@ -300,7 +300,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             consolidated into one atomic warning so the banner cannot be
             interleaved with other records under concurrent log producers.
         """
-        logging.warning(
+        logger.warning(
             " Starting interactive test of MistHelper menu options...\n"
             "  Note: This tests read-only operations requiring site/device/client selection\n"
             "! Test started at: %s\n"
@@ -311,7 +311,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
 
     def _build_option_lists(self) -> tuple[list[str], list[str], list[str]]:
         """Return (all_options, interactive_options, skip_list) using stable legacy ordering."""
-        logging.info("Building interactive option lists from menu actions")  # WHY: log before list-build action.
+        logger.info("Building interactive option lists from menu actions")  # WHY: log before list-build action.
         all_options = sorted(
             self.menu_actions.keys(), key=lambda option: float(option.replace("a", ".1"))
         )  # WHY: preserve legacy float-key ordering across sub-option letters.
@@ -322,21 +322,21 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         skip_list = [
             option for option in all_options if not self.operation_registry.is_interactive_safe(option)
         ]  # WHY: build skip list mirroring legacy negative filter.
-        logging.debug(
+        logger.debug(
             "Built option lists: %d interactive, %d skipped", len(interactive_options), len(skip_list)
         )  # WHY: log list-build result for diagnostics.
         return all_options, interactive_options, skip_list  # WHY: return triple consumed by execute().
 
     def _validate_interactive_options(self, interactive_options: list[str]) -> None:
         """Refuse any option that is not explicitly classified as interactive-safe."""
-        logging.info("Validating interactive-test safety boundary")  # WHY: log before safety check.
+        logger.info("Validating interactive-test safety boundary")  # WHY: log before safety check.
         for option in interactive_options:  # WHY: inspect each candidate before any handler can run.
             category = self.operation_registry.skip_category(option)  # WHY: read the canonical safety class.
             if category != "interactive_safe":  # WHY: only interactive_safe may run unattended.
                 raise InteractiveTestSafetyError(
                     f"Refusing menu option {option}: category {category} is outside --testinteractive"
                 )  # WHY: fail closed before a destructive or long-running handler can execute.
-        logging.debug("Validated %d interactive-test candidate operations", len(interactive_options))  # WHY: count.
+        logger.debug("Validated %d interactive-test candidate operations", len(interactive_options))  # WHY: count.
 
     def _skip_reason_for_option(self, option: str) -> str:
         """Return a non-empty skip reason for an option outside the interactive-safe set."""
@@ -361,7 +361,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             if option in self.menu_actions:
                 description = self.menu_actions[option].title  # WHY: read menu text from the named row.
                 lines.append(f"   {option:>3}: {description}")  # WHY: preserve per-option tested listing.
-        logging.warning("%s", "\n".join(lines))
+        logger.warning("%s", "\n".join(lines))
 
     def _print_skipped_options(self, skip_list: list[str]) -> None:
         """Emit the skipped-options listing via a single ``logging.warning``.
@@ -376,7 +376,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
                 reason = self._skip_reason_for_option(option)  # WHY: every skip must name a missing capability.
                 if reason:
                     lines.append(f"   {option:>3}: {reason}")  # WHY: preserve per-option skip-reason listing.
-        logging.warning("%s", "\n".join(lines))
+        logger.warning("%s", "\n".join(lines))
 
     def _print_option_listings(self, interactive_options: list[str], skip_list: list[str]) -> None:
         """Emit the tested-and-skipped option listings via ``logging.warning``.
@@ -386,7 +386,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             a single warning record. Delegated tested/skipped listings each
             emit one further warning to preserve section boundaries.
         """
-        logging.warning(
+        logger.warning(
             "! Found %d interactive read-only options to test\n! %d options will be skipped",
             len(interactive_options),
             len(skip_list),
@@ -396,10 +396,10 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
 
     def _create_emitter(self) -> tuple[Any, Any]:
         """Initialize telemetry emitter. Return (emitter, path) tuple."""
-        logging.info("Creating telemetry emitter for interactive test run")  # WHY: log before emitter setup.
+        logger.info("Creating telemetry emitter for interactive test run")  # WHY: log before emitter setup.
         telemetry_path = self.telemetry_emitter_cls.timestamped_path("data")  # WHY: generate timestamped output path.
         emitter = self.telemetry_emitter_cls(telemetry_path)  # WHY: construct emitter instance.
-        logging.debug("Telemetry emitter initialized with path: %s", telemetry_path)  # WHY: log emitter destination.
+        logger.debug("Telemetry emitter initialized with path: %s", telemetry_path)  # WHY: log emitter destination.
         return emitter, telemetry_path  # WHY: return tuple so callers do not depend on emitter attrs.
 
     def _emit_skip_events(self, emitter: Any, skip_list: list[str]) -> int:
@@ -408,7 +408,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         for option in skip_list:
             if option in self.menu_actions:
                 op_name = self.menu_actions[option].title  # WHY: read menu text from the named row.
-                logging.info("Emitting telemetry skip event for option %s", option)  # WHY: log before skip emission.
+                logger.info("Emitting telemetry skip event for option %s", option)  # WHY: log before skip emission.
                 reason = self._skip_reason_for_option(option)  # WHY: telemetry skip reason must never be blank.
                 emitter.emit_test_skip(
                     option,
@@ -418,33 +418,33 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
                     "interactive",
                 )  # WHY: emit skip event capturing option identity + skip metadata.
                 skip_count += 1  # WHY: increment skip counter after successful emission.
-        logging.debug("Emitted %d skip telemetry events", skip_count)  # WHY: log skip emission summary.
+        logger.debug("Emitted %d skip telemetry events", skip_count)  # WHY: log skip emission summary.
         return skip_count  # WHY: return count for summary reporting.
 
     def _ensure_org_id(self) -> str:
         """Return cached org_id or resolve and persist a new one."""
         org_id = self.org_id_getter()  # WHY: retrieve cached org_id from injected getter.
         if not org_id:
-            logging.info("No cached org_id present; resolving via config utils")  # WHY: log before resolution.
+            logger.info("No cached org_id present; resolving via config utils")  # WHY: log before resolution.
             org_id = self.config_utils.get_cached_or_prompted_org_id()  # WHY: resolve org_id via utils.
             self.org_id_setter(org_id)  # WHY: persist resolved org_id via injected setter.
-            logging.debug("Resolved and stored org_id=%s", org_id)  # WHY: log resolution result.
+            logger.debug("Resolved and stored org_id=%s", org_id)  # WHY: log resolution result.
         return org_id  # WHY: return org_id for downstream site resolution.
 
     def _resolve_site_or_close(self, org_id: str, emitter: Any) -> tuple[str | None, str]:
         """Resolve test site context. Close emitter and return (None, '') on failure paths."""
         try:
-            logging.warning("   Fetching test site for interactive operations...")  # WHY: #886 s18 legacy cue.
+            logger.warning("   Fetching test site for interactive operations...")  # WHY: #886 s18 legacy cue.
             test_site_id, test_site_name = self._resolve_test_site(org_id)  # WHY: resolve test site.
             if test_site_id:
-                logging.info(
+                logger.info(
                     "INTERACTIVE_TEST: Using test site_id=%s name=%s", test_site_id, test_site_name
                 )  # WHY: log selected site context.
                 return test_site_id, test_site_name  # WHY: return resolved context on success.
-            logging.error(
+            logger.error(
                 "[ERROR] No sites found in organization - cannot run interactive tests"
             )  # WHY: #886 slice 18/N — legacy no-site error via logging.error.
-            logging.error("INTERACTIVE_TEST: No sites available for testing")  # WHY: log no-site terminal condition.
+            logger.error("INTERACTIVE_TEST: No sites available for testing")  # WHY: log no-site terminal condition.
         except TestSiteSelectorUnresolved as error:
             logging.error(
                 "[ERROR] Aborting interactive tests: %s", error
@@ -452,9 +452,9 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         except Exception as error:
             logging.error("[ERROR] Failed to fetch test site: %s", error)  # WHY: #886 s18 fetch-failure msg.
             logging.error("INTERACTIVE_TEST: Failed to fetch test site: %s", error)  # WHY: log exception context.
-        logging.info("Closing telemetry emitter after site-resolution failure")  # WHY: log before close on failure.
+        logger.info("Closing telemetry emitter after site-resolution failure")  # WHY: log before close on failure.
         emitter.close()  # WHY: close emitter to flush events on failure path.
-        logging.debug("Telemetry emitter closed after site-resolution failure")  # WHY: log close completion.
+        logger.debug("Telemetry emitter closed after site-resolution failure")  # WHY: log close completion.
         return None, ""  # WHY: signal caller to abort suite.
 
     def _invoke_option(self, option: str, test_site_id: str | None) -> None:
@@ -466,7 +466,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         invoke_kwargs: dict[str, Any] = {}  # WHY: initialize kwargs payload.
         if "site_id" in signature.parameters:
             invoke_kwargs["site_id"] = test_site_id  # WHY: inject site when callable accepts it.
-        logging.debug(
+        logger.debug(
             "Invoking option %s with kwargs=%s", option, invoke_kwargs
         )  # WHY: log invocation kwargs for diagnostics.
         self._invoke_with_input_provider(option, function, invoke_kwargs)  # WHY: prevent blocking prompts.
@@ -478,13 +478,13 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             return  # WHY: no prompt seam exists to restore.
         provider = UnattendedInteractiveInputProvider(option)  # WHY: create option-scoped prompt answers.
         original_safe_input = self.input_utils.safe_input  # WHY: preserve EOF-safe behavior after this option.
-        logging.info("Installing unattended input provider for option %s", option)  # WHY: log before patch.
+        logger.info("Installing unattended input provider for option %s", option)  # WHY: log before patch.
         self.input_utils.safe_input = provider.answer  # WHY: replace only the prompt seam during the option run.
         try:
             function(**invoke_kwargs)  # WHY: execute target interactive-safe operation with deterministic prompts.
         finally:
             self.input_utils.safe_input = original_safe_input  # WHY: restore normal EOF-safe prompting.
-            logging.debug("Restored EOF-safe input provider after option %s", option)  # WHY: log restoration.
+            logger.debug("Restored EOF-safe input provider after option %s", option)  # WHY: log restoration.
 
     def _classify_site_context(self, option: str) -> str:
         """Return the per-option test_mode label reflecting whether the handler accepts ``site_id``.
@@ -512,11 +512,11 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
 
     def _emit_option_pass(self, option: str, description: str, duration: float, emitter: Any, test_mode: str) -> bool:
         """Emit telemetry pass event and preserve legacy success output for an option."""
-        logging.warning("   [SUCCESS] Option %s completed successfully", option)  # WHY: #886 s18 success msg.
-        logging.info("Emitting telemetry pass event for option %s", option)  # WHY: log before pass emission.
+        logger.warning("   [SUCCESS] Option %s completed successfully", option)  # WHY: #886 s18 success msg.
+        logger.info("Emitting telemetry pass event for option %s", option)  # WHY: log before pass emission.
         emitter.emit_test_pass(option, description, duration, test_mode)  # WHY: #1638 — label site-context outcome.
-        logging.debug("Telemetry pass event emitted for option %s", option)  # WHY: log pass completion.
-        logging.info(
+        logger.debug("Telemetry pass event emitted for option %s", option)  # WHY: log pass completion.
+        logger.info(
             "INTERACTIVE_TEST: Successfully completed menu option %s", option
         )  # WHY: log operator-facing success.
         return True  # WHY: signal success to caller.
@@ -525,15 +525,15 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         self, option: str, description: str, duration: float, error: Exception, emitter: Any, test_mode: str
     ) -> bool:
         """Emit telemetry fail event and preserve legacy failure output for an option."""
-        logging.warning(
+        logger.warning(
             "   [FAILED]  Option %s failed: %s...", option, str(error)[:100]
         )  # WHY: #886 slice 18/N — failure message via logging.warning with legacy truncation.
-        logging.info("Emitting telemetry fail event for option %s", option)  # WHY: log before fail emission.
+        logger.info("Emitting telemetry fail event for option %s", option)  # WHY: log before fail emission.
         emitter.emit_test_fail(
             option, description, duration, error, test_mode
         )  # WHY: #1638 — label site-context / prompt-cancellation outcome.
-        logging.debug("Telemetry fail event emitted for option %s", option)  # WHY: log fail completion.
-        logging.error("INTERACTIVE_TEST: Failed menu option %s: %s", option, error)  # WHY: log operator-facing failure.
+        logger.debug("Telemetry fail event emitted for option %s", option)  # WHY: log fail completion.
+        logger.error("INTERACTIVE_TEST: Failed menu option %s: %s", option, error)  # WHY: log operator-facing failure.
         return False  # WHY: signal failure to caller.
 
     def _run_single_option(self, index: int, total: int, option: str, test_site_id: str | None, emitter: Any) -> bool:
@@ -558,14 +558,14 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             no-context invocation with a prompt-cancelled site-scoped one.
         """
         description = self.menu_actions[option].title  # WHY: resolve description for progress output.
-        logging.warning(
+        logger.warning(
             "   [%2d/%d] Testing option %3s: %s...", index, total, option, description[:60]
         )  # WHY: #886 slice 18/N — per-option progress line via logging.warning.
-        logging.info("Emitting telemetry start event for option %s", option)  # WHY: log before start emission.
+        logger.info("Emitting telemetry start event for option %s", option)  # WHY: log before start emission.
         emitter.emit_test_start(option, description, "interactive")  # WHY: emit start event.
-        logging.debug("Telemetry start event emitted for option %s", option)  # WHY: log start emission completion.
+        logger.debug("Telemetry start event emitted for option %s", option)  # WHY: log start emission completion.
         op_start = time.time()  # WHY: capture per-option start timestamp.
-        logging.info(
+        logger.info(
             "INTERACTIVE_TEST: Starting test of menu option %s description='%s'", option, description
         )  # WHY: log before invocation.
         test_mode = self._classify_site_context(option)  # WHY: #1638 — resolve per-option mode label upfront.
@@ -578,7 +578,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             finally:
                 root_logger.removeHandler(observer)  # WHY: detach before pass/fail emission to avoid self-count.
             if observer.ignored_count:
-                logging.debug(
+                logger.debug(
                     "INTERACTIVE_TEST: option %s ignored %d third-party ERROR record(s)",
                     option,
                     observer.ignored_count,
@@ -629,7 +629,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
 
     def _finalize_telemetry(self, emitter: Any, tallies: SuiteTallies, total_ops: int) -> None:
         """Emit summary event, close emitter, and enforce retention policy."""
-        logging.info("Emitting telemetry summary for interactive test suite")  # WHY: log before summary emission.
+        logger.info("Emitting telemetry summary for interactive test suite")  # WHY: log before summary emission.
         emitter.emit_test_summary(
             TestSummary(
                 total_ops,
@@ -640,13 +640,13 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
                 "interactive",
             )
         )  # WHY: emit aggregate metrics (issue #470: stats bundled into a TestSummary dataclass).
-        logging.debug("Telemetry summary event emitted successfully")  # WHY: log summary completion.
-        logging.info("Closing telemetry emitter after interactive suite completion")  # WHY: log before close.
+        logger.debug("Telemetry summary event emitted successfully")  # WHY: log summary completion.
+        logger.info("Closing telemetry emitter after interactive suite completion")  # WHY: log before close.
         emitter.close()  # WHY: flush pending events.
-        logging.debug("Telemetry emitter closed successfully")  # WHY: log close completion.
-        logging.info("Applying telemetry retention policy")  # WHY: log before retention enforcement.
+        logger.debug("Telemetry emitter closed successfully")  # WHY: log close completion.
+        logger.info("Applying telemetry retention policy")  # WHY: log before retention enforcement.
         emitter.enforce_retention()  # WHY: prune old telemetry files.
-        logging.debug("Telemetry retention policy enforcement completed")  # WHY: log retention completion.
+        logger.debug("Telemetry retention policy enforcement completed")  # WHY: log retention completion.
 
     def _print_summary_stats(self, tallies: SuiteTallies, interactive_total: int, telemetry_path: Any) -> None:
         """Emit the legacy stats block as one atomic ``logging.warning``.
@@ -657,7 +657,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             guarantees the block arrives contiguously in any handler.
         """
         coverage_pct = tallies.success_count / interactive_total * 100  # WHY: precompute coverage %.
-        logging.warning(
+        logger.warning(
             "\n%s\n Interactive Test Summary:\n"
             "   Successful operations: %d\n"
             "   Failed operations: %d\n"
@@ -685,20 +685,20 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         """Print final verdict banner and return suite pass/fail status."""
         exercised_count = tallies.success_count + tallies.error_count  # WHY: zero exercise must fail loudly.
         if exercised_count == 0:
-            logging.error("INTERACTIVE_TEST: zero operations exercised; refusing green result")  # WHY: guard proof.
+            logger.error("INTERACTIVE_TEST: zero operations exercised; refusing green result")  # WHY: guard proof.
             return False  # WHY: a run that measured nothing must not pass.
         if tallies.error_count == 0:
-            logging.warning("   All tested interactive operations completed successfully!")  # WHY: #886 s18.
-            logging.info(
+            logger.warning("   All tested interactive operations completed successfully!")  # WHY: #886 s18.
+            logger.info(
                 "INTERACTIVE_TEST: All %s tested operations completed successfully in %.2fs",
                 tallies.success_count,
                 tallies.total_time,
             )  # WHY: log all-pass suite outcome.
             return True  # WHY: return pass status.
-        logging.warning(
+        logger.warning(
             "   %d operations failed - check logs for details", tallies.error_count
         )  # WHY: #886 slice 18/N — failure summary line via logging.warning.
-        logging.warning(
+        logger.warning(
             "INTERACTIVE_TEST: %s operations failed out of %s tested",
             tallies.error_count,
             interactive_total,
@@ -728,12 +728,12 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
     def _emit_credential_skip_events(self, emitter: Any, interactive_options: list[str]) -> int:
         """Emit skip events for interactive-safe options when no API token exists."""
         reason = "Requires MIST_APITOKEN or MIST_API_TOKEN because this interactive test calls the Mist API"
-        logging.warning(" Skipping interactive-safe operations that need Mist API credentials:")  # WHY: visible list.
+        logger.warning(" Skipping interactive-safe operations that need Mist API credentials:")  # WHY: visible list.
         for option in interactive_options:  # WHY: emit one skip record for each candidate that cannot run.
             description = self.menu_actions[option].title  # WHY: use the same title as normal test events.
-            logging.warning("   %3s: %s", option, reason)  # WHY: print the missing capability for this operation.
+            logger.warning("   %3s: %s", option, reason)  # WHY: print the missing capability for this operation.
             emitter.emit_test_skip(option, description, reason, "credential_required", "interactive")  # WHY: record.
-        logging.debug("Emitted %d credential skip events", len(interactive_options))  # WHY: log exact skip count.
+        logger.debug("Emitted %d credential skip events", len(interactive_options))  # WHY: log exact skip count.
         return len(interactive_options)  # WHY: include credential skips in summary skipped count.
 
     def _finalize_without_api(self, ctx: SuiteContext) -> bool:
@@ -747,7 +747,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
 
     def execute(self) -> bool:
         """Run the interactive-safe systematic test suite."""
-        logging.info("Starting interactive-safe systematic test suite")  # WHY: log suite entry boundary.
+        logger.info("Starting interactive-safe systematic test suite")  # WHY: log suite entry boundary.
         self.prompt_error_count = 0  # WHY: reset prompt-failure tally for this suite invocation.
         start_time = time.time()  # WHY: capture suite start timestamp.
         self._print_suite_header()  # WHY: emit legacy header block.
@@ -757,7 +757,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             logging.error("INTERACTIVE_TEST: %s", error)  # WHY: surface the safety refusal without a traceback.
             return False  # WHY: fail closed when the registry offers an unsafe operation.
         if not interactive_options:
-            logging.error("INTERACTIVE_TEST: zero interactive-safe operations selected")  # WHY: guard proof.
+            logger.error("INTERACTIVE_TEST: zero interactive-safe operations selected")  # WHY: guard proof.
             return False  # WHY: a run that would measure nothing must fail.
         self._print_option_listings(interactive_options, skip_list)  # WHY: emit option listings.
         emitter, telemetry_path = self._create_emitter()  # WHY: initialize telemetry emitter. Capture path.

@@ -7,6 +7,8 @@ import logging  # WHY: structured logging at info/debug/error levels per coding 
 from dataclasses import dataclass  # WHY: frozen container for injected collaborators.
 from typing import Any  # WHY: loose typing for opaque mistapi response objects.
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+
 
 @dataclass(frozen=True, slots=True)  # WHY: immutable+slotted deps bundle avoids per-instance dict overhead.
 class MarvisTroubleshootDeps:
@@ -88,10 +90,10 @@ class MarvisTroubleshootUtils:
         Args:
             deps: injected dependency container.
         """
-        logging.warning("%s\n%s", _MENU_HEADER_CLIENT, _HEADER_SEP)  # WHY: user-facing menu banner.
+        logger.warning("%s\n%s", _MENU_HEADER_CLIENT, _HEADER_SEP)  # WHY: user-facing menu banner.
         client_mac, client_type, site_id = deps.prompt_client_utils.select_client()  # WHY: pick target client.
         if not client_mac:  # WHY: guard against user cancelling the prompt.
-            logging.warning(" No client selected. Returning to main menu.")  # WHY: cancel-path message.
+            logger.warning(" No client selected. Returning to main menu.")  # WHY: cancel-path message.
             return  # WHY: exit before any API call.
         org_id = deps.config_utils.get_cached_or_prompted_org_id()  # WHY: resolve org id (cached or prompt).
         params = MarvisTroubleshootUtils._build_client_params(client_mac, client_type, site_id)  # WHY: build kwargs.
@@ -111,22 +113,22 @@ class MarvisTroubleshootUtils:
         Args:
             deps: injected dependency container.
         """
-        logging.debug("MARVIS DEBUG: Entering device_performance()")  # WHY: trace entry per existing convention.
-        logging.warning("%s\n%s", _MENU_HEADER_DEVICE, _HEADER_SEP)  # WHY: user-facing menu banner.
+        logger.debug("MARVIS DEBUG: Entering device_performance()")  # WHY: trace entry per existing convention.
+        logger.warning("%s\n%s", _MENU_HEADER_DEVICE, _HEADER_SEP)  # WHY: user-facing menu banner.
         site_id = deps.prompt_utils.select_site()  # WHY: prompt for target site.
         if not site_id:  # WHY: user cancelled site selection.
-            logging.warning(" No site selected.")  # WHY: cancel-path message.
+            logger.warning(" No site selected.")  # WHY: cancel-path message.
             return  # WHY: exit early.
         device_id = deps.prompt_utils.select_device_id_from_inventory(site_id)  # WHY: canonical device chooser.
         if not device_id:  # WHY: user cancelled device selection.
-            logging.warning(" No device selected.")  # WHY: cancel-path message.
+            logger.warning(" No device selected.")  # WHY: cancel-path message.
             return  # WHY: exit early.
         org_id = deps.config_utils.get_cached_or_prompted_org_id()  # WHY: resolve org id once for API call.
         device_info = MarvisTroubleshootUtils._lookup_device(deps, site_id, device_id)  # WHY: fetch mac+name.
         if device_info is None:  # WHY: lookup failed or missing MAC — helper already messaged.
             return  # WHY: exit without invoking Marvis.
         MarvisTroubleshootUtils._invoke_device_troubleshoot(deps, org_id, site_id, device_info)  # WHY: run.
-        logging.debug("MARVIS DEBUG: Exiting device_performance()")  # WHY: trace exit per existing convention.
+        logger.debug("MARVIS DEBUG: Exiting device_performance()")  # WHY: trace exit per existing convention.
 
     @staticmethod
     def network_connectivity(deps: MarvisTroubleshootDeps) -> None:
@@ -139,16 +141,16 @@ class MarvisTroubleshootUtils:
         Args:
             deps: injected dependency container.
         """
-        logging.debug("MARVIS DEBUG: Entering network_connectivity()")  # WHY: trace entry.
-        logging.warning("%s\n%s", _MENU_HEADER_NETWORK, _HEADER_SEP)  # WHY: user-facing menu banner.
+        logger.debug("MARVIS DEBUG: Entering network_connectivity()")  # WHY: trace entry.
+        logger.warning("%s\n%s", _MENU_HEADER_NETWORK, _HEADER_SEP)  # WHY: user-facing menu banner.
         site_id = deps.prompt_utils.select_site()  # WHY: prompt for site to analyse.
         if not site_id:  # WHY: user cancelled.
-            logging.warning(" No site selected.")  # WHY: cancel-path message.
+            logger.warning(" No site selected.")  # WHY: cancel-path message.
             return  # WHY: exit early.
         org_id = deps.config_utils.get_cached_or_prompted_org_id()  # WHY: resolve org id (cached or prompt).
         MarvisTroubleshootUtils._announce_network_run(site_id)  # WHY: print + log run banner.
         MarvisTroubleshootUtils._invoke_network_troubleshoot(deps, org_id, site_id)  # WHY: run inside boundary.
-        logging.debug("MARVIS DEBUG: Exiting network_connectivity()")  # WHY: trace exit.
+        logger.debug("MARVIS DEBUG: Exiting network_connectivity()")  # WHY: trace exit.
 
     # ---- API-call wrappers (isolate try/except so entry points stay <= 25 lines) ----
 
@@ -174,11 +176,11 @@ class MarvisTroubleshootUtils:
             client_type: ``wired``/``wireless``/``unknown``.
         """
         try:  # WHY: funnel SDK errors to user guidance.
-            logging.info("Invoking Marvis troubleshootOrg for client %s", client_mac)  # WHY: pre-action log.
+            logger.info("Invoking Marvis troubleshootOrg for client %s", client_mac)  # WHY: pre-action log.
             response = deps.mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(  # WHY: call Marvis API.
                 deps.apisession, org_id, **params
             )
-            logging.debug("Marvis client response received (has_data=%s)", bool(response.data))  # WHY: post log.
+            logger.debug("Marvis client response received (has_data=%s)", bool(response.data))  # WHY: post log.
             MarvisTroubleshootUtils._handle_client_response(deps, response, client_mac, client_type)  # WHY: dispatch.
         except Exception as error:  # Marvis SDK raises bare Exception subclasses.
             logging.error("Failed to troubleshoot client %s: %s", client_mac, error)  # WHY: log full context.
@@ -208,13 +210,13 @@ class MarvisTroubleshootUtils:
         device_mac, device_name = device_info  # WHY: unpack tuple for use in logging + API kwargs.
         MarvisTroubleshootUtils._announce_device_run(site_id, device_mac, device_name)  # WHY: print+log banner.
         try:  # WHY: funnel SDK errors to guidance.
-            logging.info(  # WHY: pre-call log identifying device.
+            logger.info(  # WHY: pre-call log identifying device.
                 "Invoking Marvis troubleshootOrg for device %s (mac=%s)", device_name, device_mac
             )
             response = deps.mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(  # WHY: Marvis device analysis call.
                 deps.apisession, org_id, mac=device_mac, site_id=site_id
             )
-            logging.debug("Marvis device response received (has_data=%s)", bool(response.data))  # WHY: post log.
+            logger.debug("Marvis device response received (has_data=%s)", bool(response.data))  # WHY: post log.
             MarvisTroubleshootUtils._handle_device_response(deps, response, device_mac, device_name)  # WHY: dispatch.
         except Exception as error:  # bare Exception is the SDK contract.
             logging.exception("Exception in device_performance: %s", error)  # WHY: log with traceback.
@@ -236,11 +238,11 @@ class MarvisTroubleshootUtils:
             site_id: site id being analysed.
         """
         try:  # WHY: funnel SDK errors to guidance.
-            logging.info("Invoking Marvis troubleshootOrg for network site %s", site_id)  # WHY: pre-call log.
+            logger.info("Invoking Marvis troubleshootOrg for network site %s", site_id)  # WHY: pre-call log.
             response = deps.mistapi.api.v1.orgs.troubleshoot.troubleshootOrg(  # WHY: site-wide Marvis analysis.
                 deps.apisession, org_id, site_id=site_id
             )
-            logging.debug("Marvis network response received (has_data=%s)", bool(response.data))  # WHY: post log.
+            logger.debug("Marvis network response received (has_data=%s)", bool(response.data))  # WHY: post log.
             MarvisTroubleshootUtils._handle_network_response(deps, response, site_id)  # WHY: dispatch into display.
         except Exception as error:  # bare Exception is the SDK contract.
             logging.exception("Exception in network_connectivity: %s", error)  # WHY: log with traceback.
@@ -270,12 +272,12 @@ class MarvisTroubleshootUtils:
             client_type: ``wired``/``wireless``/``unknown``.
         """
         if not response.data:  # WHY: Marvis returned no findings — treat as healthy.
-            logging.warning(  # WHY: healthy-path message consolidated into one record.
+            logger.warning(  # WHY: healthy-path message consolidated into one record.
                 " No specific connectivity issues found for this client.\n"
                 " This could indicate the client is functioning normally."
             )
             return  # WHY: nothing left to save.
-        logging.warning(  # WHY: success banner + follow-up prompt as one record.
+        logger.warning(  # WHY: success banner + follow-up prompt as one record.
             " Marvis AI analysis completed!\n! Analysis results available."
         )
         data = deps.marvis_data_utils.format_for_csv(response.data, "client")  # WHY: flatten for CSV export.
@@ -305,12 +307,12 @@ class MarvisTroubleshootUtils:
             device_name: friendly device name for filenames.
         """
         if not response.data:  # WHY: healthy device — no findings.
-            logging.warning(  # WHY: healthy-path message consolidated into one record.
+            logger.warning(  # WHY: healthy-path message consolidated into one record.
                 " No performance issues detected for this device.\n"
                 " This could indicate the device is operating within normal parameters."
             )
             return  # WHY: nothing to save.
-        logging.warning(" Marvis AI device analysis completed!")  # WHY: success banner.
+        logger.warning(" Marvis AI device analysis completed!")  # WHY: success banner.
         data = deps.marvis_data_utils.format_for_csv(response.data, "device")  # WHY: CSV-friendly rows.
         safe_name = device_name.replace(" ", "_")  # WHY: sanitise device name for filesystem.
         filename = f"MarvisInsights_Device_{device_mac.replace(':', '')}_{safe_name}.csv"  # WHY: deterministic.
@@ -333,12 +335,12 @@ class MarvisTroubleshootUtils:
             site_id: site id being analysed.
         """
         if not response.data:  # WHY: healthy site — no findings.
-            logging.warning(  # WHY: healthy-path message consolidated into one record.
+            logger.warning(  # WHY: healthy-path message consolidated into one record.
                 " No network connectivity issues detected for this site.\n"
                 " This indicates the network is operating within normal parameters."
             )
             return  # WHY: nothing to save.
-        logging.warning(" Marvis AI network analysis completed!")  # WHY: success banner.
+        logger.warning(" Marvis AI network analysis completed!")  # WHY: success banner.
         data = deps.marvis_data_utils.format_for_csv(response.data, "network")  # WHY: flatten for CSV.
         filename = f"MarvisInsights_Network_{site_id}.csv"  # WHY: per-site filename.
         MarvisTroubleshootUtils._persist_csv(deps, data, filename, "network")  # WHY: write + log.
@@ -367,13 +369,13 @@ class MarvisTroubleshootUtils:
             filename: output filename (already sanitised).
             kind: human-readable category (``client``/``device``/``network``).
         """
-        logging.info("Saving Marvis %s CSV to %s", kind, filename)  # WHY: pre-write log with category.
+        logger.info("Saving Marvis %s CSV to %s", kind, filename)  # WHY: pre-write log with category.
         deps.data_exporter.write_with_format_selection(
             data, filename, api_function_name="getSiteMarvisInsights"
         )  # WHY: persist results.
         row_count = len(data) if data else 0  # WHY: guard against None/empty rows before len().
-        logging.debug("Marvis %s CSV saved (rows=%s)", kind, row_count)  # WHY: post-write log.
-        logging.warning("! Results saved to %s", filename)  # WHY: user confirmation.
+        logger.debug("Marvis %s CSV saved (rows=%s)", kind, row_count)  # WHY: post-write log.
+        logger.warning("! Results saved to %s", filename)  # WHY: user confirmation.
 
     # ---- shared display / dispatch helpers (each CC <= 5) --------------------
 
@@ -426,7 +428,7 @@ class MarvisTroubleshootUtils:
             show_raw_keys: whether to render the raw-key preview.
         """
         items_processed = len(data) if data else 0  # WHY: how many flattened rows resulted.
-        logging.warning("\n  Analysis Data: %s items processed", items_processed)  # WHY: user-facing count.
+        logger.warning("\n  Analysis Data: %s items processed", items_processed)  # WHY: user-facing count.
         if show_raw_keys and response_data:  # WHY: network workflow opted into raw-key preview.
             MarvisTroubleshootUtils._print_raw_keys_preview(response_data)  # WHY: bounded preview.
 
@@ -442,7 +444,7 @@ class MarvisTroubleshootUtils:
             results: iterable of finding dicts / raw scalars.
             results_header: heading to render before bullets.
         """
-        logging.warning("\n  %s:", results_header)  # WHY: section header.
+        logger.warning("\n  %s:", results_header)  # WHY: section header.
         for result in results or []:  # WHY: iterate. Treat missing list as empty.
             MarvisTroubleshootUtils._print_result_bullet(result)  # WHY: per-result renderer.
 
@@ -458,14 +460,14 @@ class MarvisTroubleshootUtils:
             result: dict finding or raw scalar.
         """
         if not isinstance(result, dict):  # WHY: non-dict finding — stringify directly.
-            logging.warning("  !? %s", result)  # WHY: fallback rendering.
+            logger.warning("  !? %s", result)  # WHY: fallback rendering.
             return  # WHY: nothing more to display.
         description = result.get("description", "Analysis result")  # WHY: cache lookup for downstream branches.
         action = result.get("action")  # WHY: optional recommended action.
         if action:  # WHY: only show action when the API supplied one.
-            logging.warning("  !? %s\n    Recommended Action: %s", description, action)  # WHY: bullet + action.
+            logger.warning("  !? %s\n    Recommended Action: %s", description, action)  # WHY: bullet + action.
             return  # WHY: rendered together to keep one record per finding.
-        logging.warning("  !? %s", description)  # WHY: dict finding without action.
+        logger.warning("  !? %s", description)  # WHY: dict finding without action.
 
     @staticmethod
     def _render_insights_section(insights: Any, insights_label: str) -> None:
@@ -479,10 +481,10 @@ class MarvisTroubleshootUtils:
             insights: iterable of insight dicts / raw scalars.
             insights_label: heading to render before bullets.
         """
-        logging.warning("\n  %s:", insights_label)  # WHY: section header.
+        logger.warning("\n  %s:", insights_label)  # WHY: section header.
         for insight in insights or []:  # WHY: iterate. Treat missing list as empty.
             description = MarvisTroubleshootUtils._insight_description(insight)  # WHY: consistent renderer.
-            logging.warning("  !? %s", description)  # WHY: bullet output.
+            logger.warning("  !? %s", description)  # WHY: bullet output.
 
     @staticmethod
     def _insight_description(insight: Any) -> str:
@@ -518,7 +520,7 @@ class MarvisTroubleshootUtils:
             text = str(value)  # WHY: stringify for length check + truncation.
             suffix = "..." if len(text) > _MAX_RAW_VALUE_LEN else ""  # WHY: mark truncation.
             lines.append(f"   {key}: {text[:_MAX_RAW_VALUE_LEN]}{suffix}")  # WHY: truncated preview line.
-        logging.warning("%s", "\n".join(lines))  # WHY: emit consolidated preview as one record.
+        logger.warning("%s", "\n".join(lines))  # WHY: emit consolidated preview as one record.
 
     @staticmethod
     def _print_raw_response_preview(response_data: Any) -> None:
@@ -533,7 +535,7 @@ class MarvisTroubleshootUtils:
         """
         text = str(response_data)  # WHY: stringify once for length checks.
         suffix = "..." if len(text) > _MAX_RAW_RESPONSE_LEN else ""  # WHY: mark truncation.
-        logging.warning("\n  Raw response: %s%s", text[:_MAX_RAW_RESPONSE_LEN], suffix)  # WHY: bounded preview.
+        logger.warning("\n  Raw response: %s%s", text[:_MAX_RAW_RESPONSE_LEN], suffix)  # WHY: bounded preview.
 
     @staticmethod
     def _print_error_guidance(kind: str, failure_message: str | None = None) -> None:
@@ -554,7 +556,7 @@ class MarvisTroubleshootUtils:
             lines.append(failure_message)  # WHY: user-visible failure banner first.
         lines.append(" This may indicate:")  # WHY: shared guidance intro.
         lines.extend(_MARVIS_ERROR_GUIDANCE.get(kind, ()))  # WHY: guidance bullets for known kinds.
-        logging.warning("%s", "\n".join(lines))  # WHY: emit consolidated guidance as one record.
+        logger.warning("%s", "\n".join(lines))  # WHY: emit consolidated guidance as one record.
 
     # ---- workflow-specific micro helpers (one job each, CC <= 3) -------------
 
@@ -579,7 +581,7 @@ class MarvisTroubleshootUtils:
             params["site_id"] = site_id  # WHY: attach site filter.
         if client_type in ("wired", "wireless"):  # WHY: optional explicit client type filter.
             params["type"] = client_type  # WHY: attach type filter.
-        logging.debug("Built Marvis client params: %s", params)  # WHY: trace the assembled kwargs.
+        logger.debug("Built Marvis client params: %s", params)  # WHY: trace the assembled kwargs.
         return params  # WHY: hand back to caller for **params expansion.
 
     @staticmethod
@@ -602,8 +604,8 @@ class MarvisTroubleshootUtils:
         ]
         if site_id:  # WHY: only echo site when provided (test verifies omission).
             lines.append(f"   Site ID: {site_id}")  # WHY: echo site id.
-        logging.warning("%s", "\n".join(lines))  # WHY: user banner as single record.
-        logging.info(  # WHY: structured pre-run record.
+        logger.warning("%s", "\n".join(lines))  # WHY: user banner as single record.
+        logger.info(  # WHY: structured pre-run record.
             "Starting Marvis client troubleshooting (mac=%s, type=%s, site=%s)",
             client_mac,
             client_type,
@@ -624,13 +626,13 @@ class MarvisTroubleshootUtils:
             device_mac: MAC address of the device.
             device_name: friendly device name.
         """
-        logging.warning(  # WHY: user banner consolidated into one record.
+        logger.warning(  # WHY: user banner consolidated into one record.
             "! Running Marvis AI performance analysis...\n" "   Device: %s (%s)\n" "   Site ID: %s",
             device_name,
             device_mac,
             site_id,
         )
-        logging.info(  # WHY: structured pre-run record.
+        logger.info(  # WHY: structured pre-run record.
             "Starting Marvis device performance analysis (device=%s, mac=%s, site=%s)",
             device_name,
             device_mac,
@@ -649,11 +651,11 @@ class MarvisTroubleshootUtils:
         Args:
             site_id: site id being analysed.
         """
-        logging.warning(  # WHY: user banner consolidated into one record.
+        logger.warning(  # WHY: user banner consolidated into one record.
             "! Running Marvis AI network analysis...\n" "   Analyzing site-level connectivity\n" "   Site ID: %s",
             site_id,
         )
-        logging.info("Starting Marvis network connectivity analysis for site=%s", site_id)  # WHY: structured log.
+        logger.info("Starting Marvis network connectivity analysis for site=%s", site_id)  # WHY: structured log.
 
     @staticmethod
     def _lookup_device(deps: MarvisTroubleshootDeps, site_id: str, device_id: str) -> tuple[str, str] | None:
@@ -672,22 +674,22 @@ class MarvisTroubleshootUtils:
             ``(mac, name)`` on success, else ``None`` after emitting a
             user-facing warning describing the failure.
         """
-        logging.info("Looking up device %s in site %s", device_id, site_id)  # WHY: pre-call log.
-        logging.warning("! Looking up device details...")  # WHY: user progress message.
+        logger.info("Looking up device %s in site %s", device_id, site_id)  # WHY: pre-call log.
+        logger.warning("! Looking up device details...")  # WHY: user progress message.
         device_response = deps.mistapi.api.v1.sites.devices.getSiteDevice(  # WHY: fetch device details.
             deps.apisession, site_id, device_id
         )
         if not device_response.data:  # WHY: device API returned nothing.
-            logging.warning(" Could not retrieve device details.")  # WHY: user message.
-            logging.debug("Device lookup returned empty data for %s", device_id)  # WHY: diagnostic.
+            logger.warning(" Could not retrieve device details.")  # WHY: user message.
+            logger.debug("Device lookup returned empty data for %s", device_id)  # WHY: diagnostic.
             return None  # WHY: signal failure to caller.
         device_mac = device_response.data.get("mac")  # WHY: extract MAC for downstream Marvis call.
         device_name = device_response.data.get("name", _UNKNOWN_DEVICE)  # WHY: friendly name fallback.
-        logging.debug("Resolved device: name=%s mac=%s", device_name, device_mac)  # WHY: post-call log.
+        logger.debug("Resolved device: name=%s mac=%s", device_name, device_mac)  # WHY: post-call log.
         if not device_mac:  # WHY: cannot Marvis-query without a MAC.
-            logging.warning(" Could not determine device MAC address.")  # WHY: user message.
+            logger.warning(" Could not determine device MAC address.")  # WHY: user message.
             return None  # WHY: signal failure to caller.
-        logging.debug("Device payload: %s", json.dumps(device_response.data, indent=2, default=str))  # WHY: dump.
+        logger.debug("Device payload: %s", json.dumps(device_response.data, indent=2, default=str))  # WHY: dump.
         return device_mac, device_name  # WHY: hand back tuple for downstream API call.
 
     # ---- view_insights workflow (unchanged surface) --------------------------
@@ -703,7 +705,7 @@ class MarvisTroubleshootUtils:
         Args:
             deps: injected dependency container.
         """
-        logging.warning("%s\n%s", _MENU_HEADER_INSIGHTS, _HEADER_SEP)  # WHY: user-facing menu banner.
+        logger.warning("%s\n%s", _MENU_HEADER_INSIGHTS, _HEADER_SEP)  # WHY: user-facing menu banner.
         org_id = deps.config_utils.get_cached_or_prompted_org_id()  # WHY: resolve org id.
         try:  # WHY: funnel unexpected errors to shared handler.
             org_info = MarvisTroubleshootUtils._fetch_org_info(deps, org_id)  # WHY: pull org metadata.
@@ -730,12 +732,12 @@ class MarvisTroubleshootUtils:
             Org metadata dict on success, else ``None`` after logging a
             user-facing warning.
         """
-        logging.warning(" Checking Marvis availability and organizational insights...")  # WHY: progress message.
-        logging.info("Fetching org metadata for Marvis insights view (org=%s)", org_id)  # WHY: pre-call log.
+        logger.warning(" Checking Marvis availability and organizational insights...")  # WHY: progress message.
+        logger.info("Fetching org metadata for Marvis insights view (org=%s)", org_id)  # WHY: pre-call log.
         org_response = deps.mistapi.api.v1.orgs.orgs.getOrg(deps.apisession, org_id)  # WHY: org metadata call.
-        logging.debug("Org metadata fetched (has_data=%s)", bool(org_response.data))  # WHY: post-call log.
+        logger.debug("Org metadata fetched (has_data=%s)", bool(org_response.data))  # WHY: post-call log.
         if not org_response.data:  # WHY: empty response — cannot render insights.
-            logging.warning(" Could not retrieve organization information.")  # WHY: user message.
+            logger.warning(" Could not retrieve organization information.")  # WHY: user message.
             return None  # WHY: signal failure.
         return org_response.data  # WHY: hand back raw dict to caller.
 
@@ -750,15 +752,15 @@ class MarvisTroubleshootUtils:
         Args:
             org_info: org metadata dict from the API.
         """
-        logging.warning("! Organization: %s", org_info.get("name", "Unknown"))  # WHY: org banner.
+        logger.warning("! Organization: %s", org_info.get("name", "Unknown"))  # WHY: org banner.
         marvis_features = MarvisTroubleshootUtils._filter_marvis_features(org_info.get("features", []))  # WHY: filter.
         if not marvis_features:  # WHY: no toggles found.
-            logging.warning("\n  No specific Marvis/VNA features detected in organization settings.")  # WHY: message.
+            logger.warning("\n  No specific Marvis/VNA features detected in organization settings.")  # WHY: message.
             return  # WHY: nothing to enumerate.
         lines = ["\n  Marvis/VNA Features Available:"]  # WHY: section header.
         for feature in marvis_features:  # WHY: enumerate detected toggles.
             lines.append(f"  !? {feature}")  # WHY: bullet output.
-        logging.warning("%s", "\n".join(lines))  # WHY: emit consolidated section as one record.
+        logger.warning("%s", "\n".join(lines))  # WHY: emit consolidated section as one record.
 
     @staticmethod
     def _filter_marvis_features(features: Any) -> list[str]:
@@ -810,10 +812,10 @@ class MarvisTroubleshootUtils:
             deps: injected dependency container.
         """
         try:  # WHY: bound errors from insight collection so usage guide still renders.
-            logging.warning("\n Attempting to retrieve organization-level insights...")  # WHY: progress message.
+            logger.warning("\n Attempting to retrieve organization-level insights...")  # WHY: progress message.
             insights_found = MarvisTroubleshootUtils._iter_insight_endpoints(org_id, deps)  # WHY: loop dispatch.
             if not insights_found:  # WHY: tell user when no endpoint produced data.
-                logging.warning("\n  No organization-level insights currently available.")  # WHY: user message.
+                logger.warning("\n  No organization-level insights currently available.")  # WHY: user message.
         except Exception as error:  # broad SDK exception surface.
             logging.warning("Could not retrieve organization insights: %s", error)  # WHY: log context.
             logging.warning("! Could not retrieve insights: %s", error)  # WHY: user-facing failure.
@@ -877,7 +879,7 @@ class MarvisTroubleshootUtils:
             True if data was rendered, False on empty/error responses.
         """
         try:  # WHY: individual endpoint errors must not abort the loop.
-            logging.debug("Testing insight endpoint: %s", endpoint_name)  # WHY: trace which endpoint runs.
+            logger.debug("Testing insight endpoint: %s", endpoint_name)  # WHY: trace which endpoint runs.
             response = endpoint_func()  # WHY: live API call.
             if not response.data:  # WHY: skip empty responses.
                 return False  # WHY: nothing to render.
@@ -903,7 +905,7 @@ class MarvisTroubleshootUtils:
             True if a CSV was written and a preview rendered, else False.
         """
         insights_data = data if isinstance(data, list) else [data]  # WHY: normalise to list.
-        logging.debug("%s insights data length: %s", endpoint_name, len(insights_data))  # WHY: diagnostic.
+        logger.debug("%s insights data length: %s", endpoint_name, len(insights_data))  # WHY: diagnostic.
         if not insights_data:  # WHY: nothing to display.
             return False  # WHY: no rows written.
         MarvisTroubleshootUtils._print_insight_preview(endpoint_name, insights_data)  # WHY: bounded preview.
@@ -932,7 +934,7 @@ class MarvisTroubleshootUtils:
         overflow = len(insights_data) - _MAX_PREVIEW_INSIGHTS  # WHY: how many rows are hidden.
         if overflow > 0:  # WHY: tell the user there is more in the CSV.
             lines.append(f"  ... and {overflow} more insights")  # WHY: overflow message.
-        logging.warning("%s", "\n".join(lines))  # WHY: emit consolidated preview as one record.
+        logger.warning("%s", "\n".join(lines))  # WHY: emit consolidated preview as one record.
 
     @staticmethod
     def _describe_insight(insight: Any) -> Any:
@@ -988,13 +990,13 @@ class MarvisTroubleshootUtils:
             formatted_insights: CSV-ready rows.
             filename: output filename (already sanitised).
         """
-        logging.info("Saving insights CSV: %s", filename)  # WHY: pre-write log.
+        logger.info("Saving insights CSV: %s", filename)  # WHY: pre-write log.
         deps.data_exporter.write_with_format_selection(
             formatted_insights, filename, api_function_name="getSiteMarvisInsights"
         )  # WHY: persist.
         row_count = len(formatted_insights) if formatted_insights else 0  # WHY: guard against None/empty.
-        logging.debug("Insights CSV saved (rows=%s)", row_count)  # WHY: post-write log.
-        logging.warning("  Full insights saved to %s", filename)  # WHY: user confirmation.
+        logger.debug("Insights CSV saved (rows=%s)", row_count)  # WHY: post-write log.
+        logger.warning("  Full insights saved to %s", filename)  # WHY: user confirmation.
 
     @staticmethod
     def _log_endpoint_error(endpoint_name: str, exception: Exception) -> None:
@@ -1010,11 +1012,11 @@ class MarvisTroubleshootUtils:
         """
         error_message = str(exception)  # WHY: stringified once for the substring checks below.
         if "404" in error_message:  # WHY: endpoint not enabled for this org.
-            logging.debug("Endpoint %s not available for this organization (404): %s", endpoint_name, exception)
+            logger.debug("Endpoint %s not available for this organization (404): %s", endpoint_name, exception)
         elif "403" in error_message:  # WHY: permission issue.
-            logging.debug("Access denied to %s (403): %s", endpoint_name, exception)
+            logger.debug("Access denied to %s (403): %s", endpoint_name, exception)
         else:  # WHY: anything else — keep as generic debug.
-            logging.debug("Could not fetch %s: %s", endpoint_name, exception)
+            logger.debug("Could not fetch %s: %s", endpoint_name, exception)
 
     @staticmethod
     def _display_usage_guide() -> None:
@@ -1025,7 +1027,7 @@ class MarvisTroubleshootUtils:
             operators see a single atomic block rather than 14 fragmented
             print lines.
         """
-        logging.warning("%s", "\n".join(_USAGE_GUIDE_LINES))  # WHY: single consolidated record.
+        logger.warning("%s", "\n".join(_USAGE_GUIDE_LINES))  # WHY: single consolidated record.
 
     @staticmethod
     def _handle_insights_error(exception: Exception) -> None:
@@ -1039,7 +1041,7 @@ class MarvisTroubleshootUtils:
         Args:
             exception: raised exception surfaced by ``view_insights``.
         """
-        logging.error(  # WHY: single consolidated error record with banner + guidance.
+        logger.error(  # WHY: single consolidated error record with banner + guidance.
             "Failed to get Marvis insights: %s\n"
             "! Failed to get Marvis insights: %s\n"
             " This may indicate:\n"
