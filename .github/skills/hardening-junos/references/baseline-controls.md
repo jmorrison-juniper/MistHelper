@@ -24,7 +24,9 @@ the management path, then run `commit` before the timer expires.
 6. [User Authentication Security](#6-user-authentication-security)
 7. [Routing Protocol Security](#7-routing-protocol-security)
 8. [Firewall Filter](#8-firewall-filter)
-9. [Sources](#sources)
+9. [Repository security decisions](#repository-security-decisions)
+10. [Verified Junos rules](#verified-junos-rules)
+11. [Sources](#sources)
 
 ## 1. Administrative
 
@@ -192,6 +194,122 @@ remote access and require console access.
 
 Warning: test FWF-03 source limits with `commit confirmed 2` before you make them permanent. A
 wrong prefix list can block SSH, SNMP, NTP, or routing adjacencies.
+
+## Repository security decisions
+
+These decisions come from MistHelper repository sources. Cite the listed file and line when you answer.
+
+### Secret handling
+
+- `.github/instructions/coding-standards.instructions.md:165` says to redact tokens and passwords at the logging boundary.
+- `documentation/security.md:8` says MistHelper loads credentials from `.env` and never logs them in clear text.
+- `deploy/.env.example:2` tells the operator to copy the template to `.env`.
+- `deploy/.env.example:3` says never to commit the actual `.env` file.
+- `.gitignore:5` ignores `.env`, and `.gitignore:9` ignores `.env.*` copies.
+
+Rule: never place a token, password, private key, or customer secret in code, logs, examples, screenshots, issue text, or a pull request.
+
+### Logging policy
+
+- `.github/copilot-instructions.md:269` requires ASCII log output.
+- `.github/instructions/coding-standards.instructions.md:167` requires ASCII log output for cross-platform use.
+- `.github/instructions/coding-standards.instructions.md:229` allows `#nosec` only for a verified false positive.
+- `.github/instructions/coding-standards.instructions.md:234` forbids a suppression that hides a real finding.
+
+Rule: fix a security finding at its cause. Use a suppression only when the tool is wrong, and write the reason near the suppression.
+
+### Typed confirmation
+
+- `.github/instructions/coding-standards.instructions.md:109` requires explicit typed confirmation for destructive operations.
+- `documentation/security.md:9` states the same practice for a destructive operation.
+- `documentation/security.md:18` warns against an unattended destructive script.
+
+Rule: require a typed confirmation when an action can erase data, change configuration, restart a device, or interrupt traffic.
+
+### Destructive menu classification
+
+The current registry marks these menu entries as destructive.
+
+- `src/utils/operation_registry.py:180` marks menu 154 as an AP firmware upgrade.
+- `src/utils/operation_registry.py:529` through `src/utils/operation_registry.py:532` mark menu 189, 190, 191, and 194 as destructive ticket and template writes.
+- `src/utils/operation_registry.py:533` through `src/utils/operation_registry.py:550` mark menu 206, 207, and 208 as destructive synthetic-probe and device-profile changes.
+- `.github/copilot-instructions.md:830` requires explicit human review for menu 154 through 187, 189 through 191, 194, and 206 through 208.
+
+Rule: read the current operation registry before you decide that a menu entry is safe for automation.
+
+### SSH path
+
+- `.github/copilot-instructions.md:414` says the SSH container uses `ForceCommand` for direct MistHelper launch and no shell access.
+- `Dockerfile:47` writes the `ForceCommand /usr/local/bin/misthelper-session` configuration.
+- `Dockerfile:144` exposes port 2200 for SSH and web and telemetry ports for other services.
+- `src/ssh/ssh_runner_manager.py:143` through `src/ssh/ssh_runner_manager.py:147` show the target hosts, username, and command count, but not the password.
+
+Rule: show the operator the target and command count before an SSH run. Do not show or log the password.
+
+### ZTP password path
+
+- `src/device/_utility_commands_action.py:43` defines the warning shown before the live credential.
+- `src/device/_utility_commands_action.py:259` identifies menu 144 as the ZTP password path.
+- `src/device/_utility_commands_action.py:286` through `src/device/_utility_commands_action.py:290` check whether stdout is a live terminal.
+- `src/device/_utility_commands_action.py:311` says the credential print method must never call the logging module.
+- `src/device/_utility_commands_action.py:332` through `src/device/_utility_commands_action.py:335` print the withheld notice and the safe ways to view the value.
+- `src/device/_utility_commands_action.py:346` and `src/device/_utility_commands_action.py:351` log only the terminal decision.
+
+Rule: a ZTP credential can appear on a live terminal only. A stored stream must receive a withheld notice.
+
+## Verified Junos rules
+
+This section records only Junos claims verified during issue #2754. Do not add a new hardening step unless a source verifies it.
+
+### Root authentication
+
+Source: Juniper `root-authentication` statement page.
+Train: the statement was introduced before Junos OS Release 7.4.
+URL: https://www.juniper.net/documentation/us/en/software/junos/cli-reference/topics/ref/statement/root-authentication-edit-system.html
+
+Verified claims:
+
+- The `root-authentication` statement configures authentication methods for the root-level user named `root`.
+- The statement can configure SSH ECDSA, ED25519, or RSA public keys for root login.
+- More than one public key can be configured for root login and user accounts.
+- The `encrypted-password` option accepts one encrypted password string.
+- The password string must have 1 through 128 characters.
+- The required privilege level is `admin-control` to add the statement.
+- A downgrade from Junos OS Release 15.1 to 12.3 or earlier can make a SHA-256-hashed root password fail.
+
+Skill rule: do not give a root password or root key change without the target Junos train. Check downgrade risk before you advise a password hash change.
+
+### Zeroize
+
+Source: Juniper `request system zeroize` command page.
+Train: the command was introduced before Junos OS Release 9.0.
+URL: https://www.juniper.net/documentation/us/en/software/junos/cli-reference/topics/ref/command/request-system-zeroize.html
+
+Verified claims:
+
+- `request system zeroize` removes all configuration information and resets all key values on the device where the operator runs it.
+- On a device with dual Routing Engines, the command broadcasts to all Routing Engines on that device.
+- On supported EX Series or QFX Series Virtual Chassis systems, the command operates only on the member where the operator runs it.
+- The command removes user-created files, including plain-text passwords, secrets, and private keys.
+- The command reboots the device and restores the factory default configuration.
+- After the reboot, management Ethernet access is not available until the operator uses console access.
+- The `media` option scrubs storage media and can take more time than a standard zeroize.
+- The required privilege level is `maintenance`.
+
+Skill rule: treat zeroize as destructive and potentially irreversible. Require console access, a recovery plan, and typed confirmation before execution.
+
+### Local command help checks
+
+Source: `documentation/Junos show_command_help.json`.
+Train: local command help snapshot, exact train not recorded.
+
+Verified local entries:
+
+- `documentation/Junos show_command_help.json:5780` maps `request system zeroize` to "Erase all data, including configuration and log files".
+- `documentation/Junos show_command_help.json:5783` maps `request system zeroize media` to "Overwrite media".
+- `documentation/Junos show_command_help.json:27763` maps `help topic system root-authentication` to "Root password".
+
+Skill rule: use the local command help to confirm a command name. Do not use it as the only source for the safety impact of a command.
 
 ## Sources
 

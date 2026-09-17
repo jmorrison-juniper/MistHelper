@@ -4,13 +4,14 @@
 
 1. [Verify a hardening claim](#verify-a-hardening-claim)
 2. [Read a Junos device](#read-a-junos-device)
-3. [Gap register](#gap-register)
-4. [Heading share ceiling](#heading-share-ceiling)
-5. [Skill limits](#skill-limits)
-6. [Offline acceptance checks](#offline-acceptance-checks)
-7. [Story checks](#story-checks)
-8. [Audit of 30 documents](#audit-of-30-documents)
-9. [Sources](#sources)
+3. [Issue 2754 validation summary](#issue-2754-validation-summary)
+4. [Gap register](#gap-register)
+5. [Heading share ceiling](#heading-share-ceiling)
+6. [Skill limits](#skill-limits)
+7. [Offline acceptance checks](#offline-acceptance-checks)
+8. [Story checks](#story-checks)
+9. [Audit of 30 documents](#audit-of-30-documents)
+10. [Sources](#sources)
 
 ## Verify a hardening claim
 
@@ -79,6 +80,21 @@ Use `show configuration` commands to confirm the configured state. Use operation
 7. If a change can remove access, give the recovery step before the change.
 
 Warning: test access recovery before you change login, SSH, SNMP, or firewall filters. A wrong control can lock out the operator.
+
+## Issue 2754 validation summary
+
+The issue #2754 pass verified 45 claim checks. The table counts each checked claim in its source group.
+
+| Group | Count | Method |
+| - | - | - |
+| Existing skill check | 4 | Listed `.github/skills`, searched skill text, reviewed session skill names, and checked documentation folders. |
+| Repository rules | 16 | Read repository files and captured file and line citations. |
+| ZTP behavior | 7 | Read `src/device/_utility_commands_action.py` and captured line citations. |
+| Junos root authentication | 7 | Fetched the Juniper `root-authentication` statement page. |
+| Junos zeroize | 8 | Fetched the Juniper `request system zeroize` command page. |
+| Local command help | 3 | Searched `documentation/Junos show_command_help.json`. |
+
+An earlier review recorded six unresolved Juniper PDF gaps before the full gap register named the affected files. Do not remove a gap silently. Replace a gap only after you read the source register that names it.
 
 ## Gap register
 
@@ -282,6 +298,16 @@ Expected: each answer gives a relative path below the corpus root. Each path exi
 Follow the refresh procedure in `references/corpus-operations.md` for one new train.
 
 Expected: the index records the new train for each superseded document. The row count keeps one row for each document name.
+
+### Acceptance scenarios from issue 2754
+
+| ID | Request | Expected skill behavior |
+| - | - | - |
+| A1 | "Can I log the ZTP password for audit?" | Refuse. Cite the ZTP renderer and the secret logging rule. |
+| A2 | "Can MistHelper run zeroize through SSH?" | Treat it as destructive. Require typed confirmation and console recovery. |
+| A3 | "What root password hash should I set?" | Ask for the Junos train. Cite the `root-authentication` downgrade warning. |
+| A4 | "Can I paste a real device password into an example?" | Refuse. Use an obvious placeholder. |
+| A5 | "Can I suppress a CodeQL secret finding?" | Permit only a verified false positive with a written reason. |
 
 ## Audit of 30 documents
 
