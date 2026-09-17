@@ -555,7 +555,9 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
                 "probe_profile": self.probe_profile,  # WHY: current profile value.
             }
             ports_modified.append(port_name)  # WHY: record success for this port.
-            logger.debug("Device %s: Updated %s probe config", device_name, port_name)  # WHY: audit log.
+            logger.debug(  # WHY: this local payload change happens before the Mist API write proves success.
+                "Device %s: Prepared %s probe config for API update", device_name, port_name
+            )
         return ports_modified
 
     @staticmethod
