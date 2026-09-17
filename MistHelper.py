@@ -70,12 +70,13 @@ from src.utils.subprocess_runner import (  # Centralized subprocess dispatch + e
     subprocess,  # Re-exported audited module for bootstrap injection without a direct stdlib import.
 )
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 if sys.version_info < MINIMUM_PYTHON_VERSION:  # Log the same version warning after logging becomes importable.
     version_str = (
         f"{sys .version_info .major }.{sys .version_info .minor }.{sys .version_info .micro }"  # Format version.
     )
     required_str = f"{MINIMUM_PYTHON_VERSION [0 ]}.{MINIMUM_PYTHON_VERSION [1 ]}"  # Format the minimum version.
-    logging.warning(  # Keep the historical log text for the logging parity contract.
+    logger.warning(  # Keep the historical log text for the logging parity contract.
         "Python %s detected. MistHelper requires Python %s+. Some features may not work correctly.",
         version_str,
         required_str,
@@ -825,9 +826,9 @@ def _get_latest_pypi_version(package_name: str) -> str:  # Ask PyPI for a packag
         url = f"https://pypi.org/pypi/{package_name }/json"  # PyPI JSON API endpoint for this package's metadata
         if not url.startswith("https://"):  # Defence-in-depth: refuse any non-HTTPS scheme before dispatch
             raise ValueError("PyPI URL must use https scheme")  # Fail-closed guards against future url refactors
-        logging.info("Checking the latest package version for %s", package_name)  # Log before the bounded HTTP request
+        logger.info("Checking the latest package version for %s", package_name)  # Log before the bounded HTTP request
         response = requests_module.get(url, timeout=5)  # Use requests so Bandit sees the validated HTTPS URL path
-        logging.debug("PyPI returned status %s for %s", response.status_code, package_name)  # Log the HTTP result
+        logger.debug("PyPI returned status %s for %s", response.status_code, package_name)  # Log the HTTP result
         response.raise_for_status()  # Treat a non-success response as an unknown latest version
         data = response.json()  # Parse the small JSON body through requests
         version = data.get("info", {}).get("version", "")  # Return latest version string, or empty if absent
@@ -866,7 +867,7 @@ def _parse_requirements_file(filepath: str = "requirements.txt") -> list[tuple[s
                 parsed = _parse_requirement_line(line)  # Parse this line into (name, spec) or None to skip
                 if parsed is not None:  # Only keep lines that yielded a real dependency
                     packages.append(parsed)  # Record this dependency for the caller
-        logging.debug("Parsed %s packages from %s", len(packages), filepath)  # Debug aid: how many specs were parsed
+        logger.debug("Parsed %s packages from %s", len(packages), filepath)  # Debug aid: how many specs were parsed
         return packages  # Return the collected dependency list
     except FileNotFoundError:  # requirements.txt does not exist at the given path
         logging.warning("Requirements file not found: %s", filepath)  # Warn that auto-install is skipped
@@ -1122,7 +1123,7 @@ class GlobalImportManager:
 
         def build(self) -> SiteExportUtils:
             """Return a `SiteExportUtils` instance for one menu dispatch."""
-            logging.info("Building the site export utility for menu dispatch")  # WHY: log before dependency wiring.
+            logger.info("Building the site export utility for menu dispatch")  # WHY: log before dependency wiring.
             utility = SiteExportUtils(  # WHY: centralize site export wiring.
                 apisession=MainEntrypoint.context.apisession,  # WHY: reuse the active Mist session.
                 PromptUtils=PromptUtils,  # WHY: preserve the existing prompt helper dependency.
@@ -1139,7 +1140,7 @@ class GlobalImportManager:
                 tqdm=tqdm,  # WHY: preserve progress display.
                 mistapi=mistapi,  # WHY: preserve direct Mist SDK access.
             )
-            logging.debug("Built the site export utility: %s", type(utility).__name__)  # WHY: summarize result.
+            logger.debug("Built the site export utility: %s", type(utility).__name__)  # WHY: summarize result.
             return utility  # WHY: caller invokes the same method as the former inline construction.
 
     class RoutingUtilsFactory:
@@ -1147,7 +1148,7 @@ class GlobalImportManager:
 
         def build(self) -> RoutingUtils:
             """Return a `RoutingUtils` instance for one menu dispatch."""
-            logging.info("Building the routing utility for menu dispatch")  # WHY: log before dependency wiring.
+            logger.info("Building the routing utility for menu dispatch")  # WHY: log before dependency wiring.
             deps = RoutingDeps(  # WHY: centralize routing wiring.
                 apisession=MainEntrypoint.context.apisession,  # WHY: reuse the active Mist session.
                 select_site_fn=PromptUtils.select_site_id_from_csv,  # WHY: preserve the site selector.
@@ -1157,17 +1158,17 @@ class GlobalImportManager:
                 check_fn=IsDebugMode.check,  # WHY: keep the existing debug-mode predicate.
             )
             routing = RoutingUtils(deps)  # WHY: create the utility after the dependency object is complete.
-            logging.debug("Built the routing utility: %s", type(routing).__name__)  # WHY: summarize result.
+            logger.debug("Built the routing utility: %s", type(routing).__name__)  # WHY: summarize result.
             return routing  # WHY: caller invokes the same method as the former inline construction.
 
         @staticmethod
         def _select_device(site_id: str, dtype: str) -> Any:
             """Select one device while preserving the legacy `device_type` keyword."""
-            logging.info("Selecting a device for routing command at site %s", site_id)  # WHY: log before prompt work.
+            logger.info("Selecting a device for routing command at site %s", site_id)  # WHY: log before prompt work.
             device = PromptUtils.select_device_id_from_inventory(  # WHY: keep the same inventory-backed selector.
                 site_id, device_type=dtype
             )
-            logging.debug("Selected routing device value present: %s", bool(device))  # WHY: do not log sensitive data.
+            logger.debug("Selected routing device value present: %s", bool(device))  # WHY: do not log sensitive data.
             return device  # WHY: RoutingDeps expects the selected device identifier.
 
     class GatewayTemplateConfigManagerFactory:
@@ -1175,9 +1176,7 @@ class GlobalImportManager:
 
         def build(self) -> GatewayTemplateConfigManager:
             """Return a gateway template manager for one menu dispatch."""
-            logging.info(
-                "Building the gateway template manager for menu dispatch"
-            )  # WHY: log before dependency wiring.
+            logger.info("Building the gateway template manager for menu dispatch")  # WHY: log before dependency wiring.
             manager = GatewayTemplateConfigManager(  # WHY: centralize manager wiring.
                 org_id=ConfigUtils.get_cached_or_prompted_org_id(),  # WHY: preserve lazy org selection.
                 apisession=MainEntrypoint.context.apisession,  # WHY: reuse the active Mist session.
@@ -1188,7 +1187,7 @@ class GlobalImportManager:
                 generate_sites_fn=OrgSiteExporter.sites,  # WHY: preserve fallback site export.
                 sanitize_filename_fn=EnhancedSSHRunner.sanitize_filename,  # WHY: preserve safe file names.
             )
-            logging.debug("Built the gateway template manager: %s", type(manager).__name__)  # WHY: summarize result.
+            logger.debug("Built the gateway template manager: %s", type(manager).__name__)  # WHY: summarize result.
             return manager  # WHY: caller invokes the same method as the former inline construction.
 
     def __init__(self, setup_logging: bool = True) -> None:  # Read config from env and prepare dependency state
@@ -1203,7 +1202,7 @@ class GlobalImportManager:
 
     def _load_upgrade_configuration(self) -> None:  # Read upgrade/UV/CSV settings from the environment
         """Load upgrade, UV-check, and CSV-freshness settings from environment variables."""
-        logging.debug("Loading import-manager upgrade configuration from environment")  # Trace config load
+        logger.debug("Loading import-manager upgrade configuration from environment")  # Trace config load
         self.auto_upgrade_uv = os.getenv("AUTO_UPGRADE_UV", "true").lower() == "true"  # Auto-upgrade UV manager itself
         self.auto_upgrade_dependencies = os.getenv("AUTO_UPGRADE_DEPENDENCIES", "true").lower() == "true"  # Auto deps
         self.upgrade_check_timeout = int(
@@ -1220,7 +1219,7 @@ class GlobalImportManager:
 
     def _initialize_dependency_tracking(self) -> None:  # Prepare package-tracking and import/UV caches
         """Initialize dependency-tracking containers and UV/deferred-init state flags."""
-        logging.debug("Initializing dependency tracking containers and caches")  # Trace tracking setup
+        logger.debug("Initializing dependency tracking containers and caches")  # Trace tracking setup
         self.required_packages: dict[str, str | None] = {}  # Will hold name -> spec for required packages
         self.optional_packages: dict[str, str | None] = {}  # Will hold name -> spec for optional packages
         self.failed_imports: list[str] = []  # Names of packages that failed to import
@@ -1236,7 +1235,7 @@ class GlobalImportManager:
 
     def _initialize_import_mappings(self) -> None:  # Build name maps and special import handlers
         """Build package->import name mappings and the special-case import handler table."""
-        logging.debug("Initializing import name mappings and special handlers")  # Trace mapping setup
+        logger.debug("Initializing import name mappings and special handlers")  # Trace mapping setup
         self.import_name_mappings = {  # Map pip package names to import names where they differ
             "websocket-client": "websocket",  # websocket-client package provides websocket module
             "python-dotenv": "dotenv",  # python-dotenv package provides dotenv module
@@ -1261,11 +1260,11 @@ class GlobalImportManager:
 
         if self.in_venv:  # Running inside a virtual environment
             venv_path = getattr(sys, "prefix", "unknown")  # Path to the active venv
-            logging.info("Running in virtual environment: %s", venv_path)  # Log the venv location
-            logging.info("Python executable: %s", sys.executable)  # Log which interpreter is in use
+            logger.info("Running in virtual environment: %s", venv_path)  # Log the venv location
+            logger.info("Python executable: %s", sys.executable)  # Log which interpreter is in use
         else:  # Running against the system Python
-            logging.info("Running in system Python environment")  # Note the non-venv environment
-            logging.info("Python executable: %s", sys.executable)  # Log which interpreter is in use
+            logger.info("Running in system Python environment")  # Note the non-venv environment
+            logger.info("Python executable: %s", sys.executable)  # Log which interpreter is in use
 
     def _setup_logging(self) -> None:  # Build console+file handlers with env-driven levels
         """Setup basic logging configuration with environment-specific levels."""
@@ -1273,19 +1272,19 @@ class GlobalImportManager:
 
     def _build_console_log_handler(self, level: int) -> logging.StreamHandler[TextIO]:  # Console handler factory
         """Build a stdout/stderr console log handler at the requested level."""
-        logging.debug("_build_console_log_handler: creating console handler at level %s", level)  # Log before build
+        logger.debug("_build_console_log_handler: creating console handler at level %s", level)  # Log before build
         console_handler = logging.StreamHandler()  # Handler that writes to stdout/stderr
         console_handler.setLevel(level)  # Apply the console verbosity threshold
         console_formatter = logging.Formatter(
             "%(asctime)s - %(levelname)s - %(message)s"
         )  # Timestamped log line format
         console_handler.setFormatter(console_formatter)  # Attach the format to the console handler
-        logging.debug("_build_console_log_handler: console handler ready")  # Log after build
+        logger.debug("_build_console_log_handler: console handler ready")  # Log after build
         return console_handler  # Caller wires this into basicConfig
 
     def _build_file_log_handler(self, level: int) -> RotatingFileHandler:  # File handler factory (data/script.log)
         """Build a data/script.log file handler at the requested level."""
-        logging.debug("_build_file_log_handler: creating file handler at level %s", level)  # Log before build
+        logger.debug("_build_file_log_handler: creating file handler at level %s", level)  # Log before build
         log_file_path = os.path.join("data", "script.log")  # Log path under data/ (writable in the container)
         os.makedirs("data", exist_ok=True)  # Create data/ if missing (no error if present)
         rotation_settings = LogRotationSettings.from_environment()  # Read deployment rotation limits for this handler
@@ -1295,7 +1294,7 @@ class GlobalImportManager:
         file_handler.setLevel(level)  # Apply the file verbosity threshold
         file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")  # Same timestamped format
         file_handler.setFormatter(file_formatter)  # Attach the format to the file handler
-        logging.debug(
+        logger.debug(
             "_build_file_log_handler: bounded handler ready at %s with %d-byte limit and %d backups",
             log_file_path,
             rotation_settings.max_bytes,
@@ -1305,12 +1304,12 @@ class GlobalImportManager:
 
     def _define_package_requirements(self) -> None:  # Populate the required/optional package dictionaries
         """Define all required and optional package dependencies from class constants."""
-        logging.debug("_define_package_requirements: loading spec maps from class constants")  # Log before copy
+        logger.debug("_define_package_requirements: loading spec maps from class constants")  # Log before copy
         self.required_packages = dict(self._REQUIRED_PACKAGES)  # Copy class-level required spec map (defensive copy)
         self.optional_packages = {  # Filter out any None specs defensively (platform-incompatible)
             k: v for k, v in self._OPTIONAL_PACKAGES_RAW.items() if v is not None
         }
-        logging.debug(
+        logger.debug(
             "_define_package_requirements: %d required, %d optional packages loaded",
             len(self.required_packages),
             len(self.optional_packages),
@@ -1328,15 +1327,15 @@ class GlobalImportManager:
 
     def _probe_uv_binary(self) -> bool:  # Run 'uv --version' to detect UV availability
         """Probe the UV binary by running 'uv --version' and log the outcome."""
-        logging.debug("_probe_uv_binary: probing UV binary via subprocess")  # Log before probe
+        logger.debug("_probe_uv_binary: probing UV binary via subprocess")  # Log before probe
         try:  # Probing UV may fail if it is not installed
             result = SubprocessRunner.run(  # Audited dispatch (initiative 1016) -- shell=False + argv allow-list.
                 ["uv", "--version"], timeout=10, check=False
             )  # Run 'uv --version' via SubprocessRunner (validates argv, no shell).
             if result.returncode == 0:  # UV ran successfully
-                logging.info("UV package manager found: %s", result.stdout.strip())  # Log detected version
+                logger.info("UV package manager found: %s", result.stdout.strip())  # Log detected version
                 return True  # UV is usable
-            logging.warning("UV package manager not found or not working properly")  # Note the problem
+            logger.warning("UV package manager not found or not working properly")  # Note the problem
             return False  # UV is not usable
         except (TimeoutExpired, FileNotFoundError, SubprocessError) as e:  # Missing/hung
             logging.warning("UV package manager check failed: %s", e)  # Log why the probe failed
@@ -1345,10 +1344,10 @@ class GlobalImportManager:
     def _install_uv(self) -> bool:  # Try to install UV by pip when it is absent
         """Install UV package manager if not present."""
         if not self.auto_upgrade_uv:  # UV auto-management disabled by config
-            logging.info("Auto-upgrade of UV is disabled in configuration")  # Note that we will not install UV
+            logger.info("Auto-upgrade of UV is disabled in configuration")  # Note that we will not install UV
             return False  # Signal UV is unavailable
 
-        logging.info("Attempting to install UV package manager...")  # Announce the install attempt
+        logger.info("Attempting to install UV package manager...")  # Announce the install attempt
         try:  # The pip install may fail (no network, restricted env)
             # Try installing UV using pip as fallback
             result = SubprocessRunner.run(  # Audited dispatch (initiative 1016) -- interpreter self-invoke allowed.
@@ -1357,10 +1356,10 @@ class GlobalImportManager:
                 check=False,  # Caller inspects returncode to branch on success/failure.
             )
             if result.returncode == 0:  # pip reported success
-                logging.info("UV package manager installed successfully via pip")  # Confirm the install
+                logger.info("UV package manager installed successfully via pip")  # Confirm the install
                 return True  # UV is now available
             else:  # pip returned an error
-                logging.error("Failed to install UV via pip: %s", result.stderr)  # Log pip's error output
+                logger.error("Failed to install UV via pip: %s", result.stderr)  # Log pip's error output
                 return False  # UV remains unavailable
         except (TimeoutExpired, SubprocessError) as e:  # pip process hung or failed to launch
             logging.error("Failed to install UV package manager: %s", e)  # Log the exception
@@ -1381,7 +1380,7 @@ class GlobalImportManager:
             return False  # Nothing to throttle against -- allow the check
         hours_since_last_check = (now - self._last_uv_update_check) / 3600  # Convert elapsed seconds to hours
         if hours_since_last_check < self.uv_update_check_hours:  # Still inside the throttle window
-            logging.debug(  # Skip the check to avoid frequent network calls
+            logger.debug(  # Skip the check to avoid frequent network calls
                 "UV update check skipped (last check %.1f hours ago, threshold: %s hours)",
                 hours_since_last_check,
                 self.uv_update_check_hours,
@@ -1392,7 +1391,7 @@ class GlobalImportManager:
     def _run_uv_self_update(self, now: float) -> bool:  # Run 'uv self update', recording the attempt time
         """Attempt 'uv self update'. On failure, dispatch to the pip-fallback handler. Always non-fatal."""
         try:  # The update may fail. Treat most failures as non-critical
-            logging.info("Checking for UV package manager updates...")  # Announce the update check
+            logger.info("Checking for UV package manager updates...")  # Announce the update check
             result = SubprocessRunner.run(  # Audited dispatch (initiative 1016) -- 'uv' basename allow-listed.
                 ["uv", "self", "update"],
                 timeout=self.upgrade_check_timeout,  # Bounded self-update call
@@ -1400,7 +1399,7 @@ class GlobalImportManager:
             )
             self._last_uv_update_check = now  # Record this attempt so we honor the throttle next time
             if result.returncode == 0:  # Self-update succeeded
-                logging.info("UV package manager updated successfully")  # Confirm the update
+                logger.info("UV package manager updated successfully")  # Confirm the update
                 return True  # Done
             return self._handle_uv_selfupdate_failure(result)  # Inspect stderr and try the pip fallback
         except (TimeoutExpired, SubprocessError) as e:  # Update process hung or failed to launch
@@ -1414,29 +1413,29 @@ class GlobalImportManager:
             "Self-update is only available for uv binaries installed via the standalone installation scripts"
         )
         if pip_installed_marker not in result.stderr:  # Self-update failed for some other reason
-            logging.warning("UV self-update returned non-zero: %s", result.stderr)  # Log the error
+            logger.warning("UV self-update returned non-zero: %s", result.stderr)  # Log the error
             return True  # Non-critical -- the current UV still works
-        logging.info("UV was installed via pip, attempting pip upgrade...")  # Switch to the pip upgrade path
+        logger.info("UV was installed via pip, attempting pip upgrade...")  # Switch to the pip upgrade path
         pip_result = SubprocessRunner.run(  # Audited dispatch (initiative 1016) -- interpreter self-invoke allowed.
             [sys.executable, "-m", "pip", "install", "--upgrade", "uv"],  # pip upgrade command
             timeout=self.upgrade_check_timeout,  # Bound the upgrade
             check=False,  # Caller inspects returncode. Non-zero is warned, not raised.
         )
         if pip_result.returncode == 0:  # pip upgrade succeeded
-            logging.info("UV package manager updated successfully via pip")  # Confirm the upgrade
+            logger.info("UV package manager updated successfully via pip")  # Confirm the upgrade
             return True  # Done
-        logging.warning("Failed to upgrade UV via pip: %s", pip_result.stderr)  # Log the error
+        logger.warning("Failed to upgrade UV via pip: %s", pip_result.stderr)  # Log the error
         return True  # Non-critical -- the current UV still works
 
     def _install_package_with_uv(self, package_spec: str) -> bool:
         """Install a package using UV package manager with fast resolution and virtual environment awareness."""
         try:
-            logging.debug("Installing package with UV: %s", package_spec)  # Log which package the tool installs
+            logger.debug("Installing package with UV: %s", package_spec)  # Log which package the tool installs
             uv_cmd = self._resolve_uv_binary()  # Pick venv-local UV when available, else PATH 'uv'
             first_cmd = self._build_uv_install_cmd(uv_cmd, package_spec, no_build_isolation=True)  # First attempt
             if self._attempt_uv_install(first_cmd, package_spec, fallback=False):  # First UV attempt succeeded
                 return True  # Installation done
-            logging.debug("UV install failed with --no-build-isolation, retrying without it")  # Note the retry
+            logger.debug("UV install failed with --no-build-isolation, retrying without it")  # Note the retry
             retry_cmd = self._build_uv_install_cmd(uv_cmd, package_spec, no_build_isolation=False)  # Retry sans flag
             return self._attempt_uv_install(retry_cmd, package_spec, fallback=True)  # Fallback attempt (logs stderr)
         except (TimeoutExpired, SubprocessError) as e:  # UV hung or failed to launch
@@ -1452,10 +1451,10 @@ class GlobalImportManager:
         )
         if result.returncode == 0:  # UV reported a successful install
             label = "UV (fallback)" if fallback else "UV"  # Distinguish the first attempt from the retry in the log
-            logging.info("Successfully installed %s with %s", package_spec, label)  # Confirm success
+            logger.info("Successfully installed %s with %s", package_spec, label)  # Confirm success
             return True  # Installation done
         if fallback:  # Only the final (fallback) attempt surfaces the UV error output
-            logging.warning("UV install failed for %s: %s", package_spec, result.stderr)  # Log the UV error output
+            logger.warning("UV install failed for %s: %s", package_spec, result.stderr)  # Log the UV error output
         return False  # This attempt did not install the package
 
     def _resolve_uv_binary(self) -> str:  # Choose which UV binary to invoke
@@ -1464,7 +1463,7 @@ class GlobalImportManager:
             return "uv"  # Use the UV binary found on PATH
         venv_uv = os.path.join(os.path.dirname(sys.executable), "uv.exe")  # Build the venv-local UV path
         if os.path.exists(venv_uv):  # The venv ships its own UV binary
-            logging.debug("Using venv UV: %s", venv_uv)  # Record which UV binary was chosen
+            logger.debug("Using venv UV: %s", venv_uv)  # Record which UV binary was chosen
             return venv_uv  # Prefer the venv's UV to stay environment-consistent
         return "uv"  # venv has no local UV -- fall back to PATH 'uv'
 
@@ -1481,7 +1480,7 @@ class GlobalImportManager:
     def _install_package_with_pip(self, package_spec: str) -> bool:
         """Install a package using pip as fallback with virtual environment awareness."""
         try:
-            logging.info("Installing package with pip: %s", package_spec)  # Log the pip install attempt
+            logger.info("Installing package with pip: %s", package_spec)  # Log the pip install attempt
             # Always use the current Python executable to ensure installation in the right environment
             result = SubprocessRunner.run(  # Audited dispatch (initiative 1016) -- interpreter self-invoke allowed.
                 [sys.executable, "-m", "pip", "install", package_spec],  # Invoke pip as a module of this Python
@@ -1489,12 +1488,10 @@ class GlobalImportManager:
                 check=False,  # Non-zero rc is inspected below rather than raised.
             )
             if result.returncode == 0:  # pip reported a successful install
-                logging.info("Successfully installed %s with pip", package_spec)  # Confirm success
+                logger.info("Successfully installed %s with pip", package_spec)  # Confirm success
                 return True  # Installation done
             else:  # pip install failed
-                logging.error(
-                    "Failed to install %s with pip: %s", package_spec, result.stderr
-                )  # Log pip's error output
+                logger.error("Failed to install %s with pip: %s", package_spec, result.stderr)  # Log pip's error output
                 return False  # Signal failure to the caller
         except (TimeoutExpired, SubprocessError) as e:  # pip hung or failed to launch
             logging.error("Failed to install %s with pip: %s", package_spec, e)  # Log the exception detail
@@ -1524,7 +1521,7 @@ class GlobalImportManager:
 
                 # For now, we'll assume UV is up to date since checking remote version is complex
                 # In a production environment, you might want to implement version comparison
-            logging.debug("UV version check complete - assuming current version is adequate")  # Note the no-op result
+            logger.debug("UV version check complete - assuming current version is adequate")  # Note the no-op result
             return False  # Treat UV as up to date (remote comparison not implemented)
 
         except (TimeoutExpired, SubprocessError):  # Version probe hung or failed to launch
@@ -1533,21 +1530,21 @@ class GlobalImportManager:
     def _upgrade_all_dependencies(self) -> bool:
         """Install missing dependencies and upgrade existing ones."""
         if not self.auto_upgrade_dependencies:  # Auto-upgrade disabled by configuration
-            logging.info("Auto-upgrade of dependencies is disabled in configuration")  # Note the skip
+            logger.info("Auto-upgrade of dependencies is disabled in configuration")  # Note the skip
             return True  # Nothing to do. Treat as success
         packages_to_process = self._collect_packages_to_process()  # (name, spec) pairs, built-ins excluded
         if not packages_to_process:  # Caller supplied an empty work list
-            logging.info("No packages to process")  # Note there is nothing to do
+            logger.info("No packages to process")  # Note there is nothing to do
             return True  # Success by default -- no work means no failures
-        logging.info("Processing %s packages...", len(packages_to_process))  # Announce how many will be handled
+        logger.info("Processing %s packages...", len(packages_to_process))  # Announce how many will be handled
         success_count = self._install_dependency_batch(packages_to_process)  # Install each, counting successes
-        logging.info("Successfully processed %s/%s packages", success_count, len(packages_to_process))  # Summarize
+        logger.info("Successfully processed %s/%s packages", success_count, len(packages_to_process))  # Summarize
         return success_count > 0  # Report success if at least one package installed
 
     def _install_dependency_batch(self, packages_to_process: list[tuple[str, str]]) -> int:  # Install a batch
         """Install each (name, spec) package via the best backend. Return the count that installed successfully."""
         uv_available = self._check_uv_installation()  # Detect whether the tool can use UV as the fast installer
-        logging.info(  # Record which installer backend will be used
+        logger.info(  # Record which installer backend will be used
             "Using UV package manager for installations"
             if uv_available
             else "Using pip for package installations (UV not available)"
@@ -1573,7 +1570,7 @@ class GlobalImportManager:
                 return True  # Installed via UV
             if self._install_package_with_pip(pkg_spec):  # pip fallback (or UV unavailable) succeeded
                 return True  # Installed via pip
-            logging.warning("Failed to install/upgrade %s", pkg_spec)  # Both paths failed -- warn, keep going
+            logger.warning("Failed to install/upgrade %s", pkg_spec)  # Both paths failed -- warn, keep going
             return False  # This package did not install
         except (OSError, SubprocessError, ValueError, RuntimeError) as e:  # Package tool errors affect only this item
             logging.warning("Error processing package %s: %s", pkg_spec, e, exc_info=True)  # Keep the traceback
@@ -1610,7 +1607,7 @@ class GlobalImportManager:
 
     def _import_datetime(self) -> Any:
         """Special handler for datetime import."""
-        logging.debug("_import_datetime: returning _DateTimeHandler adapter")  # Log before construction
+        logger.debug("_import_datetime: returning _DateTimeHandler adapter")  # Log before construction
         return self._DateTimeHandler()  # Hand back the dual-purpose adapter
 
     def _import_tqdm(self) -> Any:
@@ -1618,7 +1615,7 @@ class GlobalImportManager:
         try:
             from tqdm import tqdm  # Attempt to import the real progress-bar library
 
-            logging.debug("Successfully imported tqdm from package")  # Note the real library is available
+            logger.debug("Successfully imported tqdm from package")  # Note the real library is available
             return tqdm  # Use the genuine tqdm progress bar
         except ImportError:  # tqdm is not installed
             logging.warning("tqdm package not available, using fallback")  # Warn and degrade gracefully
@@ -1647,13 +1644,13 @@ class GlobalImportManager:
             package_name = self._bare_package_name(package_spec)  # Strip version operators to the bare name
             result = self._run_pip_show(package_name)  # Ask pip what version is currently installed
             if result.returncode != 0:  # pip could not find the package
-                logging.debug("Package %s not found, skipping upgrade check", package_name)  # Nothing to upgrade
+                logger.debug("Package %s not found, skipping upgrade check", package_name)  # Nothing to upgrade
                 return True  # Treat as success -- not an error condition
             current_version = self._parse_pip_show_version(result.stdout)  # Parse the installed version
             if not current_version:  # Could not determine the installed version
                 return True  # Treat as non-fatal -- nothing reliable to upgrade against
-            logging.debug("Current version of %s: %s", package_name, current_version)  # Record the current version
-            logging.info("  Checking for updates to %s...", package_name)  # Inform the user an upgrade check runs
+            logger.debug("Current version of %s: %s", package_name, current_version)  # Record the current version
+            logger.info("  Checking for updates to %s...", package_name)  # Inform the user an upgrade check runs
             return self._upgrade_and_verify(package_name, package_spec, current_version)  # Upgrade + report
         except (KeyboardInterrupt, SystemExit):  # Operators must be able to stop startup immediately
             raise  # Do not convert an operator stop into a successful startup check
@@ -1700,13 +1697,13 @@ class GlobalImportManager:
             check=False,  # Non-zero rc is downgraded to a debug log, not raised.
         )
         if upgrade_result.returncode != 0:  # The upgrade command failed
-            logging.debug("  [WARN] %s: Upgrade check failed: %s", package_name, upgrade_result.stderr)  # Log detail
+            logger.debug("  [WARN] %s: Upgrade check failed: %s", package_name, upgrade_result.stderr)  # Log detail
             return True  # Non-critical failure -- continue without blocking startup
         new_version = self._parse_pip_show_version(self._run_pip_show(package_name).stdout)  # Re-query post-upgrade
         if new_version and new_version != current_version:  # The version actually advanced
-            logging.info("  [OK] %s: Upgraded from %s to %s", package_name, current_version, new_version)  # Report it
+            logger.info("  [OK] %s: Upgraded from %s to %s", package_name, current_version, new_version)  # Report it
         else:  # Version did not change
-            logging.debug("  [OK] %s: Already up to date (%s)", package_name, current_version)  # Already current
+            logger.debug("  [OK] %s: Already up to date (%s)", package_name, current_version)  # Already current
         return True  # Upgrade path is always non-fatal
 
         # _get_actual_import_name removed per issue #431 (ARCH-DELEGATE) -- callers
@@ -1735,10 +1732,10 @@ class GlobalImportManager:
         """Install a package, preferring UV then falling back to pip. Return True if either succeeded."""
         installed = False  # Track whether any installer succeeded.
         if self._check_uv_installation():  # UV is the preferred fast installer.
-            logging.debug("Trying UV installation for %s", package_spec)  # Note the UV attempt.
+            logger.debug("Trying UV installation for %s", package_spec)  # Note the UV attempt.
             installed = self._install_package_with_uv(package_spec)  # Attempt the UV install.
         if not installed:  # UV either failed or is unavailable.
-            logging.debug("Trying pip installation for %s", package_spec)  # Note the pip attempt.
+            logger.debug("Trying pip installation for %s", package_spec)  # Note the pip attempt.
             installed = self._install_package_with_pip(package_spec)  # Attempt the pip install.
         return installed  # Report whether the package is now installed.
 
@@ -1751,7 +1748,7 @@ class GlobalImportManager:
         for mod_name in (actual_import_name, module_name):  # Both names may be cached as failed.
             if mod_name in sys.modules:  # A stale/failed entry exists in the module cache.
                 del sys.modules[mod_name]  # Remove it so the retry re-imports cleanly.
-                logging.debug("Cleared cached module: %s", mod_name)  # Record the cache purge.
+                logger.debug("Cleared cached module: %s", mod_name)  # Record the cache purge.
 
     def _retry_import_after_install(self, module_name: str, package_spec: str, required: bool) -> Any | None:
         """Re-import a module after a successful install. Return it, or None if the import still fails."""
@@ -1759,7 +1756,7 @@ class GlobalImportManager:
             module = self._resolve_and_import(module_name)  # Re-import now that the package is installed.
             self.imports[module_name] = module  # Cache the now-successful import.
             self.installed_packages.append(package_spec)  # Record that we installed this package this run.
-            logging.info("Successfully imported %s after installation", module_name)  # Confirm recovery.
+            logger.info("Successfully imported %s after installation", module_name)  # Confirm recovery.
             return module  # Return the freshly imported module.
         except ImportError as retry_e:  # Import still fails even after a successful install.
             logging.error("Import still failed after installation for %s: %s", module_name, retry_e)  # Log failure.
@@ -1780,13 +1777,13 @@ class GlobalImportManager:
         if not self._auto_install_allowed(package_spec, skip_deps):  # Auto-install must be permitted.
             return None  # Installation not allowed -- nothing to retry.
         if package_spec is None:  # Defensive guard: an overridden gate must never trigger an unbounded install.
-            logging.error(
+            logger.error(
                 "Cannot install %s: package specification is missing", module_name
             )  # Surface the invalid state.
             return None  # Refuse installation without an explicit package constraint.
-        logging.info("Attempting to install missing dependency: %s", package_spec)  # Announce the install attempt.
+        logger.info("Attempting to install missing dependency: %s", package_spec)  # Announce the install attempt.
         if not self._attempt_install(package_spec):  # No installer succeeded.
-            logging.error("Failed to install %s", package_spec)  # Report the install failure.
+            logger.error("Failed to install %s", package_spec)  # Report the install failure.
             return None  # Cannot retry without a successful install.
         self._clear_failed_import_cache(module_name)  # Purge stale caches before the retry.
         time.sleep(0.5)  # Brief pause to let filesystem writes settle before retrying.
@@ -1796,13 +1793,13 @@ class GlobalImportManager:
         """Record a terminal import failure (hard error for required deps, warning for optional)."""
         if required:  # This dependency is mandatory for the program to run.
             self.failed_imports.append(module_name)  # Track it among hard failures.
-            logging.error("Required dependency %s could not be imported or installed", module_name)  # Hard error.
+            logger.error("Required dependency %s could not be imported or installed", module_name)  # Hard error.
         else:  # Optional dependency.
             # WHY: Optional deps not being installed is the expected steady state
             # for most operators (plotly/dash/kaleido only matter for the maps
             # dashboards). Emit at INFO so startup noise doesn't look like something
             # is broken; the [--] line below still surfaces it for anyone scanning.
-            logging.info("Optional dependency %s not available", module_name)
+            logger.info("Optional dependency %s not available", module_name)
 
     def import_module_safely(
         self,
@@ -1838,15 +1835,15 @@ class GlobalImportManager:
         skip_upgrade: bool,
     ) -> None:
         """Cache an imported module and run the opportunistic upgrade check."""
-        logging.debug("_record_successful_import: caching '%s' and checking upgrade", module_name)  # Log before
+        logger.debug("_record_successful_import: caching '%s' and checking upgrade", module_name)  # Log before
         self.imports[module_name] = module  # Cache the imported module for later global assignment.
-        logging.debug("Successfully imported %s", module_name)  # Record the successful import.
+        logger.debug("Successfully imported %s", module_name)  # Record the successful import.
         if not self._should_upgrade_package(
             package_spec, skip_deps, skip_upgrade
         ):  # Exit when any upgrade gate blocks.
             return  # Nothing else is required when upgrades are disabled.
         if package_spec is None:  # Defensive guard: an overridden gate must never trigger an unbounded upgrade.
-            logging.warning(
+            logger.warning(
                 "Skipping upgrade for %s: package specification is missing", module_name
             )  # Surface the invalid state.
             return  # Refuse upgrade without an explicit package constraint.
@@ -1854,7 +1851,7 @@ class GlobalImportManager:
 
     def _partition_dependencies(self, packages_dict: dict[str, str | None]) -> tuple[dict[str, None], dict[str, str]]:
         """Split a package map into (builtin, external) dicts by whether a spec is present."""
-        logging.debug("_partition_dependencies: splitting %d packages", len(packages_dict))  # Log before split
+        logger.debug("_partition_dependencies: splitting %d packages", len(packages_dict))  # Log before split
         builtin_packages = {k: v for k, v in packages_dict.items() if v is None}  # No spec -> stdlib/built-in module
         external_packages = {k: v for k, v in packages_dict.items() if v is not None}  # Has spec -> needs install
         return builtin_packages, external_packages  # Return the two cohesive groups for separate processing
@@ -1870,7 +1867,7 @@ class GlobalImportManager:
         module_name, package_spec = package_info  # Unpack the (name, spec) tuple for this worker
         package_type = "required" if required else "optional"  # Label used in user-facing log lines
         with log_lock:  # Serialize this log line against other worker threads
-            logging.info(
+            logger.info(
                 "  Checking %s dependency: %s (%s)", package_type, module_name, package_spec or "built-in"
             )  # Announce the check
         import_result = self.import_module_safely(  # Perform the actual import/install for this package
@@ -1884,15 +1881,15 @@ class GlobalImportManager:
     def _log_dependency_result(self, module_name: str, result: bool, required: bool) -> None:
         """Log a single dependency outcome as OK, hard FAIL (required), or soft WARN (optional)."""
         if result:  # Import succeeded
-            logging.info("  [OK] %s: Available", module_name)  # Report availability
+            logger.info("  [OK] %s: Available", module_name)  # Report availability
         elif required:  # Mandatory dependency missing
-            logging.error("  [FAIL] %s: Failed to import", module_name)  # Log a hard failure
+            logger.error("  [FAIL] %s: Failed to import", module_name)  # Log a hard failure
         else:  # Optional dependency missing
             # WHY: Downgraded from WARNING to INFO so a missing optional dep
             # (plotly/dash/kaleido on non-dashboard workstations) doesn't
             # masquerade as a fault at startup. Marker changed to [--] to
             # keep scan lines but drop the warning connotation.
-            logging.info("  [--] %s: Not available", module_name)
+            logger.info("  [--] %s: Not available", module_name)
 
     def _import_external_dependencies(
         self,
@@ -1903,7 +1900,7 @@ class GlobalImportManager:
         max_workers: int,
     ) -> list[tuple[str, bool]]:
         """Import external packages concurrently with a bounded thread pool."""
-        logging.debug(
+        logger.debug(
             "_import_external_dependencies: importing %d external packages",
             len(external_packages),
         )
@@ -2012,7 +2009,7 @@ class GlobalImportManager:
         for module_name, module_obj in self.imports.items():  # Walk every imported module
             globals()[module_name] = module_obj  # Bind the module into the real module globals
             self._hoist_module_globals(module_name, module_obj)  # Hoist any commonly-used attributes for it
-        logging.debug("Successfully made imported modules available globally")  # Confirm the global wiring completed
+        logger.debug("Successfully made imported modules available globally")  # Confirm the global wiring completed
 
     def _hoist_module_globals(self, module_name: str, module_obj: Any) -> None:
         """Hoist commonly-used attributes of a known module into globals (data-driven, with optional-pkg cases)."""
@@ -2073,7 +2070,7 @@ class GlobalImportManager:
 
         def normalize_address_record_fallback(address_string: str) -> dict[str, str]:
             """Fallback function when scourgify is not available."""
-            logging.debug("Using fallback address normalization (scourgify not available)")  # Note the degraded path
+            logger.debug("Using fallback address normalization (scourgify not available)")  # Note the degraded path
             return {
                 "address_line_1": address_string,
                 "city": "",
@@ -2146,21 +2143,21 @@ class GlobalImportManager:
 
     def _import_special_modules(self) -> None:
         """Import special modules with custom handling."""
-        logging.debug("_import_special_modules: wiring mistapi + websocket-client")  # Log before wiring
+        logger.debug("_import_special_modules: wiring mistapi + websocket-client")  # Log before wiring
         self._wire_mistapi_module()  # Bind mistapi to module globals if it loaded
         self._log_websocket_availability()  # Log whether the websocket client is usable
 
     def _wire_mistapi_module(self) -> None:
         """Wire mistapi to module globals and confirm its API structure."""
         if "mistapi" not in self.imports:  # The base SDK never imported
-            logging.debug("mistapi not imported, skipping sub-module imports")  # Nothing to wire up
+            logger.debug("mistapi not imported, skipping sub-module imports")  # Nothing to wire up
             return  # No work to do
         try:  # Failed to even access the cached mistapi object
             mistapi = self.imports["mistapi"]  # Fetch the cached mistapi module object
             try:  # Sub-module wiring hit an unexpected issue
                 globals()["mistapi"] = mistapi  # Expose mistapi at module global scope
                 vars(sys.modules[__name__])["mistapi"] = mistapi  # Bind dynamic SDK module without a typed attr write
-                logging.debug("Successfully imported mistapi main module")  # Confirm SDK wired up
+                logger.debug("Successfully imported mistapi main module")  # Confirm SDK wired up
                 self._verify_mistapi_api_structure(mistapi)  # Run the hasattr structural check
             except (KeyError, AttributeError, TypeError, RuntimeError) as sub_e:  # Optional SDK wiring failed safely
                 logging.debug(
@@ -2172,16 +2169,16 @@ class GlobalImportManager:
     def _verify_mistapi_api_structure(self, mistapi: Any) -> None:
         """Verify mistapi.api.v1 module structure is present and log the result."""
         if hasattr(mistapi, "api") and hasattr(mistapi.api, "v1"):  # Confirm expected nested API surface
-            logging.debug("mistapi.api.v1 module structure confirmed")  # Structure looks correct
+            logger.debug("mistapi.api.v1 module structure confirmed")  # Structure looks correct
         else:  # The expected nested structure is absent
             echo("mistapi.api.v1 structure not found - this may cause API call failures")  # Warn about likely failures
 
     def _log_websocket_availability(self) -> None:
         """Log whether websocket-client successfully loaded."""
         if "websocket-client" in self.imports:  # The websocket client library loaded
-            logging.debug("websocket-client available for WebSocket operations")  # WebSocket features enabled
+            logger.debug("websocket-client available for WebSocket operations")  # WebSocket features enabled
         else:  # The websocket client library is absent
-            logging.debug(
+            logger.debug(
                 "websocket-client not available - WebSocket operations will be disabled"
             )  # WebSocket features disabled
 
@@ -2445,7 +2442,7 @@ sys.modules[__name__].__class__ = type(  # Preserve legacy attribute reads while
 
 def _snapshot_session_globals_to_state() -> dict[str, Any]:
     """Snapshot the live module-level session globals into a mutable state bag."""
-    logging.debug("_snapshot_session_globals_to_state: capturing 5 module globals")  # Log before snapshot
+    logger.debug("_snapshot_session_globals_to_state: capturing 5 module globals")  # Log before snapshot
     return {  # Map of global name -> current value for the LoginOrchestrator to mutate
         "apisession": MainEntrypoint.context.apisession,  # Current API session object (may be None)
         "mistapi": MainEntrypoint.context.mistapi or mistapi,  # Use the context SDK module when startup replaced it.
@@ -2458,7 +2455,7 @@ def _snapshot_session_globals_to_state() -> dict[str, Any]:
 def _restore_session_globals_from_state(state: dict[str, Any]) -> None:
     """Restore module-level session globals from a state bag mutated by the orchestrator."""
     # The application context owns this state, so no global declaration is needed.
-    logging.debug("_restore_session_globals_from_state: restoring 5 module globals")  # Log before restore
+    logger.debug("_restore_session_globals_from_state: restoring 5 module globals")  # Log before restore
     MainEntrypoint.context.apisession = state.get("apisession")  # Copy the (possibly new) session back to the global
     MainEntrypoint.context.mistapi = state.get("mistapi")  # Keep the SDK module with the session context.
     MainEntrypoint.context.msp_privileges = state.get(
@@ -2472,7 +2469,7 @@ def _restore_session_globals_from_state(state: dict[str, Any]) -> None:
 
 def _print_switch_login_header() -> None:
     """Display switch to interactive login header and benefits."""
-    logging.debug("Entering _print_switch_login_header()")  # Trace entry for debugging
+    logger.debug("Entering _print_switch_login_header()")  # Trace entry for debugging
     echo("")
     echo("=" * 60)
     echo("  SWITCH TO INTERACTIVE LOGIN")
@@ -2488,7 +2485,7 @@ def _print_switch_login_header() -> None:
     echo("    - Select and switch between MSPs and Organizations")
     echo("")
     if MainEntrypoint.context.msp_privileges:  # The user already has MSP grants detected
-        logging.debug(
+        logger.debug(
             "MSP privileges already detected: %s MSP(s)", len(MainEntrypoint.context.msp_privileges)
         )  # Trace the existing grants
         echo(
@@ -2506,8 +2503,8 @@ def _attempt_interactive_login_with_rollback(old_session: Any, old_org_id: str |
     """
     # The application context owns this state, so no global declaration is needed.
 
-    logging.debug("Entering _attempt_interactive_login_with_rollback()")  # Trace entry for debugging
-    logging.debug("Clearing existing session state for re-authentication")  # Note we reset before re-login
+    logger.debug("Entering _attempt_interactive_login_with_rollback()")  # Trace entry for debugging
+    logger.debug("Clearing existing session state for re-authentication")  # Note we reset before re-login
 
     MainEntrypoint.context.clear_session()  # Drop old session state through the context owner.
 
@@ -2516,25 +2513,25 @@ def _attempt_interactive_login_with_rollback(old_session: Any, old_org_id: str |
         echo("  X Login failed - restoring previous session")
         restored_grants = detect_msp_privileges(old_session)  # Re-detect grants for the restored session.
         MainEntrypoint.context.restore_session(old_session, old_org_id, restored_grants)  # Restore through context.
-        logging.warning("Interactive login failed - restored previous API session")  # Log the failed attempt
+        logger.warning("Interactive login failed - restored previous API session")  # Log the failed attempt
         return False  # Signal failure to the caller
-    logging.debug("Interactive login succeeded")  # Trace the successful login
+    logger.debug("Interactive login succeeded")  # Trace the successful login
     return True  # Signal success to the caller
 
 
 def _handle_interactive_login_success() -> None:
     """Handle successful interactive login - display status and select MSP/org."""
-    logging.debug("Entering _handle_interactive_login_success()")  # Trace entry for debugging
+    logger.debug("Entering _handle_interactive_login_success()")  # Trace entry for debugging
     echo("")
     echo("  + Successfully switched to interactive login")
     if MainEntrypoint.context.msp_privileges:  # The new session has MSP grants
         echo("  + MSP access available: %s MSP(s)", len(MainEntrypoint.context.msp_privileges))
-        logging.info(
+        logger.info(
             "Successfully switched to interactive login session with %s MSP(s)",
             len(MainEntrypoint.context.msp_privileges),
         )  # Log the success with MSP count
     else:  # No MSP grants on the new session
-        logging.info(
+        logger.info(
             "Successfully switched to interactive login session (no MSP privileges)"
         )  # Log the success without MSPs
 
@@ -2549,7 +2546,7 @@ def _prompt_switch_login_confirmation() -> bool:
 
     Returns True if the user typed 'y', False on cancel/EOF/SystemExit.
     """
-    logging.debug("_prompt_switch_login_confirmation: prompting user for y/N")  # Log before prompt
+    logger.debug("_prompt_switch_login_confirmation: prompting user for y/N")  # Log before prompt
     try:  # safe_input may raise SystemExit on EOF in some contexts
         confirm = (
             InputUtils.safe_input("  Proceed with re-authentication? (y/N): ", context="switch_login").strip().lower()
@@ -2557,10 +2554,10 @@ def _prompt_switch_login_confirmation() -> bool:
     except SystemExit:  # EOF during the prompt
         logging.debug("SystemExit during confirmation prompt")  # Trace the early exit
         return False  # Treat as cancel
-    logging.debug("User confirmation received: '%s'", confirm)  # Log the captured response
+    logger.debug("User confirmation received: '%s'", confirm)  # Log the captured response
     if confirm != "y":  # User declined or pressed Enter
         echo("  Cancelled.")
-        logging.warning("User cancelled switch to interactive login")  # Log the cancel
+        logger.warning("User cancelled switch to interactive login")  # Log the cancel
         return False  # Caller should stay on the menu
     return True  # User explicitly chose to proceed
 
@@ -2586,17 +2583,17 @@ def _invoke_mistapi_org_picker_and_apply() -> None:
     """Run mistapi's org picker and apply the user's choice to the org_id global."""
     # The application context owns this state, so no global declaration is needed.
     try:  # mistapi may raise on network errors or invalid sessions
-        logging.debug("Invoking mistapi.cli.select_org()")  # Trace the SDK call
+        logger.debug("Invoking mistapi.cli.select_org()")  # Trace the SDK call
         org_id_list = mistapi.cli.select_org(
             MainEntrypoint.context.apisession
         )  # Let mistapi present an org picker and return the choice
         if org_id_list and len(org_id_list) > 0:  # The user selected at least one org
             MainEntrypoint.context.org_id = org_id_list[0]  # Use the first selected org ID
             echo("  + Organization ID set: %s", MainEntrypoint.context.org_id)
-            logging.info("User selected org from session: %s", MainEntrypoint.context.org_id)  # Log the chosen org
+            logger.info("User selected org from session: %s", MainEntrypoint.context.org_id)  # Log the chosen org
         else:  # The user selected nothing
             echo("  X No organization selected")
-            logging.warning("No organization selected from session privileges")  # Log the empty selection
+            logger.warning("No organization selected from session privileges")  # Log the empty selection
     except (
         AttributeError,
         TypeError,
@@ -2610,7 +2607,7 @@ def _invoke_mistapi_org_picker_and_apply() -> None:
 
 def _select_org_from_session() -> None:
     """Pick an org via mistapi's built-in selector (non-MSP path)."""
-    logging.debug("Entering _select_org_from_session()")  # Trace entry for debugging
+    logger.debug("Entering _select_org_from_session()")  # Trace entry for debugging
     echo("")
     echo("  Selecting organization from your session privileges...")
     echo("")
@@ -2631,7 +2628,7 @@ def _load_mistapi_module(current_mistapi: Any) -> Any:
     try:
         import mistapi as mistapi_fallback  # Attempt direct import as fallback when global not yet set
 
-        logging.debug("Loaded mistapi via fallback import in initialize_mist_session")  # Confirm load path
+        logger.debug("Loaded mistapi via fallback import in initialize_mist_session")  # Confirm load path
         return mistapi_fallback  # Return newly imported module
     except ImportError as import_err:
         logging.error("Cannot import mistapi: %s", import_err)  # Log failure cause for operator visibility
@@ -2674,9 +2671,9 @@ def _parse_api_tokens() -> tuple[str, list[str]]:
     raw_token_env = os.getenv("MIST_APITOKEN") or os.getenv("MIST_API_TOKEN")  # Accept both env var names
     tokens = _split_env_tokens(raw_token_env)  # Parse into individual non-empty tokens (empty list when unset)
     if tokens:  # Log a redacted preview so operators can confirm presence without exposing secrets
-        logging.debug("Token(s) discovered for initialization (redacted): %s", _redact_tokens(tokens))  # Safe preview
+        logger.debug("Token(s) discovered for initialization (redacted): %s", _redact_tokens(tokens))  # Safe preview
     else:  # No tokens discovered in environment
-        logging.debug("No tokens discovered in environment; will rely on env_file or mistapi.Session fallback")  # Note
+        logger.debug("No tokens discovered in environment; will rely on env_file or mistapi.Session fallback")  # Note
     return host, tokens  # Return host string and parsed token list to caller
 
     # Feature 1020: config values shipped in deploy/.env.example that must never be treated as real credentials.
@@ -2705,10 +2702,10 @@ def _preflight_verify_credentials(require_token: bool = True) -> None:
     ``_redact_tokens()`` previews, never raw (FR-015/SC-005). Since issue #1710 a preview is an 8
     character SHA-256 fingerprint, so it carries no character of the token itself.
     """
-    logging.info("Running credential/config preflight (require_token=%s)", require_token)  # Before-action log.
+    logger.info("Running credential/config preflight (require_token=%s)", require_token)  # Before-action log.
     problems = _collect_credential_problems(require_token)  # Local string checks only, no network.
     if not problems:  # Host present and (when required) a real token present -> continue to session init.
-        logging.debug("Credential/config preflight passed (require_token=%s)", require_token)  # After-action log.
+        logger.debug("Credential/config preflight passed (require_token=%s)", require_token)  # After-action log.
         return
     _report_credential_failure(problems)  # Emits the operator guidance and exits non-zero.
 
@@ -2736,14 +2733,12 @@ def _collect_token_problems(require_token: bool, tokens: list[str]) -> list[str]
 
 def _report_credential_failure(problems: list[str]) -> NoReturn:
     """Log every preflight problem with remediation guidance, then exit before any session is built."""
-    logging.error("Credential/config preflight failed: %s", "; ".join(problems))  # Names only - never secrets.
-    logging.error("[ERROR] Cannot start a Mist session - credential/config preflight failed:")
+    logger.error("Credential/config preflight failed: %s", "; ".join(problems))  # Names only - never secrets.
+    logger.error("[ERROR] Cannot start a Mist session - credential/config preflight failed:")
     for problem in problems:  # Enumerate each distinct problem on its own line.
-        logging.error("[ERROR]   - %s", problem)  # Log per-problem detail at ERROR level.
-    logging.error("[ERROR] Copy deploy/.env.example to .env, then set MIST_HOST and MIST_APITOKEN/MIST_API_TOKEN.")
-    logging.error(
-        "[ERROR] For --test/--testinteractive, also set org_id (or ORG_ID) - not MIST_ORG_ID - for this path."
-    )
+        logger.error("[ERROR]   - %s", problem)  # Log per-problem detail at ERROR level.
+    logger.error("[ERROR] Copy deploy/.env.example to .env, then set MIST_HOST and MIST_APITOKEN/MIST_API_TOKEN.")
+    logger.error("[ERROR] For --test/--testinteractive, also set org_id (or ORG_ID) - not MIST_ORG_ID - for this path.")
     sys.exit(1)  # Exit non-zero before the code constructs any session or network object.
 
 
@@ -2762,13 +2757,13 @@ def _check_token_rate_limit(token: str, test_host: str, label: str) -> bool:
         headers = {"Authorization": f"Token {token }"}  # Standard Mist API bearer token header
         response = requests.get(url, headers=headers, timeout=5)  # Short timeout -- probe, not full call
         if response.status_code == 429:  # HTTP 429 = Too Many Requests = rate-limited
-            logging.debug("Token %s is rate-limited (HTTP 429)", label)
+            logger.debug("Token %s is rate-limited (HTTP 429)", label)
             return True  # Confirmed rate-limited -- skip this token
         elif response.status_code == 200:  # HTTP 200 = OK = token is functional
-            logging.debug("Token %s is available (HTTP 200)", label)
+            logger.debug("Token %s is available (HTTP 200)", label)
             return False  # Token is usable -- include in available list
         else:  # Any unexpected status treated as unavailable (defensive)
-            logging.warning("Token %s returned unexpected status %d", label, response.status_code)
+            logger.warning("Token %s returned unexpected status %d", label, response.status_code)
             return True  # Treat unexpected response as unavailable for safety
     except (
         ImportError,
@@ -2795,11 +2790,11 @@ def _introspect_apisession_class(mistapi_module: Any) -> tuple[Any, list[str]]:
     """
     apisession_cls = getattr(mistapi_module, "APISession", None)  # Get APISession class (None if not present)
     if not apisession_cls:  # APISession class is absent in this mistapi version
-        logging.debug("mistapi.APISession not found -- will attempt mistapi.Session fallback only")
+        logger.debug("mistapi.APISession not found -- will attempt mistapi.Session fallback only")
         return None, []  # Return None class and empty param list to trigger fallback path
     try:
         sig_params = list(inspect.signature(apisession_cls).parameters.keys())  # Inspect constructor for param names
-        logging.debug("mistapi.APISession accepted parameters: %s", sig_params)
+        logger.debug("mistapi.APISession accepted parameters: %s", sig_params)
         return apisession_cls, sig_params  # Return class and parameter name list
     except (TypeError, ValueError) as error:  # Some SDK callables do not expose a signature
         logging.debug(
@@ -2814,7 +2809,7 @@ def _resolve_token_param_names(sig_params: list[str]) -> list[str]:
     Filters the known token kwargs against the introspected signature so callers
     only attempt parameter names the constructor actually accepts.
     """
-    logging.debug("Resolving supported token parameter names from signature")  # Trace param resolution
+    logger.debug("Resolving supported token parameter names from signature")  # Trace param resolution
     return [n for n in ["apitoken", "api_token", "token"] if n in sig_params]  # Keep only accepted token kwargs
 
 
@@ -2824,7 +2819,7 @@ def _build_token_session_attempts(
     host: str,
 ) -> list[dict[str, str]]:
     """Build token-auth kwargs dicts (highest priority) for each supported token param."""
-    logging.debug("Building token-based APISession attempts")  # Trace token attempt construction
+    logger.debug("Building token-based APISession attempts")  # Trace token attempt construction
     attempts: list[dict[str, str]] = []  # Accumulate token attempts in priority order
     token_param_names = _resolve_token_param_names(sig_params)  # Supported token kwargs from signature
     if not (tokens and token_param_names):  # Need both env tokens and an accepted token param name
@@ -2844,7 +2839,7 @@ def _build_fallback_session_attempts(
     host: str,
 ) -> list[dict[str, str]]:
     """Build env_file/host fallback attempts, only when no env tokens are present."""
-    logging.debug("Building fallback (env_file/host) APISession attempts")  # Trace fallback construction
+    logger.debug("Building fallback (env_file/host) APISession attempts")  # Trace fallback construction
     attempts: list[dict[str, str]] = []  # Accumulate fallback attempts
     if tokens:  # Env tokens present -- the code skips fallbacks to avoid duplicate token reads
         return attempts  # No fallback needed -- token attempts already cover auth
@@ -2887,7 +2882,7 @@ def _log_session_attempt_traceback(exc: Exception) -> None:
 
         tb_details = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))  # Format full traceback
         for line in tb_details.rstrip().splitlines():  # Split into individual lines for log aggregator
-            logging.info("  TRACE: %s", line)  # Prefix with TRACE so operators can filter
+            logger.info("  TRACE: %s", line)  # Prefix with TRACE so operators can filter
     except (TypeError, ValueError, OSError, RuntimeError) as trace_err:  # Secondary trace logging must not hide auth
         logging.warning("Failed to log traceback: %s", trace_err, exc_info=True)  # Non-fatal with secondary trace
 
@@ -2903,7 +2898,7 @@ def _try_single_session_kwargs(
         raise AssertionError("apisession_cls should be set if attempts list is populated")
     try:  # APISession constructor may raise on auth/validation/rate-limit
         session = apisession_cls(**kwargs)  # Attempt APISession constructor with these kwargs
-        logging.info("Mist API session initialized with mistapi.APISession using kwargs=%s", list(kwargs.keys()))
+        logger.info("Mist API session initialized with mistapi.APISession using kwargs=%s", list(kwargs.keys()))
         return session, False  # Success -- no rate-limit signal needed
     except (TypeError, ValueError, RuntimeError, OSError) as e:  # Constructor variant failed without ending retries
         error_msg = str(e)  # Convert exception to string for rate-limit signature check
@@ -2959,9 +2954,9 @@ def _filter_available_tokens(tokens: list[str], host: str) -> list[str]:
         label = f"{index }/{len (tokens )}"  # Secret-free identifier -- issue #1710 forbids any token character
         if not _check_token_rate_limit(token, host, label):  # Probe via /api/v1/self -- False means available
             available.append(token)  # This token is usable -- add to available list
-            logging.info("Token %s is available", label)
+            logger.info("Token %s is available", label)
         else:  # Token is rate-limited or unreachable -- skip it
-            logging.warning("Token %s is rate-limited - skipping", label)
+            logger.warning("Token %s is rate-limited - skipping", label)
     return available  # Return only the usable tokens
 
 
@@ -2981,7 +2976,7 @@ def _create_session_isolated_from_env(apisession_cls: Any, filtered_kwargs: dict
         if apisession_cls is None:  # Guard replaces prior assert so behavior survives python -O optimization
             raise RuntimeError("apisession_cls should be set for retry logic")  # Retry logic requires the class
         session = apisession_cls(**filtered_kwargs)  # Create session with filtered token set
-        logging.info("SUCCESS: API session initialized with filtered token kwargs=%s", list(filtered_kwargs.keys()))
+        logger.info("SUCCESS: API session initialized with filtered token kwargs=%s", list(filtered_kwargs.keys()))
         return session  # Caller pairs it back with filtered_kwargs for auth validation
     except (TypeError, ValueError, RuntimeError, OSError) as filtered_err:  # Filtered retry can still fail safely
         logging.exception("Failed to initialize with filtered tokens: %s", filtered_err)  # Keep trace
@@ -2999,7 +2994,7 @@ def _create_session_with_available_tokens(
     filtered_kwargs = _build_filtered_session_kwargs(
         sig_params, available_tokens_str, host
     )  # Build kwargs only with fields the constructor accepts
-    logging.info("Initializing with %d available token(s)", len(available_tokens))  # Operator-visible progress
+    logger.info("Initializing with %d available token(s)", len(available_tokens))  # Operator-visible progress
     session = _create_session_isolated_from_env(apisession_cls, filtered_kwargs)  # Construct with env-var isolation
     if session is None:  # Construction failed under env isolation
         return None, None  # Filtered token retry also failed
@@ -3015,12 +3010,12 @@ def _retry_with_filtered_tokens(
     """Retry session creation using only non-rate-limited tokens after a multi-token failure."""
     if not (apisession_cls and tokens and len(tokens) > 1):  # Guard: need class and multiple tokens to retry
         return None, None  # Cannot retry without multiple tokens and a class
-    logging.warning("Multi-token init failed due to rate limiting - testing %d tokens individually", len(tokens))
+    logger.warning("Multi-token init failed due to rate limiting - testing %d tokens individually", len(tokens))
     available_tokens = _filter_available_tokens(tokens, host)  # Probe each token for rate-limit status
     if not available_tokens:  # All tokens are throttled -- cannot recover
-        logging.error("All %d tokens are currently rate-limited - cannot initialize API session", len(tokens))
+        logger.error("All %d tokens are currently rate-limited - cannot initialize API session", len(tokens))
         return None, None  # No usable tokens -- caller will try Session fallback
-    logging.info("Found %d available token(s) out of %d total", len(available_tokens), len(tokens))
+    logger.info("Found %d available token(s) out of %d total", len(available_tokens), len(tokens))
     return _create_session_with_available_tokens(apisession_cls, sig_params, available_tokens, host)  # Create session
 
 
@@ -3040,7 +3035,7 @@ def _try_session_fallback(mistapi_module: Any) -> tuple[Any, Any]:
         return None, None  # Session class absent -- cannot use this fallback
     try:
         session = mistapi_module.Session()  # Attempt legacy Session() with no explicit params
-        logging.info("Mist API session initialized with mistapi.Session fallback")
+        logger.info("Mist API session initialized with mistapi.Session fallback")
         return session, {"fallback": "mistapi.Session"}  # Return session and method label for auth validation
     except (TypeError, ValueError, RuntimeError, OSError) as e:  # Last-resort SDK session creation failed safely
         logging.exception("mistapi.Session fallback failed: %s", e)  # Log why the last resort failed
@@ -3063,20 +3058,20 @@ def _ensure_mist_get_method(session: Any) -> bool:
         return True  # Session is compatible as-is.
     if hasattr(session, "get") and callable(session.get):  # Newer SDK builds can expose get instead.
         return True  # Session is usable without a run-time attribute patch.
-    logging.error("Initialized session lacks 'mist_get' or 'get' methods required for API calls")
+    logger.error("Initialized session lacks 'mist_get' or 'get' methods required for API calls")
     return False  # Session is unusable -- hard failure
 
 
 def _detect_session_token(session: Any) -> bool:
     """Return True when the session exposes a readable, non-empty token attribute."""
-    logging.debug("Detecting readable token attribute on session")  # Trace token attribute probe
+    logger.debug("Detecting readable token attribute on session")  # Trace token attribute probe
     token_attr = next((a for a in ("apitoken", "api_token", "token") if hasattr(session, a)), None)  # Find auth attr
     return bool(token_attr and getattr(session, token_attr))  # True only if attr exists and holds a value
 
 
 def _detect_session_method_flags(successful_method: Any) -> tuple[bool, bool, bool]:
     """Return (used_env_file, used_direct_token, used_fallback) from the winning kwargs."""
-    logging.debug("Detecting auth method flags from successful constructor kwargs")  # Trace method-flag derivation
+    logger.debug("Detecting auth method flags from successful constructor kwargs")  # Trace method-flag derivation
     direct_params = ["apitoken", "api_token", "token"]  # Constructor kwargs that denote direct token auth
     used_env_file = bool(successful_method and "env_file" in successful_method)  # env_file auth path used
     used_direct_token = bool(successful_method and any(p in successful_method for p in direct_params))  # Direct token
@@ -3086,21 +3081,19 @@ def _detect_session_method_flags(successful_method: Any) -> tuple[bool, bool, bo
 
 def _log_missing_auth_warning() -> None:
     """Emit operator-facing warnings when no authentication method can be detected."""
-    logging.warning("Session established but no auth method detected; API calls may fail if auth required")  # Warn
-    logging.warning("To fix: 1) Copy documentation/sample.env to .env, 2) Set MIST_APITOKEN to your token")  # Steps
-    logging.warning("Get your API token from: https://manage.mist.com/admin/apitoken")  # Where to obtain a token
+    logger.warning("Session established but no auth method detected; API calls may fail if auth required")  # Warn
+    logger.warning("To fix: 1) Copy documentation/sample.env to .env, 2) Set MIST_APITOKEN to your token")  # Steps
+    logger.warning("Get your API token from: https://manage.mist.com/admin/apitoken")  # Where to obtain a token
 
 
 def _log_detected_auth(used_env_file: bool, used_direct_token: bool, has_readable_token: bool) -> None:
     """Emit a single debug line describing the detected auth path (env_file > token param > attr)."""
     if used_env_file:  # Highest-priority detected path -- credentials came from .env
-        logging.debug("Session initialized using env_file - authentication configured via .env file")  # env_file path
+        logger.debug("Session initialized using env_file - authentication configured via .env file")  # env_file path
     elif used_direct_token:  # Next priority -- the caller passed a token directly to the constructor
-        logging.debug(
-            "Session initialized using direct token parameter - authentication configured"
-        )  # token-param path
+        logger.debug("Session initialized using direct token parameter - authentication configured")  # token-param path
     elif has_readable_token:  # Last -- session simply exposes a populated token attribute
-        logging.debug("Session has readable token attribute - authentication appears configured")  # attribute path
+        logger.debug("Session has readable token attribute - authentication appears configured")  # attribute path
 
 
 def _log_session_auth_status(session: Any, successful_method: Any) -> None:
@@ -3156,9 +3149,9 @@ def _attempt_all_session_strategies(
 
 def _log_failed_session_variants(tried_variants: list[str]) -> None:
     """Log every kwargs variant that failed (operator debugging on total init failure)."""
-    logging.error("All Mist API session initialization attempts failed. Variants tried:")
+    logger.error("All Mist API session initialization attempts failed. Variants tried:")
     for variant in tried_variants:  # One log line per variant for clarity
-        logging.error("  - %s", variant)
+        logger.error("  - %s", variant)
 
 
 def _install_default_request_timeout(inner_session: Any) -> None:
@@ -3193,11 +3186,11 @@ def _install_default_request_timeout(inner_session: Any) -> None:
 
 def _configure_session_timeout(session_obj: Any) -> None:
     """Report that the explicit session configurator owns timeout setup."""
-    logging.info("Checking legacy session timeout entry point")  # Log before the compatibility check.
+    logger.info("Checking legacy session timeout entry point")  # Log before the compatibility check.
     if session_obj is None:  # A missing session means there is nothing to configure.
-        logging.warning("Cannot configure timeout because no session was supplied")  # Explain the safe no-op.
+        logger.warning("Cannot configure timeout because no session was supplied")  # Explain the safe no-op.
         return  # Preserve the historical non-fatal behavior.
-    logging.debug("Session timeout setup is owned by MistSessionConfigurator")  # Confirm no patch ran here.
+    logger.debug("Session timeout setup is owned by MistSessionConfigurator")  # Confirm no patch ran here.
 
 
 from src.api.tenant_fetch import APITenantFetchUtils  # Re-exported for ServicePingLauncher late-binding
@@ -3228,10 +3221,10 @@ def _get_duc_instance() -> DeviceUtilityCommands:  # Build DeviceUtilityCommands
 
 def _build_gateway_export_kwargs() -> dict[str, Any]:
     """Build the kwargs dict passed to configure_gateway_export_utils_dependencies()."""
-    logging.info("Reading the canonical site exclude prefix")  # Log before the prefix module read.
+    logger.info("Reading the canonical site exclude prefix")  # Log before the prefix module read.
     from src.refactors import mist_site_exclude_prefix  # Read the canonical filter owner at dispatch time.
 
-    logging.debug(  # Log the filter length without exposing the configured text.
+    logger.debug(  # Log the filter length without exposing the configured text.
         "Read the canonical site exclude prefix with length %s",
         len(mist_site_exclude_prefix.MIST_SITE_EXCLUDE_PREFIX),
     )
@@ -3382,7 +3375,7 @@ def _configure_site_config_manager() -> type[SiteConfigManager]:
 
 def _build_firmware_manager(session: Any, target_org_id: str) -> FirmwareManager:
     """Build a fully DI-wired FirmwareManager instance for menu callbacks and internal re-checks."""
-    logging.debug("Building firmware manager impl for org %s", target_org_id)  # Trace factory build
+    logger.debug("Building firmware manager impl for org %s", target_org_id)  # Trace factory build
     _configure_gateway_module()  # 1014 P13: DI wire canonical gateway module before packaging bound method.
     fw_config = FirmwareManagerConfig(  # Frozen value-object carries identity + six DI hooks
         apisession=session,  # Live Mist API session passed through
@@ -5932,18 +5925,18 @@ def _systematic_test_build_safe_list(
 
 def _systematic_test_has_api_token() -> bool:
     """Return True when the environment holds a real Mist API token."""
-    logging.info("SYSTEMATIC_TEST: checking for a Mist API token")  # Log before reading credential metadata.
+    logger.info("SYSTEMATIC_TEST: checking for a Mist API token")  # Log before reading credential metadata.
     _host, tokens = _parse_api_tokens()  # Read only local environment values and never log the token.
     has_token = any(not _looks_like_placeholder(token) for token in tokens)  # Reject blank and template values.
-    logging.debug("SYSTEMATIC_TEST: Mist API token present: %s", has_token)  # Log only the boolean result.
+    logger.debug("SYSTEMATIC_TEST: Mist API token present: %s", has_token)  # Log only the boolean result.
     return has_token  # Tell the runner whether live API tests may execute.
 
 
 def _systematic_test_api_options(safe_options: list[str]) -> set[str]:
     """Return the safe options that must not run without a Mist API token."""
-    logging.info("SYSTEMATIC_TEST: classifying API-backed safe options")  # Log before registry filtering.
+    logger.info("SYSTEMATIC_TEST: classifying API-backed safe options")  # Log before registry filtering.
     api_options = {opt for opt in safe_options if OperationRegistry.requires_api_token(opt)}  # Find live API tests.
-    logging.debug("SYSTEMATIC_TEST: found %d API-backed safe options", len(api_options))  # Log the skip count.
+    logger.debug("SYSTEMATIC_TEST: found %d API-backed safe options", len(api_options))  # Log the skip count.
     return api_options  # Give the caller a set for quick membership tests.
 
 
@@ -5951,7 +5944,7 @@ def _systematic_test_skip_details(opt: str, has_api_token: bool) -> tuple[str, s
     """Return the skip reason and category for one systematic-test skip."""
     if not has_api_token and OperationRegistry.requires_api_token(opt):  # No token means API-backed tests must skip.
         reason = "Requires MIST_APITOKEN or MIST_API_TOKEN because this test calls the Mist API"  # Name variables.
-        logging.debug("SYSTEMATIC_TEST: option %s skipped because a Mist API token is absent", opt)  # Log cause.
+        logger.debug("SYSTEMATIC_TEST: option %s skipped because a Mist API token is absent", opt)  # Log cause.
         return reason, "credential_required"  # Emit a precise dynamic skip category.
     reason = OperationRegistry.skip_reason(opt)  # Read the static registry reason for non-credential skips.
     category = OperationRegistry.skip_category(opt)  # Read the static registry category for telemetry.
@@ -5981,11 +5974,11 @@ def _systematic_test_emit_skips(emitter: Any, unsafe_list: list[str]) -> int:
 
 def _resolve_systematic_test_invoke_kwargs(entry: Any, fast_enabled: bool) -> dict[str, Any]:
     """Build invoke kwargs from explicit menu metadata."""
-    logging.info("Resolving systematic-test kwargs for option %s", entry.menu_id)  # WHY: log before metadata read.
+    logger.info("Resolving systematic-test kwargs for option %s", entry.menu_id)  # WHY: log before metadata read.
     invoke_kwargs: dict[str, Any] = {}  # Build kwargs dict
     if entry.supports_fast and fast_enabled:  # Both function and global mode agree
         invoke_kwargs["fast"] = True  # Activate fast mode for this operation
-    logging.debug("Resolved systematic-test kwargs for option %s: %s", entry.menu_id, invoke_kwargs)  # WHY: log result.
+    logger.debug("Resolved systematic-test kwargs for option %s: %s", entry.menu_id, invoke_kwargs)  # WHY: log result.
     return invoke_kwargs
 
 
@@ -5999,7 +5992,7 @@ def _invoke_one_systematic_test(
         duration = time.time() - op_start  # Elapsed seconds
         echo("   [SUCCESS] Option %s completed successfully", option)
         emitter.emit_test_pass(option, description, duration, "systematic")  # Record pass
-        logging.info("SYSTEMATIC_TEST: Successfully completed menu option %s", option)
+        logger.info("SYSTEMATIC_TEST: Successfully completed menu option %s", option)
         return True, duration
     except (KeyboardInterrupt, SystemExit):  # Operators and automation must be able to stop the harness
         raise  # Do not record a stop request as a menu test failure
@@ -6025,7 +6018,7 @@ def _systematic_test_run_option(
     emitter.emit_test_start(option, description, "systematic")  # Telemetry start
     op_start = time.time()  # Capture start time before invocation overhead
     invoke_kwargs = _resolve_systematic_test_invoke_kwargs(menu_actions[option], fast_enabled)  # Use menu metadata.
-    logging.info(
+    logger.info(
         "SYSTEMATIC_TEST: INVOKE option=%s fast_supported=%s fast_enabled=%s test_mode=True description='%s'",
         option,
         "fast" in invoke_kwargs,
@@ -6132,9 +6125,9 @@ def _resolve_systematic_test_context() -> bool:
     """Resolve module-level org_id and the fast-mode flag once before the test loop."""
     # The application context owns this state, so no global declaration is needed.
     if not _systematic_test_has_api_token():  # Offline test mode cannot resolve a live organization.
-        logging.info("SYSTEMATIC_TEST: no Mist API token; skipping org_id resolution")  # Log the offline path.
+        logger.info("SYSTEMATIC_TEST: no Mist API token; skipping org_id resolution")  # Log the offline path.
         fast_enabled = _systematic_test_resolve_fast_mode()  # Still honor --fast for any local tests.
-        logging.debug("SYSTEMATIC_TEST: offline context prepared fast=%s", fast_enabled)  # Confirm context result.
+        logger.debug("SYSTEMATIC_TEST: offline context prepared fast=%s", fast_enabled)  # Confirm context result.
         return fast_enabled  # Let the loop run only offline-safe operations.
     if (
         not MainEntrypoint.context.org_id
@@ -6196,14 +6189,14 @@ def _report_systematic_outcome(success_count: int, error_count: int, safe_count:
     """Emit the final all-pass / partial-failure message and return the boolean result."""
     if error_count == 0:  # All-pass outcome deserves an explicit success message.
         echo("   All tested operations completed successfully!")
-        logging.info(
+        logger.info(
             "SYSTEMATIC_TEST: All %s tested operations completed successfully in %.2fs",
             success_count,
             total_time,
         )  # Record all-pass event for monitoring.
         return True  # Signal all-pass to callers (for example, for exit-code logic).
     echo("    %d operations failed - check logs for details", error_count)
-    logging.warning(
+    logger.warning(
         "SYSTEMATIC_TEST: %s operations failed out of %s tested", error_count, safe_count
     )  # Log failure count for alerting systems.
     return False  # Signal partial failure to callers.
@@ -6211,7 +6204,7 @@ def _report_systematic_outcome(success_count: int, error_count: int, safe_count:
 
 def _build_interactive_test_runner(get_org_id: Any, set_org_id: Any) -> Any:
     """Construct InteractiveTestRunner with the current runtime context and return it."""
-    logging.info("Constructing InteractiveTestRunner dependencies")  # Log before instance creation
+    logger.info("Constructing InteractiveTestRunner dependencies")  # Log before instance creation
     runner = InteractiveTestRunner(  # Build runner with runtime deps
         menu_actions=menu_actions,
         operation_registry=OperationRegistry,
@@ -6223,7 +6216,7 @@ def _build_interactive_test_runner(get_org_id: Any, set_org_id: Any) -> Any:
         org_id_setter=set_org_id,
         input_utils=InputUtils,
     )
-    logging.debug("InteractiveTestRunner initialized successfully")  # Confirm construction
+    logger.debug("InteractiveTestRunner initialized successfully")  # Confirm construction
     return runner
 
 
@@ -6231,12 +6224,12 @@ def _run_web_portal_server(app: Any, host: str, port: int, dev_debug: bool) -> N
     """Start the Flask app in container mode (Gunicorn-aware) or local Flask dev server mode."""
     in_container = EnvironmentUtils.is_running_in_container()  # Detect container runtime to switch banner + debug flag
     if in_container:
-        logging.info("WEB_PORTAL: Container detected - use wsgi.py with Gunicorn")  # Log container path
+        logger.info("WEB_PORTAL: Container detected - use wsgi.py with Gunicorn")  # Log container path
         echo(">> Running Flask dev server on %s:%s", host, port)
         echo(">> For production, use: gunicorn wsgi:app")
         app.run(host=host, port=port, debug=False)  # Force debug=False inside container
     else:
-        logging.info("WEB_PORTAL: Local mode - Flask dev server on %s:%s", host, port)  # Log local dev path
+        logger.info("WEB_PORTAL: Local mode - Flask dev server on %s:%s", host, port)  # Log local dev path
         echo(">> Web portal starting at http://127.0.0.1:%s", port)
         app.run(host=host, port=port, debug=dev_debug)  # Honor caller's debug flag locally
 
@@ -6248,20 +6241,20 @@ def _resolve_web_portal_host() -> str:
     variable, a container binds to all interfaces, and a
     workstation binds to the loopback address.
     """
-    logging.info("WEB_PORTAL: resolving the bind address for the web portal")  # Log before the resolution starts
+    logger.info("WEB_PORTAL: resolving the bind address for the web portal")  # Log before the resolution starts
     override_host = os.environ.get("WEB_HOST")  # An operator value must win over both defaults
     if override_host:  # A set WEB_HOST value controls the bind on a container and on a workstation
-        logging.debug("WEB_PORTAL: bind address came from WEB_HOST: %s", override_host)  # Report the override result
+        logger.debug("WEB_PORTAL: bind address came from WEB_HOST: %s", override_host)  # Report the override result
         return override_host  # Return the operator value and skip the container check
     in_container = EnvironmentUtils.is_running_in_container()  # Only a container gets the all-interfaces bind
     if not in_container:  # A workstation must keep the portal on the loopback interface
-        logging.debug("WEB_PORTAL: bind address is the loopback address on a workstation")  # Report the result
+        logger.debug("WEB_PORTAL: bind address is the loopback address on a workstation")  # Report the result
         return "127.0.0.1"  # Keep the portal off every external interface of the workstation
         # The next assignment runs only when is_running_in_container() returns True. A container needs the
         # all-interfaces bind, because the container network maps the port from outside. The container port map
         # controls the exposure, and a workstation returns the loopback address above.
     all_interfaces_host = ".".join(("0", "0", "0", "0"))  # Build the bind-all address only for container use
-    logging.debug("WEB_PORTAL: bind address is %s inside a container", all_interfaces_host)  # Report the result
+    logger.debug("WEB_PORTAL: bind address is %s inside a container", all_interfaces_host)  # Report the result
     return all_interfaces_host  # Hand the container bind address to the launcher
 
 
@@ -6303,7 +6296,7 @@ def _capture_portal_port() -> int:
     raw_port = os.environ.get("CAPTURE_PORT", "8056")  # The container sets this; 8056 matches the plan
     if raw_port.isdigit():  # Accept only a plain number, so startup never raises on a typo
         return int(raw_port)
-    logging.warning("CAPTURE_PORTAL: CAPTURE_PORT value %s is not a number - using 8056", raw_port)  # Warn on a typo
+    logger.warning("CAPTURE_PORTAL: CAPTURE_PORT value %s is not a number - using 8056", raw_port)  # Warn on a typo
     return 8056  # Documented default port for the capture portal
 
 
@@ -6322,11 +6315,11 @@ def _run_capture_portal_server(app: Any, host: str, port: int, dev_debug: bool) 
         dev_debug: True to start the local development server with the debugger.
     """
     if EnvironmentUtils.is_running_in_container():  # Container path -- Gunicorn owns the socket
-        logging.info("CAPTURE_PORTAL: Container detected - use wsgi_capture.py with Gunicorn on port %s", port)
+        logger.info("CAPTURE_PORTAL: Container detected - use wsgi_capture.py with Gunicorn on port %s", port)
         echo(">> For production, use: gunicorn wsgi_capture:app -w 1 -k gthread --threads 4")
         app.run(host=host, port=port, debug=False)  # Force debug=False inside the container
         return  # Container path is complete
-    logging.info("CAPTURE_PORTAL: Local mode - Flask dev server on %s:%s", host, port)  # Log the local dev path
+    logger.info("CAPTURE_PORTAL: Local mode - Flask dev server on %s:%s", host, port)  # Log the local dev path
     echo(">> Upgrade capture portal starting at http://127.0.0.1:%s", port)  # Clickable URL for the operator
     app.run(host=host, port=port, debug=dev_debug)  # Honor the caller's debug flag locally
 
@@ -6350,9 +6343,9 @@ def _launch_capture_portal(dev_debug: bool = False) -> None:
     # workstation must not take that bind: this portal has no password, so any computer that reaches
     # it could start a firmware upgrade. A CAPTURE_HOST value from the operator wins over both.
     host = resolve_host(os.environ.get("CAPTURE_HOST"), in_container=EnvironmentUtils.is_running_in_container())
-    logging.info("CAPTURE_PORTAL: Building the application for %s:%s", host, port)  # Log before the build
+    logger.info("CAPTURE_PORTAL: Building the application for %s:%s", host, port)  # Log before the build
     app = create_app()  # The factory reads every setting from the environment and holds no credential value
-    logging.debug("CAPTURE_PORTAL: Application built - starting the server")  # Log after the build
+    logger.debug("CAPTURE_PORTAL: Application built - starting the server")  # Log after the build
     _run_capture_portal_server(app, host, port, dev_debug)  # Dispatch to the container or local runner
 
 
@@ -6375,12 +6368,12 @@ def _metrics_gateway_org_id(settings: Any) -> str:
     if MainEntrypoint.context.org_id:  # The session already holds a selection, so reuse it rather than ask twice
         return str(MainEntrypoint.context.org_id)
     if not (sys.stdin.isatty() and sys.stdout.isatty()):  # Refuse prompts without a terminal
-        logging.error("METRICS_GATEWAY: No organization and no terminal.")  # Explain the startup failure
-        logging.error("METRICS_GATEWAY: Set METRICS_ORG_ID or MIST_ORG_ID.")  # Give the operator the fix
+        logger.error("METRICS_GATEWAY: No organization and no terminal.")  # Explain the startup failure
+        logger.error("METRICS_GATEWAY: Set METRICS_ORG_ID or MIST_ORG_ID.")  # Give the operator the fix
         return ""  # Return an empty value so the caller exits with a failure status
-    logging.info("METRICS_GATEWAY: No organization is set - starting the picker")  # Log before the prompt
+    logger.info("METRICS_GATEWAY: No organization is set - starting the picker")  # Log before the prompt
     _select_org_from_session()  # Writes the module-level org_id global
-    logging.debug("METRICS_GATEWAY: Picker result: %s", bool(MainEntrypoint.context.org_id))  # Record the result safely
+    logger.debug("METRICS_GATEWAY: Picker result: %s", bool(MainEntrypoint.context.org_id))  # Record the result safely
     return str(MainEntrypoint.context.org_id or "")
 
 
@@ -6393,10 +6386,10 @@ def _launch_mib_generator() -> None:
     """
     from src.mib_generator.runner import DEFAULT_OUTPUT, MibGeneratorRunner
 
-    logging.info("MIB_GENERATOR: Menu 243 started the generator")  # Log before the action.
+    logger.info("MIB_GENERATOR: Menu 243 started the generator")  # Log before the action.
     text = MibGeneratorRunner().generate(DEFAULT_OUTPUT)  # The runner reads the three checked-in inputs.
     echo(f"  Wrote {len (text )} characters to {DEFAULT_OUTPUT }")
-    logging.info("MIB_GENERATOR: Menu 243 wrote %d characters to %s", len(text), DEFAULT_OUTPUT)  # Log the result.
+    logger.info("MIB_GENERATOR: Menu 243 wrote %d characters to %s", len(text), DEFAULT_OUTPUT)  # Log the result.
 
 
 def _launch_metrics_gateway(dev_debug: bool = False) -> None:
@@ -6418,19 +6411,19 @@ def _launch_metrics_gateway(dev_debug: bool = False) -> None:
     resolved = _metrics_gateway_org_id(settings)  # The picker runs only when no setting names an org
     if not resolved:  # Without an organization the gateway would serve an empty reading forever
         echo("  X No organization selected - the metrics gateway cannot start")
-        logging.error("METRICS_GATEWAY: No organization selected - abort the launch")  # Log the refusal
+        logger.error("METRICS_GATEWAY: No organization selected - abort the launch")  # Log the refusal
         raise SystemExit(1)  # Return a non-zero status so service managers report the startup failure
     settings = settings.with_org_id(resolved)  # Carry the chosen org into the frozen record
     # Reuse the shared token-based initializer (handles retries, rate limits, and the legacy fallback).
     if not MistSessionInitializer.initialize():  # Populates the module-level `apisession` global on success.
         echo("  X Could not authenticate to Mist Cloud - the metrics gateway cannot start")
-        logging.error("METRICS_GATEWAY: Mist API session initialization failed - abort the launch")
+        logger.error("METRICS_GATEWAY: Mist API session initialization failed - abort the launch")
         return
     cache = build_cache(
         MainEntrypoint.context.apisession, settings
     )  # The cache holds the reading that both output paths serve
     start_refresh_thread(cache, threading.Event())  # A daemon thread keeps the reading fresh ahead of a poll
-    logging.info("METRICS_GATEWAY: Building the application for %s:%s", settings.host, settings.port)
+    logger.info("METRICS_GATEWAY: Building the application for %s:%s", settings.host, settings.port)
     echo(">> Mist metrics gateway starting at http://127.0.0.1:%s/metrics", settings.port)  # Clickable URL
     create_app(cache).run(host=settings.host, port=settings.port, debug=dev_debug and not in_container)
 
@@ -6460,16 +6453,16 @@ def _run_metrics_snmp(_args: argparse.Namespace) -> None:
     from src.metrics_gateway.service import GatewaySettings, build_cache, start_refresh_thread
     from src.utils.environment_utils import EnvironmentUtils  # Import EnvironmentUtils for container detection
 
-    logging.info("METRICS_SNMP: Starting the pass_persist responder")  # Log to the file, never to a stream
+    logger.info("METRICS_SNMP: Starting the pass_persist responder")  # Log to the file, never to a stream
     settings = GatewaySettings.from_environment(EnvironmentUtils.is_running_in_container())
     if not settings.org_id:  # snmpd cannot answer a prompt, so the setting is the only source here
-        logging.error("METRICS_SNMP: METRICS_ORG_ID is not set - abort")  # Log the refusal
+        logger.error("METRICS_SNMP: METRICS_ORG_ID is not set - abort")  # Log the refusal
         sys.exit(1)
         # Reuse the shared token-based initializer instead of calling mistapi directly. It is the same
         # seam every other MistHelper mode uses, so it inherits the retry, rate-limit, and fallback logic
         # for free and it writes the session to the module-level `apisession` global that build_cache reads.
     if not MistSessionInitializer.initialize():
-        logging.error("METRICS_SNMP: Mist API session initialization failed - abort")  # Log the refusal
+        logger.error("METRICS_SNMP: Mist API session initialization failed - abort")  # Log the refusal
         sys.exit(1)
     cache = build_cache(
         MainEntrypoint.context.apisession, settings
@@ -6496,11 +6489,11 @@ def _run_mib_generator_mode(args: argparse.Namespace) -> None:
 
     from src.mib_generator.runner import DEFAULT_OUTPUT, MibGeneratorRunner
 
-    logging.info("MIB_GENERATOR: Starting the MIB generator")  # Log before the action.
+    logger.info("MIB_GENERATOR: Starting the MIB generator")  # Log before the action.
     runner = MibGeneratorRunner()  # The runner reads the three checked-in inputs from their default paths.
     output = Path(args.mib_output) if getattr(args, "mib_output", None) else DEFAULT_OUTPUT
     code = _report_mib_result(runner, args, output)  # One helper keeps this function inside the line limit.
-    logging.info("MIB_GENERATOR: The generator finished with exit code %s", code)  # Log the result.
+    logger.info("MIB_GENERATOR: The generator finished with exit code %s", code)  # Log the result.
     sys.exit(code)
 
 
@@ -6531,54 +6524,54 @@ def _report_mib_result(runner: Any, args: argparse.Namespace, output: Any) -> in
 
 def _report_tqdm_status() -> None:
     """Log whether the real tqdm landed in the global namespace after deferred imports."""
-    logging.debug("_report_tqdm_status: checking tqdm namespace availability")  # Trace tqdm status check
+    logger.debug("_report_tqdm_status: checking tqdm namespace availability")  # Trace tqdm status check
     if "tqdm" in global_assignments:  # tqdm injection succeeded -- confirm availability for progress bars
-        logging.info("tqdm is available in global namespace: %s", type(globals().get("tqdm")))  # Log tqdm availability
+        logger.info("tqdm is available in global namespace: %s", type(globals().get("tqdm")))  # Log tqdm availability
     else:  # tqdm missing from resolved assignments -- progress bars will be non-functional
-        logging.warning(
+        logger.warning(
             "tqdm was not found in global assignments - progress bars will not be functional"
         )  # Warn if missing
 
 
 def _apply_deferred_assignments() -> None:
     """Inject deferred import symbols into the namespace and report tqdm availability."""
-    logging.debug("_apply_deferred_assignments: publishing deferred symbols")  # Trace publish
+    logger.debug("_apply_deferred_assignments: publishing deferred symbols")  # Trace publish
     if not global_assignments:  # No symbols resolved -- nothing to publish to namespace
         return  # Skip injection entirely when the import cycle produced no assignments
     for var_name, var_value in global_assignments.items():  # Publish each resolved symbol
         globals()[var_name] = var_value  # Inject the imported symbol into module scope for global reuse
         if var_name == "tqdm" and var_value is not None:  # Real tqdm replacing the stub warrants an explicit note
-            logging.info("Successfully imported real tqdm in deferred mode: %s", type(var_value))  # Log tqdm override
-    logging.debug("Applied %d global variable assignments", len(global_assignments))  # Log assignment count
+            logger.info("Successfully imported real tqdm in deferred mode: %s", type(var_value))  # Log tqdm override
+    logger.debug("Applied %d global variable assignments", len(global_assignments))  # Log assignment count
     _report_tqdm_status()  # Log whether tqdm is available in the global namespace
 
 
 def _run_deferred_import_cycle() -> None:
     """Run the deferred import cycle, publish symbols, and warn on partial failure."""
-    logging.info("Initializing deferred imports at application start...")  # Log before import process
+    logger.info("Initializing deferred imports at application start...")  # Log before import process
     init_success, assignments = import_manager.initialize_all_imports()  # Run full deferred import cycle
     globals()["success"] = init_success  # Preserve the legacy module name without a global statement.
     globals()["global_assignments"] = assignments  # Preserve downstream reads without a global statement.
     import_manager._deferred_init_done = True  # Mark complete to prevent duplicate initialization
     _apply_deferred_assignments()  # Inject resolved symbols and report tqdm availability
     if not init_success:  # Non-fatal warning: caller decides whether to abort on partial import failure
-        logging.warning("Some required imports failed - functionality may be limited")  # Warn limited functionality
+        logger.warning("Some required imports failed - functionality may be limited")  # Warn limited functionality
 
 
 def _initialize_deferred_imports() -> None:
     """Initialize deferred module imports if not already completed at startup."""
-    logging.debug("_initialize_deferred_imports: checking deferred import status")  # Log entry
+    logger.debug("_initialize_deferred_imports: checking deferred import status")  # Log entry
     already_done = hasattr(import_manager, "_deferred_init_done")  # Detect whether deferred init already ran
     if not success and not global_assignments and not already_done:  # First-time deferred init required
         _run_deferred_import_cycle()  # Run the import cycle and publish resolved symbols
     elif already_done:  # Already initialized -- skip to avoid duplicate work
-        logging.debug("Deferred imports already initialized, skipping duplicate initialization")  # Note the skip
-    logging.debug("_initialize_deferred_imports: complete")  # Log exit
+        logger.debug("Deferred imports already initialized, skipping duplicate initialization")  # Note the skip
+    logger.debug("_initialize_deferred_imports: complete")  # Log exit
 
 
 def _add_target_selection_arguments(parser: argparse.ArgumentParser) -> None:
     """Register the org/menu/site/device/port target-selection flags on the parser."""
-    logging.debug("_add_target_selection_arguments: registering target-selection flags")  # Log before adding
+    logger.debug("_add_target_selection_arguments: registering target-selection flags")  # Log before adding
     parser.add_argument("-O", "--org", help="Organization ID")  # Short -O flag maps to --org for quick use
     parser.add_argument("-M", "--menu", help="Menu option number to execute")  # Short -M for non-interactive dispatch
     parser.add_argument("-S", "--site", help="Human-readable site name")  # Site name that gets resolved to site_id
@@ -6588,7 +6581,7 @@ def _add_target_selection_arguments(parser: argparse.ArgumentParser) -> None:
 
 def _add_execution_mode_arguments(parser: argparse.ArgumentParser) -> None:
     """Register the debug/delay/fast/skip-deps execution-mode flags on the parser."""
-    logging.debug("_add_execution_mode_arguments: registering execution-mode flags")  # Log before adding
+    logger.debug("_add_execution_mode_arguments: registering execution-mode flags")  # Log before adding
     parser.add_argument(
         "--debug", action="store_true", help="Enable debug output (includes detailed table data in logs)"
     )  # Debug mode flag
@@ -6605,7 +6598,7 @@ def _add_execution_mode_arguments(parser: argparse.ArgumentParser) -> None:
 
 def _add_output_format_arguments(parser: argparse.ArgumentParser) -> None:
     """Register the output-format and systematic-test flags on the parser."""
-    logging.debug("_add_output_format_arguments: registering output-format and test flags")  # Log before adding
+    logger.debug("_add_output_format_arguments: registering output-format and test flags")  # Log before adding
     parser.add_argument(
         "--output-format",
         choices=["csv", "sqlite"],
@@ -6639,7 +6632,7 @@ def _add_systematic_test_flags(parser: argparse.ArgumentParser) -> None:
 
 def _add_safety_arguments(parser: argparse.ArgumentParser) -> None:
     """Register the dry-run/address-check/SSL/no-env safety flags on the parser."""
-    logging.debug("_add_safety_arguments: registering safety and validation flags")  # Log before adding
+    logger.debug("_add_safety_arguments: registering safety and validation flags")  # Log before adding
     _add_destructive_safety_flags(parser)  # Flags that change what a destructive run does.
     _add_external_call_flags(parser)  # Flags that change how outbound calls behave.
 
@@ -6682,7 +6675,7 @@ def _add_external_call_flags(parser: argparse.ArgumentParser) -> None:
 
 def _add_interface_arguments(parser: argparse.ArgumentParser) -> None:
     """Register the TUI/login/web-portal/standalone interface flags on the parser."""
-    logging.debug("_add_interface_arguments: registering interface and auth flags")  # Log before adding
+    logger.debug("_add_interface_arguments: registering interface and auth flags")  # Log before adding
     _add_interface_mode_flags(parser)  # Flags that choose which front end runs.
     _add_auth_and_backend_flags(parser)  # Flags that choose the auth path and the storage backend.
 
@@ -6769,14 +6762,14 @@ def _add_auth_and_backend_flags(parser: argparse.ArgumentParser) -> None:
 
 def _build_argument_parser() -> argparse.ArgumentParser:
     """Build and return the CLI argument parser for MistHelper with all supported flags."""
-    logging.debug("_build_argument_parser: building argument parser")  # Log before parser creation
+    logger.debug("_build_argument_parser: building argument parser")  # Log before parser creation
     parser = argparse.ArgumentParser(description="MistHelper CLI Interface")  # Create base parser with description
     _add_target_selection_arguments(parser)  # Register org/menu/site/device/port selection flags
     _add_execution_mode_arguments(parser)  # Register debug/delay/fast/skip-deps execution-mode flags
     _add_output_format_arguments(parser)  # Register output-format and systematic-test flags
     _add_safety_arguments(parser)  # Register dry-run/address-check/SSL/no-env safety flags
     _add_interface_arguments(parser)  # Register TUI/login/web-portal/standalone interface flags
-    logging.debug("_build_argument_parser: parser ready with all arguments configured")  # Log completion
+    logger.debug("_build_argument_parser: parser ready with all arguments configured")  # Log completion
     return parser  # Return parser for caller to call parse_args() on
 
 
@@ -6800,7 +6793,7 @@ _FAST_MODE_CAPABLE_FUNCTIONS: tuple[str, ...] = (
 
 def _announce_fast_mode_scope() -> None:
     """Log and print the list of fast-capable functions so operators know which paths get accelerated."""
-    logging.info(
+    logger.info(
         "FAST MODE ACTIVE: Enabling caching/concurrency shortcuts for: %s",
         ", ".join(_FAST_MODE_CAPABLE_FUNCTIONS),
     )  # Log fast scope for log-correlation
@@ -6812,16 +6805,16 @@ def _announce_fast_mode_scope() -> None:
 def _setup_runtime_flags(args: argparse.Namespace) -> None:
     """Apply standalone env flag, register args globally, and configure FAST_MODE_ENABLED."""
     # The application context owns this state, so no global declaration is needed.
-    logging.debug("_setup_runtime_flags: applying standalone and fast mode flags")  # Log entry
+    logger.debug("_setup_runtime_flags: applying standalone and fast mode flags")  # Log entry
     if args.standalone:  # --standalone flag disables ArangoDB/Redis connections org-wide
         os.environ["MISTHELPER_STANDALONE"] = "true"  # Write env var so all components detect standalone mode
-        logging.info("Standalone mode enabled via --standalone flag: ArangoDB/Redis disabled")  # Log env write
+        logger.info("Standalone mode enabled via --standalone flag: ArangoDB/Redis disabled")  # Log env write
     globals()["args"] = args  # Register parsed args globally so menu functions can read CLI flags
-    logging.debug("CLI args registered in globals()['args'] for menu function access")  # Log global assignment
+    logger.debug("CLI args registered in globals()['args'] for menu function access")  # Log global assignment
     IS_TEST_MODE = bool(  # Keep the old global behavior from stored CLI arguments.
         getattr(args, "test", False) or getattr(args, "testinteractive", False)
     )
-    logging.debug("IS_TEST_MODE set to %s", IS_TEST_MODE)  # Log the parsed test-mode state.
+    logger.debug("IS_TEST_MODE set to %s", IS_TEST_MODE)  # Log the parsed test-mode state.
     try:
         MainEntrypoint.context.fast_mode_enabled = bool(
             args.fast
@@ -6829,44 +6822,44 @@ def _setup_runtime_flags(args: argparse.Namespace) -> None:
     except (AttributeError, TypeError) as error:  # Bad args or a broken context must only disable fast mode
         logging.warning("Failed to set context fast-mode flag: %s", error, exc_info=True)  # Keep trace for repair
         MainEntrypoint.context.fast_mode_enabled = False  # Fail-safe: ensure symbol exists even if args access fails
-    logging.debug("FAST_MODE_ENABLED set to %s", MainEntrypoint.context.fast_mode_enabled)  # Log fast mode state
+    logger.debug("FAST_MODE_ENABLED set to %s", MainEntrypoint.context.fast_mode_enabled)  # Log fast mode state
     if MainEntrypoint.context.fast_mode_enabled:  # Announce only after the guarded flag write succeeds
         _announce_fast_mode_scope()  # Log + print fast-capable function list
-    logging.debug("_setup_runtime_flags: complete")  # Log exit
+    logger.debug("_setup_runtime_flags: complete")  # Log exit
 
 
 def _apply_dependency_assignments(skip_mode: bool) -> None:
     """Inject resolved global symbol assignments into the module namespace."""
-    logging.debug("_apply_dependency_assignments: publishing symbols (skip_mode=%s)", skip_mode)  # Trace publish
+    logger.debug("_apply_dependency_assignments: publishing symbols (skip_mode=%s)", skip_mode)  # Trace publish
     if not global_assignments:  # No symbols resolved -- nothing to publish to namespace
         return  # Skip injection entirely when the import cycle produced no assignments
     for var_name, var_value in global_assignments.items():  # Publish each resolved symbol
         globals()[var_name] = var_value  # Inject the imported symbol into module scope for global reuse
     if skip_mode:  # Differentiate the log message so operators see the skip-deps code path was taken
-        logging.debug(
+        logger.debug(
             "Applied %d global variable assignments in skip mode", len(global_assignments)
         )  # Log skip-mode count
     else:  # Full dependency path -- preserve the original (non-skip) log message wording
-        logging.debug("Applied %d global variable assignments", len(global_assignments))  # Log assignment count
+        logger.debug("Applied %d global variable assignments", len(global_assignments))  # Log assignment count
 
 
 def _run_full_dependency_init(args: argparse.Namespace) -> None:
     """Run the full dependency import cycle and abort on critical, non-test failure."""
-    logging.info("Initializing deferred dependencies with full checking...")  # Log before full init
+    logger.info("Initializing deferred dependencies with full checking...")  # Log before full init
     init_success, assignments = import_manager.initialize_all_imports(skip_deps=False)  # Run full import cycle
     globals()["success"] = init_success  # Preserve the legacy module name without a global statement.
     globals()["global_assignments"] = assignments  # Preserve downstream reads without a global statement.
     import_manager._deferred_init_done = True  # Mark complete to prevent duplicate initialization
     _apply_dependency_assignments(skip_mode=False)  # Publish resolved symbols into module namespace
     if not init_success and not args.test:  # Abort on critical failure unless running in test mode
-        logging.error("Critical dependencies missing. Exiting.")  # Log fatal dependency failure before exit
+        logger.error("Critical dependencies missing. Exiting.")  # Log fatal dependency failure before exit
         echo("!! Critical dependencies missing. Use --skip-deps to bypass or install missing packages.")
         sys.exit(1)  # Exit with error code -- cannot continue without required modules
 
 
 def _run_skip_dependency_init() -> None:
     """Run the minimal dependency import cycle used by the --skip-deps path."""
-    logging.info("Dependency initialization skipped due to --skip-deps flag")  # Log skip reason
+    logger.info("Dependency initialization skipped due to --skip-deps flag")  # Log skip reason
     init_success, assignments = import_manager.initialize_all_imports(skip_deps=True)  # Minimal import cycle
     globals()["success"] = init_success  # Preserve the legacy module name without a global statement.
     globals()["global_assignments"] = assignments  # Preserve downstream reads without a global statement.
@@ -6876,7 +6869,7 @@ def _run_skip_dependency_init() -> None:
 
 def _initialize_dependencies(args: argparse.Namespace) -> None:
     """Initialize deferred module imports based on --skip-deps flag, aborting on critical failure."""
-    logging.debug("_initialize_dependencies: checking if dependency initialization is needed")  # Log entry
+    logger.debug("_initialize_dependencies: checking if dependency initialization is needed")  # Log entry
     already_done = hasattr(import_manager, "_deferred_init_done")  # Detect whether deferred init already ran
     if not _initialize_imports_now and not already_done:  # First-time deferred init required
         if args.skip_deps:  # Minimal path when the caller passed --skip-deps
@@ -6884,13 +6877,13 @@ def _initialize_dependencies(args: argparse.Namespace) -> None:
         else:  # Default path performs full dependency checking
             _run_full_dependency_init(args)  # Run the full import cycle (may sys.exit on critical failure)
     elif already_done:  # Already initialized -- skip to avoid duplicate work
-        logging.debug("Dependencies already initialized, skipping duplicate initialization")  # Note the skip
-    logging.debug("_initialize_dependencies: complete")  # Log exit
+        logger.debug("Dependencies already initialized, skipping duplicate initialization")  # Note the skip
+    logger.debug("_initialize_dependencies: complete")  # Log exit
 
 
 def _establish_mist_session(args: argparse.Namespace) -> None:
     """Initialize Mist API session using interactive login or API token, then detect MSP privileges."""
-    logging.debug("_establish_mist_session: starting session initialization")  # Log entry
+    logger.debug("_establish_mist_session: starting session initialization")  # Log entry
     is_capture_portal = bool(
         getattr(args, "capture_portal", False)
     )  # The portal creates its own environment or browser credential session.
@@ -6904,14 +6897,14 @@ def _establish_mist_session(args: argparse.Namespace) -> None:
         require_token=not args.login and not is_capture_portal
     )  # The portal validates its host but can receive a browser token after startup.
     if is_capture_portal:  # The capture app owns credential selection and session creation per browser.
-        logging.info("CAPTURE_PORTAL: Credential preflight passed; deferring Mist session creation to the portal")
+        logger.info("CAPTURE_PORTAL: Credential preflight passed; deferring Mist session creation to the portal")
         return
     _preflight_systematic_test_org(args)  # Resolve org before any session or MSP call in systematic modes.
     if args.login:  # Interactive login requested via --login flag
         _init_interactive_session()  # Email/password path. Exits non-zero on failure.
     else:  # Default path: use API token from .env or environment variables
         _init_token_session()  # Token path. Exits non-zero on failure, then publishes MSP grants.
-    logging.debug("_establish_mist_session: session established successfully")  # Log successful auth
+    logger.debug("_establish_mist_session: session established successfully")  # Log successful auth
 
 
 def _preflight_systematic_test_org(args: argparse.Namespace) -> None:
@@ -6921,20 +6914,20 @@ def _preflight_systematic_test_org(args: argparse.Namespace) -> None:
     )
     if not is_systematic_test:  # WHY: interactive and single-menu runs resolve the org later, on demand.
         return
-    logging.info(
+    logger.info(
         "SYSTEMATIC_TEST: validating org_id before Mist session initialization"
     )  # Log before local org-id resolution.
     ConfigUtils.get_cached_or_prompted_org_id()  # Fail closed before session construction or MSP HTTP calls.
-    logging.debug(
+    logger.debug(
         "SYSTEMATIC_TEST: org_id preflight passed before Mist session initialization"
     )  # Log successful local validation.
 
 
 def _init_interactive_session() -> None:
     """Authenticate with email and password, then publish the session to the shared config cache."""
-    logging.info("Interactive login mode requested via --login flag")  # Log before interactive login
+    logger.info("Interactive login mode requested via --login flag")  # Log before interactive login
     if not MistSessionInteractiveInitializer.initialize():  # Attempt email/password login
-        logging.error("Failed to initialize Mist API session via interactive login")  # Log auth failure
+        logger.error("Failed to initialize Mist API session via interactive login")  # Log auth failure
         echo(" Failed to initialize Mist API session. Check your credentials.")
         sys.exit(1)  # Exit -- cannot proceed without authenticated session
 
@@ -6943,13 +6936,13 @@ def _init_token_session() -> None:
     """Authenticate with an API token, publish the session, and detect MSP privileges."""
     # The application context owns this state, so no global declaration is needed.
     if not MistSessionInitializer.initialize():  # Attempt token-based session init
-        logging.error("Failed to initialize Mist API session")  # Log token auth failure
+        logger.error("Failed to initialize Mist API session")  # Log token auth failure
         echo(" Failed to initialize Mist API session. Check your credentials.")
         sys.exit(1)  # Exit -- cannot proceed without authenticated session
     MainEntrypoint.context.msp_privileges = detect_msp_privileges(
         MainEntrypoint.context.apisession
     )  # Detect MSP grants for token session and publish to global
-    logging.debug("_establish_mist_session: session established successfully")  # Log successful auth
+    logger.debug("_establish_mist_session: session established successfully")  # Log successful auth
 
 
 def _apply_debug_log_level() -> None:
@@ -6960,48 +6953,48 @@ def _apply_debug_log_level() -> None:
             handler.setLevel(logging.DEBUG)
         elif isinstance(handler, logging.StreamHandler):  # Console stays at INFO to avoid noise
             handler.setLevel(logging.INFO)
-    logging.debug("Debug logging enabled via --debug flag")  # Confirm debug mode active in log file
-    logging.debug("Performance monitoring will trigger circuit breakers for infinite loops")  # Remind about CBs
+    logger.debug("Debug logging enabled via --debug flag")  # Confirm debug mode active in log file
+    logger.debug("Performance monitoring will trigger circuit breakers for infinite loops")  # Remind about CBs
 
 
 def _configure_runtime_options(args: argparse.Namespace) -> None:
     """Set OUTPUT_FORMAT, initialize PROGRESS_EMITTER, and configure debug log level."""
     # The application context owns this state, so no global declaration is needed.
-    logging.debug("_configure_runtime_options: applying runtime configuration")  # Log entry
+    logger.debug("_configure_runtime_options: applying runtime configuration")  # Log entry
     MainEntrypoint.context.output_format = (
         args.output_format
     )  # Apply --output-format (csv or sqlite) to global used by all exporters
     timestamp = datetime.now(UTC).isoformat()  # Capture current UTC time for audit trail
-    logging.info(
+    logger.info(
         "Output format set to: %s at %s", MainEntrypoint.context.output_format, timestamp
     )  # Log format selection with timestamp
     try:
         MainEntrypoint.context.progress_emitter = TelemetryEmitter(
             os.path.join("data", "test_events.jsonl")
         )  # Initialize JSONL telemetry emitter
-        logging.info("Progress telemetry emitter initialized: data/test_events.jsonl")  # Log emitter ready
+        logger.info("Progress telemetry emitter initialized: data/test_events.jsonl")  # Log emitter ready
     except (OSError, ValueError, TypeError) as emitter_exc:  # Telemetry file issues must not stop the CLI
         logging.warning("Progress telemetry emitter init failed: %s", emitter_exc, exc_info=True)  # Keep trace
         echo("Progress telemetry emitter init failed (non-blocking): %s", emitter_exc)  # Log non-fatal failure
         MainEntrypoint.context.progress_emitter = None  # Set to None so callers skip telemetry gracefully
     if args.debug:  # Apply debug logging level to file handlers. Keep console at INFO to avoid noise
         _apply_debug_log_level()  # Promote root + file handlers to DEBUG
-    logging.debug("_configure_runtime_options: complete")  # Log exit
+    logger.debug("_configure_runtime_options: complete")  # Log exit
 
 
 def _run_tui_mode(args: argparse.Namespace) -> None:
     """Launch MistHelper Terminal User Interface (TUI) mode using the Rich library."""
-    logging.info("TUI_MODE: Starting Terminal User Interface mode")  # Log before TUI launch
+    logger.info("TUI_MODE: Starting Terminal User Interface mode")  # Log before TUI launch
     echo(">> Terminal User Interface mode activated")
     _ensure_tui_api_session()  # Initialize the Mist API session if not already established.
     _silence_console_handlers_for_tui()  # Remove console log handlers so Rich owns the screen.
     _run_tui_event_loop(args)  # Run the TUI event loop (handles Ctrl+C + fatal errors internally).
     if args.debug:  # Debug: log a final timestamped marker after the loop exits cleanly.
         timestamp = datetime.now(UTC).astimezone().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format ms timestamp.
-        logging.debug(
+        logger.debug(
             "TUI_DEBUG: [%s] TUI mode completed successfully - about to exit", timestamp
         )  # Log clean completion.
-    logging.info("TUI_MODE: TUI mode completed successfully")  # Log clean exit.
+    logger.info("TUI_MODE: TUI mode completed successfully")  # Log clean exit.
 
 
 def _ensure_tui_api_session() -> None:
@@ -7010,8 +7003,8 @@ def _ensure_tui_api_session() -> None:
         return  # Reuse the existing session.
     echo(">> Initializing Mist API session...")
     if not MistSessionInitializer.initialize():  # Attempt session init for TUI
-        logging.error("[ERROR] Failed to initialize Mist API session")  # Auth-init failure at ERROR level.
-        logging.error("TUI_MODE: Could not initialize API session")  # Log auth failure.
+        logger.error("[ERROR] Failed to initialize Mist API session")  # Auth-init failure at ERROR level.
+        logger.error("TUI_MODE: Could not initialize API session")  # Log auth failure.
         sys.exit(1)  # Exit -- TUI cannot function without a session.
     echo(">> API session initialized successfully")
 
@@ -7026,17 +7019,17 @@ def _silence_console_handlers_for_tui() -> None:
     ]
     for handler in console_handlers:  # Iterate handlers to remove each.
         root_logger.removeHandler(handler)  # Remove console handler so logs do not disrupt Rich display.
-        logging.debug("TUI_MODE: Removed console handler to prevent interference with Rich TUI")  # Log removal.
+        logger.debug("TUI_MODE: Removed console handler to prevent interference with Rich TUI")  # Log removal.
 
 
 def _handle_tui_keyboard_interrupt(debug: bool) -> None:
     """Log clean exit when user pressed Ctrl+C inside the TUI and inform them at the console."""
     if debug:  # Debug: log timestamped interrupt event
         timestamp = datetime.now(UTC).astimezone().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format timestamp
-        logging.debug(
+        logger.debug(
             "TUI_DEBUG: [%s] KeyboardInterrupt caught - user pressed Ctrl+C", timestamp
         )  # Log interrupt with time
-    logging.info("TUI_MODE: User interrupted with Ctrl+C")  # Log clean user exit
+    logger.info("TUI_MODE: User interrupted with Ctrl+C")  # Log clean user exit
     echo("\n[EXIT] TUI mode stopped by user")
 
 
@@ -7044,14 +7037,14 @@ def _handle_tui_exception(debug: bool, error: Exception) -> None:
     """Log fatal error from the TUI event loop and exit with code 1."""
     if debug:  # Debug: log timestamped exception detail
         timestamp = datetime.now(UTC).astimezone().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Format timestamp
-        logging.debug(
+        logger.debug(
             "TUI_DEBUG: [%s] Exception caught in TUI mode: %s: %s",
             timestamp,
             type(error).__name__,
             error,
         )  # Log error
-    logging.exception("TUI_MODE: Fatal error - %s", error)  # Log full traceback to file
-    logging.error("\n[ERROR] TUI mode crashed: %s", error)  # Crash message at ERROR level.
+    logger.exception("TUI_MODE: Fatal error - %s", error)  # Log full traceback to file
+    logger.error("\n[ERROR] TUI mode crashed: %s", error)  # Crash message at ERROR level.
     sys.exit(1)  # Exit with error code after TUI crash
 
 
@@ -7063,7 +7056,7 @@ def _run_tui_event_loop(args: argparse.Namespace) -> None:
         tui = MistHelperTUI(debug_mode=args.debug)  # Create TUI with debug flag
         tui.apisession = MainEntrypoint.context.apisession  # Pass global API session so TUI can execute live API calls
         if args.debug:  # Debug: record that the code launched the TUI with debug enabled
-            logging.debug("TUI_MODE: Debug mode is ACTIVE - enhanced logging enabled")  # Log debug state
+            logger.debug("TUI_MODE: Debug mode is ACTIVE - enhanced logging enabled")  # Log debug state
         tui.run()  # Launch TUI event loop (blocks until user exits)
     except KeyboardInterrupt:  # User pressed Ctrl+C inside the TUI
         _handle_tui_keyboard_interrupt(args.debug)  # Log and inform user of clean exit
@@ -7076,7 +7069,7 @@ def _run_tui_event_loop(args: argparse.Namespace) -> None:
 def _run_cli_mode(args: argparse.Namespace) -> None:
     """Resolve org/site/device IDs from CLI args, dispatch to the target menu function, and exit."""
     # The application context owns this state, so no global declaration is needed.
-    logging.info("CLI arguments detected, running in non-interactive mode.")  # Log before CLI dispatch.
+    logger.info("CLI arguments detected, running in non-interactive mode.")  # Log before CLI dispatch.
     _log_cli_invocation(args)  # Verbose log of every parsed CLI flag for diagnostics.
     MainEntrypoint.context.org_id = _resolve_cli_org_id(args)  # Use --org if given, otherwise prompt/cache.
     site_id = _resolve_cli_site_id(args, MainEntrypoint.context.org_id)  # Resolve --site name -> site_id (or None).
@@ -7086,7 +7079,7 @@ def _run_cli_mode(args: argparse.Namespace) -> None:
 
 def _log_cli_invocation(args: argparse.Namespace) -> None:
     """Log every parsed CLI argument at DEBUG level for diagnostics."""
-    logging.debug(
+    logger.debug(
         (
             "Parsed CLI arguments: org=%s, menu=%s, site=%s, device=%s, port=%s, debug=%s, delay=%s, fast=%s, "
             "skip_deps=%s, output_format=%s, test=%s, address_check=%s, tui=%s"
@@ -7110,7 +7103,7 @@ def _log_cli_invocation(args: argparse.Namespace) -> None:
 def _resolve_cli_org_id(args: argparse.Namespace) -> str:
     """Return --org if given, otherwise resolve from cache / interactive prompt."""
     if args.org:  # CLI explicitly provided the org ID.
-        logging.info("Using org_id from CLI argument: %s", args.org)  # Log CLI org ID.
+        logger.info("Using org_id from CLI argument: %s", args.org)  # Log CLI org ID.
         return str(args.org)  # Return the CLI org ID (argparse gives Any, so narrow to str).
     return ConfigUtils.get_cached_or_prompted_org_id()  # Fall back to cache or prompt.
 
@@ -7126,7 +7119,7 @@ def _resolve_cli_site_id(args: argparse.Namespace, target_org_id: str) -> str | 
     """Resolve --site name to a site_id via API lookup. Exit 1 if name not found. Return None if no --site."""
     if not args.site:  # No --site supplied. Nothing to resolve.
         return None  # Caller treats None as "no site filter".
-    logging.info(
+    logger.info(
         "Resolving site name '%s' to site_id using unified pagination limit %d...",
         args.site,
         DEFAULT_API_PAGE_LIMIT,
@@ -7135,10 +7128,10 @@ def _resolve_cli_site_id(args: argparse.Namespace, target_org_id: str) -> str | 
     site_lookup = _build_site_name_to_id_map(sites)  # Delegate name->id map construction
     site_id = site_lookup.get(args.site)  # Look up site ID by human-readable name.
     if not site_id:  # Site name not found in org -- abort with error.
-        logging.error("! Site name '%s' not found.", args.site)  # Log resolution failure.
+        logger.error("! Site name '%s' not found.", args.site)  # Log resolution failure.
         echo("! Site name '%s' not found.", args.site)
         sys.exit(1)  # Exit -- cannot proceed with unknown site.
-    logging.info("Resolved site name '%s' to site_id '%s'.", args.site, site_id)  # Log resolution success.
+    logger.info("Resolved site name '%s' to site_id '%s'.", args.site, site_id)  # Log resolution success.
     return site_id  # Return the resolved site_id.
 
 
@@ -7146,7 +7139,7 @@ def _resolve_cli_device_id(args: argparse.Namespace, site_id: str | None) -> str
     """Resolve --device name to a device_id via site-scoped API lookup. Requires site context."""
     if not (args.device and site_id):  # Either no --device or no site context. Nothing to resolve.
         return None  # Caller treats None as "no device filter".
-    logging.info("Resolving device name '%s' at site_id '%s'...", args.device, site_id)  # Log before device resolution.
+    logger.info("Resolving device name '%s' at site_id '%s'...", args.device, site_id)  # Log before device resolution.
     response = mistapi.api.v1.sites.devices.listSiteDevices(
         MainEntrypoint.context.apisession, site_id, type="all"
     )  # Fetch all devices at site.
@@ -7156,34 +7149,34 @@ def _resolve_cli_device_id(args: argparse.Namespace, site_id: str | None) -> str
     device_lookup = {dev["name"]: dev["id"] for dev in devices}  # Build name->id map from device list.
     device_id = device_lookup.get(args.device)  # Look up device ID by human-readable name.
     if not device_id:  # Device name not found at site -- abort with error.
-        logging.error("! Device name '%s' not found at site '%s'.", args.device, args.site)  # Log resolution failure.
+        logger.error("! Device name '%s' not found at site '%s'.", args.device, args.site)  # Log resolution failure.
         echo("! Device name '%s' not found at site '%s'.", args.device, args.site)
         sys.exit(1)  # Exit -- cannot proceed with unknown device.
-    logging.info("Resolved device name '%s' to device_id '%s'.", args.device, device_id)  # Log resolution success.
+    logger.info("Resolved device name '%s' to device_id '%s'.", args.device, device_id)  # Log resolution success.
     return str(device_id)  # Return the resolved device_id (dev["id"] is Any, so narrow to str).
 
 
 def _dispatch_cli_menu_action(args: argparse.Namespace, site_id: str | None, device_id: str | None) -> None:
     """Look up args.menu in menu_actions, build kwargs, call the target. Exits 0/1 -- never returns on success."""
     if args.menu not in menu_actions:  # Invalid menu number -- abort with error.
-        logging.error("! Invalid menu option: %s", args.menu)  # Log invalid menu selection.
+        logger.error("! Invalid menu option: %s", args.menu)  # Log invalid menu selection.
         echo("! Invalid menu option: %s", args.menu)
         sys.exit(1)  # Exit with error code on invalid menu option.
     entry = menu_actions[args.menu]  # Read the named row from the dispatch table.
     func = entry.handler  # Extract the callable from the named row.
     if func is None:  # CLI mode cannot execute a static metadata row.
-        logging.error("! Invalid static menu option: %s", args.menu)  # Log invalid static row use.
+        logger.error("! Invalid static menu option: %s", args.menu)  # Log invalid static row use.
         echo("! Invalid menu option: %s", args.menu)
         sys.exit(1)  # Exit with error code on invalid menu option.
-    logging.info("Executing menu action '%s'.", args.menu)  # Log before function dispatch.
+    logger.info("Executing menu action '%s'.", args.menu)  # Log before function dispatch.
     func_args = _build_cli_func_kwargs(args, site_id, device_id)  # Build the full candidate kwargs dict.
     sig = inspect.signature(func)  # Introspect signature to keep only valid kwargs.
     accepted_args = {
         k: v for k, v in func_args.items() if k in sig.parameters and v is not None
     }  # Filter to accepted params.
     func(**accepted_args)  # Call menu function with filtered args.
-    logging.info("CLI execution complete. Exiting.")  # Log successful CLI completion.
-    logging.debug("EXIT: _run_cli_mode - CLI success")  # Log exit point.
+    logger.info("CLI execution complete. Exiting.")  # Log successful CLI completion.
+    logger.debug("EXIT: _run_cli_mode - CLI success")  # Log exit point.
     sys.exit(0)  # Clean exit after successful CLI execution.
 
 
@@ -7206,9 +7199,9 @@ def _build_cli_func_kwargs(args: argparse.Namespace, site_id: str | None, device
 def _run_interactive_mode(args: argparse.Namespace) -> None:
     """Present the interactive menu loop, dispatching to functions until user exits."""
     # The application context owns this state, so no global declaration is needed.
-    logging.info("No CLI arguments detected, running in interactive menu mode.")  # Log before interactive start.
+    logger.info("No CLI arguments detected, running in interactive menu mode.")  # Log before interactive start.
     MainEntrypoint.context.org_id = ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org ID from cache or prompt.
-    logging.info("Organization ID initialized for interactive mode: %s", MainEntrypoint.context.org_id)  # Log org ID.
+    logger.info("Organization ID initialized for interactive mode: %s", MainEntrypoint.context.org_id)  # Log org ID.
     container_mode = _setup_interactive_container_mode()  # Detect container runtime and print banner if active.
     while True:  # Main menu loop -- runs until user selects exit or input stream closes.
         _print_interactive_menu()  # Print the sorted menu options.
@@ -7227,7 +7220,7 @@ def _run_interactive_mode(args: argparse.Namespace) -> None:
         if func is None:  # Static metadata rows cannot run from the interactive CLI.
             _handle_interactive_invalid_selection(iwant, container_mode)  # Reuse the existing invalid-input handler.
             continue  # Return to the menu loop in container mode.
-        logging.info(
+        logger.info(
             "User selected menu option '%s'. Executing associated function.", iwant
         )  # Log selection before dispatch.
         _execute_interactive_menu_action(iwant, func, container_mode)  # Run the func with full error handling.
@@ -7237,7 +7230,7 @@ def _setup_interactive_container_mode() -> bool:
     """Detect whether MistHelper runs inside a container. Print banner if yes."""
     container_mode = EnvironmentUtils.is_running_in_container()  # Check Podman/Docker container marker files.
     if container_mode:  # Container mode: show banner and loop after each operation.
-        logging.info("Container mode detected - enabling continuous menu loop")  # Log container detection.
+        logger.info("Container mode detected - enabling continuous menu loop")  # Log container detection.
         echo("[CONTAINER MODE] MistHelper will return to menu after each operation")
         echo("                 Use option 0 to exit the container")
     return container_mode  # Return flag so the loop can branch on container or direct mode.
@@ -7272,7 +7265,7 @@ def _prompt_interactive_selection() -> str:
 def _handle_interactive_eof(container_mode: bool) -> None:
     """Print the EOF (Ctrl+D / SSH disconnect / pipe close) messages."""
     echo("\n[EOF] Input stream closed. Exiting gracefully...")
-    logging.info("EOF encountered on input - user disconnected or input stream closed")  # Log EOF event.
+    logger.info("EOF encountered on input - user disconnected or input stream closed")  # Log EOF event.
     if container_mode:  # Container mode: additional context message for SSH session termination.
         echo("[CONTAINER MODE] SSH session ended. Terminating MistHelper.")
 
@@ -7288,23 +7281,23 @@ def _handle_interactive_empty_input(container_mode: bool) -> None:
 
 def _handle_interactive_invalid_selection(iwant: str, container_mode: bool) -> None:
     """Handle an invalid (non-empty, not in dispatch table) menu selection. May call sys.exit."""
-    logging.error("Invalid selection '%s' entered by user.", iwant)  # Log invalid selection.
+    logger.error("Invalid selection '%s' entered by user.", iwant)  # Log invalid selection.
     echo("Invalid selection. Please try again.")
     if not container_mode:  # Direct mode: exit on invalid selection.
-        logging.debug("EXIT: _run_interactive_mode - invalid selection (direct mode)")  # Log exit point.
+        logger.debug("EXIT: _run_interactive_mode - invalid selection (direct mode)")  # Log exit point.
         sys.exit(1)  # Exit with error code on invalid selection in direct mode.
-    logging.debug("Container mode: invalid selection '%s', redisplaying menu", iwant)  # Log container invalid.
+    logger.debug("Container mode: invalid selection '%s', redisplaying menu", iwant)  # Log container invalid.
 
 
 def _execute_interactive_menu_action(iwant: str, func: Callable[[], None], container_mode: bool) -> None:
     """Run the selected menu function with full error handling (success, Ctrl+C, exception)."""
     try:
         if iwant == "0":  # Option 0 is the explicit exit shortcut.
-            logging.info("Exit option selected by user.")  # Log user-requested exit.
-            logging.debug("EXIT: _run_interactive_mode - user requested exit")  # Log exit point.
+            logger.info("Exit option selected by user.")  # Log user-requested exit.
+            logger.debug("EXIT: _run_interactive_mode - user requested exit")  # Log exit point.
             sys.exit(0)  # Exit cleanly on user selection of option 0.
         func()  # Execute the selected menu function.
-        logging.info("Menu option '%s' execution complete.", iwant)  # Log completion after function returns.
+        logger.info("Menu option '%s' execution complete.", iwant)  # Log completion after function returns.
         _dispatch_post_menu_success(iwant, container_mode)  # Branch on container vs direct + session-management ops.
     except KeyboardInterrupt:  # User pressed Ctrl+C during operation.
         _handle_post_menu_interrupt(iwant, container_mode)  # Container loops. Direct exits with SIGINT code.
@@ -7318,49 +7311,49 @@ def _dispatch_post_menu_success(iwant: str, container_mode: bool) -> None:
     """Dispatch follow-up after a successful menu call (continue loop vs sys.exit)."""
     session_management_options = {"115", "143"}  # Options that re-enter menu to use new context.
     if container_mode:  # Container mode: always return to menu after each operation.
-        logging.debug(
+        logger.debug(
             "Container mode: option '%s' completed successfully, returning to menu", iwant
         )  # Log container loop.
         echo("\n[CONTAINER MODE] Operation '%s' completed. Returning to menu...", iwant)
         echo("=" * 60)
         return  # Return so the outer while loop continues.
     if iwant in session_management_options:  # Direct mode + session management: keep loop running.
-        logging.info("Session management option '%s' completed - returning to menu", iwant)  # Log session update.
+        logger.info("Session management option '%s' completed - returning to menu", iwant)  # Log session update.
         echo("\n[SESSION] Context updated. Returning to menu...")
         echo("=" * 60)
         return  # Return so the outer while loop continues with updated session context.
-    logging.debug("EXIT: _run_interactive_mode - interactive success (direct mode)")  # Log exit point.
+    logger.debug("EXIT: _run_interactive_mode - interactive success (direct mode)")  # Log exit point.
     sys.exit(0)  # Exit after single operation in direct mode.
 
 
 def _handle_post_menu_interrupt(iwant: str, container_mode: bool) -> None:
     """Handle a Ctrl+C interrupt during a menu function call."""
-    logging.info("Operation interrupted by user (Ctrl+C)")  # Log user interrupt.
+    logger.info("Operation interrupted by user (Ctrl+C)")  # Log user interrupt.
     if container_mode:  # Container mode: return to menu after interrupt.
-        logging.debug("Container mode: option '%s' interrupted, returning to menu", iwant)  # Log container interrupt.
+        logger.debug("Container mode: option '%s' interrupted, returning to menu", iwant)  # Log container interrupt.
         echo("\n[CONTAINER MODE] Operation interrupted. Returning to menu...")
         echo("=" * 60)
         return  # Return so the outer while loop continues.
-    logging.debug("EXIT: _run_interactive_mode - user interrupt")  # Log exit point.
+    logger.debug("EXIT: _run_interactive_mode - user interrupt")  # Log exit point.
     sys.exit(130)  # Exit 130 is the standard exit code for SIGINT (Ctrl+C).
 
 
 def _handle_post_menu_exception(iwant: str, error: Exception, container_mode: bool) -> None:
     """Handle an unexpected exception raised during a menu function call."""
-    logging.exception("Error executing menu option '%s': %s", iwant, error)  # Log error with traceback.
+    logger.exception("Error executing menu option '%s': %s", iwant, error)  # Log error with traceback.
     if container_mode:  # Container mode: show error but return to menu.
-        logging.debug("Container mode: option '%s' failed with error, returning to menu", iwant)  # Log container error.
-        logging.error("\n[CONTAINER MODE] Error in operation '%s': %s", iwant, error)
+        logger.debug("Container mode: option '%s' failed with error, returning to menu", iwant)  # Log container error.
+        logger.error("\n[CONTAINER MODE] Error in operation '%s': %s", iwant, error)
         echo("Returning to menu...")
         echo("=" * 60)
         return  # Return so the outer while loop continues despite the error.
-    logging.debug("EXIT: _run_interactive_mode - interactive error (direct mode)")  # Log exit point.
+    logger.debug("EXIT: _run_interactive_mode - interactive error (direct mode)")  # Log exit point.
     sys.exit(1)  # Exit with error code on unexpected exception in direct mode.
 
 
 def _run_systematic_test_mode(_args: argparse.Namespace) -> None:
     """Run all safe menu options once and exit 0 on pass / 1 on fail."""
-    logging.info("SYSTEMATIC_TEST: Starting systematic test mode")  # Trace before dispatch
+    logger.info("SYSTEMATIC_TEST: Starting systematic test mode")  # Trace before dispatch
     from src.refactors.run_systematic_test import (
         RunSystematicTestManager,
     )
@@ -7370,7 +7363,7 @@ def _run_systematic_test_mode(_args: argparse.Namespace) -> None:
 
 def _run_interactive_test_mode(_args: argparse.Namespace) -> None:
     """Run interactive test mode (read-only menus with site/device selection) and exit."""
-    logging.info("INTERACTIVE_TEST: Starting interactive test mode")  # Trace before dispatch
+    logger.info("INTERACTIVE_TEST: Starting interactive test mode")  # Trace before dispatch
     sys.exit(0 if RunInteractiveTestManager().run() else 1)  # Route to extracted manager (PR-12)
 
 
@@ -7382,7 +7375,7 @@ def _run_tui_mode_and_exit(args: argparse.Namespace) -> None:
 
 def _run_web_portal_mode(args: argparse.Namespace) -> None:
     """Launch the Gunicorn web portal on port 8055 and exit cleanly on shutdown."""
-    logging.info("WEB_PORTAL: Starting web portal mode")  # Trace before launch
+    logger.info("WEB_PORTAL: Starting web portal mode")  # Trace before launch
     _launch_web_portal(args)  # Blocks until shutdown
     sys.exit(0)
 
@@ -7397,7 +7390,7 @@ def _run_capture_portal_mode(args: argparse.Namespace) -> None:
     Args:
         args: The parsed command-line namespace. The handler reads only the debug flag.
     """
-    logging.info("CAPTURE_PORTAL: Starting upgrade capture portal mode")  # Trace before launch
+    logger.info("CAPTURE_PORTAL: Starting upgrade capture portal mode")  # Trace before launch
     _launch_capture_portal(args.debug)  # Blocks until shutdown
     sys.exit(0)
 
@@ -7412,7 +7405,7 @@ def _run_metrics_gateway_mode(args: argparse.Namespace) -> None:
     Args:
         args: The parsed command-line namespace. The handler reads only the debug flag.
     """
-    logging.info("METRICS_GATEWAY: Starting metrics gateway mode")  # Trace before launch
+    logger.info("METRICS_GATEWAY: Starting metrics gateway mode")  # Trace before launch
     _launch_metrics_gateway(args.debug)  # Blocks until shutdown
     sys.exit(0)
 
@@ -7464,11 +7457,11 @@ def _has_meaningful_cli_args(args: argparse.Namespace) -> bool:
 
 if __name__ == "__main__":
     try:
-        logging.info("=== MistHelper application starting ===")
+        logger.info("=== MistHelper application starting ===")
         # Single explicit banner for test mode to clarify reduced lookbacks
         try:
             if IS_TEST_MODE:
-                logging.info("TEST MODE ACTIVE: Reducing default 24h lookback windows to 1h for eligible exports.")
+                logger.info("TEST MODE ACTIVE: Reducing default 24h lookback windows to 1h for eligible exports.")
         except NameError:
             # IS_TEST_MODE may not yet be defined if refactor order changes. Ignore safely
             pass
@@ -7488,9 +7481,9 @@ if __name__ == "__main__":
                     sys.__excepthook__(exc_type, exc_value, exc_traceback)
                     return
                 formatted = "".join(_tb.format_exception(exc_type, exc_value, exc_traceback))
-                logging.error("UNHANDLED TOP-LEVEL EXCEPTION TRACEBACK FOLLOWS")
+                logger.error("UNHANDLED TOP-LEVEL EXCEPTION TRACEBACK FOLLOWS")
                 for line in formatted.rstrip().splitlines():
-                    logging.error(line)
+                    logger.error(line)
             except (TypeError, ValueError, OSError, RuntimeError) as hook_err:
                 logging.exception("Exception in global excepthook: %s", hook_err)  # Keep hook trace
 
@@ -7522,5 +7515,5 @@ if __name__ == "__main__":
         logging.debug("EXIT: __main__ - unhandled exception")
         sys.exit(1)
     finally:
-        logging.info("=== MistHelper application ending ===")
+        logger.info("=== MistHelper application ending ===")
         # hi
