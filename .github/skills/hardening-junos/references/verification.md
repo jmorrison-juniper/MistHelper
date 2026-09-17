@@ -6,12 +6,13 @@
 2. [Read a Junos device](#read-a-junos-device)
 3. [Issue 2754 validation summary](#issue-2754-validation-summary)
 4. [Gap register](#gap-register)
-5. [Heading share ceiling](#heading-share-ceiling)
-6. [Skill limits](#skill-limits)
-7. [Offline acceptance checks](#offline-acceptance-checks)
-8. [Story checks](#story-checks)
-9. [Audit of 30 documents](#audit-of-30-documents)
-10. [Sources](#sources)
+5. [Known coverage gaps](#known-coverage-gaps)
+6. [Heading share ceiling](#heading-share-ceiling)
+7. [Skill limits](#skill-limits)
+8. [Offline acceptance checks](#offline-acceptance-checks)
+9. [Story checks](#story-checks)
+10. [Audit of 30 documents](#audit-of-30-documents)
+11. [Sources](#sources)
 
 ## Verify a hardening claim
 
@@ -122,6 +123,40 @@ Caution: a fallback train can lack a later change. Confirm the control against c
 5. State the risk to the reader.
 
 A listed document can be absent from the index. The register is corpus wide, and the index is the security subset.
+
+## Known coverage gaps
+
+Use this register when an answer can exceed the shipped evidence. These gaps sit beside the PDF gap register.
+
+### Platform STIG coverage
+
+Warning: do not use the EX switch STIG as the authority for an MX router or an SRX firewall. If you use it, the audit result can be wrong.
+
+| Item | Detail |
+| - | - |
+| Gap | The skill ships 181 DISA STIG rules from `U_Juniper_EX_Switches_Y26M07_STIG` only. |
+| Harm | An EX device management rule can differ from an MX router rule or an SRX firewall rule. |
+| Action | Get the matching platform STIG from the DISA Cyber Exchange. Use the EX rules as a guide only. |
+
+### Virtual Chassis fallback age
+
+Warning: confirm each Virtual Chassis statement on the live Juniper site before a production change. If you skip this check, a later train can change the control.
+
+| Item | Detail |
+| - | - |
+| Gap | The EX4200, EX4500, and EX8200 Virtual Chassis PDFs are unreadable in trains 25.2, 25.4, and 26.2. |
+| Harm | A change after the fallback train does not appear in the fallback copy. |
+| Action | Use the fallback copy for orientation only. Confirm the statement against the live Juniper site before the change. |
+
+### Offline vendor quote limit
+
+Caution: if the staged corpus is absent, do not quote vendor text. If you quote it, the quote is not verified.
+
+| Item | Detail |
+| - | - |
+| Gap | A cloned repository holds the skill files but not the staged corpus. |
+| Harm | The validation measured five questions. The shipped files answered four. The fifth needed the corpus. |
+| Action | Answer from the shipped files. State that the vendor quote is not verified. Rebuild the corpus with `references/corpus-operations.md`. |
 
 ## Heading share ceiling
 
