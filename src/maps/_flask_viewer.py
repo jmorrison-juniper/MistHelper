@@ -97,7 +97,7 @@ def _handle_map_data_request(request: MapDataRequest):  # WHY: single orchestrat
     """Top-level orchestrator for the Flask /api/map endpoint. Returns a Flask Response."""
     from flask import jsonify  # WHY: local import keeps this module importable without Flask installed globally.
 
-    logging.info("[Flask API] Fetching map data for site %s, map %s", request.site_id, request.map_id)  # WHY: trace.
+    logger.info("[Flask API] Fetching map data for site %s, map %s", request.site_id, request.map_id)  # WHY: trace.
     try:
         map_data, layers = request.collect_payload_fn(  # WHY: delegate entity gathering to MapsManager helper.
             request.api_session, request.all_sites, request.site_id, request.map_id
@@ -127,7 +127,7 @@ def _render_viewer_page(html_template: str, ctx: ViewerPageContext):  # WHY: pur
 
 def _handle_site_maps_request(api_session, jsonify, site_id: str):  # WHY: /api/site/<id>/maps route handler.
     """Flask /api/site/<id>/maps handler -- returns the site's maps list as JSON."""
-    logging.info("[Flask API] Fetching maps for site %s", site_id)  # WHY: trace which site is being fetched.
+    logger.info("[Flask API] Fetching maps for site %s", site_id)  # WHY: trace which site is being fetched.
     try:
         response = mistapi.api.v1.sites.maps.listSiteMaps(api_session, site_id=site_id)  # WHY: Mist SDK call.
         if response.status_code != _HTTP_OK or not response.data:  # WHY: non-200 or empty body -> treat as no maps.
@@ -158,13 +158,13 @@ def _handle_map_image_request(api_session, site_id: str, map_id: str):
     """Flask /api/map-image/<site>/<map> handler -- proxies the authenticated image fetch."""
     from flask import Response  # WHY: local import so tests can stub Flask without importing it at module load.
 
-    logging.info("[Flask API] Fetching map image for site %s, map %s", site_id, map_id)  # WHY: trace entry.
+    logger.info("[Flask API] Fetching map image for site %s, map %s", site_id, map_id)  # WHY: trace entry.
     try:
         image_response, error = _fetch_map_image_bytes(api_session, site_id, map_id)  # WHY: delegate the fetch.
         if error is not None:
             return error  # WHY: guard clause -- helper already produced a Flask-compatible (body, status) tuple.
         if image_response.status_code != _HTTP_OK:
-            logging.warning("Failed to fetch image: %s", image_response.status_code)  # WHY: warn on upstream failure.
+            logger.warning("Failed to fetch image: %s", image_response.status_code)  # WHY: warn on upstream failure.
             return f"Image fetch failed: {image_response.status_code}", _HTTP_NOT_FOUND  # WHY: keep body brief.
         content_type = image_response.headers.get(_CONTENT_TYPE_HEADER, _DEFAULT_IMAGE_MIMETYPE)  # WHY: passthrough.
         return Response(image_response.content, mimetype=content_type)  # WHY: stream bytes through as-is.
@@ -176,7 +176,7 @@ def _handle_map_image_request(api_session, site_id: str, map_id: str):
 def _resolve_flask_bind_address() -> tuple[str, int]:
     """Return ``(host, port)`` for the Flask server, binding all interfaces in a container."""
     if is_running_in_container():
-        logging.debug("Container detected: binding Flask to 0.0.0.0")  # WHY: confirm the host override in logs.
+        logger.debug("Container detected: binding Flask to 0.0.0.0")  # WHY: confirm the host override in logs.
         return _CONTAINER_BIND, _DEFAULT_FLASK_PORT  # WHY: bind all interfaces so host browser can reach the port.
     return _LOCALHOST_BIND, _DEFAULT_FLASK_PORT  # WHY: default to loopback for standalone desktop usage.
 
@@ -229,7 +229,7 @@ def _maybe_open_browser(port: int) -> DelayedBrowserOpener | None:
 def _run_flask_server(flask_app, host: str, port: int) -> None:
     """Run the Flask server until interrupted. Mirror the original KeyboardInterrupt path."""
     try:
-        logging.info("Starting Flask server on http://%s:%s", host, port)  # WHY: audit trail before blocking call.
+        logger.info("Starting Flask server on http://%s:%s", host, port)  # WHY: audit trail before blocking call.
         flask_app.run(host=host, port=port, debug=False, threaded=True, use_reloader=False)  # WHY: prod-safe args.
     except KeyboardInterrupt:
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
@@ -1329,7 +1329,7 @@ def launch_flask_viewer(ctx: FlaskViewerContext):
         ctx: Frozen :class:`FlaskViewerContext` bundle carrying the session,
             initial selection, site/map lists, and payload/response callables.
     """
-    logging.info(  # WHY: audit trail before Flask app construction begins.
+    logger.info(  # WHY: audit trail before Flask app construction begins.
         "_launch_flask_viewer: Starting Flask viewer for site %s, map %s",
         ctx.initial_site_id,
         ctx.initial_map_id,

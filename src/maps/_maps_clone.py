@@ -88,13 +88,11 @@ class _MapsClone:
 
     def _fetch_source_map_with_display(self, site_id: str, source_map_id: str) -> dict | None:
         """Fetch source map from API and display its key attributes. Return None on failure."""
-        logging.debug(
-            "Calling getSiteMap API - site_id: %s, map_id: %s", site_id, source_map_id
-        )  # Trace API call args.
+        logger.debug("Calling getSiteMap API - site_id: %s, map_id: %s", site_id, source_map_id)  # Trace API call args.
         print("\nFetching source map details...")  # User-visible progress marker.
         response = mistapi.api.v1.sites.maps.getSiteMap(self.apisession, site_id=site_id, map_id=source_map_id)
         if response.status_code != 200:  # Any non-200 means the map could not be read.
-            logging.error("Failed to fetch source map - HTTP %s", response.status_code)  # Log the failure code.
+            logger.error("Failed to fetch source map - HTTP %s", response.status_code)  # Log the failure code.
             print(f"\n! Failed to fetch source map: HTTP {response.status_code}")  # Surface to CLI user.
             return None  # Caller aborts when source map is unavailable.
         source_map = response.data  # Extract the JSON body from the mistapi response envelope.
@@ -213,14 +211,14 @@ class _MapsClone:
         clone_response = mistapi.api.v1.sites.maps.createSiteMap(self.apisession, site_id=site_id, body=clone_payload)
         if clone_response.status_code not in _OK_CREATE_STATUS:  # Non-success codes abort the flow.
             print(f"\n! Failed to clone map: HTTP {clone_response.status_code}")  # Surface HTTP failure.
-            logging.error("Map clone failed: %s - %s", clone_response.status_code, clone_response.data)  # Log body.
+            logger.error("Map clone failed: %s - %s", clone_response.status_code, clone_response.data)  # Log body.
             self._cleanup_temp_file(image_temp_path)  # No cloned map, so drop the buffered image.
             return None  # Signal upstream to bail out.
         cloned_map = clone_response.data  # Extract the created record.
         cloned_map_id = cloned_map.get("id")  # Grab the new UUID for downstream calls.
         if not cloned_map_id:  # Defensive: API should always return an id on 200/201.
             print("\n! Error: Cloned map has no ID")  # Surface the malformed response.
-            logging.error("Cloned map missing ID in response")  # Record the anomaly for debugging.
+            logger.error("Cloned map missing ID in response")  # Record the anomaly for debugging.
             return None  # Cannot continue without a target id.
         self._print_created_map_details(cloned_map_id, cloned_map.get("name"))  # Pretty-print the success block.
         return cloned_map_id  # Ready to attach image + zones.
@@ -243,10 +241,10 @@ class _MapsClone:
             )  # Multipart upload of the previously downloaded image bytes.
             if upload_response.status_code in _OK_CREATE_STATUS:  # 200/201 == accepted.
                 print("Image uploaded successfully!")  # User-facing success message.
-                logging.info("Image uploaded to cloned map %s", cloned_map_id)  # Structured success log.
+                logger.info("Image uploaded to cloned map %s", cloned_map_id)  # Structured success log.
             else:
                 print(f"! Warning: Failed to upload image: HTTP {upload_response.status_code}")  # Non-fatal warning.
-                logging.error("Image upload to cloned map failed: %s", upload_response.status_code)  # Log HTTP.
+                logger.error("Image upload to cloned map failed: %s", upload_response.status_code)  # Log HTTP.
         except Exception as upload_error:  # Any exception is non-fatal for the outer clone.
             logging.error("Error uploading image to cloned map: %s", upload_error)  # Full failure trace.
             print(f"! Warning: Could not upload image to cloned map: {upload_error}")  # User-facing warning.
@@ -269,9 +267,9 @@ class _MapsClone:
                 self.apisession, site_id=site_id, body=zone_payload
             )  # Fire the create-zone API for the clone target.
             if zone_response.status_code in _OK_CREATE_STATUS:  # Accept 200 and 201 as success.
-                logging.debug("Cloned zone '%s' to new map", zone.get("name"))  # Trace success for audit trails.
+                logger.debug("Cloned zone '%s' to new map", zone.get("name"))  # Trace success for audit trails.
                 return True  # Caller increments the success counter.
-            logging.warning(
+            logger.warning(
                 "Failed to clone zone '%s': HTTP %s", zone.get("name"), zone_response.status_code
             )  # Zone-scoped warning: outer flow keeps going.
         except Exception as zone_error:  # Per-zone errors must not derail the whole clone.
@@ -385,7 +383,7 @@ class _MapsClone:
         )  # Pack summary inputs into the frozen bundle expected by _print_clone_summary.
         zones = ZoneCloneResult(cloned=result.zones_cloned, failed=result.zones_failed)  # Zone tallies bundle.
         self._print_clone_summary(summary, zones)  # Emit the final summary block.
-        logging.info(
+        logger.info(
             "Successfully cloned map %s to %s at site %s (zones: %s)",
             source_map_id,
             result.cloned_map_id,
@@ -398,7 +396,7 @@ class _MapsClone:
         print("\nSelect the map to clone:")  # Prompt lead-in.
         source_map_id = self._select_map_from_site(site_id, site_name)  # Interactive map picker.
         if not source_map_id:  # No map chosen - abort quietly.
-            logging.info("clone_map aborted: No source map selected")  # Info-level breadcrumb.
+            logger.info("clone_map aborted: No source map selected")  # Info-level breadcrumb.
             return
         prep = self._prepare_clone(site_id, source_map_id)  # Prep stage returns None on any abort path.
         if prep is None:  # Any abort message has already been surfaced by _prepare_clone.
@@ -410,13 +408,13 @@ class _MapsClone:
 
     def clone_map(self):
         """Clone/duplicate an existing map at the current site including image, walls, paths, and zones."""
-        logging.info("clone_map operation initiated")  # Audit-log entry point.
+        logger.info("clone_map operation initiated")  # Audit-log entry point.
         self._print_clone_header()  # CLI banner.
         site_id, site_name = self.get_current_site()  # Resolve currently-selected site.
         if not site_id:  # No site selected -> nothing to clone.
-            logging.warning("clone_map aborted: No site selected")  # Warn since caller expected a site.
+            logger.warning("clone_map aborted: No site selected")  # Warn since caller expected a site.
             return
-        logging.debug("clone_map - Site: %s (ID: %s)", site_name, site_id)  # Trace site context.
+        logger.debug("clone_map - Site: %s (ID: %s)", site_name, site_id)  # Trace site context.
         try:
             self._run_clone_pipeline(site_id, site_name)  # All interactive + API work lives in the pipeline.
         except EOFError:

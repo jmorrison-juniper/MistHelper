@@ -17,6 +17,7 @@ from __future__ import annotations  # WHY: postponed evaluation consistent with 
 import logging  # WHY: audit trail for site-switch diagnostics
 from typing import TYPE_CHECKING, Any  # WHY: opaque manager + type-permissive Dash callback args
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 if TYPE_CHECKING:  # WHY: keep dash imports lazy at runtime
     from dash import Dash  # WHY: annotation reference for register(app)
 
@@ -71,7 +72,7 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
         current_fig: dict[str, Any],
     ) -> tuple[str, dict[str, Any]]:
         """Calculate and update PPM based on drawn line and known length."""
-        logging.info("set_scale: n_clicks=%s, actual_length_m=%s", n_clicks, actual_length_m)  # WHY: entry trace
+        logger.info("set_scale: n_clicks=%s, actual_length_m=%s", n_clicks, actual_length_m)  # WHY: entry trace
         if not n_clicks or not actual_length_m or actual_length_m <= 0:  # WHY: guard invalid input
             return "[!] Please enter a valid length in meters", current_fig  # WHY: preserve user-visible error
         shapes = current_fig.get("layout", {}).get("shapes", [])  # WHY: read user-drawn shapes from figure
@@ -82,7 +83,7 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
         self._store_new_ppm(current_fig, new_ppm)  # WHY: persist PPM in figure metadata
         self._reannotate_measurements(current_fig, shapes, new_ppm)  # WHY: refresh every measurement annotation
         status_msg = self._build_scale_status(new_ppm, actual_length_m, last_line)  # WHY: identical status text
-        logging.info(  # WHY: mirror original log line for calibration audit
+        logger.info(  # WHY: mirror original log line for calibration audit
             "Map scale updated: PPM %s -> %.2f (user calibration: %sm)", self._state.ppm, new_ppm, actual_length_m
         )
         return status_msg, current_fig  # WHY: return status + updated figure
@@ -174,7 +175,7 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
 
         site_id_local = self._current_config_site_id(config)  # WHY: site_id is required for the API call
         if not site_id_local:  # WHY: guard - cannot refresh without site context
-            logging.warning("Cannot refresh map dropdown: site_id not available")  # WHY: mirror original log
+            logger.warning("Cannot refresh map dropdown: site_id not available")  # WHY: mirror original log
             return no_update, no_update  # WHY: skip updates when site_id missing
         return self._do_refresh_map_dropdown(site_id_local, no_update)  # WHY: extracted body keeps CC low
 
@@ -183,13 +184,13 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
     ) -> tuple[Any, Any]:
         """Perform the actual fetch + payload build, guarded by outer site_id check."""
         trigger_id = self._resolve_refresh_trigger()  # WHY: identify what fired the callback
-        logging.info("Refreshing map dropdown list (trigger: %s)", trigger_id)  # WHY: mirror original log
+        logger.info("Refreshing map dropdown list (trigger: %s)", trigger_id)  # WHY: mirror original log
         try:
             maps_response = self._state.mistapi_ref.api.v1.sites.maps.listSiteMaps(  # WHY: fresh fetch
                 self._state.api_session_ref, site_id=site_id_local
             )
             if maps_response.status_code != _HTTP_OK:  # WHY: API failed -> keep current options
-                logging.warning("Failed to refresh map list: HTTP %s", maps_response.status_code)  # WHY: mirror log
+                logger.warning("Failed to refresh map list: HTTP %s", maps_response.status_code)  # WHY: mirror log
                 return no_update, no_update  # WHY: signal no change on API failure
             return self._build_refresh_payload(maps_response)  # WHY: build options + store from fresh data
         except Exception as refresh_error:  # WHY: catch-all parity with original
@@ -212,7 +213,7 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
     ) -> tuple[Any, Any]:
         """Return (dropdown options, store data) for a successful map-list response."""
         fresh_maps = maps_response.data if maps_response.data else []  # WHY: default to empty list
-        logging.info("Map dropdown refreshed: %d maps found", len(fresh_maps))  # WHY: mirror original log
+        logger.info("Map dropdown refreshed: %d maps found", len(fresh_maps))  # WHY: mirror original log
         options = self._state.serializer.build_dropdown_options(  # WHY: options for the dropdown
             fresh_maps, default_name=_DEFAULT_MAP_NAME
         )
@@ -237,7 +238,7 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
         resolved = self._resolve_url_site_id(url_search, config, available_sites)  # WHY: guard chain extracted
         if resolved is None:  # WHY: no change needed (any of: no url, no param, same, invalid)
             return [no_update]  # WHY: return single-element list to match Output signature
-        logging.info("URL site switch: Setting dropdown to site %s", resolved)  # WHY: mirror original log
+        logger.info("URL site switch: Setting dropdown to site %s", resolved)  # WHY: mirror original log
         return [resolved]  # WHY: return the site_id wrapped in a list
 
     def _resolve_url_site_id(  # WHY: extracted guard chain so handle_site_from_url has CC ≤5
@@ -253,7 +254,7 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
         if url_site_id == self._current_config_site_id(config):  # WHY: already there -> no change
             return None  # WHY: signal caller to no_update
         if not self._is_known_site(url_site_id, available_sites):  # WHY: reject unknown site
-            logging.warning("URL site switch: Invalid site_id %s", url_site_id)  # WHY: mirror original log
+            logger.warning("URL site switch: Invalid site_id %s", url_site_id)  # WHY: mirror original log
             return None  # WHY: signal caller to no_update
         return url_site_id  # WHY: valid URL param, caller should set dropdown
 
@@ -273,7 +274,7 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
         resolved = self._resolve_url_map_id(url_search, available_maps, current_dropdown_value)  # WHY: extract
         if resolved is None:  # WHY: no change needed
             return no_update  # WHY: signal Dash to skip
-        logging.debug("URL dropdown sync: Setting dropdown to %s", resolved)  # WHY: mirror original log
+        logger.debug("URL dropdown sync: Setting dropdown to %s", resolved)  # WHY: mirror original log
         return resolved  # WHY: return the map_id for the dropdown
 
     def _resolve_url_map_id(  # WHY: extracted guard chain so sync_dropdown_with_url has CC ≤5
@@ -289,7 +290,7 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
         if url_map_id == current_dropdown_value:  # WHY: already in sync -> no change
             return None  # WHY: signal caller to no_update
         if not self._is_known_map(url_map_id, available_maps):  # WHY: reject unknown map
-            logging.warning("URL dropdown sync: Invalid map_id %s", url_map_id)  # WHY: mirror original log
+            logger.warning("URL dropdown sync: Invalid map_id %s", url_map_id)  # WHY: mirror original log
             return None  # WHY: signal caller to no_update
         return url_map_id  # WHY: valid URL param, caller should set dropdown
 
@@ -348,7 +349,7 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
         from dash import no_update  # WHY: sentinel used to skip output updates
 
         noop = (no_update, no_update, no_update, no_update, no_update)  # WHY: 5-way skip preserved
-        logging.info("[SITE-SWITCH] Callback triggered with site_id=%s", selected_site_id)  # WHY: entry trace
+        logger.info("[SITE-SWITCH] Callback triggered with site_id=%s", selected_site_id)  # WHY: entry trace
         if not self._preflight_site_switch(selected_site_id, config):  # WHY: guard chain moved into helper
             return noop  # WHY: preflight already logged the reason
         return self._dispatch_site_switch(selected_site_id, config, available_sites, noop)  # WHY: heavy lifting
@@ -363,7 +364,7 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
         """Resolve site name, perform switch, and translate exceptions into noop."""
         resolved_id = selected_site_id or ""  # WHY: normalize once so downstream helpers avoid re-fallback
         site_name = self._resolve_site_name(resolved_id, available_sites or [])  # WHY: display name lookup
-        logging.info("[SITE-SWITCH] Switching to site %s (%s)", site_name, resolved_id)  # WHY: mirror log
+        logger.info("[SITE-SWITCH] Switching to site %s (%s)", site_name, resolved_id)  # WHY: mirror log
         try:
             return self._perform_site_switch(resolved_id, site_name, config)  # WHY: heavy lifting
         except Exception as site_switch_error:  # WHY: catch-all parity with original
@@ -375,10 +376,10 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
     ) -> bool:
         """Return True if a site switch should proceed. Log + return False otherwise."""
         if not selected_site_id:  # WHY: guard missing input
-            logging.warning("[SITE-SWITCH] No selected_site_id provided")  # WHY: mirror original log
+            logger.warning("[SITE-SWITCH] No selected_site_id provided")  # WHY: mirror original log
             return False  # WHY: caller should skip
         if selected_site_id == self._current_config_site_id(config):  # WHY: same -> no-op
-            logging.debug(  # WHY: mirror original log
+            logger.debug(  # WHY: mirror original log
                 "[SITE-SWITCH] Same site selected (%s), no update needed", selected_site_id
             )
             return False  # WHY: caller should skip
@@ -413,12 +414,12 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
             self._state.api_session_ref, site_id=site_id
         )
         if maps_response.status_code != _HTTP_OK:  # WHY: mirror original HTTP gate
-            logging.error(  # WHY: mirror original log
+            logger.error(  # WHY: mirror original log
                 "[SITE-SWITCH] Failed to fetch maps for site %s - HTTP %s", site_id, maps_response.status_code
             )
             return None  # WHY: caller distinguishes None (failure) from [] (no data)
         new_maps = maps_response.data if maps_response.data else []  # WHY: normalize empty
-        logging.info("[SITE-SWITCH] Found %d maps for site", len(new_maps))  # WHY: mirror original log
+        logger.info("[SITE-SWITCH] Found %d maps for site", len(new_maps))  # WHY: mirror original log
         return new_maps  # WHY: return list of maps
 
     def _build_empty_site_payload(  # WHY: 5-tuple for "site with no maps"
@@ -430,7 +431,7 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
         """Return the 5-tuple shown when a site has no maps."""
         import plotly.graph_objects as go  # WHY: local import - heavy module
 
-        logging.warning("[SITE-SWITCH] No maps found for site %s", selected_site_id)  # WHY: mirror original log
+        logger.warning("[SITE-SWITCH] No maps found for site %s", selected_site_id)  # WHY: mirror original log
         empty_fig = go.Figure()  # WHY: empty figure with site-level title
         empty_fig.update_layout(  # WHY: match original empty-figure styling byte-for-byte
             title=f"No maps found for site: {site_name}",
@@ -474,7 +475,7 @@ class _ViewerSiteSwitch:  # WHY: wrapper class hosting the site-switch callback 
         new_fig = self._build_site_switch_figure(  # WHY: fresh figure for the first map
             selected_site_id, selected_map_id, first_map, site_name, map_name
         )
-        logging.info("[SITE-SWITCH] Successfully loaded map %s", map_name)  # WHY: mirror original log
+        logger.info("[SITE-SWITCH] Successfully loaded map %s", map_name)  # WHY: mirror original log
         return new_map_options, selected_map_id, new_maps_store, updated_config, new_fig  # WHY: 5-tuple
 
     @staticmethod

@@ -122,10 +122,10 @@ class _MapsMatplotlib:  # Wrapper class holding the extracted matplotlib/launch 
         self, map_data: dict[str, Any], devices: list[dict[str, Any]]
     ) -> None:  # Fallback viewer entry.
         """Fallback matplotlib viewer (view-only)."""
-        logging.info("_launch_matplotlib_viewer called - basic fallback mode")  # Trace entry.
+        logger.info("_launch_matplotlib_viewer called - basic fallback mode")  # Trace entry.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.warning("\n! Using matplotlib viewer (view-only, no interactivity)")
-        logging.debug("Creating matplotlib figure for basic visualization")  # Debug breadcrumb.
+        logger.debug("Creating matplotlib figure for basic visualization")  # Debug breadcrumb.
         bounds = _extract_bounds(map_data)  # Read canvas dims/title with safe defaults.
         _fig, ax = plt.subplots(figsize=_FIGURE_SIZE)  # Create the plotting surface.
         _configure_axes(ax, bounds)  # Apply canvas limits, aspect, title, labels.
@@ -134,9 +134,9 @@ class _MapsMatplotlib:  # Wrapper class holding the extracted matplotlib/launch 
         ax.grid(True, alpha=_GRID_ALPHA)  # Light grid for spatial orientation.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n! Displaying map... Close window to return to menu")
-        logging.info("Displaying matplotlib figure (blocking until window closed)")  # Trace.
+        logger.info("Displaying matplotlib figure (blocking until window closed)")  # Trace.
         plt.show()  # Blocking call until user closes the window.
-        logging.info("Matplotlib map viewer closed by user")  # Trace after return.
+        logger.info("Matplotlib map viewer closed by user")  # Trace after return.
 
     def _resolve_initial_site(
         self, sites_sorted: list[dict[str, Any]], requested_site_id: str | None
@@ -195,7 +195,7 @@ class _MapsMatplotlib:  # Wrapper class holding the extracted matplotlib/launch 
 
     def _open_flask_view(self, sites_sorted: list[dict[str, Any]], targets: _StandaloneTargets) -> None:
         """Log the launch, then invoke the Flask viewer with wrapped session + callbacks."""
-        logging.info(  # Audit line captured before the blocking Flask process starts.
+        logger.info(  # Audit line captured before the blocking Flask process starts.
             "Launching Flask viewer for site=%s map=%s (sites loaded=%d)",
             targets.site_id,
             targets.map_id,
@@ -215,7 +215,7 @@ class _MapsMatplotlib:  # Wrapper class holding the extracted matplotlib/launch 
 
     def _bootstrap_sites(self) -> list[dict[str, Any]] | None:
         """Fetch and sort all org sites. Return None when the org has none."""
-        logging.info("launch_viewer_standalone: Starting web-first viewer mode")  # Trace entry.
+        logger.info("launch_viewer_standalone: Starting web-first viewer mode")  # Trace entry.
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
         logger.info("\n  Loading sites...")
         all_sites = self._fetch_sites()  # Delegated to MapsManager via __getattr__.

@@ -211,7 +211,7 @@ class _ViewerLauncher:  # WHY: Class boundary that owns the extracted launch wor
     ) -> None:
         """Emit structured info log describing what the viewer was invoked with."""
         coverage_count = self._viewer._resolve_coverage_count(optional.coverage_data)  # WHY: Count or 'None' label.
-        logging.info(  # WHY: Wide info line -- includes site/map/counts for support diagnostics.
+        logger.info(  # WHY: Wide info line -- includes site/map/counts for support diagnostics.
             "_launch_plotly_viewer called - site: %s (%s), map_id: %s, "
             "devices: %s, zones: %s, clients: %s, coverage: %s, "
             "available_maps: %s, available_sites: %s",
@@ -278,7 +278,7 @@ class _ViewerLauncher:  # WHY: Class boundary that owns the extracted launch wor
 
     def _create_dash_app(self, Dash: Any, template_mgr: DashTemplateManager) -> Any:  # WHY: Configure Dash instance.
         """Instantiate the Dash app with dark-theme template and metadata."""
-        logging.debug("Creating Dash application instance")  # WHY: Trace lifecycle for support.
+        logger.debug("Creating Dash application instance")  # WHY: Trace lifecycle for support.
         app_meta = template_mgr.get_app_meta()  # WHY: Pulls title / callback exception flag.
         app = Dash(  # WHY: Standard Dash constructor call.
             __name__,  # WHY: Anchor Dash asset paths to this module.
@@ -293,12 +293,12 @@ class _ViewerLauncher:  # WHY: Class boundary that owns the extracted launch wor
         """Return a fresh Plotly figure and the validated pixels-per-meter value."""
         import plotly.graph_objects as go  # type: ignore[import-untyped]  # WHY: Local import -- plotly is optional.
 
-        logging.debug("Building Plotly figure")  # WHY: Trace lifecycle for support.
+        logger.debug("Building Plotly figure")  # WHY: Trace lifecycle for support.
         fig = go.Figure()  # WHY: Fresh figure -- all traces are added below.
         map_width = data.map_data.get("width", 1000)  # WHY: Default width if missing.
         map_height = data.map_data.get("height", 1000)  # WHY: Default height if missing.
         ppm = data.map_data.get("ppm", 10)  # WHY: Default 10 px/m when unset.
-        logging.debug(  # WHY: Trace canvas dimensions for support.
+        logger.debug(  # WHY: Trace canvas dimensions for support.
             "Map canvas dimensions: %sx%s, PPM from map: %s",
             map_width,
             map_height,

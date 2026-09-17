@@ -141,7 +141,7 @@ class MapsManager:  # WHY: declare MapsManager class
         self.org_id = organization_id  # WHY: init/update org_id attribute
         self.current_site_id = None  # WHY: init/update current_site_id attribute
         self.current_site_name = None  # WHY: init/update current_site_name attribute
-        logging.info("MapsManager initialized for organization: %s", self.org_id)  # WHY: action-log before operation
+        logger.info("MapsManager initialized for organization: %s", self.org_id)  # WHY: action-log before operation
 
     def _fetch_sites(self):  # WHY: declare private helper _fetch_sites
         """Fetch all sites using instance API session (not global)."""
@@ -211,7 +211,7 @@ class MapsManager:  # WHY: declare MapsManager class
         self.current_site_id = selected_site.get("id")  # WHY: init/update current_site_id attribute
         self.current_site_name = selected_site.get("name", "Unknown")  # WHY: init/update current_site_name attribute
         print(f"\n   Site selected: {self.current_site_name}")  # WHY: surface user-facing message
-        logging.info(
+        logger.info(
             "MapsManager site selection: %s (%s)", self.current_site_name, self.current_site_id
         )  # WHY: action-log before operation
 
@@ -481,14 +481,14 @@ class MapsManager:  # WHY: declare MapsManager class
         """Handle one menu choice. Return True to keep looping, False to exit."""
         if choice is None or choice == "0":  # Sentinel or explicit quit
             if choice == "0":  # Only log the deliberate exit
-                logging.info("Exiting Maps Manager")  # Note the exit reason
+                logger.info("Exiting Maps Manager")  # Note the exit reason
             return False  # Signal the caller to break the loop
         handler = dispatch.get(choice)  # Look up the handler for this choice
         if handler:  # Recognised choice
             handler()  # Invoke the associated action
         else:
             print(f"\n! Invalid selection: '{choice}'. Please enter a valid option.")  # Feedback
-            logging.warning("Invalid Maps Manager menu selection: %s", choice)  # Audit trail
+            logger.warning("Invalid Maps Manager menu selection: %s", choice)  # Audit trail
         return True  # Continue the menu loop
 
     def run_interactive_menu(self):  # WHY: declare public method run_interactive_menu
@@ -555,7 +555,7 @@ class MapsManager:  # WHY: declare MapsManager class
             print(f"\n! No maps found for site: {site_name}")  # WHY: surface user-facing message
             return  # WHY: return early
         self._render_site_maps_table(maps)  # WHY: advance computation. The caller above already printed the site name
-        logging.info("Listed %s maps for site %s", len(maps), site_name)  # WHY: action-log before operation
+        logger.info("Listed %s maps for site %s", len(maps), site_name)  # WHY: action-log before operation
 
     @staticmethod
     def _build_org_map_row(site: dict, map_item: dict) -> dict:  # WHY: declare private helper _build_org_map_row
@@ -619,7 +619,7 @@ class MapsManager:  # WHY: declare MapsManager class
                 print("\n! No maps found across all sites")  # WHY: surface user-facing message
                 return  # WHY: return early
             self._render_org_maps_table(all_maps)  # WHY: advance computation
-            logging.info("Listed %s maps from %s sites", len(all_maps), len(sites))  # WHY: action-log before operation
+            logger.info("Listed %s maps from %s sites", len(all_maps), len(sites))  # WHY: action-log before operation
         except Exception as e:  # WHY: handle expected error
             logging.exception("Error listing site maps: %s", e)  # WHY: capture exception with traceback
             print(f"\n! Error listing maps: {e}")  # WHY: surface user-facing message
@@ -658,7 +658,7 @@ class MapsManager:  # WHY: declare MapsManager class
         filename = f"SiteMaps_{sanitize_filename(site_name or 'unknown_site')}"  # Sanitize name for filesystem.
         write_data_with_format_selection(maps_data, filename, api_function_name="listSiteMaps")  # Prompt+write.
         self._print_export_completion(len(maps_data))  # Confirm success and count.
-        logging.info("Exported %s maps from site %s", len(maps_data), site_name)  # Audit trail entry.
+        logger.info("Exported %s maps from site %s", len(maps_data), site_name)  # Audit trail entry.
 
     @staticmethod
     def _print_export_completion(count: int) -> None:  # WHY: declare private helper _print_export_completion
@@ -715,7 +715,7 @@ class MapsManager:  # WHY: declare MapsManager class
         print(f"\n{'-' * 80}")  # WHY: surface user-facing message
         print(f"Export completed: {exported_count} maps exported")  # WHY: surface user-facing message
         print(f"{'-' * 80}")  # WHY: surface user-facing message
-        logging.info("Exported %s maps from %s sites", exported_count, sites_count)  # WHY: action-log before operation
+        logger.info("Exported %s maps from %s sites", exported_count, sites_count)  # WHY: action-log before operation
 
     def export_all_site_maps(self):  # WHY: declare public method export_all_site_maps
         """Export all site maps across organization to CSV/SQLite with full metadata."""
@@ -761,7 +761,7 @@ class MapsManager:  # WHY: declare MapsManager class
             print(f"\n{'-' * 80}")  # WHY: surface user-facing message
             print(f"Export completed: {len(maps_with_images)} maps with images")  # WHY: surface user-facing message
             print(f"{'-' * 80}")  # WHY: surface user-facing message
-            logging.info("Exported %s maps with images", len(maps_with_images))  # WHY: action-log before operation
+            logger.info("Exported %s maps with images", len(maps_with_images))  # WHY: action-log before operation
         except Exception as e:  # WHY: handle expected error
             logging.exception("Error exporting maps with images: %s", e)  # WHY: capture exception with traceback
             print(f"\n! Error during export: {e}")  # WHY: surface user-facing message
@@ -810,7 +810,7 @@ class MapsManager:  # WHY: declare MapsManager class
                 with open(filepath, "wb") as f:  # WHY: manage scoped resource
                     f.write(response.content)  # WHY: advance computation
                 return True  # WHY: return computed result
-            logging.warning(
+            logger.warning(
                 "Failed to download %s: HTTP %s", map_name, response.status_code
             )  # WHY: surface non-fatal issue
         except Exception as e:  # WHY: handle expected error
@@ -826,9 +826,9 @@ class MapsManager:  # WHY: declare MapsManager class
         self, site_id: str, site_name: str
     ) -> "list | None":  # WHY: declare private helper _fetch_maps_with_images
         """Fetch site maps and return those with downloadable images (or None)."""
-        logging.info("Calling listSiteMaps for site_id=%s", site_id)  # Log API call start
+        logger.info("Calling listSiteMaps for site_id=%s", site_id)  # Log API call start
         maps_response = mistapi.api.v1.sites.maps.listSiteMaps(self.apisession, site_id=site_id)  # Fetch maps
-        logging.debug("listSiteMaps returned status=%s", maps_response.status_code)  # Log API result
+        logger.debug("listSiteMaps returned status=%s", maps_response.status_code)  # Log API result
         if maps_response.status_code != 200:  # API call failed
             print(f"\n! Failed to fetch maps: {maps_response.status_code}")  # User-visible failure
             return None  # Signal failure to orchestrator
@@ -842,9 +842,9 @@ class MapsManager:  # WHY: declare MapsManager class
         self, site_id: str
     ) -> tuple[str, list] | None:  # WHY: declare private helper _resolve_site_maps_for_download
         """Resolve site name and fetch list of maps with downloadable images. Returns None on failure."""
-        logging.info("Resolving site name for download target site_id=%s", site_id)  # Log resolution start
+        logger.info("Resolving site name for download target site_id=%s", site_id)  # Log resolution start
         site_name = self._lookup_site_name(site_id)  # Resolve human-readable site name
-        logging.debug("Resolved site_name=%s", site_name)  # Log resolved name
+        logger.debug("Resolved site_name=%s", site_name)  # Log resolved name
         print(f"\nFetching maps for site: {site_name}")  # User-visible status
         maps_with_images = self._fetch_maps_with_images(site_id, site_name)  # Filtered map list
         if not maps_with_images:  # Fetch failed or nothing downloadable
@@ -856,7 +856,7 @@ class MapsManager:  # WHY: declare MapsManager class
     ) -> int:  # WHY: declare private helper _download_maps_batch
         """Download a batch of map images to the target directory, returning the success count."""
         # Log batch start with count and target dir
-        logging.info(
+        logger.info(
             "Starting batch download of %d map images to %s", len(maps_with_images), download_dir
         )  # WHY: action-log before operation
         downloaded = sum(  # Count successful downloads
@@ -864,7 +864,7 @@ class MapsManager:  # WHY: declare MapsManager class
             for map_item in tqdm(maps_with_images, desc="Downloading", unit="image")  # Iterate with progress bar
             if self._download_single_map_image(map_item, download_dir)  # Delegate to existing single-image helper
         )
-        logging.debug("Batch download finished with %d successes", downloaded)  # Log batch outcome
+        logger.debug("Batch download finished with %d successes", downloaded)  # Log batch outcome
         return downloaded  # Return count for summary
 
     @staticmethod
@@ -900,7 +900,7 @@ class MapsManager:  # WHY: declare MapsManager class
         print(f"Downloading to: {download_dir}")  # User-visible target path.
         downloaded = self._download_maps_batch(maps_with_images, download_dir)  # Run batch download loop.
         self._print_download_images_summary(downloaded, len(maps_with_images), download_dir)  # Final tally.
-        logging.info("Downloaded %s map images to %s", downloaded, download_dir)  # Log final outcome.
+        logger.info("Downloaded %s map images to %s", downloaded, download_dir)  # Log final outcome.
 
     def download_site_map_images(self):  # WHY: declare public method download_site_map_images
         """Download map images to local disk."""
@@ -972,7 +972,7 @@ class MapsManager:  # WHY: declare MapsManager class
         if map_details is None:  # API call failed and already printed reason.
             return  # Nothing to display.
         self._print_map_detail_body(map_details)  # Emit the formatted body.
-        logging.info("Viewed details for map %s", map_id)  # Audit log of the view.
+        logger.info("Viewed details for map %s", map_id)  # Audit log of the view.
 
     def view_map_details(self):  # WHY: declare public method view_map_details
         """View detailed information for a specific map."""
@@ -1040,7 +1040,7 @@ class MapsManager:  # WHY: declare MapsManager class
         print(f"Name: {created_map.get('name')}")  # WHY: surface user-facing message
         print(f"Type: {created_map.get('type')}")  # WHY: surface user-facing message
         print(f"{'-' * 80}")  # WHY: surface user-facing message
-        logging.info("Created map %s for site %s", created_map.get("id"), site_id)  # WHY: action-log before operation
+        logger.info("Created map %s for site %s", created_map.get("id"), site_id)  # WHY: action-log before operation
 
     def _build_and_create_map(
         self, site_id: str, map_name: str, map_type: str
@@ -1059,7 +1059,7 @@ class MapsManager:  # WHY: declare MapsManager class
                 self._print_map_creation_success(response.data, site_id)  # WHY: advance computation
             else:
                 print(f"\n! Failed to create map: HTTP {response.status_code}")  # WHY: surface user-facing message
-                logging.error(
+                logger.error(
                     "Map creation failed: %s - %s", response.status_code, response.data
                 )  # WHY: surface fatal issue
         except ValueError as ve:  # WHY: handle expected error
@@ -1198,7 +1198,7 @@ class MapsManager:  # WHY: declare MapsManager class
             write_data_with_format_selection(
                 rows, "MapsWithoutImages_Report", api_function_name="listSiteMaps"
             )  # WHY: assign computed value
-            logging.info("Generated report: %s maps without images", len(rows))  # WHY: action-log before operation
+            logger.info("Generated report: %s maps without images", len(rows))  # WHY: action-log before operation
         except Exception as e:  # WHY: handle expected error
             logging.exception("Error generating maps report: %s", e)  # WHY: capture exception with traceback
             print(f"\n! Error generating report: {e}")  # WHY: surface user-facing message
@@ -1261,10 +1261,10 @@ class MapsManager:  # WHY: declare MapsManager class
             print(f"\n{'-' * 80}")  # Success banner top.
             print("Map updated successfully!")  # User-visible confirmation.
             print(f"{'-' * 80}")  # Success banner bottom.
-            logging.info("Updated map %s for site %s", map_id, site_id)  # Audit log.
+            logger.info("Updated map %s for site %s", map_id, site_id)  # Audit log.
             return  # Success path complete.
         print(f"\n! Failed to update map: HTTP {update_response.status_code}")  # Report failure.
-        logging.error("Map update failed: %s", update_response.status_code)  # Log HTTP error.
+        logger.error("Map update failed: %s", update_response.status_code)  # Log HTTP error.
 
     def _confirm_and_apply_map_update(
         self, site_id: str, map_id: str, update_payload: dict
@@ -1383,7 +1383,7 @@ class MapsManager:  # WHY: declare MapsManager class
         ).strip()  # WHY: compute confirmation
         if confirmation != "DELETE":  # WHY: branch on condition
             print("\n! Deletion cancelled")  # WHY: surface user-facing message
-            logging.info("Map deletion cancelled by user for map %s", map_id)  # WHY: action-log before operation
+            logger.info("Map deletion cancelled by user for map %s", map_id)  # WHY: action-log before operation
             return False  # WHY: return computed result
         return True  # WHY: return computed result
 
@@ -1397,10 +1397,10 @@ class MapsManager:  # WHY: declare MapsManager class
             print(f"\n{'-' * 80}")  # WHY: surface user-facing message
             print("Map deleted successfully!")  # WHY: surface user-facing message
             print(f"{'-' * 80}")  # WHY: surface user-facing message
-            logging.info("Deleted map %s from site %s", map_id, site_id)  # WHY: action-log before operation
+            logger.info("Deleted map %s from site %s", map_id, site_id)  # WHY: action-log before operation
         else:
             print(f"\n! Failed to delete map: HTTP {resp.status_code}")  # WHY: surface user-facing message
-            logging.error("Map deletion failed: %s - %s", resp.status_code, resp.data)  # WHY: surface fatal issue
+            logger.error("Map deletion failed: %s - %s", resp.status_code, resp.data)  # WHY: surface fatal issue
 
     @staticmethod
     def _print_delete_site_map_header() -> None:  # WHY: declare private helper _print_delete_site_map_header
@@ -1514,10 +1514,10 @@ class MapsManager:  # WHY: declare MapsManager class
             print(f"\n{'-' * 80}")  # Success banner top.
             print("Image uploaded successfully!")  # User-visible confirmation.
             print(f"{'-' * 80}")  # Success banner bottom.
-            logging.info("Uploaded image to map %s for site %s", map_id, site_id)  # Audit log.
+            logger.info("Uploaded image to map %s for site %s", map_id, site_id)  # Audit log.
             return  # Success path complete.
         print(f"\n! Failed to upload image: HTTP {upload_response.status_code}")  # Failure banner.
-        logging.error("Image upload failed: %s - %s", upload_response.status_code, upload_response.data)  # Log.
+        logger.error("Image upload failed: %s - %s", upload_response.status_code, upload_response.data)  # Log.
 
     def _confirm_image_upload(
         self, site_id: str, map_id: str, file_path: str
@@ -1556,13 +1556,13 @@ class MapsManager:  # WHY: declare MapsManager class
 
     def upload_map_image(self):  # WHY: declare public method upload_map_image
         """Upload or replace map image file (multipart upload)."""
-        logging.info("upload_map_image operation initiated")  # Audit trail
+        logger.info("upload_map_image operation initiated")  # Audit trail
         self._print_upload_image_header()  # Banner
         site_id, site_name = self.get_current_site()  # Require a selected site
         if not site_id:  # Site prompt cancelled
-            logging.warning("upload_map_image aborted: No site selected")  # Note the abort
+            logger.warning("upload_map_image aborted: No site selected")  # Note the abort
             return  # WHY: return early
-        logging.debug("upload_map_image - Site: %s (ID: %s)", site_name, site_id)  # Trace context
+        logger.debug("upload_map_image - Site: %s (ID: %s)", site_name, site_id)  # Trace context
         try:
             self._run_upload_map_image(site_id, site_name)  # Execute the upload flow
         except EOFError:  # WHY: handle expected error
@@ -1640,7 +1640,7 @@ class MapsManager:  # WHY: declare MapsManager class
             return  # WHY: return early
         self._print_devices_table(devices_on_map)  # Render the tabular device listing.
         self._maybe_export_map_devices(devices_on_map, site_id, site_name)  # Optional CSV export step.
-        logging.info("Viewed %s devices on map %s", len(devices_on_map), map_id)  # Audit trail entry.
+        logger.info("Viewed %s devices on map %s", len(devices_on_map), map_id)  # Audit trail entry.
 
     @staticmethod
     def _print_devices_table(devices_on_map: list) -> None:  # WHY: declare private helper _print_devices_table
@@ -1676,17 +1676,17 @@ class MapsManager:  # WHY: declare MapsManager class
     def auto_place_aps(self):  # WHY: declare public method auto_place_aps
         """Automatically place APs on map using Mist auto-placement."""
         print("\n! Feature coming soon: Auto-place APs")  # WHY: surface user-facing message
-        logging.info("auto_place_aps called (placeholder)")  # WHY: action-log before operation
+        logger.info("auto_place_aps called (placeholder)")  # WHY: action-log before operation
 
     def auto_orient_aps(self):  # WHY: declare public method auto_orient_aps
         """Automatically orient APs on map."""
         print("\n! Feature coming soon: Auto-orient APs")  # WHY: surface user-facing message
-        logging.info("auto_orient_aps called (placeholder)")  # WHY: action-log before operation
+        logger.info("auto_orient_aps called (placeholder)")  # WHY: action-log before operation
 
     def set_device_location(self):  # WHY: declare public method set_device_location
         """Manually set AP/device coordinates on map."""
         print("\n! Feature coming soon: Set device location")  # WHY: surface user-facing message
-        logging.info("set_device_location called (placeholder)")  # WHY: action-log before operation
+        logger.info("set_device_location called (placeholder)")  # WHY: action-log before operation
 
     def _fetch_site_maps_with_images(
         self, site_id: str
@@ -1752,7 +1752,7 @@ class MapsManager:  # WHY: declare MapsManager class
             total_downloaded += downloaded  # Accumulate downloaded count.
             total_maps += found  # Accumulate found count.
         self._print_bulk_download_summary(total_downloaded, total_maps, base_dir)  # Print tally.
-        logging.info(
+        logger.info(
             "Bulk downloaded %s of %s map images to %s", total_downloaded, total_maps, base_dir
         )  # Audit log of the batch.
 
@@ -1768,35 +1768,35 @@ class MapsManager:  # WHY: declare MapsManager class
     def backup_all_maps(self):  # WHY: declare public method backup_all_maps
         """Complete backup of all maps (metadata + images)."""
         print("\n! Feature coming soon: Backup all maps")  # WHY: surface user-facing message
-        logging.info("backup_all_maps called (placeholder)")  # WHY: action-log before operation
+        logger.info("backup_all_maps called (placeholder)")  # WHY: action-log before operation
 
     def map_coverage_analytics(self):  # WHY: declare public method map_coverage_analytics
         """Analyze RF coverage patterns by map."""
         print("\n! Feature coming soon: Map coverage analytics")  # WHY: surface user-facing message
-        logging.info("map_coverage_analytics called (placeholder)")  # WHY: action-log before operation
+        logger.info("map_coverage_analytics called (placeholder)")  # WHY: action-log before operation
 
     def device_density_analytics(self):  # WHY: declare public method device_density_analytics
         """Analyze device density and distribution by map."""
         print("\n! Feature coming soon: Device density analytics")  # WHY: surface user-facing message
-        logging.info("device_density_analytics called (placeholder)")  # WHY: action-log before operation
+        logger.info("device_density_analytics called (placeholder)")  # WHY: action-log before operation
 
     def map_usage_statistics(self):  # WHY: declare public method map_usage_statistics
         """Generate usage statistics for maps."""
         print("\n! Feature coming soon: Map usage statistics")  # WHY: surface user-facing message
-        logging.info("map_usage_statistics called (placeholder)")  # WHY: action-log before operation
+        logger.info("map_usage_statistics called (placeholder)")  # WHY: action-log before operation
 
     def _install_required_visualization_packages(
         self, import_mgr, required: dict
     ) -> None:  # WHY: declare private helper _install_required_visualization_packages
         """Probe/install each required visualization package via the import manager."""
         for package_name, package_spec in required.items():  # WHY: iterate collection
-            logging.debug(
+            logger.debug(
                 "Checking required package: %s (%s)", package_name, package_spec
             )  # WHY: action-log after operation
             import_mgr.import_module_safely(  # WHY: advance computation
                 package_name, package_spec=package_spec, required=False, skip_deps=False, skip_upgrade=True
             )
-            logging.debug("Package %s check completed", package_name)  # WHY: action-log after operation
+            logger.debug("Package %s check completed", package_name)  # WHY: action-log after operation
 
     def _install_optional_visualization_packages(
         self, import_mgr, optional: dict
@@ -1804,13 +1804,13 @@ class MapsManager:  # WHY: declare MapsManager class
         """Probe/install optional visualization packages, swallowing individual failures."""
         for package_name, package_spec in optional.items():  # WHY: iterate collection
             try:
-                logging.debug(
+                logger.debug(
                     "Checking optional package: %s (%s)", package_name, package_spec
                 )  # WHY: action-log after operation
                 import_mgr.import_module_safely(  # WHY: advance computation
                     package_name, package_spec=package_spec, required=False, skip_deps=False, skip_upgrade=True
                 )
-                logging.debug("Optional package %s installed/verified", package_name)  # WHY: action-log after operation
+                logger.debug("Optional package %s installed/verified", package_name)  # WHY: action-log after operation
             except Exception as pkg_error:  # WHY: handle expected error
                 logging.debug(
                     "Optional package %s unavailable: %s", package_name, pkg_error
@@ -1820,7 +1820,7 @@ class MapsManager:  # WHY: declare MapsManager class
         """Attempt to install plotly, dash, kaleido, and matplotlib via the global import_manager."""
         _import_manager = globals().get("import_manager")  # WHY: compute _import_manager
         if _import_manager is None:  # WHY: branch on condition
-            logging.debug(
+            logger.debug(
                 "import_manager not available (standalone mode) - skipping package installation checks"
             )  # WHY: action-log after operation
             return  # WHY: return early
@@ -1847,9 +1847,9 @@ class MapsManager:  # WHY: declare MapsManager class
         """Return False when matplotlib is available, None otherwise (with a message)."""
         if importlib.util.find_spec("matplotlib"):  # matplotlib import spec present.
             print("\n! Using matplotlib fallback (view-only mode)")  # Note view-only mode.
-            logging.info("Successfully imported matplotlib for fallback mode")  # Audit log.
+            logger.info("Successfully imported matplotlib for fallback mode")  # Audit log.
             return False  # False -> caller uses matplotlib path.
-        logging.error("matplotlib fallback also not available")  # Both libraries missing.
+        logger.error("matplotlib fallback also not available")  # Both libraries missing.
         print("\n! No visualization libraries available")  # User-visible missing-libs message.
         print("! Install plotly: pip install plotly dash")  # Suggest plotly install.
         print("! Or matplotlib: pip install matplotlib")  # Suggest matplotlib install.
@@ -1863,17 +1863,17 @@ class MapsManager:  # WHY: declare MapsManager class
         Returns True if plotly/Dash is available, False for matplotlib fallback, or None to abort.
         """
         print("\nChecking visualization dependencies...")  # Progress note.
-        logging.info("Starting visualization dependency check")  # Audit log.
+        logger.info("Starting visualization dependency check")  # Audit log.
         self._install_visualization_packages()  # Attempt on-demand install.
         if importlib.util.find_spec("plotly"):  # plotly import spec present.
-            logging.info("Successfully imported plotly modules")  # Audit log.
-            logging.debug("Using Plotly/Dash mode for interactive viewer")  # Detail log.
+            logger.info("Successfully imported plotly modules")  # Audit log.
+            logger.debug("Using Plotly/Dash mode for interactive viewer")  # Detail log.
             return True  # True -> caller uses full interactive mode.
-        logging.error("plotly not available")  # Report missing plotly.
+        logger.error("plotly not available")  # Report missing plotly.
         print("\n! Missing required package: plotly")  # User-visible message.
         print("! Install with: pip install plotly dash")  # Install hint.
         if not self._prompt_matplotlib_fallback():  # Confirm fallback path.
-            logging.info("User declined matplotlib fallback")  # Audit log of decline.
+            logger.info("User declined matplotlib fallback")  # Audit log of decline.
             return None  # None -> caller aborts.
         return self._resolve_matplotlib_fallback()  # Try matplotlib backend.
 
@@ -1883,15 +1883,15 @@ class MapsManager:  # WHY: declare MapsManager class
     ) -> None:  # WHY: declare private helper _log_and_print_map_summary
         """Log detailed map dimensions/features and print the summary line."""
         map_name = map_data.get("name", "Unnamed")  # WHY: compute map_name
-        logging.info("Map loaded: %s (ID: %s)", map_name, map_id)  # WHY: action-log before operation
-        logging.debug(  # WHY: action-log after operation
+        logger.info("Map loaded: %s (ID: %s)", map_name, map_id)  # WHY: action-log before operation
+        logger.debug(  # WHY: action-log after operation
             "Map dimensions: %sx%spx, PPM: %s, Orientation: %s",
             map_data.get("width", 1000),
             map_data.get("height", 1000),
             map_data.get("ppm", 0),
             map_data.get("orientation", 0),
         )
-        logging.debug(  # WHY: action-log after operation
+        logger.debug(  # WHY: action-log after operation
             "Map has image: %s, Has walls: %s, Has wayfinding: %s",
             "url" in map_data,
             "wall_path" in map_data,
@@ -1909,7 +1909,7 @@ class MapsManager:  # WHY: declare MapsManager class
         if map_ppm:  # WHY: branch on condition
             return  # WHY: return early
         map_name = map_data.get("name", "Unnamed")  # WHY: compute map_name
-        logging.warning(
+        logger.warning(
             "MAP NOT SCALED: Map '%s' has PPM=0 - image has not been scaled in Mist Portal", map_name
         )  # WHY: surface non-fatal issue
         print("\n" + "!" * 60)  # WHY: surface user-facing message
@@ -1922,7 +1922,7 @@ class MapsManager:  # WHY: declare MapsManager class
 
     def _log_map_fetch_failure(self, map_response) -> None:  # WHY: declare private helper _log_map_fetch_failure
         """Log details of a failed getSiteMap response and surface a user message."""
-        logging.error(  # WHY: surface fatal issue
+        logger.error(  # WHY: surface fatal issue
             "Failed to fetch map details - HTTP %s, Response: %s",
             map_response.status_code,
             map_response.data if hasattr(map_response, "data") else "No data",
@@ -1937,13 +1937,13 @@ class MapsManager:  # WHY: declare MapsManager class
         Returns the map data dict on success, or None on API failure.
         """
         print("\nLoading map data...")  # WHY: surface user-facing message
-        logging.info(
+        logger.info(
             "Fetching map details - site_id: %s, map_id: %s", site_id, map_id
         )  # WHY: action-log before operation
         map_response = mistapi.api.v1.sites.maps.getSiteMap(
             self.apisession, site_id=site_id, map_id=map_id
         )  # WHY: compute map_response
-        logging.debug("getSiteMap API response: HTTP %s", map_response.status_code)  # WHY: action-log after operation
+        logger.debug("getSiteMap API response: HTTP %s", map_response.status_code)  # WHY: action-log after operation
         if map_response.status_code != 200:  # WHY: branch on condition
             self._log_map_fetch_failure(map_response)  # WHY: advance computation
             return None  # WHY: return computed result
@@ -1960,35 +1960,35 @@ class MapsManager:  # WHY: declare MapsManager class
         for device in devices_on_map:  # WHY: iterate collection
             dtype = device.get("type", "unknown")  # WHY: compute dtype
             device_type_counts[dtype] = device_type_counts.get(dtype, 0) + 1  # WHY: compute device_type_counts
-        logging.debug("Device breakdown on map: %s", device_type_counts)  # WHY: action-log after operation
+        logger.debug("Device breakdown on map: %s", device_type_counts)  # WHY: action-log after operation
 
     def _fetch_devices_on_map(
         self, site_id: str, map_id: str
     ) -> list:  # WHY: declare private helper _fetch_devices_on_map
         """Fetch device stats for the site and filter to the given map_id."""
-        logging.info("Fetching device stats for site %s (type=all)", site_id)  # WHY: action-log before operation
+        logger.info("Fetching device stats for site %s (type=all)", site_id)  # WHY: action-log before operation
         devices_response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
             self.apisession, site_id=site_id, limit=1000
         )  # WHY: compute devices_response
-        logging.debug(
+        logger.debug(
             "listSiteDevicesStats API response: HTTP %s", devices_response.status_code
         )  # WHY: action-log after operation
         if devices_response.status_code != 200:  # WHY: branch on condition
-            logging.error("Failed to fetch devices - HTTP %s", devices_response.status_code)  # WHY: surface fatal issue
+            logger.error("Failed to fetch devices - HTTP %s", devices_response.status_code)  # WHY: surface fatal issue
             print(
                 f"\n! Failed to fetch devices: HTTP {devices_response.status_code}"
             )  # WHY: surface user-facing message
             return []  # WHY: return computed result
         all_devices = devices_response.data  # WHY: compute all_devices
-        logging.debug("Total devices at site: %s", len(all_devices))  # WHY: action-log after operation
+        logger.debug("Total devices at site: %s", len(all_devices))  # WHY: action-log after operation
         devices_on_map = [d for d in all_devices if d.get("map_id") == map_id]  # WHY: compute devices_on_map
-        logging.info("Devices on selected map: %s", len(devices_on_map))  # WHY: action-log before operation
+        logger.info("Devices on selected map: %s", len(devices_on_map))  # WHY: action-log before operation
         self._log_device_type_breakdown(devices_on_map)  # WHY: advance computation
         return devices_on_map  # WHY: return computed result
 
     def _fetch_zones_on_map(self, site_id: str, map_id: str) -> list:  # WHY: declare private helper _fetch_zones_on_map
         """Fetch site zones and filter to the given map_id."""
-        logging.info("Fetching zones for site %s", site_id)  # WHY: action-log before operation
+        logger.info("Fetching zones for site %s", site_id)  # WHY: action-log before operation
         try:
             zones_response = mistapi.api.v1.sites.zones.listSiteZones(
                 self.apisession, site_id=site_id
@@ -1996,12 +1996,12 @@ class MapsManager:  # WHY: declare MapsManager class
             if zones_response.status_code == 200:  # WHY: branch on condition
                 all_zones = zones_response.data  # WHY: compute all_zones
                 zones_on_map = [z for z in all_zones if z.get("map_id") == map_id]  # WHY: compute zones_on_map
-                logging.info(
+                logger.info(
                     "Total zones at site: %s, Zones on this map: %s", len(all_zones), len(zones_on_map)
                 )  # WHY: action-log before operation
-                logging.debug("Zones on map: %s", zones_on_map)  # WHY: action-log after operation
+                logger.debug("Zones on map: %s", zones_on_map)  # WHY: action-log after operation
                 return zones_on_map  # WHY: return computed result
-            logging.warning(
+            logger.warning(
                 "Failed to fetch zones - HTTP %s", zones_response.status_code
             )  # WHY: surface non-fatal issue
             return []  # WHY: return computed result
@@ -2021,12 +2021,12 @@ class MapsManager:  # WHY: declare MapsManager class
         self, site_id: str
     ) -> "list | None":  # WHY: declare private helper _fetch_all_wireless_clients
         """Fetch every wireless client stat for a site with pagination, or None on failure."""
-        logging.info("Fetching connected wireless client stats for site %s", site_id)  # Trace API call
+        logger.info("Fetching connected wireless client stats for site %s", site_id)  # Trace API call
         resp = mistapi.api.v1.sites.stats.listSiteWirelessClientsStats(
             self.apisession, site_id=site_id, limit=1000
         )  # Fetch first page
         if resp.status_code != 200:  # HTTP failure guard
-            logging.warning("Failed to fetch client stats - HTTP %s", resp.status_code)  # Note the failure
+            logger.warning("Failed to fetch client stats - HTTP %s", resp.status_code)  # Note the failure
             return None  # Signal failure
         return mistapi.get_all(response=resp, mist_session=self.apisession)  # Paginate to end
 
@@ -2036,13 +2036,13 @@ class MapsManager:  # WHY: declare MapsManager class
     ) -> None:  # WHY: declare private helper _log_client_map_diagnostics
         """Emit diagnostic logs after filtering clients to a specific map."""
         client_map_ids = {c.get("map_id") for c in all_clients if c.get("map_id")}  # Distinct map ids seen
-        logging.info("Client map_ids found: %s", client_map_ids)  # Trace the id set
-        logging.info("Looking for map_id: %s", map_id)  # Trace the filter target
-        logging.info("Clients on this map (after filtering): %s", len(clients_on_map))  # Filtered count
+        logger.info("Client map_ids found: %s", client_map_ids)  # Trace the id set
+        logger.info("Looking for map_id: %s", map_id)  # Trace the filter target
+        logger.info("Clients on this map (after filtering): %s", len(clients_on_map))  # Filtered count
         if clients_on_map:  # Show a sample for the matched case
-            logging.info("Sample client data: %s", clients_on_map[0])  # Trace sample match
+            logger.info("Sample client data: %s", clients_on_map[0])  # Trace sample match
         elif all_clients:  # Show a sample for the empty-match case
-            logging.warning("No clients matched map_id %s. Sample: %s", map_id, all_clients[0])  # Diagnose
+            logger.warning("No clients matched map_id %s. Sample: %s", map_id, all_clients[0])  # Diagnose
 
     def _fetch_clients_on_map(
         self, site_id: str, map_id: str
@@ -2052,7 +2052,7 @@ class MapsManager:  # WHY: declare MapsManager class
             all_clients = self._fetch_all_wireless_clients(site_id)  # Paginated client fetch
             if all_clients is None:  # Fetch failed
                 return []  # No clients to plot
-            logging.info("Total wireless clients retrieved: %s", len(all_clients))  # Trace totals
+            logger.info("Total wireless clients retrieved: %s", len(all_clients))  # Trace totals
             clients_on_map = self._filter_clients_for_map(all_clients, map_id)  # Filter by map placement
             self._log_client_map_diagnostics(all_clients, clients_on_map, map_id)  # Diagnostics
             return clients_on_map  # Filtered set for the caller
@@ -2066,16 +2066,16 @@ class MapsManager:  # WHY: declare MapsManager class
         """Log and report an error-structure response from the RF coverage API."""
         exception_str = str(coverage_data.get("exception", ""))  # WHY: compute exception_str
         if "psycopg2" in exception_str or "database" in exception_str.lower():  # WHY: branch on condition
-            logging.warning(
+            logger.warning(
                 "RF Coverage temporarily unavailable: Mist backend database connectivity issue"
             )  # WHY: surface non-fatal issue
-            logging.debug("Coverage API backend error: %s", exception_str)  # WHY: action-log after operation
+            logger.debug("Coverage API backend error: %s", exception_str)  # WHY: action-log after operation
         else:
-            logging.error(
+            logger.error(
                 "Coverage API returned error response (first 500 chars): %s", exception_str[:500]
             )  # WHY: surface fatal issue
-            logging.debug("Coverage API full error response: %s", exception_str)  # WHY: action-log after operation
-            logging.debug(
+            logger.debug("Coverage API full error response: %s", exception_str)  # WHY: action-log after operation
+            logger.debug(
                 "Error details - Query: %s, URI: %s", coverage_data.get("query"), coverage_data.get("uri")
             )  # WHY: action-log after operation
         print(
@@ -2099,7 +2099,7 @@ class MapsManager:  # WHY: declare MapsManager class
     ) -> "dict | None":  # WHY: declare private helper _parse_map_coverage_response
         """Extract coverage payload or handle known exception envelopes."""
         if coverage_response.status_code != 200:  # Non-200 -> failure.
-            logging.warning(
+            logger.warning(
                 "Failed to fetch RF coverage data - HTTP %s", coverage_response.status_code
             )  # WHY: surface non-fatal issue
             return None  # WHY: return computed result
@@ -2108,7 +2108,7 @@ class MapsManager:  # WHY: declare MapsManager class
             self._handle_coverage_exception(coverage_data)  # Log/print the exception details.
             return None  # WHY: return computed result
         result_count = len(coverage_data.get("results", [])) if coverage_data else 0  # Grid-point count.
-        logging.info("RF coverage data retrieved: %s grid points", result_count)  # Audit log.
+        logger.info("RF coverage data retrieved: %s grid points", result_count)  # Audit log.
         return coverage_data  # Return the parsed payload.
 
     def _fetch_map_coverage(
@@ -2116,7 +2116,7 @@ class MapsManager:  # WHY: declare MapsManager class
     ) -> "dict | None":  # WHY: declare private helper _fetch_map_coverage
         """Fetch RF coverage heatmap data for the given map from the Mist location API."""
         try:
-            logging.info("Fetching RF coverage data for map %s", map_id)  # Audit log of the fetch.
+            logger.info("Fetching RF coverage data for map %s", map_id)  # Audit log of the fetch.
             return self._parse_map_coverage_response(
                 self._request_map_coverage(site_id, map_id)
             )  # WHY: return computed result
@@ -2150,7 +2150,7 @@ class MapsManager:  # WHY: declare MapsManager class
         coverage_data = self._fetch_map_coverage(site_id, map_id)  # WHY: compute coverage_data
         print("Loading organization sites...")  # WHY: surface user-facing message
         all_sites = self._fetch_sites()  # WHY: compute all_sites
-        logging.info("Fetched %s sites for site selector dropdown", len(all_sites))  # WHY: action-log before operation
+        logger.info("Fetched %s sites for site selector dropdown", len(all_sites))  # WHY: action-log before operation
         return (
             map_data,
             devices_on_map,
@@ -2170,12 +2170,10 @@ class MapsManager:  # WHY: declare MapsManager class
         """Launch either the Plotly/Dash viewer or the matplotlib fallback."""
         map_name = data.map_data.get("name", "Unnamed")  # WHY: compute map_name
         if use_plotly:  # WHY: branch on condition
-            logging.info("Launching Plotly/Dash viewer for map %s", map_name)  # WHY: action-log before operation
+            logger.info("Launching Plotly/Dash viewer for map %s", map_name)  # WHY: action-log before operation
             launch_plotly_viewer(self, scope, data, optional)  # WHY: advance computation
         else:
-            logging.info(
-                "Launching matplotlib fallback viewer for map %s", map_name
-            )  # WHY: action-log before operation
+            logger.info("Launching matplotlib fallback viewer for map %s", map_name)  # WHY: action-log before operation
             self._launch_matplotlib_viewer(data.map_data, data.devices)  # WHY: advance computation
 
     def _run_map_viewer_flow(
@@ -2185,12 +2183,12 @@ class MapsManager:  # WHY: declare MapsManager class
         use_plotly = self._check_visualization_packages()  # WHY: compute use_plotly
         if use_plotly is None:  # WHY: branch on condition
             return  # WHY: return early
-        logging.debug("Prompting user to select map from site %s", site_name)  # nosec B608 — not SQL, just logging
+        logger.debug("Prompting user to select map from site %s", site_name)  # nosec B608 — not SQL, just logging
         map_id, all_maps = self._select_map_from_site(site_id, site_name, return_all_maps=True)  # WHY: compute map_id
         if not map_id:  # WHY: guard against missing precondition
-            logging.info("Map viewer aborted: No map selected")  # WHY: action-log before operation
+            logger.info("Map viewer aborted: No map selected")  # WHY: action-log before operation
             return  # WHY: return early
-        logging.debug(
+        logger.debug(
             "Selected map_id: %s, Total maps available: %s", map_id, len(all_maps)
         )  # WHY: action-log after operation
         bundle = self._load_map_viewer_bundle(site_id, map_id)  # WHY: compute bundle
@@ -2221,13 +2219,13 @@ class MapsManager:  # WHY: declare MapsManager class
         - Click-to-edit device locations
         - Save changes back to Mist Cloud
         """
-        logging.info("Interactive map viewer initiated")  # Audit log at entry.
+        logger.info("Interactive map viewer initiated")  # Audit log at entry.
         self._print_interactive_viewer_header()  # Section banner.
         site_id, site_name = self.get_current_site()  # Resolve current site.
         if not site_id:  # No site selected -> nothing to view.
-            logging.warning("Interactive map viewer aborted: No site selected")  # Log soft abort.
+            logger.warning("Interactive map viewer aborted: No site selected")  # Log soft abort.
             return  # WHY: return early
-        logging.debug("Interactive map viewer - Site: %s (ID: %s)", site_name, site_id)  # Detail log.
+        logger.debug("Interactive map viewer - Site: %s (ID: %s)", site_name, site_id)  # Detail log.
         try:
             self._run_map_viewer_flow(site_id, site_name)  # Delegate to flow method.
         except EOFError:  # User hit Ctrl-D.
@@ -2255,11 +2253,11 @@ class MapsManager:  # WHY: declare MapsManager class
 
     def _collect_ppm_samples(self, clients: list) -> list[float]:  # WHY: declare private helper _collect_ppm_samples
         """Walk the first 10 clients and collect PPM ratio samples from x/y pixel-vs-meter pairs."""
-        logging.debug("Collecting PPM samples from up to 10 clients")  # Log sample collection start.
+        logger.debug("Collecting PPM samples from up to 10 clients")  # Log sample collection start.
         ppm_samples: list[float] = []  # Accumulate computed PPM values.
         for client in clients[:10]:  # Check first 10 clients only -- sufficient for validation.
             ppm_samples.extend(self._client_ppm_samples(client))  # Merge per-client samples.
-        logging.debug("Collected %d PPM samples", len(ppm_samples))  # Log result count.
+        logger.debug("Collected %d PPM samples", len(ppm_samples))  # Log result count.
         return ppm_samples  # Hand back samples for averaging.
 
     @staticmethod
@@ -2267,13 +2265,13 @@ class MapsManager:  # WHY: declare MapsManager class
         ppm: float, calculated_ppm: float, ppm_ratio: float
     ) -> None:  # WHY: declare private helper _log_ppm_mismatch
         """Emit two warning logs describing a detected PPM calibration mismatch."""
-        logging.warning(
+        logger.warning(
             "PPM MISMATCH DETECTED! Map PPM=%s, Calculated from clients=%s (ratio: %sx)",
             ppm,
             f"{calculated_ppm:.1f}",
             f"{ppm_ratio:.2f}",
         )  # Warn operator about calibration issue.
-        logging.warning(
+        logger.warning(
             "Map may not be scaled correctly. Using calculated PPM for coverage heatmap."
         )  # Explain correction to operator.
 
@@ -2289,7 +2287,7 @@ class MapsManager:  # WHY: declare MapsManager class
         if abs(ppm_ratio - 1.0) > 0.1:  # More than 10% difference indicates mismatch.
             self._log_ppm_mismatch(ppm, calculated_ppm, ppm_ratio)  # Emit calibration warnings.
             return calculated_ppm  # Use client-derived PPM for better accuracy.
-        logging.debug("PPM validation passed: map=%s, calculated=%s", ppm, f"{calculated_ppm:.1f}")  # OK.
+        logger.debug("PPM validation passed: map=%s, calculated=%s", ppm, f"{calculated_ppm:.1f}")  # OK.
         return ppm  # Return original PPM when within acceptable range.
 
     @staticmethod
@@ -2348,22 +2346,22 @@ class MapsManager:  # WHY: declare MapsManager class
         path_name = path.get("name", f"Path {path_idx + 1}")  # Use name or generate fallback label.
         path_coords = path.get("coordinate", [])  # List of {x, y} coordinate dicts.
         if not path_coords or len(path_coords) < 2:  # Need at least 2 points to draw a line.
-            logging.warning(
+            logger.warning(
                 "Validation path '%s' has insufficient coordinates: %d", path_name, len(path_coords)
             )  # WHY: surface non-fatal issue
             return  # Skip this path -- cannot draw a line with fewer than 2 points.
         path_x = [coord.get("x", 0) for coord in path_coords]  # Extract x coordinates.
         path_y = [coord.get("y", 0) for coord in path_coords]  # Extract y coordinates.
         self._add_survey_path_trace(fig, path_name, path_x, path_y, len(path_coords))  # Draw + label.
-        logging.debug("Added validation path '%s' with %d points", path_name, len(path_coords))  # Trace.
+        logger.debug("Added validation path '%s' with %d points", path_name, len(path_coords))  # Trace.
 
     def _add_site_survey_paths(self, fig, map_data: dict) -> None:  # WHY: declare private helper _add_site_survey_paths
         """Add site survey (validation) paths to the Plotly figure as dashed magenta lines."""
         if not map_data.get("sitesurvey_path"):  # No validation paths on this map -- skip.
-            logging.info("No validation paths found on this map")  # Informational for operator.
+            logger.info("No validation paths found on this map")  # Informational for operator.
             return  # Nothing to draw.
         sitesurvey_paths = map_data["sitesurvey_path"]  # List of survey path objects from Mist API.
-        logging.info("Processing %d validation paths", len(sitesurvey_paths))  # Log path count.
+        logger.info("Processing %d validation paths", len(sitesurvey_paths))  # Log path count.
         for path_idx, path in enumerate(sitesurvey_paths):  # Iterate all paths.
             self._add_single_survey_path(fig, path, path_idx)  # Delegate per-path handling.
 
@@ -2388,7 +2386,7 @@ class MapsManager:  # WHY: declare MapsManager class
         x = client.get("x")  # Client x pixel coordinate
         y = client.get("y")  # Client y pixel coordinate
         client_mac = client.get("mac", "unknown")  # MAC for logging + fallback label
-        logging.debug(
+        logger.debug(
             "Client %s: x=%s, y=%s, map_id=%s (looking for map_id=%s)",
             client_mac,
             x,
@@ -2472,19 +2470,19 @@ class MapsManager:  # WHY: declare MapsManager class
     ) -> None:  # WHY: declare private helper _add_clients_to_figure
         """Add connected wireless client markers and labels to the Plotly figure."""
         if not clients:  # No clients on this map -- skip rendering
-            logging.info("No connected clients found on this map")  # WHY: action-log before operation
+            logger.info("No connected clients found on this map")  # WHY: action-log before operation
             return  # WHY: return early
-        logging.info("Processing %d connected clients on this map", len(clients))  # WHY: action-log before operation
-        logging.debug("Client sample data: %s", clients[0])  # First-record sample
+        logger.info("Processing %d connected clients on this map", len(clients))  # WHY: action-log before operation
+        logger.debug("Client sample data: %s", clients[0])  # First-record sample
         xs, ys, hovers, names = self._collect_client_points(clients, map_id)  # Filter to placed clients
         if not xs:  # No clients had valid coordinates
-            logging.warning(
+            logger.warning(
                 "Found %d clients but none have x,y coordinates", len(clients)
             )  # WHY: surface non-fatal issue
             return  # WHY: return early
         self._add_client_marker_trace(fig, xs, ys, hovers)  # Marker layer
         self._add_client_label_annotations(fig, xs, ys, names)  # Text label layer
-        logging.info(  # WHY: action-log before operation
+        logger.info(  # WHY: action-log before operation
             "Added %d clients to map visualization (out of %d total clients)",
             len(xs),
             len(clients),
@@ -2559,10 +2557,10 @@ class MapsManager:  # WHY: declare MapsManager class
         """Pull wall segments from the map's wall_path graph, log the count, return segments."""
         wall_data = map_data.get("wall_path", {})  # WHY: compute wall_data
         if wall_data:  # WHY: branch on condition
-            logging.debug("[Flask API] Raw wall_path data: %s", wall_data)  # WHY: action-log after operation
+            logger.debug("[Flask API] Raw wall_path data: %s", wall_data)  # WHY: action-log after operation
         walls = self._extract_graph_segments(wall_data)  # WHY: compute walls
         if walls:  # WHY: branch on condition
-            logging.info(  # WHY: action-log before operation
+            logger.info(  # WHY: action-log before operation
                 "[Flask API] Extracted %s wall segments from %s nodes",
                 len(walls),
                 len(wall_data.get("nodes", [])),
@@ -2573,12 +2571,10 @@ class MapsManager:  # WHY: declare MapsManager class
         """Pull wayfinding segments from the map's wayfinding_path graph."""
         wayfinding_data = map_data.get("wayfinding_path", {})  # WHY: compute wayfinding_data
         if wayfinding_data:  # WHY: branch on condition
-            logging.debug(
-                "[Flask API] Raw wayfinding_path data: %s", wayfinding_data
-            )  # WHY: action-log after operation
+            logger.debug("[Flask API] Raw wayfinding_path data: %s", wayfinding_data)  # WHY: action-log after operation
         wayfinding = self._extract_graph_segments(wayfinding_data)  # WHY: compute wayfinding
         if wayfinding:  # WHY: branch on condition
-            logging.info(  # WHY: action-log before operation
+            logger.info(  # WHY: action-log before operation
                 "[Flask API] Extracted %s wayfinding segments from %s nodes",
                 len(wayfinding),
                 len(wayfinding_data.get("nodes", [])),

@@ -296,7 +296,7 @@ class _MapsCoverage:
         """Fetch one coverage layer (client/asset/sdkclient) and convert meters to pixels."""
         params = _coverage_query_params(map_id, coverage_type)  # WHY: extracted so this function stays short.
         coverage_url = _coverage_url(site_id)  # WHY: extracted so this function stays short.
-        logging.info("[Flask API] Fetching %s coverage for map %s", coverage_type, map_id)  # WHY: audit trail.
+        logger.info("[Flask API] Fetching %s coverage for map %s", coverage_type, map_id)  # WHY: audit trail.
         try:  # WHY: `api_session.mist_get` may raise on network errors.
             response = api_session.mist_get(coverage_url, query=params)  # WHY: fetch coverage payload from Mist.
         except Exception as exc:  # WHY: swallow errors so one bad layer does not kill the viewer.
@@ -318,7 +318,7 @@ class _MapsCoverage:
             return None  # WHY: skip layer when payload is empty.
         indices = self._resolve_coverage_indices(result_def)  # WHY: resolve column layout with fallback.
         grid_points = _rows_to_grid_points(results, indices, ppm_value)  # WHY: extracted for length + clarity.
-        logging.info(  # WHY: report how many points made it through the projection.
+        logger.info(  # WHY: report how many points made it through the projection.
             "[Flask API] %s coverage: %s grid points (ppm=%s)",
             coverage_type,
             len(grid_points),
@@ -437,7 +437,7 @@ def _coverage_query_params(map_id: str, coverage_type: str) -> dict[str, str]:
 def _is_coverage_error_payload(coverage_data: Any, coverage_type: str) -> bool:
     """Return True when the coverage payload signals an API-side exception."""
     if isinstance(coverage_data, dict) and "exception" in coverage_data:  # WHY: Mist error envelope.
-        logging.warning("[Flask API] %s coverage API error", coverage_type)  # WHY: preserve prior log format.
+        logger.warning("[Flask API] %s coverage API error", coverage_type)  # WHY: preserve prior log format.
         return True  # WHY: caller returns None so this layer is dropped.
     return False  # WHY: normal payload - proceed with parsing.
 

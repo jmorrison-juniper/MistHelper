@@ -49,6 +49,7 @@ from src.maps.launcher._viewer_url_switch import (
     _ViewerUrlSwitch,  # WHY: URL-switch cluster split out of MapViewerCallbacks
 )
 
+logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 if TYPE_CHECKING:  # WHY: keep dash + state imports lazy at runtime
     from dash import Dash  # WHY: typing reference for register_with
 
@@ -345,7 +346,7 @@ class MapViewerCallbacks:  # WHY: thin coordinator over 6 extracted callback clu
 
     def register_with(self, app: Dash) -> None:
         """Attach all wave-A + wave-B + wave-C + wave-D + wave-E1 + wave-E2 callbacks to ``app``."""
-        logging.info(  # Trace registration start so operators can confirm wiring
+        logger.info(  # Trace registration start so operators can confirm wiring
             "MapViewerCallbacks: registering %d callbacks (waves A+B+C+D+E1+E2)", 24
         )
         self._register_wave_a(app)  # WHY: bind wave-A direct layer-toggle callback
@@ -358,7 +359,7 @@ class MapViewerCallbacks:  # WHY: thin coordinator over 6 extracted callback clu
         self._clone.register(app)  # WHY: bind clone-map callback in one call
         self._site.register(app)  # WHY: bind 5 site-switch callbacks in one call
         self._url.register(app)  # WHY: bind URL-switch callback in one call
-        logging.debug(  # Trace registration end
+        logger.debug(  # Trace registration end
             "MapViewerCallbacks: callbacks registered "
             "(5 wave-A + 4 wave-B + 4 wave-C + 3 wave-D + 2 wave-E1 + 5 wave-E2 + 1 wave-E3)"
         )
