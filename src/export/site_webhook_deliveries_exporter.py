@@ -31,6 +31,14 @@ from src.data.data_processing_utils import (
 from src.utils.input_utils import InputUtils  # WHY: safe_input honors EOF/Ctrl-C per Constitution.
 
 logger = logging.getLogger(__name__)  # Use a module logger for non-exception export messages.
+_HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
+
+
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
 class SiteWebhookDeliveriesExporter:
@@ -179,6 +187,14 @@ class SiteWebhookDeliveriesExporter:
             response = mistapi.api.v1.sites.webhooks.searchSiteWebhooksDeliveries(  # SDK call.
                 mh.apisession, site_id, webhook_id
             )
+            status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+            if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the empty delivery result unsafe.
+                logger.error(  # WHY: the operator must see the cloud status instead of a false no-data message.
+                    "The cloud returned HTTP %s for webhook deliveries at site %s",
+                    status_code,
+                    site_id,
+                )
+                return  # WHY: preserve the existing None return contract for this exporter.
             rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page all rows.
             SiteWebhookDeliveriesExporter._persist_site_webhook_deliveries(  # Persist or notify empty.
                 rawdata, site_name, webhook_name
