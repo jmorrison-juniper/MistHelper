@@ -155,11 +155,15 @@ class CommandBlockDetector:
             return False
         if len(parts) == 1:  # Single commands such as commit are valid Junos commands.
             return True
-        return parts[1].islower() or any(token in line for token in ["|", "/", "{", "}", "<"])  # Reject title rows.
+        if parts[1][:1].isupper():  # Reject title rows such as "set Set CLI properties".
+            return False
+        return parts[1].islower() or any(token in line for token in ["|", "/", "{", "}", "<"])  # Accept CLI syntax.
 
     def _has_hierarchy(self, line: str) -> bool:
         first = line.split(maxsplit=1)[0] if line.split() else ""  # Read the first token for hierarchy matching.
-        return first in self.HIERARCHY_TOKENS and ("{" in line or ";" in line or len(line.split()) > 1)  # Need context.
+        rest = line.split(maxsplit=1)[1] if len(line.split()) > 1 else ""  # Read child syntax after the root token.
+        checks = ["{" in line, ";" in line, bool(self.interface_pattern.match(rest))]  # Require config syntax.
+        return first in self.HIERARCHY_TOKENS and any(checks)  # Avoid prose that starts with a hierarchy word.
 
     def _has_interface_row(self, line: str) -> bool:
         return (
