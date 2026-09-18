@@ -8,6 +8,8 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+from arango.exceptions import ArangoError  # WHY: router tests must raise the narrowed ArangoDB driver type
+from redis.exceptions import RedisError  # WHY: router tests must raise the narrowed Redis driver type
 
 from src.db import DatabaseConfig, WriteResult
 
@@ -157,7 +159,7 @@ class TestRouterDegradedMode:
         assert result.success is True
 
     def test_arango_unavailable_returns_csv_only(self, config, mock_backends, strategies):
-        mock_backends["arango_cls"].side_effect = Exception("Connection refused")
+        mock_backends["arango_cls"].side_effect = ConnectionError("Connection refused")
         from src.db.router import DatabaseRouter
 
         router = DatabaseRouter(config, strategies=strategies)
@@ -166,8 +168,8 @@ class TestRouterDegradedMode:
         assert result.backend == "csv_only"
 
     def test_redis_unavailable_degrades_to_arango_only(self, config, mock_backends, strategies):
-        mock_backends["redis_cls"].side_effect = Exception("Connection refused")
-        mock_backends["redis_json_cls"].side_effect = Exception("Connection refused")
+        mock_backends["redis_cls"].side_effect = RuntimeError("TimeSeries module missing")
+        mock_backends["redis_json_cls"].side_effect = RuntimeError("Redis JSON module missing")
         from src.db.router import DatabaseRouter
 
         router = DatabaseRouter(config, strategies=strategies)
@@ -186,7 +188,7 @@ class TestRouterDegradedMode:
 
     def test_backend_write_failure_returns_error(self, config, mock_backends, strategies):
         router = _make_router(config, mock_backends, strategies)
-        mock_backends["arango_writer"].write.side_effect = Exception("Write failed")
+        mock_backends["arango_writer"].write.side_effect = ArangoError("Write failed")
         result = router.write([{"id": "1"}], "listOrgSites")
 
         assert result.success is False
@@ -236,7 +238,7 @@ class TestRouterSnapshot:
             records_written=1,
             records_failed=0,
         )
-        mock_backends["arango_writer"].snapshot.side_effect = Exception("snap err")
+        mock_backends["arango_writer"].snapshot.side_effect = ArangoError("snap err")
         data = [{"id": "site-1", "name": "HQ"}]
         result = router.write(data, "listOrgSites")
         assert result.success is True
@@ -270,7 +272,7 @@ class TestRouterWebhook:
 
     def test_webhook_snapshot_error_handled(self, config, mock_backends, strategies):
         router = _make_router(config, mock_backends, strategies)
-        mock_backends["arango_writer"].snapshot.side_effect = Exception("err")
+        mock_backends["arango_writer"].snapshot.side_effect = ArangoError("err")
         payload = {"object_type": "site", "object_id": "s1", "after": {}}
         router.handle_webhook_audit(payload)  # should not raise
 
@@ -305,7 +307,7 @@ class TestRouterTimeseries:
                 "primary_key": ["mac", "timestamp"],
             },
         }
-        mock_backends["redis_cls"].side_effect = Exception("down")
+        mock_backends["redis_cls"].side_effect = RuntimeError("down")
         from src.db.router import DatabaseRouter
 
         router = DatabaseRouter(config, strategies=strategies)
@@ -338,7 +340,7 @@ class TestRouterIngestStatsBatch:
         assert result.backend == "redis"
 
     def test_degrades_when_redis_unavailable(self, config, mock_backends):
-        mock_backends["redis_cls"].side_effect = Exception("down")
+        mock_backends["redis_cls"].side_effect = RuntimeError("down")
         from src.db.router import DatabaseRouter
 
         router = DatabaseRouter(config, strategies={})
@@ -372,7 +374,7 @@ class TestRouterPullConfigHistory:
 
     def test_handles_snapshot_error(self, config, mock_backends, strategies):
         router = _make_router(config, mock_backends, strategies)
-        mock_backends["arango_writer"].snapshot.side_effect = Exception("err")
+        mock_backends["arango_writer"].snapshot.side_effect = ArangoError("err")
         configs = [{"device_id": "dev-1"}]
         count = router.pull_config_history(configs)
 
@@ -408,8 +410,8 @@ class TestRouterClose:
 
     def test_close_handles_errors(self, config, mock_backends, strategies):
         router = _make_router(config, mock_backends, strategies)
-        mock_backends["arango_writer"].close.side_effect = Exception("err")
-        mock_backends["redis_writer"].close.side_effect = Exception("err")
+        mock_backends["arango_writer"].close.side_effect = ArangoError("err")
+        mock_backends["redis_writer"].close.side_effect = RedisError("err")
         router.close()  # should not raise
 
     def test_close_standalone(self, standalone_config):
@@ -424,7 +426,7 @@ class TestRouterRedisJsonError:
 
     def test_redis_json_write_exception(self, config, mock_backends, strategies):
         router = _make_router(config, mock_backends, strategies)
-        mock_backends["redis_json_writer"].write.side_effect = Exception("JSON err")
+        mock_backends["redis_json_writer"].write.side_effect = RedisError("JSON err")
         mock_backends["arango_writer"].write.return_value = WriteResult(
             success=True,
             backend="arangodb",
@@ -490,7 +492,7 @@ class TestRouterRedisWriteError:
             },
         }
         router = _make_router(config, mock_backends, strategies)
-        mock_backends["redis_writer"].write.side_effect = Exception("TS write err")
+        mock_backends["redis_writer"].write.side_effect = RedisError("TS write err")
         data = [{"mac": "aa:bb", "timestamp": 170000, "cpu": 42}]
         result = router.write(data, "getDeviceStats")
 
@@ -508,7 +510,7 @@ class TestRouterReprobe:
     """
 
     def test_health_check_reports_a_recovered_backend(self, config, mock_backends, strategies):
-        mock_backends["arango_cls"].side_effect = Exception("Connection refused")
+        mock_backends["arango_cls"].side_effect = ConnectionError("Connection refused")
         from src.db.router import DatabaseRouter
 
         router = DatabaseRouter(config, strategies=strategies)
@@ -522,7 +524,7 @@ class TestRouterReprobe:
         assert health["arangodb"] is True
 
     def test_write_uses_a_backend_that_recovered(self, config, mock_backends, strategies):
-        mock_backends["arango_cls"].side_effect = Exception("Connection refused")
+        mock_backends["arango_cls"].side_effect = ConnectionError("Connection refused")
         from src.db.router import DatabaseRouter
 
         router = DatabaseRouter(config, strategies=strategies)
@@ -543,7 +545,7 @@ class TestRouterReprobe:
         assert result.records_written == 1
 
     def test_backoff_window_blocks_a_second_connect(self, config, mock_backends, strategies):
-        mock_backends["arango_cls"].side_effect = Exception("Connection refused")
+        mock_backends["arango_cls"].side_effect = ConnectionError("Connection refused")
         from src.db.router import DatabaseRouter
 
         with patch("src.db.router.RECONNECT_WINDOW_SECONDS", 3600.0):
@@ -556,7 +558,7 @@ class TestRouterReprobe:
 
     def test_write_failure_marks_the_backend_unavailable(self, config, mock_backends, strategies):
         router = _make_router(config, mock_backends, strategies)
-        mock_backends["arango_writer"].write.side_effect = Exception("Write failed")
+        mock_backends["arango_writer"].write.side_effect = ArangoError("Write failed")
 
         with patch("src.db.router.RECONNECT_WINDOW_SECONDS", 3600.0):
             router.write([{"id": "1"}], "listOrgSites")
@@ -577,7 +579,7 @@ class TestRouterReprobe:
 
     def test_reconnect_closes_the_stale_writer(self, config, mock_backends, strategies):
         router = _make_router(config, mock_backends, strategies)
-        mock_backends["arango_writer"].write.side_effect = Exception("Write failed")
+        mock_backends["arango_writer"].write.side_effect = ArangoError("Write failed")
         router.write([{"id": "1"}], "listOrgSites")
 
         with patch("src.db.router.RECONNECT_WINDOW_SECONDS", 0.0):
@@ -591,7 +593,7 @@ class TestRouterCloseRedisJson:
 
     def test_close_releases_the_redis_json_writer(self, config, mock_backends, strategies):
         router = _make_router(config, mock_backends, strategies)
-        mock_backends["arango_writer"].close.side_effect = Exception("arango close err")
+        mock_backends["arango_writer"].close.side_effect = ArangoError("arango close err")
         router.close()
 
         mock_backends["redis_json_writer"].close.assert_called_once()

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from arango.exceptions import ArangoError  # WHY: tests must raise the narrowed ArangoDB driver type
+from redis.exceptions import RedisError  # WHY: tests must raise the narrowed Redis driver type
+
 
 class TestRetentionInit:
     """Verify RetentionManager initializes from config."""
@@ -86,7 +89,9 @@ class TestArangoRetention:
 
         arango = MagicMock()
         arango._database = MagicMock()
-        arango._database.statistics.side_effect = Exception("fail")
+        arango._database.statistics.side_effect = ArangoError(
+            "fail"
+        )  # WHY: prove the narrowed handler catches stats failures
         manager = RetentionManager(
             arango_writer=arango,
             redis_writer=MagicMock(),
@@ -110,7 +115,9 @@ class TestArangoRetention:
 
         arango = MagicMock()
         arango._database = MagicMock()
-        arango._database.aql.execute.side_effect = Exception("AQL error")
+        arango._database.aql.execute.side_effect = ArangoError(
+            "AQL error"
+        )  # WHY: prove the narrowed handler catches AQL failures
         manager = RetentionManager(
             arango_writer=arango,
             redis_writer=MagicMock(),
@@ -151,7 +158,9 @@ class TestRedisRetention:
 
         redis_writer = MagicMock()
         redis_writer._client = MagicMock()
-        redis_writer._client.execute_command.side_effect = Exception("err")
+        redis_writer._client.execute_command.side_effect = RedisError(
+            "err"
+        )  # WHY: prove the narrowed handler catches Redis failures
         manager = RetentionManager(
             arango_writer=MagicMock(),
             redis_writer=redis_writer,

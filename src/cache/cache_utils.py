@@ -279,7 +279,7 @@ class CacheUtils:
             # WHY (#886 Phase 2): consolidate print+info into single WARNING so operator sees notice
             # on the default root-logger config (INFO is suppressed by default).
             logger.warning("Address parsing failures documented in: %s (%d records)", filename, len(parse_failures))
-        except Exception as e:
+        except (OSError, csv.Error) as e:
             logging.error("Failed to create address parse failures CSV: %s", e)
             # WHY (#886 Phase 2): retire print() in favor of logging.error (surfaces on default root-logger).
             logging.error("Failed to create address parse failures CSV: %s", e)

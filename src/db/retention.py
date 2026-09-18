@@ -12,6 +12,8 @@ import threading  # WHY: background sweep thread + stop event
 from typing import Any  # WHY: writer args typed loose for duck-typed backends
 
 import structlog  # WHY: structured JSON logging for retention events
+from arango.exceptions import ArangoError  # WHY: retention only handles ArangoDB driver failures here
+from redis.exceptions import RedisError  # WHY: retention only handles Redis driver failures here
 
 logger = structlog.get_logger(__name__)  # WHY: module-scoped structlog binder
 
@@ -109,7 +111,7 @@ class RetentionManager:  # WHY: single owner of ArangoDB+Redis retention
             stats = database.statistics()  # WHY: server-level stats dict
             data_size = stats.get("dataSize", 0)  # WHY: bytes, may be missing
             return data_size / BYTES_PER_GB  # WHY: normalize to GB units
-        except Exception as error:  # WHY: driver errors must not kill sweep
+        except ArangoError as error:  # WHY: driver errors must not kill sweep
             logger.warning(EVT_STORAGE_FAIL, error=str(error))  # WHY: audit trail
             return 0.0  # WHY: safe fallback keeps sweep loop alive
 
@@ -135,7 +137,7 @@ class RetentionManager:  # WHY: single owner of ArangoDB+Redis retention
         )  # WHY: record the scan bounds before the first round trip
         try:
             count, capped = _scan_key_count(client)  # WHY: helper keeps LoC low
-        except Exception as error:  # WHY: SCAN may error on unreachable redis
+        except (RedisError, TypeError, ValueError) as error:  # WHY: SCAN can fail through Redis or malformed replies
             logger.warning(EVT_REDIS_FAIL, error=str(error))
             return 0
         if capped:  # WHY: a partial count must never look like a full count
@@ -220,6 +222,6 @@ def _execute_purge(database: Any) -> int:
         count = len(list(cursor))  # WHY: cursor materialized -> count keys
         logger.info(EVT_SNAPSHOTS_PURGED, count=count)
         return count
-    except Exception as error:  # WHY: AQL errors must not crash sweep loop
+    except ArangoError as error:  # WHY: AQL errors must not crash sweep loop
         logger.warning(EVT_PURGE_FAIL, error=str(error))
         return 0
