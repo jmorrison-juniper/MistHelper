@@ -123,12 +123,12 @@ class E2EFactoryOverrides:  # Hold one complete fail-closed E2E dependency value
 
     def validate(self) -> None:  # Verify every required nested value before route registration.
         """Reject an incomplete E2E dependency set before route registration."""
-        logging.info("Validate the E2E factory override set")  # Start the fail-closed validation.
+        logger.info("Validate the E2E factory override set")  # Start the fail-closed validation.
         missing = self._missing_values()  # Find every absent nested value before installation.
         if missing:  # An incomplete test application could reach a production fallback.
             joined = ", ".join(missing)  # Give the test a stable list of missing field paths.
             raise ValueError(f"E2E factory overrides are incomplete: {joined}.")  # Stop construction before routes.
-        logging.debug("The E2E factory override set contains every required seam")  # Confirm safe construction.
+        logger.debug("The E2E factory override set contains every required seam")  # Confirm safe construction.
 
     def _missing_values(self) -> tuple[str, ...]:  # Collect each blank required dependency path.
         """Return each blank required value as a stable dotted field path."""
@@ -158,13 +158,13 @@ class E2EFactoryOverrides:  # Hold one complete fail-closed E2E dependency value
 
     def config_values(self) -> Mapping[str, object]:  # Build one complete Flask configuration map.
         """Return the Flask configuration values for every required E2E seam."""
-        logging.info("Build the E2E seam configuration")  # Start one visible installation action.
+        logger.info("Build the E2E seam configuration")  # Start one visible installation action.
         values: dict[str, object] = {}  # Merge four explicit groups into one installation map.
         for group in (self.records, self.actions, self.security, self.external):  # Preserve group order.
             values.update(group.config_values())  # Add one complete dependency group.
         values["E2E_OVERRIDES_ACTIVE"] = True  # Mark this application as isolated.
         values["E2E_TEST_RUN_ID"] = self.test_run_id  # Bind responses to this test process.
-        logging.debug("Built %s E2E seam configuration values", len(values))  # Report a safe count only.
+        logger.debug("Built %s E2E seam configuration values", len(values))  # Report a safe count only.
         return values  # The wiring installs this complete map before blueprints.
 
     def trap_call_counts(self) -> Mapping[str, int]:  # Report all external boundary calls for one response.

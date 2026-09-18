@@ -75,5 +75,5 @@ class TuiRunner:  # WHY: extracted from MistHelperTUI.run (was CC=33)
             return  # WHY: no-op on Windows
         try:  # WHY: swallow restore errors to keep exit clean
             tui.termios.tcsetattr(sys.stdin, tui.termios.TCSADRAIN, tui.old_terminal_settings)  # Restore cooked mode
-        except Exception as term_error:  # Restore failures are non-fatal
+        except (OSError, ValueError) as term_error:  # Terminal restore errors are non-fatal.
             logging.exception("TUI: Error restoring terminal settings: %s", term_error)  # WHY: log for post-mortem

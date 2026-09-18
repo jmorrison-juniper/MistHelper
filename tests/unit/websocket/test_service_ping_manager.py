@@ -551,6 +551,18 @@ def test_execute_service_ping_returns_none_on_exception(capsys: pytest.CaptureFi
     assert "Error issuing Service Ping command" in capsys.readouterr().out
 
 
+def test_execute_service_ping_surfaces_programming_error() -> None:
+    """A malformed service-ping SDK call must raise."""
+    _prompt, mistapi_dependency, _input_utils = _configure_manager()  # WHY: configure the API call stand-in.
+    endpoint = mistapi_dependency.api.v1.sites.devices.servicePingFromSsr  # WHY: keep the mock path readable.
+    endpoint.side_effect = TypeError("bad signature")  # WHY: simulate SDK misuse.
+    manager = ServicePingManager()  # WHY: create the system under test after dependency wiring.
+    manager.site_id = "site-1"  # WHY: satisfy the path parameter state.
+    manager.device_id = "device-1"  # WHY: satisfy the path parameter state.
+    with pytest.raises(TypeError, match="bad signature"):  # WHY: prove the caller learns about the defect.
+        manager._execute_service_ping({"host": "8.8.8.8", "service": "svc-a"})  # WHY: exercise the narrowed handler.
+
+
 def test_execute_service_ping_returns_session_on_success() -> None:
     """A successful dispatch returns the session id extracted from the response."""
     _configure_manager()

@@ -61,15 +61,21 @@ class TestPromptAuditTimeRangeInput:
         mh.InputUtils.safe_input = MagicMock(return_value="  4w  ")  # WHY: stripped result asserted.
         _install_fake_mist_helper(monkeypatch, mh)
 
-        with caplog.at_level(logging.WARNING):
+        with caplog.at_level(logging.INFO, logger="src.audit.audit_analysis_ops"):  # WHY: capture guidance at INFO.
             result = AuditAnalysisOps._prompt_audit_time_range_input()  # WHY: exercise interactive branch.
 
         assert result == "4w"  # WHY: whitespace trimmed per SUT.
         mh.InputUtils.safe_input.assert_called_once_with(  # WHY: prompt string is user-visible contract.
             "Enter time range [7d]: ", context="audit_analysis"
         )
-        # WHY (#886 Phase 2): print() replaced with logging.warning; assert against caplog not capsys.
-        assert "Time range examples" in caplog.text
+        matching_records = [  # WHY: collect only the guidance record from this behavior slice.
+            record for record in caplog.records if "Time range examples" in record.getMessage()
+        ]  # WHY: count proof.
+        assert (
+            len(matching_records) == 1
+        ), "expected 1 guidance record from the measured audit slice"  # WHY: guard count.
+        assert matching_records[0].levelno == logging.INFO  # WHY: guidance must not increase WARNING count.
+        assert "Time range examples" in caplog.text  # WHY: operator guidance stays visible.
 
 
 class TestFetchFilteredAuditEntries:
@@ -133,7 +139,7 @@ class TestFetchFilteredAuditEntries:
 
 
 class TestRenderAuditAnalysisReports:
-    """``_render_audit_analysis_reports`` writes both mermaid + html reports and prints paths."""
+    """``_render_audit_analysis_reports`` writes both mermaid + html reports and logs paths."""
 
     def test_delegates_to_renderer_and_prints_both_paths(self, caplog: pytest.LogCaptureFixture) -> None:
         """Both render methods are invoked with the analysis + report paths, and paths are logged."""
@@ -144,16 +150,24 @@ class TestRenderAuditAnalysisReports:
             fake_renderer.render_html = MagicMock()
             fake_renderer_cls.return_value = fake_renderer
 
-            with caplog.at_level(logging.WARNING):
-                AuditAnalysisOps._render_audit_analysis_reports(analysis)
+            with caplog.at_level(logging.INFO, logger="src.audit.audit_analysis_ops"):  # WHY: prove INFO is visible.
+                AuditAnalysisOps._render_audit_analysis_reports(analysis)  # WHY: exercise both report path records.
 
         expected_md = os.path.join("data", "OrgAuditAnalysis.md")  # WHY: mirror SUT's os.path.join contract.
         expected_html = os.path.join("data", "OrgAuditAnalysis.html")  # WHY: mirror SUT's os.path.join contract.
         fake_renderer.render_mermaid.assert_called_once_with(analysis, expected_md)  # WHY: mermaid delegation.
         fake_renderer.render_html.assert_called_once_with(analysis, expected_html)  # WHY: html delegation.
-        # WHY (#886 Phase 2): print() replaced with logging.warning; assert against caplog not capsys.
-        assert f"Mermaid report: {expected_md}" in caplog.text
-        assert f"HTML report: {expected_html}" in caplog.text
+        matching_records = [  # WHY: collect only the two report records from this behavior slice.
+            record for record in caplog.records if "report:" in record.getMessage()
+        ]  # WHY: count proof.
+        assert (
+            len(matching_records) == 2
+        ), "expected 2 report path records from the measured audit slice"  # WHY: guard count.
+        assert {record.levelno for record in matching_records} == {
+            logging.INFO
+        }  # WHY: paths are progress, not warnings.
+        assert f"Mermaid report: {expected_md}" in caplog.text  # WHY: operator still sees the markdown path.
+        assert f"HTML report: {expected_html}" in caplog.text  # WHY: operator still sees the HTML path.
 
 
 class TestAuditLogAnalysisOrchestration:
@@ -219,12 +233,18 @@ class TestAuditLogAnalysisOrchestration:
             patch("src.audit.audit_analysis_ops.AuditLogFilter") as fake_filter_cls,
         ):
             fake_parser_cls.return_value.parse.return_value = time_range
-            with caplog.at_level(logging.WARNING):
-                AuditAnalysisOps.audit_log_analysis()
+            with caplog.at_level(logging.INFO, logger="src.audit.audit_analysis_ops"):  # WHY: capture progress records.
+                AuditAnalysisOps.audit_log_analysis()  # WHY: exercise the API-failure branch.
 
         fake_filter_cls.assert_not_called()  # WHY: API-failure aborts before filter+analyze.
-        # WHY (#886 Phase 2): print() replaced with logging.warning; assert against caplog not capsys.
-        assert "Fetching audit logs for: 7d desc" in caplog.text
+        matching_records = [  # WHY: collect only the range progress record from this behavior slice.
+            record for record in caplog.records if "Fetching audit logs for:" in record.getMessage()
+        ]  # WHY: count proof.
+        assert (
+            len(matching_records) == 1
+        ), "expected 1 range progress record from the measured audit slice"  # WHY: guard count.
+        assert matching_records[0].levelno == logging.INFO  # WHY: fetch progress must not increase WARNING count.
+        assert "Fetching audit logs for: 7d desc" in caplog.text  # WHY: operator-facing range stays visible.
 
     def test_happy_path_orchestrates_full_pipeline(
         self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
@@ -253,13 +273,21 @@ class TestAuditLogAnalysisOrchestration:
             fake_analyzer.analyze = MagicMock(return_value=fake_analysis)
             fake_analyzer_cls.return_value = fake_analyzer
 
-            with caplog.at_level(logging.WARNING):
-                AuditAnalysisOps.audit_log_analysis()
+            with caplog.at_level(logging.INFO, logger="src.audit.audit_analysis_ops"):  # WHY: capture progress records.
+                AuditAnalysisOps.audit_log_analysis()  # WHY: exercise the full happy path.
 
         fake_analyzer.analyze.assert_called_once_with(
             fake_filtered, "7 days"
         )  # WHY: analyzer called with filtered+desc.
         fake_render.assert_called_once_with(fake_analysis)  # WHY: rendering delegated to helper method.
-        # WHY (#886 Phase 2): print() replaced with logging.warning; assert against caplog not capsys.
-        assert "Retrieved 3 raw entries" in caplog.text  # WHY: raw entry count logged.
-        assert "Filtered: 2 kept, 1 noise removed" in caplog.text  # WHY: filter summary logged.
+        matching_records = [  # WHY: collect only the two count records from this behavior slice.
+            record for record in caplog.records if record.getMessage().startswith(("Retrieved", "Filtered"))
+        ]  # WHY: count proof.
+        assert (
+            len(matching_records) == 2
+        ), "expected 2 progress records from the measured audit slice"  # WHY: guard count.
+        assert {record.levelno for record in matching_records} == {
+            logging.INFO
+        }  # WHY: counts are progress, not warnings.
+        assert "Retrieved 3 raw entries" in caplog.text  # WHY: raw entry count stays visible.
+        assert "Filtered: 2 kept, 1 noise removed" in caplog.text  # WHY: filter summary stays visible.

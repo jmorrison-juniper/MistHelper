@@ -507,13 +507,20 @@ def test_show_preview_prints_totals_and_ports(capsys: pytest.CaptureFixture[str]
 
 
 def test_display_header_dry_run(capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> None:
-    """Dry-run header prints DRY-RUN MODE banner and logs a warning."""
+    """Dry-run header prints DRY-RUN MODE banner and logs start progress."""
     manager = WANProbeConfigManager()
-    with caplog.at_level(logging.WARNING):
-        manager._display_header(dry_run=True)
-    output = capsys.readouterr().out
-    assert "DRY-RUN MODE" in output
-    assert "Menu #166 DESTRUCTIVE" in caplog.text  # WHY: warning-level log emitted.
+    with caplog.at_level(logging.INFO, logger="src.refactors.wanprobe_config_manager"):  # WHY: capture INFO progress.
+        manager._display_header(dry_run=True)  # WHY: exercise the header log record.
+    output = capsys.readouterr().out  # WHY: collect the operator banner.
+    assert "DRY-RUN MODE" in output  # WHY: the visible operator banner remains unchanged.
+    matching_records = [  # WHY: collect only the start record from this behavior slice.
+        record for record in caplog.records if "operation started" in record.getMessage()
+    ]  # WHY: count proof.
+    assert (
+        len(matching_records) == 1
+    ), "expected 1 start progress record from the measured WAN probe slice"  # WHY: guard count.
+    assert matching_records[0].levelno == logging.INFO  # WHY: start progress must not increase WARNING count.
+    assert "Menu #166 DESTRUCTIVE" in caplog.text  # WHY: start progress stays visible in captured logs.
 
 
 def test_display_header_live_run(capsys: pytest.CaptureFixture[str]) -> None:
@@ -582,12 +589,19 @@ def test_emit_live_run_summary_with_failures(capsys: pytest.CaptureFixture[str])
 
 
 def test_log_destructive_completion(caplog: pytest.LogCaptureFixture) -> None:
-    """Completion logger emits a warning-level record counting successes."""
+    """Completion logger emits an info-level record counting successes."""
     manager = WANProbeConfigManager()
     results = [{"status": "SUCCESS"}, {"status": "SUCCESS"}, {"status": "FAILED"}]
-    with caplog.at_level(logging.WARNING):
-        manager._log_destructive_completion(results)
-    assert "2 templates updated" in caplog.text  # WHY: success count only.
+    with caplog.at_level(logging.INFO, logger="src.refactors.wanprobe_config_manager"):  # WHY: capture INFO completion.
+        manager._log_destructive_completion(results)  # WHY: exercise the completion record.
+    matching_records = [  # WHY: collect only the completion record from this behavior slice.
+        record for record in caplog.records if "operation complete" in record.getMessage()
+    ]  # WHY: count proof.
+    assert (
+        len(matching_records) == 1
+    ), "expected 1 success record from the measured WAN probe slice"  # WHY: guard count.
+    assert matching_records[0].levelno == logging.INFO  # WHY: success count must not increase WARNING count.
+    assert "2 templates updated" in caplog.text  # WHY: success count remains visible.
 
 
 # ---------------------------------------------------------------------------

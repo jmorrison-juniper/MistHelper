@@ -153,8 +153,21 @@ def test_classify_item_swallows_attribute_errors(tui_stub, monkeypatch: pytest.M
     class _Bad:
         @property
         def boom(self) -> Any:  # Raises on every read
-            raise RuntimeError("nope")
+            raise AttributeError("nope")
 
     module = _Bad()  # Object with a raising attribute
     LevelDiscoverer(tui_stub)._classify_item(module, "boom")  # Should not raise
     assert tui_stub.current_items == []  # Nothing appended
+
+
+def test_classify_item_propagates_unexpected_descriptor_errors(tui_stub) -> None:
+    """A non-attribute descriptor error reaches the caller."""
+
+    class _Bad:
+        @property
+        def boom(self) -> Any:  # Raise a non-attribute error to prove narrowing.
+            raise RuntimeError("nope")  # Runtime faults must not be hidden as missing attributes.
+
+    module = _Bad()  # Build the object with the failing descriptor.
+    with pytest.raises(RuntimeError, match="nope"):  # The narrowed handler lets unexpected faults surface.
+        LevelDiscoverer(tui_stub)._classify_item(module, "boom")  # Read the descriptor through the classifier.

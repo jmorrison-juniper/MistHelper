@@ -65,7 +65,10 @@ class ConfigUtils:
             context = entrypoint.MainEntrypoint.context  # Read the process context owned by the entry point.
             logger.debug("ConfigUtils resolved the application context")  # Log the successful context read.
             return context  # Give callers the state owner when it exists.
-        except Exception as error:  # A partial import must not break the old local cache path.
+        except (
+            AttributeError,
+            ImportError,
+        ) as error:  # A missing context module or attribute uses the local cache path.
             logging.debug("ConfigUtils could not resolve the application context: %s", error)  # Log the safe fallback.
             return None  # Keep the class cache path for isolated tests.
 

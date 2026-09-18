@@ -87,6 +87,17 @@ def test_prompt_password_returns_none_on_terminal_error(monkeypatch, caplog: pyt
     assert "Failed to read password" in caplog.text  # WHY: legacy console banner
 
 
+def test_prompt_password_non_terminal_error_propagates(monkeypatch) -> None:
+    """Non-terminal faults from getpass must propagate."""
+    monkeypatch.setattr(  # WHY: replace the masked prompt with a deterministic fault.
+        "src.auth.interactive.credential_prompter.getpass.getpass",
+        MagicMock(side_effect=AttributeError("bad prompt")),  # WHY: simulate a programming fault.
+    )
+    prompter = CredentialPrompter(safe_input=_SafeInputStub())  # WHY: build the subject with safe prompt input.
+    with pytest.raises(AttributeError):  # WHY: the narrowed handler must not hide programming faults.
+        prompter.prompt_password()  # WHY: execute the changed handler.
+
+
 def test_prompt_password_returns_none_on_blank(monkeypatch, caplog: pytest.LogCaptureFixture) -> None:
     """Blank password prints validation banner and returns None."""
     monkeypatch.setattr(

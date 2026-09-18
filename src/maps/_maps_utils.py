@@ -114,7 +114,7 @@ def write_data_with_format_selection(
     filepath = _resolve_csv_filepath(filename)  # WHY: single helper handles dir-mkdir + sanitized path assembly.
     try:
         _write_csv_rows(data, filepath)  # WHY: isolated write step so the try/except stays focused.
-    except Exception as write_error:  # WHY: broad catch converts any IO/encoding failure into a False return.
+    except (OSError, csv.Error) as write_error:  # WHY: convert only CSV file errors into a False return.
         logger.error(_LOG_WRITE_ERROR, write_error)  # WHY: template log includes the underlying error text.
         return False  # WHY: False on write failure preserves batch-export resilience.
     logger.info(_LOG_WRITE_OK, filepath, len(data))  # WHY: audit log includes both path and row count.

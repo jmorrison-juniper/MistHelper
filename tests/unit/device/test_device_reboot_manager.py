@@ -662,6 +662,13 @@ class TestRebootOneDevice:
         status = DeviceRebootManager._reboot_one_device(_target())
         assert status.startswith("ERROR: ")
 
+    def test_programming_error_raises(self, fake_mh: Any) -> None:
+        """A malformed reboot SDK call must raise."""
+        endpoint = fake_mh.mistapi.api.v1.sites.devices.restartSiteDevice  # WHY: keep the mock path readable.
+        endpoint.side_effect = TypeError("bad signature")  # WHY: simulate SDK misuse.
+        with pytest.raises(TypeError, match="bad signature"):  # WHY: prove the caller learns about the defect.
+            DeviceRebootManager._reboot_one_device(_target())  # WHY: exercise the narrowed handler.
+
 
 # ---------------------------------------------------------------------------
 # _build_reboot_result_row

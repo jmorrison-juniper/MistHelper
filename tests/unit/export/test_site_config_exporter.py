@@ -87,6 +87,17 @@ class TestResolveWlanSiteName:
 
         assert result == "s1"
 
+    def test_programming_error_raises(self, fake_mh):
+        """A malformed site-list SDK call must raise."""
+        from src.export.site_config_exporter import SiteConfigExporter  # WHY: import the system under test.
+
+        with patch(
+            "src.export.site_config_exporter.mistapi.api.v1.orgs.sites.listOrgSites",
+            side_effect=TypeError("bad signature"),
+        ):
+            with pytest.raises(TypeError, match="bad signature"):  # WHY: prove the caller learns about the defect.
+                SiteConfigExporter._resolve_wlan_site_name("s1")  # WHY: exercise the narrowed handler.
+
 
 class TestFetchWlansWithFallback:
     """Cover SiteConfigExporter._fetch_wlans_with_fallback."""
@@ -128,6 +139,17 @@ class TestFetchWlansWithFallback:
 
         local_api.assert_called_once()
         assert result == rows
+
+    def test_derived_programming_error_raises(self, fake_mh):
+        """A malformed derived-WLAN SDK call must raise."""
+        from src.export.site_config_exporter import SiteConfigExporter  # WHY: import the system under test.
+
+        with patch(
+            "src.export.site_config_exporter.mistapi.api.v1.sites.wlans.listSiteWlansDerived",
+            side_effect=TypeError("bad signature"),
+        ):
+            with pytest.raises(TypeError, match="bad signature"):  # WHY: prove the caller learns about the defect.
+                SiteConfigExporter._fetch_wlans_with_fallback("s1")  # WHY: exercise the narrowed handler.
 
 
 class TestPersistSiteWlansCsv:
