@@ -163,13 +163,22 @@ class DomainClassifier:
         return None  # Continue to normal domain rules when no document type matches.
 
     def _match_domain_rules(self, document: DomainDocument, signals: dict[str, str]) -> DomainAssignment | None:
-        for rule in DOMAIN_RULES:  # Apply the contract priority order.
-            assignment = self._match_rule(
-                document, rule, signals, SIGNAL_ORDER
-            )  # Scan signals in stated confidence order.
-            if assignment:  # Stop when the first domain rule matches.
+        for signal_name in SIGNAL_ORDER:  # Honor the stated signal order before broad content rules.
+            assignment = self._match_signal_rules(
+                document, signals, signal_name
+            )  # Apply domain priority within one signal.
+            if assignment:  # Stop when the strongest available signal selects a domain.
                 return assignment
         return None  # Let the caller assign the required fallback.
+
+    def _match_signal_rules(
+        self, document: DomainDocument, signals: dict[str, str], signal_name: str
+    ) -> DomainAssignment | None:
+        for rule in DOMAIN_RULES:  # Apply the contract priority order within one signal.
+            keyword = self._matched_keyword(rule, signal_name, signals[signal_name])  # Test one rule and one signal.
+            if keyword:  # Stop on the first contract rule that matches this signal.
+                return self._assignment(document, rule, signal_name, keyword)  # Preserve the exact rule and keyword.
+        return None  # No domain rule matched this signal.
 
     def _match_rule(
         self, document: DomainDocument, rule: DomainRule, signals: dict[str, str], signal_order: tuple[str, ...]
