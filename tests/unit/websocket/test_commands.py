@@ -9,6 +9,7 @@ cannot silently change the observable contract.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -243,6 +244,34 @@ def test_extract_session_id_404_disconnects_and_reports_status(capsys) -> None:
     out = capsys.readouterr().out  # Read the operator-facing text.
     assert "Failed to issue show MAC table command: 404" in out  # The status must reach the operator.
     assert "missing device" in out  # The server body must remain visible for triage.
+
+
+def test_extract_session_id_malformed_body_disconnects_and_logs_cause(caplog) -> None:
+    """A malformed show MAC table body must disconnect and log the parse cause."""
+    wm = MagicMock()  # Stand in for the open WebSocket manager.
+    resp = _fake_response(200, text="{bad")  # Model a successful response with a damaged body.
+    resp.url = "https://h/api/v1/sites/s/devices/d/show_mac_table"  # Give the log an endpoint.
+    resp.json.side_effect = json.JSONDecodeError("bad JSONDecodeError", "{bad", 1)  # Force parser failure.
+    caplog.set_level("ERROR", logger=commands_mod.logger.name)  # Capture the product parse-error record.
+    result = MacTableCommand._extract_session_id(resp, wm)  # Drive the product parser.
+    assert result is None  # A malformed body must not return a session identifier.
+    wm.disconnect.assert_called_once()  # The WebSocket must close because no session can correlate results.
+    assert "unparseable body" in caplog.text  # The log must name the malformed body.
+    assert "bad JSONDecodeError" in caplog.text  # The log must keep the parser cause.
+
+
+def test_extract_session_id_empty_body_disconnects_and_logs_cause(caplog) -> None:
+    """An empty show MAC table body must disconnect and log the parse cause."""
+    empty_body = b""  # Model the empty HTTP body that issue #2967 repaired.
+    wm = MagicMock()  # Stand in for the open WebSocket manager.
+    resp = _fake_response(200, text=empty_body.decode())  # Model a successful response with no body.
+    resp.json.side_effect = json.JSONDecodeError("empty body", empty_body.decode(), 0)  # Force parser failure.
+    caplog.set_level("ERROR", logger=commands_mod.logger.name)  # Capture the product parse-error record.
+    result = MacTableCommand._extract_session_id(resp, wm)  # Drive the product parser.
+    assert result is None  # An empty body must not return a session identifier.
+    wm.disconnect.assert_called_once()  # The WebSocket must close because no session can correlate results.
+    assert "unparseable body" in caplog.text  # The log must name the empty body.
+    assert "empty body" in caplog.text  # The log must keep the parser cause.
 
 
 def test_extract_session_id_missing_session_disconnects_and_returns_none(capsys) -> None:

@@ -182,3 +182,10 @@ class TestEmptyJsonBody:
         result = browser._read_json_line_prefix(stream)  # Drive the product JSON Lines detector.
         assert result == {"is_json_lines": False, "first_item": None}  # The empty stream is not data.
         assert stream.tell() == 0  # The caller must be able to reread the stream from the start.
+
+    def test_malformed_body_is_not_json_lines(self, browser) -> None:
+        """A malformed body must reset the stream and report no first item."""
+        stream = StringIO("{not valid JSONDecodeError")  # Model a damaged JSON body as text.
+        result = browser._read_json_line_prefix(stream)  # Drive the product JSON Lines detector.
+        assert result == {"is_json_lines": False, "first_item": None}  # The malformed stream is not data.
+        assert stream.tell() == 0  # The caller must be able to reread the stream from the start.

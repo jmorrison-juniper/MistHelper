@@ -63,6 +63,13 @@ def test_empty_cache_body_has_no_private_log_value() -> None:
     assert result == {}  # The resolver must not manufacture private fields from an empty body.
 
 
+def test_malformed_cache_body_has_no_private_log_value() -> None:
+    """A malformed cached JSON body must become an empty payload."""
+    malformed_body = "{not valid JSONDecodeError"  # Model a damaged cache value from storage.
+    result = AddressResolver._loads_json(malformed_body)  # Drive the product JSON boundary helper.
+    assert result == {}  # The resolver must not manufacture private fields from malformed JSON.
+
+
 class TestResolveLogsNoStreet:
     """The resolve entry point logs a digest, never the street."""
 

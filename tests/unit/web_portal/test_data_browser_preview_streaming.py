@@ -102,6 +102,18 @@ def test_empty_json_body_returns_read_error(tmp_path) -> None:
     assert "Expecting value" in result["error"]  # The error names the empty JSON parse failure.
 
 
+def test_malformed_json_body_returns_read_error(tmp_path) -> None:
+    """A malformed JSON body must return an error instead of a false data table."""
+    json_path = tmp_path / "broken.json"  # The JSON preview accepts the .json extension.
+    json_path.write_text("{not valid JSONDecodeError", encoding="utf-8")  # Model a damaged JSON export.
+    service = DataBrowserService(str(tmp_path))  # Scope the service to the fixture directory.
+
+    result = service.preview_file("broken.json", 1, 25, "")  # Drive the real JSON preview path.
+
+    assert result["error"].startswith("Failed to read JSON:")  # The product reports no valid preview data.
+    assert "Expecting property name" in result["error"]  # The error names the malformed JSON parse failure.
+
+
 def test_json_list_column_order_and_filtering_stay_stable(tmp_path) -> None:
     """A JSON object list keeps first-seen columns and filtered row counts."""
     json_path = tmp_path / "items.json"  # The JSON preview accepts the .json extension.
