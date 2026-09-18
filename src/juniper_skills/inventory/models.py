@@ -113,6 +113,7 @@ class VersionedFamily:
 class VersionFamilyValidationResult:
     """The result from a version family invariant validation pass."""
 
+    documents_checked: int
     families_checked: int
     multi_current_families: int
     zero_current_families: int

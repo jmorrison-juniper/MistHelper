@@ -379,15 +379,18 @@ class VersionFamilyInvariantValidator:
     def validate_groups(self, groups: list[DocumentGroup]) -> VersionFamilyValidationResult:
         logging.info("Validating version family invariants from groups")  # Log the in-memory validation start.
         counts = self._group_counts(groups)  # Count current members for each non-empty version family key.
-        result = self._validate_counts(counts)  # Raise when any family violates the one-current invariant.
+        candidates = self._candidate_family_count(groups)  # Count families that the parser can derive from titles.
+        result = self._validate_counts(len(groups), counts, candidates)  # Raise when candidate families vanish.
         logging.debug("Validated %s version families from groups", result.families_checked)  # Report scope.
         return result
 
     def validate_database(self, connection: sqlite3.Connection) -> VersionFamilyValidationResult:
         logging.info("Validating version family invariants from the database")  # Log the database validation start.
+        document_count = self._database_document_count(connection)  # Measure table scope before family counts.
+        candidates = self._database_candidate_family_count(connection)  # Count title-derived version families.
         rows = connection.execute(self._database_query()).fetchall()  # Read one count row for each version family.
         counts = {str(row[0]): int(row[1]) for row in rows}  # Convert SQLite rows into the shared count mapping.
-        result = self._validate_counts(counts)  # Raise when any persisted family violates the invariant.
+        result = self._validate_counts(document_count, counts, candidates)  # Raise when candidate families vanish.
         logging.debug("Validated %s version families from the database", result.families_checked)  # Report scope.
         return result
 
@@ -398,6 +401,13 @@ class VersionFamilyInvariantValidator:
                 counts[group.version_family_key] += 1 if group.version_status == "current" else 0  # Count current.
         return counts
 
+    def _candidate_family_count(self, groups: list[DocumentGroup]) -> int:
+        counts: dict[str, int] = defaultdict(int)  # Count parser-derived family keys before stored markings.
+        for group in groups:  # Inspect titles so stale version columns cannot hide candidate families.
+            key = VersionedFamilyResolver()._family_key(group.title)  # Reuse the production family parser.
+            counts[key] += 1 if key else 0  # Count only documents that carry a recognized version token.
+        return sum(1 for value in counts.values() if value > 1)  # A family needs at least two versioned members.
+
     def _database_query(self) -> str:
         return """
             SELECT version_family_key, SUM(CASE WHEN version_status = 'current' THEN 1 ELSE 0 END)
@@ -406,21 +416,43 @@ class VersionFamilyInvariantValidator:
             GROUP BY version_family_key
             """  # Return one current-member count for each persisted family.
 
-    def _validate_counts(self, counts: dict[str, int]) -> VersionFamilyValidationResult:
+    def _database_document_count(self, connection: sqlite3.Connection) -> int:
+        row = connection.execute("SELECT COUNT(*) FROM source_document").fetchone()  # Fail if the table is missing.
+        return int(row[0])  # Return the measured document count for failure messages.
+
+    def _database_candidate_family_count(self, connection: sqlite3.Connection) -> int:
+        rows = connection.execute("SELECT title FROM source_document").fetchall()  # Fail if the title column is absent.
+        groups = [self._title_group(str(row[0])) for row in rows]  # Reuse in-memory candidate family detection.
+        return self._candidate_family_count(groups)  # Return repeated version-family candidates.
+
+    def _title_group(self, title: str) -> DocumentGroup:
+        root = SourceRoot("validator", Path(), 0)  # Build a minimal root for title-only validation.
+        part = MarkdownPart(title, root, Path(), "", "", 0, 0, {}, {}, "ok")  # Build a minimal part for the model.
+        return DocumentGroup(title, title, "", "", root, [part], 0, "", "")  # Return a title-only document group.
+
+    def _validate_counts(
+        self, document_count: int, counts: dict[str, int], candidate_family_count: int
+    ) -> VersionFamilyValidationResult:
         families_checked = len(counts)  # Measure validation scope for guard proof output.
         multi_current = sum(1 for value in counts.values() if value > 1)  # Count families with contradictory current.
         zero_current = sum(1 for value in counts.values() if value == 0)  # Count families with no buildable current.
-        result = VersionFamilyValidationResult(families_checked, multi_current, zero_current)  # Build report data.
-        if families_checked == 0 or multi_current or zero_current:  # A guard that checks no families must fail.
+        result = VersionFamilyValidationResult(
+            document_count, families_checked, multi_current, zero_current
+        )  # Build report data.
+        no_family_in_populated_set = (
+            candidate_family_count > 0 and families_checked == 0
+        )  # Candidate families must mark.
+        if no_family_in_populated_set or multi_current or zero_current:  # Fail only invalid populated measurements.
             raise ValueError(self._failure_message(result))  # Stop the pipeline before it builds bad topics.
         return result
 
     def _failure_message(self, result: VersionFamilyValidationResult) -> str:
         return (
             "Version family invariant failed: checked "
-            f"{result.families_checked} families, found {result.multi_current_families} "
+            f"{result.documents_checked} documents and {result.families_checked} families, "
+            f"found {result.multi_current_families} "
             f"with multiple current members and {result.zero_current_families} with zero current members."
-        )  # Report the checked count and both failure modes.
+        )  # Report the document count, family count, and both failure modes.
 
 
 class SourceDocumentVersionUpdater:

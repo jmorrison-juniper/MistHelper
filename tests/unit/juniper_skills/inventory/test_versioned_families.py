@@ -69,11 +69,21 @@ class TestVersionedFamilyResolver:
         with pytest.raises(ValueError, match="zero current members"):  # The validator must fail closed.
             VersionFamilyInvariantValidator().validate_groups([first, second])  # Validate the bad state.
 
-    def test_database_validator_rejects_zero_families(self, tmp_path: Path) -> None:
+    def test_database_validator_accepts_empty_database(self, tmp_path: Path) -> None:
         db_path = tmp_path / "factory.db"  # Keep the test database away from the shared factory database.
         with sqlite3.connect(db_path) as connection:  # Create an empty source table in an isolated database.
             self._create_source_document_table(connection)  # Create only the columns that the validator reads.
-            with pytest.raises(ValueError, match="checked 0 families"):  # A zero-scope guard must fail.
+            result = VersionFamilyInvariantValidator().validate_database(connection)  # Validate the empty database.
+        assert result.documents_checked == 0  # Empty tables have no documents to group.
+        assert result.families_checked == 0  # Empty tables correctly have zero version families.
+
+    def test_database_validator_rejects_populated_database_with_zero_families(self, tmp_path: Path) -> None:
+        db_path = tmp_path / "factory.db"  # Keep the test database away from the shared factory database.
+        with sqlite3.connect(db_path) as connection:  # Create a populated table with no resolved families.
+            self._create_source_document_table(connection)  # Create only the columns that the validator reads.
+            self._insert_document(connection, "old", "Guide 2.9", 29)  # Add one title that should form a family.
+            self._insert_document(connection, "new", "Guide 2.10", 30)  # Add a second title that should form a family.
+            with pytest.raises(ValueError, match="2 documents and 0 families"):  # Candidate families must be marked.
                 VersionFamilyInvariantValidator().validate_database(connection)  # Prove the guard cannot skip.
 
     def test_database_updater_enforces_current_invariant(self, tmp_path: Path) -> None:
@@ -88,6 +98,7 @@ class TestVersionedFamilyResolver:
                 "SELECT document_key FROM source_document WHERE version_status = 'current'"
             ).fetchall()  # Query only the current rows.
         assert len(families) == 1  # The two rows are one measured version family.
+        assert result.documents_checked == 2  # The database validator reports the checked document count.
         assert result.families_checked == 1  # The database validator reports the checked family count.
         assert current == [("new",)]  # Numeric comparison must rank 2.10 above 2.9.
 
