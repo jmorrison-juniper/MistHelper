@@ -232,6 +232,19 @@ def test_extract_session_id_non_200_disconnects_and_returns_none(capsys) -> None
     assert "boom" in out
 
 
+def test_extract_session_id_404_disconnects_and_reports_status(capsys) -> None:
+    """A 404 show MAC table response must disconnect and report the exact status."""
+    wm = MagicMock()  # Stand in for the open WebSocket manager.
+    resp = _fake_response(404, text="missing device")  # Model a client-side Mist refusal.
+    result = MacTableCommand._extract_session_id(resp, wm)  # Drive the product status parser.
+    assert result is None  # A 404 response must not return a session identifier.
+    resp.json.assert_not_called()  # The success parser must not run on a 4xx response.
+    wm.disconnect.assert_called_once()  # The WebSocket must close when the REST call fails.
+    out = capsys.readouterr().out  # Read the operator-facing text.
+    assert "Failed to issue show MAC table command: 404" in out  # The status must reach the operator.
+    assert "missing device" in out  # The server body must remain visible for triage.
+
+
 def test_extract_session_id_missing_session_disconnects_and_returns_none(capsys) -> None:
     """200 response without session key disconnects and returns None."""
     wm = MagicMock()

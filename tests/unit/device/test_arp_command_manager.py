@@ -188,6 +188,23 @@ class TestTriggerCommand:
         assert any("Failed to trigger" in m for m in messages)
         assert any("boom" in m for m in messages)
 
+    def test_returns_none_and_reports_unauthorized_status(self, caplog):
+        """A 401 ARP trigger response must report the status and avoid the success path."""
+        response = MagicMock(status_code=401, text="bad token")  # Model an authentication failure response.
+        caplog.set_level(logging.ERROR, logger=_LOGGER_NAME)  # Capture the product error records.
+        with patch.object(arp_mod.requests, "post", return_value=response) as post:  # Drive the product POST call.
+            result = ARPCommandManager._trigger_command("h", "t", "s", "d")  # Exercise the 4xx status path.
+        assert result is None  # A 401 response must not return a session identifier.
+        response.json.assert_not_called()  # The success JSON parser must not run on a 4xx response.
+        post.assert_called_once_with(  # Prove the status came from the product ARP endpoint call.
+            "https://h/api/v1/sites/s/devices/d/arp",
+            headers={"Authorization": "Token t"},
+            json={},
+            timeout=30,
+        )
+        assert "Failed to trigger ARP command: 401" in caplog.text  # The log must name the 4xx status.
+        assert "bad token" in caplog.text  # The log must retain the server body for triage.
+
     def test_connection_error_reaches_the_caller(self):
         """A REST trigger connection error must reach the caller."""
         error = arp_mod.requests.exceptions.ConnectionError("synthetic connection error")  # Use the transport error.
