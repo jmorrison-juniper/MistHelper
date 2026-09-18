@@ -8,8 +8,10 @@ from pathlib import Path
 from src.juniper_skills.segment import (  # Import the public segmenter surface under test.
     CommandBlockDetector,  # Test command re-fencing.
     DocumentSegmenter,  # Test topic segmentation.
+    LifecycleClassifier,  # Test life cycle signal classification.
     OrphanWordRepairer,  # Test inline word repair.
     PartSetJoiner,  # Test part ordering.
+    TopicSubjectBuilder,  # Test useful index subjects.
 )
 
 
@@ -116,6 +118,23 @@ class TestDocumentSegmenter:
             assert any(name.endswith("candidate.md") for name in files)  # Check truncation keeps a whole word.
         finally:  # Always clean repository-local generated files.
             shutil.rmtree(output, ignore_errors=True)  # Remove the generated topic tree.
+
+
+class TestLifecycleIndexMetadata:
+    """Verify indexes carry useful life cycle tags and subjects."""
+
+    def test_classifies_each_life_cycle_stage(self) -> None:
+        classifier = LifecycleClassifier()  # Use the production classifier rules.
+        assert "day0" in classifier.classify("MX Series Routers", "platform model throughput").tags  # Design.
+        assert "day1" in classifier.classify("Initial Configuration", "set system host-name router").tags  # Setup.
+        assert "day2" in classifier.classify("Interface Statistics", "show interfaces extensive").tags  # Operate.
+        assert "day2plus" in classifier.classify("Rescue Configuration", "rollback and rescue").tags  # Change.
+
+    def test_builds_subject_from_commands_and_concepts(self) -> None:
+        text = "show interfaces terse | match ge | except inet | count"  # Use filtering command content.
+        subject = TopicSubjectBuilder().build("Filtering Output", text, ["day2"])  # Build a routing subject.
+        assert "match, count, and except pipe filters" in subject  # Check the subject adds command detail.
+        assert "operational command output" in subject  # Check the subject states the question area.
 
 
 class TestPartSetJoiner:

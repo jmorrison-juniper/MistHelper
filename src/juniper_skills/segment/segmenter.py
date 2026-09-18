@@ -8,7 +8,9 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from src.juniper_skills.segment.commands import CommandBlockDetector
+from src.juniper_skills.segment.lifecycle import LifecycleClassifier
 from src.juniper_skills.segment.repair import DefectRepairResult, DocumentDefectRepairer
+from src.juniper_skills.segment.subjects import TopicSubjectBuilder
 
 
 @dataclass(frozen=True)
@@ -21,6 +23,9 @@ class TopicSegment:
     page_start: int  # Store the first cited page in this topic.
     page_end: int  # Store the last cited page in this topic.
     size_bytes: int  # Store the UTF-8 size for contract proof.
+    lifecycle: list[str] | None = None  # Store the life cycle tags that route the topic.
+    lifecycle_signals: dict[str, list[str]] | None = None  # Store evidence for each selected life cycle tag.
+    subject: str = ""  # Store the one-line index subject that helps routing.
 
     def source_key(self, document_code: str) -> str:
         return f"{document_code} p.{self.page_start}-{self.page_end}"  # Build the contract citation key.
@@ -85,6 +90,8 @@ class DocumentSegmenter:
         self.repairer = DocumentDefectRepairer()  # Repair converter defects before heading segmentation.
         self.detector = CommandBlockDetector()  # Re-fence Junos command blocks before topic splitting.
         self.page_tracker = PageTracker()  # Preserve page citation ranges for every topic.
+        self.lifecycle = LifecycleClassifier()  # Classify topics with the locked life cycle contract signals.
+        self.subjects = TopicSubjectBuilder()  # Build useful one-line subjects for document indexes.
 
     def segment_text(self, text: str, document_slug: str = "document") -> SegmenterResult:
         logging.info("Segmenting document %s", document_slug)  # Log before any document transformation.
@@ -96,6 +103,7 @@ class DocumentSegmenter:
         bounded = self._bound_chunks(chunks)  # Split oversize chunks before topic merge.
         segments = self._merge_chunks(bounded)  # Merge tiny adjacent chunks without breaking the hard limit.
         segments = self._repair_titles(segments)  # Make every topic name unique and meaningful.
+        segments = self._enrich_segments(segments)  # Add life cycle tags and subjects after final names are stable.
         breaks = [segment for segment in segments if segment.size_bytes > self.hard_limit]  # Report failed topics.
         duplicates = self._duplicate_count(segments)  # Prove that routing names do not collide.
         non_knowledge = repair.non_knowledge_sections + dropped  # Combine text repair drops and section drops.
@@ -321,6 +329,19 @@ class DocumentSegmenter:
         slugs = [self._slug(segment.title) for segment in segments]  # Convert titles to routing identifiers.
         return len(slugs) - len(set(slugs))  # Return the number of duplicate route names.
 
+    def _enrich_segments(self, segments: list[TopicSegment]) -> list[TopicSegment]:
+        logging.info("Adding life cycle tags and subjects to %s topics", len(segments))  # Log before enrichment.
+        enriched = [self._enrich_segment(segment) for segment in segments]  # Classify each final topic independently.
+        logging.debug("Added life cycle metadata to %s topics", len(enriched))  # Report enrichment count.
+        return enriched  # Return topics with index metadata.
+
+    def _enrich_segment(self, segment: TopicSegment) -> TopicSegment:
+        classification = self.lifecycle.classify(segment.title, segment.text)  # Score contract life cycle signals.
+        subject = self.subjects.build(segment.title, segment.text, classification.tags)  # Build a useful subject.
+        return replace(
+            segment, lifecycle=classification.tags, lifecycle_signals=classification.signals, subject=subject
+        )  # Store derived metadata on the topic.
+
     def _size_rows(self, rows: list[tuple[str, int]]) -> int:
         return self._size("\n".join(line for line, _page in rows))  # Measure rows as UTF-8 bytes.
 
@@ -342,7 +363,9 @@ class DocumentSegmenter:
 
     def _topic_content(self, segment: TopicSegment, document_code: str) -> str:
         source_key = segment.source_key(document_code)  # Build the exact citation key for this source topic.
-        return f"---\ntopic: {segment.title}\nsources: [{source_key}]\n---\n\n{segment.text}\n"  # Return content.
+        lifecycle = ", ".join(segment.lifecycle or ["day0"])  # Format tags as a normalized front matter array.
+        header = f"---\ntopic: {segment.title}\nlifecycle: [{lifecycle}]\nsources: [{source_key}]\n---"  # Build header.
+        return f"{header}\n\n{segment.text}\n"  # Return content with the source text unchanged.
 
     def _slug(self, value: str) -> str:
         slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")  # Make a file-safe slug from the topic title.
@@ -361,8 +384,9 @@ class DocumentSegmenter:
 
     def _index_row(self, segment: TopicSegment) -> str:
         pages = f"p.{segment.page_start}-{segment.page_end}"  # Format the exact page range.
-        subject = self._subject(segment)  # Build one short subject for routing.
-        return f"| {segment.title} | {pages} | day2 | {subject} |"  # Return one Markdown table row.
+        lifecycle = ", ".join(segment.lifecycle or ["day0"])  # Format one or more life cycle tags.
+        subject = segment.subject or self._subject(segment)  # Use enriched subject with a safe fallback.
+        return f"| {segment.title} | {pages} | {lifecycle} | {subject} |"  # Return one Markdown table row.
 
     def _subject(self, segment: TopicSegment) -> str:
         return f"Topic covers {segment.title}."  # State the subject without copying source prose.
