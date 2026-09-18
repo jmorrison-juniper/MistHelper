@@ -11,6 +11,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from redis.exceptions import RedisError  # WHY: tests must raise the narrowed Redis driver type
 
 from src.db import retention
 from src.db.retention import RetentionManager
@@ -142,7 +143,9 @@ class TestRedisScanContract:
     def test_a_redis_error_logs_a_warning_and_returns_zero(self) -> None:
         """An unreachable Redis server must not stop the sweep thread."""
         client = MagicMock()  # WHY: a client that raises on every command
-        client.execute_command.side_effect = Exception("connection refused")
+        client.execute_command.side_effect = RedisError(
+            "connection refused"
+        )  # WHY: prove the narrowed Redis handler logs and returns zero
         assert _manager(client).check_redis_retention() == 0  # WHY: safe value
 
     def test_a_malformed_reply_returns_zero(self) -> None:

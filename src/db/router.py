@@ -13,6 +13,8 @@ from dataclasses import dataclass  # WHY: frozen slotted snapshot-arg bundle
 from typing import Any  # WHY: strategy dicts hold heterogeneous values
 
 import structlog  # WHY: structured JSON logging for the db package
+from arango.exceptions import ArangoError  # WHY: router handles ArangoDB driver failures by degrading to CSV
+from redis.exceptions import RedisError  # WHY: router handles Redis driver failures by degrading to CSV
 
 from . import DatabaseConfig, DualWriteResult, WriteResult  # WHY: reuse shared package value types
 from .arango_writer import ArangoDBWriter  # WHY: primary document store writer
@@ -135,7 +137,7 @@ class DatabaseRouter:
         try:
             self._arango_writer = ArangoDBWriter(self.config)  # WHY: sync connect + probe
             self._arango_available = True  # WHY: mark healthy for later dispatch
-        except Exception as error:  # WHY: any connect exception downgrades to csv mode
+        except (ArangoError, ConnectionError) as error:  # WHY: only expected Arango connect faults downgrade to CSV
             self._arango_available = False  # WHY: force csv fallback for arango-bound writes
             logger.warning(EVT_ARANGO_UNAVAIL, error=str(error))  # WHY: single warning per attempt
 
@@ -147,7 +149,7 @@ class DatabaseRouter:
         try:
             self._redis_writer = RedisTimeSeriesWriter(self.config)  # WHY: sync connect + probe
             self._redis_available = True  # WHY: mark healthy for later dispatch
-        except Exception as error:  # WHY: any connect exception downgrades to csv mode
+        except (RedisError, ConnectionError, RuntimeError) as error:  # WHY: Redis connect and module faults downgrade
             self._redis_available = False  # WHY: force csv fallback for redis-ts-bound writes
             logger.warning(EVT_REDIS_UNAVAIL, error=str(error))  # WHY: single warning per attempt
 
@@ -159,7 +161,11 @@ class DatabaseRouter:
         try:
             self._redis_json_writer = RedisJSONWriter(self.config)  # WHY: sync connect + probe
             self._redis_json_available = True  # WHY: mark healthy for later dispatch
-        except Exception as error:  # WHY: any connect exception downgrades to csv mode
+        except (
+            RedisError,
+            ConnectionError,
+            RuntimeError,
+        ) as error:  # WHY: Redis JSON connect and module faults downgrade
             self._redis_json_available = False  # WHY: force csv fallback for redis-json writes
             logger.warning(EVT_REDIS_JSON_UNAVAIL, error=str(error))  # WHY: single warning per attempt
 
@@ -247,7 +253,7 @@ class DatabaseRouter:
             if result.success:  # WHY: only snapshot after a successful primary write
                 self._snapshot_if_config(data, api_function_name, strategy)
             return result  # WHY: propagate underlying writer result verbatim
-        except Exception as error:  # WHY: convert unexpected writer failure to csv envelope
+        except ArangoError as error:  # WHY: convert ArangoDB writer failure to csv envelope
             logger.error(EVT_ARANGO_WRITE_ERR, error=str(error))  # WHY: preserve original error diagnostic
             self._mark_unavailable(BACKEND_ARANGO)  # WHY: a failed write means the backend is down now
             return _error_write_result(data, str(error))
@@ -299,7 +305,7 @@ class DatabaseRouter:
                 request.source,
             )  # WHY: writer contract accepts positional args (preserved from original)
             return True  # WHY: signal caller to increment stored counter
-        except Exception as error:  # WHY: never let a snapshot failure escape upward
+        except ArangoError as error:  # WHY: never let an ArangoDB snapshot failure escape upward
             logger.warning(error_event, entity_id=request.entity_id, error=str(error))
             return False  # WHY: signal caller not to count this record
 
@@ -314,7 +320,7 @@ class DatabaseRouter:
             return self._csv_fallback(api_function_name, BACKEND_REDIS)
         try:
             return self._redis_writer.write(data, api_function_name, strategy)  # WHY: perform ts write
-        except Exception as error:  # WHY: convert unexpected writer failure to csv envelope
+        except RedisError as error:  # WHY: convert Redis writer failure to csv envelope
             logger.error(EVT_REDIS_WRITE_ERR, error=str(error))
             self._mark_unavailable(BACKEND_REDIS)  # WHY: a failed write means the backend is down now
             return _error_write_result(data, str(error))
@@ -330,7 +336,7 @@ class DatabaseRouter:
             return self._csv_fallback(api_function_name, BACKEND_REDIS_JSON)
         try:
             return self._redis_json_writer.write(data, api_function_name, strategy)  # WHY: perform json write
-        except Exception as error:  # WHY: convert unexpected writer failure to csv envelope
+        except RedisError as error:  # WHY: convert Redis JSON writer failure to csv envelope
             logger.error(EVT_REDIS_JSON_WRITE_ERR, error=str(error))
             self._mark_unavailable(BACKEND_REDIS_JSON)  # WHY: a failed write means the backend is down now
             return _error_write_result(data, str(error))
@@ -443,7 +449,7 @@ class DatabaseRouter:
             return
         try:
             writer.close()  # WHY: release sockets / pools inside the writer
-        except Exception as error:  # WHY: shutdown must never raise upstream
+        except (ArangoError, RedisError, OSError) as error:  # WHY: shutdown handles driver and socket close failures
             logger.warning(error_event, error=str(error))
 
     @staticmethod
