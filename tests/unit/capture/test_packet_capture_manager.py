@@ -54,3 +54,16 @@ def test_parse_and_find_use_download_manager_statics() -> None:
     url = PacketCaptureDownloadManager.find_capture_url(parsed, "cap-10", 1)
     assert parsed == captures
     assert url == "https://example/cap-10.pcap"
+
+
+def test_fetch_completed_pcaps_reports_http_404(capsys, caplog: pytest.LogCaptureFixture) -> None:
+    """A 404 listing response must report the status and return no captures."""
+    response = MagicMock(status_code=404, data={"detail": "not found"})  # Model a client-side API refusal.
+    downloader = PacketCaptureDownloadManager()  # Drive the product helper that reads response status.
+    caplog.set_level("WARNING", logger="src.capture.packet_capture_download")  # Capture the audit status record.
+
+    result = downloader.fetch_completed_pcaps(lambda: response, 1)  # Drive the real list status path.
+
+    assert result == []  # A 404 response must not enter the success parse path.
+    assert "HTTP 404" in capsys.readouterr().out  # The operator must see the status code.
+    assert "Failed to list PCAPs: 404" in caplog.text  # The log must preserve the exact status.

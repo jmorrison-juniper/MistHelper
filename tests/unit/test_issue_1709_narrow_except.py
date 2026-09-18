@@ -85,6 +85,30 @@ def test_latest_pypi_version_catches_connection_error(monkeypatch: pytest.Monkey
     )
 
 
+def test_latest_pypi_version_reports_404_status(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The PyPI reader must report a 404 status and return the unknown-version value."""
+    response = MagicMock(status_code=404)  # Model a missing package response from PyPI.
+    response.raise_for_status.side_effect = OSError("404 not found")  # Force the product failure branch.
+    requests_stub = SimpleNamespace(get=MagicMock(return_value=response))  # Stub the deferred requests import.
+    original_import = builtins.__import__  # Keep the real importer for all other modules.
+
+    def fake_import(name: str, *args: object, **kwargs: object) -> object:
+        return requests_stub if name == "requests" else original_import(name, *args, **kwargs)  # Target requests only.
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)  # Route the deferred requests import to the stub.
+    caplog.set_level("DEBUG", logger=MistHelper.logger.name)  # Capture the product status log.
+    assert MistHelper._get_latest_pypi_version("missing") == ""  # A 404 keeps the latest version unknown.
+    requests_stub.get.assert_called_once_with(  # Prove the status came from the product PyPI request.
+        "https://pypi.org/pypi/missing/json",
+        timeout=5,
+    )
+    response.json.assert_not_called()  # The product must not parse a 4xx body as a success payload.
+    assert "PyPI returned status 404 for missing" in caplog.text  # The log must report the exact status.
+
+
 def test_latest_pypi_version_rejects_unexpected_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """The PyPI reader lets an unexpected requests defect escape."""
     requests_stub = SimpleNamespace(get=MagicMock(side_effect=AssertionError("boom")))  # Simulate an unrelated defect.

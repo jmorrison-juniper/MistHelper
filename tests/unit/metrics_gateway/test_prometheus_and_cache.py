@@ -137,6 +137,14 @@ class TestPrometheusRenderer:
         body = PrometheusRenderer().render(MetricSnapshot(samples=(sample,)))
         assert "mist_scrape_success 1" in body
 
+    def test_payload_returns_none_and_logs_429(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A 429 Mist response must produce no metrics payload and report the status."""
+        response = StubResponse(status_code=429, data={"detail": "rate limited"})  # Model a rate-limited endpoint.
+        caplog.set_level("ERROR", logger="src.metrics_gateway.collector")  # Capture the product error record.
+        payload = MistStatsReader._payload(response, "getOrgStats")  # Drive the product status parser.
+        assert payload is None  # A 429 reply must not feed the metric renderer.
+        assert "getOrgStats call returned status 429" in caplog.text  # The log must name the exact status.
+
     def test_an_info_family_renders_as_a_gauge(self) -> None:
         """An informational reading is a constant 1, which is a gauge."""
         body = PrometheusRenderer().render(_snapshot())

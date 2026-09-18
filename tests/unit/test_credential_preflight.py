@@ -232,6 +232,16 @@ class TestTokenPreviewCarriesNoSecret:
         assert "synthetic connection error" in caplog.text  # The log must state the connection cause.
         assert self._RAW_TOKEN not in caplog.text  # The log must not expose the token.
 
+    def test_rate_limit_probe_marks_429_token_unavailable(self, caplog, monkeypatch):
+        """A token probe 429 response must identify a rate-limited token."""
+        response = MagicMock(status_code=429)  # Model the Mist rate-limit response.
+        monkeypatch.setattr("requests.get", MagicMock(return_value=response))  # Drive the real probe status branch.
+        caplog.set_level(logging.DEBUG)  # Capture the product debug record that names the status.
+        result = MistHelper._check_token_rate_limit(self._RAW_TOKEN, "api.mist.com", "1/1")  # Drive probe seam.
+        assert result is True  # A rate-limited token must be unavailable for this run.
+        assert "HTTP 429" in caplog.text  # The log must distinguish rate limiting from other 4xx responses.
+        assert self._RAW_TOKEN not in caplog.text  # The log must not expose the token.
+
     def test_availability_loop_logs_a_distinct_label_per_token(self, caplog, monkeypatch):
         """An operator must still tell one token from another in the log."""
         monkeypatch.setattr(MistHelper, "_check_token_rate_limit", lambda *_args: False)  # Report every token usable
