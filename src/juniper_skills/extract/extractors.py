@@ -64,7 +64,7 @@ class CommandFactExtractor(FactExtractor):
     def _command(self, text: str) -> str:
         """Return the command text from one source line, or an empty string."""
         stripped = text.strip().strip("`")  # Remove Markdown edge code marks without changing the command.
-        prompt_match = re.search(
+        prompt_match = re.match(
             r"(?:[\w.-]+@[\w.-]+[>#]\s*)?((?:show|set|delete|edit|run|commit|request|clear|ping|traceroute)\b.+)",
             stripped,
         )  # Detect CLI.
@@ -139,7 +139,7 @@ class NumericFactExtractor(FactExtractor):
     def _numeric_fact(self, value: str, line: SourceLine, source_key: str) -> ExtractedFact:
         """Return one numeric card with a short context."""
         context = self._snippet(line.text)  # Keep copied prose below the clear threshold.
-        fact = f"Numeric value `{value}` applies in the source context `{context}`."  # Preserve the value.
+        fact = f"Numeric value `{value}` applies in source context {context}."  # Preserve the value.
         return self._fact(self._mark_for(line.text), fact, line, source_key)  # Return the numeric fact.
 
 
@@ -194,7 +194,19 @@ class TableRowFactExtractor(FactExtractor):
     def _pairs(self, headers: tuple[str, ...], cells: tuple[str, ...]) -> tuple[str, ...]:
         """Return header and value pairs for one row."""
         count = min(len(headers), len(cells))  # Avoid index errors on uneven PDF tables.
-        return tuple(f"`{headers[index]}` is `{cells[index]}`" for index in range(count))  # Preserve cells.
+        return tuple(self._pair(headers[index], cells[index]) for index in range(count))  # Preserve safe cells.
+
+    def _pair(self, header: str, cell: str) -> str:
+        """Return one safe table header and value pair."""
+        value = self._safe_cell(cell)  # Shorten prose cells without changing identifiers.
+        return f"`{header}` is {value}"  # Preserve the header and safe cell value.
+
+    def _safe_cell(self, cell: str) -> str:
+        """Return a safe table cell value for publication."""
+        words = re.findall(r"[A-Za-z]+", cell)  # Count prose words to avoid copied sentences.
+        if len(words) > 7:  # Long table descriptions are protected prose.
+            return self._snippet(cell)  # Restate long cells as a short clear-band phrase.
+        return f"`{cell}`"  # Keep short cells exact because they are structured data.
 
 
 class OutputFieldFactExtractor(FactExtractor):
@@ -222,7 +234,7 @@ class OutputFieldFactExtractor(FactExtractor):
 
     def _field_fact(self, field: tuple[str, str], line: SourceLine, source_key: str) -> ExtractedFact:
         """Return one output field card."""
-        fact = f"Output field `{field[0]}` means `{field[1]}` in this source."  # Preserve field and meaning.
+        fact = f"Output field `{field[0]}` means {field[1]} in this source."  # Preserve field and meaning.
         return self._fact(CardClassMark.INFO, fact, line, source_key)  # Return the output field fact.
 
 
@@ -244,7 +256,7 @@ class ConstraintFactExtractor(FactExtractor):
     def _constraint_fact(self, line: SourceLine, source_key: str) -> ExtractedFact:
         """Return one constraint card."""
         context = self._snippet(line.text)  # Keep copied prose below the clear threshold.
-        fact = f"Constraint applies to source context `{context}`. Read the cited page before action."  # Restate.
+        fact = f"Constraint applies to source context {context}. Read the cited page before action."  # Restate.
         return self._fact(self._mark_for(line.text), fact, line, source_key)  # Return the classified constraint.
 
 
@@ -266,7 +278,7 @@ class PrerequisiteFactExtractor(FactExtractor):
     def _ordering_fact(self, line: SourceLine, source_key: str) -> ExtractedFact:
         """Return one ordering card."""
         context = self._snippet(line.text)  # Keep copied prose below the clear threshold.
-        fact = f"Ordering requirement applies to source context `{context}`."  # Restate the ordering signal.
+        fact = f"Ordering requirement applies to source context {context}."  # Restate the ordering signal.
         return self._fact(self._mark_for(line.text), fact, line, source_key)  # Return the classified fact.
 
 
@@ -294,7 +306,7 @@ class DefinitionFactExtractor(FactExtractor):
 
     def _definition_fact(self, term: tuple[str, str], line: SourceLine, source_key: str) -> ExtractedFact:
         """Return one definition card."""
-        fact = f"Term `{term[0]}` means `{term[1]}` in this source."  # Preserve the term and a short meaning.
+        fact = f"Term `{term[0]}` means {term[1]} in this source."  # Preserve the term and a short meaning.
         return self._fact(CardClassMark.INFO, fact, line, source_key)  # Return the definition fact.
 
 
@@ -319,5 +331,5 @@ class PlatformReleaseFactExtractor(FactExtractor):
     def _qualifier_fact(self, qualifier: str, line: SourceLine, source_key: str) -> ExtractedFact:
         """Return one qualifier card."""
         context = self._snippet(line.text)  # Keep copied prose below the clear threshold.
-        fact = f"Qualifier `{qualifier}` scopes source context `{context}`."  # Preserve the qualifier.
+        fact = f"Qualifier `{qualifier}` scopes source context {context}."  # Preserve the qualifier.
         return self._fact(CardClassMark.INFO, fact, line, source_key)  # Return the qualifier fact.
