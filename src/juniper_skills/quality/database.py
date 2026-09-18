@@ -21,6 +21,7 @@ class SourceQualityDatabase:
         connection = sqlite3.connect(self.database_path)  # Open one handle so Windows can close it explicitly.
         try:  # Ensure the database handle closes even when a SQL statement fails.
             self._create_schema(connection)  # Ensure quarantine tables exist before row writes.
+            self._clear_previous_rows(connection)  # Remove stale rows before writing a full gate report.
             for score in report.scores:  # Persist every score so pass and fail counts are auditable.
                 self._upsert_score(connection, score)  # Upsert the measured source quality row.
             self._quarantine_failures(connection, report.failed)  # Block failed sources in the work queue.
@@ -34,6 +35,12 @@ class SourceQualityDatabase:
         connection.execute(self._quality_schema())  # Create the quality score table when missing.
         connection.execute(self._quarantine_schema())  # Create the quarantine table when missing.
         logging.debug("Source quality database schema is ready")  # Report DDL completion.
+
+    def _clear_previous_rows(self, connection: sqlite3.Connection) -> None:
+        logging.info("Clearing stale source quality quarantine rows")  # Log before replacing full-scan state.
+        connection.execute("DELETE FROM source_quality")  # Remove prior measurements that used older keys.
+        connection.execute("DELETE FROM source_quarantine")  # Remove prior quarantine rows before the new report.
+        logging.debug("Cleared stale source quality quarantine rows")  # Report cleanup completion.
 
     def _quality_schema(self) -> str:
         return """

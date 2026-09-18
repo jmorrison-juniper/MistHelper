@@ -2,6 +2,7 @@
 
 from __future__ import annotations  # Keep annotations cheap during quality imports.
 
+import hashlib  # Create compact stable keys for full source paths.
 import logging  # Record gate actions and measured outcomes.
 import re  # Detect text, tables, commands, and repeated document lines.
 from collections import Counter  # Count repeated lines without quadratic scans.
@@ -101,9 +102,14 @@ class SourceQualityGate:
     def _score_path(self, path: Path, text: str, threshold: float, pdf_roots: tuple[Path, ...]) -> SourceQualityScore:
         logging.info("Scoring source path %s", path)  # Log before per-file scoring.
         source_pdf = self._source_pdf(path, pdf_roots)  # Check whether a better source exists for re-extraction.
-        score = self._score(path.stem, path, text, threshold, source_pdf)  # Apply all quality rules to the file.
+        score = self._score(self._document_key(path), path, text, threshold, source_pdf)  # Apply all quality rules.
         logging.debug("Scored source path %s as %s", path, score.status)  # Report pass, review, or fail.
         return score  # Return the row for quarantine and reports.
+
+    def _document_key(self, path: Path) -> str:
+        digest = hashlib.sha1(str(path).encode("utf-8")).hexdigest()[:12]  # Avoid collisions across archive roots.
+        key = re.sub(r"[^a-z0-9]+", "-", str(path).lower()).strip("-")  # Include path context to avoid collisions.
+        return f"{digest}-{key[-200:]}" if key else digest  # Keep SQLite keys bounded and unique enough.
 
     def _score(
         self, document_key: str, path: Path, text: str, threshold: float, source_pdf: Path | None
