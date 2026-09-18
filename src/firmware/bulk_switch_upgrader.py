@@ -488,7 +488,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
             return None  # WHY: signal caller to hit API.
         try:  # WHY: any IO error must fall back to API.
             return self._maybe_read_cache()  # WHY: encapsulate freshness+size checks.
-        except Exception as cache_error:  # pylint: disable=broad-exception-caught
+        except (OSError, UnicodeDecodeError, csv.Error, KeyError, ValueError) as cache_error:
             self.logger.warning("Error reading cache file: %s", cache_error)  # WHY: audit failure.
             print("-> Cache file unreadable, will query API")  # WHY: user note.
             return None  # WHY: signal fallback to API.
@@ -568,7 +568,7 @@ class BulkSwitchFirmwareUpgrader:  # pylint: disable=too-few-public-methods,too-
             self._write_cache_rows(firmware_data)  # WHY: perform actual file write.
             print(f"!? Cached {len(firmware_data)} firmware entries to {self.CACHE_FILE}")  # WHY: user note.
             self.logger.info("Saved %d firmware entries to cache", len(firmware_data))  # WHY: audit.
-        except Exception as save_error:  # pylint: disable=broad-exception-caught
+        except OSError as save_error:
             self.logger.warning("Failed to save firmware cache: %s", save_error)  # WHY: audit.
             print(f"!? Warning: Could not cache firmware data: {save_error}")  # WHY: user note.
 
