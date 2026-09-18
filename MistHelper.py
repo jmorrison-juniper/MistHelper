@@ -703,6 +703,9 @@ from src.reports.ssid_broadcast_gap_report import SSIDBroadcastGapReport  # Menu
 from src.reports.wired_client_manufacturer_report_generator import (
     WiredClientManufacturerReportGenerator,  # Cat B (1013 SC-001 position 26) -- re-export
 )
+from src.security.rogue_dhcp import (
+    RogueDhcpScanOperation,  # Menu 269 (issue #2985) -- org-wide rogue DHCP server scan.
+)
 from src.site.address_audit import AddressAuditEngine  # Menu 195: read-only CSV site-address audit
 from src.site.bulk_radius_wlan_config_manager import (
     BulkRadiusWLANConfigManager,  # Cat B (1013 SC-001 position 15) -- re-export
@@ -4237,6 +4240,14 @@ menu_actions: dict[str, Any] = {
         category=OperationRegistry.skip_category("268"),  # Read the safety class.
         destructive=False,  # Keep the safety flag.
         supports_fast=False,  # Avoid fast-mode inspection.
+    ),
+    "269": GlobalImportManager.MenuEntry(  # Use named fields for menu 269.
+        menu_id="269",  # Store key for drift checks.
+        handler=RogueDhcpScanOperation.run,
+        title="Scan the organization for rogue DHCP servers on switches (30 days, issue #2985)",
+        category=OperationRegistry.skip_category("269"),  # Read the safety class.
+        destructive=False,  # The scan reads only, so it changes no Mist configuration.
+        supports_fast=False,  # The scan already limits its own request count.
     ),
     "238": GlobalImportManager.MenuEntry(  # Use named fields for menu 238.
         menu_id="238",  # Store key for drift checks.

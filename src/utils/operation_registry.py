@@ -331,6 +331,10 @@ class OperationRegistry:
             "category": "interactive_safe",
             "skip_reason": "Requires an endpoint operation choice and identifier prompts",
         },
+        # WHY: issue #2985. The scan reads alarms, switch events, and Marvis config actions,
+        # and it writes nothing back to the Mist cloud. The organization comes from the cache
+        # or the environment, so no prompt blocks an automated pass.
+        "269": {"category": "safe"},
         "238": {"category": "interactive_safe", "skip_reason": "Requires an MSP ID"},
         "240": {
             "category": "interactive_safe",
