@@ -137,7 +137,7 @@ def test_the_report_names_no_requirement_files_for_empty_install_list(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     """An empty install list MUST report `none` instead of a blank field."""
-    logging.info("Checking the empty install report")  # Report the plan before the work.
+    logger.info("Checking the empty install report")  # Report the plan before the work.
     caplog.set_level(logging.INFO, logger="bootstrap_worktree")  # Capture the information lines.
 
     report_result(WorktreeBootstrapper(tmp_path), [], browser_ready=True)  # Exercise the empty install edge case.
