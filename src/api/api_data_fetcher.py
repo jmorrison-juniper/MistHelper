@@ -29,7 +29,6 @@ from src.data.data_processing_utils import (
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 _HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
 _HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
-_STATUS_MISSING = object()  # WHY: distinguish old doubles from SDK timeouts that report None.
 
 
 def _response_status_code(response: Any) -> int:
@@ -192,11 +191,9 @@ class APIDataFetcher:
         Returns False when status_code is None (timeout/connection error
         swallowed by mistapi) or when it indicates a server error.
         """
-        status = getattr(response, "status_code", _STATUS_MISSING)  # Read status code when present.
-        if status is _STATUS_MISSING:  # Old response double.
-            return True  # Keep legacy test-double behavior.
-        if status is None:  # No status present.
-            return False  # Treat as invalid.
+        status = getattr(response, "status_code", None)  # WHY: a swallowed timeout carries no status.
+        if status is None:  # WHY: no status means the SDK lost the answer.
+            return False  # WHY: preserve the retry contract for swallowed timeouts.
         if not isinstance(status, int):  # Mock status attributes are not comparable.
             return True  # Keep legacy test-double behavior.
         if status >= 500:  # Server error.
