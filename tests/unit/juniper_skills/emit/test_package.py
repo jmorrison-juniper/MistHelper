@@ -9,6 +9,7 @@ from src.juniper_skills.emit.package import (
     CitationKeyAllocator,
     DocumentPackageInput,
     IndexRenderer,
+    RouteTableBuilder,
     SkillPackageAssembler,
     SkillPackageValidator,
     TopicRoute,
@@ -64,6 +65,36 @@ class TestSkillPackageEmitter:
         assert first != second  # A collision must receive a distinct key.
         assert first == again  # A persisted allocation must not change when the title changes.
 
+    def test_skill_route_rows_keep_concrete_destinations(self) -> None:
+        workspace = EmitTestWorkspace().reset("routes")  # Create isolated project-local test data.
+        document = EmitTestWorkspace().document(workspace, "doc-one", "Routing Guide")  # Build one source.
+        rows = RouteTableBuilder((document,), self._many_routes(2)).rows(10_000)  # Build a small route table.
+        assert "`documents/doc-one/00-topic.md`" in rows  # A single topic row must point at its topic file.
+        assert rows.count("`INDEX.md`") == 0  # A topic-sized route table must not redirect every row.
+
+    def test_sources_read_converted_frontmatter_fields(self) -> None:
+        workspace = EmitTestWorkspace().reset("sources")  # Create isolated project-local test data.
+        source = workspace / "harvest" / "guides" / "source.md"  # Create a source file with converter metadata.
+        source.parent.mkdir(parents=True, exist_ok=True)  # Create the harvest-like directory.
+        source.write_text(self._source_frontmatter(), encoding="utf-8")  # Write the source metadata.
+        document = DocumentPackageInput(  # Build an input that lets sources.md read the real metadata.
+            "doc-one",
+            "Fallback Title",
+            "guides",
+            1,
+            EmitTestWorkspace().document(workspace, "doc-one", "Topic Guide").document_dir,
+            (source,),
+            Path("guides") / "source.pdf",
+            "https://example.test/source",
+        )
+        result = SkillPackageAssembler(workspace / "factory.db").assemble(
+            "junos-fundamentals", workspace / "out", (document,), self._taxonomy(workspace)
+        )  # Assemble sources.md from the metadata-bearing source.
+        sources = (result.package_dir / "sources.md").read_text(encoding="utf-8")  # Read the attribution table.
+        assert "Source Title" in sources  # The source title must come from the source frontmatter.
+        assert "Source Author" in sources  # The author must come from the source frontmatter.
+        assert "| 77 |" in sources  # The page count must come from the source frontmatter.
+
     def test_coverage_gap_is_written_to_level_one_index(self) -> None:
         workspace = EmitTestWorkspace().reset("coverage")  # Create isolated project-local test data.
         document = EmitTestWorkspace().document(workspace, "doc-one", "Coverage Guide", "day1")  # Build source.
@@ -100,6 +131,12 @@ class TestSkillPackageEmitter:
             )
             for index in range(count)
         ]  # Return route rows that make the level 1 index exceed the hard limit.
+
+    def _source_frontmatter(self) -> str:
+        return (
+            "---\ntitle: Source Title\nauthor: Source Author\npages: 77\n"
+            "creationDate: D:20200101000000-07'00'\nmodDate: D:20210101000000-07'00'\n---\n\nBody.\n"
+        )  # Return source metadata that the attribution table must publish.
 
     def _taxonomy(self, workspace: Path) -> Path:
         taxonomy = workspace / "domain-taxonomy.md"  # Create a local contract fragment for this test.

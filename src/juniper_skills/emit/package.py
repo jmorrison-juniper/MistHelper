@@ -328,7 +328,7 @@ class SkillPackageAssembler:
         return TopicRoute(title, subject, lifecycle, citation, source_range, relative)
 
     def _subject(self, title: str, body: str) -> str:
-        first_card = next((line for line in body.splitlines() if line.startswith("- ")), "")
+        first_card = next((line for line in body.splitlines() if re.match(r"^- (MUST|SHOULD|INFO): ", line)), "")
         cleaned = re.sub(r"^- (?:MUST|SHOULD|INFO):\s*", "", first_card).split("[", 1)[0].strip()
         return cleaned if cleaned else f"Read about {title}."
 
@@ -485,9 +485,10 @@ class SkillRenderer:
 
     def render(self) -> str:
         logging.info("Rendering SKILL.md for %s", self.domain)
-        text = self._frontmatter() + self._body(self._route_rows())
-        if len(text.encode("utf-8")) > SKILL_HARD_LIMIT:
-            text = self._frontmatter() + self._body(self._group_rows())
+        frontmatter = self._frontmatter()
+        overhead = len(frontmatter.encode("utf-8")) + len(self._body("").encode("utf-8"))
+        route_rows = RouteTableBuilder(self.documents, self.routes).rows(SKILL_HARD_LIMIT - overhead)
+        text = frontmatter + self._body(route_rows)
         logging.debug("Rendered SKILL.md for %s with %s bytes", self.domain, len(text.encode("utf-8")))
         return text
 
@@ -533,18 +534,69 @@ class SkillRenderer:
             "This skill does not change a network device or a service.\n"
         )
 
-    def _route_rows(self) -> str:
-        return "".join(f"| {route.subject} | `{route.relative_path.as_posix()}` |\n" for route in self.routes[:120])
-
-    def _group_rows(self) -> str:
-        groups = self._keyword_groups()
-        return "".join(f"| {group} | `INDEX.md` |\n" for group in groups[:40])
-
-    def _keyword_groups(self) -> list[str]:
-        return self.keywords or [document.title for document in self.documents]
-
     def _title(self) -> str:
         return " ".join(part.capitalize() for part in self.domain.split("-"))
+
+
+class RouteTableBuilder:
+    """Build concrete SKILL.md route rows from the real topic set."""
+
+    def __init__(self, documents: tuple[DocumentPackageInput, ...], routes: list[TopicRoute]) -> None:
+        self.documents = documents
+        self.routes = routes
+
+    def rows(self, byte_budget: int) -> str:
+        logging.info("Building SKILL.md route rows with concrete destinations")
+        candidates = [self._topic_rows(), self._lifecycle_rows(), self._document_rows(), self._domain_rows()]
+        selected = next((rows for rows in candidates if 0 < len(rows.encode("utf-8")) <= byte_budget), candidates[-1])
+        logging.debug("Selected SKILL.md route rows with %s bytes", len(selected.encode("utf-8")))
+        return selected
+
+    def _topic_rows(self) -> str:
+        return "".join(f"| {self._ask(route)} | `{route.relative_path.as_posix()}` |\n" for route in self.routes)
+
+    def _lifecycle_rows(self) -> str:
+        rows: list[str] = []
+        for document in self.documents:
+            rows.extend(self._document_lifecycle_rows(document))
+        return "".join(rows)
+
+    def _document_lifecycle_rows(self, document: DocumentPackageInput) -> list[str]:
+        rows: list[str] = []
+        document_routes = [route for route in self.routes if route.relative_path.parts[1] == document.slug]
+        for tag in LIFECYCLE_TAGS:
+            tag_routes = [route for route in document_routes if tag in route.lifecycle]
+            if tag_routes:
+                rows.append(self._group_row(document, tag, tag_routes))
+        return rows
+
+    def _group_row(self, document: DocumentPackageInput, tag: str, routes: list[TopicRoute]) -> str:
+        destination = routes[0].relative_path.as_posix() if len(routes) == 1 else f"documents/{document.slug}/INDEX.md"
+        subject = f"{self._stage(tag)} in {document.title}"
+        return f"| {subject} | `{destination}` |\n"
+
+    def _document_rows(self) -> str:
+        return "".join(
+            f"| {document.title} topics | `documents/{document.slug}/INDEX.md` |\n" for document in self.documents
+        )
+
+    def _domain_rows(self) -> str:
+        if len(self.documents) > 1:
+            return "| The subject spans more than one source document | `INDEX.md` |\n"
+        return self._document_rows()
+
+    def _ask(self, route: TopicRoute) -> str:
+        text = route.subject.strip()
+        return text if 8 <= len(text) <= 140 and not text.startswith("-") else f"Read about {route.title}."
+
+    def _stage(self, tag: str) -> str:
+        names = {
+            "day0": "Design, selection, and requirements",
+            "day1": "Setup, access, and first configuration",
+            "day2": "Verification, monitoring, and troubleshooting",
+            "day2plus": "Change, recovery, upgrade, and automation",
+        }
+        return names[tag]
 
 
 class IndexRenderer:
@@ -633,12 +685,42 @@ class SourcesRenderer:
 
     def _row(self, domain: str, document: DocumentPackageInput) -> str:
         key = self.allocator.allocate(domain, document.slug, document.title)
-        markdown = "<br>".join(path.as_posix() for path in document.markdown_paths)
-        converted = document.converted or datetime.now(UTC).date().isoformat()
+        metadata = SourceMetadataReader().read(document)
+        markdown = "<br>".join(self._display_path(path) for path in document.markdown_paths)
+        title = str(metadata.get("title") or document.title)
+        pages = int(metadata.get("pages") or document.pages)
+        author = str(metadata.get("author") or document.author)
+        source_date = metadata.get("modDate") or metadata.get("creationDate") or datetime.now(UTC).date()
+        converted = str(document.converted or source_date)
         return (
-            f"| {key} | {document.title} | {document.author} | {document.category} | {document.pages} | "
+            f"| {key} | {title} | {author} | {document.category} | {pages} | "
             f"{converted} | {document.public_origin} | {markdown} | {document.pdf_path.as_posix()} |\n"
         )
+
+    def _display_path(self, path: Path) -> str:
+        parts = path.parts
+        if "juniper-harvest-md" in parts:
+            index = parts.index("juniper-harvest-md")
+            return Path(*parts[index + 1 :]).as_posix()
+        return path.as_posix()
+
+
+class SourceMetadataReader:
+    """Read attribution fields from converted source frontmatter."""
+
+    def read(self, document: DocumentPackageInput) -> dict[str, object]:
+        logging.info("Reading source metadata for %s", document.slug)
+        source_path = next((path for path in document.markdown_paths if path.exists()), None)
+        metadata = self._read_path(source_path) if source_path else {}
+        logging.debug("Read %s source metadata fields for %s", len(metadata), document.slug)
+        return metadata
+
+    def _read_path(self, path: Path | None) -> dict[str, object]:
+        if path is None:
+            return {}
+        text = path.read_text(encoding="utf-8")
+        frontmatter, _ = FrontMatterParser().parse(text)
+        return frontmatter
 
 
 class DocumentIndexRenderer:
