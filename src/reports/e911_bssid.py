@@ -15,6 +15,14 @@ from typing import Any, ClassVar  # WHY: mistapi returns untyped JSON dicts. Cla
 from src.utils.console import echo  # WHY: 1031 stdout + INFO log helper replaces legacy WARNING-channel echoes.
 
 logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
+_HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
+
+
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
 @dataclass  # WHY: promote plain class into an auto-init dataclass
@@ -196,6 +204,14 @@ class E911BSSIDReportGenerator:  # WHY: static-method namespace for the Menu 160
 
         echo("    Fetching AP radio MACs...")
         radio_response = mistapi.api.v1.orgs.devices.listOrgApsMacs(apisession, org_id, limit=page_limit)  # WHY: page 1
+        status_code = _response_status_code(radio_response)  # WHY: a 5xx can carry an empty payload without raising.
+        if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the radio count unsafe.
+            logger.error(  # WHY: the operator must see the cloud status instead of a false empty radio list.
+                "The cloud returned HTTP %s for AP radio MACs at org %s",
+                status_code,
+                org_id,
+            )
+            return {"radio_macs": [], "radio_bands": {}}  # WHY: preserve the existing empty bundle contract.
         radio_macs_data: list[dict[str, Any]] = mistapi.get_all(  # WHY: fetch all remaining pages
             response=radio_response, mist_session=apisession
         )

@@ -510,6 +510,14 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
             response = self.mistapi.api.v1.sites.rrm.getSiteCurrentChannelPlanning(
                 self.apisession, site_id
             )  # WHY: RRM plan.
+            status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+            if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the channel count unsafe.
+                logger.error(  # WHY: the operator must see the cloud status instead of a false empty export.
+                    "The cloud returned HTTP %s for current channel planning at site %s",
+                    status_code,
+                    site_id,
+                )
+                return  # WHY: preserve the existing None return contract for this exporter.
             raw = getattr(response, "data", response) or {}  # WHY: tolerate dataclass or dict.
             rows = _channel_planning_rows_from_raw(raw, site_id)  # WHY: normalize payload shape to rows.
             rows = self.DataProcessingUtils.flatten_nested_fields(rows)  # WHY: flatten for CSV.
