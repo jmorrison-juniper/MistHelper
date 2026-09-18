@@ -23,6 +23,7 @@ class WatcherConfig:
     download_root: Path | None = None  # Permit tests to use a local corpus root.
     interval_seconds: float = 10.0  # Poll often enough without adding watchdog.
     priority_bonus: int = 100_000  # Put live changes ahead of untouched backlog items.
+    max_scan_duty: float = 0.20  # Keep scan work below this fraction of service wall time.
 
 
 @dataclass
@@ -35,6 +36,8 @@ class WatcherStats:
     items_enqueued: int = 0  # Count logical documents placed back on the work queue.
     scans: int = 0  # Count scan cycles for the service progress log.
     errors: int = 0  # Count transient filesystem or database errors.
+    last_scan_seconds: float = 0.0  # Store the newest full scan duration for performance reports.
+    total_scan_seconds: float = 0.0  # Store all scan time so operators can see polling cost.
 
 
 @dataclass
@@ -97,6 +100,11 @@ class PollingFileState:
         sample = self.samples.get(path, FileSample(0, 0))  # Read the latest stable stat sample.
         accepted = self.accepted_samples.get(path, (0, 0))  # Read the last stat sample accepted with a hash.
         return accepted != (sample.size_bytes, sample.modified_ns)  # True means only metadata may have changed.
+
+    def stat_unchanged_since_accept(self, path: Path) -> bool:
+        sample = self.samples.get(path, FileSample(0, 0))  # Read the latest stable stat sample.
+        accepted = self.accepted_samples.get(path, (-1, -1))  # Use impossible defaults before a hash exists.
+        return accepted == (sample.size_bytes, sample.modified_ns)  # True means no content read is needed.
 
     def prune(self, paths: set[Path]) -> None:
         logging.info("Pruning watcher state for missing Markdown files")  # Log cleanup before mutating state.
@@ -275,7 +283,7 @@ class CorpusWatcher:
         deadline = time.monotonic() + duration_seconds if duration_seconds else None  # Bound proof runs when requested.
         while not self.stop_requested and not self._expired(deadline):  # Run until interrupt or proof duration ends.
             self.scan_once()  # Process one polling cycle with its own error boundary.
-            time.sleep(self.config.interval_seconds)  # Sleep between scans so writers can settle.
+            time.sleep(self._sleep_seconds(deadline))  # Adapt sleep so scanning does not starve converter agents.
         logging.debug("Watcher service stopped after %s scans", self.stats.scans)  # Report service stop.
         return self.stats
 
@@ -286,12 +294,14 @@ class CorpusWatcher:
 
     def scan_once(self) -> WatcherStats:
         logging.info("Running one Juniper corpus watcher scan")  # Log scan start.
+        started = time.monotonic()  # Measure full scan cost so polling cannot hide excessive work.
         try:
             self._scan_once()  # Keep transient filesystem errors inside the long-running service.
         except OSError as error:
             self._record_error(error)  # Count and log recoverable filesystem failures.
         except sqlite3.Error as error:
             self._record_error(error)  # Count and log recoverable database failures.
+        self._record_scan_time(started)  # Store scan duration before the caller reads stats.
         self.stats.scans += 1  # Count every attempted scan for progress reports.
         logging.debug("Watcher scan %s finished", self.stats.scans)  # Report scan completion.
         return self.stats
@@ -322,6 +332,8 @@ class CorpusWatcher:
     def _change_for_path(self, root_map: dict[Path, SourceRoot], path: Path) -> ReadyChange | None:
         sample = self.state.sample(path)  # Read size and mtime before any content read.
         if not sample or sample.stable_checks < 2:  # Require two equal observations before hashing.
+            return None
+        if self.state.stat_unchanged_since_accept(path):  # Skip file reads when size and mtime did not change.
             return None
         raw = path.read_bytes()  # Read only a stable file so partial writes do not enter the queue.
         content_hash = hashlib.sha256(raw).hexdigest()  # Compare exact content, not modified time.
@@ -376,6 +388,27 @@ class CorpusWatcher:
 
     def _expired(self, deadline: float | None) -> bool:
         return bool(deadline and time.monotonic() >= deadline)  # Stop duration-bound proof runs on time.
+
+    def _sleep_seconds(self, deadline: float | None) -> float:
+        duty_sleep = self._duty_sleep_seconds()  # Compute sleep that keeps scan duty under the configured limit.
+        requested = max(self.config.interval_seconds, duty_sleep)  # Obey the operator interval and the duty limit.
+        remaining = max(0.0, deadline - time.monotonic()) if deadline else requested  # Do not sleep past proof end.
+        sleep_seconds = min(requested, remaining)  # Keep duration-bound runs responsive at the end.
+        logging.debug("Watcher sleep is %.3f seconds", sleep_seconds)  # Report adaptive sleep choice.
+        return sleep_seconds
+
+    def _duty_sleep_seconds(self) -> float:
+        if self.config.max_scan_duty <= 0:  # Guard invalid config so the watcher still sleeps normally.
+            return self.config.interval_seconds
+        active = self.stats.last_scan_seconds  # Use the measured scan cost from the just-finished scan.
+        idle_ratio = (1.0 - self.config.max_scan_duty) / self.config.max_scan_duty  # Convert duty to idle time.
+        return active * idle_ratio  # Return the idle time needed to hold the configured duty limit.
+
+    def _record_scan_time(self, started: float) -> None:
+        elapsed = time.monotonic() - started  # Measure wall time used by discovery, stat checks, and queue refresh.
+        self.stats.last_scan_seconds = elapsed  # Store the latest value for live service reports.
+        self.stats.total_scan_seconds += elapsed  # Accumulate time used by all scans in this process.
+        logging.debug("Watcher scan used %.3f seconds", elapsed)  # Report the measured scan cost.
 
     def _record_error(self, error: Exception) -> None:
         self.stats.errors += 1  # Count transient failures without stopping the service.

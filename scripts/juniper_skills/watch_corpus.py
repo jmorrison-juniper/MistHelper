@@ -21,7 +21,9 @@ class WatchCorpusCommand:
     def run(self) -> None:
         args = self.parser.parse_args()  # Read command-line arguments for this service run.
         logging.basicConfig(level=args.log_level, format="%(asctime)s %(levelname)s %(message)s")  # Configure logs.
-        config = WatcherConfig(args.repo_root, args.download_root, args.interval, args.priority_bonus)  # Build config.
+        config = WatcherConfig(
+            args.repo_root, args.download_root, args.interval, args.priority_bonus, args.max_scan_duty
+        )  # Build config.
         watcher = CorpusWatcher(config)  # Create the long-running service object.
         logging.info("Watcher uses polling because watchdog is not a project dependency")  # State dependency decision.
         try:
@@ -40,6 +42,7 @@ class WatchCorpusCommand:
         parser.add_argument("--interval", type=float, default=10.0)  # Set polling cadence for long runs.
         parser.add_argument("--duration", type=float, default=None)  # Bound proof runs without another process manager.
         parser.add_argument("--priority-bonus", type=int, default=100_000)  # Keep the live priority rule configurable.
+        parser.add_argument("--max-scan-duty", type=float, default=0.20)  # Keep polling from consuming the host.
         parser.add_argument("--log-level", default="INFO")  # Permit DEBUG when investigating a live converter.
         return parser
 
@@ -50,6 +53,8 @@ class WatchCorpusCommand:
         print(f"items_enqueued={stats.items_enqueued}")  # Report logical documents queued for rebuild.
         print(f"scans={stats.scans}")  # Report the number of scan cycles observed.
         print(f"errors={stats.errors}")  # Report recovered transient errors.
+        print(f"last_scan_seconds={stats.last_scan_seconds:.3f}")  # Report the newest scan cost.
+        print(f"total_scan_seconds={stats.total_scan_seconds:.3f}")  # Report the total service scan cost.
 
 
 WatchCorpusCommand().run()  # Start the class-based command without a standalone wrapper.
