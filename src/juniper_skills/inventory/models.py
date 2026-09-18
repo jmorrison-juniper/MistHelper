@@ -110,6 +110,15 @@ class VersionedFamily:
 
 
 @dataclass(frozen=True)
+class VersionFamilyValidationResult:
+    """The result from a version family invariant validation pass."""
+
+    families_checked: int
+    multi_current_families: int
+    zero_current_families: int
+
+
+@dataclass(frozen=True)
 class InventoryResult:
     """The measured inventory result."""
 

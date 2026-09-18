@@ -22,6 +22,7 @@ from src.juniper_skills.inventory.models import (
     MarkdownPart,
     SourceRoot,
     VersionedFamily,
+    VersionFamilyValidationResult,
 )  # Share typed inventory records across the package.
 
 
@@ -296,17 +297,24 @@ class DuplicateResolver:
 class VersionedFamilyResolver:
     """Mark current and superseded product guide versions."""
 
-    _version_pattern = re.compile(r"(?:\bVersion\s+)?(\d+(?:\.\d+)+)", re.IGNORECASE)  # Match real title versions.
+    _version_pattern = re.compile(
+        r"(?<![A-Za-z0-9])(?:Release\s+|Version\s+)?"
+        r"(?P<version>\d+(?:\.(?:\d+|x))+(?:[A-Z]\d+)*(?:-[A-Z]\d+)?)(?![A-Za-z0-9])",
+        re.IGNORECASE,
+    )  # Match full release tokens such as 13.2X51-D20, 21.4R3, and 2.0.x.
     _brand_pattern = re.compile(r"\b(?:Juniper|HPE Networking)\b", re.IGNORECASE)  # Remove brands from product keys.
 
     def resolve(self, groups: list[DocumentGroup]) -> list[VersionedFamily]:
         logging.info("Resolving versioned product guide families")  # Log the version pass before mutation.
         buckets: dict[str, list[DocumentGroup]] = defaultdict(list)  # Store versioned documents by product family.
+        for group in groups:  # Clear stale state before this resolver writes the only version decision.
+            self._mark_unversioned(group)  # Prevent an earlier run from leaving a second current member.
         for group in groups:  # Inspect every active logical document.
             family_key = self._family_key(group.title)  # Remove versions and normalize product names.
             if family_key:  # Ignore documents with no parseable version.
                 buckets[family_key].append(group)  # Add the versioned document to its family.
         families = [self._mark_family(key, value) for key, value in buckets.items() if len(value) > 1]  # Mark repeats.
+        VersionFamilyInvariantValidator().validate_groups(groups)  # Fail if any marked family lacks one current.
         logging.debug("Resolved %s versioned families", len(families))  # Report family count.
         return sorted(families, key=lambda family: family.superseded_pages, reverse=True)  # Rank by page saving.
 
@@ -323,7 +331,7 @@ class VersionedFamilyResolver:
 
     def _mark_family(self, family_key: str, groups: list[DocumentGroup]) -> VersionedFamily:
         logging.info("Marking version family %s", family_key)  # Log family mutation before status writes.
-        current = max(groups, key=self._version_tuple)  # Compare version fields numerically, not as strings.
+        current = max(groups, key=self._current_score)  # Use version, recency, pages, and yield to break ties.
         for group in groups:  # Assign a version status to each family member.
             self._mark_group(group, family_key, current)  # Store current or superseded state on the document.
         superseded = [group for group in groups if group is not current]  # Gather older documents for page savings.
@@ -337,16 +345,158 @@ class VersionedFamilyResolver:
         group.version_status = "current" if group is current else "superseded"  # Mark the newest version current.
         group.build_topics = group is current  # Skip topic generation for superseded documents.
 
+    def _mark_unversioned(self, group: DocumentGroup) -> None:
+        group.version_family_key = ""  # Clear the family key so stale grouping cannot survive a re-run.
+        group.version_value = ""  # Clear the version value because an ungrouped document has no family version.
+        group.version_status = "unversioned"  # Restore the default status before the resolver measures families.
+        group.build_topics = True  # Keep non-versioned documents eligible for topic generation.
+
+    def _current_score(self, group: DocumentGroup) -> tuple[tuple[int, ...], int, int, int, str]:
+        return (
+            self._version_tuple(group),
+            group.root.rank,
+            group.pages,
+            group.text_chars,
+            TextKey.normalize(group.title),
+        )  # Break ties deterministically so one family cannot keep two current members.
+
     def _version_tuple(self, group: DocumentGroup) -> tuple[int, ...]:
-        return tuple(int(part) for part in self._version_value(group.title).split("."))  # Compare versions by number.
+        return self._version_parts(self._version_value(group.title))  # Compare releases with numeric fields only.
 
     def _version_value(self, title: str) -> str:
-        versions = [match.group(1) for match in self._version_pattern.finditer(title)]  # Parse every title version.
+        versions = [match.group("version") for match in self._version_pattern.finditer(title)]  # Parse all versions.
         winner = max(versions, key=self._version_parts) if versions else "0"  # A multi-version title uses the newest.
         return winner  # Return a string that is human-readable in the report.
 
     def _version_parts(self, version: str) -> tuple[int, ...]:
-        return tuple(int(part) for part in version.split("."))  # Build a numeric tuple so 2.10 outranks 2.9.
+        values = [int(part) for part in re.findall(r"\d+", version)]  # Build numeric fields across R, X, and D tags.
+        return tuple(values) if values else (0,)  # Keep malformed input lower than any measured version.
+
+
+class VersionFamilyInvariantValidator:
+    """Validate that each measured version family has exactly one current member."""
+
+    def validate_groups(self, groups: list[DocumentGroup]) -> VersionFamilyValidationResult:
+        logging.info("Validating version family invariants from groups")  # Log the in-memory validation start.
+        counts = self._group_counts(groups)  # Count current members for each non-empty version family key.
+        result = self._validate_counts(counts)  # Raise when any family violates the one-current invariant.
+        logging.debug("Validated %s version families from groups", result.families_checked)  # Report scope.
+        return result
+
+    def validate_database(self, connection: sqlite3.Connection) -> VersionFamilyValidationResult:
+        logging.info("Validating version family invariants from the database")  # Log the database validation start.
+        rows = connection.execute(self._database_query()).fetchall()  # Read one count row for each version family.
+        counts = {str(row[0]): int(row[1]) for row in rows}  # Convert SQLite rows into the shared count mapping.
+        result = self._validate_counts(counts)  # Raise when any persisted family violates the invariant.
+        logging.debug("Validated %s version families from the database", result.families_checked)  # Report scope.
+        return result
+
+    def _group_counts(self, groups: list[DocumentGroup]) -> dict[str, int]:
+        counts: dict[str, int] = defaultdict(int)  # Store current counts by measured version family.
+        for group in groups:  # Inspect each logical document after version resolution.
+            if group.version_family_key:  # Ignore unversioned documents because they are not family members.
+                counts[group.version_family_key] += 1 if group.version_status == "current" else 0  # Count current.
+        return counts
+
+    def _database_query(self) -> str:
+        return """
+            SELECT version_family_key, SUM(CASE WHEN version_status = 'current' THEN 1 ELSE 0 END)
+            FROM source_document
+            WHERE version_family_key <> ''
+            GROUP BY version_family_key
+            """  # Return one current-member count for each persisted family.
+
+    def _validate_counts(self, counts: dict[str, int]) -> VersionFamilyValidationResult:
+        families_checked = len(counts)  # Measure validation scope for guard proof output.
+        multi_current = sum(1 for value in counts.values() if value > 1)  # Count families with contradictory current.
+        zero_current = sum(1 for value in counts.values() if value == 0)  # Count families with no buildable current.
+        result = VersionFamilyValidationResult(families_checked, multi_current, zero_current)  # Build report data.
+        if families_checked == 0 or multi_current or zero_current:  # A guard that checks no families must fail.
+            raise ValueError(self._failure_message(result))  # Stop the pipeline before it builds bad topics.
+        return result
+
+    def _failure_message(self, result: VersionFamilyValidationResult) -> str:
+        return (
+            "Version family invariant failed: checked "
+            f"{result.families_checked} families, found {result.multi_current_families} "
+            f"with multiple current members and {result.zero_current_families} with zero current members."
+        )  # Report the checked count and both failure modes.
+
+
+class SourceDocumentVersionUpdater:
+    """Refresh version family state for an existing inventory database."""
+
+    def __init__(self, db_path: Path) -> None:
+        self.db_path = db_path  # Store the live factory database path for in-place updates.
+
+    def refresh(self) -> tuple[list[VersionedFamily], VersionFamilyValidationResult]:
+        logging.info("Refreshing source document version state in %s", self.db_path)  # Log before opening SQLite.
+        with sqlite3.connect(self.db_path) as connection:  # Use one transaction for all status changes.
+            rows = self._document_rows(connection)  # Read current source document rows without changing schema.
+            groups = self._groups(rows)  # Convert rows into resolver input records.
+            families = VersionedFamilyResolver().resolve(groups)  # Recompute family status with current parsing.
+            self._write_groups(connection, groups)  # Persist only version columns and topic build flags.
+            self._ensure_current_index(connection)  # Enforce the one-current invariant at SQLite level.
+            result = VersionFamilyInvariantValidator().validate_database(connection)  # Prove the persisted state.
+        logging.debug("Refreshed %s version families in %s", len(families), self.db_path)  # Report family count.
+        return families, result
+
+    def _document_rows(self, connection: sqlite3.Connection) -> list[sqlite3.Row]:
+        connection.row_factory = sqlite3.Row  # Return named rows so the loader is explicit and stable.
+        rows = connection.execute("SELECT * FROM source_document ORDER BY document_key").fetchall()  # Read documents.
+        logging.debug("Read %s source document rows for version refresh", len(rows))  # Report refresh input size.
+        return rows
+
+    def _groups(self, rows: list[sqlite3.Row]) -> list[DocumentGroup]:
+        root = SourceRoot("database", self.db_path.parent, 0)  # Use a synthetic root because rows are already chosen.
+        return [self._group(root, row) for row in rows]  # Build resolver records for every persisted document.
+
+    def _group(self, root: SourceRoot, row: sqlite3.Row) -> DocumentGroup:
+        part = MarkdownPart(
+            str(row["document_key"]), root, root, "", "", 0, int(row["text_chars"]), {}, {}, "ok"
+        )  # Build one synthetic part so tie-breaking can use persisted text yield.
+        return DocumentGroup(
+            str(row["document_key"]),
+            str(row["title"]),
+            str(row["category"]),
+            str(row["source_pdf"]),
+            root,
+            [part],
+            int(row["pages"]),
+            str(row["status"]),
+            str(row["group_method"]),
+        )  # Rebuild only fields needed for version resolution and reporting.
+
+    def _write_groups(self, connection: sqlite3.Connection, groups: list[DocumentGroup]) -> None:
+        logging.info("Writing refreshed version state for %s documents", len(groups))  # Log before in-place update.
+        for group in groups:  # Update all rows so stale version data is removed from ungrouped documents.
+            connection.execute(self._update_statement(), self._update_values(group))  # Persist the resolved state.
+        logging.debug("Wrote refreshed version state for %s documents", len(groups))  # Report updated row count.
+
+    def _update_statement(self) -> str:
+        return """
+            UPDATE source_document
+            SET version_family_key = ?, version_value = ?, version_status = ?, build_topics = ?
+            WHERE document_key = ?
+            """  # Limit in-place updates to version resolver output columns.
+
+    def _update_values(self, group: DocumentGroup) -> tuple[object, ...]:
+        return (
+            group.version_family_key,
+            group.version_value,
+            group.version_status,
+            1 if group.build_topics else 0,
+            group.group_key,
+        )  # Return ordered SQL values for one document update.
+
+    def _ensure_current_index(self, connection: sqlite3.Connection) -> None:
+        logging.info("Creating one-current partial index for version families")  # Log before structural guard setup.
+        connection.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS source_document_one_current_per_version_family
+            ON source_document(version_family_key)
+            WHERE version_family_key <> '' AND version_status = 'current'
+            """)  # Let SQLite reject two current rows in the same family.
+        logging.debug("One-current partial index is present")  # Report structural guard completion.
 
 
 class EditionFamilyAnalyzer:
@@ -432,6 +582,7 @@ class InventoryDatabase:
             changed = self._changed_parts(connection, decisions)  # Detect reconverted files before replacing hashes.
             self._write_documents(connection, decisions)  # Upsert document and part records.
             self._write_work_items(connection, decisions, changed)  # Queue changed documents for conversion.
+            self._enforce_version_invariants(connection)  # Stop bad version state before topic generation can run.
         logging.debug(
             "Inventory database write finished with %s changed parts", len(changed)
         )  # Report requeue signal count.
@@ -618,6 +769,12 @@ class InventoryDatabase:
         return (
             "content changed" if decision.canonical_key in changed else "inventory refreshed"
         )  # State requeue reason.
+
+    def _enforce_version_invariants(self, connection: sqlite3.Connection) -> None:
+        logging.info("Enforcing version family invariants")  # Log before the database guard runs.
+        SourceDocumentVersionUpdater(self.db_path)._ensure_current_index(connection)  # Add the SQLite uniqueness guard.
+        VersionFamilyInvariantValidator().validate_database(connection)  # Fail when a family lacks exactly one current.
+        logging.debug("Version family invariants passed")  # Report successful guard completion.
 
 
 class InventoryReport:
