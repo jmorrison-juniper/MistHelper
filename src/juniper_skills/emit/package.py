@@ -51,6 +51,15 @@ class TopicRoute:
 
 
 @dataclass(frozen=True)
+class RouteCluster:
+    """One user-language route row for SKILL.md."""
+
+    subject: str
+    destination: str
+    rank: int
+
+
+@dataclass(frozen=True)
 class PackageAssemblyResult:
     """Measured output from one domain assembly run."""
 
@@ -250,7 +259,8 @@ class SkillPackageAssembler:
     ) -> list[TopicRoute]:
         logging.info("Writing normalized topic files for %s", document.slug)
         source_files = self._topic_files(document.document_dir)
-        routes = [self._write_topic(target_dir, domain, document, key, path) for path in source_files]
+        subjects = SegmentIndexReader().subjects(document.document_dir / "INDEX.md")
+        routes = [self._write_topic(target_dir, domain, document, key, path, subjects) for path in source_files]
         logging.debug("Wrote %s normalized topic files for %s", len(routes), document.slug)
         return routes
 
@@ -261,7 +271,13 @@ class SkillPackageAssembler:
         return files
 
     def _write_topic(
-        self, target_dir: Path, domain: str, document: DocumentPackageInput, key: str, source_path: Path
+        self,
+        target_dir: Path,
+        domain: str,
+        document: DocumentPackageInput,
+        key: str,
+        source_path: Path,
+        subjects: dict[str, str],
     ) -> TopicRoute:
         logging.info("Normalizing topic file %s", source_path.name)
         source = source_path.read_text(encoding="utf-8")
@@ -272,7 +288,7 @@ class SkillPackageAssembler:
         target_path = target_dir / self._topic_filename(source_path, title)
         topic_text = self._topic_text(title, domain, document.slug, lifecycle, source_range, body)
         target_path.write_text(topic_text, encoding="utf-8")
-        route = self._route(title, document.slug, source_range, target_path, lifecycle, body)
+        route = self._route(title, document.slug, source_range, target_path, lifecycle, body, subjects)
         logging.debug("Normalized topic file %s to %s bytes", source_path.name, target_path.stat().st_size)
         return route
 
@@ -320,9 +336,16 @@ class SkillPackageAssembler:
         return line
 
     def _route(
-        self, title: str, slug: str, citation: str, path: Path, lifecycle: tuple[str, ...], body: str
+        self,
+        title: str,
+        slug: str,
+        citation: str,
+        path: Path,
+        lifecycle: tuple[str, ...],
+        body: str,
+        subjects: dict[str, str],
     ) -> TopicRoute:
-        subject = self._subject(title, body)
+        subject = subjects.get(title) or self._subject(title, body)
         source_range = citation.split(" ", 1)[1] if " " in citation else "p.0-0"
         relative = Path("documents") / slug / path.name
         return TopicRoute(title, subject, lifecycle, citation, source_range, relative)
@@ -445,6 +468,25 @@ class FrontMatterParser:
         return value
 
 
+class SegmentIndexReader:
+    """Read task-language subjects from the segmenter level 2 index."""
+
+    def subjects(self, index_path: Path) -> dict[str, str]:
+        logging.info("Reading segmenter subjects from %s", index_path)
+        if not index_path.exists():
+            logging.debug("Segmenter index does not exist at %s", index_path)
+            return {}
+        rows = self._rows(index_path.read_text(encoding="utf-8"))
+        subjects = {row[0]: row[3] for row in rows if len(row) >= 4}
+        logging.debug("Read %s segmenter subjects from %s", len(subjects), index_path)
+        return subjects
+
+    def _rows(self, text: str) -> list[list[str]]:
+        rows = [line.strip("|").split("|") for line in text.splitlines() if line.startswith("| ")]
+        clean = [[cell.strip() for cell in row] for row in rows]
+        return [row for row in clean if row and row[0] not in {"Topic", "-"}]
+
+
 class TaxonomyReader:
     """Read routing keywords for one domain from the locked taxonomy table."""
 
@@ -547,13 +589,14 @@ class RouteTableBuilder:
 
     def rows(self, byte_budget: int) -> str:
         logging.info("Building SKILL.md route rows with concrete destinations")
-        candidates = [self._topic_rows(), self._lifecycle_rows(), self._document_rows(), self._domain_rows()]
+        candidates = [self._cluster_rows(), self._lifecycle_rows(), self._document_rows(), self._domain_rows()]
         selected = next((rows for rows in candidates if 0 < len(rows.encode("utf-8")) <= byte_budget), candidates[-1])
         logging.debug("Selected SKILL.md route rows with %s bytes", len(selected.encode("utf-8")))
         return selected
 
-    def _topic_rows(self) -> str:
-        return "".join(f"| {self._ask(route)} | `{route.relative_path.as_posix()}` |\n" for route in self.routes)
+    def _cluster_rows(self) -> str:
+        clusters = SubjectClusterBuilder(self.routes).clusters()
+        return "".join(f"| {cluster.subject} | `{cluster.destination}` |\n" for cluster in clusters[:20])
 
     def _lifecycle_rows(self) -> str:
         rows: list[str] = []
@@ -585,10 +628,6 @@ class RouteTableBuilder:
             return "| The subject spans more than one source document | `INDEX.md` |\n"
         return self._document_rows()
 
-    def _ask(self, route: TopicRoute) -> str:
-        text = route.subject.strip()
-        return text if 8 <= len(text) <= 140 and not text.startswith("-") else f"Read about {route.title}."
-
     def _stage(self, tag: str) -> str:
         names = {
             "day0": "Design, selection, and requirements",
@@ -597,6 +636,93 @@ class RouteTableBuilder:
             "day2plus": "Change, recovery, upgrade, and automation",
         }
         return names[tag]
+
+
+class SubjectClusterBuilder:
+    """Compress topic routes into user-language subject clusters."""
+
+    def __init__(self, routes: list[TopicRoute]) -> None:
+        self.routes = routes
+
+    def clusters(self) -> list[RouteCluster]:
+        logging.info("Building user-language route clusters")
+        clusters = self._known_clusters()
+        clusters.extend(self._unmatched_clusters(clusters))
+        ordered = sorted(self._unique(clusters), key=lambda cluster: cluster.rank)
+        logging.debug("Built %s user-language route clusters", len(ordered))
+        return ordered
+
+    def _known_clusters(self) -> list[RouteCluster]:
+        return [
+            self._one("filtering output", "Filtering or searching command output, match, except, count, or last", 10),
+            self._one("cli help", "Finding a command, its syntax, or its options", 20),
+            self._one("comparing", "Undoing a change, rolling back, or recovering a broken configuration", 30),
+            self._one("comparing", "Making a change safely on a remote device", 40),
+            self._one("management port", "First console access, out-of-band management, or the management port", 50),
+            self._one("mx series", "Choosing a platform for a branch, a campus, or an edge role", 60),
+            self._one("alarms", "A device that will not boot, an alarm, or a hardware fault", 70),
+            self._one("basic networking tools", "Capturing packets or testing reachability", 80),
+            self._many("routing", "Writing or debugging a routing policy", 90),
+            self._many("firewall filter", "Writing or debugging a firewall filter", 100),
+        ]
+
+    def _one(self, needle: str, subject: str, rank: int) -> RouteCluster:
+        route = self._find(needle)
+        destination = route.relative_path.as_posix() if route else self._first_document_index()
+        return RouteCluster(subject, destination, rank)
+
+    def _many(self, needle: str, subject: str, rank: int) -> RouteCluster:
+        matches = [route for route in self.routes if needle in self._context(route)]
+        destination = self._span_destination(matches)
+        return RouteCluster(subject, destination, rank)
+
+    def _unmatched_clusters(self, clusters: list[RouteCluster]) -> list[RouteCluster]:
+        used = {cluster.destination for cluster in clusters}
+        rows = [
+            self._fallback(route, index)
+            for index, route in enumerate(self.routes)
+            if route.relative_path.as_posix() not in used
+        ]
+        return rows[:8]
+
+    def _fallback(self, route: TopicRoute, index: int) -> RouteCluster:
+        subject = self._fallback_subject(route)
+        return RouteCluster(subject, route.relative_path.as_posix(), 200 + index)
+
+    def _fallback_subject(self, route: TopicRoute) -> str:
+        text = route.subject.strip().rstrip(".")
+        clean = text if 12 <= len(text) <= 120 and not text.startswith("-") else route.title
+        return clean[0].upper() + clean[1:] if clean else route.title
+
+    def _unique(self, clusters: list[RouteCluster]) -> list[RouteCluster]:
+        seen: set[tuple[str, str]] = set()
+        output: list[RouteCluster] = []
+        for cluster in clusters:
+            key = (cluster.subject, cluster.destination)
+            if key not in seen:
+                output.append(cluster)
+                seen.add(key)
+        return output
+
+    def _find(self, needle: str) -> TopicRoute | None:
+        return next((route for route in self.routes if needle in self._context(route)), None)
+
+    def _context(self, route: TopicRoute) -> str:
+        return f"{route.title} {route.subject} {route.relative_path.name}".lower()
+
+    def _span_destination(self, routes: list[TopicRoute]) -> str:
+        if len(routes) == 1:
+            return routes[0].relative_path.as_posix()
+        return self._document_index(routes) if routes else self._first_document_index()
+
+    def _document_index(self, routes: list[TopicRoute]) -> str:
+        parts = routes[0].relative_path.parts
+        return f"documents/{parts[1]}/INDEX.md"
+
+    def _first_document_index(self) -> str:
+        if not self.routes:
+            return "INDEX.md"
+        return self._document_index([self.routes[0]])
 
 
 class IndexRenderer:
@@ -733,27 +859,44 @@ class DocumentIndexRenderer:
 
     def render(self) -> str:
         logging.info("Rendering level 2 index for %s", self.document.slug)
-        text = (
+        text = self._text(self._topic_rows())
+        if len(text.encode("utf-8")) > 10_240:
+            text = self._text(self._compact_topic_rows())
+        logging.debug("Rendered level 2 index for %s with %s bytes", self.document.slug, len(text.encode("utf-8")))
+        return text
+
+    def _text(self, rows: str) -> str:
+        return (
             f"# {self.document.title} index\n\n## Source\n\n"
             f"Title: {self.document.title}.\n\nCategory: {self.document.category}.\n\nPages: {self.document.pages}.\n\n"
             f"Source file path: {self._markdown_paths()}.\n\nSource PDF path: {self.document.pdf_path.as_posix()}.\n\n"
             f"Split part count: {len(self.document.markdown_paths)}.\n\n## Topic route\n\n"
             "| Ask about | Topic | Read | Life cycle |\n| - | - | - | - |\n"
-            f"{self._topic_rows()}\n## Life cycle map\n\n| Stage | Topics | Status |\n| - | -: | - |\n"
+            f"{rows}\n## Life cycle map\n\n| Stage | Topics | Status |\n| - | -: | - |\n"
             f"{self._coverage_rows()}\n## Citation keys\n\n| Key | Source range | Topic |\n| - | - | - |\n"
             f"{self._citation_rows()}"
         )
-        logging.debug("Rendered level 2 index for %s with %s bytes", self.document.slug, len(text.encode("utf-8")))
-        return text
 
     def _markdown_paths(self) -> str:
         return ", ".join(path.as_posix() for path in self.document.markdown_paths)
 
     def _topic_rows(self) -> str:
         return "".join(
-            f"| {route.subject} | {route.title} | {route.relative_path.name} | {', '.join(route.lifecycle)} |\n"
+            f"| {self._cell(route.subject, 95)} | {route.title} | {route.relative_path.name} | "
+            f"{', '.join(route.lifecycle)} |\n"
             for route in self.routes
         )
+
+    def _compact_topic_rows(self) -> str:
+        return "".join(
+            f"| {self._cell(route.subject, 42)} | {self._cell(route.title, 28)} | {route.relative_path.name} | "
+            f"{', '.join(route.lifecycle)} |\n"
+            for route in self.routes
+        )
+
+    def _cell(self, value: str, limit: int) -> str:
+        text = value.strip().rstrip(".")
+        return text if len(text) <= limit else text[: limit - 3].rstrip() + "..."
 
     def _coverage_rows(self) -> str:
         coverage = {tag: sum(1 for route in self.routes if tag in route.lifecycle) for tag in LIFECYCLE_TAGS}

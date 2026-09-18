@@ -69,8 +69,18 @@ class TestSkillPackageEmitter:
         workspace = EmitTestWorkspace().reset("routes")  # Create isolated project-local test data.
         document = EmitTestWorkspace().document(workspace, "doc-one", "Routing Guide")  # Build one source.
         rows = RouteTableBuilder((document,), self._many_routes(2)).rows(10_000)  # Build a small route table.
-        assert "`documents/doc-one/00-topic.md`" in rows  # A single topic row must point at its topic file.
+        assert "`documents/doc-one/INDEX.md`" in rows  # A grouped route must point at the document index.
         assert rows.count("`INDEX.md`") == 0  # A topic-sized route table must not redirect every row.
+
+    def test_skill_route_rows_use_user_vocabulary_clusters(self) -> None:
+        workspace = EmitTestWorkspace().reset("cluster")  # Create isolated project-local test data.
+        document = EmitTestWorkspace().document(workspace, "doc-one", "Cluster Guide")  # Build one source.
+        routes = self._cluster_routes()  # Build routes that model the pilot document subjects.
+        rows = RouteTableBuilder((document,), routes).rows(10_000)  # Build the SKILL.md route table.
+        assert "Filtering or searching command output" in rows  # The route must name user question terms.
+        assert "`documents/doc-one/08-filtering-output.md`" in rows  # The route must point at the topic file.
+        assert "Read about Filtering Output" not in rows  # The route must not restate the file name.
+        assert rows.count("\n|") <= 20  # The route table must be a cluster list, not a directory listing.
 
     def test_sources_read_converted_frontmatter_fields(self) -> None:
         workspace = EmitTestWorkspace().reset("sources")  # Create isolated project-local test data.
@@ -131,6 +141,26 @@ class TestSkillPackageEmitter:
             )
             for index in range(count)
         ]  # Return route rows that make the level 1 index exceed the hard limit.
+
+    def _cluster_routes(self) -> list[TopicRoute]:
+        return [
+            TopicRoute(
+                "Filtering Output",
+                "Use match, count, and except pipe filters to read operational command output.",
+                ("day2",),
+                "JUNOS p.64-70",
+                "p.64-70",
+                Path("documents") / "doc-one" / "08-filtering-output.md",
+            ),
+            TopicRoute(
+                "CLI Help",
+                "Shows help commands that find syntax, topics, and command options.",
+                ("day1", "day2"),
+                "JUNOS p.70-77",
+                "p.70-77",
+                Path("documents") / "doc-one" / "09-cli-help.md",
+            ),
+        ]  # Return pilot-like topics that must become user-language clusters.
 
     def _source_frontmatter(self) -> str:
         return (
