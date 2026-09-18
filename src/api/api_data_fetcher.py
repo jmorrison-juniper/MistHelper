@@ -27,6 +27,14 @@ from src.data.data_processing_utils import (
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+_HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
+
+
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
 class APIDataFetcher:
@@ -60,22 +68,24 @@ class APIDataFetcher:
         self.rawdata: list[dict[str, Any]] = []  # Raw API rows.
         self.smoothed: float | None = None  # Smoothed delay metric.
 
-    def execute(self) -> None:  # Run fetch/export/display.
+    def execute(self) -> bool:  # Run fetch/export/display.
         """Execute the complete API fetch workflow."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         self._log_entry()  # Log the run start.
         self.org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
 
         try:
-            self._fetch_api_data()  # Fetch from the API.
+            if not self._fetch_api_data():  # Fetch rows only when the cloud status proves the payload.
+                return False  # WHY: callers must not log a success count after an HTTP failure.
 
             if self.rawdata is None or len(self.rawdata) == 0:  # No data returned.
                 logger.warning("! No data returned from API for %s. Skipping.", self.title)  # warn no data.
                 logger.debug("EXIT: APIDataFetcher.execute - no data")  # Trace early exit.
-                return  # Skip export.
+                return False  # Skip export and tell callers not to log completion.
 
             self._export_and_display_data()  # Export and display.
             logger.debug("EXIT: APIDataFetcher.execute - success")  # Trace success.
+            return True  # WHY: callers can log completion only after the export succeeds.
 
         except Exception as error:  # Handle run failure.
             self._handle_outer_exception(error)  # Log/report the failure.
@@ -104,7 +114,7 @@ class APIDataFetcher:
     # API CALL METHODS
     # =========================================================================
 
-    def _fetch_api_data(self) -> None:  # Call the API and store rows.
+    def _fetch_api_data(self) -> bool:  # Call the API and store rows.
         """Make API call and retrieve paginated results with retry on timeout."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         api_name = self.api_call.__name__  # API callable name.
@@ -113,15 +123,34 @@ class APIDataFetcher:
         response = self._call_api_with_retry(api_name)  # Call with retry.
         self._apply_rate_limiting()  # Throttle after the call.
         self._log_response_structure(response)  # Trace response shape.
+        if self._reject_http_failure(response, api_name):  # WHY: HTTP failures cannot prove an empty export.
+            return False  # WHY: skip pagination, export, and caller success logs.
 
         try:
             self.rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page through all rows.
             record_count = len(self.rawdata) if self.rawdata else 0  # Count retrieved rows.
             logger.debug("API call successful, retrieved %s raw records", record_count)  # Trace the count.
+            return True  # WHY: the caller can continue to no-data or export handling.
         except KeyError as error:  # Malformed response key.
             self._handle_key_error(response, error)  # Try to recover data.
+            return bool(self.rawdata)  # WHY: recovery success lets the caller continue.
         except Exception as error:  # Other API failure.
             self._handle_api_exception(error)  # Handle/raise the failure.
+            return False  # WHY: static analysis needs an explicit return after handler calls.
+
+    def _reject_http_failure(self, response: Any, api_name: str) -> bool:
+        """Return true after logging a failing HTTP response."""
+        status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+        if status_code < _HTTP_ERROR_MIN:  # Successful or old test double.
+            return False  # Continue to pagination and export.
+        logger.error(  # WHY: the operator must see the cloud status instead of a false empty export.
+            "The cloud returned HTTP %s for %s at org %s",
+            status_code,
+            api_name,
+            self.org_id,
+        )
+        self.rawdata = []  # WHY: preserve the existing empty-result failure contract.
+        return True  # WHY: caller must stop before it logs a success count.
 
     def _call_api_with_retry(self, api_name: str) -> Any:  # Retry the API call.
         """Call API with retry/backoff (mistapi swallows timeouts as status_code=None)."""
@@ -162,9 +191,11 @@ class APIDataFetcher:
         Returns False when status_code is None (timeout/connection error
         swallowed by mistapi) or when it indicates a server error.
         """
-        status = getattr(response, "status_code", None)  # Read status code.
-        if status is None:  # No status present.
-            return False  # Treat as invalid.
+        status = getattr(response, "status_code", None)  # WHY: a swallowed timeout carries no status.
+        if status is None:  # WHY: no status means the SDK lost the answer.
+            return False  # WHY: preserve the retry contract for swallowed timeouts.
+        if not isinstance(status, int):  # Mock status attributes are not comparable.
+            return True  # Keep legacy test-double behavior.
         if status >= 500:  # Server error.
             return False  # Retry on 5xx.
         return True  # Response is usable.

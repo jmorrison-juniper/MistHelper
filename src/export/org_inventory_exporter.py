@@ -81,7 +81,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
         if emitter:  # Branch: emitter present.
             emitter.emit_progress_start("12", "inventory", 1)  # Emit progress start.
         op_start = time.time()  # Record operation start time.
-        mh.APIDataFetcher(
+        exported = mh.APIDataFetcher(
             title="Org Inventory:",
             api_call=mistapi.api.v1.orgs.inventory.getOrgInventory,
             filename="OrgInventory.csv",
@@ -89,6 +89,8 @@ class OrgInventoryExporter:  # Org inventory exporters.
             vc=True,  # Include all physical VC member devices (6186 vs 3224 logical)
             limit=1000,
         ).execute()
+        if exported is False:  # WHY: only an explicit failure skips the completion report.
+            return  # WHY: preserve the existing None return contract for this exporter.
         logger.info("Completed organization inventory export and wrote results to OrgInventory.csv.")
         if emitter:  # Branch: emitter present.
             emitter.emit_progress_complete(ProgressContext("12", "inventory", 1), 1, False, time.time() - op_start)
@@ -105,12 +107,14 @@ class OrgInventoryExporter:  # Org inventory exporters.
         if emitter:  # Branch: emitter present.
             emitter.emit_progress_start("17", "devices", 1)  # Emit progress start.
         op_start = time.time()  # Record operation start time.
-        mh.APIDataFetcher(  # Fetch and write devices.
+        exported = mh.APIDataFetcher(  # Fetch and write devices.
             title="Org Devices:",
             api_call=mistapi.api.v1.orgs.devices.listOrgDevices,
             filename="OrgDevices.csv",
             sort_key="type",
         ).execute()
+        if exported is False:  # WHY: only an explicit failure skips the completion report.
+            return  # WHY: preserve the existing None return contract for this exporter.
         logger.info("Completed organization devices export and wrote results to OrgDevices.csv.")
         if emitter:  # Branch: emitter present.
             emitter.emit_progress_complete(ProgressContext("17", "devices", 1), 1, False, time.time() - op_start)

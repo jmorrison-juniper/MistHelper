@@ -215,11 +215,21 @@ class SourceDependencyResolverService:
             return value  # Return the fake dependency for isolated unit tests.
         module_vars = vars(self._root_module)  # Read explicit host attributes without invoking dynamic lookups.
         value = module_vars.get(name)  # Read only values that a test or host assigned directly.
-        value_module = type(value).__module__ if value is not None else ""  # Identify test doubles safely.
-        if value is not None and value_module.startswith("unittest."):  # A real root can still hold monkeypatch mocks.
+        if self._is_mock_override(name, value):  # A real root can still hold monkeypatch test doubles.
             logger.debug("Resolved test override for dependency %s", name)  # Log the override without its value.
             return value  # Return the test override for monkeypatch compatibility.
         return None  # Use the canonical dependency when no override exists.
+
+    def _is_mock_override(self, name: str, value: Any | None) -> bool:
+        """Return true when a bound host value is a test override."""
+        if value is None:  # No host value exists.
+            return False  # Use the canonical dependency.
+        value_module = getattr(value, "__module__", type(value).__module__)  # WHY: classes expose their own module.
+        if value_module.startswith("unittest."):  # unittest mocks are explicit test doubles.
+            return True  # Preserve existing monkeypatch compatibility.
+        if value_module.startswith("tests."):  # Local test classes are explicit monkeypatch doubles.
+            return True  # Preserve legacy tests that patch MistHelper helper classes.
+        return False  # Use the canonical dependency when the host value is not a test double.
 
     def _host_value_override(self, name: str) -> Any | None:
         """Return an explicit host value when a test patched the root module."""

@@ -118,12 +118,14 @@ class OrgAdminExporter:
         """Export organization usage data to OrgUsage.csv."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logger.info("Starting export of organization license usage...")  # Log start.
-        mh.APIDataFetcher(  # Fetch and write usage.
+        exported = mh.APIDataFetcher(  # Fetch and write usage.
             title="Organization License Usage:",
             api_call=mistapi.api.v1.orgs.licenses.getOrgLicensesBySite,
             filename="OrgUsage",
             sort_key="site_id",
         ).execute()
+        if exported is False:  # WHY: only an explicit failure skips the completion report.
+            return  # WHY: preserve the existing None return contract for this exporter.
         logger.info(" License usage data exported to OrgUsage")  # Log completion.
         # WHY: user-visible completion banner (replaces prior print()).
         logger.warning(" License usage data exported to OrgUsage")
