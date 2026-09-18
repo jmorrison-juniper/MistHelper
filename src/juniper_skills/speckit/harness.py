@@ -15,6 +15,7 @@ from src.juniper_skills.speckit.analyzer import SpecKitAnalyzer
 from src.juniper_skills.speckit.catalog import SpecKitCatalog
 from src.juniper_skills.speckit.living import LivingDriftReport, LivingSpecManager
 from src.juniper_skills.speckit.models import SkillDocument, SpecKitPaths
+from src.juniper_skills.speckit.package_metrics import InstalledPackageScanner, PackageMetrics
 
 
 class SpecKitHarness:
@@ -31,6 +32,7 @@ class SpecKitHarness:
         logging.info("Emitting SpecKit artifacts for one skill document")  # Record artifact generation start.
         document = self._enriched_document(document, package_files or [])  # Add database and package facts.
         feature_dir = self._feature_dir(document)  # Resolve the destination directory for this source document.
+        self._write_shared_contract()  # Keep repeated harness requirements in one shared artifact.
         self._prepare_directories(feature_dir)  # Create required directories before file writes.
         self._write_artifacts(feature_dir, document)  # Write the core SpecKit artifact set.
         self._write_context(feature_dir, document)  # Write the Companion GUI context file.
@@ -79,7 +81,8 @@ class SpecKitHarness:
         """Return a document with database and package measurements."""
         logging.info("Reading real document values for SpecKit artifacts")  # Record measurement start.
         values = self._factory_values(document)  # Read inventory and journal values from the factory database.
-        values.update(self._package_values(package_files))  # Add built package topic and life cycle measurements.
+        measured = document.with_metrics(values)  # Apply persisted domain before installed package lookup.
+        values.update(self._package_values(measured, package_files))  # Add real package measurements.
         values["open_questions"] = self._open_questions(document, values)  # Record document-specific questions.
         enriched = document.with_metrics(values)  # Store the measured values in an immutable copy.
         logging.debug("Enriched document %s with %d values", document.slug, len(values))  # Record measurement count.
@@ -93,8 +96,10 @@ class SpecKitHarness:
             return {"part_count": document.part_count, "guard_result": document.guard_result}
         with sqlite3.connect(self.paths.factory_database_path) as connection:  # Open one short read transaction.
             connection.row_factory = sqlite3.Row  # Read columns by name for durable schema access.
+            self._require_domain_column(connection)  # Fail rather than guessing the document domain.
             values = self._document_row_values(connection, document)  # Read source and part facts.
             values["guard_result"] = self._latest_stage_detail(connection, document.slug, "guard")  # Add guard data.
+            values["ste_result"] = self._latest_stage_detail(connection, document.slug, "ste")  # Add STE data.
         logging.debug("Read %d factory values for %s", len(values), document.slug)  # Record read count.
         return values
 
@@ -105,30 +110,60 @@ class SpecKitHarness:
         part_count = connection.execute(self._part_count_sql(), (document.slug,)).fetchone()[0]  # Count parts.
         if row is None:  # Fall back to the caller model when the database lacks this proof row.
             return {"part_count": int(part_count or document.part_count), "category": document.category}
-        values = {"title": row["title"], "category": row["category"], "pages": int(row["pages"])}  # Use DB facts.
+        if not row["domain"]:  # A missing domain would put artifacts in the wrong directory.
+            raise RuntimeError("source_document.domain is null for " + document.slug)
+        values = self._row_values(row)  # Convert the database row into model fields.
         values["part_count"] = int(row["part_count"] or part_count or document.part_count)  # Prefer DB count.
         logging.debug("Source document row values contain %d keys", len(values))  # Record row value count.
         return values
 
-    def _package_values(self, package_files: list[Path]) -> dict[str, object]:
-        """Return measured values from the built skill package."""
-        logging.info("Reading built package values for SpecKit")  # Record package inspection start.
-        topic_files = [path for path in package_files if path.name[:2].isdigit()]  # Count generated topic files.
-        spread = self._life_cycle_spread(topic_files)  # Count life cycle marks from built topic front matter.
-        values = {"topic_count": len(topic_files), "life_cycle_spread": spread}  # Store measured package values.
-        logging.debug("Read package values for %d topic files", len(topic_files))  # Record topic count.
+    def _require_domain_column(self, connection: sqlite3.Connection) -> None:
+        """Fail when the factory database cannot provide a persisted domain."""
+        logging.info("Checking source_document domain column")  # Record the domain schema check.
+        columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(source_document)").fetchall()
+        }  # Read schema.
+        if "domain" not in columns:  # A default domain would create an unfindable artifact path.
+            raise RuntimeError("source_document.domain is missing; run the taxonomy classifier first")
+        logging.debug("source_document domain column is present")  # Record the passing schema check.
+
+    def _row_values(self, row: sqlite3.Row) -> dict[str, object]:
+        """Return document values from one database row."""
+        logging.info("Converting a source document row into metrics")  # Record row conversion.
+        values = {
+            "title": row["title"],
+            "category": row["category"],
+            "pages": int(row["pages"]),
+            "domain": row["domain"],
+            "version_status": row["version_status"],
+            "superseded_by": row["version_value"] or "not measured",
+        }  # Use persisted facts only.
+        logging.debug("Converted source row into %d metric values", len(values))  # Record metric count.
         return values
 
-    def _life_cycle_spread(self, topic_files: list[Path]) -> dict[str, int]:
-        """Count life cycle marks in built topic files."""
-        logging.info("Measuring life cycle spread from built topics")  # Record lifecycle measurement start.
-        spread = {"day0": 0, "day1": 0, "day2": 0, "day2plus": 0}  # Keep all standard buckets present.
-        for path in topic_files:  # Read generated package topics only.
-            text = path.read_text(encoding="utf-8") if path.exists() else ""  # Avoid failing on stale path lists.
-            for name in spread:  # Check each approved life cycle value.
-                spread[name] += 1 if name in text else 0  # Count topic membership for review proof.
-        logging.debug("Measured life cycle spread %s", spread)  # Record the spread without source prose.
-        return spread
+    def _package_values(self, document: SkillDocument, package_files: list[Path]) -> dict[str, object]:
+        """Return measured values from the built skill package."""
+        logging.info("Reading built package values for SpecKit")  # Record package inspection start.
+        scanner = InstalledPackageScanner(self.paths.installed_skills_dir)  # Read the installed package tree.
+        metrics = scanner.scan(document.domain, document.source_path, document.source_file, document.title)
+        values = self._metric_values(metrics)  # Convert scanner results into document fields.
+        if metrics.is_measured or package_files:  # Use real metrics, or state that the caller only had placeholders.
+            logging.debug("Read package values from installed package measured=%s", metrics.is_measured)
+        logging.debug("Read package values with %d keys", len(values))  # Record metric value count.
+        return values
+
+    def _metric_values(self, metrics: PackageMetrics) -> dict[str, object]:
+        """Return model fields from installed package metrics."""
+        logging.info("Converting installed package metrics")  # Record metric conversion.
+        values = {
+            "package_path": metrics.package_path,
+            "topic_count": metrics.topic_count,
+            "life_cycle_spread": metrics.life_cycle_spread,
+            "subjects": metrics.topic_titles,
+            "keywords": metrics.keywords,
+        }  # Preserve unavailable values as None or empty tuples.
+        logging.debug("Converted installed package metrics with measured=%s", metrics.is_measured)  # Record state.
+        return values
 
     def _open_questions(self, document: SkillDocument, values: dict[str, object]) -> tuple[str, ...]:
         """Return document-specific clarification questions."""
@@ -138,7 +173,10 @@ class SpecKitHarness:
             questions.append("The source page count is missing.")  # Record the concrete ambiguity.
         if not document.source_path.exists():  # Missing source prevents living-spec drift checks.
             questions.append("The source Markdown file is missing.")  # Record the concrete source gap.
-        if int(values.get("topic_count", document.topic_count)) == 0:  # Empty packages require review.
+        topic_count = values.get("topic_count", document.topic_count)  # Preserve unavailable package counts.
+        if topic_count is None:  # Missing installed package metrics must remain visible to reviewers.
+            questions.append("The installed package was not measured.")  # Record the package metric gap.
+        elif int(topic_count) == 0:  # Empty packages require review when the package exists.
             questions.append("The built package contains no topic files.")  # Record the package ambiguity.
         logging.debug("Resolved %d open questions", len(questions))  # Record the question count.
         return tuple(questions)
@@ -159,6 +197,28 @@ class SpecKitHarness:
         for path in paths:
             path.mkdir(parents=True, exist_ok=True)  # Create each required directory idempotently.
         logging.debug("Created SpecKit artifact directories below %s", feature_dir)  # Record directory root.
+
+    def _write_shared_contract(self) -> None:
+        """Write the shared conversion contract once."""
+        logging.info("Writing shared SpecKit conversion contract")  # Record shared contract write.
+        path = self.paths.skills_specs_dir / "CONTRACT.md"  # Keep common harness rules out of document specs.
+        path.parent.mkdir(parents=True, exist_ok=True)  # Ensure the shared spec root exists before writing.
+        path.write_text(self._shared_contract_text(), encoding="utf-8")  # Update the contract idempotently.
+        logging.debug("Wrote shared SpecKit conversion contract at %s", path)  # Record the shared contract path.
+
+    def _shared_contract_text(self) -> str:
+        """Return common conversion requirements for all documents."""
+        logging.info("Rendering shared SpecKit conversion contract")  # Record shared contract rendering.
+        text = """# Shared SpecKit Conversion Contract
+
+Each document conversion must run the full SpecKit workflow.
+The workflow must emit specify, clarify, plan, tasks, implement, analyze, and checklist artifacts.
+The workflow must use the real SpecKit templates and the real Companion context writer.
+The analyzer must fail the document when an artifact is missing or inconsistent.
+The workflow must record source hash metadata for living-spec drift and sync.
+"""
+        logging.debug("Rendered shared contract with %d characters", len(text))  # Record contract size.
+        return text
 
     def _write_artifacts(self, feature_dir: Path, document: SkillDocument) -> None:
         """Write all Markdown artifacts except the generated analysis."""
@@ -295,6 +355,48 @@ class SpecKitHarness:
         logging.debug("Built %d required artifact paths", len(paths))  # Record required path count.
         return paths
 
+    def _subject_section(self, document: SkillDocument) -> str:
+        """Return the document subject summary."""
+        logging.info("Rendering document subject section")  # Record subject section rendering.
+        subjects = document.subjects[:10] or ("not measured",)  # Use topic titles only when the package exists.
+        keywords = document.keywords[:20] or ("not measured",)  # Use extracted keywords only when measured.
+        lines = ["Subjects: " + ", ".join(subjects), "Keywords: " + ", ".join(keywords)]  # Build the summary.
+        text = "\n\n".join(lines)  # Keep the section compact for large documents.
+        logging.debug("Rendered subject section with %d characters", len(text))  # Record section size.
+        return text
+
+    def _life_cycle_gap_section(self, document: SkillDocument) -> str:
+        """Return covered and absent life cycle stages."""
+        logging.info("Rendering life cycle gap section")  # Record gap section rendering.
+        if document.topic_count is None:  # Do not create false zero-count gaps from missing package data.
+            logging.debug("Life cycle gap section is not measured")  # Record unavailable life cycle data.
+            return "Life cycle coverage is not measured."
+        absent = [name for name, count in document.life_cycles.items() if count == 0]  # Find uncovered stages.
+        present = [name for name, count in document.life_cycles.items() if count > 0]  # Find covered stages.
+        text = f"Covered stages: {', '.join(present)}.\n\nAbsent stages: {', '.join(absent) or 'none'}."
+        logging.debug("Rendered life cycle gap section with %d absent stages", len(absent))  # Record gap count.
+        return text
+
+    def _source_quality_section(self, document: SkillDocument) -> str:
+        """Return source defect and validator measurements."""
+        logging.info("Rendering source quality section")  # Record quality section rendering.
+        defects = document.source_defects or ("not measured",)  # Keep unavailable source quality honest.
+        lines = [f"Source defects: {', '.join(defects)}.", f"Guard result: {document.guard_result}."]
+        lines.append(f"STE result: {document.ste_result}.")  # Include the writing validator measurement.
+        text = "\n\n".join(lines)  # Keep quality statements separate and readable.
+        logging.debug("Rendered source quality section with %d characters", len(text))  # Record section size.
+        return text
+
+    def _expectation_section(self, document: SkillDocument) -> str:
+        """Return document-specific non-goals."""
+        logging.info("Rendering reader expectation section")  # Record expectation section rendering.
+        lines = ["Do not expect complete vendor prose.", "Do not expect topics from absent life cycle stages."]
+        if document.topic_count is None:  # Add a clear limit when the installed package is missing.
+            lines.append("Do not use the topic count until the installed package exists.")  # State the limit.
+        text = "\n".join(f"- {line}" for line in lines)  # Render non-goals as bullets.
+        logging.debug("Rendered expectation section with %d bullets", len(lines))  # Record bullet count.
+        return text
+
     def _spec(self, document: SkillDocument) -> str:
         """Return the generated feature specification."""
         logging.info("Rendering the generated skill specification")  # Record spec rendering.
@@ -315,57 +417,63 @@ Command: speckit.specify
 
 {self._metadata(document)}
 
+## Document Subjects
+
+{self._subject_section(document)}
+
+## Life Cycle Coverage
+
+{self._life_cycle_gap_section(document)}
+
+## Source Quality
+
+{self._source_quality_section(document)}
+
+## Reader Expectations
+
+{self._expectation_section(document)}
+
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Build the skill package (Priority: P1)
+### User Story 1 - Answer questions from this document (Priority: P1)
 
-As an AI agent, I need a bounded skill package for `{document.title}`.
-I can answer Junos questions with three file reads.
+As an AI agent, I need topic routes for `{document.title}`.
+I can select the correct topic and cite the source page range.
 
-**Why this priority**: The skill must route before it can answer a question.
+**Why this priority**: The package must answer questions about this document, not about the harness.
 
-**Independent Test**: Generate the package and confirm that every required artifact exists.
-
-**Acceptance Scenarios**:
-
-1. **Given** the source Markdown exists, **When** the harness runs, **Then** it writes the full artifact set.
-2. **Given** the package exists, **When** the Companion GUI reads it, **Then** context shows completed status.
-
-### Edge Cases
-
-- The harness records missing companion extension files in `analysis.md`.
-- The harness records source drift by hash so a re-converted document can trigger a sync.
+**Independent Test**: Read the installed package and confirm the measured topics and life cycles.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: The harness MUST write all required artifacts.
-  The artifacts include spec, plan, tasks, checklist, analysis, and context.
-- **FR-002**: The harness MUST reuse the installed SpecKit templates before it renders artifacts.
-- **FR-003**: The harness MUST record source metadata for living-spec drift checks.
-- **FR-004**: The harness MUST run a cross-artifact analysis that maps requirements to tasks.
-- **FR-005**: The harness MUST report missing companion extension files.
-- **FR-006**: The harness MUST record the clarify, implement, analyze, and checklist commands.
+- **FR-001**: The package MUST cover the measured subjects listed in this specification.
+- **FR-002**: The package MUST state which life cycle stages are covered and which stages are absent.
+- **FR-003**: The package MUST record the source part structure and source quality findings.
+- **FR-004**: The package MUST record version status and superseded status from the factory database.
+- **FR-005**: The package MUST report guard and STE measurements without invented values.
+- **FR-006**: The package MUST reference the shared SpecKit conversion contract.
 
 ### Key Entities
 
 - **SkillDocument**: The source Markdown file, title, domain, page count, slug, and source hash.
 - **SpecKitArtifactSet**: The generated specification, plan, tasks, checklist, analysis, and context files.
+- **Shared Contract**: The common harness rules in `specs/skills/CONTRACT.md`.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: The generated artifact set contains all six required files.
+- **SC-001**: The measured topic count matches the installed package.
 - **SC-002**: The analysis check reports zero critical issues for this generated package.
-- **SC-003**: The context file contains `currentStep`, `status`, `phase`, `phaseStatus`, and `completionPercentage`.
-- **SC-004**: The generated artifact set records {document.topic_count} built topics.
+- **SC-003**: The context file contains the source path and source hash.
+- **SC-004**: The generated artifact set records {document.topic_count_text} built topics.
 
 ## Assumptions
 
-- The domain for this proof document is `junos`.
-- The harness writes programmatic artifacts because 1,500 interactive runs are not practical.
+- The shared contract controls repeated harness behavior.
+- This document specification controls the conversion audit for one PDF.
 """
         logging.debug("Rendered skill specification with %d characters", len(text))  # Record spec size.
         return text
@@ -389,7 +497,7 @@ Command: speckit.plan
 ## Summary
 
 Generate a SpecKit artifact set for `{document.title}` and connect it to Companion state.
-Use {document.part_count} source parts and {document.topic_count} built topics.
+Use {document.part_count} source parts and {document.topic_count_text} built topics.
 
 ## Technical Context
 
@@ -472,15 +580,15 @@ Command: speckit.tasks
 
 ## Phase 1: Setup
 
-- [x] T001 [FR-001] Create the artifact directory for `{document.slug}`.
-- [x] T002 [FR-002] Read the installed SpecKit templates before rendering artifacts.
+- [x] T001 [FR-001] Record measured subjects for `{document.slug}`.
+- [x] T002 [FR-002] Record measured life cycle coverage and gaps.
 
 ## Phase 2: Core generation
 
-- [x] T003 [FR-001] Write `spec.md`, `plan.md`, `tasks.md`, and `checklists/requirements.md`.
-- [x] T004 [FR-003] Write source hash and source metadata into `.spec-context.json`.
-- [x] T005 [FR-004] Run the cross-artifact analysis after task generation.
-- [x] T006 [FR-005] Record the companion extension inventory in `analysis.md`.
+- [x] T003 [FR-003] Record the part structure and source quality measurements.
+- [x] T004 [FR-004] Record version status and superseded status from the database.
+- [x] T005 [FR-005] Record guard and STE measurements without invented values.
+- [x] T006 [FR-006] Reference the shared SpecKit conversion contract.
 - [x] T007 [FR-006] Record clarify, implement, analyze, and checklist command outputs.
 
 ## Dependencies
@@ -688,25 +796,42 @@ The factory must bridge that gap with source hashes or a registry that names tho
     def _metadata(self, document: SkillDocument) -> str:
         """Return common measured metadata lines."""
         logging.info("Rendering common measured metadata")  # Record metadata rendering.
-        cycles = ", ".join(f"{key}={value}" for key, value in document.life_cycles.items())  # Render spread.
+        cycles = self._life_cycle_text(document)  # Render only measured life cycle counts.
         lines = [  # Repeat the measured fields so each artifact stands alone.
             f"Document title: {document.title}",
             f"Domain: {document.domain}",
             f"Category: {document.category}",
             f"Page count: {document.pages}",
             f"Part count: {document.part_count}",
-            f"Topic count: {document.topic_count}",
+            f"Topic count: {document.topic_count_text}",
             f"Life cycle spread: {cycles}",
             f"Guard result: {document.guard_result}",
+            f"STE result: {document.ste_result}",
+            f"Version status: {document.version_status}",
+            f"Superseded by: {document.superseded_by}",
             f"Source hash: {document.content_hash}",
+            f"Package path: {document.package_path or 'not measured'}",
         ]
         text = "\n".join(lines) + "\n"  # Keep the metadata block newline-terminated.
         logging.debug("Rendered metadata with %d characters", len(text))  # Record metadata size.
         return text
 
+    def _life_cycle_text(self, document: SkillDocument) -> str:
+        """Return measured life cycle text or an unavailable value."""
+        logging.info("Rendering life cycle spread text")  # Record life cycle text rendering.
+        if document.topic_count is None:  # Do not emit zero counts when the package was not measured.
+            logging.debug("Life cycle spread is not measured")  # Record unavailable state.
+            return "not measured"
+        text = ", ".join(f"{key}={value}" for key, value in document.life_cycles.items())  # Render measured counts.
+        logging.debug("Rendered life cycle spread text with %d characters", len(text))  # Record text size.
+        return text
+
     def _life_cycle_table(self, document: SkillDocument) -> str:
         """Return a Markdown life cycle table."""
         logging.info("Rendering life cycle table")  # Record lifecycle table rendering.
+        if document.topic_count is None:  # Keep unavailable lifecycle data honest.
+            logging.debug("Rendered unavailable life cycle table")  # Record unavailable table rendering.
+            return "Life cycle spread: not measured\n"
         rows = [f"| {name} | {count} |" for name, count in document.life_cycles.items()]  # Render counts.
         text = "| Life cycle | Topics |\n| - | -: |\n" + "\n".join(rows) + "\n"  # Build the Markdown table.
         logging.debug("Rendered life cycle table with %d rows", len(rows))  # Record row count.
@@ -770,7 +895,10 @@ The factory must bridge that gap with source hashes or a registry that names tho
     def _document_sql(self) -> str:
         """Return the source document lookup SQL."""
         logging.info("Building source document SQL")  # Record SQL creation.
-        sql = "SELECT title, category, pages, part_count FROM source_document WHERE document_key = ?"  # Read facts.
+        sql = (
+            "SELECT title, category, pages, part_count, domain, version_status, version_value "
+            "FROM source_document WHERE document_key = ?"
+        )  # Read persisted document facts.
         logging.debug("Built source document SQL with %d characters", len(sql))  # Record SQL size.
         return sql
 

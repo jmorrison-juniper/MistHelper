@@ -196,7 +196,9 @@ class WorkLeaseStore:
             )  # Clear the lease whenever the worker stops owning the row.
 
     def _domain_expr(self, connection: sqlite3.Connection) -> str:
-        return "d.domain" if "domain" in self._columns(connection, "source_document") else "'juniper-general-reference'"
+        if "domain" not in self._columns(connection, "source_document"):  # A guessed domain misroutes artifacts.
+            raise RuntimeError("source_document.domain is missing; run the taxonomy classifier first")
+        return "d.domain"  # Use only the persisted classifier output.
 
     def _citation_expr(self, connection: sqlite3.Connection) -> str:
         columns = self._columns(connection, "source_document")  # Read columns before building safe SQL.

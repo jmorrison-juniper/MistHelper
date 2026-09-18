@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -90,6 +91,27 @@ class TestSpecKitHarness:
         assert second_dir == first_dir  # Prove the rerun targets the same feature directory.
         assert after == before  # Prove the rerun did not create duplicate artifacts.
 
+    def test_package_measurements_use_installed_topic_files(self) -> None:
+        """Confirm package metrics come from installed topics, not placeholders."""
+        workspace = self._workspace("package-measurements")  # Use a repository-local test workspace.
+        self._factory_database(workspace, domain="juniper-junos-fundamentals")  # Add a persisted domain.
+        self._installed_topics(workspace)  # Add measured installed topic files.
+        document = self._document(workspace)  # Create one source document fixture.
+        harness = self._harness(workspace)  # Build a harness pointed at fixture roots.
+        feature_dir = harness.emit_for_document(document, [workspace / "placeholder" / "00-topic-0.md"])
+        spec = (feature_dir / "spec.md").read_text(encoding="utf-8")  # Read the generated specification.
+        assert "Topic count: 2" in spec  # Prove the placeholder file did not supply the topic count.
+        assert "Life cycle spread: day0=1, day1=2, day2=0, day2plus=0" in spec  # Prove lifecycle parsing.
+
+    def test_missing_domain_column_fails_before_guessing(self) -> None:
+        """Confirm the harness fails when the taxonomy classifier did not persist a domain."""
+        workspace = self._workspace("missing-domain")  # Use a repository-local test workspace.
+        self._factory_database(workspace, include_domain=False)  # Create the old schema without a domain column.
+        document = self._document(workspace)  # Create one source document fixture.
+        harness = self._harness(workspace)  # Build a harness that must read the database.
+        with pytest.raises(RuntimeError, match="source_document.domain is missing"):
+            harness.emit_for_document(document)  # Prove no default domain is allowed.
+
     def _workspace(self, name: str) -> Path:
         """Return a clean repository-local test workspace."""
         root = self._repo_root() / "data" / "juniper_skills" / "test_speckit" / name  # Avoid system temporary paths.
@@ -107,8 +129,67 @@ class TestSpecKitHarness:
 
     def _harness(self, workspace: Path) -> SpecKitHarness:
         """Return a harness with isolated output."""
-        paths = SpecKitPaths(self._repo_root(), workspace / "specs" / "skills")  # Use the real SpecKit install.
+        paths = SpecKitPaths(  # Use the real templates with isolated data roots.
+            self._repo_root(),
+            workspace / "specs" / "skills",
+            workspace / "factory.db",
+            workspace / "installed" / "skills",
+        )
         return SpecKitHarness(paths)  # Return the class under test.
+
+    def _factory_database(self, workspace: Path, domain: str = "", include_domain: bool = True) -> None:
+        """Create a small factory database for SpecKit measurements."""
+        columns = ", domain TEXT" if include_domain else ""  # Let tests cover the old schema failure.
+        values = ", ?" if include_domain else ""  # Match the optional domain column.
+        with sqlite3.connect(workspace / "factory.db") as connection:  # Create the isolated database.
+            connection.execute(self._source_schema(columns))  # Create the source document table.
+            connection.execute(self._part_schema())  # Create the source part table.
+            connection.execute(self._event_schema())  # Create the orchestrator event table.
+            connection.execute(self._insert_source(values), self._source_values(domain, include_domain))  # Insert row.
+            connection.execute(self._insert_part(), ("part-1", "junos-beginners-guide"))  # Insert one winner part.
+
+    def _installed_topics(self, workspace: Path) -> None:
+        """Create installed package topics with multiple lifecycle values."""
+        root = workspace / "installed" / "skills" / "juniper-junos-fundamentals" / "documents" / "junos-beginners-guide"
+        root.mkdir(parents=True, exist_ok=True)  # Create the installed document package path.
+        (root / "00-routing.md").write_text(self._topic("Routing", "[day0, day1]"), encoding="utf-8")  # Topic 1.
+        (root / "01-cli.md").write_text(self._topic("CLI", "[day1]"), encoding="utf-8")  # Topic 2.
+        (root / "INDEX.md").write_text("# Index\n", encoding="utf-8")  # Add an index that must not count.
+
+    def _source_schema(self, domain_column: str) -> str:
+        """Return source document schema SQL."""
+        return (
+            "CREATE TABLE source_document (document_key TEXT, title TEXT, category TEXT, pages INTEGER, "
+            "part_count INTEGER, version_status TEXT, version_value TEXT" + domain_column + ")"
+        )
+
+    def _part_schema(self) -> str:
+        """Return source part schema SQL."""
+        return "CREATE TABLE source_part (part_key TEXT, document_key TEXT, is_winner INTEGER)"
+
+    def _event_schema(self) -> str:
+        """Return stage event schema SQL."""
+        return (
+            "CREATE TABLE orchestrator_stage_event (id INTEGER PRIMARY KEY, document_key TEXT, "
+            "stage TEXT, status TEXT, detail TEXT)"
+        )
+
+    def _insert_source(self, domain_value: str) -> str:
+        """Return source insert SQL."""
+        return "INSERT INTO source_document VALUES (?, ?, ?, ?, ?, ?, ?" + domain_value + ")"
+
+    def _source_values(self, domain: str, include_domain: bool) -> tuple[object, ...]:
+        """Return source row values."""
+        values = ("junos-beginners-guide", "Test Guide", "guides", 356, 1, "current", "")  # Base document row.
+        return values + ((domain,) if include_domain else ())  # Add the domain only for the new schema.
+
+    def _insert_part(self) -> str:
+        """Return source part insert SQL."""
+        return "INSERT INTO source_part VALUES (?, ?, 1)"
+
+    def _topic(self, title: str, lifecycle: str) -> str:
+        """Return one installed topic fixture."""
+        return f"---\ntopic: {title}\nlifecycle: {lifecycle}\n---\n\n# {title}\n"  # Keep fixture content small.
 
     def _required(self, feature_dir: Path) -> list[Path]:
         """Return required artifact paths."""

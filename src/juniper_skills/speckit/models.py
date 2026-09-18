@@ -15,6 +15,8 @@ class SpecKitPaths:
 
     repo_root: Path
     output_root: Path | None = None
+    database_path: Path | None = None
+    installed_skills_root: Path | None = None
 
     @property
     def specify_dir(self) -> Path:
@@ -44,8 +46,16 @@ class SpecKitPaths:
     def factory_database_path(self) -> Path:
         """Return the skill factory database path."""
         logging.info("Resolving the skill factory database path")  # Record the database lookup.
-        path = self.repo_root / "data" / "juniper_skills" / "factory.db"  # Use the shared factory database.
+        path = self.database_path or self.repo_root / "data" / "juniper_skills" / "factory.db"  # Use override or DB.
         logging.debug("Resolved the skill factory database path at %s", path)  # Record the database path.
+        return path
+
+    @property
+    def installed_skills_dir(self) -> Path:
+        """Return the installed skill package root."""
+        logging.info("Resolving the installed skill package root")  # Record the installed package lookup.
+        path = self.installed_skills_root or Path.home() / "juniper-agent-skills" / "skills"  # Use real package root.
+        logging.debug("Resolved the installed skill package root at %s", path)  # Record the resolved package root.
         return path
 
 
@@ -59,11 +69,18 @@ class SkillDocument:
     pages: int
     slug: str
     source_file: str
-    category: str = "unknown"
+    category: str = "not measured"
     part_count: int = 1
-    topic_count: int = 0
+    topic_count: int | None = None
     life_cycle_spread: dict[str, int] | None = None
     guard_result: str = "not measured"
+    ste_result: str = "not measured"
+    version_status: str = "not measured"
+    superseded_by: str = "not measured"
+    package_path: Path | None = None
+    subjects: tuple[str, ...] = ()
+    keywords: tuple[str, ...] = ()
+    source_defects: tuple[str, ...] = ()
     open_questions: tuple[str, ...] = ()
 
     @classmethod
@@ -102,10 +119,18 @@ class SkillDocument:
     def life_cycles(self) -> dict[str, int]:
         """Return the life cycle spread with all standard keys."""
         logging.info("Normalizing the life cycle spread")  # Record normalization before rendering artifacts.
-        baseline = {"day0": 0, "day1": 0, "day2": 0, "day2plus": 0}  # Keep all lifecycle names present.
+        baseline = {"day0": 0, "day1": 0, "day2": 0, "day2plus": 0}  # Keep all life cycle names present.
         baseline.update(self.life_cycle_spread or {})  # Merge measured package values over the stable default.
         logging.debug("Normalized %d life cycle values", len(baseline))  # Record the normalized size.
         return baseline
+
+    @property
+    def topic_count_text(self) -> str:
+        """Return the measured topic count or a clear unavailable value."""
+        logging.info("Rendering topic count text")  # Record topic count rendering.
+        value = str(self.topic_count) if self.topic_count is not None else "not measured"  # Avoid invented counts.
+        logging.debug("Rendered topic count text %s", value)  # Record the safe rendered value.
+        return value
 
     @property
     def questions(self) -> tuple[str, ...]:
