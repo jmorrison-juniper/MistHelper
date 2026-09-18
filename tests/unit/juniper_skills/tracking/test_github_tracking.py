@@ -9,6 +9,7 @@ from typing import Any
 from src.juniper_skills.tracking.comment_codec import StageCommentCodec
 from src.juniper_skills.tracking.github_cli import GitHubCommandResult, GitHubRateLimitManager
 from src.juniper_skills.tracking.github_tracker import SkillIssueTracker
+from src.juniper_skills.tracking.measurements import StageMeasurementInputs, StageMeasurementReader
 from src.juniper_skills.tracking.models import DocumentRecord, StageEvent, StageName
 
 
@@ -170,8 +171,30 @@ class TestSkillIssueTracker:
         resume_point = tracker.resume_point(document)  # Recover from GitHub comments and the local mirror.
         assert resume_point.completed_stage == StageName.SEGMENTED  # Confirm no uncompleted stage advanced.
         assert resume_point.next_action == "run the extracted stage"  # Confirm the resumed action is exact.
-        assert len(runner.comments) == 3  # Confirm each stage produced one GitHub journal comment.
+        assert len(runner.comments) == 1  # Confirm GitHub received only the immediate start comment.
         self._remove_database(database_path)  # Clean the repo-local database after the test.
+
+    def test_tracker_posts_start_summary_and_close_for_completed_document(self) -> None:
+        database_path = self._database_path("summary_calls")  # Use a repo-local database for the test.
+        self._remove_database(database_path)  # Start with a clean local mirror.
+        runner = FakeGitHubRunner()  # Use a fake runner to count GitHub operations.
+        tracker = SkillIssueTracker(database_path, runner=runner)  # Build the tracker.
+        document = self._document(1)  # Build one source document for the queue.
+        for stage in (StageName.QUEUED, StageName.SEGMENTED, StageName.VERIFIED):  # Queue a completed document.
+            tracker.record_stage(document, stage, self._metrics())  # Save each transition locally first.
+        tracker.sync_pending(limit=10)  # Create the issue and post the start comment.
+        tracker.sync_pending(limit=10)  # Post the consolidated completion comment and close the issue.
+        assert len(self._create_calls(runner)) == 1  # Confirm only one create call occurs.
+        assert len(self._comment_calls(runner)) == 2  # Confirm only start and completion comments post.
+        assert len(self._close_calls(runner)) == 1  # Confirm completed work closes the issue.
+        assert "Skill factory document completion summary." in runner.comments[-1]  # Confirm summary form.
+        self._remove_database(database_path)  # Clean the repo-local database after the test.
+
+    def test_missing_upstream_measurements_are_not_measured(self) -> None:
+        reader = StageMeasurementReader(self._database_path("missing_measurements"))  # Use no source database.
+        inputs = StageMeasurementInputs("missing-document")  # Provide no package or upstream result.
+        details = reader.details(inputs)  # Build audit details from absent evidence.
+        assert set(details.values()) == {"not measured"}  # Confirm no synthetic number can enter a comment.
 
     def _document(self, index: int, domain: str = "junos") -> DocumentRecord:
         """Return one document record for tests."""
@@ -202,6 +225,14 @@ class TestSkillIssueTracker:
     def _create_calls(self, runner: FakeGitHubRunner) -> list[list[str]]:
         """Return fake issue creation calls."""
         return [command for command in runner.commands if command[:3] == ["gh", "issue", "create"]]  # Count creates.
+
+    def _comment_calls(self, runner: FakeGitHubRunner) -> list[list[str]]:
+        """Return fake issue comment calls."""
+        return [command for command in runner.commands if command[:3] == ["gh", "issue", "comment"]]  # Count comments.
+
+    def _close_calls(self, runner: FakeGitHubRunner) -> list[list[str]]:
+        """Return fake issue close calls."""
+        return [command for command in runner.commands if command[:3] == ["gh", "issue", "close"]]  # Count closes.
 
     def _database_path(self, name: str) -> Path:
         """Return a repo-local SQLite path for one test."""

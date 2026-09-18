@@ -25,6 +25,15 @@ class StageCommentCodec:
         logging.debug("Built a GitHub journal comment with %d characters", len(comment))  # Record safe output size.
         return comment
 
+    def build_summary_comment(self, events: tuple[StageEvent, ...]) -> str:
+        """Build one completion comment that contains all stage events."""
+        logging.info("Building a consolidated GitHub journal comment")  # Record the local action.
+        payload = self._summary_payload(events)  # Create the exact state that recovery reads later.
+        json_block = json.dumps(payload, indent=2, sort_keys=True)  # Make the state deterministic for tests.
+        comment = self._render_summary(events, json_block)  # Add human text and a full stage table.
+        logging.debug("Built a consolidated GitHub comment with %d characters", len(comment))  # Record size.
+        return comment
+
     def parse_comments(self, comments: list[str], document_key: str) -> ResumePoint:
         """Read comments and return the most recent valid resume point."""
         logging.info("Parsing %d GitHub journal comments", len(comments))  # Record the recovery action.
@@ -80,9 +89,7 @@ class StageCommentCodec:
         """Extract all stage events from one issue comment body."""
         logging.info("Reading machine-readable blocks from one issue comment")  # Record each parse operation.
         blocks = self._json_blocks(body)  # Find fenced JSON blocks without reading other prose.
-        events = [
-            event for block in blocks if (event := self._event_from_json(block)) is not None
-        ]  # Keep valid events.
+        events = [event for block in blocks for event in self._events_from_json(block)]  # Keep valid events.
         logging.debug("Read %d stage events from one issue comment", len(events))  # Record the parse result.
         return events
 
@@ -96,23 +103,67 @@ class StageCommentCodec:
             blocks.append(block.strip())  # Store a clean JSON string for decoding.
         return blocks
 
-    def _event_from_json(self, block: str) -> StageEvent | None:
-        """Decode one JSON block into a stage event."""
+    def _summary_payload(self, events: tuple[StageEvent, ...]) -> dict[str, Any]:
+        """Return the JSON payload for a consolidated comment."""
+        return {  # Store every stage event so crash recovery can resume exactly.
+            "schema": "juniper-skill-factory-summary-v1",
+            "events": [self._payload_for_event(event) for event in events],
+        }
+
+    def _render_summary(self, events: tuple[StageEvent, ...], json_block: str) -> str:
+        """Render the human completion table and JSON block."""
+        lines = [  # Start the human-readable completion table.
+            "Skill factory document completion summary.",
+            "",
+            "| Stage | Topic | Card | Retention | Guard | Longest run | STE |",
+        ]
+        lines.append("| - | -: | -: | -: | - | -: | -: |")  # Keep the Markdown table valid.
+        lines.extend(self._summary_rows(events))  # Add one measured row for each stage event.
+        return "\n".join(lines + ["", self.block_start, json_block, self.block_end])  # Keep one parseable block.
+
+    def _summary_rows(self, events: tuple[StageEvent, ...]) -> list[str]:
+        """Return Markdown table rows for all stage events."""
+        rows: list[str] = []  # Collect human-readable stage measurement rows.
+        for event in events:  # Preserve the local journal order in the summary.
+            metrics = self._normalized_metrics(event.details)  # Read the required measured fields.
+            rows.append(self._summary_row(event, metrics))  # Add one table row.
+        return rows  # Return the rendered rows.
+
+    def _summary_row(self, event: StageEvent, metrics: dict[str, Any]) -> str:
+        """Return one Markdown table row for a stage event."""
+        return (  # Show each required proof value in a compact row.
+            f"| `{event.stage.value}` | {metrics['topic_count']} | {metrics['card_count']} | "
+            f"{metrics['retention_percentage']} | {metrics['guard_result']} | "
+            f"{metrics['longest_guard_run']} | {metrics['ste_score']} |"
+        )
+
+    def _events_from_json(self, block: str) -> list[StageEvent]:
+        """Decode one JSON block into stage events."""
         try:
             payload = json.loads(block)  # Decode the state that GitHub stored.
-            if payload.get("schema") != "juniper-skill-factory-stage-v1":  # Ignore unrelated JSON comments.
-                return None
-            return StageEvent(  # Rebuild the typed event for recovery logic.
-                document_key=str(payload["document_key"]),
-                stage=StageName(str(payload["stage"])),
-                next_action=str(payload["next_action"]),
-                issue_number=payload.get("issue_number"),
-                created_at=str(payload["created_at"]),
-                details=dict(payload.get("details", {})),
-            )
+            return self._events_from_payload(payload)  # Decode supported payload shapes.
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
             logging.debug("Ignored an invalid journal JSON block: %s", error)  # Tolerate user comments.
-            return None
+            return []
+
+    def _events_from_payload(self, payload: dict[str, Any]) -> list[StageEvent]:
+        """Return events from a supported payload schema."""
+        if payload.get("schema") == "juniper-skill-factory-stage-v1":  # Decode one stage event.
+            return [self._stage_event_from_payload(payload)]  # Wrap the event for shared handling.
+        if payload.get("schema") == "juniper-skill-factory-summary-v1":  # Decode a consolidated stage table.
+            return [self._stage_event_from_payload(item) for item in payload.get("events", [])]  # Decode events.
+        return []  # Ignore unrelated JSON blocks.
+
+    def _stage_event_from_payload(self, payload: dict[str, Any]) -> StageEvent:
+        """Return one stage event from a JSON payload."""
+        return StageEvent(  # Rebuild the typed event for recovery logic.
+            document_key=str(payload["document_key"]),
+            stage=StageName(str(payload["stage"])),
+            next_action=str(payload["next_action"]),
+            issue_number=payload.get("issue_number"),
+            created_at=str(payload["created_at"]),
+            details=dict(payload.get("details", {})),
+        )
 
     def _resume_from_events(self, events: list[StageEvent], document_key: str) -> ResumePoint:
         """Create a resume point from stage events."""

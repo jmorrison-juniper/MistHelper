@@ -17,6 +17,7 @@ from src.juniper_skills.tracking.github_cli import (
 )
 from src.juniper_skills.tracking.models import DocumentRecord, ResumePoint, StageEvent, StageName
 from src.juniper_skills.tracking.recovery import SkillIssueRecoveryReader
+from src.juniper_skills.tracking.rest_client import GitHubRestRunner
 from src.juniper_skills.tracking.store import FactoryJournalStore
 
 
@@ -29,12 +30,12 @@ class SkillIssueTracker:
         repo: str = "jmorrison-juniper/MistHelper",
         parent_issue: int = 2925,
         issue_shape: str = "document",
-        runner: GitHubCliRunner | None = None,
+        runner: GitHubCliRunner | GitHubRestRunner | None = None,
     ) -> None:
         self.repo = repo  # Store the repository owner and name for each `gh` command.
         self.parent_issue = parent_issue  # Link created journals back to the factory issue.
         self.issue_shape = issue_shape  # Keep compatibility while document issues are now the default.
-        self.runner = runner or GitHubCliRunner()  # Allow tests to supply a fake `gh` runner.
+        self.runner = runner or GitHubRestRunner()  # Use persistent REST by default and let tests inject fakes.
         self.rate_limit = GitHubRateLimitManager(self.runner)  # Measure real limits before GitHub calls.
         self.store = FactoryJournalStore(database_path)  # Persist all work before any network call.
         self.codec = StageCommentCodec()  # Encode journal comments in one stable format.
@@ -117,9 +118,47 @@ class SkillIssueTracker:
     def _sync_stage_events(self, limit: int) -> int:
         """Send queued stage comments."""
         synced_count = 0  # Count successful comments for caller evidence.
-        for event in self.store.unsynced_stage_events(limit):  # Send a bounded batch to respect the API limit.
-            synced_count += self._sync_one_event(event)  # Try one event and keep later events available.
+        for document_key in self.store.unsynced_document_keys(limit):  # Send one GitHub update per document state.
+            synced_count += self._sync_document_events(document_key)  # Consolidate stage details where possible.
         return synced_count
+
+    def _sync_document_events(self, document_key: str) -> int:
+        """Send the required GitHub audit comment for one document."""
+        events = self.store.stage_events_for_document(document_key)  # Read all local events for this document.
+        if self._needs_start_comment(events):  # Post the start comment as soon as the document enters the pipeline.
+            return self._sync_one_event(events[0])  # Mark only the start event as synced.
+        if self._latest_stage(events) == StageName.FAILED.value:  # Failures must appear on GitHub immediately.
+            return self._sync_event_summary(events)  # Post full context for human triage.
+        if self._latest_stage(events) in {StageName.VERIFIED.value, StageName.RELEASED.value}:  # Healthy terminal.
+            return self._sync_event_summary(events)  # Post one completion table with all measured values.
+        logging.debug("Deferred nonterminal stage events for document key %s", document_key)  # Wait for completion.
+        return 0
+
+    def _needs_start_comment(self, events: list[dict[str, Any]]) -> bool:
+        """Return whether the queued stage still needs its start comment."""
+        has_queued_start = bool(events) and events[0]["stage"] == StageName.QUEUED.value  # Confirm the first stage.
+        return has_queued_start and not events[0]["github_synced"]  # Post the start comment only once.
+
+    def _latest_stage(self, events: list[dict[str, Any]]) -> str:
+        """Return the last recorded stage for one document."""
+        if not events:  # A corrupt queue should not try a GitHub write.
+            return ""  # Return no terminal stage.
+        return str(events[-1]["stage"])  # The store returns events in creation order.
+
+    def _sync_event_summary(self, events: list[dict[str, Any]]) -> int:
+        """Write one consolidated stage summary and mark all events synced."""
+        try:
+            self.rate_limit.defer_if_needed()  # Never block the pipeline when the API bucket is empty.
+            issue_number = self._document_issue_number(str(events[-1]["document_key"]))  # Read the current issue.
+            stage_events = tuple(self._stage_event_from_row(event, issue_number) for event in events)  # Rebuild events.
+            self._comment_summary(stage_events)  # Write one complete audit table to GitHub.
+            self._set_issue_labels(issue_number, str(events[-1]["stage"]))  # Keep filters precise.
+            self._close_if_complete(issue_number, str(events[-1]["stage"]))  # Close finished document work.
+            self.store.mark_stage_events_synced(tuple(int(event["id"]) for event in events))  # Mark after success.
+            return 1
+        except (GitHubCliError, GitHubRateLimitExhausted) as error:
+            logging.debug("Deferred GitHub summary sync after error: %s", error)  # Leave events queued for retry.
+            return 0
 
     def _sync_one_document(self, row: dict[str, Any]) -> int:
         """Create or find one document issue."""
@@ -138,8 +177,6 @@ class SkillIssueTracker:
         try:
             self.rate_limit.defer_if_needed()  # Measure the API bucket before the comment call.
             self._comment_issue(event)  # Write the machine-readable audit comment.
-            self._set_issue_labels(int(event["issue_number"]), str(event["stage"]))  # Keep filters precise.
-            self._close_if_complete(int(event["issue_number"]), str(event["stage"]))  # Close finished document work.
             self.store.mark_stage_event_synced(int(event["id"]))  # Mark the row only after GitHub accepts the comment.
             return 1
         except (GitHubCliError, GitHubRateLimitExhausted) as error:
@@ -162,6 +199,32 @@ class SkillIssueTracker:
             ]
         )
         logging.debug("Wrote a stage audit comment for event %s", event["id"])  # Record the queue row.
+
+    def _comment_summary(self, events: tuple[StageEvent, ...]) -> None:
+        """Write one consolidated stage summary comment."""
+        issue_number = events[-1].issue_number  # Use the latest event's issue number.
+        logging.info("Writing a consolidated audit comment to GitHub issue %s", issue_number)  # Record the write.
+        body = self.codec.build_summary_comment(events)  # Build a full stage table with JSON recovery data.
+        self.runner.run(["gh", "issue", "comment", str(issue_number), "--repo", self.repo, "--body", body])  # Write.
+        logging.debug("Wrote a consolidated audit comment to issue %s", issue_number)  # Record success.
+
+    def _document_issue_number(self, document_key: str) -> int:
+        """Return the GitHub issue number for one document key."""
+        row = self.store.document_row(document_key)  # Read the local document row after issue creation.
+        if row is None or row["issue_number"] is None:  # A summary cannot post without an issue number.
+            raise GitHubCliError("document issue number is missing")
+        return int(row["issue_number"])  # Return the current issue number.
+
+    def _stage_event_from_row(self, row: dict[str, Any], issue_number: int) -> StageEvent:
+        """Return a stage event from a local queue row."""
+        return StageEvent(  # Rebuild the typed event for the comment codec.
+            str(row["document_key"]),
+            StageName(str(row["stage"])),
+            str(row["next_action"]),
+            issue_number,
+            str(row["created_at"]),
+            dict(row["details"]),
+        )
 
     def _find_or_create_issue(self, document: DocumentRecord) -> int:
         """Search for a journal issue and create one only when absent."""
@@ -222,7 +285,7 @@ class SkillIssueTracker:
 
     def _close_if_complete(self, issue_number: int, stage: str) -> None:
         """Close the issue when the document reaches a terminal stage."""
-        if stage != StageName.VERIFIED.value:  # Keep open work visible until verification completes.
+        if stage not in {StageName.VERIFIED.value, StageName.RELEASED.value}:  # Keep open work visible until done.
             return
         logging.info("Closing completed document issue %d", issue_number)  # Record the state change.
         self.runner.run(
