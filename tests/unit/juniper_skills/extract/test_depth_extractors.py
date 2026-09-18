@@ -5,6 +5,7 @@ from __future__ import annotations  # Keep annotations cheap during test collect
 from pathlib import Path  # Build guard files with platform-safe paths.
 
 from src.juniper_skills.extract import (  # Import the public depth extraction API.
+    CachedSourceSimilarityGuard,
     CommandFactExtractor,
     ConfigurationFactExtractor,
     ConstraintFactExtractor,
@@ -124,6 +125,17 @@ class TestDepthEngine:
         assert report.files_checked == 1  # Prove the guard measured one file.
         assert report.files_failed == 0  # Prove the guard found no hard failure.
         assert report.results[0].longest_run <= 7  # Prove copied prose stays in the clear band.
+
+    def test_cached_guard_matches_base_guard(self, tmp_path: Path) -> None:
+        """The cached guard returns the same longest run as the base guard."""
+        source = "alpha bravo charlie delta echo foxtrot golf hotel india"  # Build a source phrase.
+        generated = "alpha bravo charlie delta echo"  # Build a copied clear-band phrase.
+        topic = tmp_path / "topic.md"  # Put the generated topic under the pytest work directory.
+        topic.write_text(generated, encoding="utf-8")  # Store generated text for the base guard.
+        base = VerbatimSimilarityGuard().check((SimilarityCheckInput(topic, (source,)),))  # Run the base guard.
+        cached = CachedSourceSimilarityGuard().check_texts(((topic, generated),), source)  # Run cached guard.
+        assert cached.files_checked == base.files_checked  # Prove the same file count.
+        assert cached.results[0].longest_run == base.results[0].longest_run  # Prove the same longest run.
 
     def test_engine_reports_cards_per_page_and_retention(self) -> None:
         """The engine reports cards for each page and retained content."""
