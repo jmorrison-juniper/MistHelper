@@ -307,6 +307,14 @@ class PromptUtils:  # General prompt helpers.
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             response = mistapi.api.v1.sites.wired_clients.searchSiteWiredClients(mh.apisession, site_id, limit=1000)
+            status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+            if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the client count unsafe.
+                logger.error(  # WHY: the operator must see the cloud status instead of a false zero-client count.
+                    "The cloud returned HTTP %s for site wired clients at site %s",
+                    status_code,
+                    site_id,
+                )
+                return []  # WHY: preserve the existing empty-list failure contract.
             clients = mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page through all results.
             for client in clients:  # Tag each client.
                 client["client_type"] = "wired"  # Mark as wired type.
@@ -323,6 +331,14 @@ class PromptUtils:  # General prompt helpers.
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             response = mistapi.api.v1.orgs.clients.searchOrgWirelessClients(mh.apisession, org_id, limit=1000)
+            status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+            if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the client count unsafe.
+                logger.error(  # WHY: the operator must see the cloud status instead of a false zero-client count.
+                    "The cloud returned HTTP %s for organization wireless clients at org %s",
+                    status_code,
+                    org_id,
+                )
+                return []  # WHY: preserve the existing empty-list failure contract.
             clients = mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page through all results.
             for client in clients:  # Tag each client.
                 client["client_type"] = "wireless"  # Mark as wireless type.
@@ -338,6 +354,14 @@ class PromptUtils:  # General prompt helpers.
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             response = mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients(mh.apisession, org_id, limit=1000)
+            status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+            if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the client count unsafe.
+                logger.error(  # WHY: the operator must see the cloud status instead of a false zero-client count.
+                    "The cloud returned HTTP %s for organization wired clients at org %s",
+                    status_code,
+                    org_id,
+                )
+                return []  # WHY: preserve the existing empty-list failure contract.
             clients = mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page through all results.
             for client in clients:  # Tag each client.
                 client["client_type"] = "wired"  # Mark as wired type.

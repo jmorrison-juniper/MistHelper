@@ -37,6 +37,14 @@ except ImportError:  # pyte not installed
 
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 _RECEIVER_JOIN_TIMEOUT_SEC = 5.0  # WHY: bound the shutdown wait so a stuck socket cannot hang the menu.
+_HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
+
+
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
 class CLIShellManager:
@@ -98,6 +106,14 @@ class CLIShellManager:
                 device_id,
                 body=dict(CLIShellManager._DEFAULT_SHELL_BODY),
             )
+            status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+            if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status means no shell URL can be trusted.
+                logger.error(  # WHY: the operator must see the cloud status instead of a silent empty URL.
+                    "The cloud returned HTTP %s for the device shell session at device %s",
+                    status_code,
+                    device_id,
+                )
+                return None  # WHY: preserve the existing failure contract for shell creation.
             logger.debug("CLI shell session API returned status %s", getattr(response, "status_code", "unknown"))
             shell_data = response.data if isinstance(response.data, dict) else {}  # WHY: protect URL extraction.
             shell_url = str(shell_data.get("url") or "")  # WHY: return a stable string for the WebSocket opener.

@@ -82,6 +82,14 @@ class SiteStatsFirmwareEvidenceReader:
                 type="all",
                 limit=DEFAULT_STATS_PAGE_LIMIT,
             )
+            status_code = getattr(response, "status_code", 200)  # WHY: old tests use response doubles without status.
+            if isinstance(status_code, int) and status_code >= 400:  # WHY: failed status makes evidence unusable.
+                logger.error(  # WHY: the operator must see the cloud status instead of an empty evidence result.
+                    "The cloud returned HTTP %s for reconciliation site statistics at site %s",
+                    status_code,
+                    site_id,
+                )
+                return None  # WHY: pagination treats None as no evidence, preserving the failure contract.
             logger.debug("listSiteDevicesStats returned status %s", getattr(response, "status_code", "unknown"))
             return response  # WHY: the pagination helper consumes the response object.
         except TypeError:  # WHY: signature drift is a programming error, not a recoverable cloud result.
