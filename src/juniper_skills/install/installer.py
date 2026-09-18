@@ -10,11 +10,13 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
-TOKEN_WINDOW = 200_000  # Use the measured agent-host context window for reports.
+DEFAULT_TOKEN_WINDOW = 1_000_000  # Use the corrected Opus 5 Max context window for reports.
 TOKEN_CHAR_WIDTH = 4  # Use the requested approximate character-to-token ratio.
-WARNING_SHARE = 10.0  # Warn operators before the index becomes a large context cost.
-FORCE_SHARE = 25.0  # Require force when the projection uses one quarter of the window.
-REFUSAL_SHARE = 50.0  # Refuse by default when the projection uses half of the window.
+DESCRIPTION_TOKEN_BUDGET = 100  # Report descriptions that pass the target routing budget.
+MIN_REGISTER_ALL_PAGES = 20  # Register the qualifying document set by default.
+WARNING_SHARE = 30.0  # Warn operators when the index becomes a large context cost.
+FORCE_SHARE = 50.0  # Require force when the projection uses half of the window.
+REFUSAL_SHARE = 70.0  # Refuse plans that consume too much working context.
 CATALOG_FILE_NAME = "SKILL_CATALOG.json"  # Give routers a stable package catalog file.
 
 
@@ -55,6 +57,8 @@ class CostReport:
     skills: tuple[SkillMetadata, ...]
     token_count: int
     window_share: float
+    context_window: int
+    over_budget_descriptions: tuple[SkillMetadata, ...] = field(default_factory=tuple)
     action: str = "ok"
     message: str = ""
 
@@ -256,30 +260,45 @@ class SkillCatalogIndex:
 class SkillCostEstimator:
     """Estimate the skill-index context cost for selected registrations."""
 
+    def __init__(self, context_window: int = DEFAULT_TOKEN_WINDOW) -> None:
+        self.context_window = context_window  # Store the model context window selected by the operator.
+
     def estimate(self, skills: list[SkillMetadata], force: bool = False) -> CostReport:
         logging.info("Estimating Juniper skill registration token cost")  # Log the cost calculation.
         token_count = sum(math.ceil(len(skill.index_text) / TOKEN_CHAR_WIDTH) for skill in skills)  # Estimate tokens.
-        window_share = (token_count / TOKEN_WINDOW) * 100 if TOKEN_WINDOW else 0.0  # Convert tokens to window share.
+        window_share = (token_count / self.context_window) * 100 if self.context_window else 0.0  # Convert tokens.
+        over_budget = tuple(  # Find descriptions that the package generator should tighten.
+            skill for skill in skills if self._description_tokens(skill) > DESCRIPTION_TOKEN_BUDGET
+        )
         action, message = self._decision(window_share, force)  # Apply safety thresholds to the projection.
         logging.debug("Estimated %d tokens for %d skills", token_count, len(skills))  # Record measured cost.
-        return CostReport(tuple(skills), token_count, window_share, action, message)  # Return the full report.
+        return CostReport(  # Return the full report with the model context and description budget findings.
+            tuple(skills), token_count, window_share, self.context_window, over_budget, action, message
+        )
 
     def _decision(self, window_share: float, force: bool) -> tuple[str, str]:
-        if window_share > REFUSAL_SHARE and not force:  # Block plans that consume more than half the context.
-            return "refused", "This registration uses more than half of the context window."  # Explain the refusal.
+        if window_share > REFUSAL_SHARE:  # Block plans that consume too much working context.
+            return "refused", "This registration uses more than 70 percent of the context window."  # Explain refusal.
         if window_share > FORCE_SHARE and not force:  # Require a deliberate override for large registrations.
-            message = "This registration uses more than one quarter of the context window."  # Explain force need.
+            message = "This registration uses more than half of the context window."  # Explain force need.
             return "refused", message  # Return the blocked threshold decision.
         if window_share > WARNING_SHARE:  # Warn when the index cost becomes operationally visible.
-            return "warned", "This registration uses more than 10 percent of the context window."  # Explain warning.
-        return "ok", "This registration stays below the 10 percent warning threshold."  # State the safe result.
+            return "warned", "This registration uses more than 30 percent of the context window."  # Explain warning.
+        return "ok", "This registration stays below the 30 percent warning threshold."  # State the safe result.
+
+    def _description_tokens(self, skill: SkillMetadata) -> int:
+        return math.ceil(len(skill.description) / TOKEN_CHAR_WIDTH)  # Estimate only the description budget cost.
 
 
 class SkillInstaller:
     """Publish canonical Juniper skills into each local agent host."""
 
     def __init__(
-        self, store_path: Path | None = None, repo_path: Path | None = None, home_path: Path | None = None
+        self,
+        store_path: Path | None = None,
+        repo_path: Path | None = None,
+        home_path: Path | None = None,
+        context_window: int = DEFAULT_TOKEN_WINDOW,
     ) -> None:
         self.home_path = home_path or Path.home()  # Use the caller home so tests can isolate host paths.
         self.repo_path = repo_path or Path.cwd()  # Use the active worktree for the repository skill target.
@@ -287,7 +306,7 @@ class SkillInstaller:
         self.skills_path = self.store_path / "skills"  # Keep routing tier skills below one canonical folder.
         self.packages_path = self.store_path / "packages"  # Keep document packages below domain folders.
         self.catalog = SkillCatalogIndex(self.store_path)  # Share package discovery and catalog writing.
-        self.estimator = SkillCostEstimator()  # Share threshold logic for all registration modes.
+        self.estimator = SkillCostEstimator(context_window)  # Share threshold logic for all registration modes.
 
     def initialize_store(self) -> list[InstallOutcome]:
         logging.info("Preparing canonical Juniper skill store at %s", self.store_path)  # Log the store creation step.
@@ -334,7 +353,8 @@ class SkillInstaller:
         self, force: bool = False, dry_run: bool = False
     ) -> tuple[CostReport, list[InstallOutcome]]:
         logging.info("Installing every Juniper document package")  # Log the high-cost registration mode.
-        return self._install_plan(self.catalog.available_packages(), force, dry_run)  # Publish every document package.
+        packages = self._qualifying_packages()  # Select documents that are large enough for one skill each.
+        return self._install_plan(packages, force, dry_run)  # Publish the qualifying document package set.
 
     def unregister_all(self) -> list[InstallOutcome]:
         logging.info("Unregistering every canonical Juniper skill")  # Log the batch removal mode.
@@ -386,6 +406,13 @@ class SkillInstaller:
     def search_catalog(self, keyword: str) -> list[SkillMetadata]:
         logging.info("Searching Juniper skill inventory for %s", keyword)  # Log the search mode.
         return self.catalog.search(keyword)  # Delegate search to the catalog index.
+
+    def _qualifying_packages(self) -> list[SkillMetadata]:
+        logging.info("Selecting qualifying Juniper document packages")  # Log the default registration filter.
+        packages = self.catalog.available_packages()  # Read all document packages before applying the page filter.
+        selected = [package for package in packages if package.page_count >= MIN_REGISTER_ALL_PAGES]  # Keep large docs.
+        logging.debug("Selected %d qualifying Juniper document packages", len(selected))  # Record filtered count.
+        return selected  # Return the default registration set.
 
     def _install_plan(
         self, skills: list[SkillMetadata], force: bool, dry_run: bool

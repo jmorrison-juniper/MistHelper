@@ -23,7 +23,9 @@ class InstallSkillsCli:
         logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")  # Give operators a readable log.
         args = self.parser.parse_args(argv)  # Parse the requested install action.
         installer_class = self._installer_class()  # Resolve the class after the local source path is ready.
-        installer = installer_class(args.store, args.repo, args.home)  # Build the installer from selected paths.
+        installer = installer_class(  # Build the installer from selected paths and the model window.
+            args.store, args.repo, args.home, args.context_window
+        )
         outcomes = self._dispatch(args, installer)  # Execute exactly one requested action.
         self._print_outcomes(outcomes)  # Print a stable report for scripts and operators.
         return 1 if any(outcome.action in {"failed", "refused"} for outcome in outcomes) else 0  # Signal failure.
@@ -34,7 +36,7 @@ class InstallSkillsCli:
         parser.add_argument("--register-routers", action="store_true", help="Register only routing tier skills.")
         parser.add_argument("--register-domain", metavar="DOMAIN", help="Register every package in one domain.")
         parser.add_argument("--register", nargs="+", metavar="SLUG", help="Register one or more package slugs.")
-        parser.add_argument("--register-all", action="store_true", help="Register every document package.")
+        parser.add_argument("--register-all", action="store_true", help="Register the qualifying document packages.")
         parser.add_argument("--unregister", metavar="SLUG", help="Remove a package or skill junction.")
         parser.add_argument("--unregister-all", action="store_true", help="Remove all known Juniper skill junctions.")
         parser.add_argument("--list", action="store_true", help="List installed and available skills.")
@@ -48,6 +50,7 @@ class InstallSkillsCli:
         parser.add_argument("--init-store", action="store_true", help="Create or refresh the canonical store files.")
         parser.add_argument("--dry-run", action="store_true", help="Print the cost report and change nothing.")
         parser.add_argument("--force", action="store_true", help="Allow a large projected skill index.")
+        parser.add_argument("--context-window", type=int, default=1_000_000, help="Model context window in tokens.")
         parser.add_argument("--store", type=Path, default=None, help="Canonical store path.")
         parser.add_argument("--repo", type=Path, default=None, help="Repository root path.")
         parser.add_argument("--home", type=Path, default=None, help="User profile path.")
@@ -79,6 +82,8 @@ class InstallSkillsCli:
         return self._dispatch_registration(args, installer)  # Continue with registration modes.
 
     def _dispatch_registration(self, args: argparse.Namespace, installer: Any) -> list[Any]:
+        if args.register_routers:  # Keep router-only registration as the explicit exception.
+            return self._run_registration(installer.install_routers(args.force, args.dry_run))  # Run router plan.
         if args.all or args.register_all:  # Register every document package when requested.
             return self._run_registration(installer.install_all_packages(args.force, args.dry_run))  # Run the plan.
         if args.register_domain:  # Register one complete domain when requested.
@@ -87,7 +92,7 @@ class InstallSkillsCli:
             return self._run_registration(installer.install_packages(args.register, args.force, args.dry_run))
         if args.skill:  # Keep the legacy positional install path for existing scripts.
             return self._run_registration(installer.install_packages([args.skill], args.force, args.dry_run))
-        return self._run_registration(installer.install_routers(args.force, args.dry_run))  # Default to routers.
+        return self._run_registration(installer.install_all_packages(args.force, args.dry_run))  # Default to packages.
 
     def _run_registration(self, result: tuple[Any, list[Any]]) -> list[Any]:
         from src.juniper_skills.install import InstallOutcome  # Import only when a refused outcome is needed.
@@ -102,8 +107,15 @@ class InstallSkillsCli:
         print("Projected skill index cost:")  # Introduce the required cost report.
         print(f"  Skills: {report.skill_count}")  # Print the number of registered skills in the plan.
         print(f"  Estimate: {report.token_count} tokens, approximately.")  # State token approximation.
-        print(f"  Window share: {report.window_share:.2f}% of 200,000 tokens.")  # Print measured share.
+        print(f"  Window share: {report.window_share:.2f}% of {report.context_window:,} tokens.")  # Print share.
         print(f"  Decision: {report.action}. {report.message}")  # Print threshold decision.
+        self._print_description_report(report)  # Report descriptions that exceed the routing budget.
+
+    def _print_description_report(self, report: Any) -> None:
+        count = len(report.over_budget_descriptions)  # Count descriptions that the generator should tighten.
+        print(f"  Descriptions over 100 tokens: {count}")  # Print the description budget result.
+        for skill in report.over_budget_descriptions[:10]:  # Keep the report bounded for very large installs.
+            print(f"    - {skill.slug}: {len(skill.description) // 4} tokens, approximately.")  # Name the package.
 
     def _print_search(self, matches: list[Any]) -> list[Any]:
         print("Catalog search results:")  # Label search output for humans and agents.

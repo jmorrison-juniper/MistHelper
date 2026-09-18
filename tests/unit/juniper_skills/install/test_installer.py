@@ -70,12 +70,13 @@ class TestSkillInstaller:
         assert outcomes[0].action == "generated"  # Confirm the installer reports catalog generation.
         assert "`juniper-test-skill`" in catalog_text  # Confirm the catalog lists the installed domain skill.
 
-    def test_cost_report_warns_above_ten_percent_without_installing(self) -> None:
-        self._write_package("apstra", "large-doc", "juniper-apstra-large", "a" * 90_000)  # Create a large index.
+    def test_cost_report_warns_above_thirty_percent_without_installing(self) -> None:
+        self._write_package("apstra", "large-doc", "juniper-apstra-large", "a" * 1_300_000)  # Create a large index.
         report, outcomes = self.installer.install_packages(["large-doc"], dry_run=True)  # Measure without installing.
-        assert report.action == "warned"  # Confirm the 10 percent threshold warns instead of refusing.
-        assert report.token_count > 20_000  # Prove the estimate crossed 10 percent of 200,000 tokens.
+        assert report.action == "warned"  # Confirm the 30 percent threshold warns instead of refusing.
+        assert report.token_count > 300_000  # Prove the estimate crossed 30 percent of 1,000,000 tokens.
         assert outcomes == []  # Confirm dry-run mode did not create junctions.
+        assert report.over_budget_descriptions[0].slug == "large-doc"  # Confirm long descriptions are reported.
 
     def test_register_domain_installs_each_package_in_domain(self) -> None:
         self._write_package("apstra", "fabric-day0", "juniper-apstra-fabric-day0")  # Add the first domain package.
@@ -95,7 +96,7 @@ class TestSkillInstaller:
         assert not (self.repo / ".github" / "skills" / "juniper-apstra-evpn").exists()  # Prove it is unregistered.
 
     def test_register_all_requires_force_at_high_projection(self, capsys: pytest.CaptureFixture[str]) -> None:
-        for number in range(5):  # Create enough packages to cross the 50 percent refusal threshold.
+        for number in range(23):  # Create enough packages to cross the 50 percent force threshold.
             self._write_package("mega", f"doc-{number}", f"juniper-mega-doc-{number}", "b" * 90_000)  # Add one package.
         args = [  # Build the CLI arguments with isolated paths for this test.
             "--store",
@@ -112,6 +113,30 @@ class TestSkillInstaller:
         assert status == 1  # Confirm the CLI refuses the high projection without force.
         assert "Decision: refused." in output  # Confirm the output states the threshold decision.
         assert "Window share:" in output  # Confirm the output includes the projected context share.
+        assert "1,000,000 tokens" in output  # Confirm the corrected default context window.
+
+    def test_default_registration_uses_qualifying_document_packages(self, capsys: pytest.CaptureFixture[str]) -> None:
+        self._write_package("apstra", "doc-a", "juniper-apstra-doc-a")  # Add one qualifying document package.
+        self._write_package("apstra", "doc-b", "juniper-apstra-doc-b")  # Add another qualifying document package.
+        args = ["--store", str(self.store), "--repo", str(self.repo), "--home", str(self.home), "--dry-run"]
+        status = InstallSkillsCli().run(args)  # Run the default mode without an explicit registration option.
+        output = capsys.readouterr().out  # Capture the cost report that proves the default selection.
+        assert status == 0  # Confirm the default registration plan is allowed.
+        assert "Skills: 2" in output  # Confirm the default selected packages, not the single router.
+
+    def test_context_window_changes_threshold_decision(self) -> None:
+        self._write_package("apstra", "small-window", "juniper-apstra-small-window", "c" * 130_000)  # Add a test doc.
+        installer = SkillInstaller(self.store, self.repo, self.home, context_window=100_000)  # Use a smaller model.
+        report, outcomes = installer.install_packages(["small-window"], dry_run=True)  # Measure against that window.
+        assert report.action == "warned"  # Confirm the caller-selected window changes the threshold.
+        assert outcomes == []  # Confirm the window test changes no host registration.
+
+    def test_projection_above_seventy_percent_refuses_with_force(self) -> None:
+        self._write_package("apstra", "too-large", "juniper-apstra-too-large", "d" * 290_000)  # Add a huge doc.
+        installer = SkillInstaller(self.store, self.repo, self.home, context_window=100_000)  # Use a small window.
+        report, outcomes = installer.install_packages(["too-large"], force=True, dry_run=True)  # Measure forced plan.
+        assert report.action == "refused"  # Confirm the 70 percent threshold cannot be forced.
+        assert outcomes == []  # Confirm the refused plan changes no host registration.
 
     def _write_skill_file(self, name: str, content: str) -> None:
         (self.skill / name).write_text(content, encoding="utf-8")  # Write deterministic skill test content.
