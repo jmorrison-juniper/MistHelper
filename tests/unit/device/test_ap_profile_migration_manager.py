@@ -2208,6 +2208,30 @@ def test_reassign_raises_on_error_status() -> None:
     assert "dev-1" in str(excinfo.value), "the message MUST name the AP that failed"
 
 
+def test_parse_backup_file_empty_body_reports_value_error(tmp_path: Path) -> None:
+    """An empty backup file must report an invalid JSON backup."""
+    backup_path = tmp_path / "backup.json"  # Keep the invalid backup isolated to this test.
+    backup_path.write_text(b"".decode(), encoding="utf-8")  # Model a zero-byte backup body.
+    try:
+        APProfileMigrationManager._parse_backup_file(str(backup_path))  # Drive the product backup parser.
+    except ValueError as error:
+        assert "backup file not valid JSON" in str(error)  # The message must name the invalid backup.
+    else:
+        raise AssertionError("AP backup parser must reject an empty JSON body.")  # Guard false success.
+
+
+def test_parse_backup_file_malformed_body_reports_value_error(tmp_path: Path) -> None:
+    """A malformed backup file must report an invalid JSON backup."""
+    backup_path = tmp_path / "backup.json"  # Keep the invalid backup isolated to this test.
+    backup_path.write_text("{not valid JSONDecodeError", encoding="utf-8")  # Model damaged JSON text.
+    try:
+        APProfileMigrationManager._parse_backup_file(str(backup_path))  # Drive the product backup parser.
+    except ValueError as error:
+        assert "backup file not valid JSON" in str(error)  # The message must name the invalid backup.
+    else:
+        raise AssertionError("AP backup parser must reject a malformed JSON body.")  # Guard false success.
+
+
 def test_reassign_accepts_success_status() -> None:
     """A 2xx status MUST still count as a reassigned AP."""
     ap_record = _ap_record("dev-2", "site-1", "5c5b350e0002")
