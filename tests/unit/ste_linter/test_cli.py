@@ -70,10 +70,14 @@ def test_version_flag_exits() -> None:
 
 def test_empty_arguments_return_usage_error() -> None:
     """An empty argument list returns the documented usage error."""
-    assert main([]) == 2  # The CLI reports that no file produced a score.
+    with pytest.raises(SystemExit) as caught:  # Argparse raises when no path exists.
+        main([])  # Empty arguments must report the missing path.
+    assert caught.value.code == 2  # Argparse uses status 2 for a usage error.
 
 
 def test_none_arguments_read_sys_argv(monkeypatch: pytest.MonkeyPatch) -> None:
     """A None argument list reads sys.argv like module execution."""
     monkeypatch.setattr(sys, "argv", ["ste_linter"])  # Keep pytest flags out of argparse.
-    assert main(None) == 2  # The CLI reports that no file produced a score.
+    with pytest.raises(SystemExit) as caught:  # Argparse raises when sys.argv holds no path.
+        main(None)  # None is the module execution path.
+    assert caught.value.code == 2  # Argparse uses status 2 for a usage error.

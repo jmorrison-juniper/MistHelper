@@ -277,19 +277,27 @@ def test_capture_main_reports_missing_fixture_source(
     assert not output_path.exists()  # A failed read must not write a partial baseline.
 
 
-def test_capture_main_rejects_empty_arguments() -> None:
-    """Confirm an empty argument list reports the argparse usage failure."""
-    with pytest.raises(SystemExit) as caught:  # Argparse raises instead of returning on a missing required flag.
-        capture_log_baseline.main([])  # Empty arguments must fail before any file read.
-    assert caught.value.code == 2  # Argparse uses status 2 for a usage error.
+def test_capture_main_empty_arguments_use_default_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Confirm an empty argument list uses the documented default output path."""
+    monkeypatch.chdir(tmp_path)  # Keep the default output away from the committed fixture.
+    monkeypatch.setattr(capture_log_baseline, "FIXTURE_SITES", [])  # Avoid reading the large production file.
+    (tmp_path / "tests" / "fixtures").mkdir(parents=True)  # Create the default output parent.
+    exit_code = capture_log_baseline.main([])  # Empty arguments take the default source and output values.
+    output_path = tmp_path / "tests" / "fixtures" / "issue_429_log_baseline.json"  # Default output path.
+    assert exit_code == 0  # The default path succeeds when no fixture rows need a source read.
+    assert json.loads(output_path.read_text(encoding="utf-8")) == {}  # No fixture rows produce an empty baseline.
 
 
-def test_capture_main_rejects_none_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Confirm a None argument list reads sys.argv and reports the usage failure."""
+def test_capture_main_none_arguments_use_sys_argv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Confirm a None argument list reads sys.argv and uses default output."""
+    monkeypatch.chdir(tmp_path)  # Keep the default output away from the committed fixture.
+    monkeypatch.setattr(capture_log_baseline, "FIXTURE_SITES", [])  # Avoid reading the large production file.
     monkeypatch.setattr(sys, "argv", ["capture_log_baseline"])  # Keep pytest flags out of this CLI call.
-    with pytest.raises(SystemExit) as caught:  # Argparse raises because sys.argv holds no required flags.
-        capture_log_baseline.main(None)  # None is the module execution path.
-    assert caught.value.code == 2  # Argparse uses status 2 for a usage error.
+    (tmp_path / "tests" / "fixtures").mkdir(parents=True)  # Create the default output parent.
+    exit_code = capture_log_baseline.main(None)  # None is the module execution path.
+    output_path = tmp_path / "tests" / "fixtures" / "issue_429_log_baseline.json"  # Default output path.
+    assert exit_code == 0  # The default path succeeds when no fixture rows need a source read.
+    assert json.loads(output_path.read_text(encoding="utf-8")) == {}  # No fixture rows produce an empty baseline.
 
 
 _LEVEL_METHODS = frozenset(  # Mirrors LEVEL_METHODS in the codemod module.
