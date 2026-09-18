@@ -80,7 +80,7 @@ class CardDeduplicator:
         return line  # Keep the single best card line.
 
     def _is_card_line(self, line: str) -> bool:
-        return bool(re.match(r"^-\s+\*\*(?:MUST|SHOULD|INFO)\*\*", line))  # Match contract card bullet lines.
+        return bool(re.match(r"^-\s+(?:\*\*)?(?:MUST|SHOULD|INFO)(?:\*\*)?:", line))  # Match contract card lines.
 
     def _specific_line(self, current: str | None, candidate: str) -> str:
         if current is None:  # A new normalized card has no selected line.

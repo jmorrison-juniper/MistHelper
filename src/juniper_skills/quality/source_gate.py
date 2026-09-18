@@ -4,6 +4,7 @@ from __future__ import annotations  # Keep annotations cheap during quality impo
 
 import logging  # Record gate actions and measured outcomes.
 import re  # Detect text, tables, commands, and repeated document lines.
+from collections import Counter  # Count repeated lines without quadratic scans.
 from pathlib import Path  # Use portable paths for corpus scans.
 
 from .models import SourceQualityReport, SourceQualityScore, SpaceRatioDistribution  # Share report records.
@@ -15,6 +16,7 @@ class SourceQualityGate:
     MIN_TEXT_CHARS = 400  # Match the harvester review class for nearly empty extraction.
     REPEATED_LINE_THRESHOLD = 0.45  # Fail documents dominated by repeated headers or footers.
     STRUCTURED_RATIO_THRESHOLD = 0.70  # Avoid failing table-heavy or output-heavy sources near the threshold.
+    SAMPLE_CHARS = 200_000  # Match the measured corpus scan while bounding very large documents.
 
     def __init__(self, threshold: float | None = None) -> None:
         self.threshold = threshold  # Store an override only for deterministic unit tests.
@@ -45,11 +47,16 @@ class SourceQualityGate:
 
     def _read_texts(self, paths: tuple[Path, ...]) -> dict[Path, str]:
         logging.info("Reading source documents for quality scoring")  # Log file input before it starts.
-        texts = {
-            path: path.read_text(encoding="utf-8", errors="ignore") for path in paths if path.exists()
-        }  # Read files.
+        texts = {path: self._read_sample(path) for path in paths if path.exists()}  # Read bounded source samples.
         logging.debug("Read %s source documents for quality scoring", len(texts))  # Report successful input count.
         return texts  # Return only readable paths so missing paths do not crash the distribution.
+
+    def _read_sample(self, path: Path) -> str:
+        logging.info("Reading a bounded quality sample from %s", path)  # Log before one file read.
+        with path.open("r", encoding="utf-8", errors="ignore") as handle:  # Open text safely for Windows paths.
+            text = handle.read(self.SAMPLE_CHARS)  # Bound the scan to keep the gate fast on large PDFs.
+        logging.debug("Read %s sampled characters from %s", len(text), path)  # Report sample size.
+        return text  # Return the bounded text sample.
 
     def _distribution(self, texts: tuple[str, ...]) -> SpaceRatioDistribution:
         logging.info("Calibrating the source quality space-ratio threshold")  # Log before calculating statistics.
@@ -101,8 +108,8 @@ class SourceQualityGate:
     def _score(
         self, document_key: str, path: Path, text: str, threshold: float, source_pdf: Path | None
     ) -> SourceQualityScore:
-        letters = len(re.findall(r"[A-Za-z]", text))  # Count letters as the denominator for space damage.
-        ratio = self._space_ratio(text)  # Measure the defect signal before exemptions.
+        letters, spaces = self._text_counts(text)  # Count letters and spaces in one pass for large documents.
+        ratio = spaces / letters if letters else 0.0  # Measure the defect signal before exemptions.
         text_chars = len(re.sub(r"\s+", "", text))  # Count extracted non-space text for empty-source detection.
         repeated = self._repeated_line_ratio(text)  # Measure repeated headers and footers.
         structured = self._structured_ratio(text)  # Measure table and output share for false-positive control.
@@ -130,12 +137,23 @@ class SourceQualityGate:
         return "pass", "source text passed quality checks"  # Permit skill output only after all rules clear.
 
     def _space_ratio(self, text: str) -> float:
-        letters = len(re.findall(r"[A-Za-z]", text))  # Count letters so numbers do not hide stripped prose.
-        return text.count(" ") / letters if letters else 0.0  # Return zero when no alphabetic evidence exists.
+        letters, spaces = self._text_counts(text)  # Count letters and spaces in one pass for speed.
+        return spaces / letters if letters else 0.0  # Return zero when no alphabetic evidence exists.
+
+    def _text_counts(self, text: str) -> tuple[int, int]:
+        logging.info("Counting letters and spaces in a source sample")  # Log the bounded character scan.
+        letters = 0  # Count alphabetic characters for the ratio denominator.
+        spaces = 0  # Count literal spaces for the defect numerator.
+        for character in text:  # Inspect each sampled character once.
+            letters += character.isalpha()  # Add one when the character is a source letter.
+            spaces += character == " "  # Add one when the converter preserved a word space.
+        logging.debug("Counted %s letters and %s spaces", letters, spaces)  # Report ratio inputs.
+        return letters, spaces  # Return both values for ratio calculation.
 
     def _repeated_line_ratio(self, text: str) -> float:
         lines = [line.strip() for line in text.splitlines() if len(line.strip()) >= 8]  # Ignore short separators.
-        repeated = sum(1 for line in lines if lines.count(line) > 2)  # Count lines repeated enough to be boilerplate.
+        counts = Counter(lines)  # Count each line once so large documents stay fast.
+        repeated = sum(1 for line in lines if counts[line] > 2)  # Count lines repeated enough to be boilerplate.
         return repeated / len(lines) if lines else 0.0  # Return a safe zero for empty documents.
 
     def _structured_ratio(self, text: str) -> float:

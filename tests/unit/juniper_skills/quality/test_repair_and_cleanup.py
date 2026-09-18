@@ -44,8 +44,8 @@ def test_card_deduplicator_removes_markdown_card_duplicates() -> None:
     text = "\n".join(
         [
             "# Topic",
-            "- **INFO** Configure the login class. DOC p.0-0",
-            "- **INFO** Configure the login class. DOC p.4-5",
+            "- INFO: Configure the login class. [DOC p.0-0]",
+            "- INFO: Configure the login class. [DOC p.4-5]",
         ]
     )
     cleaned, merges = CardDeduplicator().deduplicate_markdown_text(text)  # Clean duplicate topic card lines.

@@ -40,7 +40,7 @@ class CommandFenceCleaner:
         return CommandFenceCleanReport("", len(paths), total_removed, tuple(examples[:10]))  # Return aggregate proof.
 
     def _copy_line(self, line: str, output: list[str], removed: list[str], in_fence: bool) -> bool:
-        if line.startswith("```"):  # Fence boundaries always remain in the file.
+        if line.strip().startswith("```"):  # Fence boundaries always remain in the file.
             output.append(line)  # Preserve the Markdown fence marker.
             return not in_fence  # Toggle fence state after copying the marker.
         if in_fence and self._is_prose_leak(line):  # Reject prose only inside code fences.
