@@ -53,6 +53,10 @@ class DocumentGroup:
     duplicate_of: str = ""
     is_winner: bool = True
     priority: int = 0
+    version_family_key: str = ""
+    version_value: str = ""
+    version_status: str = "unversioned"
+    build_topics: bool = True
 
     @property
     def text_chars(self) -> int:
@@ -94,6 +98,18 @@ class EditionFamily:
 
 
 @dataclass(frozen=True)
+class VersionedFamily:
+    """A product guide family that has current and superseded versions."""
+
+    family_key: str
+    current_title: str
+    current_version: str
+    document_count: int
+    superseded_count: int
+    superseded_pages: int
+
+
+@dataclass(frozen=True)
 class InventoryResult:
     """The measured inventory result."""
 
@@ -107,3 +123,6 @@ class InventoryResult:
     part_set_details: list[DocumentGroup]
     duplicate_details: list[DuplicateDecision]
     edition_families: list[EditionFamily]
+    versioned_families: list[VersionedFamily]
+    superseded_documents: int
+    superseded_pages: int

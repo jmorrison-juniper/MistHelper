@@ -21,6 +21,7 @@ from src.juniper_skills.inventory.models import (
     InventoryResult,
     MarkdownPart,
     SourceRoot,
+    VersionedFamily,
 )  # Share typed inventory records across the package.
 
 
@@ -292,6 +293,62 @@ class DuplicateResolver:
             loser.is_winner = False  # Mark the conversion as inactive.
 
 
+class VersionedFamilyResolver:
+    """Mark current and superseded product guide versions."""
+
+    _version_pattern = re.compile(r"(?:\bVersion\s+)?(\d+(?:\.\d+)+)", re.IGNORECASE)  # Match real title versions.
+    _brand_pattern = re.compile(r"\b(?:Juniper|HPE Networking)\b", re.IGNORECASE)  # Remove brands from product keys.
+
+    def resolve(self, groups: list[DocumentGroup]) -> list[VersionedFamily]:
+        logging.info("Resolving versioned product guide families")  # Log the version pass before mutation.
+        buckets: dict[str, list[DocumentGroup]] = defaultdict(list)  # Store versioned documents by product family.
+        for group in groups:  # Inspect every active logical document.
+            family_key = self._family_key(group.title)  # Remove versions and normalize product names.
+            if family_key:  # Ignore documents with no parseable version.
+                buckets[family_key].append(group)  # Add the versioned document to its family.
+        families = [self._mark_family(key, value) for key, value in buckets.items() if len(value) > 1]  # Mark repeats.
+        logging.debug("Resolved %s versioned families", len(families))  # Report family count.
+        return sorted(families, key=lambda family: family.superseded_pages, reverse=True)  # Rank by page saving.
+
+    def _family_key(self, title: str) -> str:
+        if not self._version_pattern.search(title):  # A family needs a version value in the title.
+            return ""
+        if "apstra" in title.lower() and "user guide" in title.lower():  # Handle the HPE Apstra rebrand safely.
+            return "apstra-user-guide"
+        without_version = self._version_pattern.sub("", title)  # Remove every version token from the product name.
+        without_brand = self._brand_pattern.sub(
+            "", without_version
+        )  # Remove vendor brand words that changed by rebrand.
+        return TextKey.normalize(without_brand)  # Normalize remaining product words into a family key.
+
+    def _mark_family(self, family_key: str, groups: list[DocumentGroup]) -> VersionedFamily:
+        logging.info("Marking version family %s", family_key)  # Log family mutation before status writes.
+        current = max(groups, key=self._version_tuple)  # Compare version fields numerically, not as strings.
+        for group in groups:  # Assign a version status to each family member.
+            self._mark_group(group, family_key, current)  # Store current or superseded state on the document.
+        superseded = [group for group in groups if group is not current]  # Gather older documents for page savings.
+        pages = sum(group.pages for group in superseded)  # Measure skipped topic-build pages.
+        logging.debug("Version family %s saves %s pages", family_key, pages)  # Report the measured page saving.
+        return VersionedFamily(family_key, current.title, current.version_value, len(groups), len(superseded), pages)
+
+    def _mark_group(self, group: DocumentGroup, family_key: str, current: DocumentGroup) -> None:
+        group.version_family_key = family_key  # Preserve the product family for reporting and queries.
+        group.version_value = self._version_value(group.title)  # Store the newest version named in the title.
+        group.version_status = "current" if group is current else "superseded"  # Mark the newest version current.
+        group.build_topics = group is current  # Skip topic generation for superseded documents.
+
+    def _version_tuple(self, group: DocumentGroup) -> tuple[int, ...]:
+        return tuple(int(part) for part in self._version_value(group.title).split("."))  # Compare versions by number.
+
+    def _version_value(self, title: str) -> str:
+        versions = [match.group(1) for match in self._version_pattern.finditer(title)]  # Parse every title version.
+        winner = max(versions, key=self._version_parts) if versions else "0"  # A multi-version title uses the newest.
+        return winner  # Return a string that is human-readable in the report.
+
+    def _version_parts(self, version: str) -> tuple[int, ...]:
+        return tuple(int(part) for part in version.split("."))  # Build a numeric tuple so 2.10 outranks 2.9.
+
+
 class EditionFamilyAnalyzer:
     """Find same-stem hash families that can be different editions."""
 
@@ -383,6 +440,7 @@ class InventoryDatabase:
         logging.info("Creating inventory database schema")  # Log schema creation before DDL.
         for statement in self._schema_statements():  # Create each table with a bounded statement.
             connection.execute(statement)  # Execute DDL inside the same inventory transaction.
+        self._ensure_document_columns(connection)  # Add version columns for an existing incremental database.
         logging.debug("Inventory database schema is ready")  # Report DDL completion.
 
     def _schema_statements(self) -> list[str]:
@@ -398,7 +456,9 @@ class InventoryDatabase:
                 document_key TEXT PRIMARY KEY, title TEXT NOT NULL, category TEXT NOT NULL,
                 source_pdf TEXT NOT NULL, root_name TEXT NOT NULL, pages INTEGER NOT NULL,
                 status TEXT NOT NULL, group_method TEXT NOT NULL, part_count INTEGER NOT NULL,
-                text_chars INTEGER NOT NULL, priority INTEGER NOT NULL, duplicate_losers INTEGER NOT NULL
+                text_chars INTEGER NOT NULL, priority INTEGER NOT NULL, duplicate_losers INTEGER NOT NULL,
+                version_family_key TEXT NOT NULL DEFAULT '', version_value TEXT NOT NULL DEFAULT '',
+                version_status TEXT NOT NULL DEFAULT 'unversioned', build_topics INTEGER NOT NULL DEFAULT 1
             )
             """  # Store one row for each logical document after duplicate resolution.
 
@@ -420,6 +480,25 @@ class InventoryDatabase:
                 FOREIGN KEY(document_key) REFERENCES source_document(document_key)
             )
             """  # Store one queue row for each logical document.
+
+    def _ensure_document_columns(self, connection: sqlite3.Connection) -> None:
+        logging.info("Checking source document version columns")  # Log schema migration before inspection.
+        rows = connection.execute("PRAGMA table_info(source_document)").fetchall()  # Read the current table columns.
+        existing = {str(row[1]) for row in rows}  # Build a set for constant-time migration checks.
+        for name, definition in self._document_column_additions().items():  # Add each missing incremental column.
+            if name not in existing:  # SQLite needs one ALTER statement for each missing column.
+                connection.execute(definition)  # Add the missing column with a safe default.
+        logging.debug("Source document table has %s columns", len(existing))  # Report inspected column count.
+
+    def _document_column_additions(self) -> dict[str, str]:
+        return {
+            "version_family_key": "ALTER TABLE source_document ADD COLUMN version_family_key TEXT NOT NULL DEFAULT ''",
+            "version_value": "ALTER TABLE source_document ADD COLUMN version_value TEXT NOT NULL DEFAULT ''",
+            "version_status": (
+                "ALTER TABLE source_document ADD COLUMN version_status TEXT NOT NULL DEFAULT 'unversioned'"
+            ),
+            "build_topics": "ALTER TABLE source_document ADD COLUMN build_topics INTEGER NOT NULL DEFAULT 1",
+        }  # Keep migration statements near the document schema.
 
     def _changed_parts(self, connection: sqlite3.Connection, decisions: list[DuplicateDecision]) -> set[str]:
         logging.info("Checking existing part hashes for changes")  # Log incremental detection before reading state.
@@ -446,27 +525,34 @@ class InventoryDatabase:
         logging.debug("Upserted %s source documents", len(decisions))  # Report document row count.
 
     def _upsert_document(self, connection: sqlite3.Connection, decision: DuplicateDecision) -> None:
-        group = decision.winner  # Use the selected duplicate winner as the active source document.
         connection.execute(
             """
             INSERT OR REPLACE INTO source_document
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (
-                decision.canonical_key,
-                group.title,
-                group.category,
-                group.source_pdf,
-                group.root.name,
-                group.pages,
-                group.status,
-                group.group_method,
-                group.part_count,
-                group.text_chars,
-                group.priority,
-                len(decision.losers),
-            ),
+            self._document_values(decision),
         )  # Upsert by natural document key so repeated scans are incremental.
+
+    def _document_values(self, decision: DuplicateDecision) -> tuple[object, ...]:
+        group = decision.winner  # Use the selected duplicate winner as the active source document.
+        return (
+            decision.canonical_key,
+            group.title,
+            group.category,
+            group.source_pdf,
+            group.root.name,
+            group.pages,
+            group.status,
+            group.group_method,
+            group.part_count,
+            group.text_chars,
+            group.priority,
+            len(decision.losers),
+            group.version_family_key,
+            group.version_value,
+            group.version_status,
+            1 if group.build_topics else 0,
+        )  # Return all document columns in schema order.
 
     def _upsert_parts(self, connection: sqlite3.Connection, decision: DuplicateDecision) -> None:
         groups = [decision.winner, *decision.losers]  # Preserve duplicate losers without activating them.
@@ -503,9 +589,7 @@ class InventoryDatabase:
         logging.info("Upserting priority work queue")  # Log queue writes before SQL execution.
         for decision in decisions:  # Ensure every logical document has one queue row.
             reason = self._queue_reason(decision, changed)  # Explain why the item is pending or preserved.
-            status = (
-                "pending" if decision.canonical_key in changed else self._existing_status(connection, decision)
-            )  # Preserve work.
+            status = self._queue_status(connection, decision, changed)  # Superseded items do not build topic files.
             connection.execute(
                 """
                 INSERT OR REPLACE INTO work_item (document_key, status, priority, reason, updated_at)
@@ -521,7 +605,16 @@ class InventoryDatabase:
         ).fetchone()
         return str(row[0]) if row else "pending"  # New documents start pending.
 
+    def _queue_status(self, connection: sqlite3.Connection, decision: DuplicateDecision, changed: set[str]) -> str:
+        if not decision.winner.build_topics:  # Superseded documents stay citable but do not build topic files.
+            return "superseded"
+        if decision.canonical_key in changed:  # Changed source content must run again.
+            return "pending"
+        return self._existing_status(connection, decision)  # Preserve downstream progress when content did not change.
+
     def _queue_reason(self, decision: DuplicateDecision, changed: set[str]) -> str:
+        if not decision.winner.build_topics:  # State why the pipeline skips this still-citable document.
+            return "superseded version"
         return (
             "content changed" if decision.canonical_key in changed else "inventory refreshed"
         )  # State requeue reason.
@@ -545,10 +638,27 @@ class InventoryReport:
         lines.extend(self._confirmed_structure_lines())  # Add the user supplied full-corpus structure facts.
         lines.extend(self._priority_rule_lines())  # State the rule that builds queue priority.
         lines.extend(self._part_set_lines(result))  # Add measured split part set evidence.
+        lines.extend(self._versioned_family_lines(result))  # Add current and superseded version evidence.
         lines.extend(self._edition_family_lines(result))  # Add same-stem edition evidence for hash families.
         lines.extend(self._duplicate_lines(result))  # Add measured duplicate resolution evidence.
         lines.extend(self._category_lines(result))  # Add category totals for planning.
         lines.extend(self._top_document_lines(result))  # Add the top 50 priority records.
+        return lines
+
+    def _versioned_family_lines(self, result: InventoryResult) -> list[str]:
+        lines = [
+            "",
+            "## Versioned product families",
+            "",
+            "| Family | Current version | Current title | Documents | Superseded pages |",
+            "| - | - | - | -: | -: |",
+        ]  # Create the version family table header.
+        for family in result.versioned_families:  # Report each measured version family.
+            safe_title = family.current_title.replace("|", "\\|")  # Escape table separators in source titles.
+            lines.append(
+                f"| {family.family_key} | {family.current_version} | {safe_title} | "
+                f"{family.document_count} | {family.superseded_pages} |"
+            )
         return lines
 
     def _summary_lines(self, result: InventoryResult) -> list[str]:
@@ -564,6 +674,8 @@ class InventoryReport:
             f"| Logical documents | {result.logical_documents} |",
             f"| Split part sets | {result.part_sets} |",
             f"| Duplicate conversions removed | {result.duplicate_losers} |",
+            f"| Superseded version documents | {result.superseded_documents} |",
+            f"| Superseded pages skipped for topic builds | {result.superseded_pages} |",
         ]
 
     def _confirmed_structure_lines(self) -> list[str]:
@@ -664,9 +776,12 @@ class InventoryBuilder:
         parts = CorpusScanner(self.roots, self.metadata).scan()  # Scan all physical Markdown roots.
         groups = PartSetGrouper().group(parts)  # Group split files before duplicate detection.
         decisions = DuplicateResolver().resolve(groups)  # Pick one conversion per logical document.
+        version_families = VersionedFamilyResolver().resolve(
+            [decision.winner for decision in decisions]
+        )  # Mark versions.
         self._score(decisions)  # Assign queue priority after duplicate resolution.
         InventoryDatabase(self.repo_root / "data" / "juniper_skills" / "factory.db").write(decisions)  # Persist state.
-        result = self._result(parts, decisions)  # Build measured counts for reports and final output.
+        result = self._result(parts, decisions, version_families)  # Build measured counts for reports and final output.
         InventoryReport(self.repo_root / "data" / "juniper_skills" / "inventory-report.md").write(
             result
         )  # Write report.
@@ -690,31 +805,38 @@ class InventoryBuilder:
             decision.winner.priority = self.scorer.score(decision.winner)  # Store the tunable priority value.
         logging.debug("Scored %s logical documents", len(decisions))  # Report scored document count.
 
-    def _result(self, parts: list[MarkdownPart], decisions: list[DuplicateDecision]) -> InventoryResult:
+    def _result(
+        self, parts: list[MarkdownPart], decisions: list[DuplicateDecision], version_families: list[VersionedFamily]
+    ) -> InventoryResult:
         winners = [decision.winner for decision in decisions]  # Use winners for logical document totals.
-        category_totals = self._category_totals(winners)  # Count documents by selected category.
-        top_documents = sorted(winners, key=lambda group: group.priority, reverse=True)[
-            :50
-        ]  # Rank top priority documents.
-        part_sets = sum(1 for group in winners if group.part_count > 1)  # Count split sets after duplicate resolution.
-        duplicate_losers = sum(len(decision.losers) for decision in decisions)  # Count loser conversions retained.
         part_set_details = [group for group in winners if group.part_count > 1]  # Keep part set details for the report.
+        superseded = [group for group in winners if group.version_status == "superseded"]  # Gather skipped documents.
         duplicate_details = [
             decision for decision in decisions if decision.losers
-        ]  # Keep duplicate details for the report.
-        edition_families = EditionFamilyAnalyzer().find(winners)  # Measure same-stem hash families after dedupe.
+        ]  # Keep duplicate detail for the report.
         return InventoryResult(
             len(self.roots),
             len(parts),
             len(winners),
-            part_sets,
-            duplicate_losers,
-            category_totals,
-            top_documents,
+            len(part_set_details),
+            sum(len(decision.losers) for decision in decisions),
+            self._category_totals(winners),
+            self._top_documents(winners),
             part_set_details,
             duplicate_details,
-            edition_families,
+            EditionFamilyAnalyzer().find(winners),
+            version_families,
+            len(superseded),
+            sum(group.pages for group in superseded),
         )
+
+    def _top_documents(self, groups: list[DocumentGroup]) -> list[DocumentGroup]:
+        buildable = [
+            group for group in groups if group.build_topics
+        ]  # Omit superseded documents from topic work ranking.
+        return sorted(buildable, key=lambda group: group.priority, reverse=True)[
+            :50
+        ]  # Keep the highest priority documents.
 
     def _category_totals(self, groups: list[DocumentGroup]) -> dict[str, int]:
         totals: dict[str, int] = defaultdict(int)  # Accumulate counts by selected category.
