@@ -10,6 +10,7 @@ Why:
 
 from __future__ import annotations
 
+import logging
 import sys
 from types import ModuleType, SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -171,6 +172,24 @@ class TestDeviceEvents:
         fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(  # type: ignore[attr-defined]  # WHY: empty write keeps endpoint metadata.
             [], "OrgDeviceEvents.csv", api_function_name="searchOrgDeviceEvents"
         )
+
+    def test_http_401_reports_status_and_skips_export(
+        self, fake_mh: ModuleType, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A 401 device-event response must report the exact status and skip success."""
+        response = MagicMock(status_code=401, data=[{"id": "ignored"}])  # WHY: prove failed data is not trusted.
+        caplog.set_level(logging.ERROR, logger=oaee.logger.name)  # WHY: capture the product status log.
+        with (
+            patch.object(oaee.TimeUtils, "get_dynamic_lookback_hours", return_value=24),
+            patch.object(oaee.TimeUtils, "log_dynamic_lookback"),
+            patch("src.export.org_alarm_event_exporter.mistapi") as mistapi_mock,
+        ):
+            mistapi_mock.api.v1.orgs.devices.searchOrgDeviceEvents.return_value = response  # WHY: return 401.
+            OrgAlarmEventExporter.device_events()  # WHY: drive the product status path.
+        assert "HTTP 401" in caplog.text  # WHY: the operator must see the exact auth failure.
+        assert "organization device events" in caplog.text  # WHY: the log must name the failed operation.
+        mistapi_mock.get_all.assert_not_called()  # WHY: the success pagination path must not run.
+        fake_mh.DataExporter.write_with_format_selection.assert_not_called()  # type: ignore[attr-defined]
 
 
 # ---------------------------------------------------------------------------
