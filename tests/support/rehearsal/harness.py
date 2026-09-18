@@ -216,7 +216,7 @@ def build_targets(fleet: FleetScript, site_id: str = SITE_ID) -> list[dict[str, 
     Returns:
         The target entries of the run record.
     """
-    logging.info("Building %d run record targets for the rehearsal", len(fleet.scripts))  # Entry audit.
+    logger.info("Building %d run record targets for the rehearsal", len(fleet.scripts))  # Entry audit.
     entries: list[dict[str, Any]] = []  # One target for each scripted device.
     for script in fleet.scripts:  # A single pass keeps the cost linear in the device count.
         row = {"type": script.device_type, "model": script.model}  # The two keys the classifier reads.
@@ -235,7 +235,8 @@ def build_targets(fleet: FleetScript, site_id: str = SITE_ID) -> list[dict[str, 
                 "scope": scope,  # The cloud scope that the shipped classifier chose for this device.
             }
         )
-    logging.debug("Built %d targets, and the scope of each one came from the shipped classifier", len(entries))
+    log_message = "Built %d targets, and the scope of each one came from the shipped classifier"  # Keep text short.
+    logger.debug(log_message, len(entries))  # Record the built target count.
     return entries
 
 
