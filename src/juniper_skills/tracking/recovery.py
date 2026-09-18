@@ -6,7 +6,7 @@ import json
 import logging
 
 from src.juniper_skills.tracking.comment_codec import StageCommentCodec
-from src.juniper_skills.tracking.github_cli import GitHubCliError, GitHubCliRunner, GitHubRateLimitManager
+from src.juniper_skills.tracking.github_cli import GitHubCliError, GitHubCommandRunner, GitHubRateLimitManager
 from src.juniper_skills.tracking.models import ResumePoint
 from src.juniper_skills.tracking.store import FactoryJournalStore
 
@@ -17,10 +17,11 @@ class SkillIssueRecoveryReader:
     def __init__(
         self,
         store: FactoryJournalStore,
-        runner: GitHubCliRunner,
+        runner: GitHubCommandRunner,
         rate_limit: GitHubRateLimitManager,
         repo: str = "jmorrison-juniper/MistHelper",
     ) -> None:
+        """Initialize the SkillIssueRecoveryReader instance."""
         self.store = store  # Keep the local mirror available when GitHub is down.
         self.runner = runner  # Use the contract-required `gh` CLI through a testable runner.
         self.rate_limit = rate_limit  # Measure rate limits before network reads.

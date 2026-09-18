@@ -17,34 +17,40 @@ class OrchestratorJournal:
     """Record every pipeline stage before the next stage starts."""
 
     def __init__(self, database_path: Path) -> None:
+        """Initialize the OrchestratorJournal instance."""
         self.database_path = database_path  # Reuse the inventory database for durable factory state.
         self.database_path.parent.mkdir(parents=True, exist_ok=True)  # Create the data folder for isolated tests.
         self._initialize()  # Ensure the journal table exists before a run starts.
 
     def started(self, document_key: str, stage: str, worker_id: str) -> None:
+        """Run the started operation."""
         logging.info("Recording start for orchestrator stage %s", stage)  # Log before writing the start event.
         outcome = StageOutcome(document_key, stage, "started", "stage started", worker_id)  # Build a durable event.
         self.record(outcome)  # Save the start event before work begins.
         logging.debug("Recorded start for stage %s on %s", stage, document_key)  # Record the journal result.
 
     def completed(self, outcome: StageOutcome) -> None:
+        """Run the completed operation."""
         logging.info("Recording completion for orchestrator stage %s", outcome.stage)  # Log before writing completion.
         self.record(outcome)  # Save the completed outcome before the next stage can start.
         logging.debug("Recorded completion for stage %s", outcome.stage)  # Record the completed event.
 
     def failed(self, document_key: str, stage: str, worker_id: str, error: str) -> None:
+        """Run the failed operation."""
         logging.info("Recording failure for orchestrator stage %s", stage)  # Log before writing a failure event.
         outcome = StageOutcome(document_key, stage, "failed", error, worker_id)  # Build a retryable failure event.
         self.record(outcome)  # Save the failure so a restart resumes this stage.
         logging.debug("Recorded failure for stage %s on %s", stage, document_key)  # Record the failure event.
 
     def record(self, outcome: StageOutcome) -> None:
+        """Run the record operation."""
         logging.info("Writing an orchestrator journal event")  # Log before the durable SQLite write.
         with self._connect() as connection:  # Use a short transaction for the checkpoint.
             connection.execute(self._insert_sql(), self._values(outcome))  # Store the event with measured detail.
         logging.debug("Wrote an orchestrator journal event for %s", outcome.document_key)  # Record affected document.
 
     def last_stage(self, document_key: str) -> str | None:
+        """Run the last stage operation."""
         logging.info("Reading the last completed orchestrator stage")  # Log before the recovery read.
         with self._connect() as connection:  # Use one read transaction for recovery.
             row = connection.execute(self._last_stage_sql(), (document_key,)).fetchone()  # Read newest completion.
@@ -53,6 +59,7 @@ class OrchestratorJournal:
         return stage  # Return the completed stage name or None.
 
     def stage_events(self, document_key: str) -> list[dict[str, object]]:
+        """Run the stage events operation."""
         logging.info("Reading orchestrator journal events for one document")  # Log before the audit read.
         with self._connect() as connection:  # Use one read transaction for ordered events.
             rows = connection.execute(self._events_sql(), (document_key,)).fetchall()  # Read all document events.

@@ -37,12 +37,14 @@ class WordFrequencyDictionary:
     )  # Seed critical Junos command words before corpus learning.
 
     def __init__(self, counts: Counter[str] | None = None) -> None:
+        """Initialize the WordFrequencyDictionary instance."""
         self.counts = counts or Counter()  # Store token frequencies for repair scoring.
         self.total = sum(self.counts.values()) or 1  # Store a nonzero denominator for word cost.
         self.words = set(self.counts) | set(self.DOMAIN_WORDS)  # Keep all known tokens in one lookup set.
 
     @classmethod
     def from_paths(cls, paths: tuple[Path, ...]) -> WordFrequencyDictionary:
+        """Run the from paths operation."""
         logging.info("Building word-frequency dictionary from %s healthy documents", len(paths))  # Log corpus input.
         counts: Counter[str] = Counter()  # Collect word frequencies across healthy source files.
         for path in paths:  # Read each healthy document exactly once.
@@ -57,6 +59,7 @@ class WordFrequencyDictionary:
         return [token.strip(".") for token in tokens if len(token.strip(".")) > 1]  # Drop noise and blank tokens.
 
     def cost(self, word: str) -> float:
+        """Run the cost operation."""
         count = self.counts.get(word, 1)  # Give unseen domain seeds a finite cost.
         return -math.log(count / self.total)  # Prefer frequent Juniper vocabulary during segmentation.
 
@@ -68,10 +71,12 @@ class SourceTextRepairer:
     MAX_WORD = 32  # Bound dynamic programming so long lines stay cheap.
 
     def __init__(self, dictionary: WordFrequencyDictionary) -> None:
+        """Initialize the SourceTextRepairer instance."""
         self.dictionary = dictionary  # Store the measured healthy-corpus dictionary.
         self.command_words = {"set", "show", "delete", "edit", "commit", "request", "clear"}  # Detect commands.
 
     def repair_line(self, line: str, repair_commands: bool = False) -> str:
+        """Run the repair line operation."""
         logging.info("Repairing one stripped source line")  # Log before repair attempt.
         if self._looks_like_command(line) and not repair_commands:  # Command repair needs measured proof first.
             logging.debug("Skipped command repair because command auto-repair is disabled")  # Report decision.
@@ -83,6 +88,7 @@ class SourceTextRepairer:
     def measure_accuracy(
         self, lines: tuple[str, ...], command_accuracy_bar: float | None = None
     ) -> RepairAccuracyReport:
+        """Run the measure accuracy operation."""
         logging.info("Measuring stripped-text repair accuracy on %s held-out lines", len(lines))  # Log measurement.
         bar = command_accuracy_bar or self.ACCURACY_BAR  # Allow tests to set a deterministic threshold.
         repaired = [self._repair_compact(line.replace(" ", "")) for line in lines]  # Repair stripped held-out lines.

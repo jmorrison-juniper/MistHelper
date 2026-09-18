@@ -17,6 +17,7 @@ class TextKey:
 
     @classmethod
     def normalize(cls, value: str) -> str:
+        """Run the normalize operation."""
         logging.info("Normalizing a document key field")  # Record key normalization for traceability.
         lowered = value.lower().strip()  # Use lower case so equivalent titles share one key.
         normalized = cls._space_pattern.sub("-", lowered).strip("-")  # Remove punctuation that changes by source.
@@ -30,6 +31,7 @@ class FrontMatterParser:
     _field_pattern = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$")  # Match scalar YAML fields only.
 
     def parse(self, path: Path) -> dict[str, str]:
+        """Run the parse operation."""
         logging.info("Reading front matter from %s", path)  # Log the file read before disk access.
         text = path.read_text(
             encoding="utf-8", errors="ignore"
@@ -39,6 +41,7 @@ class FrontMatterParser:
         return fields
 
     def parse_text(self, text: str) -> dict[str, str]:
+        """Run the parse text operation."""
         logging.info("Parsing front matter text")  # Mark the parse step for inventory diagnostics.
         if not text.startswith("---"):  # Return empty when the converter emitted no front matter.
             logging.debug("Front matter text has no opening marker")  # Explain why no fields were returned.
@@ -52,6 +55,7 @@ class FrontMatterParser:
         return fields
 
     def body_text(self, text: str) -> str:
+        """Run the body text operation."""
         logging.info("Removing front matter from Markdown text")  # Log the transform before it runs.
         if not text.startswith("---"):  # Keep the complete file when no metadata block exists.
             logging.debug("Markdown text has no front matter to remove")  # Report that no change occurred.
@@ -79,9 +83,11 @@ class HarvesterMetadataLoader:
     """Load authoritative catalog and manifest metadata from the harvester."""
 
     def __init__(self, harvest_root: Path) -> None:
+        """Initialize the HarvesterMetadataLoader instance."""
         self.harvest_root = harvest_root  # Keep the authoritative metadata root from the contract.
 
     def load_catalog(self) -> dict[str, dict[str, str]]:
+        """Return the load catalog result."""
         logging.info("Loading harvester catalog from %s", self.harvest_root)  # Log the catalog read before disk access.
         catalog_path = self.harvest_root / "_catalog.csv"  # Use the locked catalog file name.
         rows = self._read_catalog_rows(catalog_path) if catalog_path.exists() else []  # Permit incremental first runs.
@@ -90,6 +96,7 @@ class HarvesterMetadataLoader:
         return catalog
 
     def load_manifest_statuses(self) -> dict[str, str]:
+        """Return the load manifest statuses result."""
         logging.info("Loading harvester manifests from %s", self.harvest_root)  # Log manifest discovery.
         statuses: dict[str, str] = {}  # Store the latest status for each source PDF.
         for path in sorted(self.harvest_root.glob("_manifest*.json")):  # Read every batch and watch manifest.

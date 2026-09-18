@@ -30,11 +30,13 @@ class CorpusScanner:
     """Scan growing source roots into physical Markdown parts."""
 
     def __init__(self, roots: list[SourceRoot], metadata: HarvesterMetadataLoader) -> None:
+        """Initialize the CorpusScanner instance."""
         self.roots = roots  # Keep the locked root list for repeatable scans.
         self.metadata = metadata  # Reuse the authoritative harvester metadata reader.
         self.parser = FrontMatterParser()  # Parse front matter with one shared parser.
 
     def scan(self) -> list[MarkdownPart]:
+        """Run the scan operation."""
         logging.info("Starting corpus scan across %s roots", len(self.roots))  # Log scan start with root count.
         catalog = self.metadata.load_catalog()  # Load titles, categories, pages, and source PDF values.
         statuses = self.metadata.load_manifest_statuses()  # Load ok and review statuses from manifests.
@@ -121,6 +123,7 @@ class PartSetGrouper:
     _part_name = re.compile(r"^part-\d+$", re.IGNORECASE)  # Detect part folders from large PDFs.
 
     def group(self, parts: list[MarkdownPart]) -> list[DocumentGroup]:
+        """Run the group operation."""
         logging.info("Grouping %s Markdown parts into documents", len(parts))  # Log grouping before computation.
         buckets: dict[str, list[MarkdownPart]] = defaultdict(list)  # Store part sets by measured grouping key.
         methods: dict[str, str] = {}  # Preserve the evidence type used for each group.
@@ -256,6 +259,7 @@ class DuplicateResolver:
     """Select one winner when several roots hold the same logical document."""
 
     def resolve(self, groups: list[DocumentGroup]) -> list[DuplicateDecision]:
+        """Run the resolve operation."""
         logging.info("Resolving duplicates across %s document candidates", len(groups))  # Log duplicate pass start.
         buckets: dict[str, list[DocumentGroup]] = defaultdict(list)  # Group documents by natural document key.
         for group in groups:  # Add every candidate to a duplicate bucket.
@@ -305,6 +309,7 @@ class VersionedFamilyResolver:
     _brand_pattern = re.compile(r"\b(?:Juniper|HPE Networking)\b", re.IGNORECASE)  # Remove brands from product keys.
 
     def resolve(self, groups: list[DocumentGroup]) -> list[VersionedFamily]:
+        """Run the resolve operation."""
         logging.info("Resolving versioned product guide families")  # Log the version pass before mutation.
         buckets: dict[str, list[DocumentGroup]] = defaultdict(list)  # Store versioned documents by product family.
         for group in groups:  # Clear stale state before this resolver writes the only version decision.
@@ -377,6 +382,7 @@ class VersionFamilyInvariantValidator:
     """Validate that each measured version family has exactly one current member."""
 
     def validate_groups(self, groups: list[DocumentGroup]) -> VersionFamilyValidationResult:
+        """Validate the validate groups requirement."""
         logging.info("Validating version family invariants from groups")  # Log the in-memory validation start.
         counts = self._group_counts(groups)  # Count current members for each non-empty version family key.
         candidates = self._candidate_family_count(groups)  # Count families that the parser can derive from titles.
@@ -385,6 +391,7 @@ class VersionFamilyInvariantValidator:
         return result
 
     def validate_database(self, connection: sqlite3.Connection) -> VersionFamilyValidationResult:
+        """Validate the validate database requirement."""
         logging.info("Validating version family invariants from the database")  # Log the database validation start.
         document_count = self._database_document_count(connection)  # Measure table scope before family counts.
         candidates = self._database_candidate_family_count(connection)  # Count title-derived version families.
@@ -459,9 +466,11 @@ class SourceDocumentVersionUpdater:
     """Refresh version family state for an existing inventory database."""
 
     def __init__(self, db_path: Path) -> None:
+        """Initialize the SourceDocumentVersionUpdater instance."""
         self.db_path = db_path  # Store the live factory database path for in-place updates.
 
     def refresh(self) -> tuple[list[VersionedFamily], VersionFamilyValidationResult]:
+        """Run the refresh operation."""
         logging.info("Refreshing source document version state in %s", self.db_path)  # Log before opening SQLite.
         with sqlite3.connect(self.db_path) as connection:  # Use one transaction for all status changes.
             rows = self._document_rows(connection)  # Read current source document rows without changing schema.
@@ -485,7 +494,7 @@ class SourceDocumentVersionUpdater:
 
     def _group(self, root: SourceRoot, row: sqlite3.Row) -> DocumentGroup:
         part = MarkdownPart(
-            str(row["document_key"]), root, root, "", "", 0, int(row["text_chars"]), {}, {}, "ok"
+            str(row["document_key"]), root, root.path, "", "", 0, int(row["text_chars"]), {}, {}, "ok"
         )  # Build one synthetic part so tie-breaking can use persisted text yield.
         return DocumentGroup(
             str(row["document_key"]),
@@ -565,6 +574,7 @@ class EditionFamilyAnalyzer:
     _hash_suffix = re.compile(r"-[0-9a-f]{8,16}$", re.IGNORECASE)  # Detect source names with converter hashes.
 
     def find(self, groups: list[DocumentGroup]) -> list[EditionFamily]:
+        """Run the find operation."""
         logging.info("Analyzing source file edition families")  # Log the edition check before grouping.
         buckets: dict[str, list[DocumentGroup]] = defaultdict(list)  # Store same-stem hash families.
         for group in groups:  # Inspect each winning logical document.
@@ -605,6 +615,7 @@ class PriorityScorer:
     STATUS_WEIGHTS = {"ok": 80, "review": -120, "unknown": 0}  # Prefer documents that passed harvester review.
 
     def score(self, group: DocumentGroup) -> int:
+        """Run the score operation."""
         logging.info("Scoring priority for %s", group.group_key)  # Log scoring before applying the rule.
         score = (
             self._category_score(group)
@@ -632,9 +643,11 @@ class InventoryDatabase:
     """Persist the source document inventory and work queue in SQLite."""
 
     def __init__(self, db_path: Path) -> None:
+        """Initialize the InventoryDatabase instance."""
         self.db_path = db_path  # Store the factory database path from the contract.
 
     def write(self, decisions: list[DuplicateDecision]) -> None:
+        """Run the write operation."""
         logging.info("Writing inventory database to %s", self.db_path)  # Log persistence before file operations.
         self.db_path.parent.mkdir(parents=True, exist_ok=True)  # Create the factory data folder if it is missing.
         with sqlite3.connect(self.db_path) as connection:  # Use a transaction so a crash loses at most one commit.
@@ -841,9 +854,11 @@ class InventoryReport:
     """Write a measured inventory report for operators."""
 
     def __init__(self, report_path: Path) -> None:
+        """Initialize the InventoryReport instance."""
         self.report_path = report_path  # Store the report path under the factory data directory.
 
     def write(self, result: InventoryResult) -> None:
+        """Run the write operation."""
         logging.info("Writing inventory report to %s", self.report_path)  # Log report write before disk access.
         self.report_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure the report directory exists.
         lines = self._lines(result)  # Build report lines from measured inventory values.
@@ -982,6 +997,7 @@ class InventoryBuilder:
     """Build the inventory database, work queue, and report."""
 
     def __init__(self, repo_root: Path, download_root: Path | None = None) -> None:
+        """Initialize the InventoryBuilder instance."""
         self.repo_root = repo_root  # Store the worktree root that owns the factory database.
         self.download_root = download_root or Path.home() / "Downloads"  # Use the user download folder by default.
         self.roots = self._source_roots()  # Materialize the four locked source roots.
@@ -989,6 +1005,7 @@ class InventoryBuilder:
         self.scorer = PriorityScorer()  # Keep priority scoring separate and testable.
 
     def build(self) -> InventoryResult:
+        """Run the build operation."""
         logging.info("Building Juniper corpus inventory")  # Log the high-level build action.
         parts = CorpusScanner(self.roots, self.metadata).scan()  # Scan all physical Markdown roots.
         groups = PartSetGrouper().group(parts)  # Group split files before duplicate detection.

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import shutil
-import subprocess
+import subprocess  # nosec B404 - This module starts fixed local commands without a shell.
 from pathlib import Path
 
 from src.juniper_skills.orchestrate.models import BackendProbe
@@ -23,9 +23,11 @@ class BackendDiscovery:
     """Find a real headless rewrite backend on this machine."""
 
     def __init__(self, packet_dir: Path | None = None) -> None:
+        """Initialize the BackendDiscovery instance."""
         self.packet_dir = packet_dir or Path("data") / "juniper_skills" / "rewrite_packets"  # Store packet fallback.
 
     def choose(self) -> tuple[RewriteBackend, tuple[BackendProbe, ...]]:
+        """Run the choose operation."""
         logging.info("Discovering a headless rewrite backend")  # Log before probing local tools.
         probes = [self._copilot_probe(), self._gh_copilot_probe(), self._ollama_probe()]  # Test known local options.
         backend = self._backend_for(probes)  # Select the first true language-model path.
@@ -75,7 +77,7 @@ class BackendDiscovery:
 
     def _run(self, command: tuple[str, ...]) -> str:
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603 - The command comes from trusted PATH discovery.
                 command, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20, check=False
             )  # Read help text.
         except OSError as error:
@@ -91,10 +93,12 @@ class SubprocessAgentBackend(RewriteBackend):
     """Rewrite one packet by calling a real headless agent subprocess."""
 
     def __init__(self, command_prefix: tuple[str, ...]) -> None:
+        """Initialize the SubprocessAgentBackend instance."""
         self.command_prefix = command_prefix  # Store the executable and fixed arguments.
         self.prompt_builder = PromptTemplateBuilder()  # Reuse the locked rewrite prompt template.
 
     def rewrite(self, packet: RewriteWorkPacket) -> RewriteResult:
+        """Run the rewrite operation."""
         logging.info("Running subprocess rewrite backend")  # Log before the model subprocess starts.
         prompt = self.prompt_builder.build(packet)  # Build the copyright-safe rewrite instruction.
         output = self._invoke(prompt)  # Call the selected real backend.
@@ -106,7 +110,7 @@ class SubprocessAgentBackend(RewriteBackend):
         command = (*self.command_prefix, prompt)  # Append the prompt for Copilot-style `-p` commands.
         if self.command_prefix[:2] and self.command_prefix[1] == "run":  # Ollama reads prompts on standard input.
             command = self.command_prefix  # Keep the Ollama command prefix unchanged.
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 - The command prefix comes from a verified local backend probe.
             command,
             input=prompt,
             capture_output=True,
@@ -149,10 +153,12 @@ class PacketFileBackend(RewriteBackend):
     """Write rewrite packets for an external agent fleet and read completed cards."""
 
     def __init__(self, packet_dir: Path) -> None:
+        """Initialize the PacketFileBackend instance."""
         self.packet_dir = packet_dir  # Store the durable packet exchange directory.
         self.prompt_builder = PromptTemplateBuilder()  # Reuse the same prompt text as subprocess agents.
 
     def rewrite(self, packet: RewriteWorkPacket) -> RewriteResult:
+        """Run the rewrite operation."""
         logging.info("Writing rewrite packet for external processing")  # Log before durable packet output.
         self.packet_dir.mkdir(parents=True, exist_ok=True)  # Create the queue directory if it is absent.
         packet_path = self._packet_path(packet)  # Resolve the deterministic packet file path.

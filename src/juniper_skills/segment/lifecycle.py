@@ -123,6 +123,7 @@ class LifecycleClassifier:
     }
 
     def classify(self, title: str, text: str) -> LifecycleClassification:
+        """Run the classify operation."""
         logging.info("Classifying life cycle tags for topic %s", title)  # Log before signal scoring.
         title_context = title.lower()  # Give the heading the strongest classification weight.
         body_context = self._context(text)  # Use the body only when the heading lacks strong evidence.

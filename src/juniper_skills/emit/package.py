@@ -91,6 +91,7 @@ class ValidationResult:
 
     @property
     def passed(self) -> bool:
+        """Run the passed operation."""
         return not self.errors and self.files_checked > 0
 
 
@@ -113,9 +114,11 @@ class CitationKeyAllocator:
     }
 
     def __init__(self, database_path: Path) -> None:
+        """Initialize the CitationKeyAllocator instance."""
         self.database_path = database_path
 
     def allocate(self, domain: str, document_slug: str, title: str) -> str:
+        """Run the allocate operation."""
         logging.info("Allocating a citation key for %s", document_slug)
         self._ensure_schema()
         existing = self._existing_key(domain, document_slug)
@@ -211,11 +214,13 @@ class SkillPackageAssembler:
     """Build only the level 1 files for an existing document tree."""
 
     def __init__(self, database_path: Path) -> None:
+        """Initialize the SkillPackageAssembler instance."""
         self.allocator = CitationKeyAllocator(database_path)
 
     def assemble(
         self, domain: str, output_root: Path, documents: tuple[DocumentPackageInput, ...], taxonomy_path: Path
     ) -> PackageAssemblyResult:
+        """Run the assemble operation."""
         logging.info("Assembling domain skill package for %s", domain)
         package_dir = output_root / f"juniper-{domain}"
         package_dir.mkdir(parents=True, exist_ok=True)
@@ -400,6 +405,7 @@ class SmallDocumentPlanner:
     MIN_DOCUMENT_PACKAGE_PAGES = 20  # Keep short flyers out of the registered skill list.
 
     def plan(self, documents: tuple[DocumentPackageInput, ...]) -> SmallDocumentPlan:
+        """Run the plan operation."""
         logging.info("Planning document package granularity")  # Record the classification start.
         large = self._large_documents(documents)  # Keep long documents as standalone packages.
         small = self._small_documents(documents)  # Move short documents into a collection package.
@@ -429,11 +435,13 @@ class DocumentSkillPackageAssembler:
     """Build one standalone skill package from one existing topic tree."""
 
     def __init__(self, database_path: Path) -> None:
+        """Initialize the DocumentSkillPackageAssembler instance."""
         self.allocator = CitationKeyAllocator(database_path)  # Reuse stable citation keys across reruns.
 
     def assemble(
         self, domain: str, output_root: Path, document: DocumentPackageInput, taxonomy_path: Path
     ) -> PackageAssemblyResult:
+        """Run the assemble operation."""
         logging.info("Assembling document skill package for %s", document.slug)  # Log the package start.
         package_dir = output_root / self.package_name(domain, document)  # Use the required stable skill name.
         self._require_existing_tree(package_dir, document)  # Refuse to create or replace topic files.
@@ -446,6 +454,7 @@ class DocumentSkillPackageAssembler:
         return result  # Return the measured package result.
 
     def package_name(self, domain: str, document: DocumentPackageInput) -> str:
+        """Run the package name operation."""
         logging.info("Building the document skill package name for %s", document.slug)  # Log naming.
         name = f"juniper-{domain}-{document.slug}"  # Include the domain and document slug for collision safety.
         logging.debug("Built document skill package name %s", name)  # Record the stable package name.
@@ -507,11 +516,13 @@ class CollectionSkillPackageAssembler:
     """Build one collection skill package for short documents in one domain."""
 
     def __init__(self, database_path: Path) -> None:
+        """Initialize the CollectionSkillPackageAssembler instance."""
         self.assembler = SkillPackageAssembler(database_path)  # Reuse the multi-document domain assembler safely.
 
     def assemble(
         self, domain: str, output_root: Path, documents: tuple[DocumentPackageInput, ...], taxonomy_path: Path
     ) -> PackageAssemblyResult:
+        """Run the assemble operation."""
         logging.info("Assembling a small-document collection for %s", domain)  # Log collection package start.
         name = self.package_name(domain)  # Use one stable collection package for this domain.
         result = self.assembler.assemble(f"{domain}-small-documents", output_root, documents, taxonomy_path)
@@ -519,6 +530,7 @@ class CollectionSkillPackageAssembler:
         return result  # Return the measured package output.
 
     def package_name(self, domain: str) -> str:
+        """Run the package name operation."""
         logging.info("Building the small-document collection package name for %s", domain)  # Log naming.
         name = f"juniper-{domain}-small-documents"  # Keep the collection visible but not document-specific.
         logging.debug("Built small-document collection package name %s", name)  # Record the package name.
@@ -529,9 +541,11 @@ class SkillCatalogIndex:
     """Read generated catalog rows so domain routers do not invent package lists."""
 
     def __init__(self, catalog_path: Path) -> None:
+        """Initialize the SkillCatalogIndex instance."""
         self.catalog_path = catalog_path  # Store the generated installer catalog path.
 
     def package_names(self, domain: str) -> tuple[str, ...]:
+        """Run the package names operation."""
         logging.info("Reading catalog package names for %s", domain)  # Log catalog access.
         rows = self._rows()  # Read the generated catalog table or list.
         prefix = f"juniper-{domain}-"  # Select document packages for this domain.
@@ -554,11 +568,13 @@ class DomainRouterPackageAssembler:
     """Build the retained domain router that points to document packages."""
 
     def __init__(self, catalog: SkillCatalogIndex) -> None:
+        """Initialize the DomainRouterPackageAssembler instance."""
         self.catalog = catalog  # Use the installer catalog as the package authority.
 
     def assemble(
         self, domain: str, output_root: Path, packages: tuple[str, ...], taxonomy_path: Path
     ) -> PackageAssemblyResult:
+        """Run the assemble operation."""
         logging.info("Assembling domain router package for %s", domain)  # Log domain router start.
         package_dir = output_root / f"juniper-{domain}"  # Keep the domain routing tier package name.
         package_dir.mkdir(parents=True, exist_ok=True)  # Create the domain router folder.
@@ -601,6 +617,7 @@ class DocumentSkillRenderer:
         keywords: list[str],
         coverage: dict[str, int],
     ) -> None:
+        """Initialize the DocumentSkillRenderer instance."""
         self.domain = domain  # Store the domain for the stable skill name.
         self.document = document  # Store the source document metadata.
         self.routes = routes  # Store topic routes that already exist on disk.
@@ -608,6 +625,7 @@ class DocumentSkillRenderer:
         self.coverage = coverage  # Store life cycle coverage for the package.
 
     def render(self) -> str:
+        """Run the render operation."""
         logging.info("Rendering document SKILL.md for %s", self.document.slug)  # Log rendering start.
         route_rows = RouteTableBuilder((self.document,), self.routes).rows(SKILL_HARD_LIMIT)  # Build user routes.
         text = self._frontmatter() + self._body(route_rows)  # Combine metadata and router guidance.
@@ -743,11 +761,13 @@ class DomainRouterRenderer:
     """Render the retained domain router files."""
 
     def __init__(self, domain: str, packages: tuple[str, ...], keywords: list[str]) -> None:
+        """Initialize the DomainRouterRenderer instance."""
         self.domain = domain  # Store the domain slug for headings and metadata.
         self.packages = packages  # Store package names from the catalog and explicit inputs.
         self.keywords = keywords  # Store subject words from the domain taxonomy.
 
     def write(self, package_dir: Path) -> None:
+        """Run the write operation."""
         logging.info("Writing domain router files for %s", self.domain)  # Log router file writes.
         (package_dir / "SKILL.md").write_text(self._skill_text(), encoding="utf-8")  # Write the router skill.
         (package_dir / "INDEX.md").write_text(self._index_text(), encoding="utf-8")  # Write package targets.
@@ -811,6 +831,7 @@ class FrontMatterParser:
     """Parse small YAML frontmatter blocks from generated Markdown."""
 
     def parse(self, text: str) -> tuple[dict[str, Any], str]:
+        """Run the parse operation."""
         logging.info("Parsing Markdown frontmatter")
         if not text.startswith("---\n"):
             logging.debug("Markdown file has no frontmatter")
@@ -851,6 +872,7 @@ class SegmentIndexReader:
     """Read task-language subjects from the segmenter level 2 index."""
 
     def subjects(self, index_path: Path) -> dict[str, str]:
+        """Run the subjects operation."""
         logging.info("Reading segmenter subjects from %s", index_path)
         if not index_path.exists():
             logging.debug("Segmenter index does not exist at %s", index_path)
@@ -870,9 +892,11 @@ class TaxonomyReader:
     """Read routing keywords for one domain from the locked taxonomy table."""
 
     def __init__(self, taxonomy_path: Path) -> None:
+        """Initialize the TaxonomyReader instance."""
         self.taxonomy_path = taxonomy_path
 
     def keywords_for(self, skill_name: str) -> list[str]:
+        """Run the keywords for operation."""
         logging.info("Reading taxonomy keywords for %s", skill_name)
         text = self.taxonomy_path.read_text(encoding="utf-8")
         pattern = rf"\|\s*\d+\s*\|\s*`{re.escape(skill_name)}`\s*\|\s*(.*?)\s*\|"
@@ -898,6 +922,7 @@ class SkillRenderer:
         keywords: list[str],
         coverage: dict[str, int],
     ) -> None:
+        """Initialize the SkillRenderer instance."""
         self.domain = domain
         self.documents = documents
         self.routes = routes
@@ -905,6 +930,7 @@ class SkillRenderer:
         self.coverage = coverage
 
     def render(self) -> str:
+        """Run the render operation."""
         logging.info("Rendering SKILL.md for %s", self.domain)
         frontmatter = self._frontmatter()
         overhead = len(frontmatter.encode("utf-8")) + len(self._body("").encode("utf-8"))
@@ -963,10 +989,12 @@ class RouteTableBuilder:
     """Build concrete SKILL.md route rows from the real topic set."""
 
     def __init__(self, documents: tuple[DocumentPackageInput, ...], routes: list[TopicRoute]) -> None:
+        """Initialize the RouteTableBuilder instance."""
         self.documents = documents
         self.routes = routes
 
     def rows(self, byte_budget: int) -> str:
+        """Run the rows operation."""
         logging.info("Building SKILL.md route rows with concrete destinations")
         candidates = [self._cluster_rows(), self._lifecycle_rows(), self._document_rows(), self._domain_rows()]
         selected = next((rows for rows in candidates if 0 < len(rows.encode("utf-8")) <= byte_budget), candidates[-1])
@@ -1021,9 +1049,11 @@ class SubjectClusterBuilder:
     """Compress topic routes into user-language subject clusters."""
 
     def __init__(self, routes: list[TopicRoute]) -> None:
+        """Initialize the SubjectClusterBuilder instance."""
         self.routes = routes
 
     def clusters(self) -> list[RouteCluster]:
+        """Run the clusters operation."""
         logging.info("Building user-language route clusters")
         clusters = self._known_clusters()
         ordered = sorted(self._unique(clusters), key=lambda cluster: cluster.rank)
@@ -1095,12 +1125,14 @@ class IndexRenderer:
         routes: list[TopicRoute],
         coverage: dict[str, int],
     ) -> None:
+        """Initialize the IndexRenderer instance."""
         self.domain = domain
         self.documents = documents
         self.routes = routes
         self.coverage = coverage
 
     def render(self) -> str:
+        """Run the render operation."""
         logging.info("Rendering level 1 INDEX.md for %s", self.domain)
         text = self._text(self._topic_rows())
         if len(text.encode("utf-8")) > INDEX_HARD_LIMIT:
@@ -1160,11 +1192,13 @@ class SourcesRenderer:
     def __init__(
         self, documents: tuple[DocumentPackageInput, ...], allocator: CitationKeyAllocator, routes: list[TopicRoute]
     ) -> None:
+        """Initialize the SourcesRenderer instance."""
         self.documents = documents
         self.allocator = allocator
         self.routes = routes
 
     def render(self, domain: str) -> str:
+        """Run the render operation."""
         logging.info("Rendering sources.md for %s", domain)
         rows = "".join(self._row(domain, document) for document in self.documents)
         text = "# Sources\n\n| Key | Title | Author | Category | Pages | Converted | Origin | Markdown | PDF |\n"
@@ -1177,7 +1211,7 @@ class SourcesRenderer:
         metadata = SourceMetadataReader().read(document)
         markdown = "<br>".join(self._display_path(path) for path in document.markdown_paths)
         title = str(metadata.get("title") or document.title)
-        pages = int(metadata.get("pages") or document.pages)
+        pages = int(str(metadata.get("pages") or document.pages))  # Convert source metadata through text for mypy.
         author = str(metadata.get("author") or document.author)
         source_date = metadata.get("modDate") or metadata.get("creationDate") or datetime.now(UTC).date()
         converted = str(document.converted or source_date)
@@ -1208,6 +1242,7 @@ class SourceMetadataReader:
     """Read attribution fields from converted source frontmatter."""
 
     def read(self, document: DocumentPackageInput) -> dict[str, object]:
+        """Run the read operation."""
         logging.info("Reading source metadata for %s", document.slug)
         source_path = next((path for path in document.markdown_paths if path.exists()), None)
         metadata = self._read_path(source_path) if source_path else {}
@@ -1226,11 +1261,13 @@ class DocumentIndexRenderer:
     """Render a contract-shaped level 2 document index."""
 
     def __init__(self, document: DocumentPackageInput, key: str, routes: list[TopicRoute]) -> None:
+        """Initialize the DocumentIndexRenderer instance."""
         self.document = document
         self.key = key
         self.routes = routes
 
     def render(self) -> str:
+        """Run the render operation."""
         logging.info("Rendering level 2 index for %s", self.document.slug)
         text = self._text(self._topic_rows())
         if len(text.encode("utf-8")) > 10_240:
@@ -1287,6 +1324,7 @@ class SkillPackageValidator:
     FILE_LIMITS = {"SKILL.md": (SKILL_SOFT_LIMIT, SKILL_HARD_LIMIT), "INDEX.md": (INDEX_SOFT_LIMIT, INDEX_HARD_LIMIT)}
 
     def validate(self, package_dir: Path) -> ValidationResult:
+        """Run the validate operation."""
         logging.info("Validating skill package %s", package_dir)
         errors: list[ValidationFinding] = []
         warnings: list[ValidationFinding] = []

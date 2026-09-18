@@ -4,6 +4,7 @@ from __future__ import annotations  # Keep annotations cheap during factory impo
 
 import logging  # Record analyzer work for factory operators.
 import re  # Find commands, filters, parameters, and checklist terms.
+from collections.abc import Sequence  # Type extractor results without forcing one concrete tuple.
 
 from .extractors import (  # Reuse the structured extractors that find real source facts.
     CommandFactExtractor,
@@ -12,7 +13,13 @@ from .extractors import (  # Reuse the structured extractors that find real sour
     PlatformReleaseFactExtractor,
     TableRowFactExtractor,
 )
-from .models import CoverageEntry, CoverageManifest, CoverageVerificationReport, SourceLine  # Share models.
+from .models import (
+    CoverageEntry,
+    CoverageManifest,
+    CoverageVerificationReport,
+    ExtractedFact,
+    SourceLine,
+)  # Share models.
 from .parser import SourcePageParser  # Attach page citations before checklist extraction.
 
 
@@ -167,7 +174,7 @@ class CoverageAnalyzer:
                 entries.append(self._entry("numeric limits", value, line, source_key))  # Add the range fact.
         return entries  # Return refresh range entries.
 
-    def _fact_entries(self, category: str, facts) -> list[CoverageEntry]:
+    def _fact_entries(self, category: str, facts: Sequence[ExtractedFact]) -> list[CoverageEntry]:
         """Return manifest entries from structured extractor facts."""
         entries: list[CoverageEntry] = []  # Collect normalized fact values.
         for fact in facts:  # Convert each fact into a checklist item.

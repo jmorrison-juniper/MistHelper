@@ -9,6 +9,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 from src.juniper_skills.extract.models import DepthExtractionResult
 from src.juniper_skills.rewrite.models import SimilarityGuardReport, SteValidationReport
@@ -30,6 +31,7 @@ class StageMeasurementReader:
     """Build audit details only from upstream components and disk state."""
 
     def __init__(self, database_path: Path) -> None:
+        """Initialize the StageMeasurementReader instance."""
         self.database_path = database_path  # Store the factory database path for identity and source size reads.
 
     def document_from_factory(self, document_key: str, domain: str, skill_name: str) -> DocumentRecord:
@@ -136,7 +138,7 @@ class StageMeasurementReader:
             row = connection.execute("SELECT * FROM source_document WHERE document_key = ?", (document_key,)).fetchone()
         if row is None:  # A missing document means the caller used a bad key.
             raise KeyError(document_key)
-        return row  # Return the row with all identity fields.
+        return cast(sqlite3.Row, row)  # Return the row with all identity fields.
 
     def _source_text_chars(self, document_key: str) -> int:
         """Return the source text character count from the factory database."""

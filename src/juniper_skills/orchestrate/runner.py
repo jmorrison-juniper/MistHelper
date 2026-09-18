@@ -33,6 +33,7 @@ class FactoryRunner:
     """Keep worker threads busy until the queue or limit stops the run."""
 
     def __init__(self, config: FactoryRunConfig) -> None:
+        """Initialize the FactoryRunner instance."""
         self.config = config  # Store immutable run settings.
         self.stop_event = threading.Event()  # Let interrupts stop all workers cleanly.
         self.count_lock = threading.Lock()  # Protect the shared completed count.
@@ -43,6 +44,7 @@ class FactoryRunner:
         self.journal = OrchestratorJournal(config.database_path)  # Build the shared stage journal.
 
     def run(self) -> dict[str, object]:
+        """Run the run operation."""
         logging.info("Starting the Juniper skill factory runner")  # Log before worker threads start.
         started = time.perf_counter()  # Measure throughput for the final report.
         try:

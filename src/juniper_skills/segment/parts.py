@@ -41,6 +41,7 @@ class FrontMatterReader:
     PAGE_PATTERN = re.compile(r"<!--\s*page\s+(\d+)\s*-->", re.IGNORECASE)  # Match converter page markers.
 
     def read(self, text: str) -> tuple[dict[str, str], str]:
+        """Run the read operation."""
         logging.info("Reading Markdown front matter")  # Log before parsing converter metadata.
         if not text.startswith("---\n"):  # A document without front matter still can be segmented.
             logging.debug("Read %s front matter keys", 0)  # Report the missing front matter.
@@ -55,6 +56,7 @@ class FrontMatterReader:
         return front_matter, body
 
     def page_markers(self, text: str) -> list[int]:
+        """Run the page markers operation."""
         logging.info("Reading page markers from Markdown")  # Log before page marker extraction.
         pages = [int(match.group(1)) for match in self.PAGE_PATTERN.finditer(text)]  # Read all page marker numbers.
         logging.debug("Read %s page markers", len(pages))  # Report citation marker count.
@@ -77,9 +79,11 @@ class PartSetJoiner:
     PART_PATTERN = re.compile(r"part-(\d+)", re.IGNORECASE)  # Match converter part file names.
 
     def __init__(self) -> None:
+        """Initialize the PartSetJoiner instance."""
         self.reader = FrontMatterReader()  # Reuse the same parser for every part.
 
     def join_paths(self, paths: Sequence[Path]) -> JoinedDocument:
+        """Run the join paths operation."""
         logging.info("Joining %s Markdown parts from explicit paths", len(paths))  # Log path input count.
         parts = [self._read_path(Path(path)) for path in paths]  # Read each path into a structured part record.
         self._validate_same_root(parts)  # Prevent cross-root duplicate joins from becoming one document.
@@ -90,6 +94,7 @@ class PartSetJoiner:
         return joined
 
     def join_inventory_group(self, group: Any) -> JoinedDocument:
+        """Run the join inventory group operation."""
         logging.info("Joining Markdown parts from inventory group")  # Log that the inventory authority supplied parts.
         paths = [Path(part.path) for part in group.parts]  # Consume the inventory grouping output without regrouping.
         joined = self.join_paths(paths)  # Reuse the same order and validation path.

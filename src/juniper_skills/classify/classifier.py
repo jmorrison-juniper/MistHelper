@@ -26,9 +26,11 @@ class DomainClassifier:
     """Classify source documents and persist the single source-of-truth domain."""
 
     def __init__(self, source_root: Path | None = None) -> None:
+        """Initialize the DomainClassifier instance."""
         self.source_root = source_root or Path(r"C:\Users\jmorrison\Downloads\juniper-harvest-md")  # Use contract root.
 
     def classify_document(self, document: DomainDocument) -> DomainAssignment:
+        """Run the classify document operation."""
         logging.info("Classifying domain for document %s", document.document_key)  # Trace every classification request.
         signals = self._signals(document)  # Build signals once so the rule scan stays deterministic.
         assignment = self._match_document_type(document, signals)  # Apply document-type precedence from the contract.
@@ -42,6 +44,7 @@ class DomainClassifier:
         return assignment
 
     def migrate_database(self, database_path: Path) -> None:
+        """Run the migrate database operation."""
         logging.info("Adding domain columns to %s", database_path)  # Trace the schema migration before it starts.
         with sqlite3.connect(
             database_path
@@ -58,6 +61,7 @@ class DomainClassifier:
         logging.debug("Domain columns are present in %s", database_path)  # Confirm migration completion for operators.
 
     def classify_database(self, database_path: Path) -> DomainReport:
+        """Run the classify database operation."""
         logging.info("Classifying all source documents in %s", database_path)  # Trace the bulk classification start.
         self.migrate_database(database_path)  # Ensure the populated database can hold the result.
         documents = self._load_documents(database_path)  # Load every source row with headings and content signals.
@@ -102,8 +106,9 @@ class DomainClassifier:
         headings, content = self._read_markdown_signals(
             paths
         )  # Read headings and sampled content from available files.
-        document = DomainDocument(
-            str(row[0]), str(row[1]), str(row[2]), str(row[3]), int(row[4]), headings, content, paths
+        page_count = int(str(row[4]))  # Convert SQLite values through text so strict typing accepts the value.
+        document = DomainDocument(  # Build the classifier input from persisted source signals.
+            str(row[0]), str(row[1]), str(row[2]), str(row[3]), page_count, headings, content, paths
         )
         logging.debug(
             "Read %s headings and %s content chars for %s", len(headings), len(content), row[0]
@@ -111,8 +116,8 @@ class DomainClassifier:
         return document
 
     def _read_markdown_signals(self, paths: tuple[Path, ...]) -> tuple[tuple[str, ...], str]:
-        headings = []  # Gather heading text for a medium-confidence signal.
-        chunks = []  # Gather bounded body text for the final content signal.
+        headings: list[str] = []  # Gather heading text for a medium-confidence signal.
+        chunks: list[str] = []  # Gather bounded body text for the final content signal.
         for relative_path in paths[:5]:  # Read enough parts to identify a domain without scanning huge documents.
             headings.extend(self._headings_from_file(relative_path))  # Add headings from the current source part.
             chunks.append(self._content_from_file(relative_path))  # Add body text from the same source part.

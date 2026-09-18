@@ -32,6 +32,7 @@ class SkillIssueTracker:
         issue_shape: str = "document",
         runner: GitHubCliRunner | GitHubRestRunner | None = None,
     ) -> None:
+        """Initialize the SkillIssueTracker instance."""
         self.repo = repo  # Store the repository owner and name for each `gh` command.
         self.parent_issue = parent_issue  # Link created journals back to the factory issue.
         self.issue_shape = issue_shape  # Keep compatibility while document issues are now the default.
@@ -178,7 +179,8 @@ class SkillIssueTracker:
             self.rate_limit.defer_if_needed()  # Measure the API bucket before the comment call.
             issue_number = self._document_issue_number(str(event["document_key"]))  # Read the current issue link.
             self._comment_issue(event, issue_number)  # Write the machine-readable audit comment.
-            self.store.mark_stage_event_synced(int(event["id"]))  # Mark the row only after GitHub accepts the comment.
+            event_id = int(str(event["id"]))  # Convert persisted JSON values through text for strict typing.
+            self.store.mark_stage_event_synced(event_id)  # Mark the row only after GitHub accepts the comment.
             return 1
         except (GitHubCliError, GitHubRateLimitExhausted) as error:
             logging.debug("Deferred GitHub journal sync after error: %s", error)  # Leave the row queued for retry.
@@ -451,6 +453,7 @@ class SkillFactoryIssueIndex:
     """Render a generated index for per-document audit issues."""
 
     def __init__(self, repo: str) -> None:
+        """Initialize the SkillFactoryIssueIndex instance."""
         self.repo = repo  # Store the repository name for GitHub issue links.
 
     def render(self, rows: list[dict[str, Any]]) -> str:

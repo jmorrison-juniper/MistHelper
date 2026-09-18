@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-import subprocess
+import subprocess  # nosec B404 - This module starts fixed git commands without a shell.
 import time
 from pathlib import Path
 
@@ -12,9 +12,11 @@ class CanonicalSkillStore:
     """Manage safe git commits for generated Juniper skill files."""
 
     def __init__(self, store_path: Path) -> None:
+        """Initialize the CanonicalSkillStore instance."""
         self.store_path = store_path  # Store the canonical skill repository path.
 
     def commit_document(self, domain: str, document_key: str) -> str:
+        """Run the commit document operation."""
         logging.info("Committing generated Juniper skill files for %s", document_key)  # Log before git writes.
         self._ensure_repository()  # Refuse to run git commands outside the canonical repository.
         dirty = self._dirty_paths()  # Read the tree state before staging generated files.
@@ -70,7 +72,9 @@ class CanonicalSkillStore:
         return ""  # Satisfy static analysis after the retry loop.
 
     def _git(self, command: tuple[str, ...]) -> str:
-        result = subprocess.run(command, cwd=self.store_path, capture_output=True, text=True, timeout=60, check=False)
+        result = subprocess.run(  # nosec B603 - The command tuple is built from fixed git operations only.
+            command, cwd=self.store_path, capture_output=True, text=True, timeout=60, check=False
+        )
         output = (result.stdout + result.stderr).strip()  # Preserve stdout and stderr for diagnostics.
         if result.returncode != 0:  # Raise only after capturing git evidence.
             raise RuntimeError(output)  # Surface the exact git failure to the caller.

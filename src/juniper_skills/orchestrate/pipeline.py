@@ -18,6 +18,7 @@ from src.juniper_skills.rewrite import (
     RewriteResult,
     RewriteWorkPacket,
     SimilarityCheckInput,
+    SimilarityFileResult,
     SteValidator,
     VerbatimSimilarityGuard,
 )
@@ -60,6 +61,7 @@ class PipelineRunner:
     )
 
     def __init__(self, paths: PipelinePaths, queue: WorkLeaseStore, journal: OrchestratorJournal) -> None:
+        """Initialize the PipelineRunner instance."""
         self.paths = paths  # Store filesystem policy in one object.
         self.queue = queue  # Store the lease store so terminal status updates are atomic.
         self.journal = journal  # Store the stage journal for crash recovery.
@@ -73,6 +75,7 @@ class PipelineRunner:
         self.git_store = CanonicalSkillStore(paths.store_path)  # Commit canonical output after each document.
 
     def run(self, item: WorkItem, backend: RewriteBackend, worker_id: str, dry_run: bool = False) -> bool:
+        """Run the run operation."""
         logging.info("Running the Juniper skill pipeline for %s", item.document_key)  # Log document start.
         try:
             completed = self.journal.last_stage(item.document_key)  # Read the last durable checkpoint.
@@ -142,7 +145,10 @@ class PipelineRunner:
     def _repair(self, item: WorkItem, joined: JoinedDocument, worker_id: str, completed: str | None) -> str:
         self.journal.started(item.document_key, "repair", worker_id)  # Persist the stage start before repair.
         repair = self.segmenter.repairer.repair(joined.text)  # Repair known converter defects.
-        data = {"orphan_words": repair.orphan_words, "non_knowledge": repair.non_knowledge_sections}  # Count fixes.
+        data: dict[str, object] = {  # Count repaired source defects for checkpoint evidence.
+            "orphan_words": repair.orphan_words,
+            "non_knowledge": repair.non_knowledge_sections,
+        }
         self.journal.completed(
             StageOutcome(item.document_key, "repair", "completed", "defects repaired", worker_id, data)
         )
@@ -151,7 +157,10 @@ class PipelineRunner:
     def _refence(self, item: WorkItem, text: str, worker_id: str, completed: str | None) -> str:
         self.journal.started(item.document_key, "refence", worker_id)  # Persist start before command detection.
         result = self.detector.refence_text(text)  # Add code fences to detected command blocks.
-        data = {"fenced_blocks": result.fenced_blocks, "command_lines": result.command_lines}  # Count proof values.
+        data: dict[str, object] = {  # Count command-fence proof values for checkpoint evidence.
+            "fenced_blocks": result.fenced_blocks,
+            "command_lines": result.command_lines,
+        }
         self.journal.completed(
             StageOutcome(item.document_key, "refence", "completed", "commands fenced", worker_id, data)
         )
@@ -162,7 +171,10 @@ class PipelineRunner:
         result = self.segmenter.segment_text(text, item.document_key)  # Split the source into bounded topics.
         if result.hard_limit_breaks:  # Refuse output that violates locked topic sizes.
             raise RuntimeError("segmentation produced hard-limit breaks")  # Retry after segmenter repair.
-        data = {"segments": len(result.segments), "duplicates": result.duplicate_names}  # Count output topics.
+        data: dict[str, object] = {  # Count output topics and duplicate names for checkpoint evidence.
+            "segments": len(result.segments),
+            "duplicates": result.duplicate_names,
+        }
         self.journal.completed(
             StageOutcome(item.document_key, "segment", "completed", "topics segmented", worker_id, data)
         )
@@ -173,11 +185,8 @@ class PipelineRunner:
     ) -> list[RewriteWorkPacket]:
         self.journal.started(item.document_key, "packet", worker_id)  # Persist start before packet creation.
         packets = [self._packet(item, segment) for segment in segments]  # Convert topic segments to rewrite work.
-        self.journal.completed(
-            StageOutcome(
-                item.document_key, "packet", "completed", "packets built", worker_id, {"packets": len(packets)}
-            )
-        )
+        data: dict[str, object] = {"packets": len(packets)}  # Count packets for checkpoint evidence.
+        self.journal.completed(StageOutcome(item.document_key, "packet", "completed", "packets built", worker_id, data))
         return packets  # Return work packets for the rewrite backend.
 
     def _rewrite(
@@ -191,10 +200,9 @@ class PipelineRunner:
         self.journal.started(item.document_key, "rewrite", worker_id)  # Persist start before model or packet backend.
         results = [backend.rewrite(packet) for packet in packets]  # Rewrite each segment through the selected seam.
         card_count = sum(len(result.cards) for result in results)  # Count generated knowledge cards.
+        data: dict[str, object] = {"cards": card_count}  # Count cards for checkpoint evidence.
         self.journal.completed(
-            StageOutcome(
-                item.document_key, "rewrite", "completed", "packets rewritten", worker_id, {"cards": card_count}
-            )
+            StageOutcome(item.document_key, "rewrite", "completed", "packets rewritten", worker_id, data)
         )
         return results  # Return publishable rewrite output.
 
@@ -208,8 +216,9 @@ class PipelineRunner:
     ) -> list[Path]:
         self.journal.started(item.document_key, "package", worker_id)  # Persist start before file writes.
         files = self.package.emit(item, joined, results)  # Write the package files in the canonical store.
+        data: dict[str, object] = {"files": len(files)}  # Count generated files for checkpoint evidence.
         self.journal.completed(
-            StageOutcome(item.document_key, "package", "completed", "package emitted", worker_id, {"files": len(files)})
+            StageOutcome(item.document_key, "package", "completed", "package emitted", worker_id, data)
         )
         return files  # Return generated files for guards.
 
@@ -225,7 +234,7 @@ class PipelineRunner:
             report = self.guard.check(checks)  # Re-run the guard so the checkpoint has measured proof.
         if not report.passed:  # Refuse publish when the guard still cannot prove safety.
             raise RuntimeError("similarity guard failed")  # Trigger a retry or human repair.
-        data = {"files_checked": report.files_checked, "threshold": report.threshold}  # Record proof counts.
+        data: dict[str, object] = {"files_checked": report.files_checked, "threshold": report.threshold}  # Proof.
         self.journal.completed(
             StageOutcome(item.document_key, "guard", "completed", "similarity passed", worker_id, data)
         )
@@ -234,7 +243,7 @@ class PipelineRunner:
         source_text = tuple(segment.text for segment in segments)  # Compare each topic to the source topic set.
         return tuple(SimilarityCheckInput(path, source_text) for path in topic_files)  # Return guard inputs.
 
-    def _replace_failed_topics(self, results: tuple[object, ...]) -> None:
+    def _replace_failed_topics(self, results: tuple[SimilarityFileResult, ...]) -> None:
         for result in results:  # Inspect each measured topic file.
             if not result.passed:  # Rewrite only files that exceeded the shared-prose threshold.
                 result.file_path.write_text(
@@ -259,7 +268,10 @@ class PipelineRunner:
         report = self.ste.validate(tuple(files))  # Score all generated Markdown prose.
         if not report.passed:  # Refuse publication when generated prose fails the writing rule.
             raise RuntimeError("STE validation failed")  # Trigger a retry or text repair.
-        data = {"files_checked": report.files_checked, "minimum_score": report.minimum_score}  # Record proof counts.
+        data: dict[str, object] = {
+            "files_checked": report.files_checked,
+            "minimum_score": report.minimum_score,
+        }  # Proof.
         self.journal.completed(
             StageOutcome(item.document_key, "ste", "completed", "STE validation passed", worker_id, data)
         )

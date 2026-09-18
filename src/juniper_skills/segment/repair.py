@@ -24,8 +24,9 @@ class OrphanWordRepairer:
     PREPOSITION_PATTERN = re.compile(r"\b(?:at|by|for|from|in|into|of|on|to|with)\.?$", re.IGNORECASE)  # Dangling end.
 
     def repair(self, text: str) -> DefectRepairResult:
+        """Run the repair operation."""
         logging.info("Repairing orphan inline words")  # Log before scanning converter output.
-        lines = text.splitlines()  # Preserve source line order while repairing local defects.
+        lines: list[str | None] = [line for line in text.splitlines()]  # Permit deletes after splitting source lines.
         repairs = 0  # Count orphan words that join into a sentence.
         index = 0  # Track the scan position across source lines.
         while index < len(lines):  # Visit every line once.
@@ -72,7 +73,8 @@ class OrphanWordRepairer:
     def _previous_text_line(self, lines: list[str | None], index: int) -> int | None:
         index -= 1  # Start with the line before the orphan token.
         while index >= 0:  # Walk backward across blank converter lines.
-            if lines[index] and lines[index].strip():  # Return the first real text line.
+            line = lines[index]  # Read the optional line once so type narrowing is stable.
+            if line is not None and line.strip():  # Return the first real text line.
                 return index
             index -= 1  # Skip blank or removed lines.
         return None  # No join target exists.
@@ -80,7 +82,8 @@ class OrphanWordRepairer:
     def _next_text_line(self, lines: list[str | None], index: int) -> int | None:
         index += 1  # Start with the line after the orphan token.
         while index < len(lines):  # Walk forward across blank converter lines.
-            if lines[index] and lines[index].strip():  # Return the next real text line.
+            line = lines[index]  # Read the optional line once so type narrowing is stable.
+            if line is not None and line.strip():  # Return the next real text line.
                 return index
             index += 1  # Skip blank or removed lines.
         return None  # No following prose exists.
@@ -92,6 +95,7 @@ class CoverArtHeadingRepairer:
     REAL_START_PATTERN = re.compile(r"^##\s+(?:Chapter\s+\d+|Contents|Introduction)\b", re.IGNORECASE)  # Real start.
 
     def repair(self, result: DefectRepairResult) -> DefectRepairResult:
+        """Run the repair operation."""
         logging.info("Repairing cover-art heading defects")  # Log before removing fake heading structure.
         lines = result.text.splitlines()  # Preserve all non-heading source lines.
         real_start = self._real_start_index(lines)  # Find the first heading that starts the true structure.
@@ -120,10 +124,12 @@ class DocumentDefectRepairer:
     """Apply all segmenter-side converter repairs in the correct order."""
 
     def __init__(self) -> None:
+        """Initialize the DocumentDefectRepairer instance."""
         self.orphan_repairer = OrphanWordRepairer()  # Repair inline code movement before structure cleanup.
         self.cover_repairer = CoverArtHeadingRepairer()  # Repair false heading structure after text repair.
 
     def repair(self, text: str) -> DefectRepairResult:
+        """Run the repair operation."""
         logging.info("Starting document defect repair")  # Log the combined repair pass before any change.
         orphan_result = self.orphan_repairer.repair(text)  # Rejoin orphan words first so headings stay stable.
         final_result = self.cover_repairer.repair(orphan_result)  # Remove cover-art headings after text repair.

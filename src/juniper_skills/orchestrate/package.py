@@ -16,10 +16,12 @@ class SkillPackageEmitter:
     """Write generated skill package files into the canonical store."""
 
     def __init__(self, store_path: Path) -> None:
+        """Initialize the SkillPackageEmitter instance."""
         self.store_path = store_path  # Store the canonical repository root from the locked contract.
         self.skills_path = store_path / "skills"  # Keep package directories below the canonical skills folder.
 
     def emit(self, item: WorkItem, joined: JoinedDocument, outputs: list[RewriteResult]) -> list[Path]:
+        """Run the emit operation."""
         logging.info("Emitting Juniper skill package files for %s", item.document_key)  # Log before file writes.
         package = self._package_dir(item)  # Resolve the domain package folder.
         document_dir = package / "documents" / self._slug(item.title)  # Resolve the document topic folder.

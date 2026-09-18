@@ -16,6 +16,7 @@ class CommandFenceCleaner:
     SENTENCE_MARKS = {"!", "?"}  # Sentence punctuation is not valid in a command sample.
 
     def clean_text(self, text: str) -> CommandFenceCleanReport:
+        """Run the clean text operation."""
         logging.info("Cleaning command fences in one Markdown text")  # Log before parsing Markdown fences.
         lines = text.splitlines()  # Preserve line order for deterministic output.
         output: list[str] = []  # Build cleaned Markdown lines.
@@ -28,6 +29,7 @@ class CommandFenceCleaner:
         return report  # Return cleaned text and examples.
 
     def clean_paths(self, paths: tuple[Path, ...], write: bool = False) -> CommandFenceCleanReport:
+        """Run the clean paths operation."""
         logging.info("Cleaning command fences in %s Markdown files", len(paths))  # Log before store scan.
         total_removed = 0  # Count all removed lines across the store.
         examples: list[str] = []  # Keep a bounded example list.

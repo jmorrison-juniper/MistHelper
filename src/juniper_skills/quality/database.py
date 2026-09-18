@@ -13,9 +13,11 @@ class SourceQualityDatabase:
     """Record source quality decisions in the skill factory database."""
 
     def __init__(self, database_path: Path) -> None:
+        """Initialize the SourceQualityDatabase instance."""
         self.database_path = database_path  # Store the locked factory database path.
 
     def write_report(self, report: SourceQualityReport) -> None:
+        """Create the write report output."""
         logging.info("Writing source quality report to %s", self.database_path)  # Log before database writes.
         self.database_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure the factory data folder exists.
         connection = sqlite3.connect(self.database_path)  # Open one handle so Windows can close it explicitly.

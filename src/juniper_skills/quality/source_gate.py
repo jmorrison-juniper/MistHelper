@@ -20,10 +20,12 @@ class SourceQualityGate:
     SAMPLE_CHARS = 200_000  # Match the measured corpus scan while bounding very large documents.
 
     def __init__(self, threshold: float | None = None) -> None:
+        """Initialize the SourceQualityGate instance."""
         self.threshold = threshold  # Store an override only for deterministic unit tests.
         self.command_words = {"set", "show", "delete", "edit", "commit", "request", "clear"}  # Detect CLI lines.
 
     def check_paths(self, paths: tuple[Path, ...], pdf_roots: tuple[Path, ...] = ()) -> SourceQualityReport:
+        """Validate the check paths requirement."""
         logging.info("Checking source quality for %s documents", len(paths))  # Log before reading source files.
         texts = self._read_texts(paths)  # Read each file once for distribution and scoring.
         distribution = self._distribution(tuple(texts.values()))  # Calibrate the threshold from real source text.
@@ -37,6 +39,7 @@ class SourceQualityGate:
         return SourceQualityReport(scores, distribution, errors)  # Return measured status and reasons.
 
     def score_text(self, document_key: str, text: str, path: Path | None = None) -> SourceQualityScore:
+        """Run the score text operation."""
         logging.info("Scoring source quality for %s", document_key)  # Log the direct scoring operation.
         active_path = path or Path(document_key)  # Give in-memory tests a stable path value.
         threshold = self.threshold if self.threshold is not None else 0.08  # Use the safe default without a corpus.
@@ -107,7 +110,8 @@ class SourceQualityGate:
         return score  # Return the row for quarantine and reports.
 
     def _document_key(self, path: Path) -> str:
-        digest = hashlib.sha1(str(path).encode("utf-8")).hexdigest()[:12]  # Avoid collisions across archive roots.
+        path_bytes = str(path).encode("utf-8")  # Hash the path text to keep generated keys stable and short.
+        digest = hashlib.sha1(path_bytes, usedforsecurity=False).hexdigest()[:12]  # Use SHA1 only as a label.
         key = re.sub(r"[^a-z0-9]+", "-", str(path).lower()).strip("-")  # Include path context to avoid collisions.
         return f"{digest}-{key[-200:]}" if key else digest  # Keep SQLite keys bounded and unique enough.
 

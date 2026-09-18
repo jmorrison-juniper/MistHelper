@@ -48,6 +48,7 @@ class CommandBlockDetector:
     }  # Match Junos hierarchy roots.
 
     def __init__(self) -> None:
+        """Initialize the CommandBlockDetector instance."""
         logging.info("Compiling command detection patterns")  # Log setup before regular expressions are built.
         self.prompt_pattern = re.compile(r"^[\w.-]+@[\w.-]+[>#]\s*.*$")  # Detect operational and config prompts.
         self.interface_pattern = re.compile(
@@ -57,6 +58,7 @@ class CommandBlockDetector:
         logging.debug("Compiled %s command detection patterns", 3)  # Report setup completion.
 
     def refence_text(self, text: str) -> CommandDetectionResult:
+        """Run the refence text operation."""
         logging.info("Detecting unfenced Junos command blocks")  # Log command detection before scanning text.
         lines = text.splitlines()  # Preserve exact line text while scanning logical lines.
         output: list[str] = []  # Accumulate the repaired Markdown in source order.

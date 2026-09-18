@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterable  # Type measured catalog collections for strict mypy.
 from pathlib import Path
+from typing import cast  # Narrow JSON-derived inventory values before iteration.
 
 from src.juniper_skills.speckit.models import SpecKitPaths
 
@@ -46,20 +48,22 @@ class SpecKitCatalog:
     )
 
     def __init__(self, paths: SpecKitPaths) -> None:
+        """Initialize the SpecKitCatalog instance."""
         self.paths = paths  # Keep all repository paths in one tested object.
 
     def inventory(self) -> dict[str, object]:
         """Return the real installed SpecKit catalog."""
         logging.info("Inventorying the installed SpecKit catalog")  # Record the catalog scan start.
-        data = {  # Build one compact inventory for analysis and generated reports.
+        commands = self._commands()  # Read command contracts once so the count stays typed.
+        data: dict[str, object] = {  # Build one compact inventory for analysis and generated reports.
             "settings": self._read_known_files(),
             "templates": self._files_under(self.paths.templates_dir),
             "scripts": self._files_under(self.paths.specify_dir / "scripts"),
             "extensions": self._files_under(self.paths.specify_dir / "extensions"),
             "workflows": self._files_under(self.paths.specify_dir / "workflows"),
-            "commands": self._commands(),
+            "commands": commands,
         }
-        logging.debug("Inventory contains %d command records", len(data["commands"]))  # Record catalog size.
+        logging.debug("Inventory contains %d command records", len(commands))  # Record catalog size.
         return data
 
     def render_markdown(self) -> str:
@@ -155,7 +159,7 @@ class SpecKitCatalog:
     def _settings_lines(self, inventory: dict[str, object]) -> list[str]:
         """Return Markdown lines for settings files."""
         logging.info("Rendering SpecKit settings lines")  # Record report section rendering.
-        settings = inventory["settings"]  # Read the already measured settings object.
+        settings = cast(Iterable[str], inventory["settings"])  # Read the already measured settings object.
         lines = ["## Installed settings", ""]  # Start the settings section.
         lines.extend(f"- `{name}`: present" for name in settings)  # State each required metadata file.
         logging.debug("Rendered %d settings lines", len(lines))  # Record section size.
@@ -170,7 +174,7 @@ class SpecKitCatalog:
             "| Command | Installed | Consumes | Emits |",
             "| - | - | - | - |",
         ]  # Add table head.
-        for record in inventory["commands"]:
+        for record in cast(Iterable[dict[str, object]], inventory["commands"]):
             lines.append("| `{name}` | {installed} | {consumes} | {emits} |".format(**record))  # Add one command row.
         logging.debug("Rendered %d command table lines", len(lines))  # Record command table size.
         return lines + [""]
@@ -179,7 +183,7 @@ class SpecKitCatalog:
         """Return Markdown lines for one file list."""
         logging.info("Rendering SpecKit file list for %s", heading)  # Record file list rendering.
         lines = [f"## {heading}", ""]  # Start the file list section.
-        lines.extend(f"- `{file_name}`" for file_name in files)  # Add each measured file path.
+        lines.extend(f"- `{file_name}`" for file_name in cast(Iterable[str], files))  # Add each measured file path.
         logging.debug("Rendered %d file lines for %s", len(lines), heading)  # Record section size.
         return lines + [""]
 

@@ -17,6 +17,7 @@ class FactoryJournalStore:
     """Persist document journal state before GitHub receives it."""
 
     def __init__(self, database_path: Path) -> None:
+        """Initialize the FactoryJournalStore instance."""
         self.database_path = database_path  # Keep the factory database path explicit for tests and production.
         self.database_path.parent.mkdir(parents=True, exist_ok=True)  # Create the data directory when it is absent.
         self._initialize()  # Ensure the required tables exist before any write.
@@ -103,7 +104,9 @@ class FactoryJournalStore:
                 """,
                 self._event_values(event, comment_body),
             )
-            event_id = int(cursor.lastrowid)  # Read the row ID before the connection closes.
+            if cursor.lastrowid is None:  # SQLite must return the inserted row ID for the event queue.
+                raise RuntimeError("stage event insert did not return a row ID")  # Fail before GitHub sync.
+            event_id = cursor.lastrowid  # Read the row ID before the connection closes.
         logging.debug("Queued stage event row %d for GitHub sync", event_id)  # Record the queue position.
         return event_id
 

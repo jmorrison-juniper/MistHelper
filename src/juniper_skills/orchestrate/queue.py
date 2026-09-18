@@ -8,6 +8,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import cast
 
 from src.juniper_skills.orchestrate.models import WorkItem
 
@@ -16,11 +17,13 @@ class SourceRootResolver:
     """Resolve inventory root names to the locked source paths."""
 
     def __init__(self, repo_root: Path) -> None:
+        """Initialize the SourceRootResolver instance."""
         self.repo_root = repo_root  # Keep repository-relative roots testable.
         self.downloads = Path.home() / "Downloads"  # Use the operator downloads folder from the contract.
         self.roots = self._roots()  # Build the root table once for all work items.
 
     def resolve(self, root_name: str, relative_path: str) -> Path:
+        """Run the resolve operation."""
         logging.info("Resolving source part path for root %s", root_name)  # Log before path resolution.
         root = self.roots.get(root_name, self.repo_root)  # Fall back to the repository for test fixtures.
         path = root / Path(relative_path)  # Combine paths with pathlib for Windows compatibility.
@@ -41,6 +44,7 @@ class WorkLeaseStore:
     """Claim work items with SQLite leases that expire after worker loss."""
 
     def __init__(self, database_path: Path, repo_root: Path, lease_seconds: int = 900) -> None:
+        """Initialize the WorkLeaseStore instance."""
         self.database_path = database_path  # Store the queue database path from the inventory contract.
         self.repo_root = repo_root  # Store the worktree root for source path resolution.
         self.lease_seconds = lease_seconds  # Bound how long a dead worker can hold a row.
@@ -48,6 +52,7 @@ class WorkLeaseStore:
         self._initialize()  # Add lease columns without rebuilding inventory data.
 
     def claim_next(self, worker_id: str, domain: str | None = None) -> WorkItem | None:
+        """Run the claim next operation."""
         logging.info("Claiming one Juniper skill work item")  # Log before the atomic queue transaction.
         now = self._now()  # Capture one timestamp for claim and expiry comparisons.
         expiry = self._expiry(now)  # Compute the lease expiry before the write transaction.
@@ -63,21 +68,25 @@ class WorkLeaseStore:
         return item  # Return the claimed work item to the runner.
 
     def complete(self, document_key: str, status: str = "complete") -> None:
+        """Run the complete operation."""
         logging.info("Marking a Juniper skill work item as %s", status)  # Log before queue completion.
         self._set_status(document_key, status, None)  # Clear the lease so the row is terminal.
         logging.debug("Marked work item %s as %s", document_key, status)  # Record the terminal status.
 
     def fail(self, document_key: str, detail: str) -> None:
+        """Run the fail operation."""
         logging.info("Marking a Juniper skill work item as failed")  # Log before queue failure.
         self._set_status(document_key, "failed", detail)  # Keep the row retryable for the next run.
         logging.debug("Marked work item %s as failed", document_key)  # Record the retryable status.
 
     def release(self, document_key: str) -> None:
+        """Run the release operation."""
         logging.info("Releasing a Juniper skill work item lease")  # Log before an interrupt-safe release.
         self._set_status(document_key, "pending", "lease released")  # Return interrupted work to the queue.
         logging.debug("Released work item %s", document_key)  # Record the released row.
 
     def progress(self) -> dict[str, int]:
+        """Run the progress operation."""
         logging.info("Reading Juniper skill queue progress")  # Log before the status aggregation.
         with self._connect() as connection:  # Use one read connection for the status summary.
             rows = connection.execute("SELECT status, COUNT(*) AS count FROM work_item GROUP BY status").fetchall()
@@ -127,15 +136,15 @@ class WorkLeaseStore:
 
     def _ensure_columns(self, connection: sqlite3.Connection) -> None:
         columns = self._columns(connection, "work_item")  # Read existing queue columns before ALTER statements.
-        additions = {  # Define lease columns that older inventory databases lack.
-            "lease_owner": "TEXT",
-            "lease_expires_at": "TEXT",
-            "attempt_count": "INTEGER NOT NULL DEFAULT 0",
-            "last_error": "TEXT",
-        }
-        for name, definition in additions.items():  # Add only missing columns for backward compatibility.
+        additions = (  # Define full trusted ALTER statements for older inventory databases.
+            ("lease_owner", "ALTER TABLE work_item ADD COLUMN lease_owner TEXT"),
+            ("lease_expires_at", "ALTER TABLE work_item ADD COLUMN lease_expires_at TEXT"),
+            ("attempt_count", "ALTER TABLE work_item ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0"),
+            ("last_error", "ALTER TABLE work_item ADD COLUMN last_error TEXT"),
+        )
+        for name, statement in additions:  # Add only missing columns for backward compatibility.
             if name not in columns:  # Avoid duplicate-column errors on repeated runner starts.
-                connection.execute(f"ALTER TABLE work_item ADD COLUMN {name} {definition}")  # Extend the queue safely.
+                connection.execute(statement)  # Extend the queue with trusted schema text only.
 
     def _candidate(self, connection: sqlite3.Connection, now: str, domain: str | None) -> sqlite3.Row | None:
         where = "(w.status = 'pending' OR w.status = 'failed' OR (w.status = 'leased' AND w.lease_expires_at <= ?))"
@@ -144,7 +153,8 @@ class WorkLeaseStore:
             where = f"{where} AND {self._domain_expr(connection)} = ?"  # Use inventory domain if it exists.
             params.append(domain)  # Bind the requested domain.
         sql = self._candidate_sql(connection, where)  # Build the query after optional domain filtering.
-        return connection.execute(sql, params).fetchone()  # Return the highest-priority available row.
+        row = connection.execute(sql, params).fetchone()  # Return the highest-priority available row.
+        return cast(sqlite3.Row | None, row)  # Preserve sqlite row typing for strict mypy.
 
     def _candidate_sql(self, connection: sqlite3.Connection, where: str) -> str:
         domain_expr = self._domain_expr(connection)  # Use the inventory domain column only when it exists.
@@ -153,7 +163,7 @@ class WorkLeaseStore:
             "SELECT w.document_key, d.title, d.category, d.source_pdf, d.pages, w.priority, "
             f"{domain_expr} AS domain, {citation_expr} AS citation_only "
             "FROM work_item w JOIN source_document d ON d.document_key = w.document_key "
-            f"WHERE {where} ORDER BY w.priority DESC, w.updated_at ASC, w.document_key ASC LIMIT 1"
+            f"WHERE {where} ORDER BY w.priority DESC, w.updated_at ASC, w.document_key ASC LIMIT 1"  # nosec B608 - Trusted fragments and bound parameters build this query.
         )  # Keep queue selection deterministic and fair.
 
     def _mark_claimed(self, connection: sqlite3.Connection, document_key: str, worker_id: str, expiry: str) -> None:

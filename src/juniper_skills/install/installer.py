@@ -5,10 +5,12 @@ from __future__ import annotations
 import json
 import logging
 import math
+import os
 import re
-import subprocess
+import subprocess  # nosec B404 - This module starts fixed local commands without a shell.
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import cast
 
 DEFAULT_TOKEN_WINDOW = 1_000_000  # Use the corrected Opus 5 Max context window for reports.
 TOKEN_CHAR_WIDTH = 4  # Use the requested approximate character-to-token ratio.
@@ -47,6 +49,7 @@ class SkillMetadata:
 
     @property
     def index_text(self) -> str:
+        """Run the index text operation."""
         return f"name: {self.name}\ndescription: {self.description}\n"  # Match the host index shape.
 
 
@@ -64,6 +67,7 @@ class CostReport:
 
     @property
     def skill_count(self) -> int:
+        """Run the skill count operation."""
         return len(self.skills)  # Give callers the measured registration size.
 
 
@@ -71,12 +75,14 @@ class SkillCatalogIndex:
     """Build and search the complete Juniper skill package catalog."""
 
     def __init__(self, store_path: Path) -> None:
+        """Initialize the SkillCatalogIndex instance."""
         self.store_path = store_path  # Keep one canonical store root for catalog reads and writes.
         self.router_path = self.store_path / "skills"  # Keep routing tier skills in the stable legacy folder.
         self.package_path = self.store_path / "packages"  # Keep document skill packages below their domain.
         self.catalog_path = self.store_path / CATALOG_FILE_NAME  # Give routers one searchable catalog file.
 
     def rebuild(self) -> list[SkillMetadata]:
+        """Run the rebuild operation."""
         logging.info("Building the Juniper skill catalog index")  # Log the full catalog scan.
         skills = self.available_packages()  # Read package metadata from the canonical store.
         records = [self._record(skill) for skill in skills]  # Convert package metadata to stable JSON records.
@@ -86,6 +92,7 @@ class SkillCatalogIndex:
         return skills  # Return the measured metadata to the installer.
 
     def search(self, keyword: str) -> list[SkillMetadata]:
+        """Run the search operation."""
         logging.info("Searching the Juniper skill catalog for %s", keyword)  # Log the operator search request.
         needle = keyword.casefold()  # Normalize the search text for predictable matching.
         skills = self._catalog_or_rebuild()  # Use the catalog when present, but recover from a missing file.
@@ -94,30 +101,35 @@ class SkillCatalogIndex:
         return matches  # Return structured matches for the CLI.
 
     def available_routers(self) -> list[SkillMetadata]:
+        """Run the available routers operation."""
         logging.info("Reading available Juniper routing skills")  # Log the router inventory read.
         routers = self._skill_dirs(self.router_path, "router")  # Read legacy skill packages as routing tier skills.
         logging.debug("Read %d available Juniper routing skills", len(routers))  # Record router count.
         return routers  # Return router metadata for default registration.
 
     def available_packages(self) -> list[SkillMetadata]:
+        """Run the available packages operation."""
         logging.info("Reading available Juniper document skill packages")  # Log the package inventory read.
         packages = self._package_dirs()  # Read each domain package from the canonical store.
         logging.debug("Read %d available Juniper document skill packages", len(packages))  # Record package count.
         return packages  # Return package metadata for registration and search.
 
     def available_skills(self) -> list[SkillMetadata]:
+        """Run the available skills operation."""
         logging.info("Reading all available Juniper skills")  # Log the combined inventory read.
         skills = self.available_routers() + self.available_packages()  # Combine routers and document packages.
         logging.debug("Read %d total available Juniper skills", len(skills))  # Record combined count.
         return skills  # Return all sources for list and lookup operations.
 
     def packages_for_domain(self, domain: str) -> list[SkillMetadata]:
+        """Run the packages for domain operation."""
         logging.info("Reading Juniper packages for domain %s", domain)  # Log the domain selection.
         packages = [skill for skill in self.available_packages() if skill.domain == domain]  # Select one domain.
         logging.debug("Read %d Juniper packages for domain %s", len(packages), domain)  # Record package count.
         return packages  # Return the selected domain packages.
 
     def find(self, slug: str) -> SkillMetadata:
+        """Run the find operation."""
         logging.info("Finding Juniper skill package %s", slug)  # Log the package lookup.
         for skill in self.available_skills():  # Search all registration sources by slug or skill name.
             if slug in {skill.slug, skill.name}:  # Accept the operator slug and the host skill name.
@@ -171,6 +183,8 @@ class SkillCatalogIndex:
 
     def _metadata_from_record(self, record: dict[str, object]) -> SkillMetadata:
         path = self.store_path / str(record["relative_path"])  # Restore the package path from catalog JSON.
+        life_cycle_tags = cast(list[object], record["life_cycle_tags"])  # Read list values from catalog JSON.
+        routing_keywords = cast(list[object], record["routing_keywords"])  # Read keyword values from catalog JSON.
         return SkillMetadata(  # Rebuild the metadata type for search callers.
             slug=str(record["slug"]),
             name=str(record["name"]),
@@ -179,10 +193,10 @@ class SkillCatalogIndex:
             domain=str(record["domain"]),
             kind=str(record["kind"]),
             package_path=path,
-            page_count=int(record["page_count"]),
-            topic_count=int(record["topic_count"]),
-            lifecycle_tags=tuple(str(item) for item in record["life_cycle_tags"]),
-            routing_keywords=tuple(str(item) for item in record["routing_keywords"]),
+            page_count=int(str(record["page_count"])),
+            topic_count=int(str(record["topic_count"])),
+            lifecycle_tags=tuple(str(item) for item in life_cycle_tags),
+            routing_keywords=tuple(str(item) for item in routing_keywords),
         )
 
     def _record(self, skill: SkillMetadata) -> dict[str, object]:
@@ -261,9 +275,11 @@ class SkillCostEstimator:
     """Estimate the skill-index context cost for selected registrations."""
 
     def __init__(self, context_window: int = DEFAULT_TOKEN_WINDOW) -> None:
+        """Initialize the SkillCostEstimator instance."""
         self.context_window = context_window  # Store the model context window selected by the operator.
 
     def estimate(self, skills: list[SkillMetadata], force: bool = False) -> CostReport:
+        """Run the estimate operation."""
         logging.info("Estimating Juniper skill registration token cost")  # Log the cost calculation.
         token_count = sum(math.ceil(len(skill.index_text) / TOKEN_CHAR_WIDTH) for skill in skills)  # Estimate tokens.
         window_share = (token_count / self.context_window) * 100 if self.context_window else 0.0  # Convert tokens.
@@ -300,6 +316,7 @@ class SkillInstaller:
         home_path: Path | None = None,
         context_window: int = DEFAULT_TOKEN_WINDOW,
     ) -> None:
+        """Initialize the SkillInstaller instance."""
         self.home_path = home_path or Path.home()  # Use the caller home so tests can isolate host paths.
         self.repo_path = repo_path or Path.cwd()  # Use the active worktree for the repository skill target.
         self.store_path = store_path or self.home_path / "juniper-agent-skills"  # Keep the store outside OneDrive.
@@ -309,6 +326,7 @@ class SkillInstaller:
         self.estimator = SkillCostEstimator(context_window)  # Share threshold logic for all registration modes.
 
     def initialize_store(self) -> list[InstallOutcome]:
+        """Run the initialize store operation."""
         logging.info("Preparing canonical Juniper skill store at %s", self.store_path)  # Log the store creation step.
         self.skills_path.mkdir(parents=True, exist_ok=True)  # Create the routing tier folder.
         self.packages_path.mkdir(parents=True, exist_ok=True)  # Create the per-document package root.
@@ -319,6 +337,7 @@ class SkillInstaller:
         return self.generate_catalog()  # Generate the catalog so no operator edits it by hand.
 
     def install_skill(self, skill_name: str) -> list[InstallOutcome]:
+        """Run the install skill operation."""
         logging.info("Installing Juniper skill %s", skill_name)  # Log the requested skill publication.
         outcomes = self._install_metadata(self.catalog.find(skill_name))  # Install one source with safety checks.
         if any(outcome.action == "refused" for outcome in outcomes):  # Preserve legacy refusal behavior.
@@ -326,18 +345,21 @@ class SkillInstaller:
         return outcomes + self.generate_catalog()  # Refresh catalogs after a successful install.
 
     def install_all(self) -> list[InstallOutcome]:
+        """Run the install all operation."""
         logging.info("Installing all canonical Juniper skills")  # Log the legacy batch publication step.
         outcomes = self._install_many(self.catalog.available_skills())  # Publish routers and document packages.
         logging.debug("Installed all Juniper skills with %d outcomes", len(outcomes))  # Record the batch result count.
         return outcomes  # Return the full report to the caller.
 
     def install_routers(self, force: bool = False, dry_run: bool = False) -> tuple[CostReport, list[InstallOutcome]]:
+        """Run the install routers operation."""
         logging.info("Installing Juniper routing tier skills")  # Log the default registration mode.
         return self._install_plan(self.catalog.available_routers(), force, dry_run)  # Publish routing tier only.
 
     def install_domain(
         self, domain: str, force: bool = False, dry_run: bool = False
     ) -> tuple[CostReport, list[InstallOutcome]]:
+        """Run the install domain operation."""
         logging.info("Installing Juniper package domain %s", domain)  # Log the selected domain mode.
         packages = self.catalog.packages_for_domain(domain)  # Read all packages in the requested domain.
         return self._install_plan(packages, force, dry_run)  # Publish the measured domain plan.
@@ -345,6 +367,7 @@ class SkillInstaller:
     def install_packages(
         self, slugs: list[str], force: bool = False, dry_run: bool = False
     ) -> tuple[CostReport, list[InstallOutcome]]:
+        """Run the install packages operation."""
         logging.info("Installing selected Juniper packages")  # Log the selected package mode.
         packages = [self.catalog.find(slug) for slug in slugs]  # Resolve each operator slug before cost checks.
         return self._install_plan(packages, force, dry_run)  # Publish the measured package plan.
@@ -352,17 +375,20 @@ class SkillInstaller:
     def install_all_packages(
         self, force: bool = False, dry_run: bool = False
     ) -> tuple[CostReport, list[InstallOutcome]]:
+        """Run the install all packages operation."""
         logging.info("Installing every Juniper document package")  # Log the high-cost registration mode.
         packages = self._qualifying_packages()  # Select documents that are large enough for one skill each.
         return self._install_plan(packages, force, dry_run)  # Publish the qualifying document package set.
 
     def unregister_all(self) -> list[InstallOutcome]:
+        """Run the unregister all operation."""
         logging.info("Unregistering every canonical Juniper skill")  # Log the batch removal mode.
         outcomes = self._uninstall_many(self.catalog.available_skills())  # Remove junctions for all known skills.
         logging.debug("Unregistered every canonical Juniper skill with %d outcomes", len(outcomes))  # Record count.
         return outcomes + self.generate_catalog()  # Refresh the searchable catalog after removal.
 
     def uninstall_skill(self, skill_name: str) -> list[InstallOutcome]:
+        """Run the uninstall skill operation."""
         logging.info("Uninstalling Juniper skill %s", skill_name)  # Log the requested skill removal.
         skill = self.catalog.find(skill_name)  # Resolve the slug to the host registration name.
         outcomes = [self._remove_junction(path) for path in self._target_paths(skill.name)]  # Remove each junction.
@@ -370,6 +396,7 @@ class SkillInstaller:
         return outcomes + self.generate_catalog()  # Keep the catalog current after removal.
 
     def verify_skill(self, skill_name: str) -> list[InstallOutcome]:
+        """Run the verify skill operation."""
         logging.info("Verifying Juniper skill %s", skill_name)  # Log the verification request.
         skill = self.catalog.find(skill_name)  # Resolve the requested skill from the canonical store.
         outcomes = [self._verify_target(path, skill.package_path) for path in self._target_paths(skill.name)]  # Check.
@@ -377,6 +404,7 @@ class SkillInstaller:
         return outcomes  # Return the host-by-host verification result.
 
     def verify_all(self) -> list[InstallOutcome]:
+        """Run the verify all operation."""
         logging.info("Verifying all canonical Juniper skills")  # Log the batch verification request.
         outcomes: list[InstallOutcome] = []  # Collect every verification result for the caller.
         for skill in self.catalog.available_skills():  # Verify each canonical package that exists.
@@ -385,6 +413,7 @@ class SkillInstaller:
         return outcomes  # Return the full verification report.
 
     def generate_catalog(self) -> list[InstallOutcome]:
+        """Run the generate catalog operation."""
         logging.info("Generating Juniper skill catalogs")  # Log the catalog write.
         packages = self.catalog.rebuild()  # Write the JSON catalog of all document packages.
         skills = self.catalog.available_routers() + packages  # Include routers in the human catalog.
@@ -395,6 +424,7 @@ class SkillInstaller:
         return [InstallOutcome(catalog_path, "generated", "catalog updated from canonical skills")]  # Report write.
 
     def list_inventory(self) -> list[str]:
+        """Run the list inventory operation."""
         logging.info("Listing Juniper skill inventory")  # Log the operator inventory request.
         lines = ["Installed Juniper skills:"]  # Start with registered skills for action planning.
         lines.extend(self._installed_lines())  # Add installed sources from target junctions.
@@ -404,6 +434,7 @@ class SkillInstaller:
         return lines  # Return lines so the CLI can print them.
 
     def search_catalog(self, keyword: str) -> list[SkillMetadata]:
+        """Run the search catalog operation."""
         logging.info("Searching Juniper skill inventory for %s", keyword)  # Log the search mode.
         return self.catalog.search(keyword)  # Delegate search to the catalog index.
 
@@ -480,9 +511,18 @@ class SkillInstaller:
             return InstallOutcome(target_path, "unchanged", "junction already points to canonical skill")  # No change.
         logging.info("Creating junction %s", target_path)  # Log the junction creation command.
         target_path.parent.mkdir(parents=True, exist_ok=True)  # Create the host skill directory when missing.
-        subprocess.run(["cmd", "/c", "mklink", "/J", str(target_path), str(source_path)], check=True)  # Create link.
+        command = [self._command_processor(), "/c", "mklink", "/J", str(target_path), str(source_path)]  # Use cmd.
+        subprocess.run(command, check=True)  # nosec B603 - The command uses a fixed verb and validated paths.
         logging.debug("Created junction %s to %s", target_path, source_path)  # Record the created path pair.
         return InstallOutcome(target_path, "created", "junction created to canonical skill")  # Report the junction.
+
+    def _command_processor(self) -> str:
+        system_root = os.environ.get("SystemRoot")  # Read the Windows root without assuming one drive letter.
+        if system_root is None:  # Refuse junction creation when Windows variables are absent.
+            raise RuntimeError("Windows SystemRoot is required to create a junction")  # Give a clear operator error.
+        fallback = Path(system_root) / "System32" / "cmd.exe"  # Build the OS path without separators.
+        command_processor = os.environ.get("ComSpec", str(fallback))  # Prefer the configured Windows shell.
+        return str(Path(command_processor))  # Return an absolute executable path for process creation.
 
     def _remove_junction(self, target_path: Path) -> InstallOutcome:
         if not target_path.exists():  # A missing target is already uninstalled.

@@ -6,10 +6,11 @@ import importlib.util
 import json
 import logging
 import sqlite3
-import subprocess
+import subprocess  # nosec B404 - This module starts fixed SpecKit commands without a shell.
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, cast
 
 from src.juniper_skills.speckit.analyzer import SpecKitAnalyzer
 from src.juniper_skills.speckit.catalog import SpecKitCatalog
@@ -22,6 +23,7 @@ class SpecKitHarness:
     """Emit a complete SpecKit artifact set for one skill document."""
 
     def __init__(self, paths: SpecKitPaths) -> None:
+        """Initialize the SpecKitHarness instance."""
         self.paths = paths  # Keep all path policy in one explicit object.
         self.catalog = SpecKitCatalog(paths)  # Reuse the measured SpecKit catalog for reports.
         self.analyzer = SpecKitAnalyzer()  # Use the same checker that tests exercise.
@@ -130,7 +132,7 @@ class SpecKitHarness:
     def _row_values(self, row: sqlite3.Row) -> dict[str, object]:
         """Return document values from one database row."""
         logging.info("Converting a source document row into metrics")  # Record row conversion.
-        values = {
+        values: dict[str, object] = {
             "title": row["title"],
             "category": row["category"],
             "pages": int(row["pages"]),
@@ -155,7 +157,7 @@ class SpecKitHarness:
     def _metric_values(self, metrics: PackageMetrics) -> dict[str, object]:
         """Return model fields from installed package metrics."""
         logging.info("Converting installed package metrics")  # Record metric conversion.
-        values = {
+        values: dict[str, object] = {
             "package_path": metrics.package_path,
             "topic_count": metrics.topic_count,
             "life_cycle_spread": metrics.life_cycle_spread,
@@ -169,17 +171,26 @@ class SpecKitHarness:
         """Return document-specific clarification questions."""
         logging.info("Resolving open questions for the clarify command")  # Record clarify input preparation.
         questions: list[str] = []  # Build only questions that follow from measured values.
-        if int(values.get("pages", document.pages)) <= 0:  # Missing page count blocks source-quality confidence.
+        pages = self._int_value(values.get("pages"), document.pages)  # Read measured pages with a safe fallback.
+        if pages <= 0:  # Missing page count blocks source-quality confidence.
             questions.append("The source page count is missing.")  # Record the concrete ambiguity.
         if not document.source_path.exists():  # Missing source prevents living-spec drift checks.
             questions.append("The source Markdown file is missing.")  # Record the concrete source gap.
         topic_count = values.get("topic_count", document.topic_count)  # Preserve unavailable package counts.
         if topic_count is None:  # Missing installed package metrics must remain visible to reviewers.
             questions.append("The installed package was not measured.")  # Record the package metric gap.
-        elif int(topic_count) == 0:  # Empty packages require review when the package exists.
+        elif self._int_value(topic_count, 0) == 0:  # Empty packages require review when the package exists.
             questions.append("The built package contains no topic files.")  # Record the package ambiguity.
         logging.debug("Resolved %d open questions", len(questions))  # Record the question count.
         return tuple(questions)
+
+    def _int_value(self, value: object, default: int) -> int:
+        """Return an integer from measured data."""
+        if isinstance(value, int):  # Use integer metrics without conversion.
+            return value
+        if isinstance(value, str):  # Convert string metrics stored by SQLite or JSON.
+            return int(value)
+        return default  # Use the caller fallback for unavailable metrics.
 
     def _feature_dir(self, document: SkillDocument) -> Path:
         """Return the generated feature directory for a document."""
@@ -223,16 +234,16 @@ The workflow must record source hash metadata for living-spec drift and sync.
     def _write_artifacts(self, feature_dir: Path, document: SkillDocument) -> None:
         """Write all Markdown artifacts except the generated analysis."""
         logging.info("Writing SpecKit Markdown artifacts")  # Record bulk artifact write.
-        writers = {  # Map each artifact path to its rendered content.
-            "spec.md": self._spec(document),
-            "clarifications.md": self._clarify(document),
-            "plan.md": self._plan(document),
-            "tasks.md": self._tasks(document),
-            "implementation.md": self._implement(document),
+        writers: dict[Path, str] = {  # Map each artifact path to its rendered content.
+            Path("spec.md"): self._spec(document),
+            Path("clarifications.md"): self._clarify(document),
+            Path("plan.md"): self._plan(document),
+            Path("tasks.md"): self._tasks(document),
+            Path("implementation.md"): self._implement(document),
             (Path("checklists") / "requirements.md"): self._checklist(document),
-            "research.md": self._research(document),
-            "data-model.md": self._data_model(document),
-            "quickstart.md": self._quickstart(document),
+            Path("research.md"): self._research(document),
+            Path("data-model.md"): self._data_model(document),
+            Path("quickstart.md"): self._quickstart(document),
             (Path("contracts") / "skill-package.md"): self._contract(document),
         }
         for name, text in writers.items():
@@ -253,7 +264,7 @@ The workflow must record source hash metadata for living-spec drift and sync.
     def _write_context_with_companion(self, feature_dir: Path, document: SkillDocument) -> None:
         """Write context by invoking the real Companion writer."""
         logging.info("Invoking Companion lifecycle capture scripts")  # Record external writer use.
-        companion = self._companion_module()  # Load the installed writer module from the real extension.
+        companion = cast(Any, self._companion_module())  # Load the installed writer module from the real extension.
         for step, _status in self._companion_steps():  # Record lifecycle completion through extension functions.
             companion.journal_advance(feature_dir, step, "harness")  # Use the same function as the command.
         companion.mark_spec_complete(feature_dir, "harness")  # Promote the context through the real terminal writer.
@@ -263,7 +274,7 @@ The workflow must record source hash metadata for living-spec drift and sync.
     def _write_companion_capture(self, feature_dir: Path, document: SkillDocument) -> None:
         """Add metadata through the real capture.py writer surface."""
         logging.info("Recording additive Companion capture fields")  # Record metadata capture.
-        companion = self._companion_module()  # Load the real capture helpers re-exported by write-context.py.
+        companion = cast(Any, self._companion_module())  # Load the real capture helpers re-exported by writer code.
         companion.set_fields(feature_dir, self._capture_set_pairs(document))  # Write measured context fields.
         companion.set_living_specs_loaded(feature_dir, [document.slug])  # Record the loaded living spec.
         companion.append_capture_entries(feature_dir, "decisions", "decision", [self._decision_capture()])
@@ -301,7 +312,9 @@ The workflow must record source hash metadata for living-spec drift and sync.
         """Run the Companion writer with an explicit feature directory."""
         logging.info("Running the Companion writer script")  # Record subprocess start.
         command = [sys.executable, str(self._companion_writer()), "--feature-dir", str(feature_dir), *args]
-        result = subprocess.run(command, cwd=self.paths.repo_root, capture_output=True, text=True, check=False)
+        result = subprocess.run(  # nosec B603 - The command tuple uses the current Python executable and repo paths.
+            command, cwd=self.paths.repo_root, capture_output=True, text=True, check=False
+        )
         if result.returncode != 0:
             logging.error("Companion writer failed with code %d", result.returncode)  # Record failure code.
             raise RuntimeError(result.stderr.strip() or "Companion writer failed")
@@ -341,7 +354,7 @@ The workflow must record source hash metadata for living-spec drift and sync.
     def _required_paths(self, feature_dir: Path) -> list[Path]:
         """Return the required artifact paths."""
         logging.info("Building the required artifact path list")  # Record required path calculation.
-        names = [
+        names: list[str | Path] = [
             "spec.md",
             "clarifications.md",
             "plan.md",
@@ -401,7 +414,7 @@ The workflow must record source hash metadata for living-spec drift and sync.
         """Return the generated feature specification."""
         logging.info("Rendering the generated skill specification")  # Record spec rendering.
         self._template("spec-template.md")  # Read the real template to prove reuse in generation.
-        text = f"""# Feature Specification: {document.title} skill package
+        text = f"# Feature Specification: {document.title} skill package" f"""
 
 Command: speckit.specify
 
@@ -474,7 +487,7 @@ I can select the correct topic and cite the source page range.
 
 - The shared contract controls repeated harness behavior.
 - This document specification controls the conversion audit for one PDF.
-"""
+"""  # nosec B608 - This expression builds Markdown text and never executes SQL.
         logging.debug("Rendered skill specification with %d characters", len(text))  # Record spec size.
         return text
 
@@ -732,7 +745,7 @@ Command: speckit.implement
     def _handoff_notes(self, document: SkillDocument) -> dict[str, object]:
         """Return Companion handoff notes."""
         logging.info("Building Companion handoff notes")  # Record handoff data creation.
-        notes = {  # Store operator-useful progress details in the observed context shape.
+        notes: dict[str, object] = {  # Store operator-useful progress details in the observed context shape.
             "keyTechnicalDecisions": ["Programmatic SpecKit generation replaces 1,500 manual interactive runs."],
             "qualityGateStatus": {"artifactValidation": "PASSING", "analysis": "PASSING"},
             "whatsDone": [f"Generated artifact set for {document.slug}."],

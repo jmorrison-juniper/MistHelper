@@ -6,8 +6,17 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 from src.juniper_skills.speckit.models import SkillDocument
+
+
+class LivingSpecHarness(Protocol):
+    """Define the artifact harness surface used by living sync."""
+
+    def emit_for_document(self, document: SkillDocument, package_files: list[Path] | None = None) -> Path:
+        """Emit artifacts for one source document."""
+        ...  # Protocol method has no runtime implementation.
 
 
 @dataclass(frozen=True)
@@ -36,7 +45,7 @@ class LivingSpecManager:
         logging.debug("Living-spec drift check returned %s", report.detail)  # Record the report summary.
         return report
 
-    def sync(self, document: SkillDocument, harness: object) -> Path:
+    def sync(self, document: SkillDocument, harness: LivingSpecHarness) -> Path:
         """Regenerate artifacts after a watcher reports changed source content."""
         logging.info("Running Juniper living-spec sync")  # Record the living-sync command start.
         feature_dir = harness.emit_for_document(document)  # Rebuild artifacts so stored hashes match the source.

@@ -49,6 +49,7 @@ class TopicSubjectBuilder:
     )  # Prefer useful human-written subjects for common Junos guide headings.
 
     def build(self, title: str, text: str, lifecycle: list[str]) -> str:
+        """Run the build operation."""
         logging.info("Building index subject for topic %s", title)  # Log before subject extraction.
         direct = self._pattern_subject(title)  # Use a precise subject for known heading patterns.
         if direct:  # Return high-confidence subjects before generic composition.
@@ -81,15 +82,26 @@ class TopicSubjectBuilder:
         return found[:3]  # Keep the sentence short and readable.
 
     def _compose(self, title: str, commands: list[str], concepts: list[str], lifecycle: list[str]) -> str:
+        """Create the compose output."""
+        subject_target = self._join(concepts) or title  # Reuse the fallback subject target in each branch.
         if "filter" in title.lower() and commands:  # Use a specific subject for output filtering topics.
             return f"Use {self._join(commands[:3])} pipe filters to read operational command output."
+        lifecycle_subject = self._lifecycle_subject(title, commands, lifecycle, subject_target)
+        if lifecycle_subject:  # Prefer lifecycle-specific language when the lifecycle is known.
+            return lifecycle_subject
+        command_target = self._join(commands) or title  # Reuse the fallback command target in the default subject.
+        return f"Verify and troubleshoot {subject_target} with {command_target}."
+
+    def _lifecycle_subject(self, title: str, commands: list[str], lifecycle: list[str], subject_target: str) -> str:
+        """Return the lifecycle subject when one is available."""
+        command_target = self._join(commands) or title  # Reuse the fallback command target in the change subject.
         if "day0" in lifecycle:  # Explain design and selection topics with selection wording.
-            return f"Select or compare {self._join(concepts) or title} for {title}."
+            return f"Select or compare {subject_target} for {title}."
         if "day1" in lifecycle and commands:  # Explain setup topics by naming the command terms.
-            return f"Configure {self._join(concepts) or title} with {self._join(commands)} commands."
+            return f"Configure {subject_target} with {self._join(commands)} commands."
         if "day2plus" in lifecycle:  # Explain change topics with change and recovery wording.
-            return f"Change or recover {self._join(concepts) or title} with {self._join(commands) or title}."
-        return f"Verify and troubleshoot {self._join(concepts) or title} with {self._join(commands) or title}."
+            return f"Change or recover {subject_target} with {command_target}."
+        return ""  # Tell the caller to use the generic troubleshooting subject.
 
     def _pattern_subject(self, title: str) -> str:
         lowered = title.lower()  # Normalize the title for pattern matching.

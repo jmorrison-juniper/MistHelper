@@ -28,6 +28,7 @@ class TopicSegment:
     subject: str = ""  # Store the one-line index subject that helps routing.
 
     def source_key(self, document_code: str) -> str:
+        """Run the source key operation."""
         return f"{document_code} p.{self.page_start}-{self.page_end}"  # Build the contract citation key.
 
 
@@ -60,6 +61,7 @@ class PageTracker:
     PAGE_PATTERN = re.compile(r"<!--\s*page\s+(\d+)\s*-->", re.IGNORECASE)  # Match universal page markers.
 
     def annotate(self, lines: list[str]) -> list[tuple[str, int]]:
+        """Run the annotate operation."""
         logging.info("Annotating %s lines with page markers", len(lines))  # Log before citation mapping.
         page = 0  # Use zero until the first marker appears.
         annotated: list[tuple[str, int]] = []  # Accumulate each source line with its active page.
@@ -83,6 +85,7 @@ class DocumentSegmenter:
     ORDINAL_PATTERN = re.compile(r"^(?:chapter|part|section)\s+\d+$", re.IGNORECASE)  # Match bare ordinals.
 
     def __init__(self, soft_limit: int = 12_288, hard_limit: int = 20_480, tiny_limit: int = 2_048) -> None:
+        """Initialize the DocumentSegmenter instance."""
         self.soft_limit = soft_limit  # Store the topic size target from the locked contract.
         self.hard_limit = hard_limit  # Store the maximum topic size from the locked contract.
         self.body_limit = hard_limit - 1_536  # Reserve bytes for topic front matter and final fence growth.
@@ -94,6 +97,7 @@ class DocumentSegmenter:
         self.subjects = TopicSubjectBuilder()  # Build useful one-line subjects for document indexes.
 
     def segment_text(self, text: str, document_slug: str = "document") -> SegmenterResult:
+        """Run the segment text operation."""
         logging.info("Segmenting document %s", document_slug)  # Log before any document transformation.
         body = self._strip_front_matter(text)  # Remove converter front matter from topic content.
         repair = self.repairer.repair(body)  # Repair measured converter defects first.
@@ -349,6 +353,7 @@ class DocumentSegmenter:
         return len(text.encode("utf-8"))  # Measure the contract limit in bytes.
 
     def write_topic_tree(self, result: SegmenterResult, output_dir: Path, document_code: str) -> None:
+        """Create the write topic tree output."""
         logging.info("Writing %s segment topic files to %s", len(result.segments), output_dir)  # Log before writes.
         output_dir.mkdir(parents=True, exist_ok=True)  # Create the destination tree for generated topics.
         for segment in result.segments:  # Write each topic segment with citation metadata.

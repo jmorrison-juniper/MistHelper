@@ -1,14 +1,19 @@
 """Quality gates for Juniper source documents and generated skill topics."""
 
-from .cards import CardDeduplicationReport, CardDeduplicator  # Export card merge tools for package writers.
-from .commands import CommandFenceCleaner, CommandFenceCleanReport  # Export command fence cleanup tools.
+from .cards import CardDeduplicator  # Export card merge tools for package writers.
+from .commands import CommandFenceCleaner  # Export command fence cleanup tools.
 from .database import SourceQualityDatabase  # Export quarantine persistence for factory callers.
-from .repair import (  # Export repair measurement tools.
+from .models import (  # Export measured quality report records.
+    CardDeduplicationReport,
+    CommandFenceCleanReport,
     RepairAccuracyReport,
+    SourceQualityReport,
+)
+from .repair import (  # Export repair measurement tools.
     SourceTextRepairer,
     WordFrequencyDictionary,
 )
-from .source_gate import SourceQualityGate, SourceQualityReport  # Export source quality gate tools.
+from .source_gate import SourceQualityGate  # Export source quality gate tools.
 
 __all__ = [  # Keep the public quality surface explicit for factory imports.
     "CardDeduplicationReport",  # Publish the card deduplication report model.

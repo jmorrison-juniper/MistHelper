@@ -12,6 +12,7 @@ class InventoryCommand:
     """Run the inventory builder from the command line."""
 
     def run(self) -> None:
+        """Run the run operation."""
         logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")  # Configure clear CLI logging.
         repo_root = Path.cwd()  # Use the current worktree as the repository root.
         logging.info("Starting inventory command in %s", repo_root)  # Log command start and worktree.

@@ -64,12 +64,14 @@ class PollingFileState:
     """Track Markdown file stability and content hashes across scans."""
 
     def __init__(self) -> None:
+        """Initialize the PollingFileState instance."""
         self.samples: dict[Path, FileSample] = {}  # Remember the prior size and mtime for the quiet period.
         self.hashes: dict[Path, str] = {}  # Remember the last accepted content hash for touch detection.
         self.accepted_samples: dict[Path, tuple[int, int]] = {}  # Track accepted stat fields for touch counts.
         self.initialized = False  # Treat the first ready scan as the baseline.
 
     def sample(self, path: Path) -> FileSample | None:
+        """Run the sample operation."""
         logging.info("Sampling Markdown file %s", path)  # Log the stat call before touching the filesystem.
         try:
             stat = path.stat()  # Read size and mtime together so the quiet-period gate is consistent.
@@ -84,29 +86,35 @@ class PollingFileState:
         return current
 
     def accept_hash(self, path: Path, content_hash: str) -> str:
+        """Run the accept hash operation."""
         old_hash = self.hashes.get(path, "")  # Compare with the accepted hash, not the timestamp.
         self.hashes[path] = content_hash  # Store the accepted content for the next scan.
         return old_hash  # Return the old value so the caller classifies the change.
 
     def old_hash(self, path: Path) -> str:
+        """Run the old hash operation."""
         return self.hashes.get(path, "")  # Return the accepted hash without accepting a blocked change.
 
     def store_hash(self, path: Path, content_hash: str) -> None:
+        """Create the store hash output."""
         self.hashes[path] = content_hash  # Accept the hash only after the file or part set is ready.
         sample = self.samples.get(path, FileSample(0, 0))  # Read the stat sample accepted with this hash.
         self.accepted_samples[path] = (sample.size_bytes, sample.modified_ns)  # Store touch detection fields.
 
     def stat_changed_since_accept(self, path: Path) -> bool:
+        """Run the stat changed since accept operation."""
         sample = self.samples.get(path, FileSample(0, 0))  # Read the latest stable stat sample.
         accepted = self.accepted_samples.get(path, (0, 0))  # Read the last stat sample accepted with a hash.
         return accepted != (sample.size_bytes, sample.modified_ns)  # True means only metadata may have changed.
 
     def stat_unchanged_since_accept(self, path: Path) -> bool:
+        """Run the stat unchanged since accept operation."""
         sample = self.samples.get(path, FileSample(0, 0))  # Read the latest stable stat sample.
         accepted = self.accepted_samples.get(path, (-1, -1))  # Use impossible defaults before a hash exists.
         return accepted == (sample.size_bytes, sample.modified_ns)  # True means no content read is needed.
 
     def prune(self, paths: set[Path]) -> None:
+        """Run the prune operation."""
         logging.info("Pruning watcher state for missing Markdown files")  # Log cleanup before mutating state.
         missing = set(self.samples) - paths  # Find files that disappeared since the last scan.
         for path in missing:  # Remove deleted files from in-memory readiness state.
@@ -131,10 +139,12 @@ class PartSetReadiness:
     _number_suffix = re.compile(r"-\d+$")  # Match converter numeric part suffixes.
 
     def __init__(self) -> None:
+        """Initialize the PartSetReadiness instance."""
         self.parser = FrontMatterParser()  # Use the same metadata parser as inventory.
-        self.group_samples: dict[str, tuple[tuple[str, int, int], int]] = {}  # Track whole part-set quiet periods.
+        self.group_samples: dict[str, tuple[tuple[tuple[str, int, int], ...], int]] = {}  # Track quiet periods.
 
     def group_key(self, root: SourceRoot, path: Path, text: str) -> str:
+        """Run the group key operation."""
         logging.info("Resolving watcher part-set key for %s", path)  # Log grouping before parsing metadata.
         fields = self.parser.parse_text(text)  # Read source_file and title from stable content.
         key = self._metadata_key(root, fields) or self._fallback_key(root, path)  # Prefer contract metadata.
@@ -144,6 +154,7 @@ class PartSetReadiness:
     def ready_groups(
         self, changes: list[ReadyChange], samples: dict[Path, FileSample], paths: list[Path]
     ) -> list[ReadyChange]:
+        """Run the ready groups operation."""
         logging.info("Checking quiet period for %s changed Markdown files", len(changes))  # Log group gate start.
         blocked = self._blocked_keys(changes, samples, paths)  # Find groups with a related in-progress part.
         ready = [change for change in changes if change.group_key not in blocked]  # Keep only settled groups.
@@ -199,10 +210,12 @@ class QueueRefresher:
     """Run inventory and raise priority for live changes."""
 
     def __init__(self, config: WatcherConfig) -> None:
+        """Initialize the QueueRefresher instance."""
         self.config = config  # Store configuration for database and inventory paths.
         self.db_path = config.repo_root / "data" / "juniper_skills" / "factory.db"  # Use the locked database path.
 
     def refresh(self, changes: list[ReadyChange]) -> int:
+        """Run the refresh operation."""
         logging.info("Refreshing inventory for %s live Markdown changes", len(changes))  # Log refresh start.
         self._enable_wal()  # Enable readers and the orchestrator to continue during short writes.
         builder = InventoryBuilder(self.config.repo_root, self.config.download_root)  # Reuse inventory priority logic.
@@ -271,6 +284,7 @@ class CorpusWatcher:
     """Monitor source roots and enqueue changed Juniper documents."""
 
     def __init__(self, config: WatcherConfig) -> None:
+        """Initialize the CorpusWatcher instance."""
         self.config = config  # Store caller-controlled runtime settings.
         self.state = PollingFileState()  # Track quiet-period and hash state.
         self.readiness = PartSetReadiness()  # Gate part sets until all parts are quiet.
@@ -279,6 +293,7 @@ class CorpusWatcher:
         self.stop_requested = False  # Allow clean shutdown from the command script.
 
     def run(self, duration_seconds: float | None = None) -> WatcherStats:
+        """Run the run operation."""
         logging.info("Starting Juniper corpus watcher service")  # Log service start before the loop.
         deadline = time.monotonic() + duration_seconds if duration_seconds else None  # Bound proof runs when requested.
         while not self.stop_requested and not self._expired(deadline):  # Run until interrupt or proof duration ends.
@@ -288,11 +303,13 @@ class CorpusWatcher:
         return self.stats
 
     def stop(self) -> None:
+        """Run the stop operation."""
         logging.info("Stopping Juniper corpus watcher service")  # Log clean shutdown request.
         self.stop_requested = True  # Ask the run loop to exit after the current scan.
         logging.debug("Watcher stop flag is set")  # Confirm the stop signal.
 
     def scan_once(self) -> WatcherStats:
+        """Run the scan once operation."""
         logging.info("Running one Juniper corpus watcher scan")  # Log scan start.
         started = time.monotonic()  # Measure full scan cost so polling cannot hide excessive work.
         try:

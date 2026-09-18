@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
-import subprocess
+import shutil
+import subprocess  # nosec B404 - This module starts a fixed GitHub CLI token command without a shell.
 import time
 from typing import Any
 from urllib.parse import quote
@@ -19,6 +20,7 @@ class GitHubRestRunner:
     """Run the tracker GitHub operations through one persistent HTTPS session."""
 
     def __init__(self, timeout_seconds: int = 30) -> None:
+        """Initialize the GitHubRestRunner instance."""
         self.timeout_seconds = timeout_seconds  # Bound each REST call so reconciliation can retry later.
         self.api_call_count = 0  # Count HTTP calls for throughput measurements.
         self.request_counts: dict[str, int] = {}  # Count calls by method and path family for bottleneck reports.
@@ -73,8 +75,11 @@ class GitHubRestRunner:
     def _read_token(self) -> str:
         """Read the GitHub token from `gh` without logging it."""
         logging.info("Reading the GitHub token from the authenticated CLI")  # Record the auth source.
-        completed = subprocess.run(  # Keep `gh` only for the token handoff.
-            ["gh", "auth", "token"],
+        gh_path = shutil.which("gh")  # Resolve the executable path before the token handoff.
+        if gh_path is None:  # Stop when the authenticated GitHub CLI is absent.
+            raise GitHubCliError("GitHub CLI was not found on PATH")  # Give the operator a clear setup error.
+        completed = subprocess.run(  # nosec B603 - The command is a fixed token read without shell expansion.
+            [gh_path, "auth", "token"],
             capture_output=True,
             check=False,
             text=True,

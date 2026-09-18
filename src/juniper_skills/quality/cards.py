@@ -21,6 +21,7 @@ class CardDeduplicator:
     """Merge duplicate knowledge cards before a topic file is written."""
 
     def deduplicate(self, cards: tuple[CardLike, ...]) -> CardDeduplicationReport:
+        """Run the deduplicate operation."""
         logging.info("Deduplicating %s generated knowledge cards", len(cards))  # Log before card merge.
         selected: dict[str, CardLike] = {}  # Store the best card for each normalized fact text.
         for card in cards:  # Inspect every card emitted by the rewrite stage.
@@ -32,6 +33,7 @@ class CardDeduplicator:
         return report  # Return deduplicated cards and the count.
 
     def deduplicate_markdown_text(self, text: str) -> tuple[str, int]:
+        """Run the deduplicate markdown text operation."""
         logging.info("Deduplicating Markdown knowledge-card lines")  # Log before generated text cleanup.
         lines = text.splitlines()  # Preserve the topic file line order.
         selected = self._selected_card_lines(lines)  # Choose the best line for each normalized card.
@@ -43,6 +45,7 @@ class CardDeduplicator:
         return cleaned, merges  # Return cleaned text and merge count.
 
     def deduplicate_markdown_paths(self, paths: tuple[Path, ...], write: bool = False) -> CardDeduplicationReport:
+        """Run the deduplicate markdown paths operation."""
         logging.info("Deduplicating Markdown cards in %s files", len(paths))  # Log before built-store cleanup.
         output: list[object] = []  # Store paths that still exist after scanning.
         merges = 0  # Count duplicate card lines removed across all files.

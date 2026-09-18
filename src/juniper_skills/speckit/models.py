@@ -7,6 +7,7 @@ import logging
 import re
 from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import Any, cast
 
 
 @dataclass(frozen=True)
@@ -103,7 +104,7 @@ class SkillDocument:
     def with_metrics(self, values: dict[str, object]) -> SkillDocument:
         """Return a copy with measured document values."""
         logging.info("Applying measured SpecKit document values")  # Record enrichment before replacing fields.
-        updated = replace(self, **values)  # Keep the source model immutable while adding factory measurements.
+        updated = replace(self, **cast(dict[str, Any], values))  # Keep the source model immutable with checked keys.
         logging.debug("Applied %d measured values to %s", len(values), self.slug)  # Record enrichment count.
         return updated
 

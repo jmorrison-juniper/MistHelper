@@ -5,11 +5,12 @@ from __future__ import annotations  # Keep annotations from evaluating during im
 import logging  # Record validation actions for operators.
 from pathlib import Path  # Handle validation paths safely.
 
-from tools.ste_linter.analysis import GrammarAnalyzer, get_backend  # Reuse the existing grammar backend.
+from tools.ste_linter.analysis import Backend, GrammarAnalyzer, get_backend  # Reuse the existing grammar backend.
 from tools.ste_linter.config import LinterConfig  # Reuse the existing linter configuration.
 from tools.ste_linter.dictionary import Dictionary  # Reuse the existing controlled dictionary loader.
+from tools.ste_linter.models import Score  # Name the linter score for strict type checks.
 from tools.ste_linter.parsing import DocumentBuilder  # Reuse the existing Markdown and Python parser.
-from tools.ste_linter.rules import RuleContext, load_rules  # Reuse the existing STE rule registry.
+from tools.ste_linter.rules import Rule, RuleContext, load_rules  # Reuse the existing STE rule registry.
 from tools.ste_linter.scoring import ScoringModel  # Reuse the existing scoring model.
 
 from .models import SteFileReport, SteValidationReport  # Use rewrite-stage report models.
@@ -55,7 +56,7 @@ class SteValidator:
     def _engine(
         self,
         config: LinterConfig,
-    ) -> tuple[DocumentBuilder, object, GrammarAnalyzer, list[object], ScoringModel]:
+    ) -> tuple[DocumentBuilder, Backend, GrammarAnalyzer, list[Rule], ScoringModel]:
         """Return the existing STE linter dependencies."""
         builder = DocumentBuilder(config)  # Parse Markdown and Python exactly like the CLI.
         backend = get_backend(config.prefer_spacy)  # Use the same grammar backend as the CLI.
@@ -68,7 +69,7 @@ class SteValidator:
         self,
         path: Path,
         config: LinterConfig,
-        engine: tuple[object, ...],
+        engine: tuple[DocumentBuilder, Backend, GrammarAnalyzer, list[Rule], ScoringModel],
         reports: list[SteFileReport],
         errors: list[str],
     ) -> None:
@@ -83,7 +84,12 @@ class SteValidator:
         violation_count = len(score.violations)  # Count violations once for the report and log.
         logging.debug("STE score for %s is %d with %d violations", path, score.score, violation_count)  # Log score.
 
-    def _score_text(self, path: Path, config: LinterConfig, engine: tuple[object, ...]):
+    def _score_text(
+        self,
+        path: Path,
+        config: LinterConfig,
+        engine: tuple[DocumentBuilder, Backend, GrammarAnalyzer, list[Rule], ScoringModel],
+    ) -> Score:
         """Return the existing linter score for one file."""
         builder, backend, grammar, rules, scorer = engine  # Unpack shared linter dependencies.
         text = path.read_text(encoding="utf-8", errors="replace")  # Read text the same way as the CLI.

@@ -33,6 +33,7 @@ class InstalledPackageScanner:
     LIFE_CYCLES = ("day0", "day1", "day2", "day2plus")
 
     def __init__(self, skills_root: Path) -> None:
+        """Initialize the InstalledPackageScanner instance."""
         self.skills_root = skills_root  # Store the installed skills root from the path policy.
 
     def scan(self, domain: str, source_path: Path, source_file: str, title: str) -> PackageMetrics:
