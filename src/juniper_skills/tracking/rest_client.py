@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
+import time
 from typing import Any
 from urllib.parse import quote
 
@@ -20,6 +21,8 @@ class GitHubRestRunner:
     def __init__(self, timeout_seconds: int = 30) -> None:
         self.timeout_seconds = timeout_seconds  # Bound each REST call so reconciliation can retry later.
         self.api_call_count = 0  # Count HTTP calls for throughput measurements.
+        self.request_counts: dict[str, int] = {}  # Count calls by method and path family for bottleneck reports.
+        self.latencies: list[float] = []  # Store per-call latency so proof runs can report a measured average.
         self.session = self._session()  # Reuse TLS and auth state across thousands of writes.
 
     def run(self, command: list[str]) -> GitHubCommandResult:
@@ -94,10 +97,18 @@ class GitHubRestRunner:
         """Send one REST request and return a command-compatible result."""
         url = f"https://api.github.com/{path.lstrip('/')}"  # Build the API URL without logging credentials.
         self.api_call_count += 1  # Count the real HTTP call for throughput reporting.
+        started = time.perf_counter()  # Measure REST latency instead of subprocess startup time.
         response = self.session.request(method, url, json=payload, timeout=self.timeout_seconds)  # Send the request.
+        self.latencies.append(time.perf_counter() - started)  # Store the measured HTTP latency.
+        self._count_request(method, path)  # Record the endpoint family for call-count reports.
         if response.status_code >= 400:  # Convert failed HTTP responses to the existing typed error.
             raise GitHubCliError(response.text.strip() or response.reason)
         return GitHubCommandResult(response.status_code, response.text, "")  # Return text for existing parsers.
+
+    def _count_request(self, method: str, path: str) -> None:
+        """Count one request by method and endpoint family."""
+        key = f"{method} {path.split('?', 1)[0]}"  # Remove query text so search calls group together.
+        self.request_counts[key] = self.request_counts.get(key, 0) + 1  # Increment the measured call family.
 
     def _issue_list(self, command: list[str]) -> GitHubCommandResult:
         """Search issues and return number and title fields."""
