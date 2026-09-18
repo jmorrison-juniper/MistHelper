@@ -83,6 +83,17 @@ class DuplicateDecision:
 
 
 @dataclass(frozen=True)
+class EditionFamily:
+    """A set of similar source names that can be editions, not split parts."""
+
+    family_key: str
+    document_count: int
+    title_count: int
+    page_values: list[int]
+    source_files: list[str]
+
+
+@dataclass(frozen=True)
 class InventoryResult:
     """The measured inventory result."""
 
@@ -95,3 +106,4 @@ class InventoryResult:
     top_documents: list[DocumentGroup]
     part_set_details: list[DocumentGroup]
     duplicate_details: list[DuplicateDecision]
+    edition_families: list[EditionFamily]

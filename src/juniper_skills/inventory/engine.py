@@ -17,6 +17,7 @@ from src.juniper_skills.inventory.metadata import (
 from src.juniper_skills.inventory.models import (
     DocumentGroup,
     DuplicateDecision,
+    EditionFamily,
     InventoryResult,
     MarkdownPart,
     SourceRoot,
@@ -147,9 +148,7 @@ class PartSetGrouper:
         self, buckets: dict[str, list[MarkdownPart]], methods: dict[str, str]
     ) -> list[DocumentGroup]:
         groups = [self._make_group(key, value, methods[key]) for key, value in buckets.items()]  # Build exact groups.
-        split_keys = {
-            self._split_merge_key(group) for group in groups if self._is_split_candidate(group)
-        }  # Find splits.
+        split_keys = self._split_keys(groups)  # Find merge keys with measured split evidence.
         merged: dict[str, list[MarkdownPart]] = defaultdict(list)  # Store merged split part lists.
         group_methods: dict[str, str] = {}  # Preserve grouping evidence for merged groups.
         for group in groups:  # Merge only groups with measured split evidence.
@@ -158,12 +157,24 @@ class PartSetGrouper:
             group_methods[key] = "title" if key in split_keys else group.group_method  # State split merge evidence.
         return [self._make_group(key, value, group_methods[key]) for key, value in merged.items()]
 
+    def _split_keys(self, groups: list[DocumentGroup]) -> set[str]:
+        counts: dict[str, int] = defaultdict(int)  # Count exact groups that share a split merge key.
+        candidates: set[str] = set()  # Track keys that have explicit split evidence.
+        for group in groups:  # Inspect all exact groups before a possible merge.
+            key = self._split_merge_key(group)  # Build the same merge key for candidates and base files.
+            counts[key] += 1  # Count all exact groups so a base file can join a numbered part.
+            if self._is_split_candidate(group):  # Use only explicit split evidence to form merge sets.
+                candidates.add(key)  # Mark the key eligible only when a measured split signal exists.
+        return {key for key in candidates if counts[key] > 1}  # Merge only when more than one group participates.
+
     def _split_merge_key(self, group: DocumentGroup) -> str:
         first = group.parts[0]  # Use the first part because exact groups already share source evidence.
         title = TextKey.normalize(group.title)  # Title is the contract's second split signal.
         source = first.front_matter.get("source_file") or first.relative_path  # Use source name when available.
-        stem = self._similar_stem(Path(source))  # Remove split suffixes for merge comparison.
-        return f"{group.root.name}:split:{title}:{stem}"  # Keep split merges inside one source root.
+        stem = self._number_stem(Path(source))  # Remove only numeric part suffixes across source_file groups.
+        return (
+            f"{group.root.name}:split:{title}:{group.pages}:{stem}"  # Keep split merges inside one root and page count.
+        )
 
     def _is_split_candidate(self, group: DocumentGroup) -> bool:
         return any(self._part_has_split_signal(part) for part in group.parts)  # Merge only measured split candidates.
@@ -226,6 +237,10 @@ class PartSetGrouper:
         stem = self._number_suffix.sub("", stem)  # Remove numeric suffixes such as "-2".
         return "part-set" if self._part_name.match(path.stem) else TextKey.normalize(stem)  # Normalize the final key.
 
+    def _number_stem(self, path: Path) -> str:
+        stem = self._number_suffix.sub("", path.stem)  # Remove only numeric suffixes from exact source_file groups.
+        return TextKey.normalize(stem)  # Keep hash suffixes so editions do not merge as parts.
+
     def _has_split_suffix(self, value: str) -> bool:
         stem = Path(value).stem  # Inspect only the source file name.
         return bool(self._hash_suffix.search(stem) or self._number_suffix.search(stem))  # Detect a split-like suffix.
@@ -275,6 +290,38 @@ class DuplicateResolver:
         for loser in losers:  # Preserve every duplicate loser for the report and database.
             loser.duplicate_of = canonical_key  # Link the loser to the selected document.
             loser.is_winner = False  # Mark the conversion as inactive.
+
+
+class EditionFamilyAnalyzer:
+    """Find same-stem hash families that can be different editions."""
+
+    _hash_suffix = re.compile(r"-[0-9a-f]{8,16}$", re.IGNORECASE)  # Detect source names with converter hashes.
+
+    def find(self, groups: list[DocumentGroup]) -> list[EditionFamily]:
+        logging.info("Analyzing source file edition families")  # Log the edition check before grouping.
+        buckets: dict[str, list[DocumentGroup]] = defaultdict(list)  # Store same-stem hash families.
+        for group in groups:  # Inspect each winning logical document.
+            key = self._family_key(group)  # Build a same-stem key only for hashed source names.
+            if key:  # Ignore unhashable source names because they are not the user-reported pattern.
+                buckets[key].append(group)  # Add this document to a possible edition family.
+        families = [self._make_family(key, value) for key, value in buckets.items() if len(value) > 1]  # Keep repeats.
+        logging.debug("Found %s source file edition families", len(families))  # Report family count.
+        return sorted(families, key=lambda item: item.document_count, reverse=True)  # Show the largest families first.
+
+    def _family_key(self, group: DocumentGroup) -> str:
+        source_path = Path(group.source_pdf)  # Parse the source file with pathlib for safe path handling.
+        stem = source_path.stem  # Compare the file stem, not the extension.
+        base = self._hash_suffix.sub("", stem)  # Remove a trailing hash to find same-name families.
+        if base == stem:  # Return no key when no hash suffix exists.
+            return ""
+        parent = source_path.parent.as_posix()  # Keep the source category in the family key.
+        return TextKey.normalize(f"{parent}/{base}")  # Normalize the family key for stable reports.
+
+    def _make_family(self, key: str, groups: list[DocumentGroup]) -> EditionFamily:
+        titles = {TextKey.normalize(group.title) for group in groups}  # Count distinct titles in the family.
+        pages = sorted({group.pages for group in groups})  # Compare page counts to identify likely editions.
+        sources = sorted({group.source_pdf for group in groups})  # Preserve the source files that formed the family.
+        return EditionFamily(key, len(groups), len(titles), pages, sources)  # Return measured family evidence.
 
 
 class PriorityScorer:
@@ -495,8 +542,10 @@ class InventoryReport:
 
     def _lines(self, result: InventoryResult) -> list[str]:
         lines = self._summary_lines(result)  # Start with measured top-level counts.
+        lines.extend(self._confirmed_structure_lines())  # Add the user supplied full-corpus structure facts.
         lines.extend(self._priority_rule_lines())  # State the rule that builds queue priority.
         lines.extend(self._part_set_lines(result))  # Add measured split part set evidence.
+        lines.extend(self._edition_family_lines(result))  # Add same-stem edition evidence for hash families.
         lines.extend(self._duplicate_lines(result))  # Add measured duplicate resolution evidence.
         lines.extend(self._category_lines(result))  # Add category totals for planning.
         lines.extend(self._top_document_lines(result))  # Add the top 50 priority records.
@@ -517,6 +566,21 @@ class InventoryReport:
             f"| Duplicate conversions removed | {result.duplicate_losers} |",
         ]
 
+    def _confirmed_structure_lines(self) -> list[str]:
+        return [
+            "",
+            "## Confirmed full-corpus structure facts",
+            "",
+            "| Measure | Value |",
+            "| - | -: |",
+            "| Total Markdown files | 9931 |",
+            "| Files with `part` front matter | 169 |",
+            "| Files with fenced code | 8 |",
+            "| Distinct `source_file` values | 5787 |",
+            "| `source_file` values used more than once | 4009 |",
+            "| Files inside repeated `source_file` sets | 8151 |",
+        ]  # Record the full scan facts supplied for issue 2925.
+
     def _priority_rule_lines(self) -> list[str]:
         return [
             "",
@@ -532,6 +596,22 @@ class InventoryReport:
         for group in result.part_set_details:  # Report every measured set and its part count.
             safe_title = group.title.replace("|", "\\|")  # Escape source titles for Markdown tables.
             lines.append(f"| {safe_title} | {group.root.name} | {group.part_count} | {group.group_method} |")
+        return lines
+
+    def _edition_family_lines(self, result: InventoryResult) -> list[str]:
+        lines = [
+            "",
+            "## Same-stem hash families",
+            "",
+            "| Family | Documents | Titles | Page counts | Source files |",
+            "| - | -: | -: | - | - |",
+        ]  # Create the edition evidence table header.
+        for family in result.edition_families[:50]:  # Report largest likely edition families for review.
+            pages = ", ".join(str(value) for value in family.page_values)  # Show page evidence for edition decisions.
+            sources = "<br>".join(family.source_files[:8])  # Show the source_file values that formed the family.
+            lines.append(
+                f"| {family.family_key} | {family.document_count} | {family.title_count} | {pages} | {sources} |"
+            )
         return lines
 
     def _duplicate_lines(self, result: InventoryResult) -> list[str]:
@@ -622,6 +702,7 @@ class InventoryBuilder:
         duplicate_details = [
             decision for decision in decisions if decision.losers
         ]  # Keep duplicate details for the report.
+        edition_families = EditionFamilyAnalyzer().find(winners)  # Measure same-stem hash families after dedupe.
         return InventoryResult(
             len(self.roots),
             len(parts),
@@ -632,6 +713,7 @@ class InventoryBuilder:
             top_documents,
             part_set_details,
             duplicate_details,
+            edition_families,
         )
 
     def _category_totals(self, groups: list[DocumentGroup]) -> dict[str, int]:

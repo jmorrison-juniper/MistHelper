@@ -38,6 +38,19 @@ class TestPartSetGrouper:
         assert len(groups) == 1  # Similar split stems must join when metadata is absent.
         assert groups[0].group_method == "filename"  # The group must record filename evidence.
 
+    def test_keeps_same_source_file_separate_across_roots(self, tmp_path: Path) -> None:
+        first_root = SourceRoot("first", tmp_path / "first", 1)  # Create one conversion root.
+        second_root = SourceRoot("second", tmp_path / "second", 2)  # Create a separate conversion root.
+        first = self._part(
+            first_root, first_root.path / "cli.md", "CLI", "cli-reference/cli-reference.pdf"
+        )  # Build root one.
+        second = self._part(
+            second_root, second_root.path / "cli.md", "CLI", "cli-reference/cli-reference.pdf"
+        )  # Build root two.
+        groups = PartSetGrouper().group([first, second])  # Group parts before duplicate resolution.
+        assert len(groups) == 2  # Cross-root copies are duplicates, not parts of one document.
+        assert {group.root.name for group in groups} == {"first", "second"}  # Each root must stay separate.
+
     def _part(self, root: SourceRoot, path: Path, title: str, source_file: str) -> MarkdownPart:
         path.parent.mkdir(parents=True, exist_ok=True)  # Create the parent folder used by the part path.
         path.write_text("body", encoding="utf-8")  # Write a small body so the path exists for relative logic.
