@@ -1,0 +1,107 @@
+{
+  "workflow": "speckit",
+  "specName": "Day One: Beginner's Guide to Learning Junos skill package",
+  "branch": "feat/2925-juniper-skill-factory",
+  "currentStep": "implement",
+  "status": "completed",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "start",
+      "by": "harness",
+      "at": "2026-09-18T04:12:17.281Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-09-18T04:12:20.633Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-09-18T04:12:24.606Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T001",
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-09-18T04:12:28.688Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T002",
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-09-18T04:12:28.688Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T003",
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-09-18T04:12:28.688Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T004",
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-09-18T04:12:28.688Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T005",
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-09-18T04:12:28.688Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T006",
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-09-18T04:12:28.688Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-09-18T04:12:28.688Z"
+    }
+  ],
+  "currentTask": "T006",
+  "livingSpecs": {
+    "loaded": [
+      "junos-beginners-guide"
+    ]
+  },
+  "sourcePath": "C:\\Users\\jmorrison\\Downloads\\juniper-harvest-md\\guides\\junos-beginners-guide.md",
+  "sourceFile": "guides/junos-beginners-guide.pdf",
+  "sourceHash": "cda62188c9779df067ba8a8bcc6201d8f37481dba227e8ebe166944ce02e4dc1",
+  "sourcePages": 356,
+  "decisions": [
+    {
+      "decision": "Use programmatic SpecKit generation",
+      "why": "Manual runs do not scale."
+    }
+  ],
+  "verified": [
+    {
+      "what": "Generated artifact set validates",
+      "result": "No critical findings"
+    }
+  ]
+}

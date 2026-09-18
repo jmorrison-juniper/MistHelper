@@ -1,0 +1,61 @@
+{
+  "workflow": "speckit",
+  "specName": "Day One: Beginner's Guide to Learning Junos skill package",
+  "branch": "feat/2925-juniper-skill-factory",
+  "status": "completed",
+  "currentStep": "implement",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-09-18T07:22:33.502Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-09-18T07:22:34.210Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-09-18T07:22:34.915Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-09-18T07:22:35.596Z"
+    }
+  ],
+  "sourcePath": "C:\\Users\\jmorrison\\Downloads\\juniper-harvest-md\\guides\\junos-beginners-guide.md",
+  "sourceFile": "guides/junos-beginners-guide.pdf",
+  "sourceHash": "cda62188c9779df067ba8a8bcc6201d8f37481dba227e8ebe166944ce02e4dc1",
+  "sourcePages": 356,
+  "partCount": 1,
+  "topicCount": 47,
+  "guardResult": "not measured",
+  "livingSpecs": {
+    "loaded": [
+      "guides-junos-beginners-guide-pdf"
+    ]
+  },
+  "decisions": [
+    {
+      "decision": "Use programmatic SpecKit generation",
+      "why": "Manual runs do not scale."
+    }
+  ],
+  "verified": [
+    {
+      "what": "Generated artifact set validates",
+      "result": "No critical findings"
+    }
+  ]
+}
