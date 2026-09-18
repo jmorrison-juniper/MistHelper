@@ -135,6 +135,55 @@ class FactoryJournalStore:
             )
         logging.debug("Marked stage event %d as synced", event_id)  # Record the updated row.
 
+    def mark_stage_events_synced(self, event_ids: tuple[int, ...]) -> None:
+        """Mark several queued stage events as sent to GitHub."""
+        logging.info("Marking stage events as synced")  # Record the local update action.
+        if not event_ids:  # Avoid invalid SQL when no event reached GitHub.
+            logging.debug("No stage events needed a synced update")  # Record the no-op result.
+            return
+        with self._connect() as connection:  # Keep the batch update in one transaction.
+            connection.executemany(  # Mark each row only after GitHub accepts the consolidated comment.
+                "UPDATE skill_stage_events SET github_synced = 1 WHERE id = ?",
+                [(event_id,) for event_id in event_ids],
+            )
+        logging.debug("Marked %d stage events as synced", len(event_ids))  # Record the updated row count.
+
+    def stage_events_for_document(self, document_key: str) -> list[dict[str, Any]]:
+        """Return all stage events for one document."""
+        logging.info("Reading stage events for one document")  # Record the recovery and consolidation read.
+        with self._connect() as connection:  # Use one read transaction for consistent stage order.
+            rows = connection.execute(  # Read all fields needed to rebuild stage events and queue IDs.
+                """
+                SELECT id, document_key, stage, next_action, issue_number, created_at,
+                       details_json, comment_body, github_synced
+                FROM skill_stage_events
+                WHERE document_key = ?
+                ORDER BY id ASC
+                """,
+                (document_key,),
+            ).fetchall()
+        events = [self._stage_row(row) for row in rows]  # Decode JSON details for callers.
+        logging.debug("Read %d stage events for document key %s", len(events), document_key)  # Record count.
+        return events
+
+    def unsynced_document_keys(self, limit: int) -> list[str]:
+        """Return document keys with queued stage events."""
+        logging.info("Reading document keys with unsynced stage events")  # Record the queue read.
+        with self._connect() as connection:  # Read one bounded list for the reconciler.
+            rows = connection.execute(  # Group by document so GitHub can receive consolidated comments.
+                """
+                SELECT DISTINCT e.document_key
+                FROM skill_stage_events e
+                JOIN skill_documents d ON d.document_key = e.document_key
+                WHERE e.github_synced = 0 AND d.issue_number IS NOT NULL
+                ORDER BY e.id ASC LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        keys = [str(row["document_key"]) for row in rows]  # Convert rows into plain keys.
+        logging.debug("Read %d unsynced document keys", len(keys))  # Record queue size.
+        return keys
+
     def update_document_stage(self, document_key: str, stage: str, status: str) -> None:
         """Store the current stage and status for the generated index."""
         logging.info("Updating the document stage in the local mirror")  # Record the state update.
@@ -161,6 +210,15 @@ class FactoryJournalStore:
         documents = [dict(row) for row in rows]  # Convert rows for renderer tests and callers.
         logging.debug("Read %d documents for the index", len(documents))  # Record the row count.
         return documents
+
+    def document_row(self, document_key: str) -> dict[str, Any] | None:
+        """Return one local document row by key."""
+        logging.info("Reading one document row from the local mirror")  # Record the lookup.
+        with self._connect() as connection:  # Use a short read transaction.
+            row = connection.execute("SELECT * FROM skill_documents WHERE document_key = ?", (document_key,)).fetchone()
+        document = None if row is None else dict(row)  # Return None when the row is absent.
+        logging.debug("Document row lookup for %s returned %s", document_key, document is not None)  # Record result.
+        return document
 
     def local_comment_bodies(self, document_key: str) -> list[str]:
         """Return stored comment bodies for one document."""
@@ -222,6 +280,12 @@ class FactoryJournalStore:
             json.dumps(event.details, sort_keys=True),
             comment_body,
         )
+
+    def _stage_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        """Return one stage event row with decoded details."""
+        event = dict(row)  # Convert the SQLite row to a mutable dictionary for decoding.
+        event["details"] = json.loads(str(event["details_json"]))  # Decode measured fields for summary comments.
+        return event  # Return the enriched queue row.
 
     def _documents_schema(self) -> str:
         """Return the document table schema."""
