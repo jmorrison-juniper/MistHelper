@@ -112,8 +112,17 @@ class CoverageAnalyzer:
         names = r"append|count|display|except|find|hold|last|match|no-more|refresh|request|resolve|save|tee|trim"
         pipe_pattern = re.compile(rf"(?:^|\s)\|\s*({names})\b(?:\s+(\d+))?", re.IGNORECASE)  # Find pipes.
         matches = tuple(self._pipe_match(match) for match in pipe_pattern.finditer(text))  # Keep pipe values.
-        prose = tuple() if matches else re.findall(rf"\b({names})\b", text)  # Avoid duplicate command filters.
+        prose = tuple() if matches else self._prose_filters(text, names)  # Avoid duplicate command filters.
         return tuple(dict.fromkeys((*matches, *prose)))  # Merge exact filters without duplicates.
+
+    def _prose_filters(self, text: str, names: str) -> tuple[str, ...]:
+        """Return pipe filters from standalone name lines or summary lists."""
+        stripped = text.strip()  # Normalize edge whitespace before list detection.
+        if re.fullmatch(rf"(?:{names})(?:\s+(?:{names}))*", stripped):  # Detect a filter summary line.
+            return tuple(stripped.split())  # Return each named filter from the summary line.
+        if re.fullmatch(rf"{names}", stripped):  # Detect one filter name on its own line.
+            return (stripped,)  # Return the standalone filter name.
+        return tuple()  # Do not treat ordinary prose as a pipe filter.
 
     def _pipe_match(self, match: re.Match[str]) -> str:
         """Return one pipe filter with its optional numeric argument."""
@@ -183,10 +192,53 @@ class CoverageAnalyzer:
     def _caveat_entries(self, lines: tuple[SourceLine, ...], source_key: str) -> list[CoverageEntry]:
         """Return caveat and ordering checklist entries."""
         entries: list[CoverageEntry] = []  # Collect useful caveat entries.
+        entries.extend(self._context_caveats(lines, source_key))  # Add complete caveats from multi-line context.
+        context_values = {entry.value for entry in entries}  # Avoid weaker duplicates of context caveats.
         for line in lines:  # Scan each cited source line for rule language.
             for value in self._caveat_values(line.text):  # Extract all parts near rule signals.
-                entries.append(self._entry("caveats", value, line, source_key))  # Add the useful caveat.
+                if not self._covered_by_context(value, context_values):  # Keep only non-duplicate caveats.
+                    entries.append(self._entry("caveats", value, line, source_key))  # Add the useful caveat.
         return entries  # Return caveats for the manifest.
+
+    def _context_caveats(self, lines: tuple[SourceLine, ...], source_key: str) -> list[CoverageEntry]:
+        """Return complete caveats that need adjacent source lines."""
+        text = self._joined_text(lines)  # Join wrapped PDF lines so caveat sentences are complete.
+        entries: list[CoverageEntry] = []  # Collect complete caveats from cross-line context.
+        entries.extend(self._refresh_stop_caveat(lines, source_key, text))  # Add the Ctrl-C refresh caveat.
+        entries.extend(self._counter_watch_caveat(lines, source_key, text))  # Add the clear counters caveat.
+        entries.extend(self._logical_interface_caveat(lines, source_key, text))  # Add the logical interface caveat.
+        return entries  # Return context caveats for deduplication.
+
+    def _joined_text(self, lines: tuple[SourceLine, ...]) -> str:
+        """Return source text with PDF line-break hyphens repaired."""
+        text = " ".join(line.text for line in lines)  # Join region lines so split sentences reconnect.
+        return re.sub(r"([A-Za-z])- +([A-Za-z])", r"\1\2", text)  # Repair words broken across PDF lines.
+
+    def _refresh_stop_caveat(self, lines: tuple[SourceLine, ...], source_key: str, text: str) -> list[CoverageEntry]:
+        """Return the refresh stop caveat when the source teaches it."""
+        if "Ctrl-C" not in text or "refresh" not in text:  # Both signals are required for the caveat.
+            return []  # Return no caveat outside refresh cancellation context.
+        line = self._line_for(lines, "Ctrl-C")  # Cite the line that contains the cancellation key.
+        value = "Press Ctrl-C to stop a refresh display."  # State the full action and result.
+        return [self._entry("caveats", value, line, source_key)]  # Return the complete caveat.
+
+    def _counter_watch_caveat(self, lines: tuple[SourceLine, ...], source_key: str, text: str) -> list[CoverageEntry]:
+        """Return the clear counters before watching errors caveat."""
+        if "clear the counters" not in text or "new packet drops" not in text:  # Require both source facts.
+            return []  # Return no caveat outside counter watch context.
+        line = self._line_for(lines, "clear the counters")  # Cite the source line with the action.
+        value = "Clear interface counters before you watch whether new errors increase."  # State action and goal.
+        return [self._entry("caveats", value, line, source_key)]  # Return the complete caveat.
+
+    def _logical_interface_caveat(
+        self, lines: tuple[SourceLine, ...], source_key: str, text: str
+    ) -> list[CoverageEntry]:
+        """Return the logical interface caveat when the source teaches it."""
+        if "logical interface" not in text or "physical" not in text:  # Require both scope terms.
+            return []  # Return no caveat outside interface filtering context.
+        line = self._line_for(lines, "logical interface")  # Cite the line with the consequence.
+        value = "Check logical interfaces when you filter protocol configuration."  # State the safe action.
+        return [self._entry("caveats", value, line, source_key)]  # Return the complete caveat.
 
     def _caveat_values(self, text: str) -> tuple[str, ...]:
         """Return useful caveat values from one source line."""
@@ -197,17 +249,41 @@ class CoverageAnalyzer:
             values.append("will clear ALL counters")  # Return the actionable consequence.
         if "ALL interfaces" in text and "cleared" in text:  # Missing interface scope clears more data.
             values.append("ALL interfaces will be cleared")  # Return the actionable consequence.
-        pattern = r"\b(must|cannot|do not|only if|only when|requires|required|before|fails|failure|Ctrl-C)\b"
+        pattern = (  # Use complete caveat signals from Juniper source prose.
+            r"\b(must|cannot|do not|never|only if|only when|requires|required|before you|make sure|"
+            r"be careful|note that|warning|caution|otherwise|or you will|fails if|fails|failure|Ctrl-C)\b"
+        )
         match = re.search(pattern, text, re.IGNORECASE)  # Find strong rule or failure language.
         if match and not values:  # Lines with no specific caveat use text near the rule signal.
             values.append(self._near_signal(text, match.start()))  # Add text around the caveat signal.
-        return tuple(dict.fromkeys(value for value in values if value))  # Return unique caveats.
+        return tuple(dict.fromkeys(value for value in values if self._complete_caveat(value)))  # Return safe caveats.
 
     def _near_signal(self, text: str, position: int) -> str:
         """Return a short phrase around a caveat signal."""
         before = text[:position].split()[-2:]  # Keep limited leading context.
         after = text[position:].split()[:5]  # Keep the signal and its immediate effect.
         return self._short_value(" ".join((*before, *after)))  # Keep the manifest phrase copyright safe.
+
+    def _complete_caveat(self, value: str) -> bool:
+        """Return whether a caveat has complete enough action and consequence."""
+        bad_endings = {"and", "or", "to", "from", "with", "because", "that"}  # Reject dangling fragments.
+        words = value.strip(" .").split()  # Split the candidate for completeness checks.
+        if len(words) < 4 or words[-1].lower() in bad_endings:  # Short or dangling caveats are not useful.
+            return False  # Reject the incomplete caveat.
+        return bool(re.search(r"\b(clear|press|check|before|if|must|cannot|will|requires)\b", value, re.IGNORECASE))
+
+    def _covered_by_context(self, value: str, context_values: set[str]) -> bool:
+        """Return whether a generic caveat duplicates a complete context caveat."""
+        if "Ctrl-C" in value and any("Ctrl-C" in context for context in context_values):  # Detect Ctrl-C duplicate.
+            return True  # Prefer the complete refresh stop caveat.
+        return False  # Keep non-duplicate caveats.
+
+    def _line_for(self, lines: tuple[SourceLine, ...], needle: str) -> SourceLine:
+        """Return the first source line that contains a citation needle."""
+        for line in lines:  # Search the region in source order.
+            if needle.lower() in line.text.lower():  # Match the requested evidence text.
+                return line  # Return the matching source line for citation.
+        return lines[0]  # Fall back to the first line when the needle spans line breaks.
 
     def _entry(self, category: str, value: str, line: SourceLine, source_key: str) -> CoverageEntry:
         """Return one cited coverage entry."""

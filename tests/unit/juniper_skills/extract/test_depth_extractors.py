@@ -217,6 +217,36 @@ class TestCoverageAnalyzer:
         manifest = CoverageAnalyzer().analyze_text(source, "TEST")  # Build manifest entries.
         assert "refresh interval 2 seconds" in manifest.values("numeric limits")  # Prove full numeric fact.
 
+    def test_manifest_caveats_are_complete_sentences(self) -> None:
+        """The analyzer turns caveat context into complete sentences."""
+        source = "\n".join(  # Build the wrapped caveats that exposed the fragment defect.
+            (
+                "<!-- page 68 -->",
+                "show interfaces extensive | match ge-0|error|flap | refresh 2",
+                "Ctrl-C to cancel it. Or until your power gets cut off.",
+                "Remember, the protocol is configured on the logical interface, not the physical interface.",
+            )
+        )
+        manifest = CoverageAnalyzer().analyze_text(source, "TEST")  # Build the manifest.
+        caveats = set(manifest.values("caveats"))  # Collect caveats for direct assertions.
+        assert "Press Ctrl-C to stop a refresh display." in caveats  # Prove the refresh caveat is complete.
+        assert "Check logical interfaces when you filter protocol configuration." in caveats  # Prove caveat.
+        assert all(not value.endswith((" Or", " and", " to")) for value in caveats)  # Prove no dangling text.
+
+    def test_manifest_captures_clear_counter_caveat(self) -> None:
+        """The analyzer keeps the clear-counters caveat complete."""
+        source = "\n".join(  # Build source text from the counter troubleshooting section.
+            (
+                "<!-- page 177 -->",
+                "use the refresh option to see if the drops are incrementing,",
+                "or we can clear the counters and see if new packet drops are being recorded.",
+            )
+        )
+        manifest = CoverageAnalyzer().analyze_text(source, "TEST")  # Build the manifest.
+        assert "Clear interface counters before you watch whether new errors increase." in manifest.values(
+            "caveats"
+        )  # Prove complete caveat.
+
     def test_manifest_verifier_reports_missing_entries(self) -> None:
         """The verifier reports the share of checklist entries covered."""
         source = "<!-- page 1 -->\nshow interfaces terse\nshow route terse"  # Build two command facts.
