@@ -7,6 +7,7 @@ and T033 ask for these two properties.
 
 from __future__ import annotations
 
+import json  # JSONDecodeError names the expected malformed ledger failure.
 from pathlib import Path  # Path keeps the temporary ledger name free of a separator.
 
 from hypothesis import HealthCheck, given, settings  # The property engine.
@@ -69,3 +70,27 @@ def test_the_claim_order_never_changes_a_column(order: list[int], tmp_path: Path
     shuffled = {entry.key: entry.column for entry in second.entries()}  # Record the answer.
     assert len(set(shuffled.values())) == len(shuffled)  # No two fields may share a column.
     assert sorted(shuffled.values()) == sorted(baseline.values())  # The same column set comes out.
+
+
+def test_oid_ledger_empty_body_reports_json_parse_error(tmp_path: Path) -> None:
+    """A zero-byte ledger file must report a JSON parse error."""
+    path = tmp_path / "ledger.json"  # Keep the damaged ledger isolated to this test.
+    path.write_text(b"".decode(), encoding="utf-8")  # Model an empty ledger body.
+    try:
+        OidLedger(path).load()  # Drive the product ledger parser.
+    except json.JSONDecodeError as error:
+        assert error.msg == "Expecting value"  # The parser must name the empty JSON body.
+    else:
+        raise AssertionError("OidLedger.load must reject an empty JSON body.")  # Guard false success.
+
+
+def test_oid_ledger_malformed_body_reports_json_parse_error(tmp_path: Path) -> None:
+    """A malformed ledger file must report a JSON parse error."""
+    path = tmp_path / "ledger.json"  # Keep the damaged ledger isolated to this test.
+    path.write_text("{not valid JSONDecodeError", encoding="utf-8")  # Model a damaged ledger body.
+    try:
+        OidLedger(path).load()  # Drive the product ledger parser.
+    except json.JSONDecodeError as error:
+        assert error.msg == "Expecting property name enclosed in double quotes"  # The parser must name damage.
+    else:
+        raise AssertionError("OidLedger.load must reject a malformed JSON body.")  # Guard false success.

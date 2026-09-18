@@ -98,6 +98,28 @@ class TestOpenApiDocument:
         with pytest.raises(ValueError, match="line"):
             OpenApiDocument(path).load()
 
+    def test_it_names_an_empty_body_as_invalid_json(self, tmp_path: Path) -> None:
+        """Prove an empty OpenAPI file names the JSON parse failure."""
+        path = tmp_path / "empty.json"  # Keep the damaged document isolated to this test.
+        path.write_text(b"".decode(), encoding="utf-8")  # Model a zero-byte OpenAPI body.
+        try:
+            OpenApiDocument(path).load()  # Drive the product OpenAPI parser.
+        except ValueError as error:
+            assert "holds no valid JSON" in str(error)  # The message must name the document defect.
+        else:
+            raise AssertionError("OpenApiDocument.load must reject an empty JSON body.")  # Guard false success.
+
+    def test_it_names_a_malformed_body_as_invalid_json(self, tmp_path: Path) -> None:
+        """Prove a malformed OpenAPI file names the JSON parse failure."""
+        path = tmp_path / "broken.json"  # Keep the damaged document isolated to this test.
+        path.write_text("{not valid JSONDecodeError", encoding="utf-8")  # Model a damaged OpenAPI body.
+        try:
+            OpenApiDocument(path).load()  # Drive the product OpenAPI parser.
+        except ValueError as error:
+            assert "holds no valid JSON" in str(error)  # The message must name the document defect.
+        else:
+            raise AssertionError("OpenApiDocument.load must reject a malformed JSON body.")  # Guard false success.
+
     def test_it_unwraps_a_list_response(self, mini: OpenApiDocument) -> None:
         """Prove a list endpoint gives the schema of one row, not of the array."""
         schema = mini.response_schema("listOrgDevicesStats")  # The device endpoint returns an array.
