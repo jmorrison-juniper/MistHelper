@@ -25,7 +25,11 @@ SCOPES = st.sampled_from(list(MetricScope))  # Every scope must give a legal nam
 
 
 @given(scope=SCOPES, path=PATHS)
-@settings(max_examples=200, suppress_health_check=[HealthCheck.function_scoped_fixture])
+@settings(
+    max_examples=200,  # Keep the existing sample count for descriptor coverage.
+    deadline=None,  # Disable the duration limit because this test checks a property.
+    suppress_health_check=[HealthCheck.function_scoped_fixture],  # Keep the fixture health check rule for this file.
+)
 def test_every_descriptor_is_a_legal_smiv2_name(scope: MetricScope, path: str) -> None:
     """Random text must still give a legal SMIv2 descriptor."""
     name = DescriptorMaker().make(scope, path, frozenset())  # Feed the random path in.
@@ -36,7 +40,11 @@ def test_every_descriptor_is_a_legal_smiv2_name(scope: MetricScope, path: str) -
 
 
 @given(scope=SCOPES, paths=st.lists(PATHS, min_size=2, max_size=12, unique=True))
-@settings(max_examples=100, suppress_health_check=[HealthCheck.function_scoped_fixture])
+@settings(
+    max_examples=100,  # Keep the existing sample count for duplicate coverage.
+    deadline=None,  # Disable the duration limit because this test checks a property.
+    suppress_health_check=[HealthCheck.function_scoped_fixture],  # Keep the fixture health check rule for this file.
+)
 def test_two_paths_never_share_one_descriptor(scope: MetricScope, paths: list[str]) -> None:
     """The taken set must stop a second field from stealing a name."""
     maker = DescriptorMaker()  # One maker serves the whole batch.

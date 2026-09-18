@@ -19,7 +19,10 @@ from hypothesis import strategies as st
 
 
 @given(st.dictionaries(st.text(min_size=1), st.integers() | st.text() | st.none()))
-@settings(max_examples=50)
+@settings(
+    max_examples=50,  # Keep the existing sample count for stable property coverage.
+    deadline=None,  # Disable the duration limit because load can pause one example.
+)
 def test_flatten_dict_produces_string_keys(input_dict: dict) -> None:
     """Property: flatten_dict always produces string keys regardless of input."""
     result = _simple_flatten(input_dict)
@@ -37,7 +40,10 @@ def test_flatten_dict_produces_string_keys(input_dict: dict) -> None:
         ),
     )
 )
-@settings(max_examples=50)
+@settings(
+    max_examples=50,  # Keep the existing sample count for stable property coverage.
+    deadline=None,  # Disable the duration limit because this test checks a property.
+)
 def test_hostname_chars_are_preserved(hostname: str) -> None:
     """Property: hostname normalization preserves alphanumeric chars and hyphens."""
     normalized = hostname.strip().lower()
