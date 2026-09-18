@@ -29,19 +29,28 @@ class EmitTestWorkspace:
         return path  # Return the workspace path to the test.
 
     def document(self, root: Path, slug: str, title: str, lifecycle: str = "day1") -> DocumentPackageInput:
-        document_dir = root / "input" / slug  # Keep source topics separate from package output.
+        document_dir = root / "out" / "juniper-junos-fundamentals" / "documents" / slug  # Use a real package tree.
         document_dir.mkdir(parents=True, exist_ok=True)  # Create the source document tree.
         self._topic(document_dir, "00-overview.md", title, lifecycle)  # Add the required overview topic.
+        self._index(document_dir, title, lifecycle)  # Add the level 2 index that the assembler must read.
         markdown = Path("guides") / f"{slug}.md"  # Store a relative harvest path for sources.md.
         pdf = Path("pdf") / f"{slug}.pdf"  # Store a relative PDF path for sources.md.
         return DocumentPackageInput(slug, title, "guides", 10, document_dir, (markdown,), pdf, "https://example.test")
 
     def _topic(self, document_dir: Path, name: str, title: str, lifecycle: str) -> None:
         text = (
-            f"---\ntopic: {title}\nlifecycle: [{lifecycle}]\nsources: [DOC p.1-2]\n---\n\n"
+            f"---\ntopic: {title}\ndomain: junos-fundamentals\ndocument: {document_dir.name}\n"
+            f"lifecycle: [{lifecycle}]\nsources: [DOC p.1-2]\n---\n\n"
             f"# {title}\n\n- INFO: Read about {title}. [DOC p.1-2]\n"
         )  # Build one contract-shaped source topic.
         (document_dir / name).write_text(text, encoding="utf-8")  # Write the source topic for the assembler.
+
+    def _index(self, document_dir: Path, title: str, lifecycle: str) -> None:
+        text = (
+            f"# {title} index\n\n| Topic | Pages | Life cycle | Subject |\n| - | - | - | - |\n"
+            f"| {title} | p.1-2 | {lifecycle} | Use {title} for a real operator question. |\n"
+        )  # Build the segmenter subject table that the assembler must read.
+        (document_dir / "INDEX.md").write_text(text, encoding="utf-8")  # Write the existing level 2 index.
 
 
 class TestSkillPackageEmitter:
@@ -105,6 +114,17 @@ class TestSkillPackageEmitter:
         assert "Source Author" in sources  # The author must come from the source frontmatter.
         assert "| 77 |" in sources  # The page count must come from the source frontmatter.
 
+    def test_assembler_does_not_write_topic_files(self) -> None:
+        workspace = EmitTestWorkspace().reset("preserve")  # Create isolated project-local test data.
+        document = EmitTestWorkspace().document(workspace, "doc-one", "Preserve Guide", "day2")  # Build source.
+        topic_path = document.document_dir / "00-overview.md"  # Select the topic that must remain unchanged.
+        before = topic_path.read_text(encoding="utf-8")  # Capture the exact topic content before assembly.
+        SkillPackageAssembler(workspace / "factory.db").assemble(
+            "junos-fundamentals", workspace / "out", (document,), self._taxonomy(workspace)
+        )  # Assemble level 1 files only.
+        after = topic_path.read_text(encoding="utf-8")  # Capture the exact topic content after assembly.
+        assert after == before  # The assembler must never replace real topic content with a stub.
+
     def test_coverage_gap_is_written_to_level_one_index(self) -> None:
         workspace = EmitTestWorkspace().reset("coverage")  # Create isolated project-local test data.
         document = EmitTestWorkspace().document(workspace, "doc-one", "Coverage Guide", "day1")  # Build source.
@@ -124,7 +144,7 @@ class TestSkillPackageEmitter:
         )  # Assemble a valid package before introducing one real violation.
         topic_path = result.package_dir / "documents" / "doc-one" / "00-overview.md"  # Select the topic file.
         topic_text = topic_path.read_text(encoding="utf-8")  # Read the generated topic text.
-        topic_path.write_text(topic_text.replace("lifecycle:\n- day1", "lifecycle: []"), "utf-8")  # Break it.
+        topic_path.write_text(topic_text.replace("lifecycle: [day1]", "lifecycle: []"), "utf-8")  # Break it.
         validation = SkillPackageValidator().validate(result.package_dir)  # Run the validator on the package.
         messages = [finding.message for finding in validation.errors]  # Collect messages for a precise assertion.
         assert "topic has no life cycle tag" in messages  # The validator must catch the real violation.

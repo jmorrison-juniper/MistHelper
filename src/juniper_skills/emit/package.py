@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import re
-import shutil
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -209,7 +208,7 @@ class CitationKeyAllocator:
 
 
 class SkillPackageAssembler:
-    """Build SKILL.md, INDEX.md, sources.md, and normalized document trees."""
+    """Build only the level 1 files for an existing document tree."""
 
     def __init__(self, database_path: Path) -> None:
         self.allocator = CitationKeyAllocator(database_path)
@@ -219,124 +218,68 @@ class SkillPackageAssembler:
     ) -> PackageAssemblyResult:
         logging.info("Assembling domain skill package for %s", domain)
         package_dir = output_root / f"juniper-{domain}"
-        self._reset_package(package_dir)
+        package_dir.mkdir(parents=True, exist_ok=True)
         keys = {document.slug: self.allocator.allocate(domain, document.slug, document.title) for document in documents}
-        routes = self._write_documents(package_dir, domain, documents, keys)
+        routes = self._read_documents(package_dir, documents, keys)
         coverage = self._coverage(routes)
         self._write_level_one(package_dir, domain, documents, routes, taxonomy_path)
         result = self._result(package_dir, routes, documents, coverage)
         logging.debug("Assembled %s with %s topics", package_dir, result.topic_count)
         return result
 
-    def _reset_package(self, package_dir: Path) -> None:
-        logging.info("Preparing package directory %s", package_dir)
-        if package_dir.exists():
-            shutil.rmtree(package_dir)
-        package_dir.mkdir(parents=True, exist_ok=True)
-        logging.debug("Prepared package directory %s", package_dir)
-
-    def _write_documents(
-        self, package_dir: Path, domain: str, documents: tuple[DocumentPackageInput, ...], keys: dict[str, str]
+    def _read_documents(
+        self, package_dir: Path, documents: tuple[DocumentPackageInput, ...], keys: dict[str, str]
     ) -> list[TopicRoute]:
         routes: list[TopicRoute] = []
         for document in documents:
-            routes.extend(self._write_document(package_dir, domain, document, keys[document.slug]))
+            routes.extend(self._read_document(package_dir, document, keys[document.slug]))
         return routes
 
-    def _write_document(
-        self, package_dir: Path, domain: str, document: DocumentPackageInput, key: str
-    ) -> list[TopicRoute]:
-        logging.info("Writing document tree for %s", document.slug)
-        target_dir = package_dir / "documents" / document.slug
-        target_dir.mkdir(parents=True, exist_ok=True)
-        routes = self._write_topics(target_dir, domain, document, key)
-        self._write_document_index(target_dir, document, key, routes)
-        logging.debug("Wrote document tree for %s with %s topics", document.slug, len(routes))
+    def _read_document(self, package_dir: Path, document: DocumentPackageInput, key: str) -> list[TopicRoute]:
+        logging.info("Reading existing document tree for %s", document.slug)
+        if not (document.document_dir / "INDEX.md").exists():
+            raise ValueError(f"document index is missing for {document.slug}")
+        routes = self._read_topics(package_dir, document, key)
+        logging.debug("Read existing document tree for %s with %s topics", document.slug, len(routes))
         return routes
 
-    def _write_topics(
-        self, target_dir: Path, domain: str, document: DocumentPackageInput, key: str
-    ) -> list[TopicRoute]:
-        logging.info("Writing normalized topic files for %s", document.slug)
+    def _read_topics(self, package_dir: Path, document: DocumentPackageInput, key: str) -> list[TopicRoute]:
+        logging.info("Reading existing topic files for %s", document.slug)
         source_files = self._topic_files(document.document_dir)
         subjects = SegmentIndexReader().subjects(document.document_dir / "INDEX.md")
-        routes = [self._write_topic(target_dir, domain, document, key, path, subjects) for path in source_files]
-        logging.debug("Wrote %s normalized topic files for %s", len(routes), document.slug)
+        routes = [self._read_topic(package_dir, document.slug, key, path, subjects) for path in source_files]
+        logging.debug("Read %s existing topic files for %s", len(routes), document.slug)
         return routes
 
     def _topic_files(self, document_dir: Path) -> list[Path]:
         logging.info("Reading topic files from %s", document_dir)
         files = sorted(path for path in document_dir.glob("*.md") if path.name != "INDEX.md")
+        if not files:
+            raise ValueError(f"document folder has no topic files: {document_dir}")
         logging.debug("Read %s topic files from %s", len(files), document_dir)
         return files
 
-    def _write_topic(
+    def _read_topic(
         self,
-        target_dir: Path,
-        domain: str,
-        document: DocumentPackageInput,
+        package_dir: Path,
+        slug: str,
         key: str,
         source_path: Path,
         subjects: dict[str, str],
     ) -> TopicRoute:
-        logging.info("Normalizing topic file %s", source_path.name)
+        logging.info("Reading existing topic file %s", source_path.name)
         source = source_path.read_text(encoding="utf-8")
         frontmatter, body = FrontMatterParser().parse(source)
         title = str(frontmatter.get("topic") or self._title_from_name(source_path))
         lifecycle = self._lifecycle(frontmatter)
         source_range = self._source_range(frontmatter, key)
-        target_path = target_dir / self._topic_filename(source_path, title)
-        topic_text = self._topic_text(title, domain, document.slug, lifecycle, source_range, body)
-        target_path.write_text(topic_text, encoding="utf-8")
-        route = self._route(title, document.slug, source_range, target_path, lifecycle, body, subjects)
-        logging.debug("Normalized topic file %s to %s bytes", source_path.name, target_path.stat().st_size)
+        route = self._route(package_dir, title, slug, source_range, source_path, lifecycle, body, subjects)
+        logging.debug("Read existing topic file %s with %s bytes", source_path.name, source_path.stat().st_size)
         return route
-
-    def _topic_filename(self, source_path: Path, title: str) -> str:
-        if source_path.name.startswith("00-"):
-            return "00-overview.md"
-        if re.match(r"^[0-9][0-9]-[a-z0-9]+(-[a-z0-9]+)*\.md$", source_path.name):
-            return source_path.name
-        prefix = re.match(r"^([0-9][0-9])", source_path.name)
-        number = prefix.group(1) if prefix else "00"
-        return f"{number}-{self._slug(title)}.md"
-
-    def _topic_text(
-        self, title: str, domain: str, document_slug: str, lifecycle: tuple[str, ...], citation: str, body: str
-    ) -> str:
-        safe_body = self._body_with_cards(body, citation)
-        frontmatter = yaml.safe_dump(
-            {
-                "topic": title,
-                "domain": domain,
-                "document": document_slug,
-                "lifecycle": list(lifecycle),
-                "sources": [citation],
-            },
-            allow_unicode=False,
-            sort_keys=False,
-        )
-        return f"---\n{frontmatter}---\n\n# {title}\n\n{safe_body}\n"
-
-    def _body_with_cards(self, body: str, citation: str) -> str:
-        if self._has_card(body):
-            return self._recite_cards(body, citation)
-        return f"- INFO: Read the source document for this topic. [{citation}]\n"
-
-    def _has_card(self, body: str) -> bool:
-        return any(re.match(r"^- (MUST|SHOULD|INFO): .+ \[[A-Z0-9]{3,12} .+\]$", line) for line in body.splitlines())
-
-    def _recite_cards(self, body: str, citation: str) -> str:
-        lines = [self._recite_line(line, citation) for line in body.strip().splitlines()]
-        return "\n".join(lines) + "\n"
-
-    def _recite_line(self, line: str, citation: str) -> str:
-        if re.match(r"^- (MUST|SHOULD|INFO): ", line):
-            return re.sub(r"\[[A-Z0-9]{3,12} .+?\]$", f"[{citation}]", line)
-        return line
 
     def _route(
         self,
+        package_dir: Path,
         title: str,
         slug: str,
         citation: str,
@@ -347,8 +290,14 @@ class SkillPackageAssembler:
     ) -> TopicRoute:
         subject = subjects.get(title) or self._subject(title, body)
         source_range = citation.split(" ", 1)[1] if " " in citation else "p.0-0"
-        relative = Path("documents") / slug / path.name
+        relative = self._relative_topic_path(package_dir, slug, path)
         return TopicRoute(title, subject, lifecycle, citation, source_range, relative)
+
+    def _relative_topic_path(self, package_dir: Path, slug: str, path: Path) -> Path:
+        try:
+            return path.relative_to(package_dir)
+        except ValueError:
+            return Path("documents") / slug / path.name
 
     def _subject(self, title: str, body: str) -> str:
         first_card = next((line for line in body.splitlines() if re.match(r"^- (MUST|SHOULD|INFO): ", line)), "")
@@ -363,6 +312,13 @@ class SkillPackageAssembler:
     def _source_range(self, frontmatter: dict[str, Any], key: str) -> str:
         sources = frontmatter.get("sources") or [f"{key} p.0-0"]
         first = str(sources[0]) if isinstance(sources, list) and sources else f"{key} p.0-0"
+        first = first.strip().strip('"').strip("'")
+        citation = re.search(
+            r"^[A-Z0-9-]{3,16} (?:p\.\d+(?:-\d+)?|sec\.[a-z0-9-]+|table\.[a-z0-9-]+|fig\.[a-z0-9-]+)",
+            first,
+        )
+        if citation:
+            return citation.group(0)
         match = re.search(r"(?:p\.\d+(?:-\d+)?|sec\.[a-z0-9-]+|table\.[a-z0-9-]+|fig\.[a-z0-9-]+)", first)
         return f"{key} {match.group(0) if match else 'p.0-0'}"
 
@@ -389,7 +345,8 @@ class SkillPackageAssembler:
             SkillRenderer(domain, documents, routes, keywords, coverage).render(), "utf-8"
         )
         (package_dir / "INDEX.md").write_text(IndexRenderer(domain, documents, routes, coverage).render(), "utf-8")
-        (package_dir / "sources.md").write_text(SourcesRenderer(documents, self.allocator).render(domain), "utf-8")
+        sources_text = SourcesRenderer(documents, self.allocator, routes).render(domain)
+        (package_dir / "sources.md").write_text(sources_text, "utf-8")
         logging.debug("Wrote level 1 files for %s", domain)
 
     def _coverage(self, routes: list[TopicRoute]) -> dict[str, int]:
@@ -647,7 +604,6 @@ class SubjectClusterBuilder:
     def clusters(self) -> list[RouteCluster]:
         logging.info("Building user-language route clusters")
         clusters = self._known_clusters()
-        clusters.extend(self._unmatched_clusters(clusters))
         ordered = sorted(self._unique(clusters), key=lambda cluster: cluster.rank)
         logging.debug("Built %s user-language route clusters", len(ordered))
         return ordered
@@ -675,24 +631,6 @@ class SubjectClusterBuilder:
         matches = [route for route in self.routes if needle in self._context(route)]
         destination = self._span_destination(matches)
         return RouteCluster(subject, destination, rank)
-
-    def _unmatched_clusters(self, clusters: list[RouteCluster]) -> list[RouteCluster]:
-        used = {cluster.destination for cluster in clusters}
-        rows = [
-            self._fallback(route, index)
-            for index, route in enumerate(self.routes)
-            if route.relative_path.as_posix() not in used
-        ]
-        return rows[:8]
-
-    def _fallback(self, route: TopicRoute, index: int) -> RouteCluster:
-        subject = self._fallback_subject(route)
-        return RouteCluster(subject, route.relative_path.as_posix(), 200 + index)
-
-    def _fallback_subject(self, route: TopicRoute) -> str:
-        text = route.subject.strip().rstrip(".")
-        clean = text if 12 <= len(text) <= 120 and not text.startswith("-") else route.title
-        return clean[0].upper() + clean[1:] if clean else route.title
 
     def _unique(self, clusters: list[RouteCluster]) -> list[RouteCluster]:
         seen: set[tuple[str, str]] = set()
@@ -797,9 +735,12 @@ class IndexRenderer:
 class SourcesRenderer:
     """Render the domain attribution table."""
 
-    def __init__(self, documents: tuple[DocumentPackageInput, ...], allocator: CitationKeyAllocator) -> None:
+    def __init__(
+        self, documents: tuple[DocumentPackageInput, ...], allocator: CitationKeyAllocator, routes: list[TopicRoute]
+    ) -> None:
         self.documents = documents
         self.allocator = allocator
+        self.routes = routes
 
     def render(self, domain: str) -> str:
         logging.info("Rendering sources.md for %s", domain)
@@ -810,7 +751,7 @@ class SourcesRenderer:
         return text
 
     def _row(self, domain: str, document: DocumentPackageInput) -> str:
-        key = self.allocator.allocate(domain, document.slug, document.title)
+        key = self._key(domain, document)
         metadata = SourceMetadataReader().read(document)
         markdown = "<br>".join(self._display_path(path) for path in document.markdown_paths)
         title = str(metadata.get("title") or document.title)
@@ -822,6 +763,16 @@ class SourcesRenderer:
             f"| {key} | {title} | {author} | {document.category} | {pages} | "
             f"{converted} | {document.public_origin} | {markdown} | {document.pdf_path.as_posix()} |\n"
         )
+
+    def _key(self, domain: str, document: DocumentPackageInput) -> str:
+        route_key = self._route_key(document.slug)
+        if route_key:
+            return route_key
+        return self.allocator.allocate(domain, document.slug, document.title)
+
+    def _route_key(self, slug: str) -> str:
+        route = next((item for item in self.routes if item.relative_path.parts[1] == slug), None)
+        return route.citation.split(" ", 1)[0].strip().strip('"').strip("'") if route else ""
 
     def _display_path(self, path: Path) -> str:
         parts = path.parts
@@ -1081,14 +1032,14 @@ class SkillPackageValidator:
     def _card(self, path: Path, line: str, sources: set[str], errors: list[ValidationFinding]) -> None:
         if not re.match(r"^- (MUST|SHOULD|INFO): ", line):
             errors.append(ValidationFinding(path, "card lacks a class mark", line[:80]))
-        match = re.search(r"\[([A-Z0-9]{3,12} .+?)\]$", line)
+        match = re.search(r"\[([A-Z0-9-]{3,16} .+?)\]$", line)
         if not match:
             errors.append(ValidationFinding(path, "card lacks a citation key", line[:80]))
             return
         self._citation_resolves(path, match.group(1), sources, errors)
 
     def _citation_resolves(self, path: Path, citation: str, sources: set[str], errors: list[ValidationFinding]) -> None:
-        key = citation.split(" ", 1)[0]
+        key = citation.split(" ", 1)[0].strip().strip('"').strip("'")
         if key not in sources:
             errors.append(ValidationFinding(path, "citation key does not resolve to sources.md", citation))
 
