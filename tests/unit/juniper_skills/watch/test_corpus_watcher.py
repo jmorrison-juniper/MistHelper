@@ -1,7 +1,9 @@
 """Tests for the live Juniper corpus watcher."""
 
+import gc  # Release SQLite objects before Windows cleanup removes the proof root.
 import shutil  # Copy real corpus files into isolated test roots.
 import time  # Pause during slow-write simulation so mtime values can change.
+import uuid  # Make each controlled proof root unique inside the repository data folder.
 from pathlib import Path  # Use Path to create isolated corpus roots for each test.
 
 import pytest  # Skip the real-corpus proof when the local corpus is absent.
@@ -76,17 +78,15 @@ class TestCorpusWatcher:
         stats = watcher.run(1.0)  # Run with a bound duration so the test cannot hang.
         assert stats.scans == 0  # The service must stop cleanly without another scan.
 
-    def test_real_file_controlled_proof(self, tmp_path: Path) -> None:
+    def test_real_file_controlled_proof(self) -> None:
         corpus = self._real_corpus()  # Locate the real converted Markdown corpus on this workstation.
         self._require_real_file(corpus / "guides" / "junos-beginners-guide.md")  # Require one real guide.
         self._require_real_file(corpus / "uncategorized" / "qfx__switching" / "ptx10008" / "part-001.md")  # Require.
-        counts = {
-            "new": self._prove_real_new_file(tmp_path, corpus),
-            "rewrite": self._prove_real_rewrite(tmp_path, corpus),
-            "touch": self._prove_real_touch(tmp_path, corpus),
-            "slow": self._prove_real_slow_write(tmp_path, corpus),
-            "part_set": self._prove_real_part_set(tmp_path, corpus),
-        }  # Run the five deterministic proofs against copied real files.
+        proof_root = self._proof_root()  # Create an isolated root under this repository, not the real corpus.
+        try:
+            counts = self._controlled_counts(proof_root, corpus)  # Run five proofs against copied real files.
+        finally:
+            self._remove_tree(proof_root)  # Remove the controlled proof root after the proof finishes.
         print(f"watcher_controlled_counts={counts}")  # Report measured counts for issue and local review evidence.
         assert counts["new"] == (1, 1)  # A copied real file that arrives after baseline must enqueue once.
         assert counts["rewrite"] == (1, 1)  # A rewritten real file must enqueue one logical document.
@@ -117,8 +117,22 @@ class TestCorpusWatcher:
         if not path.exists():  # Skip when this workstation does not hold the requested real corpus file.
             pytest.skip(f"Real corpus proof needs {path}")  # Report the missing input instead of writing real data.
 
-    def _case_paths(self, tmp_path: Path, name: str) -> tuple[Path, Path]:
-        case_root = tmp_path / name  # Isolate each proof so queue counts cannot leak across cases.
+    def _proof_root(self) -> Path:
+        root = Path.cwd() / "data" / "juniper_skills" / "watch_proof_runs" / uuid.uuid4().hex  # Stay in the repo.
+        root.mkdir(parents=True, exist_ok=True)  # Create the controlled proof root before copying real files.
+        return root  # Return the root so the test can remove it in a finally block.
+
+    def _controlled_counts(self, proof_root: Path, corpus: Path) -> dict[str, tuple[int, ...]]:
+        return {
+            "new": self._prove_real_new_file(proof_root, corpus),
+            "rewrite": self._prove_real_rewrite(proof_root, corpus),
+            "touch": self._prove_real_touch(proof_root, corpus),
+            "slow": self._prove_real_slow_write(proof_root, corpus),
+            "part_set": self._prove_real_part_set(proof_root, corpus),
+        }  # Run the five deterministic proofs against copied real files.
+
+    def _case_paths(self, proof_root: Path, name: str) -> tuple[Path, Path]:
+        case_root = proof_root / name  # Isolate each proof so queue counts cannot leak across cases.
         repo_root = self._repo_root(case_root)  # Create a separate repository root for this proof case.
         download_root = self._download_root(case_root)  # Create a separate download root for this proof case.
         return repo_root, download_root  # Return both roots for watcher configuration and file copies.
@@ -134,8 +148,8 @@ class TestCorpusWatcher:
         watcher.scan_once()  # Take size and mtime samples for the controlled corpus.
         watcher.scan_once()  # Hash stable files without queueing the existing backlog.
 
-    def _prove_real_new_file(self, tmp_path: Path, corpus: Path) -> tuple[int, int]:
-        repo_root, download_root = self._case_paths(tmp_path, "real-new")  # Create isolated proof roots.
+    def _prove_real_new_file(self, proof_root: Path, corpus: Path) -> tuple[int, int]:
+        repo_root, download_root = self._case_paths(proof_root, "real-new")  # Create isolated proof roots.
         watcher = self._watcher(repo_root, download_root)  # Build the watcher for this controlled case.
         watcher.scan_once()  # Establish an empty baseline.
         relative = Path("guides") / "junos-beginners-guide.md"  # Use a real guide with front matter and pages.
@@ -144,8 +158,8 @@ class TestCorpusWatcher:
         watcher.scan_once()  # Accept the stable real file and enqueue it.
         return watcher.stats.files_added, watcher.stats.items_enqueued  # Report measured new-file counts.
 
-    def _prove_real_rewrite(self, tmp_path: Path, corpus: Path) -> tuple[int, int]:
-        repo_root, download_root = self._case_paths(tmp_path, "real-rewrite")  # Create isolated proof roots.
+    def _prove_real_rewrite(self, proof_root: Path, corpus: Path) -> tuple[int, int]:
+        repo_root, download_root = self._case_paths(proof_root, "real-rewrite")  # Create isolated proof roots.
         path = self._copy_real(corpus, download_root, Path("guides") / "junos-beginners-guide.md")  # Copy input.
         watcher = self._watcher(repo_root, download_root)  # Build the watcher after the initial file exists.
         self._baseline(watcher)  # Establish a stable hash baseline.
@@ -156,8 +170,8 @@ class TestCorpusWatcher:
         watcher.scan_once()  # Accept the stable changed content and enqueue it.
         return watcher.stats.files_changed, watcher.stats.items_enqueued  # Report measured rewrite counts.
 
-    def _prove_real_touch(self, tmp_path: Path, corpus: Path) -> tuple[int, int]:
-        repo_root, download_root = self._case_paths(tmp_path, "real-touch")  # Create isolated proof roots.
+    def _prove_real_touch(self, proof_root: Path, corpus: Path) -> tuple[int, int]:
+        repo_root, download_root = self._case_paths(proof_root, "real-touch")  # Create isolated proof roots.
         path = self._copy_real(corpus, download_root, Path("guides") / "junos-beginners-guide.md")  # Copy input.
         watcher = self._watcher(repo_root, download_root)  # Build the watcher after the initial file exists.
         self._baseline(watcher)  # Establish a stable hash baseline.
@@ -166,8 +180,8 @@ class TestCorpusWatcher:
         watcher.scan_once()  # Accept the stable touched file and compare the hash.
         return watcher.stats.files_touched, watcher.stats.items_enqueued  # Report measured touch counts.
 
-    def _prove_real_slow_write(self, tmp_path: Path, corpus: Path) -> tuple[int, int, int]:
-        repo_root, download_root = self._case_paths(tmp_path, "real-slow")  # Create isolated proof roots.
+    def _prove_real_slow_write(self, proof_root: Path, corpus: Path) -> tuple[int, int, int]:
+        repo_root, download_root = self._case_paths(proof_root, "real-slow")  # Create isolated proof roots.
         source = (corpus / "guides" / "junos-beginners-guide.md").read_text(encoding="utf-8")  # Read real content.
         target = download_root / "juniper-harvest-md" / "guides" / "slow.md"  # Write only into the test root.
         target.parent.mkdir(parents=True, exist_ok=True)  # Create the controlled destination folder.
@@ -184,8 +198,8 @@ class TestCorpusWatcher:
         watcher.scan_once()  # Accept the stable complete file and enqueue it.
         return before_close, watcher.stats.files_added, watcher.stats.items_enqueued  # Report measured slow counts.
 
-    def _prove_real_part_set(self, tmp_path: Path, corpus: Path) -> tuple[int, int]:
-        repo_root, download_root = self._case_paths(tmp_path, "real-part-set")  # Create isolated proof roots.
+    def _prove_real_part_set(self, proof_root: Path, corpus: Path) -> tuple[int, int]:
+        repo_root, download_root = self._case_paths(proof_root, "real-part-set")  # Create isolated proof roots.
         folder = Path("uncategorized") / "qfx__switching" / "ptx10008"  # Use the smaller real PTX10008 part set.
         for name in ("part-001.md", "part-002.md", "part-003.md"):  # Copy enough real parts to prove grouping.
             self._copy_real(corpus, download_root, folder / name)  # Preserve real shared source_file and part fields.
@@ -199,6 +213,17 @@ class TestCorpusWatcher:
         watcher.scan_once()  # Accept file quiet and start whole-set quiet.
         watcher.scan_once()  # Accept whole-set quiet and enqueue one logical document.
         return watcher.stats.files_changed, watcher.stats.items_enqueued  # Report measured part-set counts.
+
+    def _remove_tree(self, root: Path) -> None:
+        for attempt in range(5):  # Retry because Windows can hold SQLite files briefly after close.
+            gc.collect()  # Release any final SQLite objects before removal.
+            try:
+                shutil.rmtree(root)  # Remove every copied real file and controlled database.
+                return
+            except PermissionError:
+                if attempt == 4:  # Fail the proof if cleanup cannot remove its controlled root.
+                    raise
+                time.sleep(0.2)  # Wait briefly for the file handle to close.
 
     def _document(self, title: str, source_file: str, marker: str = "base") -> str:
         return "\n".join(
