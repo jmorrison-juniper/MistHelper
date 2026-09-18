@@ -171,6 +171,22 @@ class TestFetchRoguesForOneSite:
         )
         assert result == []
 
+    def test_http_403_reports_status_and_skips_rogue_rows(
+        self, fake_mh: ModuleType, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A 403 rogue fetch must report the exact status and return no rows."""
+        response = MagicMock(status_code=403, data=[{"bssid": "ignored"}])  # WHY: failed data is not trustworthy.
+        fetch_callable = MagicMock(return_value=response)  # WHY: drive the product per-site fetch seam.
+        caplog.set_level("ERROR", logger=ocse.logger.name)  # WHY: capture the product status log.
+        with patch.object(ocse.mistapi, "get_all") as get_all:  # WHY: prove pagination is skipped.
+            result = OrgClientSecurityExporter._fetch_rogues_for_one_site(
+                fetch_callable, "site-1", "Alpha", "24h", "rogue APs"
+            )
+        assert result == []  # WHY: a forbidden site must not produce rogue rows.
+        assert "HTTP 403" in caplog.text  # WHY: the operator must see the exact permission failure.
+        assert "rogue APs" in caplog.text  # WHY: the log must name the failed data set.
+        get_all.assert_not_called()  # WHY: the success pagination path must not run.
+
 
 # ---------------------------------------------------------------------------
 # _collect_rogues_across_sites

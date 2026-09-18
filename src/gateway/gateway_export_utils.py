@@ -16,6 +16,8 @@ from src.gateway.overrides import (  # WHY: import walker + override wiring entr
 from src.refactors.connection_pool_executor import ConnectionPoolExecutor  # WHY: extracted pool executor (1012 SC-003).
 
 logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
+_HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
 
 MANAGEMENT_IP_INPUT_CSVS: tuple[str, ...] = (  # WHY: fixed set of correlation inputs for management-IP export.
     "SiteList.csv",
@@ -58,6 +60,12 @@ FAST_MODE_MAX_RETRIES: int = 2  # WHY: retry cap for fast-mode API calls.
 FAST_MODE_RETRY_DELAY: float = 0.5  # WHY: base delay (seconds) between retries.
 _api_usage_cache: Any = None  # WHY: shared API usage cache reference.
 tqdm: Any = None  # WHY: progress bar dependency reference.
+
+
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
 def _wire_stats_exporter(deps: dict[str, Any]) -> None:  # WHY: forward stats-exporter slots only.
@@ -488,6 +496,14 @@ class GatewayExportUtils:  # WHY: centralised gateway export utility class extra
         logger.info("Exporting gateway templates for the organization...")  # WHY: audit log for entry.
         current_org_id = ConfigUtils.get_cached_or_prompted_org_id()  # WHY: resolve org_id via standard path.
         response = mistapi.api.v1.orgs.gatewaytemplates.listOrgGatewayTemplates(apisession, current_org_id)
+        status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+        if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the template count unsafe.
+            logger.error(  # WHY: the operator must see the cloud status instead of a false no-template report.
+                "The cloud returned HTTP %s for gateway templates at org %s",
+                status_code,
+                current_org_id,
+            )
+            return  # WHY: preserve the existing None return contract for this exporter.
         templates = getattr(response, "data", [])  # WHY: defensive — response may lack .data attribute.
         if not templates:  # WHY: nothing to export — emit diagnostics and return.
             logger.warning("No gateway templates found for this organization.")
