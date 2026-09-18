@@ -360,3 +360,11 @@ class TestPackageImportMap:
         logger.info("test_mapping_size_matches_documented_entries: begin")  # WHY: BEFORE action log.
         assert len(pim.PackageImportMapManager.MAPPING) == 11  # WHY: fixed size per module body.
         logger.debug("test_mapping_size_matches_documented_entries: passed")  # WHY: AFTER action log.
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

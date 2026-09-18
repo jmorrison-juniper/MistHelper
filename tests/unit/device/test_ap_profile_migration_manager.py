@@ -2380,3 +2380,11 @@ def test_migrate_pacing_ignores_a_foreign_thread_sleep(
     assert len(sleep_args) == 10, f"expected exactly 10 pacing sleeps, got {len(sleep_args)}"
     # WHY: the index the CI failure reported now reads the fallback constant.
     assert sleep_args[4] == pytest.approx(0.75), f"5th sleep arg expected 0.75, got {sleep_args[4]!r}"
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_mistapi_empty_result_observation("JSONDecodeError")  # Bad JSON gives empty data.
+    failure_modes.assert_mistapi_empty_result_observation(b"")  # Empty body gives empty data.

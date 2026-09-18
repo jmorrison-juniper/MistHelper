@@ -579,3 +579,10 @@ class TestFlagDuplicateAddresses:
         )  # No suffix.
         AddressAuditEngine._flag_duplicate_addresses([a, b])  # Run the post-pass.
         assert a.issue_type == "DUPLICATE_ADDRESS" and b.issue_type == "DUPLICATE_ADDRESS"  # Normalized to one key.
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

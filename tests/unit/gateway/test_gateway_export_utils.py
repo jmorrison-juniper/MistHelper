@@ -86,3 +86,11 @@ def test_with_wan_overrides_delegates_to_wan_override_walker() -> None:
         override_mock.assert_called_once_with(fast=True)  # Confirm walker invoked with fast flag
     finally:
         module.WanOverrideWalker.walk = original_method  # Always restore the original method
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

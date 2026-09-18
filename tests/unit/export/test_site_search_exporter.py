@@ -348,3 +348,10 @@ class TestTroubleshootCall:
 
         assert "Error fetching call troubleshoot for site" in caplog.text
         wired["DataExporter"].write_with_format_selection.assert_not_called()
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

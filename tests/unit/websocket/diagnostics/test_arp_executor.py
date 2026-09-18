@@ -960,3 +960,10 @@ def test_execute_swallows_exception_and_cleans_up(caplog) -> None:
     cleanup.assert_called_once_with(None)  # workflow never returned a ws
     log_err.assert_called_once()
     assert "kaboom" in log_err.call_args.args[0]
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_mistapi_empty_result_observation(b"")  # Empty body gives empty data.

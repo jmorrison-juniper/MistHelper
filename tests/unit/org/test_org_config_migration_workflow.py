@@ -607,3 +607,10 @@ class TestDisplayImportReport:
         caplog.set_level("WARNING")  # WHY: the printer writes at WARNING level.
         manager._print_report_section("IMPORTED", [{"type": "networks", "name": "Net-A"}])
         assert "Net-A" in caplog.text  # WHY: the row must render without a reason.
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

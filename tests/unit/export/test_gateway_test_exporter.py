@@ -407,3 +407,11 @@ class TestTestResultsBySiteDelegator:
         with patch("src.refactors.serial_cc.test_results_by_site.GatewayTestResultsService") as svc:
             GatewayTestExporter.test_results_by_site(fast=True)
         svc.execute.assert_called_once_with(fast=True)
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

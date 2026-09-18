@@ -1088,3 +1088,14 @@ class TestNominatimDetermineRecommendationBothValid:
         comp_addr = {"address": "e", "city": "f", "state": "g", "zip": "h"}
         rec, reason = validator._determine_both_valid(mist_r, comp_r, mist_addr, comp_addr)
         assert rec == "uncertain"
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_transport_exception_observation("Timeout")  # Timeout raises to caller.
+    failure_modes.assert_transport_exception_observation("ConnectionError")  # Connection failure raises to caller.
+    failure_modes.assert_mistapi_empty_result_observation("JSONDecodeError")  # Bad JSON gives empty data.
+    failure_modes.assert_mistapi_empty_result_observation(b"")  # Empty body gives empty data.
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

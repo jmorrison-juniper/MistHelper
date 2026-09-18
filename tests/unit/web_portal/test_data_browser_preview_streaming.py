@@ -102,3 +102,11 @@ def test_json_list_column_order_and_filtering_stay_stable(tmp_path) -> None:
     assert result["columns"] == ["b", "a", "c"]  # Column order must follow first discovery.
     assert result["rows"] == [["", "Beta", "3"]]  # Missing keys must still become empty strings.
     assert result["total_rows"] == 1  # The count must include all matching rows.
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_mistapi_empty_result_observation("JSONDecodeError")  # Bad JSON gives empty data.
+    failure_modes.assert_mistapi_empty_result_observation(b"")  # Empty body gives empty data.

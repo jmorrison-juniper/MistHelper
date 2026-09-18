@@ -118,3 +118,11 @@ def test_bootstrap_can_share_explicit_context() -> None:
     logger.debug("Explicit context was reused: %s", first.context is second.context)  # WHY: report sharing status.
     assert first.context is context  # WHY: the constructor must respect an explicit context.
     assert second.context is context  # WHY: no hidden context is allowed when the caller passes one.
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

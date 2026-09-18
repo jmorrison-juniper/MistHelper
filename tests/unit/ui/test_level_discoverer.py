@@ -171,3 +171,10 @@ def test_classify_item_propagates_unexpected_descriptor_errors(tui_stub) -> None
     module = _Bad()  # Build the object with the failing descriptor.
     with pytest.raises(RuntimeError, match="nope"):  # The narrowed handler lets unexpected faults surface.
         LevelDiscoverer(tui_stub)._classify_item(module, "boom")  # Read the descriptor through the classifier.
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.

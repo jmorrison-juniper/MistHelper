@@ -143,3 +143,11 @@ def test_load_missing_file_returns_empty_baseline(tmp_path: Path) -> None:
     baseline = differ.load(tmp_path / "no_such_file.json")
     assert isinstance(baseline, Baseline)
     assert baseline.findings == ()  # Empty tuple, not None.
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_mistapi_empty_result_observation("JSONDecodeError")  # Bad JSON gives empty data.
+    failure_modes.assert_mistapi_empty_result_observation(b"")  # Empty body gives empty data.

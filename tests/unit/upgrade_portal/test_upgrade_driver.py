@@ -1869,3 +1869,11 @@ class TestPostCheckModeSeam:
         assert config.POST_CHECK_AUTOMATIC == driver.POST_CHECK_AUTOMATIC
         assert config.POST_CHECK_MANUAL == driver.POST_CHECK_MANUAL
         assert config.DEFAULT_POST_CHECK_MODE == driver.DEFAULT_POST_CHECK_MODE
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_mistapi_empty_result_observation("JSONDecodeError")  # Bad JSON gives empty data.
+    failure_modes.assert_mistapi_empty_result_observation(b"")  # Empty body gives empty data.

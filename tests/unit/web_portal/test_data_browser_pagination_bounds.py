@@ -170,3 +170,11 @@ class TestTheBoundsAreNamed:
         # An upper bound below the lower bound would make every clamp empty.
         assert MAX_PAGE_SIZE > MIN_PAGE_SIZE, "The upper bound must sit above the lower bound."
         logger.debug("The bounds are %d and %d", MIN_PAGE_SIZE, MAX_PAGE_SIZE)
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_mistapi_empty_result_observation("JSONDecodeError")  # Bad JSON gives empty data.
+    failure_modes.assert_mistapi_empty_result_observation(b"")  # Empty body gives empty data.

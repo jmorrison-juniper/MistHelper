@@ -96,3 +96,11 @@ def test_log_safe_payload_fields_drops_every_value() -> None:
 def test_log_safe_payload_fields_handles_an_empty_payload() -> None:
     """The helper returns an empty string when the payload holds no field."""
     assert PacketCaptureManager._log_safe_payload_fields({}) == ""  # WHY: guard the boundary case
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

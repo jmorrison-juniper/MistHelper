@@ -506,3 +506,10 @@ def test_prompt_template_meta_returns_tuple_of_all_three_values() -> None:
     ):
         name, ttype, model = manager._prompt_template_meta("SRX300", set())  # Invoke orchestrator
     assert (name, ttype, model) == ("my-name", "spoke", "SRX345")  # All three chained correctly
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.

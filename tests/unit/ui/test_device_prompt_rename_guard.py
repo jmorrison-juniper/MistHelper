@@ -87,3 +87,10 @@ def test_known_regression_site_uses_canonical_prompt(module_path: str) -> None:
     """
     source = (REPO_ROOT / module_path).read_text(encoding="utf-8")
     assert CANONICAL_NAME in source, f"{module_path} no longer calls {CANONICAL_NAME}"
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

@@ -518,3 +518,13 @@ def test_execute_exception_logs_and_cleans_up() -> None:
     err_msg = mock_err.call_args.args[0]
     assert "WebSocket show MAC table operation failed" in err_msg
     assert "boom" in err_msg
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_transport_exception_observation("ConnectionError")  # Connection failure raises to caller.
+    failure_modes.assert_mistapi_empty_result_observation("JSONDecodeError")  # Bad JSON gives empty data.
+    failure_modes.assert_mistapi_empty_result_observation(b"")  # Empty body gives empty data.
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.

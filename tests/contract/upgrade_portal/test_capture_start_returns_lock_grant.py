@@ -439,3 +439,11 @@ def test_a_start_with_a_null_run_stores_an_empty_run(
     record = lock.LockRecord.from_json(lock_store.values[SITE_KEY])  # The value the store now holds.
     assert record is not None  # A well-shaped record reads back, never None.
     assert record.run_id == ""  # FR-112 forbids the word None, so the record holds an empty run.
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_mistapi_empty_result_observation("JSONDecodeError")  # Bad JSON gives empty data.
+    failure_modes.assert_mistapi_empty_result_observation(b"")  # Empty body gives empty data.

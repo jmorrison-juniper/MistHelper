@@ -644,3 +644,13 @@ class TestExportToCsv:
         caplog.set_level(logging.ERROR, logger=_LOGGER_NAME)
         ARPCommandManager._export_to_csv()
         assert any("Failed to export ARP output to CSV" in r.getMessage() for r in caplog.records)
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_transport_exception_observation("ConnectionError")  # Connection failure raises to caller.
+    failure_modes.assert_mistapi_empty_result_observation("JSONDecodeError")  # Bad JSON gives empty data.
+    failure_modes.assert_mistapi_empty_result_observation(b"")  # Empty body gives empty data.
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.

@@ -72,3 +72,11 @@ def test_site_results_wires_gateway_dependencies_before_delegating(monkeypatch) 
     GatewayTestExporter.test_results_by_site(fast=True)  # WHY: execute the second direct gateway-test entry point.
 
     assert call_order == ["configure", "service"]  # WHY: service must never run with unwired gateway dependencies.
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

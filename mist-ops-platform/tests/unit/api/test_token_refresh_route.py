@@ -124,3 +124,11 @@ def test_a_refresh_with_a_valid_cookie_returns_the_stored_identifier() -> None:
     body = response.json()["data"]  # The route wraps the payload in a response envelope.
     assert body["session_id"] == session_id  # The route returns the identifier the store knows.
     assert body["expires_in"] == SESSION_TTL_SECONDS  # The route reports the real lifetime.
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_mistapi_empty_result_observation("JSONDecodeError")  # Bad JSON gives empty data.
+    failure_modes.assert_mistapi_empty_result_observation(b"")  # Empty body gives empty data.

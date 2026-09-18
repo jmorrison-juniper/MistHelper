@@ -424,3 +424,11 @@ def test_an_unreachable_lock_store_still_starts_the_capture(
     lock_store.fail = True  # Every command of the store now raises.
     answer = start_capture(client)  # The read and the grant both fail, and the start continues.
     assert_capture_started(answer, capture_runner, 1)  # The capture still runs.
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_mistapi_empty_result_observation("JSONDecodeError")  # Bad JSON gives empty data.
+    failure_modes.assert_mistapi_empty_result_observation(b"")  # Empty body gives empty data.

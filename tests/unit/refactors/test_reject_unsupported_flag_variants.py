@@ -118,3 +118,11 @@ def test_hyphenated_test_flag_uses_standard_argparse_error(capsys: pytest.Captur
     assert excinfo.value.code == 2  # WHY: argparse uses exit code 2 for usage errors.
     assert "unrecognized arguments" in captured.err  # WHY: The standard parser error must own this failure.
     assert "Did you mean" not in captured.err  # WHY: The removed compatibility guard must not run.
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

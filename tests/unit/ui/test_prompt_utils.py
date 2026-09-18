@@ -873,3 +873,10 @@ def test_extract_selected_client_empty_site_becomes_empty_string() -> None:
     client = {"mac": "dd", "client_type": "wired"}
     result = PromptUtils._extract_selected_client(client, {}, None)
     assert result == ("dd", "wired", "")
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.

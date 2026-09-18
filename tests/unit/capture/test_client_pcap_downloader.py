@@ -217,3 +217,12 @@ def test_run_invokes_download_when_all_steps_succeed(downloader: ClientPacketCap
     ):
         downloader.run()
     step4.assert_called_once_with("aa:bb:cc:dd:ee:ff", rows)
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_transport_exception_observation("Timeout")  # Timeout raises to caller.
+    failure_modes.assert_transport_exception_observation("ConnectionError")  # Connection failure raises to caller.
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

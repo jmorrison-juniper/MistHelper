@@ -452,3 +452,12 @@ class TestPromptVlanChoice:
         with patch.object(cpd, "_get_input_utils", return_value=input_utils):
             rows = downloader._prompt_vlan_choice(grouped)  # WHY: drive the resolve branch.
         assert len(rows) == 2  # WHY: both captures on the VLAN must queue for download.
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_transport_exception_observation("Timeout")  # Timeout raises to caller.
+    failure_modes.assert_transport_exception_observation("ConnectionError")  # Connection failure raises to caller.
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

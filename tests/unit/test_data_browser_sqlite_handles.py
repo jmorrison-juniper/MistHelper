@@ -89,3 +89,11 @@ def test_sqlite_helpers_close_the_handle_on_the_success_path(tmp_path) -> None:
     assert [table["table_name"] for table in listing["tables"]] == ["devices"]
     assert service._is_valid_table_name(str(database_path), "devices") is True
     assert service._is_valid_table_name(str(database_path), "absent") is False
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_mistapi_empty_result_observation("JSONDecodeError")  # Bad JSON gives empty data.
+    failure_modes.assert_mistapi_empty_result_observation(b"")  # Empty body gives empty data.

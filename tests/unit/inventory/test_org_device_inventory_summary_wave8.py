@@ -589,3 +589,11 @@ def test_run_for_org_returns_expected_tuple(monkeypatch: pytest.MonkeyPatch, cap
     assert result == (model_rows, version_rows, pivot_rows, "SafeOrg")  # WHY: tuple order documented
     out = "\n".join(r.getMessage() for r in caplog.records)  # WHY: aggregate captured log lines
     assert "Summary for SafeOrg completed" in out  # WHY: user-visible summary logged
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

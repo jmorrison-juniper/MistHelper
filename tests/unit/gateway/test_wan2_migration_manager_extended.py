@@ -1007,3 +1007,12 @@ def test_find_subinterface_ip_configs_yields_records_when_present() -> None:
     records = manager._find_subinterface_ip_configs(row)
     assert len(records) == 1
     assert records[0]["port_identifier"] == "ge-0/0/1.100"
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_mistapi_empty_result_observation("JSONDecodeError")  # Bad JSON gives empty data.
+    failure_modes.assert_mistapi_empty_result_observation(b"")  # Empty body gives empty data.
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.

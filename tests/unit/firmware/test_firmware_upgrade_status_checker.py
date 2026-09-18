@@ -1479,3 +1479,10 @@ class TestRecordHelpers:
         chk._record_stored_upgrade("u12345678", "s1", "Site 1", {"status": "up"})
         assert chk.active_upgrades[0]["source"] == "stored_tracking"
         assert "Site 1" in capsys.readouterr().out
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.

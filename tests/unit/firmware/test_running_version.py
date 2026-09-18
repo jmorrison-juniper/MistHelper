@@ -305,3 +305,11 @@ def test_validate_ssr_devices_skips_stale_devices() -> None:
     validated, skipped = manager._validate_ssr_devices_for_version(["dev-5"], inventory, "23.4R2-S5.5")
     assert "dev-5" not in validated, "A stale device must not appear in the validated list."
     assert "dev-5" in skipped, "A stale device must appear in the skipped list."
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

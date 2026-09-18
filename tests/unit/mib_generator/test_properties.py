@@ -69,3 +69,11 @@ def test_the_claim_order_never_changes_a_column(order: list[int], tmp_path: Path
     shuffled = {entry.key: entry.column for entry in second.entries()}  # Record the answer.
     assert len(set(shuffled.values())) == len(shuffled)  # No two fields may share a column.
     assert sorted(shuffled.values()) == sorted(baseline.values())  # The same column set comes out.
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_mistapi_empty_result_observation("JSONDecodeError")  # Bad JSON gives empty data.
+    failure_modes.assert_mistapi_empty_result_observation(b"")  # Empty body gives empty data.

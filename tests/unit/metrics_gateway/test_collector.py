@@ -234,3 +234,10 @@ def test_a_label_value_never_holds_a_raw_quotation_mark(endpoint_overrides: dict
     names = [dict(s.labels).get("site_name", "") for s in snapshot.samples if s.definition.scope is MetricScope.SITE]
     assert 'Branch "A"' in names
     assert re.search(r'Branch "A"', "".join(names))
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

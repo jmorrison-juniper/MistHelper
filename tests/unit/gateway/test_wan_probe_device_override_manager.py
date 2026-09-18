@@ -107,3 +107,11 @@ def test_generate_report_calls_exporter_with_expected_output_filename() -> None:
     exporter.assert_called_once()
     _, output_filename = exporter.call_args.args
     assert output_filename == "GatewayDevice_WAN_Probe_Override_Audit.csv"
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

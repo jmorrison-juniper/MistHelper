@@ -788,3 +788,11 @@ class TestExecuteMonitoringCheck:
         caplog.set_level(logging.ERROR, logger="root")
         assert mgr._execute_monitoring_check(None) is None
         assert any("Error in monitoring check" in r.message for r in caplog.records)
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

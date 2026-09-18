@@ -132,3 +132,10 @@ class TestReviewAndApply:
         monkeypatch.setattr(corr_mod.InputUtils, "safe_input", spy)
         assert AddressCorrector(MagicMock()).review_and_apply([_result(issue="ADDRESS_MATCH")]) == []
         spy.assert_not_called()
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

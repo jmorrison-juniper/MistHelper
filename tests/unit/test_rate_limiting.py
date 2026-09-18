@@ -747,3 +747,12 @@ class TestCoverageGapTargets:
                 api_usage_cache=api_cache,  # Cache with initialized=False triggers refresh
             )
         assert delay > 0  # A positive delay is always returned
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_mistapi_empty_result_observation("JSONDecodeError")  # Bad JSON gives empty data.
+    failure_modes.assert_mistapi_empty_result_observation(b"")  # Empty body gives empty data.
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.

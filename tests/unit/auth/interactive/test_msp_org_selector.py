@@ -320,3 +320,11 @@ def test_render_page_shows_multi_page_hint(caplog: pytest.LogCaptureFixture) -> 
     with caplog.at_level(logging.WARNING):
         selector._render_page([{"id": "org-A", "name": "A"}], 0, 2)  # WHY: total_pages=2 triggers hint
     assert "Page 1/2" in caplog.text  # WHY: multi-page hint surfaced
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

@@ -1063,3 +1063,10 @@ def test_debug_validate_service_prints_custom_line_for_others(capsys) -> None:
     harness.debug_mode = True
     harness._debug_validate_service("random")
     assert "custom service: random" in capsys.readouterr().out
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.

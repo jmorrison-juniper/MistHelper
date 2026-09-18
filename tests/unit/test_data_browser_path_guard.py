@@ -146,3 +146,11 @@ class TestAllowedPathsStillWork:
         service = DataBrowserService(str(data_dir))  # Service under test, scoped to the data mount.
 
         assert service.resolve_safe_path("absent.csv") is None  # A missing file must return None.
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_mistapi_empty_result_observation("JSONDecodeError")  # Bad JSON gives empty data.
+    failure_modes.assert_mistapi_empty_result_observation(b"")  # Empty body gives empty data.

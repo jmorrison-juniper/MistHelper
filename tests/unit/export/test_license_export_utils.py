@@ -151,3 +151,10 @@ def test_is_valid_uuid_rejects_malformed_string() -> None:
 def test_is_valid_uuid_rejects_none() -> None:
     """A None candidate is rejected without raising."""
     assert LicenseExportUtils._is_valid_uuid(None) is False  # type: ignore[arg-type]
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

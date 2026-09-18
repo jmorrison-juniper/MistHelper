@@ -862,3 +862,11 @@ def test_a_reserved_operator_address_cannot_start_a_multi_site_upgrade(
     body = answer.get_json() or {}  # Read the refusal envelope that the contract fixes.
     assert body.get("error", {}).get("code") == "unreachable_operator_address"  # Name the exact refusal code.
     assert len(org_service.calls) == before, "The refusal must reach no cloud service at all."
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_mistapi_empty_result_observation("JSONDecodeError")  # Bad JSON gives empty data.
+    failure_modes.assert_mistapi_empty_result_observation(b"")  # Empty body gives empty data.

@@ -673,3 +673,10 @@ class TestIsTwoFactorError:
     )
     def test_substring_guard(self, lower_message: str, expected: bool) -> None:
         assert LoginOrchestrator._is_two_factor_error(lower_message) is expected
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.

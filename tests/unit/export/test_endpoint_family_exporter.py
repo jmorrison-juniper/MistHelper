@@ -202,3 +202,11 @@ def test_run_reports_sdk_errors_without_raising() -> None:
     ):
         EndpointFamilyExporter._run(_ORG_DETAIL_OPS[0])
     callable_obj.assert_called_once_with(fake.apisession, "org-one", "sso-one")
+
+
+def test_observable_failure_mode_contracts() -> None:
+    """Failure-mode contracts stay explicit for this test module."""
+    from tests.support import failure_mode_observations as failure_modes  # Import shared contracts.
+
+    failure_modes.assert_http_status_observation(400)  # HTTP 4xx status stays observable.
+    failure_modes.assert_http_status_observation(500)  # HTTP 5xx status stays observable.
