@@ -38,6 +38,7 @@ class SkillIssueTracker:
         self.rate_limit = GitHubRateLimitManager(self.runner)  # Measure real limits before GitHub calls.
         self.store = FactoryJournalStore(database_path)  # Persist all work before any network call.
         self.codec = StageCommentCodec()  # Encode journal comments in one stable format.
+        self.ensured_labels: set[str] = set()  # Avoid repeated label create calls during large reconciliations.
 
     def ensure_issue(self, document: DocumentRecord, sync: bool = True) -> int | None:
         """Queue one document issue and optionally reconcile it to GitHub."""
@@ -327,11 +328,15 @@ class SkillIssueTracker:
 
     def _ensure_one_label(self, name: str, color: str) -> None:
         """Create one GitHub label if it does not exist."""
+        if name in self.ensured_labels:  # Skip labels that this process already checked.
+            logging.debug("GitHub label %s already checked in this process", name)  # Record the local cache hit.
+            return
         try:
             self.runner.run(["gh", "label", "create", name, "--repo", self.repo, "--color", color])  # Create label.
             logging.debug("Created GitHub label %s", name)  # Record the created label.
         except GitHubCliError as error:
             logging.debug("GitHub label %s already exists or cannot be created: %s", name, error)  # Keep idempotency.
+        self.ensured_labels.add(name)  # Cache the result because an existing label is sufficient for later writes.
 
     def _label_colors(self, domain: str, stage: str, status: str) -> dict[str, str]:
         """Return label colors for one document state."""

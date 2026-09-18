@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 
@@ -148,6 +149,26 @@ class TestSkillPackageEmitter:
         assert "absent in this document" in skill_text  # The skill must state missing life cycle stages.
         assert after == before  # The assembler must not rewrite an existing topic file.
 
+    def test_document_skill_description_is_dense_and_discriminating(self) -> None:
+        workspace = EmitTestWorkspace().reset("description-budget")  # Create isolated project-local test data.
+        package = "juniper-evpn-evpn"  # Use the large EVPN package name from the proof case.
+        document = EmitTestWorkspace().document_in_package(
+            workspace,
+            package,
+            "evpn",
+            "Junos OS EVPN User Guide",
+            "day2",
+            2220,
+        )  # Build a document that needs sibling disambiguation.
+        result = DocumentSkillPackageAssembler(workspace / "factory.db").assemble(
+            "evpn", workspace / "out", document, self._taxonomy(workspace)
+        )  # Assemble one registered document package.
+        description = self._description_from_skill(result.package_dir / "SKILL.md")  # Read the load-bearing field.
+        assert len(description) <= 420  # The field must stay near the 80-token registration budget.
+        assert "EVPN" in description  # The field must name the protocol that selects the package.
+        assert "configure" in description  # The field must carry real task vocabulary.
+        assert "missing MAC address" in description  # The field must carry realistic symptom vocabulary.
+
     def test_small_documents_are_grouped_into_collection_package(self) -> None:
         workspace = EmitTestWorkspace().reset("small-documents")  # Create isolated project-local test data.
         package = "juniper-sd-wan-small-documents"  # Use the collection package for short source documents.
@@ -259,6 +280,12 @@ class TestSkillPackageEmitter:
             encoding="utf-8",
         )  # Write only the row needed by the assembler.
         return taxonomy  # Return the taxonomy path to the test.
+
+    def _description_from_skill(self, path: Path) -> str:
+        text = path.read_text(encoding="utf-8")  # Read the generated SKILL.md file.
+        match = re.search(r"description: >-\n  (.*?)\nlicense:", text, re.DOTALL)  # Find folded YAML text.
+        assert match is not None  # The generated skill must contain a description field.
+        return " ".join(match.group(1).split())  # Return the normalized description for assertions.
 
     def _bad_route_skill_text(self) -> str:
         return (

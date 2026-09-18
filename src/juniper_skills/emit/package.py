@@ -631,25 +631,84 @@ class DocumentSkillRenderer:
 
     def _description(self) -> str:
         logging.info("Building document skill description for %s", self.document.slug)  # Log trigger text build.
-        subjects = self._subjects()  # Read product and protocol words from metadata and route subjects.
-        tasks = "select, deploy, configure, verify, troubleshoot, upgrade, migrate, or automate"
-        text = (
-            f"Use this skill for Juniper {self.document.title}, {subjects}. Use it when a question asks how to "
-            f"{tasks}. Use it for symptoms such as a commit failure, a route mismatch, an alarm, a tunnel problem, "
-            "a missing MAC address, a neighbor that stays down, packet loss, latency, reachability loss, or an "
-            "unexpected command result. The skill routes this one document to its topic files and citations."
-        )
+        text = " ".join(self._description_parts())  # Combine dense routing signals for skill selection.
         logging.debug("Built description with %s characters", len(text))  # Report description size.
         return text  # Return one paragraph for skill registration.
 
+    def _description_parts(self) -> list[str]:
+        logging.info("Building discriminating description parts")  # Log description part creation.
+        parts = [self._title_anchor(), self._subject_anchor(), self._task_anchor(), self._symptom_anchor()]
+        version = self._version_anchor()  # Add a release or version only when the title carries one.
+        if version:  # Avoid empty filler for documents with no version marker.
+            parts.append(version)  # Preserve version specificity for sibling documents.
+        logging.debug("Built %s description parts", len(parts))  # Report selected part count.
+        return parts  # Return parts in a stable order for reproducible descriptions.
+
+    def _title_anchor(self) -> str:
+        logging.info("Building the title anchor for the description")  # Log title anchor creation.
+        title = self._clip_phrase(self.document.title, 92)  # Keep long sibling titles inside the token budget.
+        anchor = f"Juniper {title}."  # Lead with the source document title for sibling disambiguation.
+        logging.debug("Built title anchor with %s characters", len(anchor))  # Report anchor length.
+        return anchor  # Return the product title sentence.
+
+    def _subject_anchor(self) -> str:
+        logging.info("Building the product and protocol anchor")  # Log subject anchor creation.
+        subjects = self._subjects()  # Extract products, platforms, protocols, and features.
+        anchor = f"Product, platform, protocol, feature: {subjects}."  # Use direct labels for routing terms.
+        logging.debug("Built subject anchor with %s characters", len(anchor))  # Report anchor length.
+        return anchor  # Return the searchable subject sentence.
+
+    def _task_anchor(self) -> str:
+        return "Tasks: configure, verify, troubleshoot, install, upgrade, design, automate."  # Add user task verbs.
+
+    def _symptom_anchor(self) -> str:
+        logging.info("Building the symptom anchor")  # Log symptom selection.
+        symptoms = ", ".join(self._symptoms())  # Select domain-specific symptom words.
+        anchor = f"Symptoms: {symptoms}."  # Use words that an operator types during incidents.
+        logging.debug("Built symptom anchor with %s characters", len(anchor))  # Report anchor length.
+        return anchor  # Return the symptom sentence.
+
+    def _version_anchor(self) -> str:
+        logging.info("Searching document title for a release or version marker")  # Log version extraction.
+        haystack = " ".join((self.document.title, self.document.slug, self.document.category))  # Search metadata only.
+        match = re.search(r"\b(?:\d{2}\.\dR\d|\d{4}-\d{2}-\d{2}|[A-Z]?\d+\.\d+(?:R\d+)?)\b", haystack)
+        anchor = f"Release or version: {match.group(0)}." if match else ""  # Include version only when present.
+        logging.debug("Version marker found: %s", bool(anchor))  # Report whether the anchor exists.
+        return anchor  # Return empty text for non-versioned documents.
+
     def _subjects(self) -> str:
         logging.info("Extracting document subject words for the skill description")  # Log subject extraction.
-        raw = " ".join([self.document.category, self.document.title, *self.keywords[:12]])
+        route_text = " ".join(route.title + " " + route.subject for route in self.routes[:12])  # Sample topic terms.
+        raw = " ".join([self.document.category, self.document.title, route_text, *self.keywords[:12]])
         words = re.findall(r"[A-Za-z0-9][A-Za-z0-9-]+", raw)  # Keep product and protocol tokens.
-        chosen = tuple(dict.fromkeys(word for word in words if len(word) > 2))[:18]  # Keep stable order.
+        chosen = tuple(dict.fromkeys(word for word in words if len(word) > 2))[:12]  # Keep stable order.
         text = ", ".join(chosen) if chosen else self.domain.replace("-", " ")  # Fall back to the domain name.
         logging.debug("Extracted %s document subject words", len(chosen))  # Report trigger token count.
         return text  # Return compact subject text.
+
+    def _symptoms(self) -> tuple[str, ...]:
+        logging.info("Selecting symptom words for the document domain")  # Log symptom selection.
+        context = " ".join((self.domain, self.document.title, self.document.slug, self._subjects())).lower()
+        choices = self._domain_symptoms(context)  # Pick protocol-specific terms when they match.
+        logging.debug("Selected %s symptom words", len(choices))  # Report selected symptom count.
+        return choices  # Return symptoms for the description.
+
+    def _domain_symptoms(self, context: str) -> tuple[str, ...]:
+        if "evpn" in context or "vxlan" in context:  # Match data-center overlay questions.
+            return ("missing MAC address", "VNI mismatch", "BGP neighbor down", "traffic blackhole", "commit fails")
+        if "mpls" in context or "ldp" in context:  # Match label-switched path questions.
+            return ("LSP down", "label missing", "LDP neighbor down", "packet loss", "high latency")
+        if "bgp" in context:  # Match route-exchange questions.
+            return ("neighbor down", "route missing", "prefix rejected", "flapping", "commit fails")
+        if "ospf" in context:  # Match link-state routing questions.
+            return ("adjacency down", "route missing", "flapping", "packet loss", "high latency")
+        if "sd-wan" in context or "session smart" in context:  # Match WAN path questions.
+            return ("tunnel problem", "application path loss", "high latency", "failover failed", "site down")
+        return ("will not boot", "commit fails", "alarm", "packet loss", "reachability loss")  # Use safe defaults.
+
+    def _clip_phrase(self, value: str, limit: int) -> str:
+        text = value.strip().rstrip(".")  # Normalize source titles before the budget cut.
+        return text if len(text) <= limit else text[: limit - 3].rstrip() + "..."  # Keep long titles bounded.
 
     def _body(self, rows: str) -> str:
         logging.info("Rendering document SKILL.md body")  # Log body generation.
