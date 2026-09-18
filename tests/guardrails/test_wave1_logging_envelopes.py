@@ -61,7 +61,9 @@ class TestCollectMissingDataEnvelopes:
         with caplog.at_level(logging.INFO, logger="root"):  # Capture INFO+ logs
             MistHelper.SSHRunnerManager._collect_missing_data(deps, [], None, None, [])  # All-missing data
         entry_msgs = _entry_messages(caplog.records)  # Collect entry envelope lines
-        assert entry_msgs, (  # At least one entry envelope must be present
+        assert (
+            any("_collect_missing_data" in message for message in entry_msgs) is True
+        ), (  # Verify the target function logged entry.
             "No entry envelope logged by _collect_missing_data; " "expected a message containing 'Entering'"
         )
 
@@ -76,7 +78,9 @@ class TestCollectMissingDataEnvelopes:
                 deps, ["10.0.0.1"], None, "secret", []
             )
         exit_msgs = _exit_messages(caplog.records)  # Collect exit envelope lines
-        assert exit_msgs, (  # At least one exit envelope must be present
+        assert (
+            any("_collect_missing_data" in message for message in exit_msgs) is True
+        ), (  # Verify the target function logged exit.
             "No exit envelope logged by _collect_missing_data on success path; "
             "expected a message containing 'Exiting'"
         )
@@ -91,10 +95,8 @@ class TestCollectMissingDataEnvelopes:
             MistHelper.SSHRunnerManager._collect_missing_data(deps, [], None, None, [])
         exit_msgs = _exit_messages(caplog.records)  # Collect exit envelope lines
         assert (
-            exit_msgs
-        ), (  # Cancellation path must also emit exit envelope
-            "No exit envelope logged by _collect_missing_data on cancel path"
-        )
+            any("_collect_missing_data" in message for message in exit_msgs) is True
+        ), "No exit envelope logged by _collect_missing_data on cancel path"  # Verify the cancel path logs exit.
 
 
 class TestConfirmExecutionEnvelopes:
@@ -109,7 +111,9 @@ class TestConfirmExecutionEnvelopes:
         with caplog.at_level(logging.INFO, logger="root"):  # Capture INFO+ logs
             MistHelper.SSHRunnerManager._confirm_execution(deps, 5)
         entry_msgs = _entry_messages(caplog.records)  # Collect entry envelope lines
-        assert entry_msgs, "No entry envelope logged by _confirm_execution"
+        assert (
+            any("_confirm_execution" in message for message in entry_msgs) is True
+        ), "No entry envelope logged by _confirm_execution"  # Verify this helper logged entry.
 
     def test_exit_envelope_emitted_on_confirm(self, caplog, monkeypatch):
         """Exit log must appear when user confirms with 'y'."""
@@ -119,7 +123,9 @@ class TestConfirmExecutionEnvelopes:
             result = MistHelper.SSHRunnerManager._confirm_execution(deps, 5)
         exit_msgs = _exit_messages(caplog.records)  # Collect exit envelope lines
         assert result is True  # Confirm returns True for 'y'
-        assert exit_msgs, "No exit envelope logged by _confirm_execution on confirm path"
+        assert (
+            any("_confirm_execution" in message for message in exit_msgs) is True
+        ), "No exit envelope logged by _confirm_execution on confirm path"  # Verify the confirm path logged exit.
 
     def test_exit_envelope_emitted_on_cancel(self, caplog, monkeypatch):
         """Exit log must appear when user cancels."""
@@ -129,7 +135,9 @@ class TestConfirmExecutionEnvelopes:
             result = MistHelper.SSHRunnerManager._confirm_execution(deps, 5)
         exit_msgs = _exit_messages(caplog.records)  # Collect exit envelope lines
         assert result is False  # Cancel returns False
-        assert exit_msgs, "No exit envelope logged by _confirm_execution on cancel path"
+        assert (
+            any("_confirm_execution" in message for message in exit_msgs) is True
+        ), "No exit envelope logged by _confirm_execution on cancel path"  # Verify the cancel path logged exit.
 
 
 class TestGetSiteSelectionEnvelopes:
@@ -172,7 +180,9 @@ class TestGetSiteSelectionEnvelopes:
         with caplog.at_level(logging.INFO, logger="root"):  # Capture INFO+ logs
             manager._get_site_selection()
         entry_msgs = _entry_messages(caplog.records)  # Collect entry envelope lines
-        assert entry_msgs, "No entry envelope logged by _get_site_selection"
+        assert (
+            any("_get_site_selection" in message for message in entry_msgs) is True
+        ), "No entry envelope logged by _get_site_selection"  # Verify site selection logged entry.
 
     def test_exit_envelope_emitted_on_all_sites(self, caplog, monkeypatch):
         """Exit log must appear when user selects all sites."""
@@ -184,7 +194,9 @@ class TestGetSiteSelectionEnvelopes:
             result = manager._get_site_selection()
         exit_msgs = _exit_messages(caplog.records)  # Collect exit envelope lines
         assert len(result) == 2  # Both fake sites returned
-        assert exit_msgs, "No exit envelope logged by _get_site_selection on all-sites path"
+        assert (
+            any("_get_site_selection" in message for message in exit_msgs) is True
+        ), "No exit envelope logged by _get_site_selection on all-sites path"  # Verify the all-sites path logged exit.
 
     def test_exit_envelope_emitted_on_cancel(self, caplog, monkeypatch):
         """Exit log must appear when user cancels."""
@@ -196,7 +208,9 @@ class TestGetSiteSelectionEnvelopes:
             result = manager._get_site_selection()
         exit_msgs = _exit_messages(caplog.records)  # Collect exit envelope lines
         assert result == []  # Cancel returns empty list
-        assert exit_msgs, "No exit envelope logged by _get_site_selection on cancel path"
+        assert (
+            any("_get_site_selection" in message for message in exit_msgs) is True
+        ), "No exit envelope logged by _get_site_selection on cancel path"  # Verify the cancel path logged exit.
 
 
 class TestConfirmSiteVariableOperationEnvelopes:
@@ -232,7 +246,9 @@ class TestConfirmSiteVariableOperationEnvelopes:
         with caplog.at_level(logging.INFO, logger="root"):  # Capture INFO+ logs
             manager._confirm_site_variable_operation(3)
         entry_msgs = _entry_messages(caplog.records)  # Collect entry envelope lines
-        assert entry_msgs, "No entry envelope logged by _confirm_site_variable_operation"
+        assert (
+            any("_confirm_site_variable_operation" in message for message in entry_msgs) is True
+        ), "No entry envelope logged by _confirm_site_variable_operation"  # Verify this helper logged entry.
 
     def test_exit_envelope_emitted_on_confirm(self, caplog, monkeypatch):
         """Exit log must appear when user confirms."""
@@ -242,7 +258,11 @@ class TestConfirmSiteVariableOperationEnvelopes:
             result = manager._confirm_site_variable_operation(3)
         exit_msgs = _exit_messages(caplog.records)  # Collect exit envelope lines
         assert result is True  # Confirm returns True
-        assert exit_msgs, "No exit envelope logged by _confirm_site_variable_operation on confirm path"
+        assert (
+            any("_confirm_site_variable_operation" in message for message in exit_msgs) is True
+        ), (  # Verify confirm path logged exit.
+            "No exit envelope logged by _confirm_site_variable_operation on confirm path"
+        )
 
     def test_exit_envelope_emitted_on_cancel(self, caplog, monkeypatch):
         """Exit log must appear when user cancels."""
@@ -254,7 +274,11 @@ class TestConfirmSiteVariableOperationEnvelopes:
             result = manager._confirm_site_variable_operation(3)
         exit_msgs = _exit_messages(caplog.records)  # Collect exit envelope lines
         assert result is False  # Cancel returns False
-        assert exit_msgs, "No exit envelope logged by _confirm_site_variable_operation on cancel path"
+        assert (
+            any("_confirm_site_variable_operation" in message for message in exit_msgs) is True
+        ), (  # Verify cancel path logged exit.
+            "No exit envelope logged by _confirm_site_variable_operation on cancel path"
+        )
 
 
 class TestLaunchInteractiveEnvelopes:
@@ -271,7 +295,9 @@ class TestLaunchInteractiveEnvelopes:
         with caplog.at_level(logging.INFO, logger="root"):  # Capture INFO+ logs
             MistHelper.TroubleshootUtils.launch_interactive()
         entry_msgs = _entry_messages(caplog.records)  # Collect entry envelope lines
-        assert entry_msgs, "No entry envelope logged by TroubleshootUtils.launch_interactive"
+        assert (
+            any("TroubleshootUtils.launch_interactive" in message for message in entry_msgs) is True
+        ), "No entry envelope logged by TroubleshootUtils.launch_interactive"  # Verify launcher logged entry.
 
     def test_exit_envelope_emitted(self, caplog, monkeypatch):
         """Exit log must appear after menu choice is dispatched."""
@@ -284,7 +310,9 @@ class TestLaunchInteractiveEnvelopes:
         with caplog.at_level(logging.INFO, logger="root"):  # Capture INFO+ logs
             MistHelper.TroubleshootUtils.launch_interactive()
         exit_msgs = _exit_messages(caplog.records)  # Collect exit envelope lines
-        assert exit_msgs, "No exit envelope logged by TroubleshootUtils.launch_interactive"
+        assert (
+            any("TroubleshootUtils.launch_interactive" in message for message in exit_msgs) is True
+        ), "No exit envelope logged by TroubleshootUtils.launch_interactive"  # Verify launcher logged exit.
 
 
 # ---------------------------------------------------------------------------
@@ -336,7 +364,7 @@ class TestNoSecretExposureInLogs:
         all_log_text = " ".join(r.getMessage() for r in caplog.records)  # Concat all log messages
         # No password flows through _confirm_execution; just ensure no raw secret token patterns
         assert (
-            "***REDACTED***" not in all_log_text or True
-        ), "Unexpected log content in _confirm_execution"  # Placeholder OK if it appears
+            "Entering SSHRunnerManager._confirm_execution" in all_log_text
+        )  # Verify logs came from the target helper.
         # The canary must not appear since no password was passed
         assert self._CANARY_PASSWORD not in all_log_text  # Paranoia check — canary not injected here
