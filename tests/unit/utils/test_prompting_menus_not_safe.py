@@ -56,4 +56,4 @@ class TestPromptingMenusAreNotSafe:
     def test_menu_records_why_the_sweep_skips_it(self, menu: str, prompt_context: str) -> None:
         """A skip reason tells the next reader why the sweep passes the menu over."""
         reason = OperationRegistry.skip_reason(menu)
-        assert reason, f"Menu {menu} needs a skip_reason naming the prompt."
+        assert len(reason) > 0, f"Menu {menu} needs a skip_reason naming the prompt."

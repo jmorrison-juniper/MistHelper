@@ -121,7 +121,7 @@ class TestInstallUvWithPip:
         # WHY: broad except must log warning and return False, not propagate
         installer, _os, _sub, _sys, log = _make_installer(subprocess_raises=RuntimeError("boom"))
         assert installer.install_uv_with_pip() is False  # WHY: exception path returns False
-        assert log.warning.called  # WHY: caller must be told via warning log
+        assert log.warning.call_count == 1  # WHY: caller must be told via warning log
 
 
 class TestInstallWithUv:
@@ -145,7 +145,7 @@ class TestInstallWithUv:
         # WHY: uv install failure logs at warning level (recoverable via pip fallback)
         installer, _os, _sub, _sys, log = _make_installer(subprocess_raises=RuntimeError("fail"))
         assert installer.install_with_uv(["uv"], "requests") is False  # WHY: failure surfaces as False
-        assert log.warning.called  # WHY: uv-path failure uses warning severity
+        assert log.warning.call_count == 1  # WHY: uv-path failure uses warning severity
 
 
 class TestInstallWithPip:
@@ -170,7 +170,7 @@ class TestInstallWithPip:
         # WHY: pip-path failure logs at error level because it is the final fallback
         installer, _os, _sub, _sys, log = _make_installer(subprocess_raises=RuntimeError("boom"))
         assert installer.install_with_pip("requests") is False  # WHY: failure surfaces as False
-        assert log.error.called  # WHY: pip-path failure uses error severity, not warning
+        assert log.error.call_count == 1  # WHY: pip-path failure uses error severity, not warning
 
 
 class TestBuildInstallCommands:

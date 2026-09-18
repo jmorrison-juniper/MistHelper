@@ -528,7 +528,7 @@ class TestStylesheetsApplied:
         table = loaded_page.get_by_test_id(HISTORY_TABLE_ID)
         sync_api.expect(table).to_be_visible(timeout=GATE_TIMEOUT_MS)
         found = table.evaluate(f"node => getComputedStyle(node).getPropertyValue('{THEME_PROPERTY}').trim()")
-        assert found, f"The property {THEME_PROPERTY} is empty, so no theme stylesheet applied."
+        assert len(found) > 0, f"The property {THEME_PROPERTY} is empty, so no theme stylesheet applied."
 
 
 class TestScriptsApplied:

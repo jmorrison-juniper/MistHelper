@@ -119,7 +119,7 @@ class TestMibRoot:
             r"::=\s*\{\s*enterprises\s+(\d+(?:\s+\d+)*)\s*\}",  # One or more numbers
             mib_text,  # Search the MIB text
         )  # Match result
-        assert match, "The MIB does not assign the module root below `enterprises`"
+        assert match is not None, "The MIB does not assign the module root below `enterprises`"
         tail = match.group(1).split()  # The branch numbers, outermost first
         root = "." + ".".join(["1", "3", "6", "1", "4", "1"] + tail)  # Full dotted OID
         assert root == DEFAULT_BASE_OID
@@ -180,7 +180,7 @@ class TestSyntax:
         """A 32-bit counter for a Mist byte count wraps within one day."""
         catalog = MetricCatalog()
         counters = [d for scope in MetricScope for d in catalog.for_scope(scope) if d.kind is MetricKind.COUNTER]
-        assert counters, "The catalog defines no counter, so this test guards nothing"
+        assert len(counters) > 0, "The catalog defines no counter, so this test guards nothing"
         assert mib_text.count("SYNTAX Counter64") >= len(counters)
 
     def test_the_module_names_every_expected_syntax(self, mib_text: str) -> None:

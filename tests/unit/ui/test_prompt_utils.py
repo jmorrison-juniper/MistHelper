@@ -207,7 +207,7 @@ def test_select_device_id_from_inventory_happy_path(caplog: pytest.LogCaptureFix
     ):
         assert PromptUtils.select_device_id_from_inventory("site-1") == "d1"
     # Ensures the table render path emitted at least one log record.
-    assert caplog.records  # Non-empty log captured.
+    assert len(caplog.records) > 0  # Non-empty log captured.
 
 
 # ---------- _load_site_csv_maps ----------

@@ -735,7 +735,7 @@ def test_udp_check_port_4500_prepends_non_esp_marker(
     stub = _StubDatagramSocket(recv_bytes=b"\x00" * 28)  # arbitrary reply
     _install_udp_stub(monkeypatch, stub)
     zp_mod._udp_check("vpn.example.zscaler.net", 4500, timeout=1.0)
-    assert stub.sent, "sendto was never called"
+    assert len(stub.sent) > 0, "sendto was never called"
     payload, addr = stub.sent[0]
     assert addr == ("vpn.example.zscaler.net", 4500)
     assert payload[:4] == b"\x00\x00\x00\x00", "port 4500 requires non-ESP marker"
@@ -855,7 +855,7 @@ def test_no_real_sock_dgram_socket_created(monkeypatch: pytest.MonkeyPatch) -> N
     stub = _StubDatagramSocket(recv_bytes=b"\x00" * 28)
     calls = _install_udp_stub(monkeypatch, stub)
     zp_mod._udp_check("host.example", 500, timeout=1.0)
-    assert calls, "the socket factory should have been called exactly once"
+    assert len(calls) > 0, "the socket factory should have been called exactly once"
     for _family, sock_type, _proto in calls:
         # ``socket.SOCK_DGRAM`` is the enum flag for UDP; anything else here
         # means the probe accidentally opened a TCP or raw socket.

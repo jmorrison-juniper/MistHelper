@@ -174,7 +174,7 @@ def test_a_client_row_names_the_five_fields_of_the_story() -> None:
 def test_an_empty_capture_writes_a_header_and_no_row() -> None:
     """A site with no device and no client is a valid capture, not a fault."""
     result = export.export_capture({"capture_id": CAPTURE_ID}, export.FORMAT_CSV)
-    assert result.ok
+    assert result.ok is True
     assert _csv_rows(result.body) == []
 
 
@@ -278,7 +278,7 @@ def test_the_csv_file_names_the_capture_on_every_row() -> None:
     body = export.export_capture(_capture(), export.FORMAT_CSV).body
     assert body.startswith(export.HEADER_MARKER)  # The header line opens the file, with no preamble.
     rows = _csv_rows(body)
-    assert rows, "the capture holds rows, so the file must hold rows"
+    assert len(rows) > 0, "the capture holds rows, so the file must hold rows"
     for row in rows:  # Every row names its own capture, so one row alone is still traceable.
         assert row["org_name"] == ORG_NAME
         assert row["site_name"] == SITE_NAME
@@ -390,7 +390,7 @@ def test_an_unknown_format_is_refused() -> None:
 
 def test_a_format_with_stray_spaces_still_works() -> None:
     """The value arrives in the address bar, so a stray space is not a mistake."""
-    assert export.export_capture(_capture(), "  CSV  ").ok
+    assert export.export_capture(_capture(), "  CSV  ").ok is True
 
 
 def test_each_format_carries_its_own_media_type() -> None:

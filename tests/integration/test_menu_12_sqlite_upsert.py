@@ -110,7 +110,7 @@ class TestSQLiteUpsertIdempotency:
         expected_columns = ["org_id", "site_id", "mac", "serial", "model", "type"]
         for column in expected_columns:
             matching = [name for name in index_names if column in name]
-            assert matching, f"No index found for column: {column}"
+            assert len(matching) > 0, f"No index found for column: {column}"
 
 
 class TestCSVSchemaStability:

@@ -239,7 +239,7 @@ def test_the_badge_cell_carries_no_field_attribute() -> None:
         badge with that text, and the column would read as empty.
     """
     cells = tags_with(BADGE_CELL_TESTID)  # WHY: The cell carries the test identifier of the contract.
-    assert cells, "progress.html holds no cell for the version check."
+    assert len(cells) > 0, "progress.html holds no cell for the version check."
     for tag in cells:  # WHY: One cell for each device row.
         for attribute in FIELD_ATTRS:  # WHY: The same two attributes as the badge test.
             assert attribute not in tag, f"The version check cell carries {attribute}."

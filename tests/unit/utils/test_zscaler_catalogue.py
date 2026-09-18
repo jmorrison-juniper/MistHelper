@@ -390,7 +390,7 @@ class TestRefreshCenr:
         monkeypatch.setattr(zc_mod, "fetch_cloud", lambda cloud, **_kw: None)
         fresh, warnings = refresh_cenr(cenr_path)
         assert fresh == {}
-        assert warnings  # at least the "all fetches failed" warning
+        assert len(warnings) > 0  # at least the "all fetches failed" warning
 
     def test_city_metadata_warnings_propagate(self, monkeypatch, tmp_path):
         """Warnings from ``attach_city_metadata`` bubble into the return list."""

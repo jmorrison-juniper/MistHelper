@@ -97,7 +97,7 @@ def test_the_bootstrap_runs_the_browser_download(tmp_path: Path, monkeypatch: py
     assert bootstrapper.install_browser_driver() is True, "a zero exit status means the browser is ready"
     logger.debug("The bootstrap ran %r", calls)  # Record the command for a failure read.
 
-    assert calls, "the bootstrap must run one command"
+    assert len(calls) > 0, "the bootstrap must run one command"
     assert calls[0][1:] == ["-m", "playwright", "install", PLAYWRIGHT_BROWSER], "wrong download command"
 
 

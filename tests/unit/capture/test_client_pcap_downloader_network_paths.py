@@ -345,7 +345,7 @@ class TestDownloadOneResourceHandling:
         with patch.object(cpd.requests, "get", return_value=response):
             ClientPacketCaptureDownloader._download_one(row, tmp_path)  # WHY: drive the failure.
         # WHY: the with block must call __exit__ so the socket returns to the pool.
-        assert response.__exit__.called
+        assert response.__exit__.call_count == 1
 
     def test_a_successful_download_releases_the_connection(self, tmp_path: Path) -> None:
         """A connection held after a clean transfer still exhausts the pool."""
@@ -354,7 +354,7 @@ class TestDownloadOneResourceHandling:
         row = _CaptureRow("c1", "https://host/c1.pcap", "10", "c1.pcap")  # WHY: one row.
         with patch.object(cpd.requests, "get", return_value=response):
             assert ClientPacketCaptureDownloader._download_one(row, tmp_path) is True
-        assert response.__exit__.called  # WHY: the socket must return to the pool.
+        assert response.__exit__.call_count == 1  # WHY: the socket must return to the pool.
         assert (tmp_path / "c1.pcap").read_bytes() == b"payload"  # WHY: prove the write ran.
 
 

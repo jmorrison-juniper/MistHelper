@@ -623,7 +623,7 @@ def test_apply_site_settings_failed_marks_error() -> None:
     WAN2MigrationManager._apply_site_settings("s1", "S1", {"vars": {}}, result)
     assert result["status"] == "FAILED"
     assert "500" in result["error"]
-    assert mocks["mistapi"].api.v1.sites.setting.updateSiteSettings.called
+    assert mocks["mistapi"].api.v1.sites.setting.updateSiteSettings.call_count == 1
 
 
 def test_fetch_current_site_settings_normalises_non_dict() -> None:
@@ -684,7 +684,7 @@ def test_process_sites_for_variable_respects_stop_signal() -> None:
     manager, mocks = _wire(stop_signal=True)  # WHY: stop signal fires on first call.
     results = manager._process_sites_for_variable([{"id": "s1", "name": "S1"}, {"id": "s2", "name": "S2"}])
     assert results == []  # WHY: no site processed before stop signal check.
-    assert mocks["check_stop"].called
+    assert mocks["check_stop"].call_count == 1
 
 
 def test_process_sites_for_variable_processes_all_sites_when_no_stop() -> None:
@@ -718,7 +718,7 @@ def test_generate_site_variable_report_writes_and_prints_summary(
             }
         ]
     )
-    assert mocks["write"].called  # WHY: DataExporter invoked.
+    assert mocks["write"].call_count == 1  # WHY: DataExporter invoked.
     out = capsys.readouterr().out
     assert "Configuration Complete" in out
     assert "CRITICAL ATTENTION" in out

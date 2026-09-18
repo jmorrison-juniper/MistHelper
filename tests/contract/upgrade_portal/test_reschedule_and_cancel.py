@@ -287,7 +287,7 @@ def test_a_reschedule_names_the_operator(client: FlaskClient, run_store: Recordi
     run_id = seed(run_store, "awaiting_confirmation")
     client.post(RESCHEDULE_TEMPLATE.format(run_id=run_id), json={"start_time": "1h"})
     digest = run_store.runs[run_id]["rescheduled_by"]
-    assert digest  # The record names the operator.
+    assert len(digest) > 0  # The record names the operator.
     assert PROBE_EMAIL not in digest  # It never names the address.
 
 
@@ -358,7 +358,7 @@ def test_a_cancel_names_the_operator(client: FlaskClient, run_store: RecordingRu
     run_id = seed(run_store, "created")
     client.post(CANCEL_TEMPLATE.format(run_id=run_id), json={})
     digest = run_store.runs[run_id]["cancelled_by"]
-    assert digest
+    assert len(digest) > 0
     assert PROBE_EMAIL not in digest
 
 

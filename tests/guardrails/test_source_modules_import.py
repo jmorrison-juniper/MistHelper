@@ -69,7 +69,7 @@ def test_every_source_module_imports() -> None:
     """Fail when a module under `src/` cannot import."""
     SourceModuleImporter.ensure_import_path()  # Make `src.` resolvable before the walk.
     names = SourceModuleImporter.module_names()  # Discover every first-party module.
-    assert names, f"The guard found no module under {_SRC_ROOT}. The scan read nothing."
+    assert len(names) > 0, f"The guard found no module under {_SRC_ROOT}. The scan read nothing."
     failures = SourceModuleImporter.import_all(names)  # Import each module and collect the failures.
     unexpected = {  # Keep only a failure that no open issue already tracks.
         name: message for name, message in failures.items() if name not in KNOWN_IMPORT_FAILURES

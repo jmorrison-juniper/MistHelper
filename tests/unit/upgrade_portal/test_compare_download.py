@@ -414,7 +414,7 @@ def test_a_known_format_returns_a_file(chosen: str) -> None:
 
     assert result.ok is True
     assert result.error == ""
-    assert result.body
+    assert result.body != ""
 
 
 @pytest.mark.parametrize("chosen", ["xlsx", "", "pdf", None, 12345, "cs v", ["csv"]])

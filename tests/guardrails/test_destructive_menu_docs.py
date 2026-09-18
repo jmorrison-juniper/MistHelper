@@ -99,7 +99,7 @@ def test_documents_match_the_registry() -> None:
                 missing = sorted(expected - documented)  # A menu the document forgot.
                 extra = sorted(documented - expected)  # A menu the document invented.
                 mismatches.append(f"  {relative_path}: missing={missing} extra={extra}")
-    assert checked, "The guard found no documented range expression, so it compared nothing."
+    assert checked > 0, "The guard found no documented range expression, so it compared nothing."
     report = "\n".join(mismatches)  # One line for each wrong expression.
     assert not mismatches, (  # A wrong safety list must stop the build.
         f"Compared {checked} documented range expressions against " f"{len(expected)} destructive menus.\n{report}"
@@ -122,7 +122,7 @@ def test_instruction_table_counts_match_the_registry() -> None:
     path = _REPO_ROOT / ".github/copilot-instructions.md"  # The table lives in the instruction file.
     assert path.is_file(), "The guard cannot read .github/copilot-instructions.md."
     rows = re.findall(r"^\| `(\w+)` \| (\d+) \|", path.read_text(encoding="utf-8"), re.MULTILINE)
-    assert rows, "The guard found no category row, so it compared nothing."
+    assert len(rows) > 0, "The guard found no category row, so it compared nothing."
     wrong = [  # Keep one message for each row that disagrees with the registry.
         f"  {name}: table says {int(count)}, registry says {actual.get(name)}"
         for name, count in rows

@@ -943,7 +943,7 @@ class TestAnalyzeIntegration:
         ZoneConfigurationAnalyzer.analyze(**mock_deps)
         out = capsys.readouterr().out
         assert "ZONE & ENGAGEMENT" in out
-        mock_deps["save_data_fn"].assert_called()
+        assert mock_deps["save_data_fn"].call_count == 5  # Prove the analyzer saves each report table.
 
     def test_api_error_handled(
         self,

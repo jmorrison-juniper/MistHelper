@@ -187,7 +187,7 @@ def test_partitioned_tables_use_list_partitioning(migration_ddl: str, table_name
     """Each partitioned table must use LIST, because `ensure_org_partitions` sends a LIST bound."""
     parents = _parent_tables(migration_ddl)  # Read the tables the chain leaves behind.
     statement = parents.get(table_name, "")  # Take the final definition of this one table.
-    assert statement, f"The migration builds no `{table_name}` table."
+    assert len(statement) > 0, f"The migration builds no `{table_name}` table."
     assert (
         "PARTITION BY LIST (org_id)" in statement
     ), f"The `{table_name}` table does not use LIST partitioning by `org_id`."

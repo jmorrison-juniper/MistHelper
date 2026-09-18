@@ -537,7 +537,7 @@ def test_theme_list_is_a_tuple_of_plain_names(monkeypatch: pytest.MonkeyPatch) -
     assert isinstance(themes, tuple)
     assert all(isinstance(name, str) for name in themes)
     assert all(name == name.strip() for name in themes)
-    assert themes  # WHY: The reader must never hand the template an empty list.
+    assert len(themes) > 0  # WHY: The reader must never hand the template an empty list.
 
 
 def test_default_theme_list_holds_no_duplicate() -> None:
@@ -882,7 +882,7 @@ def test_load_settings_never_reads_a_password_variable(monkeypatch: pytest.Monke
     # that name reaches this module only and leaves every other module alone.
     monkeypatch.setattr(config, "os", SimpleNamespace(environ=recorder))
     load_settings()
-    assert recorder.read_keys  # WHY: An empty log would make the next two checks meaningless.
+    assert len(recorder.read_keys) > 0  # WHY: An empty log would make the next two checks meaningless.
     assert ARANGO_PASSWORD_NAME not in recorder.read_keys
     assert REDIS_PASSWORD_NAME not in recorder.read_keys
 

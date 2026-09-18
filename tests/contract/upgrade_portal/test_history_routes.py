@@ -435,7 +435,7 @@ def test_each_history_row_carries_the_six_contract_fields(signed_in_client: Flas
     """
     rows = read_rows(signed_in_client.get(HISTORY_API_PATH), CAPTURES_FIELD)
 
-    assert rows, "The canned history holds forty rows, so the first page is not empty."
+    assert len(rows) > 0, "The canned history holds forty rows, so the first page is not empty."
     for row in rows:
         assert ROW_FIELDS <= set(row), f"The row {row.get('capture_id')} drops a field of the contract."
 

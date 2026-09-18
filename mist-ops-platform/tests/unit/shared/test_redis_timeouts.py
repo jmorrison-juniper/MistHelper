@@ -97,10 +97,10 @@ class TestEveryCallSitePassesTheLimits:
         calls = [
             node for node in ast.walk(tree) if isinstance(node, ast.Call) and self._callee_name(node) == "from_url"
         ]
-        assert calls, f"{module_path} builds no Redis client, so this list is stale"
+        assert len(calls) > 0, f"{module_path} builds no Redis client, so this list is stale"
         for call in calls:
             spread = [kw for kw in call.keywords if kw.arg is None]
-            assert spread, (
+            assert len(spread) > 0, (
                 f"{module_path} line {call.lineno}: from_url carries no **kwargs spread, "
                 "so the Redis client waits without a socket limit"
             )

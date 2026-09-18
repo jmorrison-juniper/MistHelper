@@ -83,7 +83,9 @@ class TestFetchOrgSitesSilentFailure:
         # accompanying log record.
         if result == []:
             # The test passes only when the log contains the failure.
-            assert caplog.records, "result is [] and no log record exists -- " "the failure is invisible to the caller."
+            assert len(caplog.records) > 0, (
+                "result is [] and no log record exists -- " "the failure is invisible to the caller."
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +122,7 @@ class TestFetchSiteDevicesSilentFailure:
                 result = _fetch_site_devices(apisession, "site-abc", "all")
 
         # Before the fix this assertion fails, because the handler logs nothing.
-        assert fake_logger.exception.called, "Expected an ERROR log record for the failed device call."
+        assert fake_logger.exception.call_count == 1, "Expected an ERROR log record for the failed device call."
         # The site identifier must reach the record, so an operator can trace it.
         assert "site-abc" in fake_logger.exception.call_args[0], "Expected the log record to name the site."
         assert result == [], "The helper still returns a list, so no call site changes."
@@ -134,7 +136,7 @@ class TestFetchSiteDevicesSilentFailure:
 
         # An empty list is acceptable only when the failure left a record.
         if result == []:
-            assert fake_logger.exception.called, (
+            assert fake_logger.exception.call_count == 1, (
                 "result is [] and no log record exists -- " "the failure is invisible to the caller."
             )
 
@@ -168,7 +170,9 @@ class TestFetchWirelessClientsSilentFailure:
         result = _fetch_wireless_clients(mistapi_mock, apisession, "site-xyz")
 
         if result == []:
-            assert caplog.records, "result is [] and no log record exists -- " "the failure is invisible to the caller."
+            assert len(caplog.records) > 0, (
+                "result is [] and no log record exists -- " "the failure is invisible to the caller."
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -200,4 +204,6 @@ class TestFetchWiredClientsSilentFailure:
         result = _fetch_wired_clients(mistapi_mock, apisession, "site-def")
 
         if result == []:
-            assert caplog.records, "result is [] and no log record exists -- " "the failure is invisible to the caller."
+            assert len(caplog.records) > 0, (
+                "result is [] and no log record exists -- " "the failure is invisible to the caller."
+            )

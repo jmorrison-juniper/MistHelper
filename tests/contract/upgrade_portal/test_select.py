@@ -754,7 +754,7 @@ def test_the_site_list_reads_the_organization_that_the_path_named(
         fake_mist_api: The canned cloud read surface.
     """
     fetch_sites(signed_in_client, fake_org_id)
-    assert fake_mist_api.calls  # WHY: A silent route would pass every field check below.
+    assert len(fake_mist_api.calls) > 0  # WHY: A silent route would pass every field check below.
     assert all(parameters.get("org_id") == fake_org_id for _, parameters in fake_mist_api.calls)
 
 

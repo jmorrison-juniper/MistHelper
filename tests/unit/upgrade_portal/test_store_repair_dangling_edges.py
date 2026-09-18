@@ -184,7 +184,7 @@ def test_repair_logs_each_removed_edge(caplog: pytest.LogCaptureFixture) -> None
     with caplog.at_level(logging.INFO, logger=store.logger.name):  # WHY: The removal logs at the info level.
         store.repair_dangling_edges(database)  # The one-time repair runs.
     removals = [record.getMessage() for record in caplog.records if dangling in record.getMessage()]  # The removal log.
-    assert removals  # The repair logged the removal.
+    assert len(removals) > 0  # The repair logged the removal.
     assert any(_MISSING_RUN in message for message in removals)  # The log names the missing run key.
 
 

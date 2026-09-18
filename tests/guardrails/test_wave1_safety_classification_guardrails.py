@@ -25,7 +25,7 @@ class TestWave1SafetyClassificationGuardrails:
         destructive_options = MistHelper.OperationRegistry.wave1_safety_classification_baseline()["destructive_markers"]
         for option in destructive_options:
             reason = MistHelper.OperationRegistry.skip_reason(option)
-            assert reason, f"Option {option} should have a non-empty skip reason"
+            assert len(reason) > 0, f"Option {option} should have a non-empty skip reason"
             assert "DESTRUCTIVE" in reason.upper(), f"Option {option} skip reason lost destructive marker"
 
     def test_adjacent_boundary_options_remain_stable(self):

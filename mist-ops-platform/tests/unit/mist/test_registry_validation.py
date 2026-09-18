@@ -83,4 +83,4 @@ class TestRegistryCompleteness:
                 or endpoint.write_method is not None
                 or endpoint.list_method is not None
             )
-            assert has_method, f"{entity_type} has no read, write, or list method"
+            assert has_method is True, f"{entity_type} has no read, write, or list method"

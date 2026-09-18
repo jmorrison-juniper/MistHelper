@@ -160,7 +160,7 @@ class TestPostCheckRollback:
 
         result = deploy_tasks._execute_scheduled_job(db, job)
 
-        assert FakeRollbackService.calls, "The restore helper never ran"
+        assert len(FakeRollbackService.calls) > 0, "The restore helper never ran"
         assert FakeRollbackService.calls[0][2] == PREVIOUS_CONFIG
         assert job.status == "rolled_back"
         assert result["rollback"] == "restored"
@@ -177,7 +177,7 @@ class TestPostCheckRollback:
         result = deploy_tasks._execute_scheduled_job(db, job)
 
         assert workflow["post_check"].calls == 0, "The post-check ran after a failed install"
-        assert FakeRollbackService.calls, "The restore helper never ran"
+        assert len(FakeRollbackService.calls) > 0, "The restore helper never ran"
         assert job.status == "rolled_back"
         assert result["status"] == "install_failed"
 
