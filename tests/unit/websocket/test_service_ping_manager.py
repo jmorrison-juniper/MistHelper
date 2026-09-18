@@ -497,6 +497,25 @@ def test_handle_ping_response_returns_none_on_non_200(capsys: pytest.CaptureFixt
     assert "Failed to issue Service Ping command" in capsys.readouterr().out
 
 
+def test_handle_ping_response_reports_401_status(
+    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A 401 service ping response must report the exact status."""
+    _configure_manager()  # Configure the product dependencies without a live session.
+    manager = ServicePingManager()  # Build the real manager.
+    response = SimpleNamespace(status_code=401, data={"detail": "bad token"})  # Model an auth failure.
+
+    with caplog.at_level(logging.ERROR, logger=spm_module.logger.name):  # Capture the product status log.
+        result = manager._handle_ping_response(response)  # Drive the product status parser.
+
+    assert result is None  # A 401 response must not return a session identifier.
+    out = capsys.readouterr().out  # Read the operator-facing status output.
+    assert "Status 401" in out  # The operator must see the exact client-error status.
+    assert "bad token" in out  # The operator must see the server detail for triage.
+    assert "status 401" in caplog.text  # The log must preserve the exact status.
+
+
 def test_handle_ping_response_returns_session_when_present(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

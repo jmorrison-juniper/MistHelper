@@ -36,7 +36,7 @@ from src.metrics_gateway.snmp import (
     format_oid,
     parse_oid,
 )
-from tests.unit.metrics_gateway.conftest import ORG_ID, SITE_A, build_overrides
+from tests.unit.metrics_gateway.conftest import ORG_ID, SITE_A, StubResponse, build_overrides
 
 BASE = parse_oid(DEFAULT_BASE_OID)  # The base every test OID starts with.
 
@@ -49,6 +49,15 @@ def _snapshot() -> MetricSnapshot:
     """
     reader = MistStatsReader(session=None, overrides=build_overrides())
     return MistMetricsCollector(reader, ORG_ID).collect()
+
+
+def test_payload_returns_none_and_logs_429(caplog: pytest.LogCaptureFixture) -> None:
+    """A 429 Mist response must produce no payload and report the status."""
+    response = StubResponse(status_code=429, data={"detail": "rate limited"})  # Model a rate-limited endpoint.
+    caplog.set_level("ERROR", logger="src.metrics_gateway.collector")  # Capture the product error record.
+    payload = MistStatsReader._payload(response, "getOrgStats")  # Drive the product status parser.
+    assert payload is None  # A 429 reply must not feed the metric collector.
+    assert "getOrgStats call returned status 429" in caplog.text  # The log must name the exact status.
 
 
 class TestOidText:

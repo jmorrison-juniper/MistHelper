@@ -686,6 +686,31 @@ class TestGatewayExportUtilsStaticMethods:
         messages = "\n".join(rec.getMessage() for rec in caplog.records)
         assert "No gateway templates found" in messages  # WHY: legacy operator message.
 
+    def test_templates_http_404_reports_status_and_skips_export(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A 404 template response must report the status and skip export."""
+        writer = MagicMock()  # WHY: a client error must not create a valid empty export.
+        list_templates = MagicMock(return_value=SimpleNamespace(status_code=404, data=[{"id": "ignored"}]))
+        mistapi_module = ModuleType("mistapi_stub")  # WHY: isolate the SDK module from live imports.
+        cast(Any, mistapi_module).api = SimpleNamespace(
+            v1=SimpleNamespace(
+                orgs=SimpleNamespace(gatewaytemplates=SimpleNamespace(listOrgGatewayTemplates=list_templates))
+            )
+        )
+        bundle = _build_dependency_bundle(
+            tmp_path,
+            mistapi_dependency=mistapi_module,
+            data_exporter=SimpleNamespace(write_with_format_selection=writer),
+        )  # WHY: wire the product helper to controlled dependencies.
+        configure_gateway_export_utils_dependencies(**bundle)  # WHY: drive the real dependency seam.
+        with caplog.at_level(logging.ERROR, logger="src.gateway.gateway_export_utils"):  # WHY: capture status log.
+            result = GatewayExportUtils.templates()  # WHY: drive the product status path.
+        assert result is None  # WHY: preserve the existing exporter return contract.
+        assert "HTTP 404" in caplog.text  # WHY: the operator must see the exact client-error status.
+        assert "gateway templates" in caplog.text  # WHY: the log must name the failed data set.
+        writer.assert_not_called()  # WHY: a client error must not produce a valid empty export.
+
     def test_templates_writes_export_when_templates_present(self, tmp_path: Path) -> None:
         """Happy path forwards flattened+escaped templates to DataExporter."""
         writer = MagicMock()
