@@ -22,6 +22,7 @@ from unittest.mock import MagicMock, patch  # WHY: mandatory spec= mocks + patch
 
 import pytest  # WHY: monkeypatch + caplog fixtures.
 
+from src.device import device_utils as device_utils_mod  # WHY: patch the product module SDK and logger.
 from src.device.device_utils import DeviceUtils  # WHY: SUT direct import.
 
 
@@ -90,6 +91,23 @@ class TestGetAllApMacsFromSite:
 
         assert result == []  # WHY: SUT contract: no crash, empty on failure.
         assert "Exception in DeviceUtils.get_all_ap_macs_from_site" in caplog.text  # WHY: log format.
+
+    def test_http_404_returns_empty_and_logs_status(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A 404 AP list must return no rows and report the exact status."""
+        _install_fake_mist_helper(monkeypatch)  # WHY: lazy MistHelper import must resolve without side effects.
+        response = MagicMock(spec=object)  # WHY: opaque SDK response double for the product status reader.
+        response.status_code = 404  # WHY: model a site whose AP list is unavailable by client error.
+        response.data = [{"mac": "aa"}]  # WHY: prove the product ignores data from a failed status.
+        caplog.set_level(logging.ERROR, logger=device_utils_mod.logger.name)  # WHY: capture the status log.
+        with patch("src.device.device_utils.mistapi") as fake_mistapi:  # WHY: isolate the SDK call.
+            fake_mistapi.api.v1.sites.devices.listSiteDevices.return_value = response  # WHY: return the 404 reply.
+            result = DeviceUtils.get_all_ap_macs_from_site("site-404")  # WHY: drive the product status path.
+        assert result == []  # WHY: a 404 response must not return AP MACs.
+        fake_mistapi.api.v1.sites.devices.listSiteDevices.assert_called_once()  # WHY: prove the SDK path ran.
+        assert "HTTP 404" in caplog.text  # WHY: the operator must see the exact client-error status.
+        assert "Found 1 AP MACs" not in caplog.text  # WHY: the product must not log a false success count.
 
 
 class TestExpandPortRangeString:
