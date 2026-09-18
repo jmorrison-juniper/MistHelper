@@ -34,6 +34,20 @@ RUN_ID = "run-2564"
 NO_WAIT = 0  # The value the banner reads as "no cooldown to show".
 
 
+def test_lock_record_empty_body_returns_none() -> None:
+    """A zero-byte lock payload must read as no active lock."""
+    empty_body = b"".decode()  # WHY: model a Redis value with no JSON bytes.
+    result = LockRecord.from_json(empty_body)  # WHY: drive the product lock decoder.
+    assert result is None  # WHY: invalid lock data must not block the page.
+
+
+def test_lock_record_malformed_json_returns_none() -> None:
+    """A malformed lock payload must read as no active lock."""
+    malformed_body = "{not valid JSONDecodeError"  # WHY: model a damaged Redis lock value.
+    result = LockRecord.from_json(malformed_body)  # WHY: drive the product lock decoder.
+    assert result is None  # WHY: corrupt lock data must not crash the page.
+
+
 def explode(*args: Any, **kwargs: Any) -> Any:
     """Raise the way a dead store or a broken session layer does.
 

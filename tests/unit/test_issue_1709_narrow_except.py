@@ -109,6 +109,44 @@ def test_latest_pypi_version_reports_404_status(
     assert "PyPI returned status 404 for missing" in caplog.text  # The log must report the exact status.
 
 
+def test_latest_pypi_version_catches_empty_json_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The PyPI reader treats an empty JSON body as an unknown latest version."""
+    response = MagicMock(status_code=200)  # Model a successful HTTP response with a bad body.
+    response.raise_for_status.return_value = None  # Keep the product on the body-parse path.
+    response.json.side_effect = ValueError(b"".decode())  # Model the empty JSON body parse failure.
+    requests_stub = SimpleNamespace(get=MagicMock(return_value=response))  # Stub the deferred requests import.
+    original_import = builtins.__import__  # Keep the real importer for all other modules.
+
+    def fake_import(name: str, *args: object, **kwargs: object) -> object:
+        return requests_stub if name == "requests" else original_import(name, *args, **kwargs)  # Target requests only.
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)  # Route the deferred requests import to the stub.
+    assert MistHelper._get_latest_pypi_version("requests") == ""  # Preserve the latest-unknown contract.
+    requests_stub.get.assert_called_once_with(  # Prove the product PyPI request path ran.
+        "https://pypi.org/pypi/requests/json",
+        timeout=5,
+    )
+
+
+def test_latest_pypi_version_catches_malformed_json_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The PyPI reader treats a malformed JSON body as an unknown latest version."""
+    response = MagicMock(status_code=200)  # Model a successful HTTP response with a damaged body.
+    response.raise_for_status.return_value = None  # Keep the product on the body-parse path.
+    response.json.side_effect = ValueError("{not valid JSONDecodeError")  # Model the malformed JSON parse failure.
+    requests_stub = SimpleNamespace(get=MagicMock(return_value=response))  # Stub the deferred requests import.
+    original_import = builtins.__import__  # Keep the real importer for all other modules.
+
+    def fake_import(name: str, *args: object, **kwargs: object) -> object:
+        return requests_stub if name == "requests" else original_import(name, *args, **kwargs)  # Target requests only.
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)  # Route the deferred requests import to the stub.
+    assert MistHelper._get_latest_pypi_version("requests") == ""  # Preserve the latest-unknown contract.
+    requests_stub.get.assert_called_once_with(  # Prove the product PyPI request path ran.
+        "https://pypi.org/pypi/requests/json",
+        timeout=5,
+    )
+
+
 def test_latest_pypi_version_rejects_unexpected_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """The PyPI reader lets an unexpected requests defect escape."""
     requests_stub = SimpleNamespace(get=MagicMock(side_effect=AssertionError("boom")))  # Simulate an unrelated defect.

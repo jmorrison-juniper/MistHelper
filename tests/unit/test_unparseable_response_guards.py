@@ -123,6 +123,34 @@ def test_diagnostic_common_reports_404_without_parsing_body(caplog: pytest.LogCa
     assert "command failed; status=404" in _messages(caplog)  # WHY: the audit log must pin the status.
 
 
+def test_arp_trigger_timeout_reaches_the_caller() -> None:
+    """The ARP trigger must let a transport timeout reach the caller."""
+    timeout = requests.exceptions.Timeout("synthetic timeout")  # WHY: use the real Requests timeout type.
+    with patch.object(arp_mod.requests, "post", side_effect=timeout) as post:  # WHY: fail the product POST call.
+        with pytest.raises(requests.exceptions.Timeout, match="synthetic timeout"):
+            ARPCommandManager._trigger_command("h", "t", "s", "d")  # WHY: drive the real product transport seam.
+    post.assert_called_once_with(  # WHY: prove the timeout came from the product ARP endpoint call.
+        "https://h/api/v1/sites/s/devices/d/arp",
+        headers={"Authorization": "Token t"},
+        json={},
+        timeout=30,
+    )
+
+
+def test_arp_trigger_connection_error_reaches_the_caller() -> None:
+    """The ARP trigger must let a transport connection error reach the caller."""
+    error = requests.exceptions.ConnectionError("synthetic connection error")  # WHY: use the real Requests type.
+    with patch.object(arp_mod.requests, "post", side_effect=error) as post:  # WHY: fail the product POST call.
+        with pytest.raises(requests.exceptions.ConnectionError, match="synthetic connection error"):
+            ARPCommandManager._trigger_command("h", "t", "s", "d")  # WHY: drive the real product transport seam.
+    post.assert_called_once_with(  # WHY: prove the error came from the product ARP endpoint call.
+        "https://h/api/v1/sites/s/devices/d/arp",
+        headers={"Authorization": "Token t"},
+        json={},
+        timeout=30,
+    )
+
+
 def test_redis_writer_json_call_is_not_an_http_response_parse() -> None:
     """RedisJSON writer line 597 sends JSON.SET and does not parse an HTTP body."""
     config = DatabaseConfig(redis_host="localhost", redis_port=6379, redis_password="test")  # WHY: real config.
