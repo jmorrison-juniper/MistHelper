@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from src.utils import address_utils as address_mod
 from src.utils.address_utils import (
@@ -863,6 +866,39 @@ class TestNominatimValidatorAPI:
         mock_resp.json.return_value = []
         result = self.validator._parse_geocode_response(mock_resp, [])  # WHY: source left the signature
         assert result["valid"] is False
+
+    def test_parse_geocode_response_malformed_body_returns_error(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A malformed geocode body must return the documented failure payload."""
+        response = MagicMock(status_code=200, url="https://nominatim.example/search")  # Model a 200 HTTP response.
+        response.json.side_effect = json.JSONDecodeError("bad JSONDecodeError", "{bad", 1)  # Force parser failure.
+        caplog.set_level("ERROR", logger=address_mod.logger.name)  # Capture the product parse-error record.
+        result = self.validator._parse_geocode_response(response, ["123 Main"])  # Drive the product parser.
+        assert result == {  # The caller must receive the standard empty-result shape.
+            "valid": False,
+            "confidence": 0.0,
+            "lat": None,
+            "lon": None,
+            "error": "Unparseable response body",
+        }
+        assert "unparseable body" in caplog.text  # The log must name the malformed body.
+        assert "bad JSONDecodeError" in caplog.text  # The log must keep the parser cause.
+
+    def test_parse_geocode_response_empty_body_returns_error(self, caplog: pytest.LogCaptureFixture) -> None:
+        """An empty geocode body must return the documented failure payload."""
+        empty_body = b""  # Model the empty HTTP body that issue #2967 repaired.
+        response = MagicMock(status_code=200, url="https://nominatim.example/search")  # Model a 200 HTTP response.
+        response.json.side_effect = json.JSONDecodeError("empty body", empty_body.decode(), 0)  # Parser failure.
+        caplog.set_level("ERROR", logger=address_mod.logger.name)  # Capture the product parse-error record.
+        result = self.validator._parse_geocode_response(response, ["123 Main"])  # Drive the product parser.
+        assert result == {  # The caller must receive the standard empty-result shape.
+            "valid": False,
+            "confidence": 0.0,
+            "lat": None,
+            "lon": None,
+            "error": "Unparseable response body",
+        }
+        assert "unparseable body" in caplog.text  # The log must name the empty body.
+        assert "empty body" in caplog.text  # The log must keep the parser cause.
 
     def test_parse_geocode_response_success(self):
         mock_resp = MagicMock()

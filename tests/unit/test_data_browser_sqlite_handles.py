@@ -74,6 +74,18 @@ def test_empty_json_body_reports_read_error(tmp_path) -> None:
     assert "Expecting value" in result["error"]  # The message identifies the empty JSON body.
 
 
+def test_malformed_json_body_reports_read_error(tmp_path) -> None:
+    """Verify malformed JSON returns an error payload instead of raising."""
+    json_path = tmp_path / "broken.json"  # Use an allowed extension for the preview route.
+    json_path.write_text("{not valid JSONDecodeError", encoding="utf-8")  # Model a damaged JSON export.
+    service = DataBrowserService(str(tmp_path))  # Scope the service to the fixture directory.
+
+    result = service.preview_file("broken.json", 1, 25, "")  # Drive the product JSON preview path.
+
+    assert result["error"].startswith("Failed to read JSON:")  # The caller receives a controlled error.
+    assert "Expecting property name" in result["error"]  # The message identifies the malformed JSON body.
+
+
 def test_preview_sqlite_closes_the_handle_when_the_table_is_absent(tmp_path) -> None:
     """Verify the empty-table early return still releases the connection."""
     service = DataBrowserService(str(tmp_path))

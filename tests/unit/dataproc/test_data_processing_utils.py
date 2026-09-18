@@ -103,6 +103,13 @@ class TestFlattenNestedFields:
         result = DataProcessingUtils.flatten_nested_fields([entry])  # Execute the real flattening pipeline.
         assert result == [{"cfg": ""}]  # The product keeps the empty value without a false row.
 
+    def test_malformed_json_string_returns_original_value(self) -> None:
+        """A malformed JSON body string must stay visible as the original value."""
+        malformed_body = "{not valid JSONDecodeError"  # Model a damaged response body.
+        entry = {"cfg": malformed_body}  # Drive the product parser with malformed JSON text.
+        result = DataProcessingUtils.flatten_nested_fields([entry])  # Execute the real flattening pipeline.
+        assert result == [{"cfg": "{not valid JSONDecodeError"}]  # The product keeps the original value.
+
     def test_stringified_list_of_scalars_joined_as_csv(self) -> None:
         """Parsed scalar lists join into a CSV string (line 112)."""
         # WHY: exercises _flatten_value_into fall-through when list is NOT list-of-dicts.

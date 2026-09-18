@@ -205,6 +205,37 @@ class TestTriggerCommand:
         assert "Failed to trigger ARP command: 401" in caplog.text  # The log must name the 4xx status.
         assert "bad token" in caplog.text  # The log must retain the server body for triage.
 
+    def test_malformed_json_body_returns_none_and_logs_cause(self, caplog):
+        """A malformed ARP trigger body must return no session and log the parse cause."""
+        error = json.JSONDecodeError("bad JSONDecodeError", "{bad", 1)  # Model the parser failure.
+        response = MagicMock(status_code=200, text="{bad", url="https://h/api/v1/sites/s/devices/d/arp")  # 200 path.
+        response.json.side_effect = error  # Force the product body parser to fail.
+        caplog.set_level(logging.ERROR, logger=_LOGGER_NAME)  # Capture the product parse-error record.
+        with patch.object(arp_mod.requests, "post", return_value=response) as post:  # Drive the product POST call.
+            result = ARPCommandManager._trigger_command("h", "t", "s", "d")  # Exercise the guarded parse path.
+        assert result is None  # A malformed body must not return a session identifier.
+        post.assert_called_once_with(  # Prove the result came from the product ARP endpoint call.
+            "https://h/api/v1/sites/s/devices/d/arp",
+            headers={"Authorization": "Token t"},
+            json={},
+            timeout=30,
+        )
+        assert "unparseable body" in caplog.text  # The log must name the body parse failure.
+        assert "bad JSONDecodeError" in caplog.text  # The log must keep the parser cause.
+
+    def test_empty_body_returns_none_and_logs_cause(self, caplog):
+        """An empty ARP trigger body must return no session and log the parse cause."""
+        empty_body = b""  # Model the empty HTTP body that caused issue #2967.
+        error = json.JSONDecodeError("empty body", empty_body.decode(), 0)  # Model the parser failure.
+        response = MagicMock(status_code=200, text=empty_body.decode())  # Exercise the 200 parse path.
+        response.json.side_effect = error  # Force the product body parser to fail.
+        caplog.set_level(logging.ERROR, logger=_LOGGER_NAME)  # Capture the product parse-error record.
+        with patch.object(arp_mod.requests, "post", return_value=response):  # Drive the product POST call.
+            result = ARPCommandManager._trigger_command("h", "t", "s", "d")  # Exercise the guarded parse path.
+        assert result is None  # An empty body must not return a session identifier.
+        assert "unparseable body" in caplog.text  # The log must name the body parse failure.
+        assert "empty body" in caplog.text  # The log must keep the parser cause.
+
     def test_connection_error_reaches_the_caller(self):
         """A REST trigger connection error must reach the caller."""
         error = arp_mod.requests.exceptions.ConnectionError("synthetic connection error")  # Use the transport error.

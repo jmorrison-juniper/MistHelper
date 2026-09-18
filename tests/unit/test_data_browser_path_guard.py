@@ -156,3 +156,13 @@ class TestAllowedPathsStillWork:
 
         assert result["error"].startswith("Failed to read JSON:")  # The preview must not claim success.
         assert "Expecting value" in result["error"]  # The error must name the empty JSON parse failure.
+
+    def test_malformed_json_body_returns_read_error(self, data_dir):
+        """A malformed JSON file must return an error instead of a false preview."""
+        (data_dir / "broken.json").write_text("{not valid JSONDecodeError", encoding="utf-8")  # Damaged export.
+        service = DataBrowserService(str(data_dir))  # Service under test, scoped to the data mount.
+
+        result = service.preview_file("broken.json", 1, 25, "")  # Drive the product JSON preview.
+
+        assert result["error"].startswith("Failed to read JSON:")  # The preview must not claim success.
+        assert "Expecting property name" in result["error"]  # The error must name the malformed JSON parse failure.
