@@ -77,7 +77,7 @@ def test_a_table_column_sits_one_level_below_the_entry(generated: dict[str, tupl
         assert re.search(rf"mist{word}Table OBJECT-TYPE.*?::= {{ mistHelperMIB {subtree} }}", text, re.S)
         assert re.search(rf"mist{word}Entry OBJECT-TYPE.*?::= {{ mist{word}Table {ENTRY_NODE} }}", text, re.S)
         columns = [number for _, parent, number in generated.values() if parent == f"mist{word}Entry"]
-        assert columns, word  # A table with no column would pass the two searches above and still be useless.
+        assert len(columns) > 0, word  # A table with no column would pass the two searches above and still be useless.
 
 
 def test_the_identity_column_uses_the_catalog_number(generated: dict[str, tuple[str, str, int]]) -> None:

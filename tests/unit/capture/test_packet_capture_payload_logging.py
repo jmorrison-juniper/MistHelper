@@ -61,7 +61,9 @@ def test_payload_log_omits_the_ap_mac(manager: PacketCaptureManager, caplog: pyt
     with caplog.at_level(logging.DEBUG):  # WHY: the payload log line runs at DEBUG level
         _run_scan_flow(manager)  # WHY: exercise the production code path
     lines = _payload_log_lines(caplog)  # WHY: read back the payload log records
-    assert lines, "The scan flow must still log the payload shape"  # WHY: catch a silent removal of the audit line
+    assert (
+        len(lines) > 0
+    ), "The scan flow must still log the payload shape"  # WHY: catch a silent removal of the audit line
     assert all(AP_MAC not in line for line in lines)  # WHY: fails if a change restores the raw payload log
 
 

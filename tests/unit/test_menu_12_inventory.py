@@ -72,7 +72,7 @@ class TestInventoryAPIDataFetcherWiring:
 
         MistHelper.OrgInventoryExporter.inventory()
 
-        assert execute_called
+        assert execute_called is True
 
 
 class TestInventoryProgressEmitter:

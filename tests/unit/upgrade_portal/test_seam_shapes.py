@@ -58,7 +58,7 @@ class TestTheRecordStaysTrue:
             return  # Nothing more to compare for that seam.
         signature = inspect.signature(fallback)  # The declared shape of the real callable.
         answered = [call for call in shape.calls if seam_shapes.answers_call(signature, call)]
-        assert answered, (
+        assert len(answered) > 0, (
             f"The fallback {fallback.__name__}{signature} of the seam {shape.config_key} answers none "
             f"of its recorded calls."
         )
@@ -70,7 +70,7 @@ class TestTheGuardRefusesAWrongShape:
     def test_a_stand_in_with_too_few_parameters_is_refused(self) -> None:
         """The lock reader takes two values, so a stand-in of one is refused."""
         differences = seam_shapes.shape_differences("SITE_LOCK_READER", lambda org_id: {})
-        assert differences, "The guard accepted a stand-in that the route call cannot reach."
+        assert len(differences) > 0, "The guard accepted a stand-in that the route call cannot reach."
 
     def test_a_stand_in_with_too_many_required_parameters_is_refused(self) -> None:
         """A stand-in that demands a fourth value cannot answer a three-value call."""

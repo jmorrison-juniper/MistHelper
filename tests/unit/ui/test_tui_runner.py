@@ -53,10 +53,10 @@ def test_run_unix_path_drives_discover_and_loop(tui_stub) -> None:
     tui_stub._discover_current_level = MagicMock()  # Track the discover call
     runner = _drive_runner(tui_stub, keys=["a", "b"])  # Two keys then auto-quit
     runner.run()  # Drive the full lifecycle
-    assert tui_stub._discover_current_level.called  # Discovery ran once
+    assert tui_stub._discover_current_level.call_count == 1  # Discovery ran once
     assert tui_stub._keyboard_dispatch.dispatch.call_count == 2  # Both keys dispatched
-    assert tui_stub.tty.setcbreak.called  # Raw mode entered
-    assert tui_stub.termios.tcsetattr.called  # Restore performed
+    assert tui_stub.tty.setcbreak.call_count == 1  # Raw mode entered
+    assert tui_stub.termios.tcsetattr.call_count == 1  # Restore performed
 
 
 def test_run_windows_path_skips_termios(tui_stub) -> None:
@@ -77,7 +77,7 @@ def test_run_propagates_critical_error(tui_stub) -> None:
     runner = TuiRunner(tui_stub)  # Construct runner
     with pytest.raises(RuntimeError, match="boom"):  # Original error propagates
         runner.run()
-    assert tui_stub.termios.tcsetattr.called  # finally-block still restored terminal
+    assert tui_stub.termios.tcsetattr.call_count == 1  # finally-block still restored terminal
 
 
 def test_render_loop_breaks_when_quit_requested(tui_stub) -> None:

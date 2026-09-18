@@ -59,7 +59,7 @@ class TestOperationRegistryMenuCoverage:
             if OperationRegistry.get(option)["category"] != "destructive":
                 continue  # WHY: only destructive entries must carry the operator-visible marker.
             reason = OperationRegistry.skip_reason(option)  # WHY: skip_reason is what operators scan.
-            assert reason, f"Destructive option {option} must have a non-empty skip reason"
+            assert len(reason) > 0, f"Destructive option {option} must have a non-empty skip reason"
             assert "DESTRUCTIVE" in reason.upper(), f"Destructive option {option} lost its DESTRUCTIVE marker"
 
     def test_menu_194_is_destructive_and_never_eligible(self):

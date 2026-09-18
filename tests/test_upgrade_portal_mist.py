@@ -53,7 +53,7 @@ class TestMistAPIClient:
         assert result[0]["name"] == "Austin"  # WHY: sorted by name
         assert result[1]["name"] == "Boston"  # WHY: second site
         # WHY: verify cache was set
-        assert self.mock_redis.setex.called  # WHY: cache written
+        assert self.mock_redis.setex.call_count == 1  # WHY: cache written
 
     def test_list_sites_cache_hit(self):
         """Test sites listing from cache.
@@ -138,7 +138,7 @@ class TestMistAPIClient:
         assert result[0]["id"] == "dev-1"  # WHY: device id
         assert result[0]["firmware_version"] == "12.3.4"  # WHY: mapped field
         # WHY: verify cache was set
-        assert self.mock_redis.setex.called  # WHY: cache written
+        assert self.mock_redis.setex.call_count == 1  # WHY: cache written
 
     def test_list_devices_cache_hit(self):
         """Test devices listing from cache.

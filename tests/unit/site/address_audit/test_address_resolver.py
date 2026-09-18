@@ -253,7 +253,7 @@ class TestTier3Gating:
         mist = {"address": "4200 Conroy Rd #204", "city": "Orlando", "state": "FL", "zip": "32839"}
         csv = {"address": "4200 Conroy Rd Suite H200", "city": "Orlando", "state": "FL", "zip": "32839"}
         resolver.resolve(ResolveCandidates(mist_address=mist, csv_address=csv, ui_geocode=True))
-        ui.geocode_via_ui.assert_called()  # Conflicting suites -> adjudicate via the web.
+        ui.geocode_via_ui.assert_called_once()  # Conflicting suites must trigger one web lookup.
 
     def test_suite_unit_extracts_identifier(self):
         """The bare unit identifier is extracted for conflict comparison."""
@@ -408,7 +408,7 @@ class TestHelpers:
         resolver = AddressResolver()
         resolver._respect_rate_limit()
         resolver._respect_rate_limit()
-        assert slept  # Second rapid call paused.
+        assert len(slept) > 0  # Second rapid call paused.
 
 
 class TestHasConflictingHints:

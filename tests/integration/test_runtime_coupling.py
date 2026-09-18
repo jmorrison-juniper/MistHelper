@@ -46,7 +46,7 @@ def test_runtime_coupling_profile_selection(profile: RuntimeCouplingProfile) -> 
         pytest.skip(f"Skipping {profile.name}; not selected in RUNTIME_COUPLING_PROFILES")
 
     assert profile.phase_number >= 1
-    assert profile.target_group
+    assert profile.target_group != ""
 
 
 def test_runtime_profile_names_are_unique() -> None:

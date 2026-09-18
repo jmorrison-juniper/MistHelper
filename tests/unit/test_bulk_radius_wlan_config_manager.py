@@ -547,7 +547,7 @@ def test_simulate_wlan_update_debug_on_logs_payload() -> None:
         patch.object(brwcm.logger, "debug") as mock_debug,
     ):
         manager._simulate_wlan_update({"id": "w", "ssid": "SS"}, {"k": "v"})
-    mock_debug.assert_called()
+    mock_debug.assert_called_once()  # Prove debug mode emits one payload log.
 
 
 # ---------------------------------------------------------------------------
@@ -716,7 +716,7 @@ def test_export_audit_trail_writes_csv(tmp_path: Any, capsys: pytest.CaptureFixt
     # File should exist under the tmp cwd's data/ directory
     data_dir = os.path.join(os.getcwd(), "data")
     files = [f for f in os.listdir(data_dir) if f.endswith(".csv")]
-    assert files, "expected an audit CSV in data/"
+    assert len(files) > 0, "expected an audit CSV in data/"
 
 
 def test_export_audit_trail_dry_run_prefix() -> None:

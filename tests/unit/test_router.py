@@ -585,7 +585,7 @@ class TestRouterReprobe:
         with patch("src.db.router.RECONNECT_WINDOW_SECONDS", 0.0):
             router.health_check()
 
-        mock_backends["arango_writer"].close.assert_called()
+        mock_backends["arango_writer"].close.assert_called_once_with()  # Prove the stale writer was closed once.
 
 
 class TestRouterCloseRedisJson:

@@ -154,7 +154,7 @@ class TestEmailAdapterTimeoutFailure:
         )
 
         errors = [r for r in caplog.records if r.levelno == logging.ERROR]
-        assert errors, "the timeout must report at ERROR level"
+        assert len(errors) > 0, "the timeout must report at ERROR level"
         message = errors[0].getMessage()
         assert _TEST_HOST in message
         assert str(_TEST_PORT) in message

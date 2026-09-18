@@ -108,7 +108,7 @@ class TestDeviceStatsAPIDataFetcherWiring:
 
         MistHelper.OrgDeviceStatsExporter.device_stats()
 
-        assert execute_called
+        assert execute_called is True
 
 
 class TestDeviceStatsProgressEmitter:
@@ -239,7 +239,7 @@ class TestDeviceStatsFastMode:
 
         MistHelper.OrgDeviceStatsExporter.device_stats(fast=True)
 
-        assert fetcher_created
+        assert fetcher_created is True
 
     def test_fast_mode_cache_miss_no_file(self, monkeypatch, tmp_path):
         """FR-006 / US5 Scenario 3: No CSV file proceeds with API fetch."""
@@ -270,7 +270,7 @@ class TestDeviceStatsFastMode:
 
         MistHelper.OrgDeviceStatsExporter.device_stats(fast=True)
 
-        assert fetcher_created
+        assert fetcher_created is True
 
     def test_fast_mode_disabled_by_default(self, monkeypatch, tmp_path):
         """US5 Scenario 4: Default call skips cache check entirely."""
@@ -304,7 +304,7 @@ class TestDeviceStatsFastMode:
 
         MistHelper.OrgDeviceStatsExporter.device_stats()
 
-        assert fetcher_created
+        assert fetcher_created is True
 
 
 class TestDeviceStatsDynamicLookback:

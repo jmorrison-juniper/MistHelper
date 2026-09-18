@@ -365,7 +365,7 @@ def test_migrate_writes_backup_before_any_put(
 
     # WHY: the first observed event MUST be the backup write; every put must
     # come after it.
-    assert order, "Expected at least one recorded event"
+    assert len(order) > 0, "Expected at least one recorded event"
     assert order[0] == "backup_write", f"Backup MUST precede first PUT; got order={order!r}"
     assert "put" in order, "Expected at least one PUT call after backup"
 
@@ -472,7 +472,7 @@ def test_migrate_retries_transient_put_failure_then_succeeds(
     assert sleep_calls == [0.5, 1.0], f"Retry cadence MUST be [0.5, 1.0]; observed sleeps={sleep_calls!r}"
     # WHY: the successful third attempt records the AP as reassigned.
     files = list(data_dir.glob("ap-profile-migration_*.json"))
-    assert files, "Backup file expected on success"
+    assert len(files) > 0, "Backup file expected on success"
     payload = json.loads(files[0].read_text(encoding="utf-8"))
     assert payload["aps_reassigned"] == ["d1"]
     assert payload["outcome"] == "success"
@@ -525,7 +525,7 @@ def test_migrate_stops_on_second_retry_exhaustion_and_records_partial_success(
     assert "d3" not in touched and "d4" not in touched, f"APs after the failed one MUST NOT be PUT; touched={touched!r}"
 
     files = list(data_dir.glob("ap-profile-migration_*.json"))
-    assert files, "Backup file expected even on partial failure"
+    assert len(files) > 0, "Backup file expected even on partial failure"
     payload = json.loads(files[0].read_text(encoding="utf-8"))
     assert payload["aps_reassigned"] == ["d0", "d1"]
     assert payload["outcome"] == "partial"

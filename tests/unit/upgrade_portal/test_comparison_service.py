@@ -412,7 +412,7 @@ class TestComparisonServiceCompareFull:
         )
 
         # WHY: verify audit_logger.log_operation was called
-        assert audit_logger.log_operation.called  # WHY: audit logged
+        assert audit_logger.log_operation.call_count == 1  # WHY: audit logged
         assert isinstance(result, ComparisonResult)  # WHY: result type valid
 
 
@@ -841,7 +841,7 @@ class TestAnalyzeDeltasValidation:
         # WHY: verify result type
         assert isinstance(result, DetailedComparisonResult)  # WHY: correct type
         # WHY: verify audit logging called
-        assert audit_logger.log_operation.called  # WHY: audit logged
+        assert audit_logger.log_operation.call_count == 1  # WHY: audit logged
         call_args = audit_logger.log_operation.call_args  # WHY: get call args
         # WHY: verify operation name
         assert "delta_analysis_complete" in str(call_args)  # WHY: check operation name

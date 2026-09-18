@@ -151,7 +151,7 @@ class TestFragmentNaming:
         """A name outside the three forms can collide with the name of another change."""
         for path in fragments:
             matched = any(pattern.match(path.name) for pattern in ALLOWED_NAMES)
-            assert matched, (
+            assert matched is True, (
                 f"{path.name} does not match an allowed name. Use pr-<number>.md, "
                 f"issue-<number>-<slug>.md, or <YYYY-MM-DD>-<slug>.md."
             )
@@ -185,7 +185,7 @@ class TestFragmentContent:
         for path in fragments:
             text = path.read_text(encoding="utf-8")
             found = [word for word in CHANGE_TYPES if word in text]
-            assert found, f"{path.name} names no change type. Use one of {', '.join(CHANGE_TYPES)}."
+            assert len(found) > 0, f"{path.name} names no change type. Use one of {', '.join(CHANGE_TYPES)}."
 
     def test_every_fragment_holds_a_heading_and_a_bullet(self, fragments: list[Path]) -> None:
         """The heading names the change, and the bullet states the observable effect."""

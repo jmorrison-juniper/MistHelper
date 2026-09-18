@@ -236,7 +236,7 @@ def test_startup_configures_logging_before_any_other_startup_action() -> None:
     body = _module_body()  # Startup statements in source order.
     actions = [index for index, node in enumerate(body) if _is_action_statement(node)]  # Working statements.
     config_index = _index_of_basic_config(body)  # Position of the logging configuration.
-    assert actions, "The module must hold at least one startup action"
+    assert len(actions) > 0, "The module must hold at least one startup action"
     assert config_index == actions[0], "logging.basicConfig must be the first startup action"
 
 

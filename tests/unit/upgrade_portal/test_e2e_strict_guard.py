@@ -134,5 +134,5 @@ def test_every_browser_module_still_carries_its_own_skip() -> None:
     ]
     logger.debug("Read %d browser modules", len(modules))  # Record the count after the read.
 
-    assert modules, "the browser suite must hold at least one module"
+    assert len(modules) > 0, "the browser suite must hold at least one module"
     assert not missing, f"these modules lost their skip: {missing}"

@@ -57,7 +57,7 @@ class TestProbeTargetsReadiness:
     def test_quadlet_unit_probe_calls_the_readiness_endpoint(self):
         """The Quadlet HealthCmd calls /ready, so a read-only data mount marks the container unhealthy."""
         commands = _probe_command_lines(QUADLET_UNIT, "HealthCmd=")
-        assert commands, "The Quadlet unit defines no HealthCmd."
+        assert len(commands) > 0, "The Quadlet unit defines no HealthCmd."
         assert all(_READINESS_PATH in line for line in commands)  # A liveness call cannot detect a bad mount.
 
     def test_containerfile_probe_calls_the_readiness_endpoint(self):

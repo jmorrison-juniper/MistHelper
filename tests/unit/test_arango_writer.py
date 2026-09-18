@@ -767,7 +767,7 @@ class TestArangoDBWriterPopulateGraph:  # WHY: pytest test class
         writer._populate_graph(data, "listOrgSites")  # WHY: test line
 
         # Should have attempted to import org vertex + site vertex + edges
-        assert mock_collection.import_bulk.called  # WHY: verify expected behavior
+        assert mock_collection.import_bulk.call_count == 3  # WHY: verify org, site, and edge imports occurred.
 
 
 class TestArangoDBWriterSiteGuestGraph:  # WHY: pytest test class

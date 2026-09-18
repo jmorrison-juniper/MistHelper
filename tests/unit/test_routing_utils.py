@@ -1851,7 +1851,7 @@ class TestExecuteShowForwardingTableHappyPath:
             ru.apisession.apitoken = "token123"
             ru.execute_show_forwarding_table()
 
-        ws_mgr.disconnect.assert_called()
+        ws_mgr.disconnect.assert_called_once_with()  # Prove the forwarding-table WebSocket closed once.
 
 
 class TestExecuteShowRoutingTableHappyPath:
@@ -1888,7 +1888,7 @@ class TestExecuteShowRoutingTableHappyPath:
             ru.apisession.apitoken = "token123"
             ru.execute_show_routing_table()
 
-        ws_mgr.disconnect.assert_called()
+        ws_mgr.disconnect.assert_called_once_with()  # Prove the routing-table WebSocket closed once.
 
 
 class TestExecuteShowSsrRoutesHappyPath:
@@ -1926,7 +1926,7 @@ class TestExecuteShowSsrRoutesHappyPath:
             mock_payload_api.api.v1.sites.devices.showSiteSsrAndSrxRoutes.return_value = api_resp
             ru.execute_show_ssr_routes()
 
-        ws_mgr.disconnect.assert_called()
+        ws_mgr.disconnect.assert_called_once_with()  # Prove the SSR routes WebSocket closed once.
 
 
 # ===================================================================

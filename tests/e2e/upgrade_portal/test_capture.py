@@ -795,6 +795,6 @@ class TestUpgradeJourney:
         link = error_region.locator("a")
         sync_api.expect(link).to_be_visible(timeout=START_TIMEOUT_MS)
         run_id = (link.inner_text() or "").strip()
-        assert run_id, "The link inside the error region named no run identifier."
+        assert run_id != "", "The link inside the error region named no run identifier."
         href = link.get_attribute("href") or ""
         assert href == f"/runs/{run_id}", f"The link pointed at {href!r}, not /runs/{run_id}."

@@ -47,5 +47,5 @@ class TestOperationRegistryFailClosed:
     def test_unknown_key_surfaces_a_skip_reason(self):
         """An unregistered key exposes a non-empty, actionable skip_reason (never silently blank)."""
         reason = OperationRegistry.skip_reason(_NEVER_REGISTERED)  # WHY: telemetry/summary must show a reason.
-        assert reason, "Unregistered options must carry a non-empty skip reason"
+        assert len(reason) > 0, "Unregistered options must carry a non-empty skip reason"
         assert OperationRegistry.skip_category(_NEVER_REGISTERED) == "unregistered"

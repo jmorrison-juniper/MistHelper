@@ -53,7 +53,7 @@ class TestSystematicTestUnregisteredSemantics:
 
         assert OperationRegistry.skip_category(_SYNTHETIC_KEY) == "unregistered"
         reason = OperationRegistry.skip_reason(_SYNTHETIC_KEY)
-        assert reason, "Unregistered skip must have a non-empty, actionable reason"
+        assert len(reason) > 0, "Unregistered skip must have a non-empty, actionable reason"
 
     def test_skip_emission_records_unregistered_category(self, monkeypatch):
         """The skip-emission path records the unregistered option with its category + reason in telemetry."""
@@ -66,5 +66,5 @@ class TestSystematicTestUnregisteredSemantics:
         emitter.emit_test_skip.assert_called_once()  # WHY: it must be emitted, never silently dropped.
         _opt, _desc, reason, category, mode = emitter.emit_test_skip.call_args.args
         assert category == "unregistered", "Skip telemetry must record the fail-closed category"
-        assert reason, "Skip telemetry must record a non-empty reason"
+        assert len(reason) > 0, "Skip telemetry must record a non-empty reason"
         assert mode == "systematic"

@@ -578,7 +578,7 @@ def test_device_deltas_hold_every_contract_key(signed_in_client: FlaskClient) ->
     """
     rows = read_body(fetch_comparison(signed_in_client, BEFORE_CAPTURE_ID, AFTER_CAPTURE_ID))["device_deltas"]
 
-    assert rows
+    assert len(rows) > 0
     for row in rows:
         assert DEVICE_DELTA_KEYS <= set(row)
 
@@ -605,7 +605,7 @@ def test_client_deltas_hold_every_contract_key(signed_in_client: FlaskClient) ->
     """
     rows = read_body(fetch_comparison(signed_in_client, BEFORE_CAPTURE_ID, AFTER_CAPTURE_ID))["client_deltas"]
 
-    assert rows
+    assert len(rows) > 0
     for row in rows:
         assert CLIENT_DELTA_KEYS <= set(row)
 

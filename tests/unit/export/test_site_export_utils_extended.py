@@ -427,7 +427,7 @@ def test_display_or_log_results_debug_mode_calls_debug_table() -> None:
     exporter, mocks = _build_exporter(debug_mode=True)
     exporter._display_or_log_results([{"name": "row"}], "data type", "out.csv")
     # PrettyTable stand-in captured invocation with expected column
-    assert mocks["pretty_table"].instances, "expected PrettyTable to be constructed"
+    assert len(mocks["pretty_table"].instances) > 0, "expected PrettyTable to be constructed"
 
 
 def test_display_or_log_results_non_debug_logs_summary(caplog: pytest.LogCaptureFixture) -> None:

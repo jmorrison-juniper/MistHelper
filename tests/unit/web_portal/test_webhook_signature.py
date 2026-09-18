@@ -161,7 +161,7 @@ class TestSignatureVerification:
         response = client.post("/api/webhook", data=_AUDIT_BODY, headers=headers)
 
         assert response.status_code == 200
-        assert calls, "The route must call hmac.compare_digest to compare the signature"
+        assert len(calls) > 0, "The route must call hmac.compare_digest to compare the signature"
 
 
 class TestMissingSecret:

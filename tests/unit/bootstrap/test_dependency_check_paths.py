@@ -118,7 +118,9 @@ class TestEarlyReturns:
         orchestrator, installer, logging_module = _build(monkeypatch=monkeypatch, requirements=[], disabled=True)
         orchestrator.run()  # Trigger.
         installer.find_uv_executable.assert_not_called()  # UV probe never reached.
-        logging_module.debug.assert_called()  # Debug log emitted.
+        logging_module.debug.assert_called_once_with(
+            "Early dependency auto-install disabled via DISABLE_AUTO_INSTALL"
+        )  # Prove the disabled-path log text.
 
     def test_empty_requirements_warns_and_returns(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Empty requirements triggers warning + early return."""
@@ -126,7 +128,9 @@ class TestEarlyReturns:
         orchestrator, installer, logging_module = _build(monkeypatch=monkeypatch, requirements=[])
         orchestrator.run()  # Trigger.
         installer.install_with_pip.assert_not_called()  # No install work.
-        logging_module.warning.assert_called()  # Warning log emitted.
+        logging_module.warning.assert_called_once_with(
+            "No packages found in requirements.txt - skipping dependency check"
+        )  # Prove the empty-requirements warning text.
 
     def test_all_up_to_date_debug_logs_and_returns(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When nothing is missing/outdated, run() logs debug + returns."""
@@ -225,7 +229,7 @@ class TestUpgradePath:
             install_with_pip_ok=False,  # Force failure.
         )
         orchestrator.run()  # Trigger.
-        logging_module.error.assert_called()  # Error log emitted.
+        logging_module.error.assert_called_once_with("Failed to upgrade %s", "pkg-e")  # Prove the exact failure log.
 
 
 class TestInstallResultLogging:
@@ -240,7 +244,9 @@ class TestInstallResultLogging:
             install_with_pip_ok=False,  # Force failure.
         )
         orchestrator.run()  # Trigger.
-        logging_module.error.assert_called()  # Error log emitted.
+        logging_module.error.assert_called_once_with(
+            "Failed to install %s", "pkg-f>=1.0"
+        )  # Prove the exact failure log.
 
 
 class TestUvBootstrap:
@@ -272,7 +278,9 @@ class TestUvBootstrap:
         )
         orchestrator.run()  # Trigger.
         installer.install_uv_with_pip.assert_called_once()  # Bootstrap invoked.
-        installer.install_with_uv.assert_called()  # UV path used post-bootstrap.
+        installer.install_with_uv.assert_called_once_with(
+            ["uv"], "pkg-h>=1.0", upgrade=False
+        )  # Prove UV used after bootstrap.
 
     def test_uv_missing_bootstrap_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """UV missing + bootstrap fails -> use_uv=False, pip fallback used."""
@@ -285,7 +293,7 @@ class TestUvBootstrap:
         orchestrator.run()  # Trigger.
         installer.install_uv_with_pip.assert_called_once()  # Bootstrap attempted.
         installer.install_with_uv.assert_not_called()  # UV never used.
-        installer.install_with_pip.assert_called()  # pip fallback used.
+        installer.install_with_pip.assert_called_once_with("pkg-i>=1.0", upgrade=False)  # Prove pip fallback used.
 
     def test_uv_missing_bootstrap_succeeds_reverify_still_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Bootstrap succeeds but re-verify still returns no UV -> pip-only."""
@@ -299,7 +307,7 @@ class TestUvBootstrap:
         )
         orchestrator.run()  # Trigger.
         installer.install_with_uv.assert_not_called()  # UV path never engaged.
-        installer.install_with_pip.assert_called()  # pip fallback used.
+        installer.install_with_pip.assert_called_once_with("pkg-j>=1.0", upgrade=False)  # Prove pip fallback used.
 
 
 class TestTryUvGuards:

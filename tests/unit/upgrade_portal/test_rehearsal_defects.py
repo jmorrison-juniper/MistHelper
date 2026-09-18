@@ -116,7 +116,7 @@ def test_an_uptime_rule_that_reads_the_clock_settles_a_device_too_early(
     harness.join()  # The broken gate settles fast, so the join returns at once.
     rounds = harness.progress.rounds()  # The poll record of the whole run, in round order.
     settled = [entry for entry in rounds if entry.phase == "gateways" and entry.settled == 2]  # Both gateways.
-    assert settled  # The broken gate settled the phase, which the honest gate could not.
+    assert len(settled) > 0  # The broken gate settled the phase, which the honest gate could not.
     assert settled[0].at < started_at + REBOOT_OFFSET_SECONDS  # The phase settled before the device rebooted.
 
 

@@ -408,7 +408,7 @@ def test_the_socket_seal_really_raises(sealed_stores: tuple[tuple[ModuleType, st
     Args:
         sealed_stores: The seal fixture. The socket seal travels with it.
     """
-    assert sealed_stores  # The fixture ran, so both seal layers are in place.
+    assert len(sealed_stores) > 0  # The fixture ran, so both seal layers are in place.
     with pytest.raises(RuntimeError, match=re.escape(STORE_SEAL_MESSAGE)):
         socket.create_connection(("127.0.0.1", 1))
 

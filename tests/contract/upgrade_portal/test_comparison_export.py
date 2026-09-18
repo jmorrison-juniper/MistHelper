@@ -388,7 +388,7 @@ def test_csv_download_reports_the_version_change(signed_in_client: FlaskClient) 
     lines = read_csv_rows(fetch_download(signed_in_client, CSV_FORMAT))
     versions = [line for line in lines[1:] if line and line[1] == DEVICE_CHANGED_MAC and line[4] == VERSION_FIELD]
 
-    assert versions
+    assert len(versions) > 0
     assert versions[0][5] == OLD_VERSION
     assert versions[0][6] == NEW_VERSION
 
@@ -407,7 +407,7 @@ def test_csv_download_guards_a_formula_cell(signed_in_client: FlaskClient) -> No
     lines = read_csv_rows(fetch_download(signed_in_client, CSV_FORMAT))
     guarded = [line for line in lines[1:] if line and line[1] == DEVICE_ADDED_MAC]
 
-    assert guarded
+    assert len(guarded) > 0
     assert guarded[0][2] == FORMULA_GUARD + FORMULA_NAME
 
 
@@ -463,7 +463,7 @@ def test_json_download_holds_the_same_seven_columns(signed_in_client: FlaskClien
     """
     rows = read_json_rows(fetch_download(signed_in_client, JSON_FORMAT))
 
-    assert rows
+    assert len(rows) > 0
     for row in rows:
         assert set(EXPORT_COLUMNS) <= set(row)
 

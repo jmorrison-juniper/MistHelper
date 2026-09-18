@@ -107,4 +107,5 @@ class TestFullExecution:
         assert isinstance(success, bool)
         assert isinstance(stdout, str)
         assert stderr == "" or "error" in stderr.lower()  # Either clean success or graceful failure
-        mock_shell.send.assert_called()  # We actually wrote the command
+        mock_shell.send.assert_any_call(b"show version\n")  # Prove the command payload written to SSH.
+        assert mock_shell.send.call_count == 3  # Prove the command and clean logout writes occurred.

@@ -164,7 +164,7 @@ def test_build_from_empty_produces_https_prefixed_no_port_targets(probes_source:
         cannot speak IKEv2 on UDP/500.
     """
     result = ospm._build_probe_set((probes_source, cenr_source), [10])
-    assert result, "Expected at least one probe"
+    assert len(result) > 0, "Expected at least one probe"
     vpn_hosts = {h.lower() for h in cenr_source.get("vpn_hostnames", []) or []}
     for name, probe in result.items():
         assert name.startswith(ospm._TOOL_NAME_PREFIX), name
@@ -1139,7 +1139,7 @@ def test_build_marks_only_critical_flagged_roles_as_critical() -> None:
     (only_name,) = critical
     assert only_name == "zcc-pac-pac-zscaler-net"
     non_critical = [p for p in result.values() if p.get("aggressiveness") == ospm._AUTO_AGGRESSIVENESS]
-    assert non_critical, "Expected at least one non-critical probe"
+    assert len(non_critical) > 0, "Expected at least one non-critical probe"
     for probe in non_critical:
         assert probe["aggressiveness"] == ospm._AUTO_AGGRESSIVENESS
 
@@ -1943,13 +1943,13 @@ def test_no_https_vpn_targets_in_generated_payload() -> None:
     # Act: drive the full pipeline exactly like manage_org_synthetic_probes.
     probes = ospm._build_probe_set((probes_source, cenr), [10])
     # Assert: at least one row per host was emitted.
-    assert probes
+    assert len(probes) > 0
     https_vpn_pattern = re.compile(r"^https?://.*-vpn\.")
     # Assert: every VPN row is a bare hostname; NO scheme, NO ":port" suffix.
     # INV-3: pre-1024 leakage was ":500" — this regex actively guards against
     # both scheme re-introduction and any port suffix.
     vpn_rows = [(name, body) for name, body in probes.items() if "-vpn" in body["target"]]
-    assert vpn_rows, "expected at least one VPN probe target"
+    assert len(vpn_rows) > 0, "expected at least one VPN probe target"
     for name, body in vpn_rows:
         target = body["target"]
         # SC-001: no scheme allowed on VPN targets.
@@ -1962,7 +1962,7 @@ def test_no_https_vpn_targets_in_generated_payload() -> None:
         ), f"VPN row {name!r} target={target!r} type={body['type']!r} != reachability"
     # Sanity: proxy rows still shipped as https:// URLs with default port elided.
     proxy_targets = [body["target"] for name, body in probes.items() if ".sme." in body["target"]]
-    assert proxy_targets, "expected at least one proxy probe target"
+    assert len(proxy_targets) > 0, "expected at least one proxy probe target"
     for target in proxy_targets:
         assert target.startswith("https://"), f"proxy row {target!r} lost its scheme"
         assert ":443" not in target, f"proxy row {target!r} kept explicit :443"

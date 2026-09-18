@@ -233,7 +233,7 @@ class TestOutputContract:
         lines = self._convert(tmp_path).splitlines()  # measure the output line by line
         body = lines[lines.index("---", 1) + 1 :]  # drop the front matter, which also holds a marker line
         headings = [line for line in body if line.startswith("#")]  # every Markdown heading of the file
-        assert headings, "the file must hold at least 1 heading"  # row 3 of check V15
+        assert len(headings) > 0, "the file must hold at least 1 heading"  # row 3 of check V15
         marker = next((index for index, line in enumerate(body) if line.startswith("<!-- page")), len(body))
         early = [line for line in body[:marker] if line.startswith("#")]  # the headings of the cover page
         assert len(early) <= 6, f"the cover page holds {len(early)} headings, and the limit is 6"

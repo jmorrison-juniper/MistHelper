@@ -532,7 +532,7 @@ class TestStopOutcome:
         _send_the_stop(run_page, EMPTY_STOP_ANSWER)
         for marker in (STOP_CANCELLED_ID, STOP_WRITING_ID, STOP_NO_CANCEL_ID):
             text = (run_page.get_by_test_id(marker).inner_text() or "").strip()
-            assert text, f"{marker} reads no text, so an empty list looks like a fault."
+            assert text != "", f"{marker} reads no text, so an empty list looks like a fault."
 
     def test_the_outcome_writes_the_new_state_into_the_run_state(self, run_page: Any) -> None:
         """The answer moves the state region to the state the server reported.

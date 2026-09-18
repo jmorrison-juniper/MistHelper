@@ -676,7 +676,7 @@ class TestApplyChangesDispatch:
         manager.selected_wlan = {"id": "w1", "_inheritance_level": level}  # WHY: set the scope.
         with patch.object(manager, method) as write_spy:  # WHY: watch the expected writer.
             manager._apply_changes()  # WHY: run the dispatch.
-        assert write_spy.called  # WHY: the matching writer must run.
+        assert write_spy.call_count == 1  # WHY: the matching writer must run.
 
     def test_an_unknown_level_writes_nothing(self, manager: WLANRadiusTimerManager) -> None:
         """A silent fall-through would look like a successful change."""
@@ -830,7 +830,7 @@ class TestSiteTemplateWlanUpdate:
         api.api.v1.orgs.sitetemplates.getOrgSiteTemplate.return_value = _response(200, body)
         api.api.v1.orgs.sitetemplates.updateOrgSiteTemplate.return_value = _response(200)
         manager._update_site_template_wlan()  # WHY: run the write.
-        assert api.api.v1.orgs.sitetemplates.updateOrgSiteTemplate.called
+        assert api.api.v1.orgs.sitetemplates.updateOrgSiteTemplate.call_count == 1
 
 
 class TestOrgWlanUpdate:
@@ -982,8 +982,8 @@ class TestManageWorkflow:
     def test_a_full_pass_reaches_the_write_and_the_completion(self, manager: WLANRadiusTimerManager) -> None:
         """A broken chain would leave the WLAN on a stale timer."""
         spies = self._run(manager)  # WHY: every guard passes.
-        assert spies["_apply_changes"].called  # WHY: the write must run.
-        assert spies["_print_completion_message"].called  # WHY: tell the operator it finished.
+        assert spies["_apply_changes"].call_count == 1  # WHY: the write must run.
+        assert spies["_print_completion_message"].call_count == 1  # WHY: tell the operator it finished.
 
 
 class TestSummaryFields:

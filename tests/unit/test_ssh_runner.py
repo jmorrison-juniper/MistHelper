@@ -1459,7 +1459,7 @@ class TestRunMultipleSSHCommandsDeep:
             )
         )
         assert result is False
-        mock_disc.assert_called()
+        mock_disc.assert_called_once_with()  # Prove cleanup runs after the execution exception.
 
     @patch("src.ssh.batch.batch_executor.datetime")
     @patch.object(EnhancedSSHRunner, "_disconnect")

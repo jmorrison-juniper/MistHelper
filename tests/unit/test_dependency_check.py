@@ -42,7 +42,7 @@ def test_dependency_check_installs_missing_packages() -> None:
     """Missing package path triggers install attempts via pip fallback."""
     orchestrator, installer, _os_module = _build_orchestrator([("pkg-one", "pkg-one>=1.0")])
     orchestrator.run()
-    assert installer.install_with_pip.called
+    assert installer.install_with_pip.call_count == 1
 
 
 def test_dependency_check_skips_when_disabled() -> None:

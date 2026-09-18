@@ -64,7 +64,7 @@ class TestResolveEntityUuidLeavesARecord:
         with caplog.at_level(logging.WARNING):
             result = _resolve_entity_uuid({})
         assert isinstance(result, UUID)  # WHY: the recovery behavior must not change.
-        assert caplog.records  # WHY: the path must not stay silent.
+        assert len(caplog.records) > 0  # WHY: the path must not stay silent.
 
     def test_a_valid_value_stays_silent(self, caplog: pytest.LogCaptureFixture) -> None:
         """The normal path must not add noise to the log."""

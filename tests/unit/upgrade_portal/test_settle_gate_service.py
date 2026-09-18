@@ -296,12 +296,12 @@ class TestSettleGateServicePersistence:
         )  # WHY: settle call
 
         # WHY: verify write was called
-        assert mock_db_router.write.called  # WHY: check write called
+        assert mock_db_router.write.call_count == 1  # WHY: check write called
         # WHY: verify collection name
         call_args = mock_db_router.write.call_args  # WHY: get call arguments
         assert call_args[1]["collection"] == "settle_gates"  # WHY: verify collection
         # WHY: verify audit logger was called
-        assert mock_audit_logger.log_operation.called  # WHY: check audit called
+        assert mock_audit_logger.log_operation.call_count == 1  # WHY: check audit called
 
 
 class TestSettleCheckMethods:

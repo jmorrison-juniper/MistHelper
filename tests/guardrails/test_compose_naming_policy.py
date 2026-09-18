@@ -153,7 +153,7 @@ class TestNetwork:
         """A bridge with no subnet takes a pool range, which a second project can also take."""
         network = compose["networks"]["misthelper-network"]
         subnets = [entry["subnet"] for entry in network["ipam"]["config"]]
-        assert subnets, "The project network pins no subnet"
+        assert len(subnets) > 0, "The project network pins no subnet"
 
     def test_the_network_carries_an_explicit_name(self, compose: dict[str, Any]) -> None:
         """Without a name the runtime prefixes the directory, so the name changes per checkout."""

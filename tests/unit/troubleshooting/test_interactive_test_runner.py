@@ -723,7 +723,7 @@ def test_execute_returns_false_on_unresolved_selector(monkeypatch: pytest.Monkey
     )
     result = runner.execute()
     assert result is False  # WHY: unresolved selector -> suite verdict must be failure.
-    assert telemetry_stubs, "emitter was never constructed"  # WHY: guard against stub wiring drift.
+    assert len(telemetry_stubs) > 0, "emitter was never constructed"  # WHY: guard against stub wiring drift.
     event_types = [event[0] for event in telemetry_stubs[0].events]
     assert "start" not in event_types  # WHY: no option ran against a wrong site.
     assert "pass" not in event_types

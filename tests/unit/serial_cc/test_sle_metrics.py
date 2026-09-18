@@ -39,7 +39,7 @@ def test_sle_metrics_normal_mode_fetches_all_categories(mock_resolve_runtime_dep
 
     SLEMetricsService.execute(fast=False)
 
-    assert deps.DataExporter.write_with_format_selection.called
+    assert deps.DataExporter.write_with_format_selection.call_count == 1
 
 
 @patch("src.refactors.serial_cc.sle_metrics._resolve_runtime_dependencies")

@@ -155,7 +155,9 @@ def test_no_phase_started_before_the_earlier_phase_settled(cascade: RehearsalHar
         if not first:  # The client phase holds no target, so it polls no round at all.
             continue  # A phase with no round cannot have started early.
         settled = [entry.at for entry in rounds_of(cascade, earlier) if entry.settled == entry.total]  # The proof.
-        assert settled, f"the phase {earlier} never settled"  # A phase that never settled would open the next one.
+        assert (
+            len(settled) > 0
+        ), f"the phase {earlier} never settled"  # A phase that never settled would open the next one.
         assert first[0].at >= settled[0], f"the phase {later} started before {earlier} settled"
 
 
@@ -247,7 +249,7 @@ def test_the_event_search_always_names_the_device_family(cascade: RehearsalHarne
         cascade: The finished harness.
     """
     searches = cascade.cloud.calls_named("searchOrgDeviceEvents")  # Every event search of the run.
-    assert searches  # A run with no event search would prove no reconnect at all.
+    assert len(searches) > 0  # A run with no event search would prove no reconnect at all.
     assert all("device_type" in call.keywords for call in searches)  # The keyword that defect class 1 drops.
 
 

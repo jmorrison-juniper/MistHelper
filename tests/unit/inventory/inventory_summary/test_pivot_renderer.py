@@ -219,7 +219,7 @@ class TestRender:
         out = caplog.text  # WHY: banner + table now emitted through logging.info, not stdout.
         assert "Version Distribution per Model" in out  # WHY: banner reached.
         assert "AP32" in out and "SW1" in out  # WHY: both models printed.
-        assert fake_exporter.write_with_format_selection.called  # WHY: export was invoked exactly once.
+        assert fake_exporter.write_with_format_selection.call_count == 1  # WHY: export was invoked exactly once.
         assert (
             "Rendering version-per-model pivot for 4 rows -> OrgVersionPerModel.csv" in caplog.text
         )  # WHY: pre-action info log.
