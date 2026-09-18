@@ -144,6 +144,22 @@ class TestLoadPidTuningData:
         finally:
             rl.tuning_data_file = original  # Restore module state for later tests.
 
+    def test_handles_malformed_json_tuning_file(self):
+        """A malformed tuning file must return safe PID defaults."""
+        import src.utils.rate_limiting as rl
+
+        filepath = os.path.join("data", "tuning_data.json")  # Use the product default file name.
+        with open(filepath, "w", encoding="utf-8") as file_handle:  # Write text to match persisted JSON.
+            file_handle.write("{not valid JSONDecodeError")  # Model a damaged persisted JSON reply.
+
+        original = rl.tuning_data_file  # Preserve module state for later tests.
+        rl.tuning_data_file = filepath  # Point the product loader at the malformed file.
+        try:
+            data = RateLimitingUtils._load_pid_tuning_data()  # Drive the product fallback path.
+            assert data == {"k_p": 0.1, "k_i": 0.0005, "error": [], "integral": 0.0}  # Safe defaults.
+        finally:
+            rl.tuning_data_file = original  # Restore module state for later tests.
+
     def test_cleans_error_values_on_load(self):
         """Error values with NaN/Inf are cleaned during load."""
         import src.utils.rate_limiting as rl

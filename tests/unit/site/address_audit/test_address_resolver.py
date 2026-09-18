@@ -155,6 +155,12 @@ class TestTier2Nominatim:
         result = AddressResolver._loads_json(empty_body)  # Drive the product JSON boundary helper.
         assert result == {}  # The resolver must treat an empty body as no cached payload.
 
+    def test_malformed_cache_body_returns_empty_payload(self) -> None:
+        """A malformed cached JSON body must become an empty payload."""
+        malformed_body = "{not valid JSONDecodeError"  # Model a damaged cache value from storage.
+        result = AddressResolver._loads_json(malformed_body)  # Drive the product JSON boundary helper.
+        assert result == {}  # The resolver must treat malformed JSON as no cached payload.
+
     def test_nominatim_invalid_is_no_result(self, tmp_path, monkeypatch):
         """An invalid Nominatim comparison yields canonical_address None."""
         _FakeValidator.count = 0

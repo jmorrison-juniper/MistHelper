@@ -58,6 +58,11 @@ class TestExclusionDriftReporter:
         output = b"".decode()  # Model a tool that returned no JSON bytes.
         assert ExclusionDriftReporter._count_findings("ruff", output) == 0  # The report must not crash.
 
+    def test_ruff_malformed_json_count_is_zero(self) -> None:
+        """A malformed tool JSON body must count as zero findings."""
+        output = "{not valid JSONDecodeError"  # Model a damaged tool JSON body.
+        assert ExclusionDriftReporter._count_findings("ruff", output) == 0  # The report must not crash.
+
     def test_mypy_error_count(self) -> None:
         """Mypy error lines must count while notes stay excluded."""
         output = "file.py:1: error: Bad type\nfile.py:1: note: Detail"

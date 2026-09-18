@@ -19,6 +19,8 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from src.websocket.diagnostics import arp_executor as arp_mod
 from src.websocket.diagnostics.arp_executor import ArpDeviceExecutor
 
@@ -640,6 +642,43 @@ def test_post_arp_command_success_returns_session_id() -> None:
     assert got == "sess-1"
     post.assert_called_once()
     demux.assert_called_once_with(fake_resp, ws, "ARP")
+
+
+def test_post_arp_command_malformed_body_returns_none_and_disconnects(caplog: pytest.LogCaptureFixture) -> None:
+    """A malformed ARP response body must return no session and close the WebSocket."""
+    deps = _make_deps()  # Build injected dependencies without live network access.
+    ws = MagicMock()  # Stand in for the open WebSocket manager.
+    response = MagicMock(status_code=200, text="{bad", url="https://h/api/v1/sites/s/devices/d/arp")  # 200 path.
+    response.json.side_effect = json.JSONDecodeError("bad JSONDecodeError", "{bad", 1)  # Force parser failure.
+    caplog.set_level(logging.ERROR)  # Capture the shared diagnostic parse-error record.
+    with (
+        patch.object(arp_mod, "prepare_command_credentials", return_value=("h", "t")),  # Provide credentials.
+        patch.object(arp_mod, "post_device_command", return_value=response),  # Return the malformed body.
+    ):
+        result = ArpDeviceExecutor()._post_arp_command(deps, ws, "s", "d", False)  # Drive the product workflow.
+    assert result is None  # A malformed body must not return a session identifier.
+    ws.disconnect.assert_called_once()  # The WebSocket must close because no session can correlate results.
+    assert "unparseable body" in caplog.text  # The log must name the malformed body.
+    assert "bad JSONDecodeError" in caplog.text  # The log must keep the parser cause.
+
+
+def test_post_arp_command_empty_body_returns_none_and_disconnects(caplog: pytest.LogCaptureFixture) -> None:
+    """An empty ARP response body must return no session and close the WebSocket."""
+    empty_body = b""  # Model the empty HTTP body that issue #2967 repaired.
+    deps = _make_deps()  # Build injected dependencies without live network access.
+    ws = MagicMock()  # Stand in for the open WebSocket manager.
+    response = MagicMock(status_code=200, text=empty_body.decode())  # Model a 200 reply with no body.
+    response.json.side_effect = json.JSONDecodeError("empty body", empty_body.decode(), 0)  # Parser failure.
+    caplog.set_level(logging.ERROR)  # Capture the shared diagnostic parse-error record.
+    with (
+        patch.object(arp_mod, "prepare_command_credentials", return_value=("h", "t")),  # Provide credentials.
+        patch.object(arp_mod, "post_device_command", return_value=response),  # Return the empty body.
+    ):
+        result = ArpDeviceExecutor()._post_arp_command(deps, ws, "s", "d", False)  # Drive the product workflow.
+    assert result is None  # An empty body must not return a session identifier.
+    ws.disconnect.assert_called_once()  # The WebSocket must close because no session can correlate results.
+    assert "unparseable body" in caplog.text  # The log must name the empty body.
+    assert "empty body" in caplog.text  # The log must keep the parser cause.
 
 
 # ---------- _await_and_render ----------
