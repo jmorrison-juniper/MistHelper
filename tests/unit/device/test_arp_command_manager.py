@@ -188,6 +188,19 @@ class TestTriggerCommand:
         assert any("Failed to trigger" in m for m in messages)
         assert any("boom" in m for m in messages)
 
+    def test_connection_error_reaches_the_caller(self):
+        """A REST trigger connection error must reach the caller."""
+        error = arp_mod.requests.exceptions.ConnectionError("synthetic connection error")  # Use the transport error.
+        with patch.object(arp_mod.requests, "post", side_effect=error) as post:  # Fail the product REST trigger call.
+            with pytest.raises(arp_mod.requests.exceptions.ConnectionError, match="synthetic connection error"):
+                ARPCommandManager._trigger_command("h", "t", "s", "d")  # Drive the product call that can fail.
+        post.assert_called_once_with(  # Prove the exception came from the real POST request.
+            "https://h/api/v1/sites/s/devices/d/arp",
+            headers={"Authorization": "Token t"},
+            json={},
+            timeout=30,
+        )
+
 
 class TestBuildWsSubscribe:
     """Cover the WebSocket subscribe-payload builder."""

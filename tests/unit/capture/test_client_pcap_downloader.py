@@ -182,6 +182,18 @@ def test_download_one_returns_false_on_timeout(tmp_path: Path, caplog: pytest.Lo
     assert "synthetic timeout" in caplog.text  # The log must preserve the timeout cause for operators.
 
 
+def test_download_one_returns_false_on_connection_error(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """A download connection error must fail one row without writing a partial file."""
+    row = _CaptureRow("cap-1", "https://x/cap.pcap", "10", "cap.pcap")  # Drive the real download seam.
+    caplog.set_level("ERROR", logger=mod.logger.name)  # Capture the operator-visible connection failure record.
+    error = mod.requests.exceptions.ConnectionError("synthetic connection error")  # Use the transport error type.
+    with patch.object(mod.requests, "get", side_effect=error):  # Force the HTTP GET call to fail before response.
+        ok = ClientPacketCaptureDownloader._download_one(row, tmp_path)  # Execute product connection handling.
+    assert ok is False  # A failed connection must count as a failed download.
+    assert (tmp_path / "cap.pcap").exists() is False  # No partial file may appear after an early connection error.
+    assert "synthetic connection error" in caplog.text  # The log must preserve the connection cause.
+
+
 # ---------- run() orchestration guards ----------
 
 

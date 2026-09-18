@@ -16,7 +16,7 @@ import logging
 from unittest.mock import MagicMock
 
 import pytest
-from requests.exceptions import Timeout
+from requests.exceptions import ConnectionError, Timeout
 
 import MistHelper
 
@@ -220,6 +220,16 @@ class TestTokenPreviewCarriesNoSecret:
         result = MistHelper._check_token_rate_limit(self._RAW_TOKEN, "api.mist.com", "1/1")  # Drive the probe seam.
         assert result is True  # The token must be treated as unavailable after a timeout.
         assert "synthetic timeout" in caplog.text  # The log must state the timeout cause.
+        assert self._RAW_TOKEN not in caplog.text  # The log must not expose the token.
+
+    def test_rate_limit_probe_marks_connection_error_token_unavailable(self, caplog, monkeypatch):
+        """A token probe connection error must mark only that token unavailable."""
+        error = ConnectionError("synthetic connection error")  # Use the real Requests connection error type.
+        monkeypatch.setattr("requests.get", MagicMock(side_effect=error))  # Force the probe call to fail.
+        caplog.set_level(logging.WARNING)  # Capture the warning that explains the unavailable token.
+        result = MistHelper._check_token_rate_limit(self._RAW_TOKEN, "api.mist.com", "1/1")  # Drive probe seam.
+        assert result is True  # The token must be treated as unavailable after a connection error.
+        assert "synthetic connection error" in caplog.text  # The log must state the connection cause.
         assert self._RAW_TOKEN not in caplog.text  # The log must not expose the token.
 
     def test_availability_loop_logs_a_distinct_label_per_token(self, caplog, monkeypatch):

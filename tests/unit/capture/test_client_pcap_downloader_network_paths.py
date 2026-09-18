@@ -129,6 +129,19 @@ class TestFetchWirelessClients:
         assert result == []  # The menu must see an empty list and abort safely.
         assert "synthetic timeout" in caplog.text  # The log must preserve the timeout cause.
 
+    def test_a_search_connection_error_returns_an_empty_list(
+        self, downloader: ClientPacketCaptureDownloader, caplog: Any
+    ) -> None:
+        """A wireless-client connection error must abort the step with a logged cause."""
+        caplog.set_level("ERROR", logger=cpd.logger.name)  # Capture the module log for the connection path.
+        fake_sdk = MagicMock()  # Stand in for the SDK so no live Mist call starts.
+        error = cpd.requests.exceptions.ConnectionError("synthetic connection error")  # Use the transport error.
+        fake_sdk.api.v1.sites.clients.searchSiteWirelessClients.side_effect = error  # Fail at the API call.
+        with patch.object(cpd, "mistapi", fake_sdk), patch.object(cpd, "MISTAPI_AVAILABLE", True):  # Enable SDK path.
+            result = downloader._fetch_wireless_clients("site-1")  # Drive the product connection handling.
+        assert result == []  # The menu must see an empty list and abort safely.
+        assert "synthetic connection error" in caplog.text  # The log must preserve the connection cause.
+
     def test_a_paging_failure_returns_an_empty_list(
         self, downloader: ClientPacketCaptureDownloader, caplog: Any
     ) -> None:

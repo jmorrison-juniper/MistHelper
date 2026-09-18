@@ -12,6 +12,8 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from src.websocket import commands as commands_mod
 from src.websocket.commands import MacTableCommand
 
@@ -200,6 +202,20 @@ def test_post_show_mac_table_prints_debug_when_enabled(capsys) -> None:
     assert "[REDACTED]" in out and "tok-real" not in out
     assert "HTTP Response Status = 200" in out
     assert "body-here" in out
+
+
+def test_post_show_mac_table_connection_error_reaches_caller() -> None:
+    """A show MAC table connection error must reach the caller."""
+    error = commands_mod.requests.exceptions.ConnectionError("synthetic connection error")  # Transport error.
+    with patch.object(commands_mod.requests, "post", side_effect=error) as mock_post:  # Fail the product POST call.
+        with pytest.raises(commands_mod.requests.exceptions.ConnectionError, match="synthetic connection error"):
+            MacTableCommand._post_show_mac_table("h", "tok", "s", "d", debug_mode=False)  # Drive the product call.
+    mock_post.assert_called_once_with(  # Prove the exception came from the real REST RPC call.
+        "https://h/api/v1/sites/s/devices/d/show_mac_table",
+        headers={"Authorization": "Token tok", "Content-Type": "application/json"},
+        json={},
+        timeout=30,
+    )
 
 
 # ---------- _extract_session_id ----------
