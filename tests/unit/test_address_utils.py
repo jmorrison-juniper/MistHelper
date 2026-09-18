@@ -830,6 +830,26 @@ class TestNominatimValidatorAPI:
             verify=True,
         )
 
+    def test_try_request_attempt_returns_none_on_connection_error(self):
+        """A Nominatim connection error must return no response for the retry loop."""
+        error = address_mod.requests.exceptions.ConnectionError("synthetic connection error")  # Transport error.
+        with patch("src.utils.address_utils.requests") as mock_requests:  # Replace the HTTP client only.
+            mock_requests.get.side_effect = error  # Force the product HTTP call to fail before response.
+            result = self.validator._try_request_attempt(  # Drive the real per-attempt request method.
+                {"format": "json", "q": "123 Main", "limit": 1},  # Supply the expected query fields.
+                {"User-Agent": self.validator.USER_AGENT},  # Supply the required Nominatim header.
+                True,  # Keep certificate verification enabled.
+                self.validator.MAX_RETRIES,  # Use final attempt so the test does not sleep.
+            )
+        assert result is None  # The retry loop must receive a no-response signal after a connection error.
+        mock_requests.get.assert_called_once_with(  # The connection error must come from the real product call.
+            self.validator.NOMINATIM_URL,
+            params={"format": "json", "q": "123 Main", "limit": 1},
+            headers={"User-Agent": self.validator.USER_AGENT},
+            timeout=self.validator.timeout + (self.validator.MAX_RETRIES * 5),
+            verify=True,
+        )
+
     def test_parse_geocode_response_not_200(self):
         mock_resp = MagicMock()
         mock_resp.status_code = 404
