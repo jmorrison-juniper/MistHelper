@@ -6,10 +6,31 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.shared.services import auth as auth_module
 from src.shared.services.auth import AuthService, MistApiUnavailableError, MistPrivileges
 
 STATUS_UNAUTHORIZED = 401  # Name the HTTP 4xx token rejection used by auth tests.
 STATUS_UNAVAILABLE = 503  # Name the HTTP 5xx service failure used by auth tests.
+
+
+class _FakeRedisClient:
+    """Return one prepared value to tests that exercise the real cache reader."""
+
+    def __init__(self, raw_value: bytes) -> None:
+        self.raw_value = raw_value  # Preserve the exact Redis bytes for this test case.
+        self.key_read = ""  # Record the key so the test proves the cache path ran.
+
+    def get(self, key: str) -> bytes:
+        self.key_read = key  # Capture the digest key without exposing the token.
+        return self.raw_value  # Return the prepared bytes to exercise parsing.
+
+
+class _SchemaDriftPrivileges:
+    """Require one new field to simulate a later MistPrivileges schema."""
+
+    def __init__(self, email: str, required_scope: str) -> None:
+        self.email = email  # Keep the old field so the missing new field causes TypeError.
+        self.required_scope = required_scope  # Require the future field for schema drift.
 
 
 class TestMistPrivileges:
@@ -107,6 +128,56 @@ class TestAuthService:
         self.svc.validate_token("tok-new")
 
         mock_write.assert_called_once()
+
+    def test_read_cache_returns_none_and_logs_truncated_value(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        redis_client = _FakeRedisClient(b'{"email": "a@b.c"')  # Simulate a truncated Redis value.
+        service = AuthService(redis_client=redis_client)  # Use a fake client for the real reader.
+
+        with caplog.at_level("WARNING", logger=auth_module.__name__):  # Capture the warning.
+            result = service._read_cache("tok-truncated")  # Exercise the sign-in cache path.
+
+        assert result is None  # The cache reader must take the same path as a cache miss.
+        assert "Discarding an unreadable privilege cache entry" in caplog.text  # Prove the log.
+        assert "Expecting ',' delimiter" in caplog.text  # Prove the log keeps the parse cause.
+        expected_key = auth_module.privilege_cache_key("tok-truncated")  # Build the expected key.
+        assert redis_client.key_read == expected_key  # Prove the real key path.
+
+    def test_read_cache_returns_none_and_logs_schema_drift(
+        self,
+        caplog: pytest.LogCaptureFixture,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        redis_client = _FakeRedisClient(b'{"email": "a@b.c"}')  # Simulate an old cache schema.
+        service = AuthService(redis_client=redis_client)  # Use a fake client for the real reader.
+        monkeypatch.setattr(auth_module, "MistPrivileges", _SchemaDriftPrivileges)  # Add drift.
+
+        with caplog.at_level("WARNING", logger=auth_module.__name__):  # Capture the warning.
+            result = service._read_cache("tok-schema-drift")  # Exercise schema drift.
+
+        assert result is None  # The cache reader must take the same path as a cache miss.
+        assert "Discarding an unreadable privilege cache entry" in caplog.text  # Prove the log.
+        assert "required_scope" in caplog.text  # Prove the log keeps the schema drift cause.
+        expected_key = auth_module.privilege_cache_key("tok-schema-drift")  # Build the key.
+        assert redis_client.key_read == expected_key  # Prove the real key path.
+
+    def test_read_cache_returns_privileges_for_valid_value(self) -> None:
+        raw_value = (  # Keep the valid cache payload close to the assertion.
+            b'{"email": "a@b.c", "name": "Agent", "is_msp": false, '
+            b'"org_ids": ["org-1"], "site_ids": ["site-1"], "org_names": {"org-1": "Org"}}'
+        )
+        redis_client = _FakeRedisClient(raw_value)  # Match the _write_cache shape.
+        service = AuthService(redis_client=redis_client)  # Use a fake client for the real reader.
+
+        result = service._read_cache("tok-valid")  # Exercise the happy path.
+
+        assert isinstance(result, MistPrivileges)  # Prove the guard keeps valid entries.
+        assert result.email == "a@b.c"  # Prove the cached identity survives the trip.
+        assert result.org_ids == ["org-1"]  # Prove the cached org scope survives the round trip.
+        expected_key = auth_module.privilege_cache_key("tok-valid")  # Build the expected key.
+        assert redis_client.key_read == expected_key  # Prove the real key path.
 
     @patch("src.shared.services.auth.mistapi.APISession")
     @patch("src.shared.services.auth.MistEndpointService")

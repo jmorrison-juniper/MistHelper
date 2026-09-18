@@ -183,7 +183,15 @@ class AuthService:
         raw = self._redis.get(privilege_cache_key(token))  # Address the entry by a stable digest.
         if not raw:  # A cache miss makes the caller ask Mist.
             return None
-        return MistPrivileges(**json.loads(raw))  # Rebuild the result that _write_cache stored.
+        try:  # A cached value can be truncated, or it can predate a schema change.
+            payload = json.loads(raw)  # Parse the cache entry before rebuilding privileges.
+            return MistPrivileges(**payload)  # Rebuild the result that _write_cache stored.
+        except (ValueError, TypeError) as cache_error:  # JSONDecodeError subclasses ValueError.
+            logger.warning(  # Explain why the sign-in path must ask Mist again.
+                "Discarding an unreadable privilege cache entry: %s",
+                cache_error,
+            )
+            return None  # Take the documented miss path, so the caller asks Mist again.
 
     def _write_cache(self, token: str, privs: MistPrivileges) -> None:
         """Cache privilege data in Redis with TTL."""
