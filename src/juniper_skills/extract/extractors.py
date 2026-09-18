@@ -59,7 +59,7 @@ class FactExtractor(ABC):
         """Return the first platform or release qualifier from source text."""
         match = re.search(
             r"\b(on|for|from|starting in|introduced in)\s+"
-            r"((?:Junos\s+OS\s+)?\d+\.\d+[A-Za-z0-9.-]*|[A-Z]{2,6}\s+Series|"
+            r"((?:Junos\s+OS\s+|Junos\s+)\d+\.\d+[A-Za-z0-9.-]*|[A-Z]{2,6}\s+Series|"
             r"EX\d{4}|QFX\d{4}|SRX\d{3,4}|MX\d{3,4})",
             text,
             re.IGNORECASE,
@@ -84,7 +84,7 @@ class CommandFactExtractor(FactExtractor):
         """Return the command text from one source line, or an empty string."""
         stripped = text.strip().strip("`")  # Remove Markdown edge code marks without changing the command.
         prompt_match = re.match(
-            r"(?:[\w.-]+@[\w.-]+[>#]\s*)?((?:show|set|delete|edit|run|commit|request|clear|ping|traceroute)\b.+)",
+            r"(?:[\w.-]+@[\w.-]+[>#]\s*)?((?:show|set|delete|edit|run|commit|request|clear|ping|traceroute)\s+.+)",
             stripped,
         )  # Detect CLI.
         if prompt_match:  # Prompt lines carry the command after the prompt.
@@ -95,6 +95,8 @@ class CommandFactExtractor(FactExtractor):
         """Return command text only when the line is not prose."""
         if re.search(r",\s+(and|or)\s+|\.\s+If\b|\bcommands?\.\s+If\b", command):  # Detect prose lists.
             return ""  # Do not preserve a prose sentence as a command.
+        if re.match(r"^(set|delete|show)\s+[A-Z]", command):  # Detect glossary rows that start with CLI verbs.
+            return ""  # Reject command keyword descriptions as commands.
         if command.startswith("set ") and not re.match(
             r"set\s+(interfaces|protocols|routing-options|policy-options|security|vlans|groups|switch-options|forwarding-options|system|class-of-service)\b",
             command,
@@ -155,9 +157,12 @@ class NumericFactExtractor(FactExtractor):
 
     fact_type = "numeric"  # Name numeric facts for dedup keys.
     _PATTERN = re.compile(
-        r"\b(?:default|range|timer|threshold|limit|maximum|minimum)?\s*\d+(?:\.\d+)?(?:\s*(?:VLANs|MACs|routes|bytes|seconds|minutes|hours|days|Gbps|Mbps|kbps|dBm|dB|ms|sec|%|V|W|A))?",
+        r"\b(?:maximum|minimum|default|range|timer|threshold|limit|interval|hold-time|mtu|vlan-id|"
+        r"preference|metric|timeout|delay|count|size|rate|age|priority|cost)\s+"
+        r"\d+(?:\.\d+)?(?:\s*(?:VLANs|MACs|routes|bytes|seconds|minutes|hours|days|Gbps|Mbps|"
+        r"kbps|dBm|dB|ms|sec|%|V|W|A))?",
         re.IGNORECASE,
-    )  # Find numeric facts.
+    )  # Find numeric facts that have a named parameter anchor.
 
     def _extract(self, lines: tuple[SourceLine, ...], source_key: str) -> list[ExtractedFact]:
         facts: list[ExtractedFact] = []  # Collect numeric facts in source order.
@@ -379,12 +384,21 @@ class DefinitionFactExtractor(FactExtractor):
 
     def _definition(self, text: str) -> tuple[str, str] | None:
         """Return a term and short meaning from one line."""
+        if self._bad_definition_line(text):  # Headings and questions create false term facts.
+            return None  # Return no definition for non-definition lines.
         match = re.match(
-            r"^\s*(?:[-*]\s*)?`?([A-Z][A-Za-z0-9 /_-]{1,50})`?\s+(?:is|are|refers to|means)\s+(.+)$", text.strip()
+            r"^\s*(?:[-*]\s*)?`?([A-Z][A-Za-z0-9 /_-]{1,50})`?\s+(?:is a|is an|is the|means|refers to)\s+(.+)$",
+            text.strip(),
         )  # Detect definitions.
         if not match:  # Most lines are not term definitions.
             return None  # Return no definition.
         return match.group(1).strip(), self._snippet(match.group(2))  # Keep the term exact and meaning short.
+
+    def _bad_definition_line(self, text: str) -> bool:
+        """Return whether a line cannot be a safe definition."""
+        stripped = text.strip()  # Normalize edge whitespace for definition filters.
+        blocked = ("#", "what ", "when ", "where ", "why ", "how ")  # Block headings and questions.
+        return stripped.lower().startswith(blocked) or "?" in stripped  # Reject common non-definition shapes.
 
     def _definition_fact(self, term: tuple[str, str], line: SourceLine, source_key: str) -> ExtractedFact:
         """Return one definition card."""
@@ -398,7 +412,7 @@ class PlatformReleaseFactExtractor(FactExtractor):
     fact_type = "platform-release"  # Name platform and release facts for dedup keys.
     _PATTERN = re.compile(
         r"\b(on|for|from|starting in|introduced in)\s+"
-        r"((?:Junos\s+OS\s+)?\d+\.\d+[A-Za-z0-9.-]*|[A-Z]{2,6}\s+Series|"
+        r"((?:Junos\s+OS\s+|Junos\s+)\d+\.\d+[A-Za-z0-9.-]*|[A-Z]{2,6}\s+Series|"
         r"EX\d{4}|QFX\d{4}|SRX\d{3,4}|MX\d{3,4})",
         re.IGNORECASE,
     )  # Find qualifiers.

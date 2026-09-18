@@ -9,6 +9,7 @@ from src.juniper_skills.extract import (  # Import the public depth extraction A
     CommandFactExtractor,
     ConfigurationFactExtractor,
     ConstraintFactExtractor,
+    CoverageAnalyzer,
     DefinitionFactExtractor,
     FactExtractionEngine,
     NumericFactExtractor,
@@ -30,6 +31,11 @@ class TestDepthExtractors:
         assert facts[0].citation_key == "[TEST p.7]"  # Prove exact page citation.
         assert "`show route protocol bgp detail`" in facts[0].fact  # Prove verbatim command preservation.
         assert any("`bgp`" in fact.fact for fact in facts)  # Prove argument extraction.
+
+    def test_command_extractor_rejects_prose_that_starts_with_set(self) -> None:
+        """A command extractor rejects English sentences that start with set."""
+        source = "<!-- page 7 -->\nset, from routers to switches to firewalls."  # Build prose, not CLI.
+        assert self._facts(CommandFactExtractor(), source) == tuple()  # Prove prose did not become a command.
 
     def test_configuration_extractor_keeps_hierarchy_path(self) -> None:
         """A configuration extractor preserves the configuration statement."""
@@ -163,3 +169,46 @@ class TestDepthEngine:
         assert result.cards_per_page >= 1.0  # Prove the page density metric is populated.
         assert result.table_card_count == 1  # Prove the table-derived metric counts deduplicated cards.
         assert result.retention_percent > 0.0  # Prove the retention metric is populated.
+
+
+class TestCoverageAnalyzer:
+    """Verify manifest extraction and coverage checks."""
+
+    def test_manifest_lists_commands_filters_and_tables(self) -> None:
+        """The analyzer creates a checklist instead of noisy cards."""
+        source = "\n".join(  # Build a source region with commands, filters, and a text table.
+            (
+                "<!-- page 64 -->",
+                "# Filtering Output",
+                "show interfaces terse | match ge- | refresh 2",
+                "#### Table 1: Pipe Filters",
+                "Name Description",
+                "last Shows final lines",
+            )
+        )
+        manifest = CoverageAnalyzer().analyze_text(source, "TEST")  # Build the coverage manifest.
+        assert manifest.count("commands found") == 1  # Prove command checklist extraction.
+        assert "match" in manifest.values("pipe filters named")  # Prove pipe filter extraction.
+        assert manifest.count("table rows") == 1  # Prove table row extraction.
+
+    def test_manifest_verifier_reports_missing_entries(self) -> None:
+        """The verifier reports the share of checklist entries covered."""
+        source = "<!-- page 1 -->\nshow interfaces terse\nshow route terse"  # Build two command facts.
+        manifest = CoverageAnalyzer().analyze_text(source, "TEST")  # Build manifest entries.
+        report = CoverageAnalyzer().verify(manifest, "Use `show interfaces terse`.")  # Check one covered fact.
+        assert report.coverage_percent == 50.0  # Prove only one of two entries was covered.
+        assert report.missing_entries[0].value == "show route terse"  # Prove missing fact reporting.
+
+    def test_numeric_manifest_requires_parameter_anchor(self) -> None:
+        """The analyzer drops bare numbers and keeps named numeric limits."""
+        source = "<!-- page 2 -->\nFan 4 OK\nhold-time 90 seconds\nVersion 10.3 started"  # Build numeric text.
+        manifest = CoverageAnalyzer().analyze_text(source, "TEST")  # Build manifest entries.
+        assert manifest.values("numeric limits") == ("hold-time 90 seconds",)  # Prove anchored numeric extraction.
+
+    def test_definition_extractor_rejects_heading_questions(self) -> None:
+        """The definition extractor ignores question headings."""
+        source = "<!-- page 3 -->\n## What if the counters are slow?\nRoute preference is a route rank."  # Source.
+        facts = SourcePageParser().parse(source)  # Attach page markers before direct extraction.
+        definitions = DefinitionFactExtractor().extract(facts, "TEST")  # Extract definitions.
+        assert len(definitions) == 1  # Prove only the real definition remains.
+        assert "What if" not in definitions[0].fact  # Prove the heading did not become a term.

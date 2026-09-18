@@ -17,6 +17,74 @@ class SourceLine:
 
 
 @dataclass(frozen=True)
+class CoverageEntry:
+    """One checklist item that a writer must cover."""
+
+    category: str  # Store the manifest section that owns the item.
+    value: str  # Store the command, parameter, row, caveat, or qualifier.
+    citation_key: str  # Store the exact source page citation.
+
+    def to_markdown(self) -> str:
+        """Return one manifest line."""
+        return f"- `{self.value}` {self.citation_key}"  # Keep the item exact and cited.
+
+
+@dataclass(frozen=True)
+class CoverageManifest:
+    """One source-region checklist for a writing agent."""
+
+    topic: str  # Store the inferred topic name for the source region.
+    region: str  # Store the exact source page range for the region.
+    entries: tuple[CoverageEntry, ...]  # Store all deduplicated checklist items.
+    merge_count: int  # Store how many repeated checklist items merged away.
+
+    def count(self, category: str) -> int:
+        """Return the count of manifest entries in one category."""
+        return sum(1 for entry in self.entries if entry.category == category)  # Count only the requested category.
+
+    def values(self, category: str) -> tuple[str, ...]:
+        """Return manifest values for one category."""
+        return tuple(entry.value for entry in self.entries if entry.category == category)  # Keep source order.
+
+    def to_markdown(self) -> str:
+        """Return a publishable coverage manifest."""
+        lines = [f"# Coverage manifest: {self.topic}", "", f"region: {self.region}", ""]  # Start report header.
+        for category in self.categories():  # Emit each populated section.
+            lines.extend(self._section(category))  # Add the section heading and entries.
+        return "\n".join(lines).rstrip() + "\n"  # Return Markdown with one final newline.
+
+    def categories(self) -> tuple[str, ...]:
+        """Return populated categories in first-seen order."""
+        seen: dict[str, None] = {}  # Use dictionary order to keep first occurrence order.
+        for entry in self.entries:  # Walk entries in manifest order.
+            seen.setdefault(entry.category, None)  # Keep each category once.
+        return tuple(seen)  # Return category names for output sections.
+
+    def _section(self, category: str) -> list[str]:
+        """Return one manifest section."""
+        section = [f"## {category}", ""]  # Start a visible section for the writer.
+        section.extend(entry.to_markdown() for entry in self.entries if entry.category == category)  # Add items.
+        section.append("")  # Separate sections with a blank line.
+        return section  # Return section lines for the report.
+
+
+@dataclass(frozen=True)
+class CoverageVerificationReport:
+    """Coverage comparison between a manifest and a finished topic."""
+
+    total_entries: int  # Store the count of manifest facts checked.
+    covered_entries: int  # Store the count found in the finished topic.
+    missing_entries: tuple[CoverageEntry, ...]  # Store manifest facts not found in the topic.
+
+    @property
+    def coverage_percent(self) -> float:
+        """Return the share of manifest facts covered by the topic."""
+        if self.total_entries <= 0:  # A zero-entry manifest cannot prove coverage.
+            return 0.0  # Return zero so callers do not treat it as passed.
+        return self.covered_entries * 100.0 / self.total_entries  # Convert covered facts to a percentage.
+
+
+@dataclass(frozen=True)
 class ExtractedFact:
     """One candidate fact before cross-extractor deduplication."""
 
