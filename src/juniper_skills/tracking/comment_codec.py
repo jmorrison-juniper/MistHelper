@@ -43,13 +43,38 @@ class StageCommentCodec:
 
     def _render_comment(self, event: StageEvent, json_block: str) -> str:
         """Render the human text and the JSON block."""
+        metrics = self._metrics_lines(event.details)  # Build measured evidence for the human audit trail.
         human_lines = [  # Keep the prose short so issue comments stay readable.
             "Skill factory journal update.",
             f"Document key: `{event.document_key}`.",
             f"Stage complete: `{event.stage.value}`.",
             f"Next action: {event.next_action}.",
+            *metrics,
         ]
         return "\n".join(human_lines + ["", self.block_start, json_block, self.block_end])  # Keep one parseable block.
+
+    def _metrics_lines(self, details: dict[str, Any]) -> list[str]:
+        """Return human-readable measured values for one stage."""
+        metrics = self._normalized_metrics(details)  # Add defaults so every audit comment has the same fields.
+        return [  # Keep each measurement on its own short line for readers.
+            f"Topic count: {metrics['topic_count']}.",
+            f"Card count: {metrics['card_count']}.",
+            f"Retention percentage: {metrics['retention_percentage']}.",
+            f"Guard result: {metrics['guard_result']}.",
+            f"Longest guard run: {metrics['longest_guard_run']}.",
+            f"STE score: {metrics['ste_score']}.",
+        ]
+
+    def _normalized_metrics(self, details: dict[str, Any]) -> dict[str, Any]:
+        """Return required metrics with safe defaults."""
+        return {  # Preserve provided values and make missing measurements explicit.
+            "topic_count": details.get("topic_count", "not measured"),
+            "card_count": details.get("card_count", "not measured"),
+            "retention_percentage": details.get("retention_percentage", "not measured"),
+            "guard_result": details.get("guard_result", "not measured"),
+            "longest_guard_run": details.get("longest_guard_run", "not measured"),
+            "ste_score": details.get("ste_score", "not measured"),
+        }
 
     def _events_from_body(self, body: str) -> list[StageEvent]:
         """Extract all stage events from one issue comment body."""
@@ -108,7 +133,7 @@ class StageCommentCodec:
 
     def _next_action_after(self, stage: StageName) -> str:
         """Return the next pipeline action after a completed stage."""
-        if stage == StageName.VERIFIED:  # A verified document needs no more pipeline work.
+        if stage in {StageName.VERIFIED, StageName.RELEASED}:  # A terminal document needs no more pipeline work.
             return "no action"
         stage_index = STAGE_ORDER.index(stage)  # Convert the enum into its pipeline position.
         return f"run the {STAGE_ORDER[stage_index + 1].value} stage"  # Name the next stage for recovery.

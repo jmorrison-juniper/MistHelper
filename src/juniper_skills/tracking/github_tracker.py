@@ -6,69 +6,78 @@ import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from src.juniper_skills.tracking.comment_codec import StageCommentCodec
-from src.juniper_skills.tracking.github_cli import GitHubCliError, GitHubCliRunner, GitHubRateLimitManager
+from src.juniper_skills.tracking.github_cli import (
+    GitHubCliError,
+    GitHubCliRunner,
+    GitHubRateLimitExhausted,
+    GitHubRateLimitManager,
+)
 from src.juniper_skills.tracking.models import DocumentRecord, ResumePoint, StageEvent, StageName
 from src.juniper_skills.tracking.recovery import SkillIssueRecoveryReader
 from src.juniper_skills.tracking.store import FactoryJournalStore
 
 
 class SkillIssueTracker:
-    """Open and update lazy GitHub journal issues for skill factory work."""
+    """Open and update one GitHub issue for each source document."""
 
     def __init__(
         self,
         database_path: Path,
         repo: str = "jmorrison-juniper/MistHelper",
         parent_issue: int = 2925,
-        issue_shape: str = "domain",
+        issue_shape: str = "document",
         runner: GitHubCliRunner | None = None,
     ) -> None:
         self.repo = repo  # Store the repository owner and name for each `gh` command.
         self.parent_issue = parent_issue  # Link created journals back to the factory issue.
-        self.issue_shape = issue_shape  # Select domain journals by default to avoid 1,500 visible issues.
+        self.issue_shape = issue_shape  # Keep compatibility while document issues are now the default.
         self.runner = runner or GitHubCliRunner()  # Allow tests to supply a fake `gh` runner.
         self.rate_limit = GitHubRateLimitManager(self.runner)  # Measure real limits before GitHub calls.
         self.store = FactoryJournalStore(database_path)  # Persist all work before any network call.
         self.codec = StageCommentCodec()  # Encode journal comments in one stable format.
 
-    def ensure_issue(self, document: DocumentRecord) -> int | None:
-        """Return the journal issue number, creating it lazily if needed."""
-        logging.info("Ensuring a lazy GitHub journal issue exists")  # Record the high-level action.
+    def ensure_issue(self, document: DocumentRecord, sync: bool = True) -> int | None:
+        """Queue one document issue and optionally reconcile it to GitHub."""
+        logging.info("Ensuring a document GitHub journal issue is queued")  # Record the durable local action.
         self.store.save_document(document, self.issue_shape)  # Mirror document metadata before a network action.
         issue_number = self.store.get_issue_number(document.document_key)  # Reuse a local issue link if it exists.
         if issue_number is not None:  # Avoid duplicate issue creation on retries.
             logging.debug("Using local journal issue %d", issue_number)  # Record the idempotent result.
             return issue_number
-        issue_number = self._find_or_create_issue(document)  # Search GitHub before creating a lazy issue.
-        self.store.save_issue_number(document.document_key, issue_number)  # Persist the link for future retries.
-        logging.debug("Ensured GitHub journal issue %d", issue_number)  # Record the created or found issue.
-        return issue_number
+        synced_count = self.sync_pending(limit=1) if sync else 0  # Let callers defer GitHub work.
+        logging.debug("Document issue queue sync attempted %d item", synced_count)  # Record nonblocking behavior.
+        return self.store.get_issue_number(document.document_key)  # Return None when the background queue must retry.
 
     def record_stage(
         self,
         document: DocumentRecord,
         stage: StageName,
         details: dict[str, object] | None = None,
-        sync: bool = True,
+        sync: bool = False,
     ) -> int:
-        """Store a stage event and optionally sync one GitHub comment."""
+        """Store a stage event and optionally sync the background queue."""
         logging.info("Recording a skill factory stage transition")  # Record the durable journal action.
-        issue_number = self.ensure_issue(document)  # Create the journal only when the document enters the pipeline.
+        self.store.save_document(document, self.issue_shape)  # Save the document before the comment event.
+        issue_number = self.store.get_issue_number(document.document_key)  # Attach the issue number if it exists.
         event = self._stage_event(document, stage, issue_number, details or {})  # Build the exact recovery state.
         comment_body = self.codec.build_comment(event)  # Create the GitHub-ready comment text.
         event_id = self.store.enqueue_stage_event(event, comment_body)  # Save the local mirror before the network call.
-        self.sync_pending(limit=1) if sync else logging.debug("Deferred GitHub sync for stage event %d", event_id)
+        self.store.update_document_stage(
+            document.document_key, stage.value, self._status_for_stage(stage)
+        )  # Update board.
+        self.sync_pending() if sync else logging.debug("Deferred GitHub sync for stage event %d", event_id)
         return event_id
 
     def sync_pending(self, limit: int = 25) -> int:
-        """Send queued comments to GitHub."""
-        logging.info("Reconciling local journal events to GitHub")  # Record the sync action.
-        synced_count = 0  # Count successful comments for caller evidence.
-        for event in self.store.unsynced_stage_events(limit):  # Send a bounded batch to respect the API limit.
-            synced_count += self._sync_one_event(event)  # Try one event and keep later events available.
-        logging.debug("Synced %d journal events to GitHub", synced_count)  # Record the sync result.
+        """Reconcile queued issues and comments to GitHub."""
+        logging.info("Reconciling local journal work to GitHub")  # Record the sync action.
+        synced_count = self._sync_document_issues(limit)  # Create document issues before comments that need them.
+        remaining_limit = max(0, limit - synced_count)  # Keep the caller limit across issue and comment writes.
+        synced_count += self._sync_stage_events(remaining_limit)  # Send comments only for documents with issues.
+        logging.debug("Synced %d queued GitHub journal items", synced_count)  # Record the sync result.
         return synced_count
 
     def resume_point(self, document: DocumentRecord) -> ResumePoint:
@@ -78,36 +87,106 @@ class SkillIssueTracker:
         reader = SkillIssueRecoveryReader(self.store, self.runner, self.rate_limit, self.repo)  # Build the reader.
         return reader.resume_point(document.document_key, issue_number)  # Reconstruct the exact resume point.
 
+    def build_index_markdown(self) -> str:
+        """Return a generated progress index grouped by domain."""
+        logging.info("Building the skill factory issue index")  # Record the index action.
+        rows = self.store.documents_for_index()  # Read progress rows from the durable local mirror.
+        index = SkillFactoryIssueIndex(self.repo).render(rows)  # Render the Markdown index for issue #2925 or a file.
+        logging.debug("Built the skill factory issue index with %d characters", len(index))  # Record output size.
+        return index
+
+    def sync_parent_index_comment(self) -> int:
+        """Add a generated index comment to the parent issue."""
+        logging.info("Writing the generated index comment to the parent issue")  # Record the index sync.
+        body = self.build_index_markdown()  # Build the current local progress board.
+        self.rate_limit.defer_if_needed()  # Defer this optional write when the API bucket is low.
+        self.runner.run(
+            ["gh", "issue", "comment", str(self.parent_issue), "--repo", self.repo, "--body", body]
+        )  # Write.
+        logging.debug("Wrote the generated index comment to issue %d", self.parent_issue)  # Record the target issue.
+        return 1
+
+    def _sync_document_issues(self, limit: int) -> int:
+        """Create queued document issues."""
+        synced_count = 0  # Count successful creates for throughput reporting.
+        for row in self.store.unsynced_documents(limit):  # Process a bounded queue slice.
+            synced_count += self._sync_one_document(row)  # Create one issue and preserve the rest on failure.
+        return synced_count
+
+    def _sync_stage_events(self, limit: int) -> int:
+        """Send queued stage comments."""
+        synced_count = 0  # Count successful comments for caller evidence.
+        for event in self.store.unsynced_stage_events(limit):  # Send a bounded batch to respect the API limit.
+            synced_count += self._sync_one_event(event)  # Try one event and keep later events available.
+        return synced_count
+
+    def _sync_one_document(self, row: dict[str, Any]) -> int:
+        """Create or find one document issue."""
+        document = self._document_from_row(row)  # Rebuild the document identity from SQLite.
+        try:
+            self.rate_limit.defer_if_needed()  # Never block the pipeline when the API bucket is empty.
+            issue_number = self._find_or_create_issue(document)  # Search GitHub before creating a lazy issue.
+            self.store.mark_document_issue_synced(document.document_key, issue_number)  # Persist the remote link.
+            return 1
+        except (GitHubCliError, GitHubRateLimitExhausted) as error:
+            logging.debug("Deferred document issue sync after error: %s", error)  # Leave the row queued for retry.
+            return 0
+
+    def _sync_one_event(self, event: dict[str, object]) -> int:
+        """Send one queued stage event to GitHub."""
+        try:
+            self.rate_limit.defer_if_needed()  # Measure the API bucket before the comment call.
+            self._comment_issue(event)  # Write the machine-readable audit comment.
+            self._set_issue_labels(int(event["issue_number"]), str(event["stage"]))  # Keep filters precise.
+            self._close_if_complete(int(event["issue_number"]), str(event["stage"]))  # Close finished document work.
+            self.store.mark_stage_event_synced(int(event["id"]))  # Mark the row only after GitHub accepts the comment.
+            return 1
+        except (GitHubCliError, GitHubRateLimitExhausted) as error:
+            logging.debug("Deferred GitHub journal sync after error: %s", error)  # Leave the row queued for retry.
+            return 0
+
+    def _comment_issue(self, event: dict[str, object]) -> None:
+        """Write one stage comment to a document issue."""
+        logging.info("Writing a stage audit comment to GitHub issue %s", event["issue_number"])  # Record the write.
+        self.runner.run(  # Write the crash-recovery journal comment to GitHub.
+            [
+                "gh",
+                "issue",
+                "comment",
+                str(event["issue_number"]),
+                "--repo",
+                self.repo,
+                "--body",
+                str(event["comment_body"]),
+            ]
+        )
+        logging.debug("Wrote a stage audit comment for event %s", event["id"])  # Record the queue row.
+
     def _find_or_create_issue(self, document: DocumentRecord) -> int:
         """Search for a journal issue and create one only when absent."""
         title = self._issue_title(document)  # Build the idempotency key that GitHub search can find.
         found_issue = self._search_issue(title)  # Search before create to avoid duplicate issues.
         if found_issue is not None:  # Reuse the existing issue when a prior run created it.
             return found_issue
-        return self._create_issue(document, title)  # Create the lazy issue only after no match exists.
+        return self._create_issue(document, title)  # Create the document issue only after no match exists.
 
     def _search_issue(self, title: str) -> int | None:
         """Search GitHub for an exact journal title."""
-        logging.info("Searching GitHub for an existing journal issue")  # Record the idempotency search.
-        self.rate_limit.wait_if_needed()  # Avoid rate-limit failures before search.
+        logging.info("Searching GitHub for an existing document issue")  # Record the idempotency search.
         query = f'repo:{self.repo} in:title "{title}"'  # Scope search to this repository and exact title text.
         result = self.runner.run(  # Ask GitHub for a small JSON result set.
             ["gh", "issue", "list", "--repo", self.repo, "--state", "all", "--search", query, "--json", "number,title"]
         )
         matches = json.loads(result.stdout)  # Decode the result set for exact title comparison.
-        issue_number = next(
-            (int(item["number"]) for item in matches if item["title"] == title),
-            None,
-        )  # Find exact match.
-        logging.debug("GitHub journal issue search found %s", issue_number)  # Record the idempotency result.
+        issue_number = next((int(item["number"]) for item in matches if item["title"] == title), None)  # Match title.
+        logging.debug("GitHub document issue search found %s", issue_number)  # Record the idempotency result.
         return issue_number
 
     def _create_issue(self, document: DocumentRecord, title: str) -> int:
         """Create a GitHub journal issue."""
-        logging.info("Creating a lazy GitHub journal issue")  # Record the network create action.
-        self._ensure_labels(document.domain)  # Ensure filters exist before the issue uses them.
-        self.rate_limit.wait_if_needed()  # Avoid rate-limit failures before issue creation.
-        result = self.runner.run(  # Create one issue for the selected safe shape.
+        logging.info("Creating a document GitHub journal issue")  # Record the network create action.
+        self._ensure_labels(document.domain, StageName.QUEUED.value, "queued")  # Ensure initial filters exist first.
+        result = self.runner.run(  # Create one issue for this source document.
             [
                 "gh",
                 "issue",
@@ -119,14 +198,113 @@ class SkillIssueTracker:
                 "--body",
                 self._issue_body(document),
                 "--label",
-                f"skill-factory,domain:{document.domain}",
+                self._label_csv(document.domain, StageName.QUEUED.value, "queued"),
             ]
         )
         issue_number = self._issue_number_from_url(result.stdout)  # Read the created number from the CLI URL.
         issue_id = self._issue_id(issue_number)  # Read the REST ID that the sub-issue API needs.
         self._link_parent_issue(issue_number, issue_id)  # Try to connect the issue to #2925.
-        logging.debug("Created GitHub journal issue %d", issue_number)  # Record the created issue number.
+        logging.debug("Created GitHub document journal issue %d", issue_number)  # Record the created issue number.
         return issue_number
+
+    def _set_issue_labels(self, issue_number: int, stage: str) -> None:
+        """Replace labels so the issue list shows the current stage."""
+        status = self._status_for_stage(StageName(stage))  # Derive the status label from the completed stage.
+        row = self._row_for_issue(issue_number)  # Read the domain that the label set needs.
+        labels = self._label_list(str(row["domain"]), stage, status)  # Build the complete label set for this issue.
+        self._ensure_labels(str(row["domain"]), stage, status)  # Create labels before the issue references them.
+        body = json.dumps({"labels": labels}, sort_keys=True)  # Replace the label set in one GitHub API call.
+        self.runner.run_with_input(
+            ["gh", "api", f"repos/{self.repo}/issues/{issue_number}", "--method", "PATCH", "--input", "-"], body
+        )  # Apply exact labels.
+        logging.debug("Set labels for issue %d to %s", issue_number, ",".join(labels))  # Record safe label names.
+
+    def _close_if_complete(self, issue_number: int, stage: str) -> None:
+        """Close the issue when the document reaches a terminal stage."""
+        if stage != StageName.VERIFIED.value:  # Keep open work visible until verification completes.
+            return
+        logging.info("Closing completed document issue %d", issue_number)  # Record the state change.
+        self.runner.run(
+            ["gh", "issue", "close", str(issue_number), "--repo", self.repo, "--reason", "completed"]
+        )  # Close.
+        logging.debug("Closed completed document issue %d", issue_number)  # Record the completed issue.
+
+    def _row_for_issue(self, issue_number: int) -> dict[str, Any]:
+        """Return the local document row for a GitHub issue."""
+        rows = self.store.documents_for_index()  # Read the small local progress table.
+        return next(row for row in rows if row["issue_number"] == issue_number)  # Match by the stored issue number.
+
+    def _stage_event(
+        self,
+        document: DocumentRecord,
+        stage: StageName,
+        issue_number: int | None,
+        details: dict[str, object],
+    ) -> StageEvent:
+        """Create a stage event with a deterministic next action."""
+        created_at = datetime.now(UTC).isoformat()  # Use UTC so comments sort the same on every machine.
+        next_action = self._next_action_for_stage(stage)  # Store the exact action the recovery reader reports.
+        return StageEvent(document.document_key, stage, next_action, issue_number, created_at, details)  # Return state.
+
+    def _next_action_for_stage(self, stage: StageName) -> str:
+        """Return the stored next action for one completed stage."""
+        if stage == StageName.FAILED:  # A failed stage requires repair before more pipeline work.
+            return "repair the failed stage"
+        if stage in {StageName.VERIFIED, StageName.RELEASED}:  # A terminal document needs no more pipeline work.
+            return "no action"
+        return "continue the document pipeline"  # The codec expands this from the exact completed stage.
+
+    def _status_for_stage(self, stage: StageName) -> str:
+        """Return the progress status for one stage."""
+        if stage == StageName.FAILED:  # A failed document needs operator repair.
+            return "failed"
+        if stage in {StageName.VERIFIED, StageName.RELEASED}:  # A verified or released document is complete.
+            return "complete"
+        return "in-progress"  # Any other stage means the document still has work.
+
+    def _issue_title(self, document: DocumentRecord) -> str:
+        """Return the document issue title."""
+        safe_title = document.title[:90]  # Bound the title so GitHub search remains readable.
+        return f"[skill-factory] {document.audit_citation_key}: {safe_title}"  # Make the citation the idempotency key.
+
+    def _issue_body(self, document: DocumentRecord) -> str:
+        """Return the GitHub issue body for the journal."""
+        lines = self._identity_lines(document)  # Build the self-contained document identity section.
+        checklist = [f"- [ ] {stage.value}" for stage in StageName if stage != StageName.FAILED]  # List normal stages.
+        return "\n".join(
+            lines + ["", "Stage checklist:", *checklist, "", f"Parent factory issue: #{self.parent_issue}"]
+        )
+
+    def _identity_lines(self, document: DocumentRecord) -> list[str]:
+        """Return the self-contained issue identity lines."""
+        return [  # Keep each field visible without requiring another index.
+            "This issue tracks one source document for the Juniper skill factory.",
+            "",
+            f"Document title: {document.title}",
+            f"Citation key: `{document.audit_citation_key}`",
+            f"Source PDF path: `{document.source_path}`",
+            f"Page count: {document.page_count}",
+            f"Part count: {document.part_count}",
+            f"Domain: `{document.domain}`",
+            f"Assigned skill name: `{document.audit_skill_name}`",
+            f"Priority: {document.priority}",
+            f"Version status: {document.version_status}",
+        ]
+
+    def _document_from_row(self, row: dict[str, Any]) -> DocumentRecord:
+        """Rebuild a document record from a local database row."""
+        return DocumentRecord(  # Keep GitHub reconciliation independent of in-memory pipeline objects.
+            Path(str(row["source_path"])),
+            str(row["title"]),
+            str(row["category"]),
+            int(row["page_count"]),
+            str(row["domain"]),
+            str(row["citation_key"]),
+            int(row["part_count"]),
+            str(row["skill_name"]),
+            str(row["priority"]),
+            str(row["version_status"]),
+        )
 
     def _issue_number_from_url(self, output: str) -> int:
         """Read the issue number from the `gh issue create` output URL."""
@@ -137,17 +315,14 @@ class SkillIssueTracker:
     def _issue_id(self, issue_number: int) -> int:
         """Read the database ID that the GitHub sub-issue API uses."""
         logging.info("Reading the GitHub issue REST ID")  # Record the metadata read.
-        result = self.runner.run(  # Ask `gh` for the issue ID after creation.
-            ["gh", "api", f"repos/{self.repo}/issues/{issue_number}"]
-        )
+        result = self.runner.run(["gh", "api", f"repos/{self.repo}/issues/{issue_number}"])  # Ask `gh` for metadata.
         payload = json.loads(result.stdout)  # Decode the issue metadata response.
         logging.debug("Read GitHub issue REST ID for issue %d", issue_number)  # Record safe issue context.
         return int(payload["id"])
 
-    def _ensure_labels(self, domain: str) -> None:
-        """Create the labels that make journal issues easy to filter."""
-        labels = [("skill-factory", "0969da"), (f"domain:{domain}", "d4c5f9")]  # Use predictable label names.
-        for name, color in labels:  # Create both labels if the repository does not have them yet.
+    def _ensure_labels(self, domain: str, stage: str, status: str) -> None:
+        """Create labels that make document issues easy to filter."""
+        for name, color in self._label_colors(domain, stage, status).items():  # Create all labels used by this issue.
             self._ensure_one_label(name, color)  # Keep one label create small and recoverable.
 
     def _ensure_one_label(self, name: str, color: str) -> None:
@@ -157,6 +332,33 @@ class SkillIssueTracker:
             logging.debug("Created GitHub label %s", name)  # Record the created label.
         except GitHubCliError as error:
             logging.debug("GitHub label %s already exists or cannot be created: %s", name, error)  # Keep idempotency.
+
+    def _label_colors(self, domain: str, stage: str, status: str) -> dict[str, str]:
+        """Return label colors for one document state."""
+        return {  # Use predictable colors for generated filters.
+            "skill-factory": "0969da",
+            f"domain:{self._label_value(domain)}": "d4c5f9",
+            f"stage:{self._label_value(stage)}": "bfdadc",
+            f"status:{self._label_value(status)}": "c2e0c6",
+        }
+
+    def _label_csv(self, domain: str, stage: str, status: str) -> str:
+        """Return a comma-separated label list for `gh issue create`."""
+        return ",".join(self._label_list(domain, stage, status))  # Match GitHub CLI label input format.
+
+    def _label_list(self, domain: str, stage: str, status: str) -> list[str]:
+        """Return the exact label list for one issue state."""
+        return [  # Keep generated issue labels precise and navigable.
+            "skill-factory",
+            f"domain:{self._label_value(domain)}",
+            f"stage:{self._label_value(stage)}",
+            f"status:{self._label_value(status)}",
+        ]
+
+    def _label_value(self, value: str) -> str:
+        """Return a safe GitHub label suffix."""
+        safe_chars = [char.lower() if char.isalnum() else "-" for char in value]  # Normalize spaces and punctuation.
+        return "-".join(part for part in "".join(safe_chars).split("-") if part)  # Collapse duplicate separators.
 
     def _link_parent_issue(self, issue_number: int, issue_id: int) -> None:
         """Attach the journal issue to the parent issue when the API permits it."""
@@ -175,83 +377,45 @@ class SkillIssueTracker:
         except GitHubCliError as error:
             logging.debug("Sub-issue link failed for issue %d: %s", issue_number, error)  # Preserve core tracking.
 
-    def _sync_one_event(self, event: dict[str, object]) -> int:
-        """Send one queued stage event to GitHub."""
-        try:
-            self.rate_limit.wait_if_needed()  # Measure the API bucket before the comment call.
-            self.runner.run(  # Write the crash-recovery journal comment to GitHub.
-                [
-                    "gh",
-                    "issue",
-                    "comment",
-                    str(event["issue_number"]),
-                    "--repo",
-                    self.repo,
-                    "--body",
-                    str(event["comment_body"]),
-                ]
-            )
-            self.store.mark_stage_event_synced(int(event["id"]))  # Mark the row only after GitHub accepts it.
-            return 1
-        except GitHubCliError as error:
-            logging.debug("Deferred GitHub journal sync after error: %s", error)  # Leave the row queued for retry.
-            return 0
 
-    def _stage_event(
-        self,
-        document: DocumentRecord,
-        stage: StageName,
-        issue_number: int | None,
-        details: dict[str, object],
-    ) -> StageEvent:
-        """Create a stage event with a deterministic next action."""
-        created_at = datetime.now(UTC).isoformat()  # Use UTC so comments sort the same on every machine.
-        next_action = self._next_action_for_stage(stage)  # Store the exact action the recovery reader reports.
-        return StageEvent(document.document_key, stage, next_action, issue_number, created_at, details)  # Return state.
+class SkillFactoryIssueIndex:
+    """Render a generated index for per-document audit issues."""
 
-    def _next_action_for_stage(self, stage: StageName) -> str:
-        """Return the stored next action for one completed stage."""
-        if stage == StageName.FAILED:  # A failed stage requires repair before more pipeline work.
-            return "repair the failed stage"
-        if stage == StageName.VERIFIED:  # A verified document completed the pipeline.
-            return "no action"
-        return "continue the document pipeline"  # The codec expands this from the exact completed stage.
+    def __init__(self, repo: str) -> None:
+        self.repo = repo  # Store the repository name for GitHub issue links.
 
-    def _issue_title(self, document: DocumentRecord) -> str:
-        """Return the selected issue title."""
-        if self.issue_shape == "document":  # Support the original one-issue-per-document shape when required.
-            return f"[skill-factory] Convert {document.title} ({document.document_key})"
-        return f"[skill-factory] Domain {document.domain} conversion journal"  # Default to the safer domain shape.
+    def render(self, rows: list[dict[str, Any]]) -> str:
+        """Return a Markdown index grouped by domain."""
+        logging.info("Rendering the skill factory issue index")  # Record the render action.
+        lines = ["Skill factory document issue index.", "", "<!-- skill-factory-index -->"]  # Mark generated content.
+        for domain, domain_rows in self._group_rows(rows).items():  # Render one section per domain.
+            lines.extend(self._domain_lines(domain, domain_rows))  # Add the rows for one domain.
+        logging.debug("Rendered index for %d documents", len(rows))  # Record the document count.
+        return "\n".join(lines)
 
-    def _issue_body(self, document: DocumentRecord) -> str:
-        """Return the GitHub issue body for the journal."""
-        checklist = "\n".join(f"- [ ] {stage.value}" for stage in StageName)  # Show every required stage.
-        shape_note = self._shape_note(document)  # Explain the chosen scale-safe journal shape.
-        return "\n".join(  # Build clear STE prose for recovery readers.
-            [
-                "This issue is a crash-recovery journal for the Juniper skill factory.",
-                "",
-                f"Source document: {document.title}",
-                f"Category: {document.category}",
-                f"Page count: {document.page_count}",
-                f"Source path: `{document.source_path}`",
-                f"Assigned domain skill: `juniper-{document.domain}`",
-                f"Journal shape: {self.issue_shape}",
-                "",
-                shape_note,
-                "",
-                "Stage checklist:",
-                checklist,
-                "",
-                f"Parent factory issue: #{self.parent_issue}",
-            ]
-        )
+    def _group_rows(self, rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+        """Group rows by domain while preserving sorted input order."""
+        grouped: dict[str, list[dict[str, Any]]] = {}  # Collect rows for each domain.
+        for row in rows:  # Process the store output in its stable order.
+            grouped.setdefault(str(row["domain"]), []).append(row)  # Append the row to its domain section.
+        return grouped
 
-    def _shape_note(self, document: DocumentRecord) -> str:
-        """Explain the issue shape tradeoff in the issue body."""
-        if self.issue_shape == "document":  # Explain the explicit high-detail shape.
-            return "This document entered the pipeline, so the factory created its issue lazily."
-        return (  # Explain why one domain issue can hold many document events.
-            "This domain journal prevents the repository issue list from holding one issue for each source document. "
-            f"Comments identify each document with the key `{document.document_key}`."
-        )
+    def _domain_lines(self, domain: str, rows: list[dict[str, Any]]) -> list[str]:
+        """Return Markdown lines for one domain."""
+        lines = ["", f"## {domain}"]  # Start a clear domain section.
+        for row in rows:  # Render each document issue as one bullet.
+            lines.append(self._row_line(row))  # Add one compact progress row.
+        return lines
+
+    def _row_line(self, row: dict[str, Any]) -> str:
+        """Return one Markdown row for a document."""
+        issue = self._issue_link(row.get("issue_number"))  # Link when GitHub already has an issue number.
+        stage = row.get("current_stage", "queued")  # Show the current stage from the local mirror.
+        status = row.get("status", "queued")  # Show whether the issue should remain open.
+        return f"- {issue} `{status}` `{stage}` {row['title']}"  # Keep the row readable in a large issue.
+
+    def _issue_link(self, issue_number: object) -> str:
+        """Return a Markdown issue link or a queued marker."""
+        if issue_number is None:  # A local-only document has no GitHub issue yet.
+            return "`local-only`"  # Make deferred network work visible in the index.
+        return f"[#{issue_number}](https://github.com/{self.repo}/issues/{issue_number})"  # Link the document issue.

@@ -12,23 +12,33 @@ class StageName(StrEnum):
     """Known stages that a document moves through."""
 
     QUEUED = "queued"
+    PARTS_JOINED = "parts joined"
     SEGMENTED = "segmented"
+    EXTRACTED = "extracted"
     REWRITTEN = "rewritten"
     GUARDED = "guarded"
-    BUILT = "built"
+    STE_VALIDATED = "STE validated"
+    SPECKIT_EMITTED = "SpecKit artifacts emitted"
+    PACKAGE_ASSEMBLED = "package assembled"
     INSTALLED = "installed"
     VERIFIED = "verified"
+    RELEASED = "released"
     FAILED = "failed"
 
 
 STAGE_ORDER: tuple[StageName, ...] = (  # Keep the resume order stable after a crash.
     StageName.QUEUED,
+    StageName.PARTS_JOINED,
     StageName.SEGMENTED,
+    StageName.EXTRACTED,
     StageName.REWRITTEN,
     StageName.GUARDED,
-    StageName.BUILT,
+    StageName.STE_VALIDATED,
+    StageName.SPECKIT_EMITTED,
+    StageName.PACKAGE_ASSEMBLED,
     StageName.INSTALLED,
     StageName.VERIFIED,
+    StageName.RELEASED,
 )
 
 
@@ -41,6 +51,11 @@ class DocumentRecord:
     category: str
     page_count: int
     domain: str
+    citation_key: str = ""
+    part_count: int = 0
+    skill_name: str = ""
+    priority: str = "normal"
+    version_status: str = "current"
 
     @property
     def document_key(self) -> str:
@@ -48,6 +63,20 @@ class DocumentRecord:
         normalized_path = self.source_path.as_posix().lower()  # Normalize the path for repeatable keys on Windows.
         safe_chars = [char if char.isalnum() else "-" for char in normalized_path]  # Keep the key URL-safe.
         return "".join(safe_chars).strip("-")[:160]  # Bound the key so SQLite and GitHub titles stay small.
+
+    @property
+    def audit_citation_key(self) -> str:
+        """Return the citation key that the GitHub issue must show."""
+        if self.citation_key:  # Prefer the source citation when the corpus provides one.
+            return self.citation_key  # Keep the citation stable across file moves.
+        return self.document_key  # Fall back to the path key so the field is never empty.
+
+    @property
+    def audit_skill_name(self) -> str:
+        """Return the skill name that owns this document."""
+        if self.skill_name:  # Prefer the assigned skill when the scheduler provides one.
+            return self.skill_name  # Keep the issue body useful for a domain owner.
+        return f"juniper-{self.domain}"  # Fall back to the domain skill naming convention.
 
 
 @dataclass(frozen=True)

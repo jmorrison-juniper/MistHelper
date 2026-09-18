@@ -28,16 +28,46 @@ class FactoryJournalStore:
             connection.execute(  # Store enough metadata to rebuild the issue title and body.
                 """
                 INSERT INTO skill_documents
-                (document_key, source_path, title, category, page_count, domain, issue_shape)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (document_key, source_path, title, category, page_count, domain, issue_shape,
+                 citation_key, part_count, skill_name, priority, version_status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(document_key) DO UPDATE SET
                 source_path=excluded.source_path, title=excluded.title,
                 category=excluded.category, page_count=excluded.page_count,
-                domain=excluded.domain, issue_shape=excluded.issue_shape
+                domain=excluded.domain, issue_shape=excluded.issue_shape,
+                citation_key=excluded.citation_key, part_count=excluded.part_count,
+                skill_name=excluded.skill_name, priority=excluded.priority,
+                version_status=excluded.version_status, updated_at=CURRENT_TIMESTAMP
                 """,
                 self._document_values(document, issue_shape),
             )
         logging.debug("Saved document metadata for key %s", document.document_key)  # Record the affected key.
+
+    def unsynced_documents(self, limit: int) -> list[dict[str, Any]]:
+        """Return document issues that GitHub still needs."""
+        logging.info("Reading unsynced document issues from the local mirror")  # Record the queue read.
+        with self._connect() as connection:  # Open a read transaction for a bounded batch.
+            rows = connection.execute(  # Keep issue creation in a measured background queue.
+                "SELECT * FROM skill_documents WHERE issue_created_synced = 0 ORDER BY updated_at ASC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        documents = [dict(row) for row in rows]  # Convert rows for the GitHub reconciler.
+        logging.debug("Read %d unsynced document issues", len(documents))  # Record the batch size.
+        return documents
+
+    def mark_document_issue_synced(self, document_key: str, issue_number: int) -> None:
+        """Record that GitHub has the issue for one document."""
+        logging.info("Marking a document issue as synced")  # Record the local queue update.
+        with self._connect() as connection:  # Keep the issue link and sync marker atomic.
+            connection.execute(  # Save the remote issue number and stop future create attempts.
+                """
+                UPDATE skill_documents
+                SET issue_number = ?, issue_created_synced = 1, updated_at = CURRENT_TIMESTAMP
+                WHERE document_key = ?
+                """,
+                (issue_number, document_key),
+            )
+        logging.debug("Marked document key %s as issue %d", document_key, issue_number)  # Record safe link details.
 
     def save_issue_number(self, document_key: str, issue_number: int) -> None:
         """Record the GitHub issue number for a document."""
@@ -83,8 +113,10 @@ class FactoryJournalStore:
         with self._connect() as connection:  # Open a read transaction for a bounded batch.
             rows = connection.execute(  # Keep the batch small to respect rate limits.
                 """
-                SELECT id, issue_number, comment_body FROM skill_stage_events
-                WHERE github_synced = 0 AND issue_number IS NOT NULL
+                SELECT e.id, d.issue_number, e.comment_body, e.stage, e.document_key
+                FROM skill_stage_events e
+                JOIN skill_documents d ON d.document_key = e.document_key
+                WHERE e.github_synced = 0 AND d.issue_number IS NOT NULL
                 ORDER BY id ASC LIMIT ?
                 """,
                 (limit,),
@@ -102,6 +134,33 @@ class FactoryJournalStore:
                 (event_id,),
             )
         logging.debug("Marked stage event %d as synced", event_id)  # Record the updated row.
+
+    def update_document_stage(self, document_key: str, stage: str, status: str) -> None:
+        """Store the current stage and status for the generated index."""
+        logging.info("Updating the document stage in the local mirror")  # Record the state update.
+        with self._connect() as connection:  # Keep the progress board state atomic.
+            connection.execute(  # Store the current board fields for label and index generation.
+                """
+                UPDATE skill_documents
+                SET current_stage = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE document_key = ?
+                """,
+                (stage, status, document_key),
+            )
+        logging.debug("Updated document key %s to stage %s", document_key, stage)  # Record the new stage.
+
+    def documents_for_index(self) -> list[dict[str, Any]]:
+        """Return document progress rows for index generation."""
+        logging.info("Reading document progress rows for the index")  # Record the index read.
+        with self._connect() as connection:  # Use one read transaction for a consistent index.
+            rows = connection.execute("""
+                SELECT document_key, title, domain, current_stage, status, issue_number
+                FROM skill_documents
+                ORDER BY domain, title, document_key
+                """).fetchall()  # Sort by domain and title so the index stays stable.
+        documents = [dict(row) for row in rows]  # Convert rows for renderer tests and callers.
+        logging.debug("Read %d documents for the index", len(documents))  # Record the row count.
+        return documents
 
     def local_comment_bodies(self, document_key: str) -> list[str]:
         """Return stored comment bodies for one document."""
@@ -121,6 +180,7 @@ class FactoryJournalStore:
         with self._connect() as connection:  # Use one transaction for all schema statements.
             connection.execute(self._documents_schema())  # Create the document mirror table.
             connection.execute(self._events_schema())  # Create the durable comment queue table.
+            self._migrate_documents(connection)  # Add new audit columns to older local mirrors.
         logging.debug("Initialized the local journal mirror at %s", self.database_path)  # Record the database path.
 
     @contextmanager
@@ -144,6 +204,11 @@ class FactoryJournalStore:
             document.page_count,
             document.domain,
             issue_shape,
+            document.audit_citation_key,
+            document.part_count,
+            document.audit_skill_name,
+            document.priority,
+            document.version_status,
         )
 
     def _event_values(self, event: StageEvent, comment_body: str) -> tuple[Any, ...]:
@@ -170,6 +235,14 @@ class FactoryJournalStore:
                 domain TEXT NOT NULL,
                 issue_shape TEXT NOT NULL,
                 issue_number INTEGER,
+                citation_key TEXT NOT NULL DEFAULT '',
+                part_count INTEGER NOT NULL DEFAULT 0,
+                skill_name TEXT NOT NULL DEFAULT '',
+                priority TEXT NOT NULL DEFAULT 'normal',
+                version_status TEXT NOT NULL DEFAULT 'current',
+                current_stage TEXT NOT NULL DEFAULT 'queued',
+                status TEXT NOT NULL DEFAULT 'queued',
+                issue_created_synced INTEGER NOT NULL DEFAULT 0,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """
@@ -189,3 +262,30 @@ class FactoryJournalStore:
                 github_synced INTEGER NOT NULL DEFAULT 0
             )
         """
+
+    def _migrate_documents(self, connection: sqlite3.Connection) -> None:
+        """Add audit columns when an old journal database exists."""
+        logging.info("Checking the document table schema for migrations")  # Record the schema check.
+        existing = self._document_column_names(connection)  # Read existing columns before any ALTER statement.
+        for name, definition in self._document_migrations().items():  # Apply only missing columns.
+            if name not in existing:  # Avoid duplicate column errors on repeat runs.
+                connection.execute(f"ALTER TABLE skill_documents ADD COLUMN {name} {definition}")  # Add one column.
+        logging.debug("Document table migration check finished with %d columns", len(existing))  # Record result size.
+
+    def _document_column_names(self, connection: sqlite3.Connection) -> set[str]:
+        """Return the current document table column names."""
+        rows = connection.execute("PRAGMA table_info(skill_documents)").fetchall()  # Read SQLite schema metadata.
+        return {str(row["name"]) for row in rows}  # Convert metadata rows into a fast lookup set.
+
+    def _document_migrations(self) -> dict[str, str]:
+        """Return column definitions for older journal databases."""
+        return {  # Keep migration definitions beside the table schema.
+            "citation_key": "TEXT NOT NULL DEFAULT ''",
+            "part_count": "INTEGER NOT NULL DEFAULT 0",
+            "skill_name": "TEXT NOT NULL DEFAULT ''",
+            "priority": "TEXT NOT NULL DEFAULT 'normal'",
+            "version_status": "TEXT NOT NULL DEFAULT 'current'",
+            "current_stage": "TEXT NOT NULL DEFAULT 'queued'",
+            "status": "TEXT NOT NULL DEFAULT 'queued'",
+            "issue_created_synced": "INTEGER NOT NULL DEFAULT 0",
+        }
