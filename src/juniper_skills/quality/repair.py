@@ -96,7 +96,7 @@ class SourceTextRepairer:
         token_accuracy, tokens = self._token_accuracy(lines, repaired)  # Measure token-level recovery.
         command_accuracy, command_count = self._command_accuracy(lines, repaired)  # Measure command-line safety.
         auto_commands = command_count > 0 and command_accuracy >= bar  # Trust commands only above the safety bar.
-        decision = self._decision(auto_commands, command_accuracy, command_count, bar)  # Build a clear decision.
+        decision = self._decision(auto_commands, command_count, bar)  # Build a clear decision from the gate result.
         logging.debug("Repair accuracy was %.4f lines and %.4f tokens", line_accuracy, token_accuracy)  # Report result.
         return RepairAccuracyReport(
             len(lines), line_accuracy, tokens, token_accuracy, command_count, command_accuracy, auto_commands, decision
@@ -155,7 +155,7 @@ class SourceTextRepairer:
         compact = line.strip().lower()  # Normalize a possible stripped command.
         return any(compact.startswith(word) for word in self.command_words)  # Detect Junos command starts.
 
-    def _decision(self, auto_commands: bool, accuracy: float, count: int, bar: float) -> str:
+    def _decision(self, auto_commands: bool, count: int, bar: float) -> str:
         if auto_commands:  # Only high measured command accuracy permits automatic command repair.
             return "Command auto-repair is enabled because held-out command accuracy met the safety bar."
         return "Command auto-repair is disabled because held-out command accuracy was below the safety bar or absent."
