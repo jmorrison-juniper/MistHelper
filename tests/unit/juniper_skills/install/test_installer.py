@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from scripts.juniper_skills.install_skills import InstallSkillsCli
 from src.juniper_skills.install import SkillInstaller
 
 
@@ -69,8 +70,63 @@ class TestSkillInstaller:
         assert outcomes[0].action == "generated"  # Confirm the installer reports catalog generation.
         assert "`juniper-test-skill`" in catalog_text  # Confirm the catalog lists the installed domain skill.
 
+    def test_cost_report_warns_above_ten_percent_without_installing(self) -> None:
+        self._write_package("apstra", "large-doc", "juniper-apstra-large", "a" * 90_000)  # Create a large index.
+        report, outcomes = self.installer.install_packages(["large-doc"], dry_run=True)  # Measure without installing.
+        assert report.action == "warned"  # Confirm the 10 percent threshold warns instead of refusing.
+        assert report.token_count > 20_000  # Prove the estimate crossed 10 percent of 200,000 tokens.
+        assert outcomes == []  # Confirm dry-run mode did not create junctions.
+
+    def test_register_domain_installs_each_package_in_domain(self) -> None:
+        self._write_package("apstra", "fabric-day0", "juniper-apstra-fabric-day0")  # Add the first domain package.
+        self._write_package("apstra", "fabric-day2", "juniper-apstra-fabric-day2")  # Add the second domain package.
+        self._write_package("junos", "routing-day2", "juniper-junos-routing-day2")  # Add another domain package.
+        report, outcomes = self.installer.install_domain("apstra")  # Register the requested domain only.
+        assert report.skill_count == 2  # Confirm only Apstra packages entered the cost plan.
+        assert [outcome.action for outcome in outcomes].count("created") == 6  # Confirm two packages hit three hosts.
+        assert not (self.repo / ".github" / "skills" / "juniper-junos-routing-day2").exists()  # Exclude other domain.
+
+    def test_search_finds_unregistered_package(self) -> None:
+        self._write_package("apstra", "evpn-reference", "juniper-apstra-evpn")  # Add an unregistered package.
+        outcomes = self.installer.generate_catalog()  # Write the searchable catalog from available packages.
+        matches = self.installer.search_catalog("evpn")  # Search by a routing keyword from the package content.
+        assert outcomes[0].action == "generated"  # Confirm the catalog write ran before search.
+        assert [match.slug for match in matches] == ["evpn-reference"]  # Confirm keyword recall found the package.
+        assert not (self.repo / ".github" / "skills" / "juniper-apstra-evpn").exists()  # Prove it is unregistered.
+
+    def test_register_all_requires_force_at_high_projection(self, capsys: pytest.CaptureFixture[str]) -> None:
+        for number in range(5):  # Create enough packages to cross the 50 percent refusal threshold.
+            self._write_package("mega", f"doc-{number}", f"juniper-mega-doc-{number}", "b" * 90_000)  # Add one package.
+        args = [  # Build the CLI arguments with isolated paths for this test.
+            "--store",
+            str(self.store),
+            "--repo",
+            str(self.repo),
+            "--home",
+            str(self.home),
+            "--register-all",
+            "--dry-run",
+        ]
+        status = InstallSkillsCli().run(args)  # Run the CLI so the cost report text is proved.
+        output = capsys.readouterr().out  # Capture the cost report that operators read.
+        assert status == 1  # Confirm the CLI refuses the high projection without force.
+        assert "Decision: refused." in output  # Confirm the output states the threshold decision.
+        assert "Window share:" in output  # Confirm the output includes the projected context share.
+
     def _write_skill_file(self, name: str, content: str) -> None:
         (self.skill / name).write_text(content, encoding="utf-8")  # Write deterministic skill test content.
+
+    def _write_package(
+        self, domain: str, slug: str, name: str, description: str = "Apstra EVPN day2 reference."
+    ) -> Path:
+        package = self.store / "packages" / domain / slug  # Build the canonical per-document package path.
+        package.mkdir(parents=True)  # Create the package folder for the installer catalog.
+        (package / "SKILL.md").write_text(self._package_skill_text(name, description), encoding="utf-8")  # Write entry.
+        (package / "INDEX.md").write_text("# EVPN topics\n\n- day2 validation\n", encoding="utf-8")  # Add keywords.
+        (package / "sources.md").write_text("pages: 42\n", encoding="utf-8")  # Add a measurable page count.
+        topic_text = "# Overlay EVPN\n\nUse this for day2 checks.\n"  # Keep topic text reusable and readable.
+        (package / "topic.md").write_text(topic_text, encoding="utf-8")  # Add topic keyword content.
+        return package  # Return the package path for focused assertions.
 
     def _remove_tree(self, root: Path) -> None:
         if not root.exists():  # Nothing needs cleanup when setup failed early.
@@ -102,6 +158,21 @@ class TestSkillInstaller:
                 "# Juniper test skill",
                 "",
                 "Read this file to verify junction discovery.",
+                "",
+            ]
+        )
+
+    def _package_skill_text(self, name: str, description: str) -> str:
+        return "\n".join(  # Build a complete per-document skill entry file.
+            [
+                "---",
+                f"name: {name}",
+                f"description: {description}",
+                "---",
+                "",
+                "# Apstra EVPN reference",
+                "",
+                "Read INDEX.md, sources.md, and the topic files for this package.",
                 "",
             ]
         )
