@@ -138,7 +138,7 @@ class SkillIssueTracker:
         """Read the database ID that the GitHub sub-issue API uses."""
         logging.info("Reading the GitHub issue REST ID")  # Record the metadata read.
         result = self.runner.run(  # Ask `gh` for the issue ID after creation.
-            ["gh", "issue", "view", str(issue_number), "--repo", self.repo, "--json", "id"]
+            ["gh", "api", f"repos/{self.repo}/issues/{issue_number}"]
         )
         payload = json.loads(result.stdout)  # Decode the issue metadata response.
         logging.debug("Read GitHub issue REST ID for issue %d", issue_number)  # Record safe issue context.

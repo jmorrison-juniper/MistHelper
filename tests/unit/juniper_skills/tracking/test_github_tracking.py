@@ -34,6 +34,8 @@ class FakeGitHubRunner:
         if command[:3] == ["gh", "issue", "comment"]:  # Store the stage comment body.
             self.comments.append(command[-1])  # The `--body` value is the final argument.
             return GitHubCommandResult(0, "https://example.invalid/comment\n", "")
+        if command[:2] == ["gh", "api"] and "/issues/9999" in command[2]:  # Simulate a REST issue read.
+            return GitHubCommandResult(0, json.dumps({"id": 123456}), "")
         if command[:2] == ["gh", "api"]:  # Simulate a successful sub-issue link.
             return GitHubCommandResult(0, "{}", "")
         return GitHubCommandResult(1, "", "unexpected command")  # Fail unknown commands.
