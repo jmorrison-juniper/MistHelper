@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pytest
 
+logger = logging.getLogger(__name__)  # A module logger keeps the record source readable.
+
 # Issue #1991 records the fault this line prevents. A stand-in that answers a
 # simpler shape than the real callee agreed with its own reader and disagreed
 # with the cloud, and the whole suite stayed green. With this variable set, every
@@ -129,14 +131,14 @@ def _bootstrap_message(missing: list[str]) -> str:
 
 def pytest_configure(config: pytest.Config) -> None:
     """Stop the session with one message when the environment cannot serve the tests."""
-    logging.info("Checking the test environment for the MistHelper runtime dependencies")
+    logger.info("Checking the test environment for the MistHelper runtime dependencies")
     missing = _find_missing_packages(_REQUIRED_RUNTIME_PACKAGES)  # Scan the short required list once.
-    logging.debug("Environment check found %d missing runtime package(s)", len(missing))
+    logger.debug("Environment check found %d missing runtime package(s)", len(missing))
     if missing:  # Report the environment gap before pytest collects a single module.
         raise pytest.UsageError(_bootstrap_message(missing))  # Raise one clear error instead of many import errors.
-    logging.info("Checking that the name 'src' resolves inside this repository")  # Issue #2010.
+    logger.info("Checking that the name 'src' resolves inside this repository")  # Issue #2010.
     shadow = _shadowing_source_path()  # None in a healthy environment.
-    logging.debug("The shadow check found %s", shadow if shadow is not None else "no stale copy")
+    logger.debug("The shadow check found %s", shadow if shadow is not None else "no stale copy")
     if shadow is not None:  # A stale copy would make every result meaningless.
         raise pytest.UsageError(_shadow_message(shadow))  # Name the copy and the removal command.
 
@@ -162,9 +164,9 @@ if _mh_path.exists() and (_existing is None or _is_init):
         # A dependency is absent, so the module body stops at that import and the
         # names below it never bind. Record the cause, because the half-built
         # module stays in sys.modules and later hides this error. See #1923.
-        logging.info("MistHelper.py stopped part way through its import: %s", _import_failure)  # Log the cause.
+        logger.info("MistHelper.py stopped part way through its import: %s", _import_failure)  # Log the cause.
         setattr(_mod, _IMPORT_ERROR_ATTRIBUTE, _import_failure)  # Keep the real cause on the half-built module.
-        logging.debug("Recorded the import failure as %s", _IMPORT_ERROR_ATTRIBUTE)  # Log the result.
+        logger.debug("Recorded the import failure as %s", _IMPORT_ERROR_ATTRIBUTE)  # Log the result.
 
 
 @pytest.fixture

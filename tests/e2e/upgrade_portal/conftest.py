@@ -304,12 +304,12 @@ def pytest_configure(config: pytest.Config) -> None:
     """
     del config  # WHY: The hook signature requires the parameter, and the guard reads no setting.
     if os.environ.get(STRICT_VARIABLE) != STRICT_ENABLED:  # WHY: A workstation may still skip.
-        logging.debug("The browser strict guard is off, so a missing package stays a skip")
+        logger.debug("The browser strict guard is off, so a missing package stays a skip")
         return  # WHY: Leave the existing skip behaviour for a workstation with no browser.
-    logging.info("The browser strict guard is on, so a missing package fails the run")
+    logger.info("The browser strict guard is on, so a missing package fails the run")
     if not _playwright_is_installed():  # WHY: Ask without importing the package.
         raise pytest.UsageError(MISSING_PLAYWRIGHT_MESSAGE)  # WHY: Stop the run before it reports a pass.
-    logging.debug("The Playwright package is present, so the browser suite can open a page")
+    logger.debug("The Playwright package is present, so the browser suite can open a page")
 
 
 def _playwright_is_installed() -> bool:
@@ -328,7 +328,7 @@ def _playwright_is_installed() -> bool:
     try:  # WHY: A missing parent package raises rather than answering None.
         return importlib.util.find_spec("playwright.sync_api") is not None
     except ModuleNotFoundError:  # WHY: No `playwright` package exists at all.
-        logging.debug("The playwright package is absent, so no browser test can open a page")
+        logger.debug("The playwright package is absent, so no browser test can open a page")
         return False  # WHY: Report the absence as an answer, not as an internal error.
 
 

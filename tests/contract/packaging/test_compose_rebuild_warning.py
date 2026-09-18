@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pytest
 
+logger = logging.getLogger(__name__)  # A module logger keeps the record source readable.
+
 # The three files that carry the repair, and the script that enforces it.
 _ROOT = Path(__file__).resolve().parents[3]
 _COMPOSE = _ROOT / "compose.yml"
@@ -33,36 +35,36 @@ _RETIRED_CLAIM = "so a compose run uses it instead of a stale local build"
 @pytest.fixture(name="compose_text", scope="module")
 def fixture_compose_text() -> str:
     """Read the compose file."""
-    logging.info("Reading the compose file at %s", _COMPOSE)  # Report the read before the work.
+    logger.info("Reading the compose file at %s", _COMPOSE)  # Report the read before the work.
     text = _COMPOSE.read_text(encoding="utf-8")
-    logging.debug("The compose file holds %d characters", len(text))  # Record the size.
+    logger.debug("The compose file holds %d characters", len(text))  # Record the size.
     return text
 
 
 @pytest.fixture(name="guide_text", scope="module")
 def fixture_guide_text() -> str:
     """Read the container deployment guide."""
-    logging.info("Reading the deployment guide at %s", _GUIDE)  # Report the read before the work.
+    logger.info("Reading the deployment guide at %s", _GUIDE)  # Report the read before the work.
     text = _GUIDE.read_text(encoding="utf-8")
-    logging.debug("The guide holds %d characters", len(text))  # Record the size.
+    logger.debug("The guide holds %d characters", len(text))  # Record the size.
     return text
 
 
 @pytest.fixture(name="compose_build_text", scope="module")
 def fixture_compose_build_text() -> str:
     """Read the build file that holds the build section."""
-    logging.info("Reading the build file at %s", _COMPOSE_BUILD)  # Report the read before the work.
+    logger.info("Reading the build file at %s", _COMPOSE_BUILD)  # Report the read before the work.
     text = _COMPOSE_BUILD.read_text(encoding="utf-8")
-    logging.debug("The build file holds %d characters", len(text))  # Record the size.
+    logger.debug("The build file holds %d characters", len(text))  # Record the size.
     return text
 
 
 @pytest.fixture(name="script_text", scope="module")
 def fixture_script_text() -> str:
     """Read the helper script that enforces the split."""
-    logging.info("Reading the helper script at %s", _SCRIPT)  # Report the read before the work.
+    logger.info("Reading the helper script at %s", _SCRIPT)  # Report the read before the work.
     text = _SCRIPT.read_text(encoding="utf-8")
-    logging.debug("The script holds %d characters", len(text))  # Record the size.
+    logger.debug("The script holds %d characters", len(text))  # Record the size.
     return text
 
 
@@ -73,14 +75,14 @@ def test_the_compose_header_never_repeats_the_retired_claim(compose_text: str) -
         The claim is false under podman-compose. A reader who trusts it runs a
         plain `up` and downgrades the running container.
     """
-    logging.info("Checking that the retired claim is absent")  # Report the plan.
+    logger.info("Checking that the retired claim is absent")  # Report the plan.
 
     assert _RETIRED_CLAIM not in compose_text, "the compose header must not repeat the retired claim"
 
 
 def test_the_compose_header_warns_about_a_combined_build(compose_text: str) -> None:
     """The header MUST warn that a compose build section can overwrite the tag."""
-    logging.info("Checking the rebuild warning of the compose header")  # Report the plan.
+    logger.info("Checking the rebuild warning of the compose header")  # Report the plan.
 
     assert "does not stop a rebuild" in compose_text, "the header must state that a rebuild still happens"
     assert "overwrites this" in compose_text, "the header must state that the tag moves"
@@ -89,7 +91,7 @@ def test_the_compose_header_warns_about_a_combined_build(compose_text: str) -> N
 
 def test_the_compose_header_names_the_safe_command(compose_text: str) -> None:
     """The header MUST name the command pair that never builds."""
-    logging.info("Checking the safe command of the compose header")  # Report the plan.
+    logger.info("Checking the safe command of the compose header")  # Report the plan.
 
     assert "podman pull ghcr.io/jmorrison-juniper/misthelper:latest" in compose_text
     assert "--no-deps misthelper" in compose_text, "the header must name the service"
@@ -102,7 +104,7 @@ def test_the_compose_header_names_the_revision_check(compose_text: str) -> None:
         The label is the only reading that tells a local build from the tested
         image. An operator with no such reading has to search inside the image.
     """
-    logging.info("Checking the revision check of the compose header")  # Report the plan.
+    logger.info("Checking the revision check of the compose header")  # Report the plan.
 
     assert "org.opencontainers.image.revision" in compose_text, "the header must name the label"
 
@@ -115,14 +117,14 @@ def test_the_compose_file_carries_no_build_section(compose_text: str) -> None:
         plain `up` runs. A build section in this file can therefore overwrite
         the published tag with a local build.
     """
-    logging.info("Checking that the compose file holds no build section")  # Report the plan.
+    logger.info("Checking that the compose file holds no build section")  # Report the plan.
 
     assert "build:" not in compose_text, "the compose file must not hold a build section; move it to compose.build.yml"
 
 
 def test_the_build_file_holds_the_build_section(compose_build_text: str) -> None:
     """The build file MUST hold the build section that the compose file lost."""
-    logging.info("Checking the build section of the build file")  # Report the plan.
+    logger.info("Checking the build section of the build file")  # Report the plan.
 
     assert "context: ." in compose_build_text, "the build file must name the build context"
     assert "dockerfile: Containerfile" in compose_build_text, "the build file must name the build file"
@@ -130,7 +132,7 @@ def test_the_build_file_holds_the_build_section(compose_build_text: str) -> None
 
 def test_the_script_builds_only_through_the_build_file(script_text: str) -> None:
     """The script MUST build through the build file, and it MUST offer the revision check."""
-    logging.info("Checking the build and revision paths of the helper script")  # Report the plan.
+    logger.info("Checking the build and revision paths of the helper script")  # Report the plan.
 
     assert "compose.build.yml" in script_text, "the build subcommand must load the build file"
     assert "check-revision" in script_text, "the script must offer the revision check"
@@ -140,7 +142,7 @@ def test_the_script_builds_only_through_the_build_file(script_text: str) -> None
 
 def test_the_guide_names_the_build_separation(guide_text: str) -> None:
     """The guide MUST state that a plain `up` cannot build the application image."""
-    logging.info("Checking the build separation in the guide")  # Report the plan.
+    logger.info("Checking the build separation in the guide")  # Report the plan.
 
     assert "A plain `up`" in guide_text, "the guide must name the default command"
     assert "cannot build the application image" in guide_text, "the guide must state the safe result"
@@ -150,7 +152,7 @@ def test_the_guide_names_the_build_separation(guide_text: str) -> None:
 
 def test_the_guide_names_the_revision_check(guide_text: str) -> None:
     """The guide MUST show how to read the commit that a container runs."""
-    logging.info("Checking the revision check of the guide")  # Report the plan.
+    logger.info("Checking the revision check of the guide")  # Report the plan.
 
     assert "org.opencontainers.image.revision" in guide_text, "the guide must name the label"
     assert "git rev-parse origin/main" in guide_text, "the guide must name the value to compare against"
@@ -163,9 +165,9 @@ def test_the_guide_updates_the_checkout_before_the_pull(guide_text: str) -> None
         An explicit local build reads the working tree. The recipe updates the
         checkout first, so a later local build does not use old code.
     """
-    logging.info("Checking the order of the update recipe")  # Report the plan.
+    logger.info("Checking the order of the update recipe")  # Report the plan.
     checkout = guide_text.index("git pull")
     image = guide_text.index("podman pull ghcr.io/jmorrison-juniper/misthelper:latest")
-    logging.debug("The checkout step sits at %d and the image step at %d", checkout, image)
+    logger.debug("The checkout step sits at %d and the image step at %d", checkout, image)
 
     assert checkout < image, "the recipe must update the checkout before it pulls the image"
