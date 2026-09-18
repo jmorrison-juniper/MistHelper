@@ -1750,6 +1750,53 @@ class TestBlindHandlerNarrowing:
             upgrader._fetch_firmware_from_api()  # WHY: exercise the narrowed handler.
         endpoint.side_effect = None  # WHY: keep later tests isolated.
 
+    def test_cache_load_keeps_io_failure_visible_as_fallback(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        upgrader: BulkSwitchFirmwareUpgrader,
+    ) -> None:
+        """An unreadable firmware cache must fall back to the API path."""
+        monkeypatch.setattr(os.path, "exists", MagicMock(return_value=True))  # WHY: reach the cache read branch.
+        monkeypatch.setattr(
+            upgrader, "_maybe_read_cache", MagicMock(side_effect=OSError("denied"))
+        )  # WHY: simulate a real file-system failure.
+        assert upgrader._load_from_cache() is None  # WHY: prove the visible fallback behavior.
+
+    def test_cache_load_surfaces_programming_error(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        upgrader: BulkSwitchFirmwareUpgrader,
+    ) -> None:
+        """A malformed cache helper must raise."""
+        monkeypatch.setattr(os.path, "exists", MagicMock(return_value=True))  # WHY: reach the cache read branch.
+        monkeypatch.setattr(
+            upgrader, "_maybe_read_cache", MagicMock(side_effect=TypeError("bad state"))
+        )  # WHY: simulate a programmer defect.
+        with pytest.raises(TypeError, match="bad state"):  # WHY: prove the blind handler no longer hides it.
+            upgrader._load_from_cache()  # WHY: exercise the narrowed handler.
+
+    def test_cache_save_keeps_io_failure_nonfatal(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        upgrader: BulkSwitchFirmwareUpgrader,
+    ) -> None:
+        """A firmware cache write failure must not abort the upgrade plan."""
+        monkeypatch.setattr(os, "makedirs", MagicMock(side_effect=OSError("denied")))  # WHY: fail before file write.
+        upgrader._save_to_cache([{"version": "23.4R2.21", "model": "EX4100"}])  # WHY: prove the handler returns.
+
+    def test_cache_save_surfaces_programming_error(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        upgrader: BulkSwitchFirmwareUpgrader,
+    ) -> None:
+        """A malformed cache writer must raise."""
+        monkeypatch.setattr(os, "makedirs", MagicMock(return_value=None))  # WHY: allow the writer path to run.
+        monkeypatch.setattr(
+            upgrader, "_write_cache_rows", MagicMock(side_effect=TypeError("bad state"))
+        )  # WHY: simulate a programmer defect.
+        with pytest.raises(TypeError, match="bad state"):  # WHY: prove the blind handler no longer hides it.
+            upgrader._save_to_cache([{"version": "23.4R2.21", "model": "EX4100"}])  # WHY: exercise the handler.
+
     def test_execute_upgrades_surfaces_programming_error(
         self,
         monkeypatch: pytest.MonkeyPatch,
