@@ -18,6 +18,8 @@ from typing import Any
 import pytest
 import yaml
 
+logger = logging.getLogger(__name__)  # A module logger keeps the record source readable.
+
 # The workflow that holds the job under test.
 _WORKFLOW = Path(__file__).resolve().parents[3] / ".github" / "workflows" / "ci.yml"
 
@@ -35,10 +37,10 @@ _INSTALL_STEP = "Install from the lockfile"
 @pytest.fixture(name="ops_portal_job", scope="module")
 def fixture_ops_portal_job() -> dict[str, Any]:
     """Read the ops portal job out of the workflow file."""
-    logging.info("Reading the ops portal job from %s", _WORKFLOW)  # Report the read before the work.
+    logger.info("Reading the ops portal job from %s", _WORKFLOW)  # Report the read before the work.
     document = yaml.safe_load(_WORKFLOW.read_text(encoding="utf-8"))
     job = document["jobs"]["ops_portal"]
-    logging.debug("The job holds %d steps", len(job["steps"]))  # Record the shape after the read.
+    logger.debug("The job holds %d steps", len(job["steps"]))  # Record the shape after the read.
     return dict(job)
 
 
@@ -61,7 +63,7 @@ def test_every_step_carries_its_own_budget(ops_portal_job: dict[str, Any], name:
         follow it then never run, and the job reports a failure that graded no
         code.
     """
-    logging.info("Checking the budget of the step %s", name)  # Report the plan.
+    logger.info("Checking the budget of the step %s", name)  # Report the plan.
     budgets = {str(step["name"]): step.get("timeout-minutes") for step in _named_steps(ops_portal_job)}
 
     assert budgets.get(name), f"the step {name!r} must carry its own timeout-minutes"
@@ -75,7 +77,7 @@ def test_every_code_step_runs_before_the_audit(ops_portal_job: dict[str, Any], n
         The type check, the lint, and the unit tests read the code and reach no
         network. An outage of the advisory service must not hide their result.
     """
-    logging.info("Checking that %s runs before the audit", name)  # Report the plan.
+    logger.info("Checking that %s runs before the audit", name)  # Report the plan.
     order = _step_order(ops_portal_job)
 
     assert order.index(name) < order.index(_AUDIT_STEP), f"{name} must run before the audit"
@@ -89,10 +91,10 @@ def test_the_job_budget_exceeds_the_sum_of_the_step_budgets(ops_portal_job: dict
         `cancelled` with no cause, and that is what made the first report of
         issue #2257 hard to read.
     """
-    logging.info("Checking the job budget against the step budgets")  # Report the plan.
+    logger.info("Checking the job budget against the step budgets")  # Report the plan.
     steps = sum(int(step.get("timeout-minutes", 0)) for step in _named_steps(ops_portal_job))
     job = int(ops_portal_job["timeout-minutes"])
-    logging.debug("The steps ask for %d minutes and the job allows %d", steps, job)  # Record both.
+    logger.debug("The steps ask for %d minutes and the job allows %d", steps, job)  # Record both.
 
     assert job > steps, f"the job budget {job} must exceed the step total {steps}"
 
@@ -105,7 +107,7 @@ def test_the_audit_retries_an_unreachable_endpoint(ops_portal_job: dict[str, Any
         retry after a short pause clears a brief outage, and a longer outage
         then fails this step alone.
     """
-    logging.info("Checking the retry of the audit step")  # Report the plan before the work.
+    logger.info("Checking the retry of the audit step")  # Report the plan before the work.
     audit = next(step for step in _named_steps(ops_portal_job) if step["name"] == _AUDIT_STEP)
     body = str(audit["run"])
 
@@ -121,7 +123,7 @@ def test_the_audit_bounds_its_network_call(ops_portal_job: dict[str, Any]) -> No
         Issue #2257, second measurement. An unbounded call ran until the step
         budget ended, so the step reported a timeout and never named the cause.
     """
-    logging.info("Checking the network bound of the audit step")  # Report the plan.
+    logger.info("Checking the network bound of the audit step")  # Report the plan.
     audit = next(step for step in _named_steps(ops_portal_job) if step["name"] == _AUDIT_STEP)
     body = str(audit["run"])
 
@@ -136,7 +138,7 @@ def test_the_audit_reads_one_answer_for_each_attempt(ops_portal_job: dict[str, A
         status and once for the reason. A dead endpoint then cost four calls.
         One JSON body answers both questions.
     """
-    logging.info("Checking the call count of the audit step")  # Report the plan.
+    logger.info("Checking the call count of the audit step")  # Report the plan.
     audit = next(step for step in _named_steps(ops_portal_job) if step["name"] == _AUDIT_STEP)
     body = str(audit["run"])
 
@@ -153,7 +155,7 @@ def test_the_audit_still_fails_on_a_real_advisory(ops_portal_job: dict[str, Any]
         A retry that swallowed an advisory would turn the one security check of
         this job into no check at all.
     """
-    logging.info("Checking that the audit still fails on an advisory")  # Report the plan.
+    logger.info("Checking that the audit still fails on an advisory")  # Report the plan.
     audit = next(step for step in _named_steps(ops_portal_job) if step["name"] == _AUDIT_STEP)
     body = str(audit["run"])
 

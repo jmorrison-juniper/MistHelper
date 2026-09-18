@@ -10,25 +10,27 @@ from __future__ import annotations
 
 import logging
 
+logger = logging.getLogger(__name__)  # A module logger keeps the record source readable.
+
 
 def _emit_plain_fstring(value: str) -> None:
     """Plain f-string substitution (G004 base case)."""
-    logging.info(f"x={value}")
+    logger.info(f"x={value}")
 
 
 def _emit_format_spec_2f(rate: float) -> None:
     """f-string with `.2f` numeric format spec."""
-    logging.debug(f"rate={rate:.2f}")
+    logger.debug(f"rate={rate:.2f}")
 
 
 def _emit_repr_conversion(item: object) -> None:
     """f-string using `!r` repr conversion."""
-    logging.warning(f"item={item!r}")
+    logger.warning(f"item={item!r}")
 
 
 def _emit_g003_concat(label: str, value: int) -> None:
     """String concatenation in logging call (G003)."""
-    logging.info("label=" + label + " value=" + str(value))
+    logger.info("label=" + label + " value=" + str(value))
 
 
 def _emit_g201_in_except() -> None:
@@ -36,9 +38,9 @@ def _emit_g201_in_except() -> None:
     try:
         raise ValueError("synthetic")
     except ValueError as exc:
-        logging.error(f"caught: {exc}", exc_info=True)
+        logger.error(f"caught: {exc}", exc_info=True)
 
 
 def _emit_already_lazy(name: str) -> None:
     """Already-lazy form; codemod must leave this untouched."""
-    logging.info("name=%s", name)
+    logger.info("name=%s", name)

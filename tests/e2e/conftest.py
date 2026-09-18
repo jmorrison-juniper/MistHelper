@@ -16,6 +16,8 @@ import os
 
 import pytest
 
+logger = logging.getLogger(__name__)  # A module logger keeps the record source readable.
+
 E2E_TIMEOUT_SECONDS = 120  # Bound each E2E test, so one browser wait cannot stop the suite for hours.
 
 
@@ -32,19 +34,19 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         config: The active pytest configuration.
         items: The E2E test items that pytest collected under this directory.
     """
-    logging.info("Checking the E2E timeout guard")  # Log before the plugin check.
+    logger.info("Checking the E2E timeout guard")  # Log before the plugin check.
     timeout_is_ready = config.pluginmanager.hasplugin("timeout")  # Confirm that pytest-timeout loaded.
-    logging.debug("E2E timeout plugin loaded: %s", timeout_is_ready)  # Log the plugin state.
+    logger.debug("E2E timeout plugin loaded: %s", timeout_is_ready)  # Log the plugin state.
     if not timeout_is_ready:  # A missing guard must not let browser tests hang.
-        logging.info("Adding E2E skip marks because pytest-timeout is missing")  # Log before the skip marks.
+        logger.info("Adding E2E skip marks because pytest-timeout is missing")  # Log before the skip marks.
         skip_mark = pytest.mark.skip(  # Build one skip mark with the exact missing guard.
             reason="pytest-timeout is not installed, so the E2E timeout guard cannot run."
         )
         for item in items:  # Apply the skip to every collected E2E item.
             item.add_marker(skip_mark)  # Skip unsafe E2E tests instead of letting them run unbounded.
-        logging.debug("Added E2E skip marks to %d items", len(items))  # Log the number of skipped items.
+        logger.debug("Added E2E skip marks to %d items", len(items))  # Log the number of skipped items.
         return  # Stop before the timeout mark, because the plugin is not present.
-    logging.info("Adding per-test timeout marks to E2E tests")  # Log before the timeout marks.
+    logger.info("Adding per-test timeout marks to E2E tests")  # Log before the timeout marks.
     timeout_mark = pytest.mark.timeout(E2E_TIMEOUT_SECONDS)  # Use the declared pytest-timeout plugin.
     marked_count = 0  # Count items that this hook protects.
     for item in items:  # Visit each collected E2E item once.
@@ -52,7 +54,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             continue  # Preserve an item-specific timeout from a test module.
         item.add_marker(timeout_mark)  # Bound this E2E test with the default guard.
         marked_count += 1  # Count the guard that this hook added.
-    logging.debug("Added E2E timeout marks to %d items", marked_count)  # Log the number of protected items.
+    logger.debug("Added E2E timeout marks to %d items", marked_count)  # Log the number of protected items.
 
 
 @pytest.fixture(scope="session")

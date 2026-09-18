@@ -31,6 +31,8 @@ from typing import Any
 
 import pytest
 
+logger = logging.getLogger(__name__)  # A module logger keeps the record source readable.
+
 # The Playwright package must exist before this module defines a browser test.
 # A run without the package reports a skip and never an import error.
 sync_api = pytest.importorskip("playwright.sync_api", reason="The Playwright package is not installed.")
@@ -690,7 +692,7 @@ def _release_the_site(page: Any) -> None:
         release.click()  # A plain press gives the site back at once.
         sync_api.expect(page.get_by_test_id(LOCK_TAKE_BUTTON_ID)).to_be_visible(timeout=LOCK_SETTLE_MS)
     except Exception as failure:  # A closed page or a dead portal must not mask the real result.
-        logging.info("The site release did not complete, so a later test may meet the lease. Cause: %s", failure)
+        logger.info("The site release did not complete, so a later test may meet the lease. Cause: %s", failure)
 
 
 # WHY: Issue #2259. The walk takes the site lock, and the lease outlives the

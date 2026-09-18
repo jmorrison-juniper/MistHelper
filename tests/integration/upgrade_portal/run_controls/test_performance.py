@@ -21,7 +21,7 @@ from src.upgrade_portal.persistence.actions import (  # Use real journal.
 )
 from tests.integration.upgrade_portal.run_controls import FakeDatabase  # Trap ArangoDB in process memory.
 
-LOGGER = logging.getLogger(__name__)  # Keep these measurements grouped under this test module.
+logger = logging.getLogger(__name__)  # A module logger keeps the record source readable.
 HISTORY_ROWS: Final[int] = 50  # The plan and research files fix the history workload size.
 HISTORY_WARMUPS: Final[int] = 10  # The research file fixes the history warm-up count.
 HISTORY_SAMPLES: Final[int] = 30  # The research file fixes the history timed sample count.
@@ -56,7 +56,7 @@ class Measurement:
 
 def _history_records() -> tuple[dict[str, Any], ...]:
     """Return the fixed 50-row history workload."""
-    logging.info("Build the fixed history workload")  # Record the deterministic setup before work starts.
+    logger.info("Build the fixed history workload")  # Record the deterministic setup before work starts.
     rows = tuple(  # Keep row order stable for every timed sample.
         {
             "run_id": f"history-run-{index:02d}",  # Give each row one stable identifier.
@@ -69,16 +69,16 @@ def _history_records() -> tuple[dict[str, Any], ...]:
         }
         for index in range(HISTORY_ROWS)  # Create the exact fixed row count from the plan.
     )
-    logging.debug("Built %s fixed history row(s)", len(rows))  # Confirm the setup size.
+    logger.debug("Built %s fixed history row(s)", len(rows))  # Confirm the setup size.
     return rows  # Share one immutable workload across history samples.
 
 
 def _build_history_view(rows: Sequence[Mapping[str, Any]]) -> tuple[dict[str, Any], ...]:
     """Return shaped rows for the fixed history view."""
-    LOGGER.info("Build the measured history view")  # Record the measured action before the loop.
+    logger.info("Build the measured history view")  # Record the measured action before the loop.
     policy = RunStalePolicy(FIXED_NOW)  # Use one fixed clock for all rows in this view.
     shaped = tuple(run_history_row(row, policy) for row in rows)  # Exercise the real row shaping path.
-    LOGGER.debug("Built the measured history view with %s row(s)", len(shaped))  # Report the safe count.
+    logger.debug("Built the measured history view with %s row(s)", len(shaped))  # Report the safe count.
     return shaped  # Expose the built view for correctness checks.
 
 
@@ -93,7 +93,7 @@ def _repository() -> tuple[FakeDatabase, ActionRepository]:
 
 def _bulk_context() -> tuple[BulkRunActionService, dict[str, Any]]:
     """Return one fixed no-cloud bulk cancel workload."""
-    logging.info("Build the fixed no-cloud batch workload")  # Record local setup before the measured action.
+    logger.info("Build the fixed no-cloud batch workload")  # Record local setup before the measured action.
     database, repository = _repository()  # Isolate each timed batch from prior mutations.
     run_ids = tuple(f"batch-run-{index:02d}" for index in range(BULK_RUNS))  # Fix the ordered run identifiers.
     tokens = {f"site-{index:02d}": "token" for index in range(BULK_RUNS)}  # Give each site one valid local lock.
@@ -111,7 +111,7 @@ def _bulk_context() -> tuple[BulkRunActionService, dict[str, Any]]:
     guard = SiteMutationGuard(allow_write, read_lock, tokens)  # Reuse the same guard path as other tests.
     service = BulkRunActionService(repository, collection.get, guard, clock=_fixed_clock)  # Reach no cloud seam.
     preview = _bulk_preview(run_ids)  # Build the signed-preview stand-in without a route or cloud call.
-    logging.debug("Built the fixed no-cloud batch workload with %s run(s)", len(run_ids))  # Confirm size.
+    logger.debug("Built the fixed no-cloud batch workload with %s run(s)", len(run_ids))  # Confirm size.
     return service, preview  # Return only the objects needed inside the timed boundary.
 
 
@@ -149,14 +149,14 @@ def _bulk_preview(run_ids: Sequence[str]) -> dict[str, Any]:
 def _cancel_batch() -> Any:
     """Run one fixed no-cloud bulk cancel action."""
     service, preview = _bulk_context()  # Build local state outside the service call.
-    LOGGER.info("Run the measured no-cloud batch path")  # Record the measured action before it starts.
+    logger.info("Run the measured no-cloud batch path")  # Record the measured action before it starts.
     action = service.cancel(  # Exercise the real batch service with only fake local stores.
         actor=ACTOR,  # Use one durable actor for deterministic idempotency.
         idempotency_key="performance-cancel-key-0001",  # Reuse is safe because each sample has a fresh store.
         confirmation="CANCEL 50 RUNS",  # Match the fixed workload size.
         preview=preview,  # Use the deterministic preview payload.
     )
-    LOGGER.debug("The measured no-cloud batch path returned %s item(s)", len(action.ledger.items))  # Summarize result.
+    logger.debug("The measured no-cloud batch path returned %s item(s)", len(action.ledger.items))  # Summarize result.
     return action  # Let the caller check that the full batch completed.
 
 
@@ -189,14 +189,14 @@ def _bulk_sample() -> float:
 
 def _measure(name: str, warmups: int, samples: int, sample: Callable[[], float]) -> Measurement:
     """Return one measured aggregate after warm-up calls."""
-    LOGGER.info("Warm up the %s measurement", name)  # Record warm-up before any unreported samples run.
+    logger.info("Warm up the %s measurement", name)  # Record warm-up before any unreported samples run.
     for _ in range(warmups):  # Stabilize the interpreter and caches before timing.
         sample()  # Exercise the same measured boundary as the timed phase.
-    LOGGER.debug("Finished %s warm-up call(s) for %s", warmups, name)  # Confirm warm-up count.
-    LOGGER.info("Collect timed samples for %s", name)  # Record the measured phase before samples run.
+    logger.debug("Finished %s warm-up call(s) for %s", warmups, name)  # Confirm warm-up count.
+    logger.info("Collect timed samples for %s", name)  # Record the measured phase before samples run.
     values = [sample() for _ in range(samples)]  # Collect the fixed timed sample count.
     result = Measurement(name, statistics.median(values), max(values), len(values))  # Report median and maximum.
-    LOGGER.debug("Measured %s median %s and maximum %s", name, result.median_seconds, result.maximum_seconds)
+    logger.debug("Measured %s median %s and maximum %s", name, result.median_seconds, result.maximum_seconds)
     return result  # Expose the aggregate to assertions and reports.
 
 
@@ -204,7 +204,7 @@ def _record_measurement(record_property: Callable[[str, object], None], measurem
     """Expose one measurement through pytest reports and console output."""
     record_property(f"{measurement.name}_median_seconds", measurement.median_seconds)  # Store the median in reports.
     record_property(f"{measurement.name}_maximum_seconds", measurement.maximum_seconds)  # Store the maximum in reports.
-    logging.info(  # Write the human-readable result through the logging path.
+    logger.info(  # Write the human-readable result through the logging path.
         "%s performance median %.6f seconds maximum %.6f seconds samples %s",
         measurement.name,
         measurement.median_seconds,
