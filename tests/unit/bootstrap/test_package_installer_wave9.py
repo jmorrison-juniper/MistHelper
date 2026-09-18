@@ -16,6 +16,8 @@ import pytest  # WHY: parametrized branch coverage of platform + upgrade combina
 
 from src.bootstrap.package_installer import PackageInstaller  # WHY: SUT under test
 
+logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
+
 
 def _make_installer(
     *,
@@ -29,7 +31,7 @@ def _make_installer(
     path_sep: str = "/",  # WHY: POSIX separator drives the runnable-guard fallback
 ) -> tuple[PackageInstaller, MagicMock, MagicMock, MagicMock, MagicMock]:
     """Build a PackageInstaller wired to controllable mocks."""
-    logging.info("Building PackageInstaller with os_name=%s", os_name)  # WHY: trace fixture creation
+    logger.info("Building PackageInstaller with os_name=%s", os_name)  # WHY: trace fixture creation
     os_module = MagicMock()  # WHY: injected os stub supports .name, .path.join, .path.isfile
     os_module.name = os_name  # WHY: gate the Windows .exe suffix branch
     os_module.path.sep = path_sep  # WHY: _candidate_is_runnable inspects path.sep
@@ -55,7 +57,7 @@ def _make_installer(
         logging_module=logging_module,
     )
     # WHY: monkeypatch sysconfig.get_path via a class-level attribute since it's imported at top level
-    logging.debug("PackageInstaller built successfully")  # WHY: post-action trace
+    logger.debug("PackageInstaller built successfully")  # WHY: post-action trace
     return installer, os_module, subprocess_module, sys_module, logging_module  # WHY: expose mocks for assertions
 
 

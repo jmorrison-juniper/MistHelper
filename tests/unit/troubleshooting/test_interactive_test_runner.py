@@ -24,6 +24,8 @@ from src.troubleshooting.interactive_test_runner import (
 )
 from src.utils.menu_entry import MenuEntry  # WHY: test fixtures must use the production row model.
 
+logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
+
 
 @pytest.fixture(autouse=True)
 def _capture_warnings(caplog: pytest.LogCaptureFixture) -> None:
@@ -569,7 +571,7 @@ def test_run_option_loop_flags_logged_error_as_failure(caplog: pytest.LogCapture
     """
 
     def _logs_error(site_id: str | None = None) -> None:
-        logging.error("simulated operation failure")
+        logger.error("simulated operation failure")
         return None
 
     menu_actions = {"1": _entry("1", _logs_error, "Logs Error")}

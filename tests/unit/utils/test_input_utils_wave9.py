@@ -17,31 +17,33 @@ import pytest  # WHY: monkeypatch fixture
 from src.utils import input_utils as input_utils_module  # WHY: patch _tqdm attribute
 from src.utils.input_utils import InputUtils  # WHY: SUT under test
 
+logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
+
 
 class TestEnsureTqdmAvailable:
     """Cover both branches of the tqdm-availability probe."""
 
     def test_real_tqdm_module_returns_true(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # WHY: when _tqdm.__module__ starts with "tqdm", the probe returns True
-        logging.info("Building fake real-tqdm module stub")  # WHY: pre-action trace
+        logger.info("Building fake real-tqdm module stub")  # WHY: pre-action trace
         fake_tqdm = MagicMock()  # WHY: mock with a controllable __module__ attr
         fake_tqdm.__module__ = "tqdm.std"  # WHY: mimic the real tqdm module path
         monkeypatch.setattr(input_utils_module, "_tqdm", fake_tqdm)  # WHY: replace module-level handle
         result = InputUtils.ensure_tqdm_available()  # WHY: exercise the real-tqdm branch
-        logging.debug("ensure_tqdm_available returned %s", result)  # WHY: post-action trace
+        logger.debug("ensure_tqdm_available returned %s", result)  # WHY: post-action trace
         assert result is True  # WHY: real tqdm active -> True
 
     def test_fallback_wrapper_returns_false(
         self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
         # WHY: when _tqdm.__module__ does NOT start with "tqdm", the fallback branch fires
-        logging.info("Building fake fallback tqdm stub")  # WHY: pre-action trace
+        logger.info("Building fake fallback tqdm stub")  # WHY: pre-action trace
         fake_tqdm = MagicMock()  # WHY: mock with a non-tqdm __module__
         fake_tqdm.__module__ = "src.utils.tqdm_wrapper"  # WHY: wrapper path -> fallback
         monkeypatch.setattr(input_utils_module, "_tqdm", fake_tqdm)  # WHY: replace module-level handle
         with caplog.at_level(logging.WARNING):  # WHY: capture the WARNING log
             result = InputUtils.ensure_tqdm_available()  # WHY: exercise fallback branch
-        logging.debug("ensure_tqdm_available returned %s", result)  # WHY: post-action trace
+        logger.debug("ensure_tqdm_available returned %s", result)  # WHY: post-action trace
         assert result is False  # WHY: fallback in use -> False
         assert any("fallback in use" in rec.message for rec in caplog.records)  # WHY: warning surfaced
 

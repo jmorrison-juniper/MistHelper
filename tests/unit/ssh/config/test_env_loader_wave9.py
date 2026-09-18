@@ -19,17 +19,19 @@ import pytest  # WHY: monkeypatch fixture for module-level flag flips
 from src.ssh.config import env_loader as env_loader_module  # WHY: patch _DOTENV_AVAILABLE
 from src.ssh.config.env_loader import EnvSshConfigLoader  # WHY: SUT under test
 
+logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
+
 
 def _empty_config() -> dict[str, Any]:
     """Return the sentinel-only default config shape used by ``load``."""
-    logging.info("Building empty config sentinel dict")  # WHY: pre-action trace
+    logger.info("Building empty config sentinel dict")  # WHY: pre-action trace
     result: dict[str, Any] = {  # WHY: mirror the shape emitted by _build_empty_config
         "hosts": [],
         "username": None,
         "password": None,
         "commands": [],
     }
-    logging.debug("Empty config sentinel dict built: keys=%s", list(result.keys()))  # WHY: post-action trace
+    logger.debug("Empty config sentinel dict built: keys=%s", list(result.keys()))  # WHY: post-action trace
     return result  # WHY: hand back the sentinel dict for tests
 
 
@@ -65,7 +67,7 @@ class TestLoadPathGuards:
         env_path.write_text("SSH_HOST=1.1.1.1\n", encoding="utf-8")  # WHY: real content is irrelevant here
 
         def _boom(_path: str) -> int:  # WHY: monkeypatch getsize to raise OSError
-            logging.info("Simulating OSError from os.path.getsize")  # WHY: pre-action trace
+            logger.info("Simulating OSError from os.path.getsize")  # WHY: pre-action trace
             raise OSError("stat failed")  # WHY: hit the except OSError branch
 
         import os as _os_mod  # WHY: patch os.path.getsize directly (env_loader imports os)
@@ -193,7 +195,7 @@ class TestManualParser:
         env_path.write_text("SSH_USER=admin\n", encoding="utf-8")  # WHY: content irrelevant
 
         def _bad_open(*_args: Any, **_kwargs: Any) -> Any:  # WHY: patched builtins.open raises decode error
-            logging.info("Simulating UnicodeDecodeError from open")  # WHY: pre-action trace
+            logger.info("Simulating UnicodeDecodeError from open")  # WHY: pre-action trace
             raise UnicodeDecodeError("utf-8", b"", 0, 1, "bad byte")  # WHY: hit that except branch
 
         monkeypatch.setattr(env_loader_module, "open", _bad_open, raising=False)  # WHY: shadow module open
@@ -209,7 +211,7 @@ class TestManualParser:
         env_path.write_text("SSH_USER=admin\n", encoding="utf-8")  # WHY: content irrelevant
 
         def _bad_open(*_args: Any, **_kwargs: Any) -> Any:  # WHY: patched open raises OSError
-            logging.info("Simulating OSError from open")  # WHY: pre-action trace
+            logger.info("Simulating OSError from open")  # WHY: pre-action trace
             raise OSError("permission denied")  # WHY: hit that except branch
 
         monkeypatch.setattr(env_loader_module, "open", _bad_open, raising=False)  # WHY: shadow module open
@@ -225,7 +227,7 @@ class TestManualParser:
         env_path.write_text("SSH_USER=admin\n", encoding="utf-8")  # WHY: content irrelevant
 
         def _bad_open(*_args: Any, **_kwargs: Any) -> Any:  # WHY: raise a non-OS, non-Unicode exception
-            logging.info("Simulating generic Exception from open")  # WHY: pre-action trace
+            logger.info("Simulating generic Exception from open")  # WHY: pre-action trace
             raise RuntimeError("boom")  # WHY: hit the broad except branch
 
         monkeypatch.setattr(env_loader_module, "open", _bad_open, raising=False)  # WHY: shadow module open
@@ -245,7 +247,7 @@ class TestDotenvPath:
         env_path.write_text("SSH_USER=admin\n", encoding="utf-8")  # WHY: content irrelevant
 
         def _boom(*_args: Any, **_kwargs: Any) -> None:  # WHY: swap load_dotenv for one that raises
-            logging.info("Simulating exception from load_dotenv")  # WHY: pre-action trace
+            logger.info("Simulating exception from load_dotenv")  # WHY: pre-action trace
             raise RuntimeError("dotenv exploded")  # WHY: hit the except branch
 
         monkeypatch.setattr(env_loader_module, "_DOTENV_AVAILABLE", True)  # WHY: gate on dotenv path

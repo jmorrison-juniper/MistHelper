@@ -28,6 +28,8 @@ from tests.support.rehearsal import (
 )
 from tests.support.rehearsal.cloud import CATALOGUE_KEYS, FIRMWARE_WRITE_NAMES, STATISTICS_NAME
 
+logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
+
 
 @pytest.fixture
 def clock() -> RehearsalClock:
@@ -221,10 +223,10 @@ def test_the_route_level_condition_keeps_its_own_proof() -> None:
         would make SC-001 false with no other signal, so this test holds the
         name.
     """
-    logging.info("Checking that the contract test named by SC-001 still exists")  # Report before the read.
+    logger.info("Checking that the contract test named by SC-001 still exists")  # Report before the read.
     path = Path(__file__).resolve().parents[2] / "contract" / "upgrade_portal" / "test_capture_attach.py"
     text = path.read_text(encoding="utf-8")  # The module that owns the route-level proof.
-    logging.debug("Read %d characters of the contract module", len(text))  # Record the size after the read.
+    logger.debug("Read %d characters of the contract module", len(text))  # Record the size after the read.
 
     assert path.is_file(), "SC-001 names a contract module that must exist"
     assert "def test_a_start_before_the_pre_check_still_refuses(" in text, "SC-001 names this test"
