@@ -310,6 +310,25 @@ def test_fetch_clients_returns_empty_on_exception(caplog: pytest.LogCaptureFixtu
     assert "Error retrieving wired clients" in caplog.text
 
 
+def test_fetch_clients_http_404_reports_status_and_skips_success(caplog: pytest.LogCaptureFixture) -> None:
+    """A 404 wired-client response must report the status and return no rows."""
+    fake_mh = _make_mh()  # WHY: isolate the source dependency resolver.
+    fake_mistapi = MagicMock(name="mistapi")  # WHY: isolate the SDK boundary.
+    response = SimpleNamespace(status_code=404, data=[{"mac": "ignored"}])  # WHY: failed data is untrustworthy.
+    fake_mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients.return_value = response  # WHY: feed 404.
+    fake_mistapi.get_all.return_value = []  # WHY: success pagination must not matter.
+    with (
+        patch("src.reports.global_wired_client_report_generator.mistapi", fake_mistapi),
+        _patch_mh(fake_mh),
+        caplog.at_level(logging.ERROR),
+    ):
+        records, remote_used = R._fetch_clients("org-uuid", None)  # WHY: drive the product status path.
+    assert records == []  # WHY: a 404 reply must not produce client rows.
+    assert remote_used is False  # WHY: no remote filter was pushed.
+    assert "HTTP 404" in caplog.text  # WHY: the operator must see the exact client-error status.
+    assert "Retrieved 0 wired client records" not in caplog.text  # WHY: avoid false success.
+
+
 # ---------- _build_remote_params ----------
 
 
