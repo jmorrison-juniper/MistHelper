@@ -34,7 +34,7 @@ class SpecKitHarness:
         self._prepare_directories(feature_dir)  # Create required directories before file writes.
         self._write_artifacts(feature_dir, document)  # Write the core SpecKit artifact set.
         self._write_context(feature_dir, document)  # Write the Companion GUI context file.
-        self._write_analysis(feature_dir)  # Run analysis after all core artifacts exist.
+        self._write_analysis(feature_dir, document)  # Run analysis after all core artifacts exist.
         self.require_complete(feature_dir)  # Make the workflow mandatory before install can run.
         logging.debug("Emitted SpecKit artifacts at %s", feature_dir)  # Record the final destination.
         return feature_dir
@@ -262,11 +262,14 @@ class SpecKitHarness:
         path.write_text(json.dumps(context, indent=2) + "\n", encoding="utf-8")  # Write stable JSON.
         logging.debug("Wrote fallback Companion context with %d keys", len(context))  # Record fallback size.
 
-    def _write_analysis(self, feature_dir: Path) -> None:
+    def _write_analysis(self, feature_dir: Path, document: SkillDocument) -> None:
         """Write the analysis report after validation."""
         logging.info("Writing the SpecKit analysis report")  # Record analysis generation.
         text = (
-            self.catalog.render_markdown()
+            "# Document analysis context\n\n"
+            + self._metadata(document)
+            + "\n"
+            + self.catalog.render_markdown()
             + "\n"
             + self._living_judgement()
             + "\n"
