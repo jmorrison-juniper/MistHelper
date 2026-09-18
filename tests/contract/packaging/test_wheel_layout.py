@@ -60,7 +60,7 @@ def test_the_wheel_never_packs_the_repository_root(wheel_target: dict[str, Any])
     packages = list(wheel_target.get("packages", []))
 
     assert "." not in packages, "a root package entry packs the whole repository"
-    assert packages, "the wheel must name at least one package"
+    assert len(packages) >= 1, "the wheel must name at least one package"
 
 
 @pytest.mark.parametrize("name", _REQUIRED_PACKAGES)

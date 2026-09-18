@@ -17,7 +17,7 @@ import pytest
 
 from src.firmware.upgrade_service import DeviceTarget, GatewayFamily, PlanRoute, UpgradePlan
 from src.upgrade_portal.runtime.runs import RunState
-from src.upgrade_portal.runtime.signals import StopOutcome, StopRequestStore
+from src.upgrade_portal.runtime.signals import ConfirmationRequiredError, StopOutcome, StopRequestStore
 from src.upgrade_portal.upgrade import options, stop
 from tests.support.rehearsal import (
     ORG_ID,
@@ -138,7 +138,7 @@ def run_and_stop(monkeypatch: pytest.MonkeyPatch, root: Path, writing: set[str])
     reached, holding = threading.Event(), threading.Event()  # The handshake of the held round.
     harness.cloud.set_pause(lambda: _hold(reached, holding))  # Hold the first poll round of the run.
     harness.start()  # The shipped entry point at ``RunDriver.start``.
-    assert reached.wait(5.0)  # The run reached a poll round, so the stop lands in mid-run.
+    assert reached.wait(5.0) is True  # The run reached a poll round, so the stop lands in mid-run.
     outcome = _press_stop(harness)  # The shipped stop control, with no route and no browser.
     holding.set()  # Release the held round, so the driver can read the stop request.
     harness.cloud.set_pause(None)  # No later round waits on the event.
@@ -271,7 +271,6 @@ def test_the_run_record_holds_the_stop_outcome(stopped: StoppedRun) -> None:
         stopped: The stopped run.
     """
     request = stopped.harness.record()["stop_request"]  # The stop request that the store holds.
-    assert request is not None  # The route wrote the request before the cancel calls ran.
     assert request["outcome"]["message"] == stopped.outcome.message  # The record repeats the answer of the control.
 
 
@@ -326,7 +325,7 @@ def test_a_stop_with_the_wrong_text_reaches_no_cloud_call(monkeypatch: pytest.Mo
     """
     harness = RehearsalHarness(RehearsalDeps(fleet=stop_fleet(0.0)))  # A run that no operator confirms.
     harness.attach(monkeypatch, tmp_path / "data")  # The five attachment points and the page size.
-    with pytest.raises(Exception, match="STOP"):  # The shipped control refuses the wrong text.
+    with pytest.raises(ConfirmationRequiredError, match="STOP"):  # The shipped control refuses the wrong text.
         stop.stop_run(None, stop_targets(harness.fleet), "stop")
     assert harness.cloud.calls_of("cancelSiteDeviceUpgrade") == 0  # A refused stop reaches no cloud call.
 
