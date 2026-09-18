@@ -42,10 +42,10 @@ class FactExtractor(ABC):
             return CardClassMark.SHOULD  # Mark recommendations as SHOULD cards.
         return CardClassMark.INFO  # Mark plain facts as informational cards.
 
-    def _snippet(self, text: str, size: int = 7) -> str:
+    def _snippet(self, text: str, size: int = 4) -> str:
         """Return a short source phrase that stays below the guard clear line."""
         words = re.findall(r"[A-Za-z][A-Za-z0-9._/-]*", text)  # Keep technical words in source order.
-        return " ".join(words[:size])  # Limit copied prose to seven words by contract.
+        return " ".join(words[:size])  # Limit copied prose so adjacent cards stay below the warning band.
 
 
 class CommandFactExtractor(FactExtractor):
@@ -69,8 +69,19 @@ class CommandFactExtractor(FactExtractor):
             stripped,
         )  # Detect CLI.
         if prompt_match:  # Prompt lines carry the command after the prompt.
-            return prompt_match.group(1).strip()  # Keep the exact command text after the prompt.
+            return self._safe_command(prompt_match.group(1).strip())  # Keep only command-shaped text.
         return ""  # Return no command for ordinary prose.
+
+    def _safe_command(self, command: str) -> str:
+        """Return command text only when the line is not prose."""
+        if re.search(r",\s+(and|or)\s+|\.\s+If\b|\bcommands?\.\s+If\b", command):  # Detect prose lists.
+            return ""  # Do not preserve a prose sentence as a command.
+        if command.startswith("set ") and not re.match(
+            r"set\s+(interfaces|protocols|routing-options|policy-options|security|vlans|groups|switch-options|forwarding-options|system|class-of-service)\b",
+            command,
+        ):  # Validate set roots.
+            return ""  # Reject prose that starts with the verb set.
+        return command  # Return the command when it passes the prose filters.
 
     def _command_facts(self, command: str, line: SourceLine, source_key: str) -> list[ExtractedFact]:
         """Return command and argument cards for one command line."""

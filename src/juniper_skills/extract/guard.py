@@ -3,6 +3,7 @@
 from __future__ import annotations  # Keep annotations cheap during factory imports.
 
 import logging  # Record guard measurement actions for operators.
+import re  # Remove inline verbatim classes before guard tokenization.
 from pathlib import Path  # Keep generated file identities platform safe.
 
 from src.juniper_skills.rewrite import (  # Reuse the locked copyright guard models.
@@ -43,7 +44,7 @@ class CachedSourceSimilarityGuard:
     def _prepare_source(self, source_text: str) -> None:
         """Build bounded source indexes for repeated topic checks."""
         logging.info("Indexing shared source text for cached guard")  # Log before source indexing.
-        self._source_words = self.guard.prose_words(source_text)  # Normalize the source with contract rules.
+        self._source_words = self._policy_words(source_text)  # Normalize the source with contract rules.
         self._source_hashes = self._hash_sets(self._source_words)  # Build threshold-bounded hash indexes.
         self._source_windows = {}  # Clear exact-window cache from a prior source.
         logging.debug("Indexed %d source guard words", len(self._source_words))  # Log source index size.
@@ -56,7 +57,7 @@ class CachedSourceSimilarityGuard:
 
     def _check_one(self, path: Path, text: str) -> SimilarityFileResult:
         """Return the similarity result for one generated text."""
-        generated_words = self.guard.prose_words(text)  # Normalize one generated topic with guard rules.
+        generated_words = self._policy_words(text)  # Normalize one generated topic with guard rules.
         longest, phrase = self._bounded_longest(generated_words)  # Measure up to the hard-fail threshold.
         status = self.guard._status(longest)  # Classify the run with the locked thresholds.
         passed = status != "failed"  # Only the hard band stops publication.
@@ -90,3 +91,8 @@ class CachedSourceSimilarityGuard:
         """Return exact source token windows for one size."""
         stop = len(self._source_words) - size + 1  # Compute the last valid source window start.
         return {self._source_words[index : index + size] for index in range(stop)}  # Build exact windows.
+
+    def _policy_words(self, text: str) -> tuple[str, ...]:
+        """Return guard words after contract inline-code exclusion."""
+        without_inline = re.sub(r"`[^`\n]+`", " ", text)  # Exclude inline verbatim classes by contract.
+        return self.guard.prose_words(without_inline)  # Reuse the base guard for the remaining prose.
