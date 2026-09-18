@@ -32,9 +32,17 @@ CATEGORY_RANGES = [
     (49, 62, "Site Config & Monitoring"),
     (63, 65, "Work In Progress"),
     (66, 89, "Insights & Diagnostics"),
+    (269, 269, "Network Security Scans"),
 ]
 
 DESTRUCTIVE_THRESHOLD = 90
+
+# Menu numbers the portal may run even though they sit above DESTRUCTIVE_THRESHOLD.
+# The registry check below still runs first, so this set can never admit an
+# operation that OperationRegistry does not call safe. Each entry names its issue.
+# 269 (issue #2985) scans an organization for rogue DHCP servers. It reads alarms,
+# switch events, and Marvis config actions, and it writes nothing to the Mist cloud.
+PORTAL_EXPLICIT_ALLOWLIST = frozenset({"269"})
 
 # The safety categories that the portal may run. `OperationRegistry` in
 # src/utils/operation_registry.py is the single source of truth for the safety
@@ -559,10 +567,12 @@ class OperationExecutor:
         logger.info("Portal checks whether it may run operation %s", menu_number)
         category = OperationRegistry.skip_category(menu_number)  # Authoritative safety verdict.
         num = self._parse_menu_number(menu_number)  # None when int() cannot read the key.
+        within_bound = num is not None and num < DESTRUCTIVE_THRESHOLD  # Keep the existing narrower bound.
+        listed = menu_number in PORTAL_EXPLICIT_ALLOWLIST  # An explicit row may sit above the bound.
         allowed = (
             category in PORTAL_RUNNABLE_CATEGORIES  # The registry must call the operation safe.
             and num is not None  # A key the page cannot place must never run.
-            and num < DESTRUCTIVE_THRESHOLD  # Keep the existing narrower bound, so no operation is added.
+            and (within_bound or listed)  # The bound holds, unless an explicit row names this operation.
         )
         logger.debug("Portal verdict for operation %s: category=%s allowed=%s", menu_number, category, allowed)
         return allowed

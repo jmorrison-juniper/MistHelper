@@ -140,6 +140,17 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Device events with composite key for uniqueness",
     },
+    # Issue #2985: one merged row can arrive from an alarm, a switch event, or a
+    # Marvis config action, so the key must stay stable across all three sources.
+    # ``record_id`` is the merge key the scanner computes, not a Mist identifier,
+    # because the three sources do not share one identifier field.
+    "scanOrgRogueDhcpServers": {
+        "type": "composite_pk",
+        "primary_key": ["record_id", "site_id", "last_seen"],
+        "indexes": ["org_id", "site_id", "device_mac", "signal_type", "state", "last_seen"],
+        "unique_constraints": [],
+        "description": "Rogue DHCP server findings merged from alarms, switch events, and Marvis actions",
+    },
     "searchOrgClientEvents": {
         "type": "composite_pk",
         "primary_key": ["id", "site_id", "timestamp"],
