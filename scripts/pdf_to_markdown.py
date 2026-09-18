@@ -161,10 +161,14 @@ class PdfLineReader:
         logger.debug("Measured %d common sizes from %d distinct sizes", len(common), len(sizes))
         return max(common) if common else sizes.most_common(1)[0][0]  # the modal size is the fallback
 
+    X_TOLERANCE = 1.0  # the space width that pdfplumber assumes between 2 words
+
     def _page_lines(self, page: Any, sizes: Counter[float]) -> list[TextLine]:
         """Return the drawn lines of one page and add their sizes to the count."""
         lines: list[TextLine] = []  # the lines of this page, in reading order
-        for raw in page.extract_text_lines():  # pdfplumber groups the characters into lines
+        # The pdfplumber default of 3 points merges adjacent words in a Juniper
+        # PDF, so "set class" becomes "setclass". Issue #2946 holds the evidence.
+        for raw in page.extract_text_lines(x_tolerance=self.X_TOLERANCE):
             chars = raw["chars"]  # each line carries its characters, so a per line size exists
             sizes.update(round(float(char["size"]), 1) for char in chars)  # feed the size count
             lines.append(self._line_style(str(raw["text"]), chars))

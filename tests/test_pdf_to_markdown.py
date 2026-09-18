@@ -46,6 +46,81 @@ class PdfFixtureBuilder:
         logger.debug("Built fixture with %d bytes", path.stat().st_size)  # record the produced size
         return path  # the test converts this file
 
+    def build_spaced_words(self, name: str, rows: list[list[str]], gap: float = 2.5) -> Path:
+        """Write a PDF that draws each word at its own position, with no space glyph.
+
+        A Juniper PDF places each word with its own text matrix, so the file holds
+        no space character. The reader must infer a space from the gap. A gap under
+        the reader tolerance joins the two words, which is the defect of issue #2946.
+        """
+        logger.info("Building spaced word fixture %s with gap %.1f", name, gap)  # announce the write
+        streams = [self._word_content(words, gap) for words in rows]  # one stream for each page
+        entries = [
+            "<</Type/Catalog/Pages 2 0 R>>",  # object 1, the document catalog
+            "",  # object 2, the page tree, which the kid list completes below
+            "<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>",  # object 3, the body font
+            "<<>>",  # object 4, the empty metadata dictionary
+        ]
+        kids: list[int] = []  # the object number of each page, for the page tree
+        for stream in streams:  # one content object and one page object for each page
+            entries.append(f"<</Length {len(stream)}>>\nstream\n{stream}\nendstream")
+            box = "/MediaBox[0 0 612 792]/Resources<</Font<</F1 3 0 R>>>>"  # the frame and the font
+            entries.append(f"<</Type/Page/Parent 2 0 R{box}/Contents {len(entries)} 0 R>>")
+            kids.append(len(entries))  # the page object number, which the page tree needs
+        kid_list = " ".join(f"{kid} 0 R" for kid in kids)  # the reference list of the page tree
+        entries[1] = f"<</Type/Pages/Kids[{kid_list}]/Count {len(kids)}>>"  # complete object 2
+        path = self.directory / name  # pathlib keeps the path correct on every platform
+        path.write_bytes(self._serialize(entries, 4))  # one atomic write of the whole file
+        logger.debug("Built spaced word fixture with %d bytes", path.stat().st_size)  # record the size
+        return path  # the test converts this file
+
+    # The Helvetica advance width of each letter, in units of 1/1000 of the size.
+    # These come from the Adobe Helvetica metrics, so the fixture places a word
+    # exactly where the reader expects it. A wrong width eats the gap and makes
+    # the test measure the fixture instead of the converter.
+    WIDTHS: ClassVar[dict[str, int]] = {
+        "a": 556,
+        "b": 556,
+        "c": 500,
+        "d": 556,
+        "e": 556,
+        "f": 278,
+        "g": 556,
+        "h": 556,
+        "i": 222,
+        "j": 222,
+        "k": 500,
+        "l": 222,
+        "m": 833,
+        "n": 556,
+        "o": 556,
+        "p": 556,
+        "q": 556,
+        "r": 333,
+        "s": 500,
+        "t": 278,
+        "u": 556,
+        "v": 500,
+        "w": 722,
+        "x": 500,
+        "y": 500,
+        "z": 500,
+        "-": 333,
+        "0": 556,
+    }
+
+    @classmethod
+    def _word_content(cls, words: list[str], gap: float) -> str:
+        """Return a content stream that draws each word at its own x position."""
+        parts = ["BT", "/F1 10 Tf"]  # begin the text object and select the body font
+        x = 72.0  # the left margin, where the first word starts
+        for word in words:  # each word carries its own text matrix, so no space glyph exists
+            parts.append(f"1 0 0 1 {x:.2f} 700 Tm ({word}) Tj")  # place and draw this word
+            width = sum(cls.WIDTHS.get(letter, 556) for letter in word) / 100.0  # width at size 10
+            x += width + gap  # the next word starts one gap to the right
+        parts.append("ET")  # end the text object
+        return "\n".join(parts)  # the reader needs one stream for each page
+
     def _objects(self, pages: list[list[TextLine]], metadata: dict[str, str]) -> tuple[list[str], int]:
         """Return the body of each PDF object and the number of the metadata object."""
         fields = " ".join(f"/{key} ({value})" for key, value in metadata.items())  # info dictionary entries
@@ -433,3 +508,33 @@ class TestGlyphsInMetadata:
         cleaned = rules.normalize("set system host-name \ufffdlab-router")
         assert "\ufffd" not in cleaned, f"the unmapped mark must go: {cleaned!r}"
         assert cleaned == "set system host-name lab-router", f"the command must stay: {cleaned!r}"
+
+
+class TestWordSpacing:
+    """Prove that the converter keeps a space between 2 words that a gap divides."""
+
+    def test_words_drawn_with_a_gap_keep_their_space(self, tmp_path: Path) -> None:
+        """A Juniper PDF draws each word alone, so the reader must infer the space."""
+        # A Helvetica space at 10 points measures 2.78 points, which is under the
+        # pdfplumber default tolerance of 3. The default therefore joins the words
+        # and writes "setclass". Issue #2946 holds the measured evidence.
+        builder = PdfFixtureBuilder(tmp_path)  # the builder writes one PDF for this test
+        words = ["set", "class", "operator", "allow-commands", "request", "system"]
+        source = builder.build_spaced_words("commands.pdf", [words])  # draw the words apart
+        target = tmp_path / "commands.md"  # the converter writes the Markdown here
+        PdfMarkdownConverter(source, target).convert()  # run the converter under test
+        body = target.read_text(encoding="utf-8")  # read the produced Markdown
+        assert "setclass" not in body, f"the words must not join: {body!r}"
+        assert "set class" in body, f"the space must survive: {body!r}"
+
+    def test_spacing_holds_across_a_whole_line(self, tmp_path: Path) -> None:
+        """Every word boundary of the line must keep its space, not only the first."""
+        builder = PdfFixtureBuilder(tmp_path)  # the builder writes one PDF for this test
+        words = ["show", "interfaces", "terse", "match", "inet"]  # a command an engineer types
+        source = builder.build_spaced_words("terse.pdf", [words])  # draw the words apart
+        target = tmp_path / "terse.md"  # the converter writes the Markdown here
+        PdfMarkdownConverter(source, target).convert()  # run the converter under test
+        body = target.read_text(encoding="utf-8")  # read the produced Markdown
+        joined = "".join(words)  # the shape that the defect produces
+        assert joined not in body, f"the line must not collapse: {body!r}"
+        assert " ".join(words) in body, f"every space must survive: {body!r}"
