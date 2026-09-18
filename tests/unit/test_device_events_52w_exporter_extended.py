@@ -47,7 +47,7 @@ def test_export_early_exits_when_org_id_missing() -> None:
     data_exporter = MagicMock()  # Must NOT be invoked when org is missing
     exporter = _build_exporter(org_id="", logger=logger, data_exporter=data_exporter)
     exporter.export()  # Trigger the guarded path
-    logger.error.assert_called_once()  # Operator-visible error emitted
+    logger.error.assert_called_once_with("No org_id available. Exiting.")  # Verify the exact operator error.
     data_exporter.write_with_format_selection.assert_not_called()  # No output emitted
 
 
@@ -75,7 +75,9 @@ def test_read_checkpoint_returns_token_when_file_present(tmp_path: Path) -> None
     logger = MagicMock()  # Capture resume log
     exporter = _build_exporter(logger=logger)
     assert exporter._read_checkpoint(str(checkpoint_file)) == "token-123"  # Stripped
-    logger.info.assert_called()  # Resume trace logged
+    logger.info.assert_called_once_with(
+        "Resuming OrgDeviceEvents_52w from checkpoint token: %s", "token-123"
+    )  # Verify token.
 
 
 def test_read_checkpoint_returns_none_for_empty_file(tmp_path: Path) -> None:
@@ -94,7 +96,8 @@ def test_read_checkpoint_handles_read_failure_and_warns(tmp_path: Path) -> None:
     exporter = _build_exporter(logger=logger)
     with patch("builtins.open", side_effect=OSError("boom")):  # Force read to fail
         assert exporter._read_checkpoint(str(checkpoint_file)) is None
-    logger.warning.assert_called()  # Non-fatal warn emitted
+    logger.warning.assert_called_once()  # Verify the read failure emitted one warning.
+    assert str(checkpoint_file) in logger.warning.call_args.args  # Verify the warning named the bad checkpoint.
 
 
 def test_write_checkpoint_writes_token_to_file(tmp_path: Path) -> None:
@@ -119,7 +122,8 @@ def test_write_checkpoint_warns_on_write_failure(tmp_path: Path) -> None:
     exporter = _build_exporter(logger=logger)
     with patch("builtins.open", side_effect=OSError("disk full")):  # Force write to fail
         exporter._write_checkpoint(str(tmp_path / "cp"), "tok")  # Should not raise
-    logger.warning.assert_called()  # Non-fatal warn emitted
+    logger.warning.assert_called_once()  # Verify the write failure emitted one warning.
+    assert "disk full" in str(logger.warning.call_args.args[-1])  # Verify the warning kept the OS error.
 
 
 def test_remove_checkpoint_removes_file_when_present(tmp_path: Path) -> None:
@@ -136,6 +140,7 @@ def test_remove_checkpoint_skips_when_file_absent(tmp_path: Path) -> None:
     exporter = _build_exporter()  # Default exporter
     # Should not raise even though file is absent
     exporter._remove_checkpoint(str(tmp_path / "absent"))  # Guard exercised
+    assert not (tmp_path / "absent").exists()  # Verify the guard did not create a checkpoint.
 
 
 def test_remove_checkpoint_logs_debug_on_failure(tmp_path: Path) -> None:
@@ -146,7 +151,7 @@ def test_remove_checkpoint_logs_debug_on_failure(tmp_path: Path) -> None:
     exporter = _build_exporter(logger=logger)
     with patch("os.remove", side_effect=OSError("locked")):  # Force removal to fail
         exporter._remove_checkpoint(str(checkpoint_file))  # Should not raise
-    logger.debug.assert_called()  # Debug breadcrumb emitted
+    logger.debug.assert_called_once_with("Could not remove checkpoint file after completion")  # Verify breadcrumb.
 
 
 def test_fetch_kwargs_omits_search_after_when_no_token() -> None:
@@ -222,7 +227,9 @@ def test_build_header_returns_unique_keys_and_logs_header_size() -> None:
     exporter = _build_exporter(data_processing_utils=utils, logger=logger)
     header = exporter._build_header([{"timestamp": 1, "type": "x"}])  # Trigger
     assert header == ["timestamp", "type"]  # Verbatim pass-through
-    logger.info.assert_called()  # Header size log emitted
+    logger.info.assert_called_once_with(
+        "Using CSV header with %s fields for OrgDeviceEvents_52w.csv", 2
+    )  # Verify size.
 
 
 def test_write_initial_batch_csv_branch_writes_header_and_rows(tmp_path: Path) -> None:
@@ -268,7 +275,10 @@ def test_append_rows_sqlite_branch_dispatches_to_backend() -> None:
     data_exporter = MagicMock()  # Track backend call
     exporter = _build_exporter(output_format="sqlite", data_exporter=data_exporter)
     exporter._append_rows("ignored.csv", [{"a": 1}], ["a"])  # Trigger SQLite path
-    data_exporter.write_with_format_selection.assert_called_once()  # Backend invoked
+    data_exporter.write_with_format_selection.assert_called_once()  # Verify the backend was invoked once.
+    _, kwargs = data_exporter.write_with_format_selection.call_args  # Inspect the backend dispatch options.
+    assert kwargs["api_function_name"] == "searchOrgDeviceEvents"  # Verify the endpoint key is preserved.
+    assert kwargs["backend_options"].format_override == "sqlite"  # Verify the SQLite backend override.
 
 
 def test_write_rows_restricts_to_header_fields(tmp_path: Path) -> None:
@@ -292,9 +302,9 @@ def test_log_completion_csv_branch_logs_csv_file_path() -> None:
     logger = MagicMock()  # Capture completion log
     exporter = _build_exporter(output_format="csv", logger=logger)
     exporter._log_completion("path/to/output.csv")  # Trigger CSV branch
-    logger.info.assert_called()  # Completion line emitted
-    args = logger.info.call_args[0]  # Format args
-    assert "path/to/output.csv" in args  # File path passed through
+    logger.info.assert_called_once_with(
+        "All org device events (52w) exported to %s.", "path/to/output.csv"
+    )  # Verify path.
 
 
 def test_log_completion_sqlite_branch_logs_database_path() -> None:
@@ -302,9 +312,10 @@ def test_log_completion_sqlite_branch_logs_database_path() -> None:
     logger = MagicMock()  # Capture completion log
     exporter = _build_exporter(output_format="sqlite", database_path="db/mist.db", logger=logger)
     exporter._log_completion("ignored.csv")  # Trigger SQLite branch
-    logger.info.assert_called()  # Completion line emitted
-    args = logger.info.call_args[0]  # Format args
-    assert "db/mist.db" in args  # DB path passed through
+    logger.info.assert_called_once_with(  # Verify the SQLite completion message names the database path.
+        "All org device events (52w) exported to SQLite table OrgDeviceEvents_52w (DB: %s)",
+        "db/mist.db",
+    )
 
 
 def test_sleep_before_retry_skips_on_final_attempt() -> None:
@@ -314,6 +325,7 @@ def test_sleep_before_retry_skips_on_final_attempt() -> None:
     with patch("time.sleep", new=sleep_mock):  # Track the sleep calls of this thread only.
         exporter._sleep_before_retry(attempt=2, retries=3, backoff=1.0)  # Last attempt
     sleep_mock.assert_not_called()  # Final attempt short-circuits
+    assert sleep_mock.call_count == 0  # Verify the final attempt never waits.
 
 
 def test_sleep_before_retry_sleeps_exponentially() -> None:
@@ -461,6 +473,7 @@ def test_stream_remaining_pages_breaks_on_empty_results() -> None:
             )
         )
     append_mock.assert_not_called()  # Empty page short-circuits before append
+    assert append_mock.call_count == 0  # Verify the empty page wrote no rows.
 
 
 def test_export_full_happy_path_calls_streaming_pipeline(tmp_path: Path, monkeypatch) -> None:
@@ -483,7 +496,9 @@ def test_export_full_happy_path_calls_streaming_pipeline(tmp_path: Path, monkeyp
         logger=logger,
     )
     exporter.export()  # Trigger full export
-    logger.info.assert_called()  # Completion log emitted
+    logger.info.assert_any_call(
+        "All org device events (52w) exported to %s.", str(Path("data") / "OrgDeviceEvents_52w.csv")
+    )  # Verify completion.
     assert (tmp_path / "data" / "OrgDeviceEvents_52w.csv").exists()  # CSV output produced
 
 
