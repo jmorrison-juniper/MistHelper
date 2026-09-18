@@ -196,7 +196,16 @@ class MacTableCommand:  # WHY: Namespace grouping the show_mac_table workflow he
             print(f"! Response: {response.text}")  # WHY: Legacy error body echo for operator diagnosis.
             websocket_manager.disconnect()  # WHY: Free WS socket since we will not await a result.
             return None  # WHY: Signal failure to orchestrator.
-        response_data = response.json()  # WHY: Parse JSON envelope returning the session correlation id.
+        try:  # WHY: a 200 reply can still carry an empty or malformed body.
+            response_data = response.json()  # WHY: Parse JSON envelope returning the session correlation id.
+        except ValueError as parse_error:  # WHY: JSONDecodeError subclasses ValueError.
+            logger.error(  # WHY: log the parse failure before the caller receives the failure contract.
+                "The cloud returned an unparseable body for %s: %s",
+                getattr(response, "url", "unknown endpoint"),
+                parse_error,
+            )
+            websocket_manager.disconnect()  # WHY: Free WS socket since no result can be correlated.
+            return None  # WHY: Signal failure to orchestrator.
         session_id = response_data.get("session")  # WHY: Extract Mist-assigned session id used to demux WS messages.
         if not session_id:
             print("! No session ID returned from show MAC table command")  # WHY: Legacy error message.

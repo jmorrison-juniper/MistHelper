@@ -1034,7 +1034,15 @@ class NominatimValidator:
         """Parse successful geocode response."""
         if response.status_code != 200:  # WHY: any non-200 is a failure
             return self._create_empty_result(f"HTTP {response.status_code}")  # WHY: surface status in error
-        results = response.json()  # WHY: parse JSON body
+        try:  # WHY: a 200 reply can still carry an empty or malformed body.
+            results = response.json()  # WHY: parse JSON body
+        except ValueError as parse_error:  # WHY: JSONDecodeError subclasses ValueError.
+            logger.error(  # WHY: log the parse failure before returning the empty-result contract.
+                "The geocode service returned an unparseable body for %s: %s",
+                getattr(response, "url", "unknown endpoint"),
+                parse_error,
+            )
+            return self._create_empty_result("Unparseable response body")  # WHY: preserve the failure shape.
         if not results:  # WHY: empty result list = no geocode match
             return self._create_empty_result("No results found")  # WHY: canonical no-match error
         result = results[0]  # WHY: use only the top match
