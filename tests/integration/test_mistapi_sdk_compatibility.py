@@ -11,7 +11,7 @@ from pathlib import Path  # Keep file handling correct on Windows and Linux.
 
 from pytest import CaptureFixture  # Type captured-output control without importing test internals.
 
-LOGGER = logging.getLogger(__name__)  # Let pytest or callers choose the log level.
+logger = logging.getLogger(__name__)  # A module logger keeps the record source readable.
 REPO_ROOT = Path(__file__).resolve().parents[2]  # Locate the checkout even when pytest changes the working directory.
 UNRESOLVED_CALL_SITE_BASELINE = 10  # Fail only when new dynamic SDK paths increase the measured baseline.
 UNVERIFIABLE_SIGNATURE_BASELINE = 366  # Fail only when new dynamic SDK argument patterns increase the baseline.
@@ -205,10 +205,10 @@ class MistapiSignatureComparator:
 
     def messages(self) -> tuple[str, ...]:
         """Return all compatibility failures for one call site."""
-        logging.info("Checking signature for mistapi.%s", self.site.function)  # Log before the comparison.
+        logger.info("Checking signature for mistapi.%s", self.site.function)  # Log before the comparison.
         messages = [*self._missing_required(), *self._unexpected_keywords()]  # Compare required and named arguments.
         messages.extend(self._too_many_positionals())  # Add positional arity failures after named argument failures.
-        logging.debug("Signature check found %d issue(s)", len(messages))  # Log the comparison result.
+        logger.debug("Signature check found %d issue(s)", len(messages))  # Log the comparison result.
         return tuple(messages)  # Freeze the result for deterministic assertions.
 
     def _missing_required(self) -> tuple[str, ...]:
@@ -258,23 +258,23 @@ class MistapiSdkSurfaceCollector:
     @classmethod
     def from_installed_package(cls) -> MistapiSdkSurfaceCollector:
         """Build a collector for the installed ``mistapi`` package."""
-        logging.info("Locating the installed mistapi package")  # Log before environment inspection.
+        logger.info("Locating the installed mistapi package")  # Log before environment inspection.
         spec = importlib.util.find_spec("mistapi")  # Ask Python for the package used by this test run.
         if spec is None or spec.origin is None:  # A missing SDK means the guard cannot read its input.
             raise AssertionError("FAIL mistapi package could not be located")  # Fail instead of passing without input.
         package_root = Path(spec.origin).parent  # Convert the package file path to the package directory.
-        logging.debug("Located mistapi package at %s", package_root)  # Record the measured SDK root.
+        logger.debug("Located mistapi package at %s", package_root)  # Record the measured SDK root.
         return cls(package_root)  # Return a configured collector for the installed package.
 
     def collect(self) -> Mapping[str, MistapiSdkSignature]:
         """Return public callable signatures from the installed SDK."""
-        logging.info("Collecting mistapi SDK signatures from %s", self.package_root)  # Log before reading SDK files.
+        logger.info("Collecting mistapi SDK signatures from %s", self.package_root)  # Log before reading SDK files.
         signatures: dict[str, MistapiSdkSignature] = {}  # Store direct signatures by package-relative name.
         re_exports: list[tuple[str, str]] = []  # Store aliases until all direct signatures exist.
         for path in sorted(self.package_root.rglob("*.py")):  # Walk each installed SDK module once.
             self._add_path_symbols(path, signatures, re_exports)  # Add module definitions and re-export edges.
         self._add_re_export_signatures(signatures, re_exports)  # Copy signatures to aliases such as mistapi.get_all.
-        logging.debug("Collected %d mistapi SDK signature(s)", len(signatures))  # Prove the SDK scan read data.
+        logger.debug("Collected %d mistapi SDK signature(s)", len(signatures))  # Prove the SDK scan read data.
         return signatures  # Return a mapping so callers can read signatures by function path.
 
     def _add_path_symbols(
@@ -374,9 +374,9 @@ class MistapiSourceCallCollector(ast.NodeVisitor):
 
     def collect(self) -> tuple[tuple[MistapiCallSite, ...], tuple[MistapiCallSite, ...]]:
         """Return resolved and unresolved Mist SDK call sites from this source."""
-        logging.info("Collecting mistapi call sites from %s", self.path)  # Log before source analysis.
+        logger.info("Collecting mistapi call sites from %s", self.path)  # Log before source analysis.
         self.visit(self._tree)  # Walk the parsed source and fill both call-site lists.
-        logging.debug(
+        logger.debug(
             "Collected %d resolved and %d unresolved call site(s)",
             len(self.call_sites),
             len(self.unresolved_call_sites),
@@ -537,27 +537,27 @@ class MistapiSdkCompatibilityGuard:
 
     def evaluate_installed_sdk(self) -> MistapiGuardReport:
         """Return a compatibility report for this checkout and environment."""
-        logging.info("Starting mistapi SDK compatibility guard")  # Log the start of the measured guard.
+        logger.info("Starting mistapi SDK compatibility guard")  # Log the start of the measured guard.
         sdk_signatures = (
             MistapiSdkSurfaceCollector.from_installed_package().collect()
         )  # Read the installed SDK surface.
         sources = self._project_sources()  # Read the project files that can call the SDK.
         report = self.evaluate_sources(sources, sdk_signatures)  # Compare source call sites to SDK definitions.
-        logging.debug("%s", report.summary())  # Record the count that proves this guard measured call sites.
+        logger.debug("%s", report.summary())  # Record the count that proves this guard measured call sites.
         return report  # Return the report so tests can enforce failure rules.
 
     def evaluate_sources(
         self, sources: Mapping[Path, str], sdk_signatures: Mapping[str, MistapiSdkSignature]
     ) -> MistapiGuardReport:
         """Evaluate supplied project sources against supplied SDK signatures."""
-        logging.info("Evaluating %d source file(s) for mistapi call sites", len(sources))  # Log the input size.
+        logger.info("Evaluating %d source file(s) for mistapi call sites", len(sources))  # Log the input size.
         resolved: list[MistapiCallSite] = []  # Collect all statically resolved SDK calls.
         unresolved: list[MistapiCallSite] = []  # Collect all dynamic SDK module references.
         for path, source in sources.items():  # Analyze each source independently for precise file names.
             file_resolved, file_unresolved = MistapiSourceCallCollector(path, source).collect()  # Scan one file.
             resolved.extend(file_resolved)  # Add resolved calls to the report input.
             unresolved.extend(file_unresolved)  # Add unresolved calls so they remain visible.
-        logging.debug("Evaluation resolved %d call site(s)", len(resolved))  # Log the measured static coverage.
+        logger.debug("Evaluation resolved %d call site(s)", len(resolved))  # Log the measured static coverage.
         return MistapiGuardReport(tuple(resolved), tuple(unresolved), sdk_signatures)  # Build the report.
 
     def _project_sources(self) -> dict[Path, str]:

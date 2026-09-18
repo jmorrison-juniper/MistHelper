@@ -9,6 +9,8 @@ from typing import Any  # Type the Playwright page without a hard test dependenc
 
 import pytest  # Use pytest fixtures and skip support for browser availability.
 
+logger = logging.getLogger(__name__)  # A module logger keeps the record source readable.
+
 pytest.importorskip("playwright.sync_api", reason="The Playwright package is not installed.")
 
 ROOT = Path(__file__).parents[2]  # Anchor asset paths at the repository root.
@@ -19,7 +21,7 @@ DATA_PREVIEW_SCRIPT = SCRIPT_DIR / "data_preview.js"  # Load the preview modal c
 
 def _install_browser_stubs(page: Any, preview_rows: list[list[str]]) -> None:
     """Install API, CSRF, event stream, and modal stubs in the browser page."""
-    logging.info("Installing quickstart browser stubs")  # Mark the browser stub setup.
+    logger.info("Installing quickstart browser stubs")  # Mark the browser stub setup.
     page.evaluate(  # Install deterministic browser APIs before the production scripts run.
         """
         (config) => {
@@ -64,23 +66,23 @@ def _install_browser_stubs(page: Any, preview_rows: list[list[str]]) -> None:
         """,
         json.loads(json.dumps({"rows": preview_rows})),
     )
-    logging.debug("Installed browser stubs for %d preview rows", len(preview_rows))  # Record the stub size.
+    logger.debug("Installed browser stubs for %d preview rows", len(preview_rows))  # Record the stub size.
 
 
 def _load_operations_shell(page: Any) -> None:
     """Load the minimum Operations page nodes that the production script needs."""
-    logging.info("Loading the Operations quickstart shell")  # Mark the DOM setup.
+    logger.info("Loading the Operations quickstart shell")  # Mark the DOM setup.
     page.set_content(OPERATIONS_HTML)  # Provide the production script with its required element identifiers.
     page.add_script_tag(path=str(DATA_PREVIEW_SCRIPT))  # Add the shared modal script before the Operations script.
     page.add_script_tag(path=str(OPERATIONS_SCRIPT))  # Add the production Operations controller.
-    logging.debug("Loaded the Operations quickstart shell")  # Confirm the script setup.
+    logger.debug("Loaded the Operations quickstart shell")  # Confirm the script setup.
 
 
 def test_quickstart_menu31_posts_selected_site(page: Any) -> None:
     """Menu 31 renders a site field and sends the selected answer."""
     _load_operations_shell(page)  # Build the page before browser stubs use its elements.
     _install_browser_stubs(page, [["Alpha", "Switch-1", "ok"]])  # Serve one site and one preview row.
-    logging.info("Rendering Menu 31 in the Operations list")  # Mark the accordion rendering step.
+    logger.info("Rendering Menu 31 in the Operations list")  # Mark the accordion rendering step.
     page.evaluate(
         "renderAccordion([{name:'Site Data Exports',operations:["
         "{menu_number:31,description:'Site devices',category:'interactive'}]}])"
@@ -96,34 +98,34 @@ def test_quickstart_menu31_posts_selected_site(page: Any) -> None:
         "parameters": {"input_answers": ["Alpha"]},
     }
     assert run_body == expected_body  # Verify input injection order.
-    logging.debug("Menu 31 submitted body: %s", run_body)  # Record the submitted body.
+    logger.debug("Menu 31 submitted body: %s", run_body)  # Record the submitted body.
 
 
 def test_quickstart_data_browser_modal_opens_csv(page: Any) -> None:
     """The shared preview modal opens a CSV table from the Data Browser path."""
     _load_operations_shell(page)  # Reuse the same modal markup that both pages render.
     _install_browser_stubs(page, [["Alpha", "Switch-1", "ok"], ["Bravo", "Gateway-1", "ok"]])  # Serve two CSV rows.
-    logging.info("Opening the Data Browser CSV preview")  # Mark the modal action.
+    logger.info("Opening the Data Browser CSV preview")  # Mark the modal action.
     page.evaluate("DataPreviewModal.openPreview('issue992_quickstart.csv')")  # Open the modal through the public API.
     page.wait_for_selector("#modalPreviewTable")  # Wait for CSV rows to render.
     rows = page.locator("#modalPreviewTable tbody tr").all_inner_texts()  # Read the visible CSV rows.
     assert rows == ["Alpha\tSwitch-1\tok", "Bravo\tGateway-1\tok"]  # Verify the modal rendered the table.
     assert "show" in page.locator("#dataPreviewModal").get_attribute("class")  # Verify the modal opened in place.
-    logging.debug("Data Browser modal rows: %s", rows)  # Record the rendered rows.
+    logger.debug("Data Browser modal rows: %s", rows)  # Record the rendered rows.
 
 
 def test_quickstart_operations_result_preview_reuses_modal(page: Any) -> None:
     """The Operations output list opens the same CSV preview modal."""
     _load_operations_shell(page)  # Load the Operations page shell with the output list.
     _install_browser_stubs(page, [["Alpha", "Switch-1", "ok"]])  # Serve the output preview row.
-    logging.info("Rendering an Operations output file")  # Mark the result-list rendering step.
+    logger.info("Rendering an Operations output file")  # Mark the result-list rendering step.
     page.evaluate("showOutputFiles(['issue992_quickstart.csv'])")  # Render an output file as a completed run would.
     page.locator("#outputFileList button").click()  # Open the preview from the Operations result list.
     page.wait_for_selector("#modalPreviewTable")  # Wait for the modal to render the CSV table.
     modal_title = page.locator("#dataPreviewModalLabel").inner_text()  # Read the modal title.
     assert modal_title == "Preview: issue992_quickstart.csv"  # Verify the file title.
     assert page.locator("#executionPanel").is_visible()  # Verify the Operations page state stays visible.
-    logging.debug("Operations result preview stayed on the Operations page")  # Record the state preservation check.
+    logger.debug("Operations result preview stayed on the Operations page")  # Record the state preservation check.
 
 
 OPERATIONS_HTML = """

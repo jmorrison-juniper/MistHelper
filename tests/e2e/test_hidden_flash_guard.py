@@ -39,9 +39,9 @@ class TestHiddenGuardInStylesheet:
 
     def test_css_file_exists(self):
         """portal.css must exist at the expected path."""
-        logging.info("Checking that portal.css exists at %s", _CSS_PATH)  # Log before check.
+        logger.info("Checking that portal.css exists at %s", _CSS_PATH)  # Log before check.
         assert _CSS_PATH.is_file(), f"portal.css not found at {_CSS_PATH}"
-        logging.debug("portal.css found at %s", _CSS_PATH)  # Log result.
+        logger.debug("portal.css found at %s", _CSS_PATH)  # Log result.
 
     def test_hidden_guard_present(self):
         """portal.css must contain [hidden] { display: none !important; }.
@@ -50,9 +50,9 @@ class TestHiddenGuardInStylesheet:
         beats the user agent rule, so an empty hidden flash container still
         renders and a screen reader announces the bare signal word.
         """
-        logging.info("Reading portal.css to check for [hidden] guard")  # Log before read.
+        logger.info("Reading portal.css to check for [hidden] guard")  # Log before read.
         css_text = _CSS_PATH.read_text(encoding="utf-8")
-        logging.debug("Read %d characters from portal.css", len(css_text))  # Log result.
+        logger.debug("Read %d characters from portal.css", len(css_text))  # Log result.
         assert _HIDDEN_GUARD_RE.search(css_text), (
             "portal.css is missing [hidden] { display: none !important; }. "
             "Without this guard, a hidden flash container still renders when "
@@ -65,9 +65,9 @@ class TestHiddenGuardInStylesheet:
         This rule would ordinarily defeat the user agent [hidden] rule.
         The [hidden] guard above restores the correct behavior.
         """
-        logging.info("Checking that flash-region uses display: flex")  # Log before check.
+        logger.info("Checking that flash-region uses display: flex")  # Log before check.
         css_text = _CSS_PATH.read_text(encoding="utf-8")
-        logging.debug("Read %d characters from portal.css", len(css_text))  # Log result.
+        logger.debug("Read %d characters from portal.css", len(css_text))  # Log result.
         assert ".flash-region" in css_text, (
             "portal.css is missing .flash-region.  Add flash layout rules "
             "so the [hidden] guard has something to protect against."
@@ -79,9 +79,9 @@ class TestHiddenGuardInStylesheet:
         The ::before pseudo-element prints the signal word.  The [hidden] guard
         prevents the word from appearing when the container is hidden.
         """
-        logging.info("Checking .flash-warning::before content rule")  # Log before check.
+        logger.info("Checking .flash-warning::before content rule")  # Log before check.
         css_text = _CSS_PATH.read_text(encoding="utf-8")
-        logging.debug("Read %d characters from portal.css", len(css_text))  # Log result.
+        logger.debug("Read %d characters from portal.css", len(css_text))  # Log result.
         assert ".flash-warning::before" in css_text, (
             "portal.css is missing .flash-warning::before.  The issue "
             "requires this rule to exist so the guard has a concrete target."
@@ -89,9 +89,9 @@ class TestHiddenGuardInStylesheet:
 
     def test_flash_danger_before_content(self):
         """portal.css must define the Warning: signal word for .flash-danger."""
-        logging.info("Checking .flash-danger::before content rule")  # Log before check.
+        logger.info("Checking .flash-danger::before content rule")  # Log before check.
         css_text = _CSS_PATH.read_text(encoding="utf-8")
-        logging.debug("Read %d characters from portal.css", len(css_text))  # Log result.
+        logger.debug("Read %d characters from portal.css", len(css_text))  # Log result.
         assert ".flash-danger::before" in css_text, "portal.css is missing .flash-danger::before."
 
 
@@ -105,17 +105,17 @@ class TestFlashContainerHiddenAttribute:
 
     def test_dashboard_loads(self, client):
         """Dashboard must return 200 as a baseline before checking flash HTML."""
-        logging.info("Requesting dashboard page to verify server is healthy")  # Log action.
+        logger.info("Requesting dashboard page to verify server is healthy")  # Log action.
         response = client.get("/")
-        logging.debug("Dashboard response status: %d", response.status_code)  # Log result.
+        logger.debug("Dashboard response status: %d", response.status_code)  # Log result.
         assert response.status_code == 200
 
     def test_portal_css_link_present(self, client):
         """Rendered dashboard must link portal.css, which carries the [hidden] guard."""
-        logging.info("Checking that portal.css is linked in the dashboard HTML")  # Log action.
+        logger.info("Checking that portal.css is linked in the dashboard HTML")  # Log action.
         response = client.get("/")
         html = response.data.decode()
-        logging.debug("Dashboard HTML length: %d characters", len(html))  # Log result.
+        logger.debug("Dashboard HTML length: %d characters", len(html))  # Log result.
         assert "portal.css" in html, (
             "The dashboard page does not link portal.css.  The [hidden] guard "
             "would not apply even if the CSS file contains it."
@@ -132,10 +132,10 @@ class TestFlashContainerHiddenAttribute:
         Note: This test checks the HTML source.  A full accessibility-tree
         assertion requires a browser run with Playwright (see module docstring).
         """
-        logging.info("Checking dashboard HTML for bare signal words")  # Log before check.
+        logger.info("Checking dashboard HTML for bare signal words")  # Log before check.
         response = client.get("/")
         html = response.data.decode()
-        logging.debug("Dashboard HTML length: %d characters", len(html))  # Log result.
+        logger.debug("Dashboard HTML length: %d characters", len(html))  # Log result.
         # The signal words appear inside CSS content strings in the <style>
         # block, which is correct.  They must not appear as standalone text
         # nodes that a screen reader would voice.
