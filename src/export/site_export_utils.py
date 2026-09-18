@@ -18,6 +18,14 @@ _LOOKBACK_DEFAULT_HOURS: int = 24  # WHY: default dynamic lookback window (hours
 _LOOKBACK_MIN_HOURS: int = 1  # WHY: minimum floor for dynamic lookback.
 _DATA_SUBDIR: str = "data"  # WHY: default output folder for exports.
 _INSIGHT_METRIC_SCOPE: str = "site"  # WHY: constant scope used for SLE metric queries.
+_HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
+
+
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
 def _sanitize_for_filename(text: str) -> str:  # WHY: shared filename-token normalization for exports.
@@ -176,9 +184,18 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
         site_id: str,
         filename: str,
         api_function_name: str,
-    ) -> int:
+    ) -> int | None:
         """Export a single-endpoint site report and return the number of rows written."""
         response = api_call(self.apisession, site_id)  # WHY: fetch site endpoint payload.
+        status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+        if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the row count untrustworthy.
+            logger.error(  # WHY: the operator must see the cloud status instead of a false empty export.
+                "The cloud returned HTTP %s for %s at site %s",
+                status_code,
+                api_function_name,
+                site_id,
+            )
+            return None  # WHY: preserve caller None failure paths while skipping writes.
         rows = _read_site_response_rows(response)  # WHY: normalize shape.
         rows = self.DataProcessingUtils.flatten_nested_fields(rows)  # WHY: flatten for CSV.
         self.DataExporter.write_with_format_selection(
@@ -396,6 +413,8 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
                 "SiteSiteStats.csv",
                 "getSiteStats",
             )
+            if count is None:  # WHY: only an explicit failure skips the success report.
+                return  # WHY: preserve the existing None return contract for this exporter.
             logger.info("Exported %d site stats records to %s", count, "SiteSiteStats.csv")
         except Exception as exception:
             logging.exception("Failed to export site stats: %s", exception)  # WHY: preserve legacy log.
@@ -415,6 +434,8 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
                 "SiteGatewayMetrics.csv",
                 "getSiteGatewayMetrics",
             )
+            if count is None:  # WHY: only an explicit failure skips the success report.
+                return  # WHY: preserve the existing None return contract for this exporter.
             logger.info("Exported %d gateway metric records to %s", count, "SiteGatewayMetrics.csv")
         except Exception as exception:
             logging.exception("Failed to export gateway metrics: %s", exception)  # WHY: preserve legacy log.
@@ -434,6 +455,8 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
                 "SiteSwitchesMetrics.csv",
                 "getSiteSwitchesMetrics",
             )
+            if count is None:  # WHY: only an explicit failure skips the success report.
+                return  # WHY: preserve the existing None return contract for this exporter.
             logger.info("Exported %d switches metric records to %s", count, "SiteSwitchesMetrics.csv")
         except Exception as exception:
             logging.exception("Failed to export switches metrics: %s", exception)  # WHY: preserve legacy log.
@@ -460,6 +483,8 @@ class SiteExportUtils(SiteInsightsExporter):  # WHY: inherit insights exporters 
                 "SiteWxrulesUsage.csv",
                 "getSiteWxRulesUsage",
             )
+            if count is None:  # WHY: only an explicit failure skips the success report.
+                return  # WHY: preserve the existing None return contract for this exporter.
             logger.info("Exported %d WxRules usage records to %s", count, "SiteWxrulesUsage.csv")
         except Exception as exception:
             logging.exception("Failed to export WxRules usage: %s", exception)  # WHY: preserve legacy log.

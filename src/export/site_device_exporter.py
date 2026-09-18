@@ -30,6 +30,14 @@ from src.export.site_export_utils import SiteExportUtils  # WHY: Pattern 1 inlin
 from src.utils.tqdm_wrapper import tqdm  # WHY: 1015 T-14 -- canonical wrapper import (eliminates mh.tqdm).
 
 logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
+_HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
+
+
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
 class SiteDeviceExporter:
@@ -222,6 +230,14 @@ class SiteDeviceExporter:
             response = mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(
                 mh.apisession, site_id, device_id
             )  # Fetch
+            status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+            if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the empty VC result untrustworthy.
+                logger.error(  # WHY: the operator must see the cloud status instead of a false no-VC message.
+                    "The cloud returned HTTP %s for virtual chassis at site %s",
+                    status_code,
+                    site_id,
+                )
+                return  # WHY: preserve the existing None return contract for this exporter.
             if not response.data:  # No VC payload.
                 logger.warning("! No virtual chassis data returned for device %s", device_name)  # Warn no VC data.
                 # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
