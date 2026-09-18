@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 import re
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -94,7 +96,7 @@ class StageMeasurementReader:
 
     def _card_count(self, paths: tuple[Path, ...]) -> int:
         """Return the count of knowledge cards in generated topic files."""
-        pattern = re.compile(r"^- \*\*(MUST|SHOULD|INFO)\*\*", re.MULTILINE)  # Match the locked card syntax.
+        pattern = re.compile(r"^- (?:\*\*)?(MUST|SHOULD|INFO)(?:\*\*)?:", re.MULTILINE)  # Match card syntax.
         count = sum(len(pattern.findall(path.read_text(encoding="utf-8"))) for path in paths)  # Count real cards.
         logging.debug("Counted %d knowledge cards in generated topic files", count)  # Record the card count.
         return count
@@ -173,8 +175,12 @@ class StageMeasurementReader:
             str(row["version_status"]),
         )
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
         """Open a row-based SQLite connection."""
         connection = sqlite3.connect(self.database_path)  # Open the factory database for one read.
         connection.row_factory = sqlite3.Row  # Make column reads clear and name-based.
-        return connection  # Return the connection to the caller's context manager.
+        try:
+            yield connection  # Let the caller perform one read transaction.
+        finally:
+            connection.close()  # Release the file handle so Windows tests can delete the database.

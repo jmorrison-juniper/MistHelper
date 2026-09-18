@@ -196,6 +196,21 @@ class TestSkillIssueTracker:
         details = reader.details(inputs)  # Build audit details from absent evidence.
         assert set(details.values()) == {"not measured"}  # Confirm no synthetic number can enter a comment.
 
+    def test_package_measurements_read_values_from_disk(self) -> None:
+        database_path = self._database_path("package_measurements")  # Use a repo-local source database.
+        package_dir = Path("data") / "juniper_skills" / "test_tracking_package"  # Keep test files inside data.
+        self._remove_database(database_path)  # Start with no prior source-size row.
+        self._write_source_size(database_path, "disk-document", 1000)  # Provide real source size for retention.
+        self._write_topic(package_dir / "alpha.md", "- MUST: One fact. [A p.1]\n")  # Create one real card.
+        self._write_topic(package_dir / "beta.md", "- **INFO**: Two fact. [A p.2]\n")  # Create one alternate card.
+        reader = StageMeasurementReader(database_path)  # Build the real measurement reader.
+        details = reader.details(StageMeasurementInputs("disk-document", package_dir))  # Read package metrics.
+        assert details["topic_count"] == 2  # Confirm topic count came from Markdown files.
+        assert details["card_count"] == 2  # Confirm both supported card syntaxes count.
+        assert details["retention_percentage"] != "not measured"  # Confirm retention used disk and database sizes.
+        self._remove_package(package_dir)  # Clean generated test files.
+        self._remove_database(database_path)  # Clean the repo-local database after the test.
+
     def _document(self, index: int, domain: str = "junos") -> DocumentRecord:
         """Return one document record for tests."""
         return DocumentRecord(  # Keep the test document small and deterministic.
@@ -242,6 +257,32 @@ class TestSkillIssueTracker:
         """Remove a repo-local SQLite path if it exists."""
         if database_path.exists():  # Leave the test independent of earlier failures.
             database_path.unlink()  # Remove only the test database file.
+
+    def _write_source_size(self, database_path: Path, document_key: str, text_chars: int) -> None:
+        """Create a minimal source document table for measurement tests."""
+        import sqlite3  # Keep SQLite local to this helper because production code owns database access.
+
+        database_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure the repo-local data directory exists.
+        connection = sqlite3.connect(database_path)  # Open a compact database fixture.
+        try:
+            connection.execute(
+                "CREATE TABLE source_document (document_key TEXT PRIMARY KEY, text_chars INTEGER)"
+            )  # Schema.
+            connection.execute("INSERT INTO source_document VALUES (?, ?)", (document_key, text_chars))  # Add source.
+            connection.commit()  # Persist the fixture before the measurement reader opens it.
+        finally:
+            connection.close()  # Release the file handle for Windows cleanup.
+
+    def _write_topic(self, path: Path, text: str) -> None:
+        """Write one generated topic file for measurement tests."""
+        path.parent.mkdir(parents=True, exist_ok=True)  # Ensure the package directory exists.
+        path.write_text(text, encoding="utf-8")  # Write a small Markdown topic for the reader.
+
+    def _remove_package(self, package_dir: Path) -> None:
+        """Remove test package files."""
+        for path in package_dir.glob("*.md"):  # Remove only files created by this test.
+            path.unlink()  # Delete the generated Markdown file.
+        package_dir.rmdir()  # Remove the now-empty test package directory.
 
 
 class TestGitHubRateLimitManager:
