@@ -507,7 +507,9 @@ class SkillRenderer:
         subjects = ", ".join(self.keywords[:30])
         return (
             f"Use this skill for Juniper {subjects}. The skill holds a document tree with source documents, "
-            "topic routes, life cycle tags, citation keys, and copyright-safe knowledge cards."
+            "topic routes, life cycle tags, citation keys, and copyright-safe knowledge cards. Use it when a question "
+            "asks how to select, deploy, configure, verify, troubleshoot, upgrade, migrate, or automate the subjects "
+            "that this domain owns."
         )
 
     def _body(self, rows: str) -> str:
@@ -692,6 +694,7 @@ class SkillPackageValidator:
         warnings: list[ValidationFinding] = []
         markdown_files = self._markdown_files(package_dir)
         self._required_files(package_dir, errors)
+        self._layout(package_dir, markdown_files, errors)
         self._sizes(package_dir, markdown_files, errors, warnings)
         sources = self._sources(package_dir, errors)
         topic_names = self._topics(package_dir, sources, errors)
@@ -715,6 +718,40 @@ class SkillPackageValidator:
             if not (package_dir / name).exists():
                 errors.append(ValidationFinding(package_dir / name, "required file is missing", "missing"))
         logging.debug("Required level 1 file check produced %s errors", len(errors))
+
+    def _layout(self, package_dir: Path, files: list[Path], errors: list[ValidationFinding]) -> None:
+        logging.info("Checking package path layout")
+        if not re.match(r"^juniper-[a-z0-9]+(-[a-z0-9]+)*$", package_dir.name):
+            errors.append(ValidationFinding(package_dir, "package directory name is invalid", package_dir.name))
+        for path in files:
+            self._layout_path(package_dir, path, errors)
+        self._overview_files(package_dir, errors)
+        logging.debug("Checked package path layout for %s files", len(files))
+
+    def _layout_path(self, package_dir: Path, path: Path, errors: list[ValidationFinding]) -> None:
+        relative = path.relative_to(package_dir)
+        parts = relative.parts
+        if len(parts) == 1 and path.name in {"SKILL.md", "INDEX.md", "sources.md"}:
+            return
+        if len(parts) == 3 and parts[0] == "documents":
+            self._document_path(path, parts, errors)
+            return
+        errors.append(ValidationFinding(path, "Markdown file path is not allowed by the package layout", str(relative)))
+
+    def _document_path(self, path: Path, parts: tuple[str, ...], errors: list[ValidationFinding]) -> None:
+        if not re.match(r"^[a-z0-9]+(-[a-z0-9]+)*$", parts[1]):
+            errors.append(ValidationFinding(path, "document directory name is invalid", parts[1]))
+        valid_topic = re.match(r"^[0-9][0-9]-[a-z0-9]+(-[a-z0-9]+)*\.md$", parts[2])
+        if parts[2] != "INDEX.md" and not valid_topic:
+            errors.append(ValidationFinding(path, "topic file name is invalid", parts[2]))
+
+    def _overview_files(self, package_dir: Path, errors: list[ValidationFinding]) -> None:
+        documents_dir = package_dir / "documents"
+        if not documents_dir.exists():
+            return
+        for document_dir in documents_dir.iterdir():
+            if document_dir.is_dir() and not (document_dir / "00-overview.md").exists():
+                errors.append(ValidationFinding(document_dir, "00-overview.md is missing", "missing"))
 
     def _sizes(
         self, package_dir: Path, files: list[Path], errors: list[ValidationFinding], warnings: list[ValidationFinding]
@@ -839,8 +876,21 @@ class SkillPackageValidator:
         for name in ("name", "description", "license", "metadata"):
             if name not in frontmatter:
                 errors.append(ValidationFinding(path, "SKILL.md frontmatter field is missing", name))
+        self._skill_name(path, frontmatter.get("name"), package_dir.name, errors)
+        self._skill_description(path, frontmatter.get("description"), errors)
         self._skill_metadata(path, frontmatter.get("metadata"), errors)
         logging.debug("Validated SKILL.md frontmatter")
+
+    def _skill_name(self, path: Path, value: object, package_name: str, errors: list[ValidationFinding]) -> None:
+        if value != package_name:
+            errors.append(ValidationFinding(path, "SKILL.md name does not match the package directory", str(value)))
+
+    def _skill_description(self, path: Path, value: object, errors: list[ValidationFinding]) -> None:
+        if not isinstance(value, str):
+            errors.append(ValidationFinding(path, "SKILL.md description is not text", str(type(value))))
+            return
+        if not 250 <= len(value) <= 1200:
+            errors.append(ValidationFinding(path, "SKILL.md description length is invalid", str(len(value))))
 
     def _skill_metadata(self, path: Path, value: object, errors: list[ValidationFinding]) -> None:
         if not isinstance(value, dict):
@@ -849,6 +899,13 @@ class SkillPackageValidator:
         for name in ("feature", "domain", "documents", "topics", "source_pages", "built"):
             if name not in value:
                 errors.append(ValidationFinding(path, "SKILL.md metadata field is missing", name))
+        self._metadata_types(path, value, errors)
+
+    def _metadata_types(self, path: Path, value: dict[str, object], errors: list[ValidationFinding]) -> None:
+        integer_fields = ("documents", "topics", "source_pages")
+        for name in integer_fields:
+            if name in value and not isinstance(value[name], int):
+                errors.append(ValidationFinding(path, "SKILL.md metadata field is not an integer", name))
 
     def _links(self, package_dir: Path, files: list[Path], errors: list[ValidationFinding]) -> None:
         logging.info("Checking internal Markdown links")
