@@ -33,6 +33,8 @@ import pytest
 from src.device import ap_profile_migration_manager as apm_mod
 from src.device.ap_profile_migration_manager import APProfileMigrationManager
 
+logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
+
 # WHY: caplog / patch(...) targets must use the dotted module path so the
 # logger the code writes to matches the logger the test captures on.
 _LOGGER_NAME = "src.device.ap_profile_migration_manager"
@@ -61,7 +63,7 @@ def _sleep_recorder() -> tuple[list[float], Callable[[float], None]]:
         A pair. The first item is the ordered pacing log. The second item is
         the recorder to pass as the ``side_effect`` of the sleep patch.
     """
-    logging.info("Building a thread-scoped sleep recorder for the pacing assertions")
+    logger.info("Building a thread-scoped sleep recorder for the pacing assertions")
     owner_thread_id = threading.get_ident()  # WHY: only this thread may add to the pacing log.
     sleep_args: list[float] = []  # WHY: ordered pacing log that the assertions read by index.
 
@@ -71,7 +73,7 @@ def _sleep_recorder() -> tuple[list[float], Callable[[float], None]]:
             return  # WHY: drop the foreign sleep so the pacing log stays exact.
         sleep_args.append(secs)  # WHY: keep the ordered pacing log for the assertions.
 
-    logging.debug("Sleep recorder ready for thread %d", owner_thread_id)
+    logger.debug("Sleep recorder ready for thread %d", owner_thread_id)
     return sleep_args, _record_sleep
 
 
@@ -1744,7 +1746,7 @@ def test_sleep_recorder_ignores_a_foreign_thread() -> None:
         ``test_migrate_limiter_exception_falls_back_and_continues`` reads.
         This test locks the guard that removes that failure mode.
     """
-    logging.info("Checking that the pacing recorder rejects a foreign thread")
+    logger.info("Checking that the pacing recorder rejects a foreign thread")
     sleep_args, record_sleep = _sleep_recorder()  # WHY: recorder is owned by this test thread.
     record_sleep(0.1)  # WHY: the owning thread must reach the pacing log.
 
@@ -1758,7 +1760,7 @@ def test_sleep_recorder_ignores_a_foreign_thread() -> None:
     assert not foreign.is_alive(), "the foreign thread did not finish inside the join timeout"
 
     record_sleep(0.2)  # WHY: a later owning-thread call must still append in order.
-    logging.debug("Pacing log after the foreign call is %r", sleep_args)
+    logger.debug("Pacing log after the foreign call is %r", sleep_args)
 
     # WHY: the foreign 30 s value MUST NOT appear, and the order MUST hold.
     assert sleep_args == [0.1, 0.2], f"foreign sleep leaked into the pacing log: {sleep_args!r}"

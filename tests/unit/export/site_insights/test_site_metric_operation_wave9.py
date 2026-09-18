@@ -17,10 +17,12 @@ from src.export.site_insights.site_metric_operation import (  # WHY: SUTs under 
     SiteRunContext,
 )
 
+logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
+
 
 def _make_deps() -> dict:
     """Return the seven injected constructor kwargs as fresh MagicMocks."""
-    logging.info("Building baseline injected deps for SiteMetricOperation")  # WHY: pre-action trace
+    logger.info("Building baseline injected deps for SiteMetricOperation")  # WHY: pre-action trace
     apisession = MagicMock(name="apisession")  # WHY: opaque session passed through
     prompt_utils = MagicMock(name="PromptUtils")  # WHY: select_site stub bound per-test
     data_processing = MagicMock(name="DataProcessingUtils")  # WHY: flatten + escape helpers
@@ -31,7 +33,7 @@ def _make_deps() -> dict:
     enhanced_ssh.sanitize_filename.side_effect = lambda s: s.replace(" ", "_")  # WHY: deterministic sanitizer
     insight_metrics = MagicMock(name="InsightMetricsUtils")  # WHY: get_by_scope + export_const_insight_metrics
     mistapi_mod = MagicMock(name="mistapi")  # WHY: API dispatcher mock; sub-attrs set per test
-    logging.debug("Baseline deps built with %d keys", 7)  # WHY: post-action trace
+    logger.debug("Baseline deps built with %d keys", 7)  # WHY: post-action trace
     return {
         "apisession": apisession,
         "PromptUtils": prompt_utils,

@@ -20,6 +20,8 @@ import pytest
 
 from src.org import org_synthetic_probes_manager as ospm
 
+logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
+
 # --------------------------------------------------------------------------- #
 # Module-level constants (feature 1025)
 # --------------------------------------------------------------------------- #
@@ -2674,7 +2676,7 @@ def _patch_apply_to_capture(monkeypatch: pytest.MonkeyPatch, capture_sink: list)
             first (and only) entry to inspect the emitted map.
     """
     # setup logging (Constitution VII)
-    logging.info("_patch_apply_to_capture: installing _apply stub sink=%r", id(capture_sink))
+    logger.info("_patch_apply_to_capture: installing _apply stub sink=%r", id(capture_sink))
 
     def _capture(mist_session, org_id, setting, combined_probes, vlan_ids):  # match ospm._apply signature 1:1
         """Record the combined probe map and short-circuit the PUT.
@@ -2684,10 +2686,10 @@ def _patch_apply_to_capture(monkeypatch: pytest.MonkeyPatch, capture_sink: list)
             no network I/O is required (or safe) inside pytest.
         """
         capture_sink.append(combined_probes)  # stash the map for the caller to compare against baseline
-        logging.debug("_capture: intercepted combined_probes keys=%s", sorted(combined_probes.keys()))
+        logger.debug("_capture: intercepted combined_probes keys=%s", sorted(combined_probes.keys()))
 
     monkeypatch.setattr(ospm, "_apply", _capture)  # replace the real PUT with the sink recorder
-    logging.debug("_patch_apply_to_capture: _apply replaced (return sink=%r)", id(capture_sink))
+    logger.debug("_patch_apply_to_capture: _apply replaced (return sink=%r)", id(capture_sink))
 
 
 class TestUs1CenrDedupWarning:
@@ -2721,12 +2723,12 @@ class TestUs1CenrDedupWarning:
             The parsed JSON document as a plain Python dict.
         """
         path = self._FIXTURE_DIR / name  # deterministic sibling-directory lookup
-        logging.info("TestUs1CenrDedupWarning: loading fixture %s", path)
+        logger.info("TestUs1CenrDedupWarning: loading fixture %s", path)
         # utf-8 default on 3.13; explicit for clarity
         payload = json.loads(path.read_text(encoding="utf-8"))
         # trace parsed top-level shape for debugging
         top_keys = sorted(payload.keys()) if isinstance(payload, dict) else "<non-dict>"
-        logging.debug("_load_json: %s parsed (top-level keys=%s)", name, top_keys)
+        logger.debug("_load_json: %s parsed (top-level keys=%s)", name, top_keys)
         return payload
 
     def _samsung_elm_americas_role(self) -> dict[str, Any]:
@@ -2746,14 +2748,14 @@ class TestUs1CenrDedupWarning:
             A role dict shaped like an entry in
             ``data/zscaler_client_connector_probes.json``.
         """
-        logging.info("_samsung_elm_americas_role: assembling role with %d fqdns", len(EXPECTED_MISSING_HOSTS))
+        logger.info("_samsung_elm_americas_role: assembling role with %d fqdns", len(EXPECTED_MISSING_HOSTS))
         role = {
             "role": f"{ospm._SAMSUNG_ELM_ROLE_PREFIX}americas",  # target region-scoped role name
             "ports": [443],  # matches shipped catalogue's HTTPS port list
             "probe": {"protocol": "https", "port": 443},  # branch-3 fallback shape when observation missing
             "fqdns": sorted(EXPECTED_MISSING_HOSTS),  # sort for deterministic iteration in tests
         }
-        logging.debug("_samsung_elm_americas_role: role dict role=%s fqdns=%s", role["role"], role["fqdns"])
+        logger.debug("_samsung_elm_americas_role: role dict role=%s fqdns=%s", role["role"], role["fqdns"])
         return role
 
     def _empty_cenr(self) -> dict[str, Any]:
@@ -2769,14 +2771,14 @@ class TestUs1CenrDedupWarning:
         Returns:
             A minimal CENR document with fresh timestamp and empty bags.
         """
-        logging.info("_empty_cenr: assembling empty CENR document")
+        logger.info("_empty_cenr: assembling empty CENR document")
         cenr = {
             "schema_version": 1,  # matches loader adapter expectation
             "fetched_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),  # keep is_stale false
             "proxy_hostnames": [],  # empty so every SecB2B host misses the cache
             "vpn_hostnames": [],  # empty so no host is classified as VPN
         }
-        logging.debug("_empty_cenr: emitted cache with empty proxy/vpn bags")
+        logger.debug("_empty_cenr: emitted cache with empty proxy/vpn bags")
         return cenr
 
     def _cenr_with_all_hosts(self) -> dict[str, Any]:
@@ -2794,7 +2796,7 @@ class TestUs1CenrDedupWarning:
             A CENR document whose ``proxy_hostnames`` bag lists v3-shaped
             entries for every EXPECTED_MISSING_HOSTS member.
         """
-        logging.info("_cenr_with_all_hosts: fully-populating CENR for %d hosts", len(EXPECTED_MISSING_HOSTS))
+        logger.info("_cenr_with_all_hosts: fully-populating CENR for %d hosts", len(EXPECTED_MISSING_HOSTS))
         cenr = {
             "schema_version": 1,  # v3 loader shape
             "fetched_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),  # keep freshness guard happy
@@ -2809,7 +2811,7 @@ class TestUs1CenrDedupWarning:
             ],
             "vpn_hostnames": [],  # keep VPN bag empty so no host is reclassified as reachability
         }
-        logging.debug("_cenr_with_all_hosts: emitted cache with %d proxy entries", len(cenr["proxy_hostnames"]))
+        logger.debug("_cenr_with_all_hosts: emitted cache with %d proxy entries", len(cenr["proxy_hostnames"]))
         return cenr
 
     def _count_cenr_warnings(self, records: list[logging.LogRecord]) -> int:
@@ -2830,7 +2832,7 @@ class TestUs1CenrDedupWarning:
             The number of records at WARNING level whose rendered message
             references at least one EXPECTED_MISSING_HOSTS entry.
         """
-        logging.info("_count_cenr_warnings: scanning %d records for CENR warnings", len(records))
+        logger.info("_count_cenr_warnings: scanning %d records for CENR warnings", len(records))
         matches = [
             rec
             for rec in records
@@ -2838,7 +2840,7 @@ class TestUs1CenrDedupWarning:
             # message names at least one missing host
             and any(host in rec.getMessage() for host in EXPECTED_MISSING_HOSTS)
         ]
-        logging.debug("_count_cenr_warnings: matched %d records", len(matches))
+        logger.debug("_count_cenr_warnings: matched %d records", len(matches))
         return len(matches)
 
     def test_cenr_warning_dedup_ge_1_missing(self, caplog: pytest.LogCaptureFixture) -> None:  # T007
@@ -2858,7 +2860,7 @@ class TestUs1CenrDedupWarning:
         # Arrange: 315-site org fixture; samsung_elm role listing the 7 SecB2B
         # hosts absent from the empty CENR cache. This is the exact shape the
         # storm required in production before 1025 landed.
-        logging.info("test_cenr_warning_dedup_ge_1_missing: loading 315-site fixture")
+        logger.info("test_cenr_warning_dedup_ge_1_missing: loading 315-site fixture")
         sites = self._load_json("cenr_dedup_org.json")["sites"]  # 315 US-country_code site dicts
         probes = {
             "schema_version": 1,  # matches shipped catalogue
@@ -2866,7 +2868,7 @@ class TestUs1CenrDedupWarning:
             "roles": [self._samsung_elm_americas_role()],  # only the region role -- keeps signal focused
         }
         cenr = self._empty_cenr()  # every SecB2B host misses the cache
-        logging.debug(
+        logger.debug(
             "test_cenr_warning_dedup_ge_1_missing: fixture sites=%d expected_missing=%d",
             len(sites),
             len(EXPECTED_MISSING_HOSTS),
@@ -2883,7 +2885,7 @@ class TestUs1CenrDedupWarning:
         # Assert: CENR WARNING count <= number of unique missing hosts.
         cap = len(EXPECTED_MISSING_HOSTS)  # M per contract log_record_shape.md §1.4
         observed = self._count_cenr_warnings(caplog.records)  # counts WARNING records naming any missing host
-        logging.info(
+        logger.info(
             "test_cenr_warning_dedup_ge_1_missing: observed=%d cap=%d sites=%d",
             observed,
             cap,
@@ -2907,7 +2909,7 @@ class TestUs1CenrDedupWarning:
             consult observations) trips immediately.
         """
         # Arrange: same 315-site fixture but with a fully-populated CENR cache.
-        logging.info("test_cenr_warning_zero_when_fully_populated: loading fixture with populated CENR")
+        logger.info("test_cenr_warning_zero_when_fully_populated: loading fixture with populated CENR")
         sites = self._load_json("cenr_dedup_org.json")["sites"]  # 315-site input
         probes = {
             "schema_version": 1,  # required by loader adapter
@@ -2923,7 +2925,7 @@ class TestUs1CenrDedupWarning:
 
         # Assert: zero CENR-missing WARNING records.
         observed = self._count_cenr_warnings(caplog.records)  # should be 0 given full coverage
-        logging.info("test_cenr_warning_zero_when_fully_populated: observed=%d", observed)
+        logger.info("test_cenr_warning_zero_when_fully_populated: observed=%d", observed)
         assert observed == 0, (  # any non-zero count means WARNING fired despite observation being present
             f"CENR WARNING count {observed} > 0 with fully-populated cache; "
             "warnings must correlate with actual missing observations"
@@ -2945,7 +2947,7 @@ class TestUs1CenrDedupWarning:
             invocations (FR-012).
         """
         # Arrange: shared fixture inputs for both runs (identical topology).
-        logging.info("test_cenr_warning_re_emit_across_runs: preparing two independent runs")
+        logger.info("test_cenr_warning_re_emit_across_runs: preparing two independent runs")
         probes = {
             "schema_version": 1,  # v1 loader shape
             "source": "fixture",
@@ -2975,7 +2977,7 @@ class TestUs1CenrDedupWarning:
         run2_records = caplog.records[run2_start:]  # snapshot of what run 2 emitted
         run2_count = self._count_cenr_warnings(list(run2_records))  # WARNING count for run 2
 
-        logging.info(
+        logger.info(
             "test_cenr_warning_re_emit_across_runs: run1=%d run2=%d",
             run1_count,
             run2_count,
@@ -3017,7 +3019,7 @@ class TestUs1CenrDedupWarning:
             behaviour per FR-012.
         """
         # Arrange: full 7-host catalogue with the samsung_elm americas role.
-        logging.info("test_cenr_warning_re_emit_on_dropout: preparing dropout scenario")
+        logger.info("test_cenr_warning_re_emit_on_dropout: preparing dropout scenario")
         probes = {
             "schema_version": 1,  # v1 loader shape
             "source": "fixture",
@@ -3078,7 +3080,7 @@ class TestUs1CenrDedupWarning:
         run2_records = caplog.records[run2_start:]  # snapshot
         run2_messages = " | ".join(rec.getMessage() for rec in run2_records if rec.levelno == logging.WARNING)
 
-        logging.info(
+        logger.info(
             "test_cenr_warning_re_emit_on_dropout: host_a=%s host_b=%s missing_run1=%d missing_run2=%d",
             host_a,
             host_b,
@@ -3119,7 +3121,7 @@ class TestUs1CenrDedupWarning:
         # Arrange: load the T005-captured baseline (pinned pre-1025) and the
         # smoke fixture ``_build_probe_set`` consumes. Both fixtures live in
         # the sibling ``fixtures/`` directory.
-        logging.info("test_probe_payload_byte_stability_smoke: loading baseline + smoke fixture")
+        logger.info("test_probe_payload_byte_stability_smoke: loading baseline + smoke fixture")
         baseline = self._load_json("smoke_probes_baseline.json")  # T005 output; deterministic
         smoke = self._load_json("smoke_org.json")  # (probes, cenr) tuple used to regenerate output
 
@@ -3127,7 +3129,7 @@ class TestUs1CenrDedupWarning:
         # baseline. Any change in ``_build_probe_set`` or its transitive
         # helpers (e.g. ``_probe_target``) will diff the JSON.
         emitted = ospm._build_probe_set((smoke["probes"], smoke["cenr"]), [10])  # smoke fixture uses vlan_ids=[10]
-        logging.debug(
+        logger.debug(
             "test_probe_payload_byte_stability_smoke: emitted %d probes; baseline has %d",
             len(emitted),
             len(baseline),
@@ -3179,10 +3181,10 @@ class TestUs2CountryCodeDedupWarning:
             ``name``, ``country_code``).
         """
         path = self._FIXTURE_DIR / name  # deterministic sibling-directory lookup
-        logging.info("TestUs2CountryCodeDedupWarning: loading fixture %s", path)
+        logger.info("TestUs2CountryCodeDedupWarning: loading fixture %s", path)
         payload = json.loads(path.read_text(encoding="utf-8"))  # utf-8 explicit for clarity
         sites = payload["sites"]  # KeyError deliberate: malformed fixture must fail loudly
-        logging.debug("_load_sites: %s parsed %d sites", name, len(sites))
+        logger.debug("_load_sites: %s parsed %d sites", name, len(sites))
         return sites
 
     def _count_country_code_warnings(self, records: list[logging.LogRecord]) -> int:
@@ -3207,7 +3209,7 @@ class TestUs2CountryCodeDedupWarning:
             if rec.levelno == logging.WARNING  # only WARNING severity qualifies per contract
             and "country_code" in rec.getMessage()  # grep anchor token from FR-013
         ]
-        logging.debug(
+        logger.debug(
             "TestUs2CountryCodeDedupWarning: matched %d country_code WARNING(s)",
             len(matches),
         )
@@ -3226,7 +3228,7 @@ class TestUs2CountryCodeDedupWarning:
             (never ``"amer"``).
         """
         sites = self._load_sites(self._LATAM_FIXTURE)  # load 8-site fixture
-        logging.info(  # BEFORE the resolution loop per Constitution VII
+        logger.info(  # BEFORE the resolution loop per Constitution VII
             "test_latam_caribbean_region_resolution: verifying %d sites",
             len(sites),
         )
@@ -3237,7 +3239,7 @@ class TestUs2CountryCodeDedupWarning:
             region = ospm._COUNTRY_CODE_TO_REGION.get(normalised)  # exact code path used at line 1069
             if region != self._AMERICAS_LITERAL:  # collect drift; do not fail-fast
                 unresolved.append((cc, str(region)))  # capture code + observed literal
-        logging.debug(  # AFTER the resolution loop per Constitution VII
+        logger.debug(  # AFTER the resolution loop per Constitution VII
             "test_latam_caribbean_region_resolution: unresolved=%s",
             unresolved,
         )
@@ -3268,12 +3270,12 @@ class TestUs2CountryCodeDedupWarning:
         warned_unmapped_codes: set[str] = set()  # fresh per-run dedup state (FR-012)
         caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")
         start = len(caplog.records)  # snapshot so we ignore prior records
-        logging.info(  # BEFORE the load-time emission per Constitution VII
+        logger.info(  # BEFORE the load-time emission per Constitution VII
             "test_latam_caribbean_no_warnings: invoking load-time hook (unmapped=%d)",
             len(unmapped),
         )
         ospm._emit_load_time_country_code_warning(unmapped, warned_unmapped_codes)  # single call site
-        logging.debug(  # AFTER the load-time emission per Constitution VII
+        logger.debug(  # AFTER the load-time emission per Constitution VII
             "test_latam_caribbean_no_warnings: warned_unmapped_codes=%s",
             warned_unmapped_codes,
         )
@@ -3320,12 +3322,12 @@ class TestUs2CountryCodeDedupWarning:
         warned_unmapped_codes: set[str] = set()  # fresh dedup state (FR-012)
         caplog.set_level(logging.WARNING, logger="src.org.org_synthetic_probes_manager")
         start = len(caplog.records)  # snapshot to isolate this test's records
-        logging.info(  # BEFORE the load-time emission per Constitution VII
+        logger.info(  # BEFORE the load-time emission per Constitution VII
             "test_unmapped_country_warning_dedup: invoking hook (unmapped=%d)",
             k_unique,
         )
         ospm._emit_load_time_country_code_warning(unmapped, warned_unmapped_codes)
-        logging.debug(  # AFTER the load-time emission per Constitution VII
+        logger.debug(  # AFTER the load-time emission per Constitution VII
             "test_unmapped_country_warning_dedup: warned_unmapped_codes=%s",
             warned_unmapped_codes,
         )
@@ -3354,7 +3356,7 @@ class TestUs2CountryCodeDedupWarning:
         # Arrange: shared fixture -- 30 synthetic sites with one unmapped
         # code "ZZ". Both runs see the identical unmapped set so any
         # dedup-state leak would silence run 2 (the regression trap).
-        logging.info("test_country_warning_re_emit_across_runs: preparing two independent runs")
+        logger.info("test_country_warning_re_emit_across_runs: preparing two independent runs")
         unmapped_code = "ZZ"  # ISO 3166 user-assigned range; guaranteed unmapped
         fake_sites = [
             {"id": f"synthetic-{idx:04d}", "name": f"site-{idx}", "country_code": unmapped_code}
@@ -3389,7 +3391,7 @@ class TestUs2CountryCodeDedupWarning:
         run2_records = caplog.records[run2_start:]  # snapshot of run-2 emissions
         run2_count = self._count_country_code_warnings(list(run2_records))  # WARNING count for run 2
 
-        logging.info(
+        logger.info(
             "test_country_warning_re_emit_across_runs: run1=%d run2=%d",
             run1_count,
             run2_count,
@@ -3440,7 +3442,7 @@ def test_regression_runtime_under_budget(pytestconfig: pytest.Config) -> None:  
     import time  # local import so the top-of-file stays lean when this test skips
 
     if os.environ.get("_1025_RUNTIME_BUDGET_INFLIGHT") == "1":  # recursion guard
-        logging.info("test_regression_runtime_under_budget: nested invocation detected -- skipping")
+        logger.info("test_regression_runtime_under_budget: nested invocation detected -- skipping")
         pytest.skip("nested pytest invocation would recurse into the runtime-budget test")
 
     # The curated 1025 regression subset -- one representative per contract.
@@ -3471,7 +3473,7 @@ def test_regression_runtime_under_budget(pytestconfig: pytest.Config) -> None:  
         _coverage_file,
     ]
 
-    logging.info("test_regression_runtime_under_budget: measuring %d nodes", len(subset))
+    logger.info("test_regression_runtime_under_budget: measuring %d nodes", len(subset))
     # Set the breadcrumb before spawning the nested runner so any child
     # invocation short-circuits via the guard above.
     os.environ["_1025_RUNTIME_BUDGET_INFLIGHT"] = "1"
@@ -3508,7 +3510,7 @@ def test_regression_runtime_under_budget(pytestconfig: pytest.Config) -> None:  
         # Always clear the breadcrumb, even on assertion failure.
         os.environ.pop("_1025_RUNTIME_BUDGET_INFLIGHT", None)
 
-    logging.info(
+    logger.info(
         "test_regression_runtime_under_budget: elapsed=%.3fs exit_code=%d",
         elapsed,
         exit_code,

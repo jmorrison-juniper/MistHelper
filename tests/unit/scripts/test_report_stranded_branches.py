@@ -23,6 +23,8 @@ from scripts.report_stranded_branches import (
     main,
 )
 
+logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
+
 # The instant that every age test measures against. A fixed value keeps the
 # tests hermetic, because a real clock changes between two runs.
 _NOW = datetime(2026, 9, 3, 12, 0, 0, tzinfo=UTC)
@@ -30,20 +32,20 @@ _NOW = datetime(2026, 9, 3, 12, 0, 0, tzinfo=UTC)
 
 def _record(name: str, ahead_by: int = 3, age_days: int = 30) -> BranchRecord:
     """Build one branch record at a chosen age and ahead count."""
-    logging.info("Building the record for the branch %s", name)  # Report the build before the work.
+    logger.info("Building the record for the branch %s", name)  # Report the build before the work.
     record = BranchRecord(
         name=name,  # The short branch name the tests assert on.
         sha="a" * 40,  # A fixed fork point, because no test reads the value.
         ahead_by=ahead_by,  # The count that the first protection test reads.
         last_commit_at=_NOW - timedelta(days=age_days),  # The date that the age test reads.
     )
-    logging.debug("The record for %s is %d days old", name, age_days)  # Record the age.
+    logger.debug("The record for %s is %d days old", name, age_days)  # Record the age.
     return record
 
 
 def _reporter(records: list[BranchRecord], open_heads: frozenset[str], min_age_days: int = 7) -> StrandedBranchReporter:
     """Build a reporter over a fixed set of records and open pull requests."""
-    logging.info("Building a reporter over %d records", len(records))  # Report before the build.
+    logger.info("Building a reporter over %d records", len(records))  # Report before the build.
     by_name = {record.name: record for record in records}  # Index the records for the read callback.
     return StrandedBranchReporter(
         lambda: list(by_name),  # Answer every branch name in the fixed set.
@@ -60,7 +62,7 @@ def _reporter(records: list[BranchRecord], open_heads: frozenset[str], min_age_d
 
 def test_a_branch_with_work_and_no_pull_request_is_stranded() -> None:
     """A branch above the base with no open pull request MUST be reported."""
-    logging.info("Checking that unprotected work is reported")  # Report the plan.
+    logger.info("Checking that unprotected work is reported")  # Report the plan.
     record = _record("fix/1234-a-defect")  # Three commits above the base, thirty days old.
 
     assert record.is_stranded(frozenset(), 7, _NOW), "unprotected work must be reported"
@@ -68,7 +70,7 @@ def test_a_branch_with_work_and_no_pull_request_is_stranded() -> None:
 
 def test_an_open_pull_request_protects_the_branch() -> None:
     """A branch that an open pull request names MUST NOT be reported."""
-    logging.info("Checking that an open pull request protects the head")  # Report the plan.
+    logger.info("Checking that an open pull request protects the head")  # Report the plan.
     record = _record("fix/1234-a-defect")  # The same unprotected shape as the previous test.
 
     # WHY: refs/pull/<n>/head survives a deletion, so the head is already permanent.
@@ -77,7 +79,7 @@ def test_an_open_pull_request_protects_the_branch() -> None:
 
 def test_a_branch_at_the_base_holds_nothing_to_lose() -> None:
     """A branch with no commit above the base MUST NOT be reported."""
-    logging.info("Checking that a branch at the base is quiet")  # Report the plan.
+    logger.info("Checking that a branch at the base is quiet")  # Report the plan.
     record = _record("chore/no-work", ahead_by=0)  # No commit above the base branch.
 
     assert not record.is_stranded(frozenset(), 7, _NOW), "a branch at the base loses nothing"
@@ -85,7 +87,7 @@ def test_a_branch_at_the_base_holds_nothing_to_lose() -> None:
 
 def test_recent_work_stays_below_the_quiet_period() -> None:
     """A branch younger than the threshold MUST NOT be reported."""
-    logging.info("Checking that recent work stays quiet")  # Report the plan.
+    logger.info("Checking that recent work stays quiet")  # Report the plan.
     record = _record("feat/today", age_days=2)  # Pushed two days ago, so the work is active.
 
     assert not record.is_stranded(frozenset(), 7, _NOW), "active work is not stranded"
@@ -97,7 +99,7 @@ def test_recent_work_stays_below_the_quiet_period() -> None:
 )
 def test_a_bot_branch_is_never_reported(name: str) -> None:
     """A bot branch follows its own lifecycle, so the report MUST skip it."""
-    logging.info("Checking that the bot branch %s stays quiet", name)  # Report the plan.
+    logger.info("Checking that the bot branch %s stays quiet", name)  # Report the plan.
     record = _record(name)  # The same unprotected shape as a real feature branch.
 
     assert not record.is_stranded(frozenset(), 7, _NOW), f"{name} must not be reported"
@@ -105,7 +107,7 @@ def test_a_bot_branch_is_never_reported(name: str) -> None:
 
 def test_a_clock_skew_never_reports_a_negative_age() -> None:
     """A head dated in the future MUST report an age of zero, not a negative."""
-    logging.info("Checking the age floor against a clock skew")  # Report the plan.
+    logger.info("Checking the age floor against a clock skew")  # Report the plan.
     record = _record("feat/future", age_days=-5)  # A head dated five days ahead of the clock.
 
     assert record.age_days(_NOW) == 0, "an age must never fall below zero"
@@ -118,12 +120,12 @@ def test_a_clock_skew_never_reports_a_negative_age() -> None:
 
 def test_the_report_names_every_stranded_branch() -> None:
     """The report MUST name each stranded branch and skip each protected one."""
-    logging.info("Checking the report content")  # Report the plan before the work.
+    logger.info("Checking the report content")  # Report the plan before the work.
     records = [_record("fix/a-defect"), _record("feat/protected"), _record("chore/fresh", age_days=1)]
     reporter = _reporter(records, frozenset({"feat/protected"}))  # One branch has a pull request.
 
     text = reporter.render(reporter.find(now=_NOW), _NOW)  # Find, then render, against one instant.
-    logging.debug("The report is %r", text)  # Record the report for a failure read.
+    logger.debug("The report is %r", text)  # Record the report for a failure read.
 
     assert "`fix/a-defect`" in text, "the stranded branch must appear"
     assert "feat/protected" not in text, "a branch with a pull request must not appear"
@@ -132,24 +134,24 @@ def test_the_report_names_every_stranded_branch() -> None:
 
 def test_the_report_orders_the_oldest_head_first() -> None:
     """The report MUST list the oldest head first, because it is the most at risk."""
-    logging.info("Checking the report order")  # Report the plan before the work.
+    logger.info("Checking the report order")  # Report the plan before the work.
     records = [_record("feat/newer", age_days=10), _record("feat/older", age_days=200)]
     reporter = _reporter(records, frozenset())  # Neither branch has a pull request.
 
     names = [record.name for record in reporter.find(now=_NOW)]  # Read the order the reporter chose.
-    logging.debug("The report order is %r", names)  # Record the order for a failure read.
+    logger.debug("The report order is %r", names)  # Record the order for a failure read.
 
     assert names == ["feat/older", "feat/newer"], "the oldest head must come first"
 
 
 def test_the_reference_time_controls_the_age_classification() -> None:
     """The instant the caller passes MUST decide the age, not the real clock."""
-    logging.info("Checking that the caller instant decides the age")  # Report the plan.
+    logger.info("Checking that the caller instant decides the age")  # Report the plan.
     reporter = _reporter([_record("chore/fresh", age_days=1)], frozenset())  # One young branch.
 
     inside = [record.name for record in reporter.find(now=_NOW)]  # One day old at the fixed instant.
     outside = [record.name for record in reporter.find(now=_NOW + timedelta(days=30))]  # Older later.
-    logging.debug("The result is %r at the fixed instant and %r later", inside, outside)  # Record both.
+    logger.debug("The result is %r at the fixed instant and %r later", inside, outside)  # Record both.
 
     assert inside == [], "a branch inside the quiet period must not appear"
     assert outside == ["chore/fresh"], "the later instant must move the branch past the threshold"
@@ -157,18 +159,18 @@ def test_the_reference_time_controls_the_age_classification() -> None:
 
 def test_the_report_age_column_reads_the_reference_time() -> None:
     """The age column MUST measure against the instant the caller passes."""
-    logging.info("Checking the age column against a fixed instant")  # Report the plan.
+    logger.info("Checking the age column against a fixed instant")  # Report the plan.
     reporter = _reporter([_record("fix/a-defect", age_days=30)], frozenset())  # One stranded branch.
 
     text = reporter.render(reporter.find(now=_NOW), _NOW)  # Render against the same fixed instant.
-    logging.debug("The report is %r", text)  # Record the report for a failure read.
+    logger.debug("The report is %r", text)  # Record the report for a failure read.
 
     assert "| `fix/a-defect` | 3 | 30 |" in text, "the age column must report the fixture age"
 
 
 def test_the_default_reference_time_reads_the_real_clock() -> None:
     """A call with no instant MUST measure against the real UTC clock."""
-    logging.info("Checking the default reference time")  # Report the plan before the work.
+    logger.info("Checking the default reference time")  # Report the plan before the work.
     real_now = datetime.now(UTC)  # Read the real clock that the default path must also read.
     records = [
         BranchRecord("feat/today", "b" * 40, 3, real_now),  # Pushed now, so the branch is active.
@@ -177,14 +179,14 @@ def test_the_default_reference_time_reads_the_real_clock() -> None:
     reporter = _reporter(records, frozenset())  # Neither branch has a pull request.
 
     names = [record.name for record in reporter.find()]  # Call with no instant, so the clock decides.
-    logging.debug("The default path reported %r", names)  # Record the result for a failure read.
+    logger.debug("The default path reported %r", names)  # Record the result for a failure read.
 
     assert names == ["fix/old"], "the default path must measure against the real clock"
 
 
 def test_a_clean_repository_answers_a_clear_sentence() -> None:
     """An empty result MUST answer a sentence, not an empty table."""
-    logging.info("Checking the clean report")  # Report the plan before the work.
+    logger.info("Checking the clean report")  # Report the plan before the work.
     reporter = _reporter([], frozenset())  # No branch at all, so nothing can be stranded.
 
     text = reporter.render(reporter.find())  # Render the empty result.
@@ -195,7 +197,7 @@ def test_a_clean_repository_answers_a_clear_sentence() -> None:
 
 def test_the_base_branch_is_never_reported() -> None:
     """The base branch MUST NOT appear in its own report."""
-    logging.info("Checking that the base branch is skipped")  # Report the plan.
+    logger.info("Checking that the base branch is skipped")  # Report the plan.
     reporter = _reporter([_record("main")], frozenset())  # Only the base branch exists.
 
     assert reporter.find("main") == [], "the base branch cannot be stranded against itself"
@@ -203,7 +205,7 @@ def test_the_base_branch_is_never_reported() -> None:
 
 def test_an_unreadable_branch_is_skipped() -> None:
     """A branch the reader cannot answer MUST NOT stop the report."""
-    logging.info("Checking that an unreadable branch is skipped")  # Report the plan.
+    logger.info("Checking that an unreadable branch is skipped")  # Report the plan.
     reporter = StrandedBranchReporter(
         lambda: ["feat/unreadable", "fix/a-defect"],  # The API lists two branches.
         {"fix/a-defect": _record("fix/a-defect")}.get,  # The compare answers only one of them.
@@ -223,14 +225,14 @@ def test_an_unreadable_branch_is_skipped() -> None:
 @pytest.mark.parametrize("body", [{"message": "Not Found"}, None, "text", 7])
 def test_a_non_list_body_answers_no_rows(body: object) -> None:
     """An error body or a scalar MUST answer no rows, not raise."""
-    logging.info("Checking the row reader against %r", body)  # Report the plan.
+    logger.info("Checking the row reader against %r", body)  # Report the plan.
 
     assert list(_as_rows(body)) == [], "only a JSON array holds rows"
 
 
 def test_the_row_reader_drops_a_non_object_element() -> None:
     """A list that mixes objects and scalars MUST answer the objects only."""
-    logging.info("Checking the row reader against a mixed list")  # Report the plan.
+    logger.info("Checking the row reader against a mixed list")  # Report the plan.
 
     rows = list(_as_rows([{"name": "a"}, "b", None, {"name": "c"}]))  # Two objects, two scalars.
 
@@ -239,7 +241,7 @@ def test_the_row_reader_drops_a_non_object_element() -> None:
 
 def test_the_head_reference_reads_a_well_formed_row() -> None:
     """A pull request row MUST answer the short head branch name."""
-    logging.info("Checking the head reference reader")  # Report the plan before the work.
+    logger.info("Checking the head reference reader")  # Report the plan before the work.
 
     name = _head_ref({"head": {"ref": "fix/1234-a-defect", "sha": "b" * 40}})  # A normal API row.
 
@@ -249,7 +251,7 @@ def test_the_head_reference_reads_a_well_formed_row() -> None:
 @pytest.mark.parametrize("row", [{}, {"head": None}, {"head": "main"}, {"head": {}}, {"head": {"ref": 7}}])
 def test_a_malformed_row_answers_an_empty_head(row: dict[str, object]) -> None:
     """A row with no readable head MUST answer an empty name, not raise."""
-    logging.info("Checking the head reference reader against %r", row)  # Report the plan.
+    logger.info("Checking the head reference reader against %r", row)  # Report the plan.
 
     # WHY: an empty name never matches a branch, so a malformed row protects nothing.
     assert _head_ref(row) == "", "a malformed row must answer an empty name"
@@ -257,7 +259,7 @@ def test_a_malformed_row_answers_an_empty_head(row: dict[str, object]) -> None:
 
 def test_an_unreadable_pull_request_row_protects_no_branch() -> None:
     """An empty head name MUST NOT protect a branch whose name is also empty."""
-    logging.info("Checking that an empty head name protects nothing")  # Report the plan.
+    logger.info("Checking that an empty head name protects nothing")  # Report the plan.
     record = _record("")  # A branch with an empty name cannot exist, so it must not match.
 
     assert record.is_stranded(frozenset(), 7, _NOW), "an empty name must not act as protection"
@@ -265,14 +267,14 @@ def test_an_unreadable_pull_request_row_protects_no_branch() -> None:
 
 def test_the_head_date_reads_the_last_commit() -> None:
     """The head date MUST come from the last commit, because compare orders oldest first."""
-    logging.info("Checking the head date reader")  # Report the plan before the work.
+    logger.info("Checking the head date reader")  # Report the plan before the work.
     commits = [
         {"commit": {"committer": {"date": "2026-01-01T00:00:00Z"}}},  # The oldest commit.
         {"commit": {"committer": {"date": "2026-06-15T09:30:00Z"}}},  # The head commit.
     ]
 
     stamp = _head_date(commits)  # Read the date that the age test uses.
-    logging.debug("The head date is %s", stamp)  # Record the value for a failure read.
+    logger.debug("The head date is %s", stamp)  # Record the value for a failure read.
 
     assert stamp == datetime(2026, 6, 15, 9, 30, tzinfo=UTC), "the last commit is the head"
 
@@ -280,7 +282,7 @@ def test_the_head_date_reads_the_last_commit() -> None:
 @pytest.mark.parametrize("commits", [[], [{"commit": {}}], [{"commit": {"committer": {}}}], "not-a-list"])
 def test_a_missing_head_date_reads_as_now(commits: object) -> None:
     """A missing date MUST read as now, so the branch stays below every threshold."""
-    logging.info("Checking the head date fallback against %r", commits)  # Report the plan.
+    logger.info("Checking the head date fallback against %r", commits)  # Report the plan.
 
     stamp = _head_date(commits)  # Read the fallback value.
 
@@ -295,7 +297,7 @@ def test_a_missing_head_date_reads_as_now(commits: object) -> None:
 
 def test_the_command_line_reports_success_without_the_fail_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     """A find MUST answer status 0 unless the caller passes --fail-on-find."""
-    logging.info("Checking the default exit status")  # Report the plan before the work.
+    logger.info("Checking the default exit status")  # Report the plan before the work.
     _patch_reader(monkeypatch, [_record("fix/a-defect")])  # One stranded branch exists.
 
     assert main([]) == 0, "a report alone must not fail a run"
@@ -303,7 +305,7 @@ def test_the_command_line_reports_success_without_the_fail_flag(monkeypatch: pyt
 
 def test_the_fail_flag_turns_a_find_into_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     """A find with --fail-on-find MUST answer status 1, so a gate can block."""
-    logging.info("Checking the exit status under --fail-on-find")  # Report the plan.
+    logger.info("Checking the exit status under --fail-on-find")  # Report the plan.
     _patch_reader(monkeypatch, [_record("fix/a-defect")])  # One stranded branch exists.
 
     assert main(["--fail-on-find"]) == 1, "a find must fail the run under the flag"
@@ -311,7 +313,7 @@ def test_the_fail_flag_turns_a_find_into_a_failure(monkeypatch: pytest.MonkeyPat
 
 def test_a_clean_repository_answers_zero_under_the_fail_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     """No find MUST answer status 0, even with --fail-on-find."""
-    logging.info("Checking the clean exit status under --fail-on-find")  # Report the plan.
+    logger.info("Checking the clean exit status under --fail-on-find")  # Report the plan.
     _patch_reader(monkeypatch, [])  # No branch at all, so nothing can be stranded.
 
     assert main(["--fail-on-find"]) == 0, "a clean repository must pass the gate"
@@ -328,7 +330,7 @@ def test_none_arguments_read_sys_argv_and_report_success(monkeypatch: pytest.Mon
 
 def _patch_reader(monkeypatch: pytest.MonkeyPatch, records: list[BranchRecord]) -> None:
     """Replace the GitHub reader with a fixed set of records."""
-    logging.info("Patching the GitHub reader with %d records", len(records))  # Report the plan.
+    logger.info("Patching the GitHub reader with %d records", len(records))  # Report the plan.
     by_name = {record.name: record for record in records}  # Index the records for the read callback.
     monkeypatch.setattr("scripts.report_stranded_branches.GitHubReader.list_branches", lambda self: list(by_name))
     monkeypatch.setattr(
@@ -337,4 +339,4 @@ def _patch_reader(monkeypatch: pytest.MonkeyPatch, records: list[BranchRecord]) 
     monkeypatch.setattr(
         "scripts.report_stranded_branches.GitHubReader.list_open_pull_request_heads", lambda self: frozenset()
     )
-    logging.debug("The GitHub reader now answers a fixed set")  # Record the patch after the work.
+    logger.debug("The GitHub reader now answers a fixed set")  # Record the patch after the work.

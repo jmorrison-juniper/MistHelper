@@ -23,6 +23,8 @@ from types import ModuleType
 
 import pytest
 
+logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
+
 # The conftest that holds the reclaim. A conftest is not importable by name, so
 # these tests load it by path, the same way the conftest loads its own settings.
 _CONFTEST_PATH = Path(__file__).resolve().parents[3] / "tests" / "e2e" / "upgrade_portal" / "conftest.py"
@@ -31,7 +33,7 @@ _CONFTEST_PATH = Path(__file__).resolve().parents[3] / "tests" / "e2e" / "upgrad
 @pytest.fixture(name="portal_conftest")
 def fixture_portal_conftest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     """Load the browser conftest and point its record at a temporary file."""
-    logging.info("Loading the browser conftest from %s", _CONFTEST_PATH)  # Report before the load.
+    logger.info("Loading the browser conftest from %s", _CONFTEST_PATH)  # Report before the load.
     name = "upgrade_portal_e2e_conftest_owner"  # One fixed name, so a second load reuses the entry.
     spec = importlib.util.spec_from_file_location(name, _CONFTEST_PATH)
     assert spec is not None and spec.loader is not None, "the browser conftest must be loadable"
@@ -46,7 +48,7 @@ def fixture_portal_conftest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(module, "SERVER_OWNER_PATH", tmp_path / "portal.pid")  # No shared file.
     monkeypatch.setattr(module, "RECLAIM_TRIES", 2)  # Two tries keep every test quick.
     monkeypatch.setattr(module, "RECLAIM_PAUSE_SECONDS", 0.0)  # No test waits on a real clock.
-    logging.debug("Loaded the browser conftest")  # Record the load after the work.
+    logger.debug("Loaded the browser conftest")  # Record the load after the work.
     return module
 
 
@@ -55,7 +57,7 @@ class TestTheOwnerRecord:
 
     def test_a_started_portal_writes_its_identifier(self, portal_conftest: ModuleType) -> None:
         """A portal that answered MUST write its process identifier."""
-        logging.info("Checking that a started portal writes its identifier")  # Report the plan.
+        logger.info("Checking that a started portal writes its identifier")  # Report the plan.
 
         portal_conftest._record_owner(_StandInProcess(4321))
 
@@ -63,7 +65,7 @@ class TestTheOwnerRecord:
 
     def test_a_stopped_portal_forgets_its_identifier(self, portal_conftest: ModuleType) -> None:
         """A clean stop MUST remove the record, because the portal owns nothing now."""
-        logging.info("Checking that a stopped portal forgets its identifier")  # Report the plan.
+        logger.info("Checking that a stopped portal forgets its identifier")  # Report the plan.
         portal_conftest._record_owner(_StandInProcess(4321))
 
         portal_conftest._forget_owner()
@@ -72,7 +74,7 @@ class TestTheOwnerRecord:
 
     def test_forgetting_twice_never_raises(self, portal_conftest: ModuleType) -> None:
         """A second forget MUST do nothing, because a teardown can run twice."""
-        logging.info("Checking the second forget")  # Report the plan before the work.
+        logger.info("Checking the second forget")  # Report the plan before the work.
 
         portal_conftest._forget_owner()
         portal_conftest._forget_owner()
@@ -84,7 +86,7 @@ class TestTheOwnerRecord:
             The record is a convenience for the next run. A workstation with an
             unwritable temporary folder must still run the browser tests.
         """
-        logging.info("Checking the unwritable record path")  # Report the plan.
+        logger.info("Checking the unwritable record path")  # Report the plan.
         portal_conftest.SERVER_OWNER_PATH = portal_conftest.SERVER_OWNER_PATH / "no-such-folder" / "portal.pid"
 
         portal_conftest._record_owner(_StandInProcess(4321))  # WHY: this must not raise.
@@ -95,21 +97,21 @@ class TestReadingTheRecord:
 
     def test_a_written_record_reads_back(self, portal_conftest: ModuleType) -> None:
         """The reader MUST answer the identifier that the writer wrote."""
-        logging.info("Checking the read of a written record")  # Report the plan.
+        logger.info("Checking the read of a written record")  # Report the plan.
         portal_conftest._record_owner(_StandInProcess(9876))
 
         assert portal_conftest._recorded_owner() == 9876
 
     def test_no_record_answers_nothing(self, portal_conftest: ModuleType) -> None:
         """A first run on a workstation MUST read no owner."""
-        logging.info("Checking the read with no record present")  # Report the plan.
+        logger.info("Checking the read with no record present")  # Report the plan.
 
         assert portal_conftest._recorded_owner() is None
 
     @pytest.mark.parametrize("text", ["", "   ", "not-a-number", "12.5", "-1x"])
     def test_a_damaged_record_answers_nothing(self, portal_conftest: ModuleType, text: str) -> None:
         """A record that names no process MUST answer nothing, not raise."""
-        logging.info("Checking the read of the damaged record %r", text)  # Report the plan.
+        logger.info("Checking the read of the damaged record %r", text)  # Report the plan.
         portal_conftest.SERVER_OWNER_PATH.write_text(text, encoding="utf-8")
 
         # WHY: a damaged record must never become a process identifier that the suite stops.
@@ -126,7 +128,7 @@ class TestReclaimingThePort:
             A portal container on the same port is a state of the workstation.
             The suite must name it and stop, never end it.
         """
-        logging.info("Checking that an unrecorded listener survives")  # Report the plan.
+        logger.info("Checking that an unrecorded listener survives")  # Report the plan.
         stopped: list[int] = []  # Records every stop the reclaim attempted.
         portal_conftest.os = _StandInOs(stopped)  # type: ignore[attr-defined]
 
@@ -137,7 +139,7 @@ class TestReclaimingThePort:
         self, portal_conftest: ModuleType, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """A recorded portal MUST be stopped, and the reclaim MUST report success."""
-        logging.info("Checking the reclaim of a recorded portal")  # Report the plan.
+        logger.info("Checking the reclaim of a recorded portal")  # Report the plan.
         stopped: list[int] = []
         monkeypatch.setattr(portal_conftest, "os", _StandInOs(stopped))
         monkeypatch.setattr(portal_conftest, "_probe_port", lambda port: False)  # The port is free.
@@ -151,7 +153,7 @@ class TestReclaimingThePort:
         self, portal_conftest: ModuleType, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """A port that stays held MUST report a failure, so the caller names it."""
-        logging.info("Checking the reclaim of a port that stays held")  # Report the plan.
+        logger.info("Checking the reclaim of a port that stays held")  # Report the plan.
         monkeypatch.setattr(portal_conftest, "os", _StandInOs([]))
         monkeypatch.setattr(portal_conftest, "_probe_port", lambda port: True)  # The port stays held.
         portal_conftest._record_owner(_StandInProcess(3333))
@@ -167,7 +169,7 @@ class TestReclaimingThePort:
             The process can end between the read and the stop. That is the state
             the reclaim wants, so it must not become a failure.
         """
-        logging.info("Checking the reclaim against an absent process")  # Report the plan.
+        logger.info("Checking the reclaim against an absent process")  # Report the plan.
         monkeypatch.setattr(portal_conftest, "os", _StandInOs([], raises=True))
         monkeypatch.setattr(portal_conftest, "_probe_port", lambda port: False)
         portal_conftest._record_owner(_StandInProcess(3333))
@@ -185,7 +187,7 @@ class TestTheMessageNamesTheSuite:
             The first report of issue #2260 sent the reader to look for a portal
             container. The record tells the reader which case they are in.
         """
-        logging.info("Checking the stray listener message")  # Report the plan.
+        logger.info("Checking the stray listener message")  # Report the plan.
 
         assert ".pid" in portal_conftest.STRAY_LISTENER_MESSAGE, "the message must name the record file"
         assert "container" in portal_conftest.STRAY_LISTENER_MESSAGE, "the message must name the common cause"

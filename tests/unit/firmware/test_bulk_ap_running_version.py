@@ -25,6 +25,8 @@ import pytest
 from src.firmware.bulk_ap_upgrader import UNKNOWN_VERSION, BulkAPFirmwareUpgrader, BulkAPUpgraderConfig
 from src.firmware.running_version import RunningFirmwareVersionResolver
 
+logger = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
+
 # The identifiers of one access point. The stats row and the device row do not
 # always share a field, so the resolver accepts the id, the device_id, and the MAC.
 _DEVICE_ID = "00000000-0000-0000-0000-00000000ab01"
@@ -39,10 +41,10 @@ _STALE_VERSION = "0.10.17000"
 @pytest.fixture(name="upgrader")
 def fixture_upgrader() -> Any:
     """Build one upgrader with a stand-in session and no network reach."""
-    logging.info("Building a bulk access point upgrader for the version rule tests")  # Report the build.
+    logger.info("Building a bulk access point upgrader for the version rule tests")  # Report the build.
     config = BulkAPUpgraderConfig(org_id="org-0001", apisession=MagicMock())
     built = BulkAPFirmwareUpgrader(config)  # The constructor builds the resolver.
-    logging.debug("The upgrader holds a resolver of type %s", type(built._version_resolver).__name__)
+    logger.debug("The upgrader holds a resolver of type %s", type(built._version_resolver).__name__)
     return built
 
 
@@ -51,25 +53,25 @@ class TestTheUpgraderReadsTheSharedRule:
 
     def test_the_upgrader_holds_the_shared_resolver(self, upgrader: Any) -> None:
         """The upgrader MUST hold the shared resolver, and not a copy of its rule."""
-        logging.info("Checking that the upgrader holds the shared resolver")  # Report the plan.
+        logger.info("Checking that the upgrader holds the shared resolver")  # Report the plan.
 
         assert isinstance(upgrader._version_resolver, RunningFirmwareVersionResolver)
 
     def test_the_index_answers_the_shared_join_map(self, upgrader: Any) -> None:
         """The index MUST answer the same map that the resolver builds."""
-        logging.info("Checking the index against the shared reader")  # Report the plan.
+        logger.info("Checking the index against the shared reader")  # Report the plan.
         rows = [{"id": _DEVICE_ID, "mac": _DEVICE_MAC, "version": _RUNNING_VERSION}]
 
         built = upgrader._index_stats_by_device_id(rows)  # The upgrader path.
         shared = RunningFirmwareVersionResolver.index_stats_rows(rows)  # The shared reader.
-        logging.debug("The index answered %d keys", len(built))  # Record the size.
+        logger.debug("The index answered %d keys", len(built))  # Record the size.
 
         assert built == shared, "the upgrader must answer the map that the shared reader builds"
 
     @pytest.mark.parametrize("key", ["id", "device_id", "mac"])
     def test_the_index_accepts_every_join_key(self, upgrader: Any, key: str) -> None:
         """A stats row MUST join on any of the three identifier fields."""
-        logging.info("Checking the join key %s", key)  # Report the plan before the work.
+        logger.info("Checking the join key %s", key)  # Report the plan before the work.
 
         built = upgrader._index_stats_by_device_id([{key: _DEVICE_ID, "version": _RUNNING_VERSION}])
 
@@ -81,7 +83,7 @@ class TestAStaleReadingNeverBecomesAVersion:
 
     def test_the_running_version_reaches_the_caller(self, upgrader: Any) -> None:
         """A stats row MUST give its version to the caller."""
-        logging.info("Checking the running version path")  # Report the plan before the work.
+        logger.info("Checking the running version path")  # Report the plan before the work.
         lookup = {_DEVICE_ID: _RUNNING_VERSION}  # The stats endpoint named this device.
 
         answer = upgrader._get_ap_version({"id": _DEVICE_ID, "mac": _DEVICE_MAC}, lookup)
@@ -90,7 +92,7 @@ class TestAStaleReadingNeverBecomesAVersion:
 
     def test_the_mac_address_also_reaches_the_running_version(self, upgrader: Any) -> None:
         """A stats row keyed by MAC MUST still reach the device row."""
-        logging.info("Checking the MAC join of the version read")  # Report the plan.
+        logger.info("Checking the MAC join of the version read")  # Report the plan.
         lookup = {_DEVICE_MAC: _RUNNING_VERSION}  # The stats row carried a MAC and no id.
 
         answer = upgrader._get_ap_version({"id": _DEVICE_ID, "mac": _DEVICE_MAC}, lookup)
@@ -104,7 +106,7 @@ class TestAStaleReadingNeverBecomesAVersion:
             No running-version endpoint reported this device, so the portal
             cannot state the version it runs.
         """
-        logging.info("Checking a device that no stats row names")  # Report the plan.
+        logger.info("Checking a device that no stats row names")  # Report the plan.
 
         answer = upgrader._get_ap_version({"id": _DEVICE_ID, "mac": _DEVICE_MAC}, {})
 
@@ -118,7 +120,7 @@ class TestAStaleReadingNeverBecomesAVersion:
             can name a release the device left long ago. The resolver marks such
             a reading stale, and the upgrader must refuse it.
         """
-        logging.info("Checking that the listing version stays out of the verdict")  # Report the plan.
+        logger.info("Checking that the listing version stays out of the verdict")  # Report the plan.
         row = {"id": _DEVICE_ID, "mac": _DEVICE_MAC, "version": _STALE_VERSION}  # A listing row.
 
         answer = upgrader._get_ap_version(row, {})  # No stats row exists for this device.
@@ -138,18 +140,18 @@ class TestAnUnknownVersionStaysInTheUpgradeBucket:
             no endpoint confirmed leaves production hardware on old firmware, and
             the operator reads the run as complete.
         """
-        logging.info("Checking the partition of a device with no readable version")  # Report the plan.
+        logger.info("Checking the partition of a device with no readable version")  # Report the plan.
         devices = [{"id": _DEVICE_ID, "mac": _DEVICE_MAC}]  # One device with no entry in ap_versions.
 
         needing, at_target = upgrader._partition_devices_by_version(devices, _RUNNING_VERSION)
-        logging.debug("The partition put %d in upgrade and %d at target", len(needing), len(at_target))
+        logger.debug("The partition put %d in upgrade and %d at target", len(needing), len(at_target))
 
         assert needing == devices, "an unreadable device must stay in the upgrade bucket"
         assert at_target == [], "an unreadable device must never read as already at target"
 
     def test_a_device_at_the_target_is_skipped(self, upgrader: Any) -> None:
         """A device whose running version matches the target MUST be skipped."""
-        logging.info("Checking the partition of a device already at the target")  # Report the plan.
+        logger.info("Checking the partition of a device already at the target")  # Report the plan.
         upgrader.ap_versions[_DEVICE_ID] = _RUNNING_VERSION  # A running reading placed this value.
         devices = [{"id": _DEVICE_ID, "mac": _DEVICE_MAC}]
 
@@ -165,13 +167,13 @@ class TestAnUnknownVersionStaysInTheUpgradeBucket:
             The two steps run one after the other in the real flow. This test
             drives both, so no future change can pass one and break the pair.
         """
-        logging.info("Checking the read and the partition together")  # Report the plan.
+        logger.info("Checking the read and the partition together")  # Report the plan.
         access_point = {"id": _DEVICE_ID, "mac": _DEVICE_MAC, "version": _STALE_VERSION}
         upgrader.all_aps = [access_point]  # The listing named one device.
 
         upgrader._process_aps_with_stats({})  # No stats row exists, so nothing confirms a version.
         needing, at_target = upgrader._partition_devices_by_version([access_point], _STALE_VERSION)
-        logging.debug("The recorded version is %r", upgrader.ap_versions.get(_DEVICE_ID))
+        logger.debug("The recorded version is %r", upgrader.ap_versions.get(_DEVICE_ID))
 
         assert upgrader.ap_versions[_DEVICE_ID] == UNKNOWN_VERSION, "the stale value must not be recorded"
         assert needing == [access_point], "the device must stay in the upgrade bucket"
