@@ -24,6 +24,14 @@ from src.data.data_processing_utils import (
 from src.time.time_utils import TimeUtils  # WHY: 1014 P6 direct import (FR-005).
 
 logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
+_HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
+
+
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
 class OrgExportUtils:
@@ -734,6 +742,15 @@ class OrgExportUtils:
             kwargs = OrgExportUtils._build_audit_log_kwargs(full_history, duration)  # Resolve API kwargs.
             logger.debug("Making API call with parameters: %s", kwargs)  # Trace the params.
             response = mistapi.api.v1.orgs.logs.listOrgAuditLogs(mh.apisession, org_id, **kwargs)  # List audit logs.
+            status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+            if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the count untrustworthy.
+                logger.error(  # WHY: the operator must see the cloud status instead of a false empty result.
+                    "The cloud returned HTTP %s for the organization audit logs at org %s",
+                    status_code,
+                    org_id,
+                )
+                logger.debug("EXIT: OrgExportUtils.audit_logs - HTTP error")  # WHY: trace the guarded exit path.
+                return  # WHY: preserve the existing None return contract for this exporter.
             rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page all rows.
             if not rawdata:  # No rows.
                 logger.warning(" No audit logs returned from API.")  # Warn none returned.

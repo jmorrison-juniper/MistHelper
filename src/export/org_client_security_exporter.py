@@ -164,6 +164,15 @@ class OrgClientSecurityExporter:
             response = fetch_callable(
                 mh.apisession, site_id, duration=rogue_duration, limit=1000
             )  # Request this site's rogues
+            status_code = getattr(response, "status_code", 200)  # WHY: old tests use response doubles without statuses.
+            if isinstance(status_code, int) and status_code >= 400:  # WHY: an HTTP failure makes the count unsafe.
+                logger.error(  # WHY: the operator must see the cloud status instead of a false zero-rogue count.
+                    "The cloud returned HTTP %s for %s at site %s",
+                    status_code,
+                    label,
+                    site_id,
+                )
+                return []  # WHY: preserve the existing failure contract and continue with the next site.
             rogues = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page through all results
             for rogue in rogues:  # Tag each rogue with site context
                 rogue["site_id"] = site_id  # Record which site detected it

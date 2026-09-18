@@ -71,7 +71,7 @@ class OrgAlarmEventExporter:
         hours = TimeUtils.get_dynamic_lookback_hours(24, 1)  # Resolve dynamic lookback hours.
         TimeUtils.log_dynamic_lookback("open org alarms export", hours)  # Log chosen lookback window.
         try:
-            mh.APIDataFetcher(  # Fetch and write alarms.
+            exported = mh.APIDataFetcher(  # Fetch and write alarms.
                 title="Search all Org Alarms:",
                 api_call=mistapi.api.v1.orgs.alarms.searchOrgAlarms,
                 filename="OrgAlarms.csv",
@@ -79,6 +79,8 @@ class OrgAlarmEventExporter:
                 duration=f"{hours}h",
                 acked=False,
             ).execute()
+            if not exported:  # WHY: a failed fetch must not report a completed export.
+                return  # WHY: preserve the existing None return contract for this exporter.
             logger.info("Completed org alarms export and wrote results to OrgAlarms.csv.")
             logger.debug("EXIT: OrgAlarmEventExporter.alarms - success")  # Trace successful exit.
         except Exception as error:  # Catch export errors.
@@ -120,6 +122,14 @@ class OrgAlarmEventExporter:
         response = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents(  # Search org device events.
             mh.apisession, org_id, device_type="all", limit=1000, duration=duration_param
         )
+        status_code = getattr(response, "status_code", 200)  # WHY: old tests use response doubles without statuses.
+        if isinstance(status_code, int) and status_code >= 400:  # WHY: an HTTP failure makes the count unsafe.
+            logger.error(  # WHY: the operator must see the cloud status instead of a false zero-event count.
+                "The cloud returned HTTP %s for the organization device events at org %s",
+                status_code,
+                org_id,
+            )
+            return  # WHY: preserve the existing None return contract for this exporter.
         rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page through all events.
         events = rawdata  # Alias rawdata as events.
         logger.info(
