@@ -33,6 +33,14 @@ from src.config.source_dependency_resolver import (
 from src.security import CredentialRedactor  # WHY: strip device credentials at the read boundary (#2011).
 
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+_HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
+
+
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
 class APIFetchUtils:  # Higher-level org/site fetchers.
@@ -55,6 +63,14 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
 
             # Call the Mist API to get organization services
             response = mistapi.api.v1.orgs.services.listOrgServices(mh.apisession, org_id, limit=1000)  # List services.
+            status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+            if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the count untrustworthy.
+                logger.error(  # WHY: the operator must see the cloud status instead of a false empty result.
+                    "The cloud returned HTTP %s for the organization service list at org %s",
+                    status_code,
+                    org_id,
+                )
+                return []  # WHY: preserve the existing failure contract for this helper.
 
             if hasattr(response, "data") and response.data:  # Only proceed with data.
                 services_data = response.data  # Unwrap the payload.
@@ -98,7 +114,16 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
         site_id = site.get("id")  # Target site id
         site_name = site.get("name", "Unnamed Site")  # Friendly site label
         try:
-            raw = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id).data  # Fetch site settings
+            response = mistapi.api.v1.sites.setting.getSiteSetting(apisession, site_id)  # Fetch site settings
+            status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+            if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the success log untrustworthy.
+                logger.error(  # WHY: the operator must see the cloud status instead of a false empty config.
+                    "The cloud returned HTTP %s for the site setting at site %s",
+                    status_code,
+                    site_id,
+                )
+                return None  # WHY: preserve the existing failure contract for a skipped site.
+            raw = response.data  # Fetch site settings only after the status proves the payload is valid.
             config = CredentialRedactor.redact(raw)  # Drop every credential before the record travels.
             config["site_id"] = site_id  # Tag with site id
             config["site_name"] = site_name  # Tag with site name

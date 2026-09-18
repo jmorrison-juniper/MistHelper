@@ -32,8 +32,15 @@ _DEFAULT_DURATION = "7d"  # WHY: seven-day query window per issue #421 spec.
 _CLIENT_PAGE_LIMIT = 1000  # WHY: matches PromptUtils._fetch_site_wireless_clients page size.
 _PCAP_PAGE_LIMIT = 1000  # WHY: max page size supported by /sites/{site}/pcaps.
 _OUTPUT_ROOT = Path("data") / "packet_captures"  # WHY: hard-coded per issue #421 layout spec.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
 
 logger = logging.getLogger(__name__)  # WHY: module-scoped logger for #886 print-to-logger migration.
+
+
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
 def _get_config_utils() -> Any:  # WHY: module-level factory for deferred ConfigUtils access.
@@ -150,6 +157,14 @@ class ClientPacketCaptureDownloader:
             response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(
                 self._session, site_id, duration=_DEFAULT_DURATION, limit=_CLIENT_PAGE_LIMIT
             )  # WHY: 7-day window scoped to the chosen site.
+            status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+            if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the count untrustworthy.
+                logger.error(  # WHY: the operator must see the cloud status instead of a false empty result.
+                    "The cloud returned HTTP %s for the wireless client list at site %s",
+                    status_code,
+                    site_id,
+                )
+                return []  # WHY: preserve the existing failure contract for the caller.
             clients = mistapi.get_all(response=response, mist_session=self._session) or []
             logger.info("Fetched %s wireless clients for site %s", len(clients), site_id)  # WHY: audit count.
             return clients  # WHY: caller renders and prompts.
@@ -232,6 +247,14 @@ class ClientPacketCaptureDownloader:
                 duration=_DEFAULT_DURATION,
                 limit=_PCAP_PAGE_LIMIT,
             )  # WHY: Mist expects unpunctuated MAC in query filter.
+            status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+            if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the count untrustworthy.
+                logger.error(  # WHY: the operator must see the cloud status instead of a false empty result.
+                    "The cloud returned HTTP %s for the packet capture list at site %s",
+                    status_code,
+                    site_id,
+                )
+                return []  # WHY: preserve the existing failure contract for the caller.
             captures = mistapi.get_all(response=response, mist_session=self._session) or []
             logger.info("Fetched %s PCAPs for %s", len(captures), mac)  # WHY: audit count.
             return captures  # WHY: caller normalises/groups.

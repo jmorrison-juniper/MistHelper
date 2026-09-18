@@ -18,6 +18,14 @@ from src.config.source_dependency_resolver import (
 )
 
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+_HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
+
+
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
 class DeviceUtils:  # Device helper utilities.
@@ -37,7 +45,16 @@ class DeviceUtils:  # Device helper utilities.
 
         try:
             apisession = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-            rawdata = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap").data
+            response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, site_id, type="ap")  # Fetch AP rows.
+            status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+            if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the count untrustworthy.
+                logger.error(  # WHY: the operator must see the cloud status instead of a false empty result.
+                    "The cloud returned HTTP %s for the AP device list at site %s",
+                    status_code,
+                    site_id,
+                )
+                return []  # WHY: preserve the existing failure contract for this helper.
+            rawdata = response.data  # WHY: read the payload only after the status proves it is trustworthy.
             if not rawdata:  # Handle empty AP set.
                 logger.warning("No APs found for site_id: %s", site_id)  # Log no APs found.
                 return []  # Return empty list.
