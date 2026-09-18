@@ -6,6 +6,8 @@ import json
 import shutil
 from pathlib import Path
 
+import pytest
+
 from src.juniper_skills.speckit import SkillDocument, SpecKitAnalyzer, SpecKitHarness, SpecKitPaths
 
 
@@ -54,6 +56,40 @@ class TestSpecKitHarness:
         assert any(finding.severity == "CRITICAL" for finding in findings)  # Prove the inconsistency fails.
         assert any("FR-001" in finding.summary for finding in findings)  # Prove the missing id is named.
 
+    def test_mandatory_stage_fails_when_artifact_is_missing(self) -> None:
+        """Confirm the mandatory gate refuses a skipped command artifact."""
+        workspace = self._workspace("mandatory-failure")  # Use a repository-local test workspace.
+        document = self._document(workspace)  # Create one source document fixture.
+        harness = self._harness(workspace)  # Build the harness with isolated output.
+        feature_dir = harness.emit_for_document(document)  # Generate a valid artifact set first.
+        (feature_dir / "clarifications.md").unlink()  # Simulate a skipped speckit.clarify command.
+        with pytest.raises(RuntimeError, match="SpecKit artifact gate failed"):
+            harness.require_complete(feature_dir)  # Prove install cannot proceed without all artifacts.
+
+    def test_living_drift_reports_changed_source_hash(self) -> None:
+        """Confirm living-drift reports a re-converted source document."""
+        workspace = self._workspace("drift")  # Use a repository-local test workspace.
+        document = self._document(workspace)  # Create one source document fixture.
+        harness = self._harness(workspace)  # Build the harness with isolated output.
+        feature_dir = harness.emit_for_document(document)  # Generate context with the first source hash.
+        document.source_path.write_text(self._source_text() + "\nNew section.\n", encoding="utf-8")  # Change source.
+        report = harness.living_drift(feature_dir)  # Run the document-specific drift check.
+        assert report.checked  # Prove the drift check read the recorded source path.
+        assert report.drifted  # Prove the changed source hash is visible.
+        assert report.detail == "source hash changed"  # Prove the report explains the drift.
+
+    def test_idempotent_rerun_updates_existing_artifacts(self) -> None:
+        """Confirm a rerun updates files instead of duplicating directories."""
+        workspace = self._workspace("idempotent")  # Use a repository-local test workspace.
+        document = self._document(workspace)  # Create one source document fixture.
+        harness = self._harness(workspace)  # Build the harness with isolated output.
+        first_dir = harness.emit_for_document(document)  # Generate the first artifact set.
+        before = sorted(path.relative_to(first_dir) for path in first_dir.rglob("*") if path.is_file())  # Count files.
+        second_dir = harness.emit_for_document(document)  # Run the workflow again for the same document.
+        after = sorted(path.relative_to(second_dir) for path in second_dir.rglob("*") if path.is_file())  # Count again.
+        assert second_dir == first_dir  # Prove the rerun targets the same feature directory.
+        assert after == before  # Prove the rerun did not create duplicate artifacts.
+
     def _workspace(self, name: str) -> Path:
         """Return a clean repository-local test workspace."""
         root = self._repo_root() / "data" / "juniper_skills" / "test_speckit" / name  # Avoid system temporary paths.
@@ -78,8 +114,10 @@ class TestSpecKitHarness:
         """Return required artifact paths."""
         names = [
             "spec.md",
+            "clarifications.md",
             "plan.md",
             "tasks.md",
+            "implementation.md",
             Path("checklists") / "requirements.md",
             "analysis.md",
             ".spec-context.json",

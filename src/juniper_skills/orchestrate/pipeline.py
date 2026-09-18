@@ -120,7 +120,7 @@ class PipelineRunner:
         files = self._package(item, joined, results, worker_id, completed)  # Emit Markdown package files.
         self._guard(item, files, segments, worker_id, completed)  # Run similarity guard before publication.
         self._ste(item, files, worker_id, completed)  # Run the STE validator after all prose exists.
-        self._speckit(item, worker_id, completed)  # Emit SpecKit artifacts for the source document.
+        self._speckit(item, files, worker_id, completed)  # Emit SpecKit artifacts before install can run.
         return files  # Return generated files for publication stages.
 
     def _publish(self, item: WorkItem, files: list[Path], worker_id: str, completed: str | None, dry_run: bool) -> None:
@@ -264,12 +264,18 @@ class PipelineRunner:
             StageOutcome(item.document_key, "ste", "completed", "STE validation passed", worker_id, data)
         )
 
-    def _speckit(self, item: WorkItem, worker_id: str, completed: str | None) -> None:
+    def _speckit(self, item: WorkItem, files: list[Path], worker_id: str, completed: str | None) -> None:
         self.journal.started(item.document_key, "speckit", worker_id)  # Persist start before artifact generation.
         document = SkillDocument(
-            item.part_paths[0], item.domain, item.title, item.pages, item.document_key, item.source_pdf
+            item.part_paths[0],
+            item.domain,
+            item.title,
+            item.pages,
+            item.document_key,
+            item.source_pdf,
+            item.category,
         )
-        feature_dir = self.speckit.emit_for_document(document)  # Emit the per-skill specification artifacts.
+        feature_dir = self.speckit.emit_for_document(document, files)  # Emit per-skill specification artifacts.
         errors = self.speckit.validate(feature_dir)  # Validate the generated artifact set.
         if errors:  # Refuse to advance when the harness reports critical errors.
             raise RuntimeError("SpecKit validation failed")  # Preserve the failed stage for retry.
