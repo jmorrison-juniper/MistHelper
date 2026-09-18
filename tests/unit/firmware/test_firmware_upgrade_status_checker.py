@@ -234,6 +234,25 @@ class TestFetchSiteAndOrgStats:
         self._install_pagination(monkeypatch, [], ("api", "v1", "sites", "stats", "listSiteDevicesStats"))
         assert chk._fetch_site_stats() is False
 
+    def test_site_stats_http_404_returns_false_and_logs_status(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A 404 site stats response must not report a successful empty result."""
+        chk = _make_checker(monkeypatch, site_filter="site-x")  # Build the real checker under a fixed site.
+        mistapi = fm_mod.mistapi  # Use the module reference that the product uses.
+        monkeypatch.setattr(mistapi, "get_all", MagicMock())  # Prove pagination does not run.
+        monkeypatch.setattr(  # Replace the exact SDK call with a 404 response.
+            mistapi.api.v1.sites.stats,
+            "listSiteDevicesStats",
+            lambda *_a, **_k: _FakeResponse(404, [{"id": "ignored"}]),
+        )
+        with caplog.at_level("ERROR", logger=fm_mod.logger.name):  # Capture the product status log.
+            result = chk._fetch_site_stats()  # Drive the product status path.
+        assert result is False  # Failed status must return the documented false value.
+        assert "HTTP 404" in caplog.text  # The log must keep the exact client-error status.
+        assert "site-x" in caplog.text  # The log must name the failed site.
+        mistapi.get_all.assert_not_called()  # The success pagination path must not run.
+
     def test_org_stats_accumulates(self, monkeypatch: pytest.MonkeyPatch) -> None:
         chk = _make_checker(monkeypatch)
         self._install_pagination(

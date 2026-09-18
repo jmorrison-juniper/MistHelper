@@ -31,6 +31,13 @@ class _FailedResponse:
     data: Any = []  # WHY: simulate the empty SDK payload that previously looked normal.
 
 
+class _ClientErrorResponse:
+    """Response object for a 404 with an empty payload."""
+
+    status_code = 404  # WHY: simulate a client-side cloud status for the HTTP 4xx analyzer rule.
+    data: Any = []  # WHY: simulate the empty SDK payload that must not look normal.
+
+
 def _has_status_at_problem_level(caplog: pytest.LogCaptureFixture) -> bool:
     """Return true when a warning or error log names the HTTP 503 status."""
     return any(  # WHY: operators act on WARNING or ERROR for this failure.
@@ -98,6 +105,23 @@ def test_current_channel_planning_503_suppresses_success_and_writes_no_file(
     assert _has_status_at_problem_level(caplog)  # WHY: the operator must see the exact 503 status.
     assert "Exported 0 channel planning records" not in caplog.text  # WHY: this success would be false.
     writer.assert_not_called()  # WHY: an outage must not produce a valid empty export.
+
+
+def test_current_channel_planning_404_suppresses_success_and_writes_no_file(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A channel-planning 404 must not write an empty planning export."""
+    writer = MagicMock()  # WHY: a client error must not create a valid empty export.
+    utils = _site_utils(writer, "getSiteCurrentChannelPlanning")  # WHY: build the real product object.
+    utils.mistapi.api.v1.sites.rrm.getSiteCurrentChannelPlanning.return_value = _ClientErrorResponse()  # 404.
+    with caplog.at_level(logging.INFO, logger=site_utils_module.logger.name):  # WHY: capture module logs.
+        result = utils.current_channel_planning()  # WHY: drive the real product function.
+    assert result is None  # WHY: the existing failure contract for this exporter is None.
+    assert any(  # WHY: the operator must see the exact client-error status.
+        record.levelno >= logging.WARNING and "404" in record.getMessage() for record in caplog.records
+    )
+    assert "Exported 0 channel planning records" not in caplog.text  # WHY: this success would be false.
+    writer.assert_not_called()  # WHY: a client error must not produce a valid empty export.
 
 
 def test_fetch_site_stats_503_returns_false_and_suppresses_success(caplog: pytest.LogCaptureFixture) -> None:

@@ -14,6 +14,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.api import api_data_fetcher as fetcher_module
+from src.api.api_data_fetcher import APIDataFetcher
+from src.export import org_admin_exporter as admin_module
 from src.export.org_admin_exporter import OrgAdminExporter
 
 
@@ -235,3 +238,31 @@ def test_usage_delegates_to_apidata_fetcher_execute(caplog: pytest.LogCaptureFix
     assert kwargs["filename"] == "OrgUsage"
     fake_mh.APIDataFetcher.return_value.execute.assert_called_once_with()
     assert "License usage data exported to OrgUsage" in caplog.text
+
+
+def test_usage_http_401_reports_status_and_skips_success(caplog: pytest.LogCaptureFixture) -> None:
+    """A 401 usage response must report status and skip the success message."""
+    writer = MagicMock()  # WHY: the failing path must not write a false empty export.
+    resolver = _make_mh()  # WHY: reuse the standard source dependency double.
+    resolver.APIDataFetcher = APIDataFetcher  # WHY: drive the real shared fetcher status handling.
+    resolver.DataExporter.write_with_format_selection = writer  # WHY: observe unsafe writes.
+    resolver.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"  # WHY: fix target org.
+    resolver.RateLimitingUtils = MagicMock()  # WHY: satisfy APIDataFetcher pacing dependency.
+    resolver.RateLimitingUtils.get_rate_limited_delay.return_value = (None, 0)  # WHY: keep the test fast.
+
+    def failed_usage(_session: object, _org_id: str, **_kwargs: object) -> object:
+        """Return a client-error response from the usage endpoint."""
+        return type("UsageResponse", (), {"status_code": 401, "data": []})()  # WHY: SDK-shaped 401 response.
+
+    failed_usage.__name__ = "getOrgLicensesBySite"  # WHY: APIDataFetcher logs the operation name.
+    with (
+        patch.object(admin_module, "SourceDependencyResolver", resolver),
+        patch.object(fetcher_module, "SourceDependencyResolver", resolver),
+        patch.object(admin_module.mistapi.api.v1.orgs.licenses, "getOrgLicensesBySite", failed_usage),
+        caplog.at_level("INFO"),
+    ):
+        result = OrgAdminExporter.usage()  # WHY: drive the product export entry point.
+    assert result is None  # WHY: the exporter keeps its existing None return contract.
+    assert "HTTP 401" in caplog.text  # WHY: the operator must see the exact auth failure.
+    assert "License usage data exported to OrgUsage" not in caplog.text  # WHY: avoid false success.
+    writer.assert_not_called()  # WHY: a client error must not produce a valid empty export.

@@ -106,6 +106,16 @@ def test_fetch_site_running_versions_reports_runtime_failure(caplog: Any) -> Non
     assert "Failed to read listSiteDevicesStats for site site-1" in caplog.text  # WHY: the log gives failure context
 
 
+def test_rows_from_response_reports_http_404(caplog: Any) -> None:
+    """A 404 site stats response must return no rows and log the exact status."""
+    response = _FakeResponse(status_code=404, data=[{"id": "ignored"}])  # Model a client-side refusal.
+    with caplog.at_level("ERROR", logger="src.firmware.running_version"):  # Capture the product status log.
+        rows = RunningFirmwareVersionResolver._rows_from_response(response, "site-404")  # Drive the parser.
+    assert rows == []  # Failed status data must not feed a firmware decision.
+    assert "returned 404" in caplog.text  # The log must keep the exact status.
+    assert "site-404" in caplog.text  # The log must keep the failed site identifier.
+
+
 def test_fetch_site_running_versions_surfaces_programming_error() -> None:
     """A malformed SDK call must raise so a programmer can repair the call site."""
 

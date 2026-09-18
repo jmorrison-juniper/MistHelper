@@ -145,6 +145,37 @@ class TestAuthService:
         expected_key = auth_module.privilege_cache_key("tok-truncated")  # Build the expected key.
         assert redis_client.key_read == expected_key  # Prove the real key path.
 
+    def test_read_cache_returns_none_and_logs_empty_body(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        redis_client = _FakeRedisClient(b"")  # Simulate a zero-byte Redis value.
+        service = AuthService(redis_client=redis_client)  # Use a fake client for the real reader.
+
+        with caplog.at_level("WARNING", logger=auth_module.__name__):  # Capture the warning.
+            result = service._read_cache("tok-empty")  # Exercise the empty-body cache path.
+
+        assert result is None  # The cache reader must take the same path as a cache miss.
+        assert caplog.text == ""  # The product treats an empty body as an ordinary cache miss.
+        expected_key = auth_module.privilege_cache_key("tok-empty")  # Build the expected key.
+        assert redis_client.key_read == expected_key  # Prove the real key path.
+
+    def test_read_cache_returns_none_and_logs_malformed_json(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        redis_client = _FakeRedisClient(b"{not valid JSONDecodeError")  # Simulate damaged Redis JSON.
+        service = AuthService(redis_client=redis_client)  # Use a fake client for the real reader.
+
+        with caplog.at_level("WARNING", logger=auth_module.__name__):  # Capture the warning.
+            result = service._read_cache("tok-malformed")  # Exercise the malformed cache path.
+
+        assert result is None  # The cache reader must take the same path as a cache miss.
+        assert "Discarding an unreadable privilege cache entry" in caplog.text  # Prove the log.
+        assert "Expecting property name enclosed in double quotes" in caplog.text  # Prove parse cause.
+        expected_key = auth_module.privilege_cache_key("tok-malformed")  # Build the expected key.
+        assert redis_client.key_read == expected_key  # Prove the real key path.
+
     def test_read_cache_returns_none_and_logs_schema_drift(
         self,
         caplog: pytest.LogCaptureFixture,
