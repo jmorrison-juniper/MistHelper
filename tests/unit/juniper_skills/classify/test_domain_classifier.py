@@ -161,6 +161,18 @@ class TestDomainClassifierSignals:
             assignment.signal == "fallback:juniper-general-reference:no-rule"
         )  # The signal must show no rule matched.
 
+    def test_generic_junos_does_not_select_fundamentals(self) -> None:
+        document = self.builder.document("Junos OS Overview Guide")  # Use a title without fundamentals terms.
+        assignment = self.classifier.classify_document(document)  # Prove a bare Junos word is not enough.
+        assert assignment.domain == "juniper-general-reference"  # Broad Junos titles must not bloat fundamentals.
+        assert assignment.low_confidence is True  # The broad title must stay visible for taxonomy review.
+
+    def test_small_product_gap_document_stays_fallback(self) -> None:
+        document = self.builder.document("SRC Short Flyer")  # Use a short document from a new product-gap domain.
+        assignment = self.classifier.classify_document(document)  # Prove the substantial-document floor applies.
+        assert assignment.domain == "juniper-general-reference"  # Short product mentions stay with flyer grouping.
+        assert assignment.low_confidence is True  # The fallback report still exposes the short document.
+
 
 class TestDomainClassifierKnownSet:
     """Measure known-answer accuracy for unambiguous documents."""
@@ -208,7 +220,7 @@ class TestDomainClassifierKnownSet:
             ("Contrail Cloud Native Guide", "juniper-cloud-native-contrail"),
             ("CN2 Kubernetes CNI Guide", "juniper-cloud-native-contrail"),
             ("EX4650 Ethernet Switch Hardware Guide", "juniper-campus-branch-switching"),
-            ("QFX Series Switching Guide", "juniper-campus-branch-switching"),
+            ("QFX Series Switching Guide", "juniper-datacenter-switching"),
             ("MX Series Hardware Datasheet", "juniper-hardware-platforms"),
             ("Optics Transceiver Cable Guide", "juniper-hardware-platforms"),
             ("Rack Mount Installation Guide", "juniper-installation-maintenance"),

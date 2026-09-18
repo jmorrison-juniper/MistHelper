@@ -15,6 +15,7 @@ from .taxonomy import (
     GENERAL_DOMAIN,
     SIGNAL_CONFIDENCE,
     SIGNAL_ORDER,
+    SUBSTANTIAL_ONLY_DOMAINS,
 )  # Use contract rules.
 
 LOW_CONFIDENCE_LIMIT = 0.70  # Flag fallback and content-only matches for review.
@@ -142,9 +143,7 @@ class DomainClassifier:
         return path.read_text(encoding="utf-8", errors="ignore")  # Decode damaged vendor text without failing the run.
 
     def _signals(self, document: DomainDocument) -> dict[str, str]:
-        path_signal = " ".join(
-            [document.source_pdf, *(str(path) for path in document.part_paths)]
-        )  # Combine all path evidence.
+        path_signal = document.source_pdf  # Use the canonical source path to avoid duplicate-part noise.
         return {  # Keep each signal separate so the audit trail names the winning source.
             "title": document.title,  # Title is the strongest signal.
             "path": path_signal,  # Path is the second signal because it carries category slugs.
@@ -175,10 +174,17 @@ class DomainClassifier:
         self, document: DomainDocument, signals: dict[str, str], signal_name: str
     ) -> DomainAssignment | None:
         for rule in DOMAIN_RULES:  # Apply the contract priority order within one signal.
+            if self._skip_small_product_gap(document, rule):  # Leave short product mentions for the flyer agent.
+                continue
             keyword = self._matched_keyword(rule, signal_name, signals[signal_name])  # Test one rule and one signal.
             if keyword:  # Stop on the first contract rule that matches this signal.
                 return self._assignment(document, rule, signal_name, keyword)  # Preserve the exact rule and keyword.
         return None  # No domain rule matched this signal.
+
+    def _skip_small_product_gap(self, document: DomainDocument, rule: DomainRule) -> bool:
+        if rule.domain not in SUBSTANTIAL_ONLY_DOMAINS:  # Apply the page floor only to new product-gap domains.
+            return False
+        return document.pages < 20  # Keep small flyers and case studies in the fallback bucket.
 
     def _match_rule(
         self, document: DomainDocument, rule: DomainRule, signals: dict[str, str], signal_order: tuple[str, ...]

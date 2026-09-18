@@ -14,6 +14,15 @@ SIGNAL_CONFIDENCE = {  # Rank signals so reports show how much evidence selected
     "fallback": 0.20,  # Mark the required fallback as low confidence by design.
 }
 SIGNAL_ORDER = ("title", "path", "category", "heading", "content")  # State the scan order for every document.
+SUBSTANTIAL_ONLY_DOMAINS = {  # Keep small fallback documents for the separate flyer grouping work.
+    "juniper-aaa-radius-policy",  # Classify only substantial Steel-Belted Radius documents here.
+    "juniper-legacy-security-management",  # Classify only substantial legacy security documents here.
+    "juniper-mobile-packet-core",  # Classify only substantial MobileNext documents here.
+    "juniper-network-management-platforms",  # Classify only substantial management platform documents here.
+    "juniper-optical-transport",  # Classify only substantial packet optical documents here.
+    "juniper-service-control-policy",  # Classify only substantial SRC and SDX documents here.
+    "juniper-service-provider-planning",  # Classify only substantial planning documents here.
+}
 DOCUMENT_TYPE_RULES = (  # Apply required document-type rules before normal domain rules.
     DomainRule(1, "juniper-software-lifecycle", ("release notes",), ("release-notes",)),  # Keep releases in lifecycle.
     DomainRule(2, "juniper-security-srx-firewall", ("srx", "vsrx", "csrx")),  # Route SRX names to firewall first.
@@ -73,6 +82,8 @@ DOMAIN_RULES = (  # Preserve the priority table from contracts/domain-taxonomy.m
             "netconf",
             "yang",
             "pyez",
+            "grpc",
+            "openflow",
             "ansible",
             "automation",
             "script",
@@ -134,10 +145,30 @@ DOMAIN_RULES = (  # Preserve the priority table from contracts/domain-taxonomy.m
             "orchestration",
             "proactive",
             "service assurance",
+            "ai-scripts",
+            "service now",
+            "service insight",
         ),
     ),
     DomainRule(
         12,
+        "juniper-network-management-platforms",
+        (
+            "junos space",
+            "connectivity services director",
+            "network director",
+            "edge services director",
+            "customer portal online help",
+            "cloud customer portal",
+            "cso",
+            "atom user guide",
+            "anuta atom",
+            "junosv app engine",
+            "junosphere",
+        ),
+    ),
+    DomainRule(
+        13,
         "juniper-subscriber-services",
         (
             "broadband subscriber",
@@ -151,12 +182,12 @@ DOMAIN_RULES = (  # Preserve the priority table from contracts/domain-taxonomy.m
         ),
     ),
     DomainRule(
-        13,
+        14,
         "juniper-mpls-transport",
         ("mpls", "ldp", "rsvp", "segment routing", "sr-mpls", "traffic engineering", "layer 3 vpn", "l3vpn"),
     ),
     DomainRule(
-        14,
+        15,
         "juniper-routing-protocols",
         (
             "bgp",
@@ -173,11 +204,20 @@ DOMAIN_RULES = (  # Preserve the priority table from contracts/domain-taxonomy.m
         ),
     ),
     DomainRule(
-        15,
+        16,
         "juniper-junos-fundamentals",
         (
-            "junos",
+            "beginner's guide to learning junos",
+            "junos os cli user guide",
+            "cli user guide",
+            "cli basics",
+            "configuration mode",
             "configuration hierarchy",
+            "first-time setup",
+            "high availability user guide",
+            "multinode high availability",
+            "timing and synchronization",
+            "continuity software",
             "commit",
             "rollback",
             "system services",
@@ -186,13 +226,32 @@ DOMAIN_RULES = (  # Preserve the priority table from contracts/domain-taxonomy.m
             "routing engine",
             "chassis cluster",
             "interfaces",
+            "licensing guide",
+            "standards reference",
         ),
     ),
     DomainRule(
-        16, "juniper-datacenter-apstra", ("apstra", "data center", "datacenter", "intent-based", "sfs", "smart fabric")
+        17,
+        "juniper-datacenter-switching",
+        (
+            "qfx",
+            "qfabric",
+            "complete software guide for junos os for the qfx",
+            "traffic management on the qfx",
+            "storage on the qfx",
+            "routing options on the qfx",
+            "security on the qfx",
+            "user and access management on the qfx",
+            "high availability features on the qfx",
+        ),
+        (),
+        (r"\bqfx\d+\b",),
     ),
     DomainRule(
-        17,
+        18, "juniper-datacenter-apstra", ("apstra", "data center", "datacenter", "intent-based", "sfs", "smart fabric")
+    ),
+    DomainRule(
+        19,
         "juniper-cloud-native-contrail",
         (
             "contrail",
@@ -207,7 +266,7 @@ DOMAIN_RULES = (  # Preserve the priority table from contracts/domain-taxonomy.m
         ),
     ),
     DomainRule(
-        18,
+        20,
         "juniper-mist-ai-cloud",
         (
             "mist",
@@ -222,25 +281,132 @@ DOMAIN_RULES = (  # Preserve the priority table from contracts/domain-taxonomy.m
             "radio",
             "antenna",
             "location services",
+            "wireless assessment",
+            "wireless location",
         ),
         (),
         (r"\bap\d+\b",),
     ),
     DomainRule(
-        19,
-        "juniper-campus-branch-switching",
-        ("campus", "branch", "switching", "switches", "switch", "ethernet switch", "wired access", "poe"),
-        (),
-        (r"\bex\d+\b", r"\bqfx\d+\b"),
+        21,
+        "juniper-mobile-packet-core",
+        (
+            "mobilenext",
+            "mobile next",
+            "broadband gateway",
+            "pdn gateway",
+            "p-gw",
+            "s-gw",
+            "ggsn",
+            "pcef",
+            "mobile gateway",
+            "charging for serving gateway",
+            "config-guide-mobility",
+            "juniper-mbg",
+            "swcmdref-mobility",
+            "statements and commands reference guide",
+            "serving gateway",
+            "gprs tunneling protocol",
+            "redundancy",
+            "system architecture",
+            "network architecture",
+            "exception handling",
+        ),
     ),
     DomainRule(
-        20,
+        22,
+        "juniper-aaa-radius-policy",
+        ("steel-belted", "steel belted", "radius carrier", "funk steel-belted radius"),
+    ),
+    DomainRule(
+        23,
+        "juniper-service-control-policy",
+        (
+            "session and resource control",
+            "src pe",
+            "src cli",
+            "src-pe",
+            "sdx",
+            "application library guide",
+            "subscribers and subscriptions guide",
+            "services and policies guide",
+        ),
+        (),
+        (r"\bsrc\b",),
+    ),
+    DomainRule(
+        24,
+        "juniper-optical-transport",
+        (
+            "bti7000",
+            "bti7800",
+            "tl1 reference",
+            "packetvx",
+            "ctpview",
+            "ctp series",
+            "tcx series",
+            "optical transport",
+        ),
+    ),
+    DomainRule(
+        25,
+        "juniper-legacy-security-management",
+        (
+            "network and security manager",
+            "network security manager",
+            "nsm",
+            "screenos",
+            "firefly host",
+            "firefly perimeter",
+            "vgw series",
+            "webapp secure",
+            "mykonos",
+            "strm",
+            "netscreen",
+            "isg 2000",
+            "corero smartwall",
+            "juniper atp appliance",
+            "secintel",
+            "policy enforcer",
+            "application layer gateways",
+            "attack detection",
+            "public key infrastructure",
+            "hardening junos devices",
+        ),
+    ),
+    DomainRule(
+        26,
+        "juniper-service-provider-planning",
+        ("ip/mplsview", "ip-mplsview", "wandl", "proactive services", "packet walkthrough", "junos fusion"),
+    ),
+    DomainRule(
+        27,
+        "juniper-campus-branch-switching",
+        (
+            "campus",
+            "branch",
+            "switching",
+            "switches",
+            "switch",
+            "ethernet switch",
+            "wired access",
+            "spanning-tree",
+            "spanning tree",
+            "poe",
+        ),
+        (),
+        (r"\bex\d+\b",),
+    ),
+    DomainRule(
+        28,
         "juniper-hardware-platforms",
         (
             "datasheet",
             "data sheet",
             "hardware",
             "platform",
+            "hwguide",
+            "hw guide",
             "chassis",
             "line card",
             "mic",
@@ -253,17 +419,20 @@ DOMAIN_RULES = (  # Preserve the priority table from contracts/domain-taxonomy.m
             "adapter",
             "optics",
             "cable",
+            "m20",
+            "m40",
+            "m160",
         ),
         ("datasheets",),
     ),
     DomainRule(
-        21,
+        29,
         "juniper-installation-maintenance",
         ("installation", "install", "rack", "mount", "cabling", "replacement", "fru", "maintenance"),
         ("installation-guides", "configuration-guides", "administration-guides"),
     ),
     DomainRule(
-        22,
+        30,
         "juniper-training-learning",
         (
             "day one",
@@ -280,7 +449,7 @@ DOMAIN_RULES = (  # Preserve the priority table from contracts/domain-taxonomy.m
         ),
     ),
     DomainRule(
-        23,
+        31,
         "juniper-business-solutions",
         (
             "case study",
@@ -311,7 +480,7 @@ DOMAIN_RULES = (  # Preserve the priority table from contracts/domain-taxonomy.m
         ),
     ),
     DomainRule(
-        24,
+        32,
         "juniper-legal-corporate",
         (
             "anti-corruption",
