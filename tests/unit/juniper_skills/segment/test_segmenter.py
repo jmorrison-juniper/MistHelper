@@ -68,8 +68,10 @@ class TestDocumentSegmenter:
         result = DocumentSegmenter().segment_text(source, "junos-beginners-guide")  # Segment the repaired document.
         combined = "\n".join(segment.text for segment in result.segments)  # Combine output for structural assertions.
         assert "## DAY ONE" not in combined  # Check the fake cover heading was removed.
+        assert "a Juniper network" not in combined  # Check the cover region text was removed.
         assert "## Chapter 1" in combined  # Check the first real heading remains.
         assert result.repair.cover_headings == 5  # Check the cover-art repair reports its measured count.
+        assert result.non_knowledge_sections == 1  # Check the removed cover region is measured.
 
     def test_splits_oversize_topic_below_hard_limit(self) -> None:
         paragraph = "This paragraph gives a measured routing fact for the segmenter. " * 80  # Build real prose shape.
@@ -78,6 +80,42 @@ class TestDocumentSegmenter:
         assert len(result.segments) > 1  # Check the oversize topic split into multiple topics.
         assert not result.hard_limit_breaks  # Check every topic obeys the hard limit.
         assert all(segment.page_start == 1 for segment in result.segments)  # Check page citation stays present.
+
+    def test_repairs_duplicate_generic_topic_names(self) -> None:
+        source = "\n".join(
+            [
+                "<!-- page 1 -->",
+                "## CLI Basics",
+                "Body.",
+                "## Summary",
+                "CLI summary.",
+                "## Routing Basics",
+                "Body.",
+                "## Summary",
+                "Routing summary.",
+            ]
+        )  # Build repeated generic headings like a converted book.
+        result = DocumentSegmenter(soft_limit=20, tiny_limit=1).segment_text(source, "generic")  # Segment for names.
+        titles = [segment.title for segment in result.segments]  # Read the names that route to topic files.
+        assert result.duplicate_names == 0  # Check every topic route name is unique.
+        assert "CLI Basics Summary" in titles  # Check a generic heading gains parent context.
+        assert "Routing Basics Summary" in titles  # Check the second generic heading gains its own context.
+
+    def test_writes_index_and_word_boundary_slugs(self) -> None:
+        output = Path("data") / "juniper_skills" / "segment_write_test"  # Keep generated proof files in data.
+        shutil.rmtree(output, ignore_errors=True)  # Remove files from a prior interrupted run.
+        title = "Configuring Your Device Active Configs Versus Candidate Configuration"  # Use a long real title.
+        source = f"<!-- page 7 -->\n## {title}\nBody text."  # Build a one-topic document with a long heading.
+        try:  # Clean generated files even when an assertion fails.
+            segmenter = DocumentSegmenter()  # Use the production segmenter defaults.
+            result = segmenter.segment_text(source, "slug")  # Segment the test document.
+            segmenter.write_topic_tree(result, output, "SLUG")  # Write topic files and the level 2 index.
+            files = {path.name for path in output.glob("*.md")}  # Read generated Markdown file names.
+            assert "INDEX.md" in files  # Check the required level 2 index exists.
+            assert not any(name.endswith("conf.md") for name in files)  # Check the slug does not cut a word.
+            assert any(name.endswith("candidate.md") for name in files)  # Check truncation keeps a whole word.
+        finally:  # Always clean repository-local generated files.
+            shutil.rmtree(output, ignore_errors=True)  # Remove the generated topic tree.
 
 
 class TestPartSetJoiner:

@@ -14,6 +14,7 @@ class DefectRepairResult:
     text: str  # Store Markdown after converter defect repair.
     orphan_words: int  # Count single-word lines joined into the preceding sentence.
     cover_headings: int  # Count fake cover-art headings removed before the real structure.
+    non_knowledge_sections: int = 0  # Count front matter sections that do not teach agent knowledge.
 
 
 class OrphanWordRepairer:
@@ -33,7 +34,7 @@ class OrphanWordRepairer:
             index += 1  # Continue after the current source line.
         repaired = "\n".join(line for line in lines if line is not None)  # Remove orphan lines that were joined.
         logging.debug("Repaired %s orphan inline words", repairs)  # Report the measured repair count.
-        return DefectRepairResult(repaired, repairs, 0)  # Cover-art repair runs in another class.
+        return DefectRepairResult(repaired, repairs, 0, 0)  # Cover-art repair runs in another class.
 
     def _is_orphan(self, lines: list[str | None], index: int) -> bool:
         line = lines[index] or ""  # Treat a removed line as empty during later checks.
@@ -98,10 +99,11 @@ class CoverArtHeadingRepairer:
             logging.debug("Removed %s cover-art headings", 0)  # Report that no cover block existed.
             return result
         heading_count = sum(1 for line in lines[:real_start] if line.startswith("## "))  # Measure fake headings.
-        repaired = self._drop_headings(lines, real_start) if heading_count >= 5 else lines  # Drop only cover blocks.
+        repaired = self._drop_prefix(lines, real_start) if heading_count >= 5 else lines  # Drop the cover block.
+        dropped = 1 if heading_count >= 5 else 0  # Count the front matter region as one non-knowledge section.
         logging.debug("Removed %s cover-art headings", heading_count if heading_count >= 5 else 0)  # Report count.
         return DefectRepairResult(
-            "\n".join(repaired), result.orphan_words, heading_count if heading_count >= 5 else 0
+            "\n".join(repaired), result.orphan_words, heading_count if heading_count >= 5 else 0, dropped
         )  # Return metrics.
 
     def _real_start_index(self, lines: list[str]) -> int | None:
@@ -110,9 +112,8 @@ class CoverArtHeadingRepairer:
                 return index
         return None  # No cover art block can be proven.
 
-    def _drop_headings(self, lines: list[str], real_start: int) -> list[str]:
-        prefix = [line for line in lines[:real_start] if not line.startswith("## ")]  # Remove fake heading lines only.
-        return [*prefix, *lines[real_start:]]  # Keep the real document structure and all other text.
+    def _drop_prefix(self, lines: list[str], real_start: int) -> list[str]:
+        return lines[real_start:]  # Drop cover, marketing, reviewers, and copyright before the real structure.
 
 
 class DocumentDefectRepairer:
