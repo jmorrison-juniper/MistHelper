@@ -50,6 +50,12 @@ class DepthExtractionResult:
     pages: tuple[int, ...]  # Store every page that produced at least one line.
     topics: tuple[TopicSplit, ...]  # Store rendered topic parts after size splitting.
     source_prose_chars: int  # Store the measurable source size.
+    fact_type_counts: dict[str, int]  # Store deduplicated card counts by extractor fact class.
+
+    @property
+    def table_card_count(self) -> int:
+        """Return the count of deduplicated table-derived cards."""
+        return self.fact_type_counts.get("table-row", 0)  # Report table rows as the table-derived metric.
 
     @property
     def cards_per_page(self) -> float:

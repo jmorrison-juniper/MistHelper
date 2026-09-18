@@ -30,8 +30,9 @@ class FactExtractor(ABC):
     def _fact(self, mark: CardClassMark, fact: str, line: SourceLine, source_key: str) -> ExtractedFact:
         """Return one candidate fact with a precise page citation."""
         citation = f"[{source_key} p.{line.page}]"  # Build the exact citation string.
+        scoped_fact = self._with_qualifier(fact, line.text)  # Attach a platform or release qualifier when present.
         span = line.text[:160]  # Keep a bounded source span for dedup priority only.
-        return ExtractedFact(self.fact_type, mark, fact, citation, span)  # Return the candidate fact.
+        return ExtractedFact(self.fact_type, mark, scoped_fact, citation, span)  # Return the candidate fact.
 
     def _mark_for(self, text: str) -> CardClassMark:
         """Return the required card class from source language."""
@@ -46,6 +47,24 @@ class FactExtractor(ABC):
         """Return a short source phrase that stays below the guard clear line."""
         words = re.findall(r"[A-Za-z][A-Za-z0-9._/-]*", text)  # Keep technical words in source order.
         return " ".join(words[:size])  # Limit copied prose so adjacent cards stay below the warning band.
+
+    def _with_qualifier(self, fact: str, source_text: str) -> str:
+        """Return fact text with a source platform or release qualifier."""
+        qualifier = self._qualifier(source_text)  # Extract scope from the same source line.
+        if not qualifier or qualifier in fact:  # Avoid duplicate scope text on qualifier cards.
+            return fact  # Return unchanged text when no new qualifier exists.
+        return f"{fact} Qualifier `{qualifier}` applies."  # Put the qualifier in each scoped card.
+
+    def _qualifier(self, text: str) -> str:
+        """Return the first platform or release qualifier from source text."""
+        match = re.search(
+            r"\b(on|for|from|starting in|introduced in)\s+"
+            r"((?:Junos\s+OS\s+)?\d+\.\d+[A-Za-z0-9.-]*|[A-Z]{2,6}\s+Series|"
+            r"EX\d{4}|QFX\d{4}|SRX\d{3,4}|MX\d{3,4})",
+            text,
+            re.IGNORECASE,
+        )  # Detect the same qualifier classes that require card scope.
+        return match.group(0) if match else ""  # Return exact source spelling when a qualifier exists.
 
 
 class CommandFactExtractor(FactExtractor):
@@ -95,7 +114,7 @@ class CommandFactExtractor(FactExtractor):
     def _argument_tokens(self, command: str) -> tuple[str, ...]:
         """Return visible command options and arguments."""
         tokens = tuple(part for part in command.split()[1:] if self._is_argument(part))  # Keep non-verb tokens.
-        return tokens[:12]  # Bound one very long line while keeping every useful prefix token.
+        return tokens  # Keep every option and argument that the source shows.
 
     def _is_argument(self, token: str) -> bool:
         """Return whether one token is useful as a command argument."""
@@ -162,12 +181,43 @@ class TableRowFactExtractor(FactExtractor):
     def _extract(self, lines: tuple[SourceLine, ...], source_key: str) -> list[ExtractedFact]:
         facts: list[ExtractedFact] = []  # Collect table facts in source order.
         headers: dict[int, tuple[str, ...]] = {}  # Track the last header for each source page.
+        title = ""  # Track PDF text tables that do not survive as Markdown pipe tables.
+        skipped_header = False  # Skip the text-table header row before body rows.
         for line in lines:  # Walk in order so each body row receives the active header.
+            title, skipped_header = self._text_table_state(title, skipped_header, line)  # Update table state.
+            skipped_header = self._append_text_table_fact(  # Add text-table rows or skip the header.
+                facts, title, skipped_header, line, source_key
+            )
             headers = self._headers(headers, line)  # Update headers when the line is a table header.
             fact = self._row_fact(headers.get(line.page, tuple()), line, source_key)  # Try to emit a row fact.
             if fact:  # Divider rows and headers do not create body facts.
                 facts.append(fact)  # Store the table row as one fact.
         return facts  # Return table row facts for the engine.
+
+    def _text_table_state(self, title: str, skipped_header: bool, line: SourceLine) -> tuple[str, bool]:
+        """Return the active text-table title and header state."""
+        if self._is_text_table_heading(line.text):  # PDF text tables start with a heading line.
+            return self._table_title(line.text), False  # Store the table title and reset header skipping.
+        if title and self._ends_text_table(line.text):  # A new section ends the current text table.
+            return "", False  # Clear the table state.
+        return title, skipped_header  # Keep the prior state for body lines.
+
+    def _append_text_table_fact(
+        self, facts: list[ExtractedFact], title: str, skipped_header: bool, line: SourceLine, source_key: str
+    ) -> bool:
+        """Append a fact for one PDF text-table row when applicable."""
+        if not title or not self._text_table_row(line.text):  # Require a table section and body-like text.
+            return skipped_header  # Keep the current header state.
+        if not skipped_header:  # The first row after a table title is usually the table header.
+            return True  # Mark the header skipped for following body rows.
+        facts.append(self._text_table_fact(title, line, source_key))  # Add one fact for the text-table row.
+        return skipped_header  # Keep the header skipped state.
+
+    def _text_table_fact(self, title: str, line: SourceLine, source_key: str) -> ExtractedFact:
+        """Return one fact from a PDF text-table row."""
+        row_start = self._snippet(line.text)  # Keep the row context below the clear-band threshold.
+        fact = f"Table `{title}` has row context {row_start}."  # State the row without copying long prose.
+        return self._fact(self._mark_for(line.text), fact, line, source_key)  # Return the table row fact.
 
     def _headers(self, headers: dict[int, tuple[str, ...]], line: SourceLine) -> dict[int, tuple[str, ...]]:
         """Return updated table headers after one line."""
@@ -218,6 +268,27 @@ class TableRowFactExtractor(FactExtractor):
         if len(words) > 7:  # Long table descriptions are protected prose.
             return self._snippet(cell)  # Restate long cells as a short clear-band phrase.
         return f"`{cell}`"  # Keep short cells exact because they are structured data.
+
+    def _is_text_table_heading(self, text: str) -> bool:
+        """Return whether a line starts a PDF text table."""
+        return bool(re.match(r"^#{2,6}\s+Table\s+\d+:", text.strip()))  # Detect converted table headings.
+
+    def _table_title(self, text: str) -> str:
+        """Return a safe table title from a heading line."""
+        title = re.sub(r"^#{2,6}\s+", "", text.strip())  # Remove Markdown heading marks.
+        return title.replace("(Continued)", "").strip()  # Merge continued tables under the same title.
+
+    def _ends_text_table(self, text: str) -> bool:
+        """Return whether the current text table has ended."""
+        stripped = text.strip()  # Normalize edge whitespace before structural checks.
+        return bool(stripped.startswith("#") or stripped.startswith("<!-- page"))  # Stop at a new section or page.
+
+    def _text_table_row(self, text: str) -> bool:
+        """Return whether one line is content in a PDF text table."""
+        stripped = text.strip()  # Normalize edge whitespace for row checks.
+        if not stripped or stripped.startswith("#") or self._is_table(stripped):  # Pipe tables use the Markdown path.
+            return False  # Do not duplicate pipe table rows.
+        return bool(re.search(r"[A-Za-z0-9]", stripped))  # Keep rows that contain data.
 
 
 class OutputFieldFactExtractor(FactExtractor):

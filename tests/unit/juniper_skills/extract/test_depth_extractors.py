@@ -40,10 +40,11 @@ class TestDepthExtractors:
 
     def test_numeric_extractor_classifies_required_limits(self) -> None:
         """A numeric extractor finds limits and marks required text as MUST."""
-        source = "<!-- page 9 -->\nYou must configure a maximum 4096 VLANs on this platform."  # Source.
+        source = "<!-- page 9 -->\nYou must configure a maximum 4096 VLANs on MX Series."  # Source.
         facts = self._facts(NumericFactExtractor(), source)  # Extract the numeric limit.
         assert facts[0].mark == CardClassMark.MUST  # Prove mandatory language classification.
         assert "`maximum 4096 VLANs`" in facts[0].fact  # Prove numeric value preservation.
+        assert "Qualifier `on MX Series` applies." in facts[0].fact  # Prove scoped facts keep qualifiers.
 
     def test_table_row_extractor_emits_one_fact_per_row(self) -> None:
         """A table row extractor emits each body row as one fact."""
@@ -51,6 +52,15 @@ class TestDepthExtractors:
         facts = self._facts(TableRowFactExtractor(), source)  # Extract table body rows.
         assert len(facts) == 2  # Prove one fact exists for each table body row.
         assert "`Field` is `State`" in facts[0].fact  # Prove header-to-cell pairing.
+
+    def test_table_row_extractor_reads_pdf_text_tables(self) -> None:
+        """A table extractor emits rows from converted PDF text tables."""
+        source = "\n".join(  # Build a converted table without Markdown pipe syntax.
+            ("<!-- page 16 -->", "#### Table 1: Platform Support", "Platform Description", "MX Series Supports EVPN")
+        )
+        facts = self._facts(TableRowFactExtractor(), source)  # Extract the text table row.
+        assert len(facts) == 1  # Prove the header row was skipped and the body row was kept.
+        assert "Table `Table 1: Platform Support`" in facts[0].fact  # Prove the table title was retained.
 
     def test_output_field_extractor_finds_field_meaning(self) -> None:
         """An output field extractor finds output fields and meanings."""
@@ -139,7 +149,17 @@ class TestDepthEngine:
 
     def test_engine_reports_cards_per_page_and_retention(self) -> None:
         """The engine reports cards for each page and retained content."""
-        source = "<!-- page 1 -->\nshow interfaces terse\n<!-- page 2 -->\ndefault 30 seconds"  # Source.
+        source = "\n".join(  # Build a two-page source with one table row.
+            (
+                "<!-- page 1 -->",
+                "show interfaces terse",
+                "<!-- page 2 -->",
+                "| Field | Meaning |",
+                "| --- | --- |",
+                "| State | Up |",
+            )
+        )
         result = FactExtractionEngine().extract_text(source, "TEST")  # Extract and measure the source.
         assert result.cards_per_page >= 1.0  # Prove the page density metric is populated.
+        assert result.table_card_count == 1  # Prove the table-derived metric counts deduplicated cards.
         assert result.retention_percent > 0.0  # Prove the retention metric is populated.

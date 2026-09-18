@@ -40,12 +40,14 @@ class FactExtractionEngine:
         logging.info("Starting depth extraction for %s", source_key)  # Log before the full extraction.
         lines = self.parser.parse(text)  # Attach page numbers to all source lines.
         facts = self._facts(lines, source_key)  # Run each class-specific extractor.
-        cards, merges = self._deduplicate(facts)  # Merge repeated facts from long documents.
+        kept_facts, merges = self._deduplicate(facts)  # Merge repeated facts from long documents.
+        cards = tuple(fact.to_card() for fact in kept_facts)  # Convert kept facts to topic cards.
+        type_counts = self._type_counts(kept_facts)  # Count deduplicated cards by extractor fact class.
         topics = self._topics(cards, source_key)  # Render and split topic Markdown.
         prose_chars = self.parser.prose_chars(text)  # Measure source prose for retention.
         pages = tuple(sorted({line.page for line in lines}))  # Count pages that had source content.
         logging.debug("Depth extraction kept %d cards after %d merges", len(cards), merges)  # Log final counts.
-        return DepthExtractionResult(cards, len(facts), merges, pages, topics, prose_chars)  # Return the report.
+        return DepthExtractionResult(cards, len(facts), merges, pages, topics, prose_chars, type_counts)  # Return.
 
     def extract_path(self, path: Path, source_key: str | None = None) -> DepthExtractionResult:
         """Return dense cards for one Markdown source file."""
@@ -78,17 +80,26 @@ class FactExtractionEngine:
         logging.debug("Extractors emitted %d raw facts", len(facts))  # Log raw extraction count.
         return tuple(facts)  # Return immutable facts for deduplication.
 
-    def _deduplicate(self, facts: tuple[ExtractedFact, ...]) -> tuple[tuple[KnowledgeCard, ...], int]:
+    def _deduplicate(self, facts: tuple[ExtractedFact, ...]) -> tuple[tuple[ExtractedFact, ...], int]:
         """Return deduplicated cards and the merge count."""
         logging.info("Deduplicating extracted facts")  # Log before merge analysis.
         by_key: dict[str, ExtractedFact] = {}  # Store the fullest fact for each normalized meaning.
         for fact in facts:  # Check every extracted fact for repeated meaning.
             key = self._dedup_key(fact)  # Normalize away citation and minor wording differences.
             by_key[key] = self._fuller(by_key.get(key), fact)  # Keep the fact with the fullest source span.
-        cards = tuple(item.to_card() for item in by_key.values())  # Convert remaining facts to topic cards.
-        merges = len(facts) - len(cards)  # Count how many candidates merged away.
+        kept_facts = tuple(by_key.values())  # Keep fact type metadata after deduplication.
+        merges = len(facts) - len(kept_facts)  # Count how many candidates merged away.
         logging.debug("Merged %d repeated facts", merges)  # Log deduplication effectiveness.
-        return cards, merges  # Return both cards and evidence count.
+        return kept_facts, merges  # Return both facts and evidence count.
+
+    def _type_counts(self, facts: tuple[ExtractedFact, ...]) -> dict[str, int]:
+        """Return the deduplicated card count for each fact type."""
+        logging.info("Counting deduplicated facts by extractor type")  # Log before result metric aggregation.
+        counts: dict[str, int] = {}  # Store each fact type count for reports.
+        for fact in facts:  # Count only facts that survived deduplication.
+            counts[fact.fact_type] = counts.get(fact.fact_type, 0) + 1  # Add one fact to its extractor class.
+        logging.debug("Counted %d deduplicated fact types", len(counts))  # Log the number of populated types.
+        return counts  # Return counts for measurement reports.
 
     def _dedup_key(self, fact: ExtractedFact) -> str:
         """Return a stable key for equivalent facts."""
