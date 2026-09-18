@@ -14,6 +14,14 @@ from src.config.source_dependency_resolver import (
 from src.utils.console import echo
 
 logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
+_HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
+
+
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
 class SSIDBroadcastGapReport:
@@ -41,6 +49,7 @@ class SSIDBroadcastGapReport:
     def _find_missing_sites(apisession: Any, sites: list[dict[str, Any]], ssid: str) -> list[dict[str, Any]]:
         """Return sites without an enabled WLAN that exactly matches the SSID."""
         missing: list[dict[str, Any]] = []  # WHY: collect report rows in site order.
+        failed = False  # WHY: suppress the final success count when any site query fails.
         for site in sites:  # WHY: evaluate each organization site.
             site_id = str(site.get("id", ""))  # WHY: the derived endpoint requires a site identifier.
             if not site_id:  # WHY: skip malformed site records that cannot be queried.
@@ -49,6 +58,15 @@ class SSIDBroadcastGapReport:
             response = mistapi.api.v1.sites.wlans.listSiteWlansDerived(
                 apisession, site_id, resolve=True
             )  # WHY: resolve template and filter inheritance into effective WLANs.
+            status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+            if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status cannot prove a site misses the SSID.
+                logger.error(  # WHY: the operator must see the cloud status instead of a false missing-site row.
+                    "The cloud returned HTTP %s for derived WLANs at site %s",
+                    status_code,
+                    site_id,
+                )
+                failed = True  # WHY: mark the report incomplete so the final count does not mislead.
+                continue  # WHY: preserve the list return while avoiding a false conclusion.
             wlans = getattr(response, "data", response)  # WHY: support SDK response objects and test lists.
             if not SSIDBroadcastGapReport._has_enabled_ssid(wlans, ssid):  # WHY: report only absent broadcasts.
                 missing.append(
@@ -59,6 +77,8 @@ class SSIDBroadcastGapReport:
                         "ssid": ssid,
                     }
                 )  # WHY: retain a stable row key and operator-readable fields.
+        if failed:  # WHY: an incomplete report cannot claim a complete missing-site count.
+            return missing  # WHY: preserve the list return while suppressing the false success log.
         logger.info("SSID gap report found %d sites", len(missing))  # WHY: record report size.
         return missing
 

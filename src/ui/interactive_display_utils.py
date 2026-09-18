@@ -54,7 +54,7 @@ class InteractiveDisplayUtils:
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logger.info("Prompting user to select a device for detailed statistics view...")  # Log the prompt.
-        mh.DeviceDataFetcher(  # Fetch and display.
+        fetched = mh.DeviceDataFetcher(  # Fetch and display.
             DeviceFetchConfig(  # Issue #470: bundle fetch params (T-01: imported from src.refactors).
                 fetch_function=mistapi.api.v1.sites.stats.getSiteDeviceStats,
                 filename="DeviceStats.csv",
@@ -63,6 +63,8 @@ class InteractiveDisplayUtils:
                 device_id=device_id,
             )
         ).fetch()
+        if fetched is False:  # WHY: only an explicit failure skips the completion report.
+            return  # WHY: preserve the existing None return contract for this display.
         logger.info("Completed device_stats execution.")  # Log completion.
 
     @staticmethod
@@ -70,7 +72,7 @@ class InteractiveDisplayUtils:
         """Prompt user to select a gateway device and display its synthetic test stats."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logger.info("Prompting user to select a gateway device for synthetic test stats view...")  # Log the prompt.
-        mh.DeviceDataFetcher(  # Fetch and display.
+        fetched = mh.DeviceDataFetcher(  # Fetch and display.
             DeviceFetchConfig(  # Issue #470: bundle fetch params (T-01: imported from src.refactors).
                 fetch_function=mistapi.api.v1.sites.devices.getSiteDeviceSyntheticTest,
                 filename="DeviceTestResults.csv",
@@ -78,6 +80,8 @@ class InteractiveDisplayUtils:
                 device_type="gateway",
             )
         ).fetch()
+        if fetched is False:  # WHY: only an explicit failure skips the completion report.
+            return  # WHY: preserve the existing None return contract for this display.
         logger.info("Completed device_tests execution.")  # Log completion.
 
     @staticmethod
@@ -85,11 +89,13 @@ class InteractiveDisplayUtils:
         """Prompt user to select a device and display its configuration details."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logger.info("Prompting user to select a device for configuration details view...")  # Log the prompt.
-        mh.DeviceDataFetcher(  # Fetch and display.
+        fetched = mh.DeviceDataFetcher(  # Fetch and display.
             DeviceFetchConfig(  # Issue #470: bundle fetch params (T-01: imported from src.refactors).
                 fetch_function=mistapi.api.v1.sites.devices.getSiteDevice,
                 filename="DeviceConfig.csv",
                 description="Fetching device configuration",
             )
         ).fetch()
+        if fetched is False:  # WHY: only an explicit failure skips the completion report.
+            return  # WHY: preserve the existing None return contract for this display.
         logger.info("Completed device_config execution.")  # Log completion.
