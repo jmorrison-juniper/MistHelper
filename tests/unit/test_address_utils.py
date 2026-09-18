@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from src.utils import address_utils as address_mod
 from src.utils.address_utils import (
     AddressUtils,
     AddressValidationConfig,
@@ -808,6 +809,26 @@ class TestNominatimValidatorAPI:
             with patch("time.sleep"):
                 result = self.validator._make_api_request("123 Main")  # WHY: source left the signature
                 assert result is None
+
+    def test_try_request_attempt_returns_none_on_timeout(self):
+        """A Nominatim timeout must return no response for the retry loop."""
+        timeout = address_mod.requests.exceptions.Timeout("synthetic timeout")  # Use the transport timeout type.
+        with patch("src.utils.address_utils.requests") as mock_requests:  # Replace the HTTP client only.
+            mock_requests.get.side_effect = timeout  # Force the product HTTP call to time out.
+            result = self.validator._try_request_attempt(  # Drive the real per-attempt request method.
+                {"format": "json", "q": "123 Main", "limit": 1},  # Supply the expected query fields.
+                {"User-Agent": self.validator.USER_AGENT},  # Supply the required Nominatim header.
+                True,  # Keep certificate verification enabled.
+                self.validator.MAX_RETRIES,  # Use final attempt so the test does not sleep.
+            )
+        assert result is None  # The retry loop must receive a no-response signal after a timeout.
+        mock_requests.get.assert_called_once_with(  # The timeout must come from the real product call.
+            self.validator.NOMINATIM_URL,
+            params={"format": "json", "q": "123 Main", "limit": 1},
+            headers={"User-Agent": self.validator.USER_AGENT},
+            timeout=self.validator.timeout + (self.validator.MAX_RETRIES * 5),
+            verify=True,
+        )
 
     def test_parse_geocode_response_not_200(self):
         mock_resp = MagicMock()
