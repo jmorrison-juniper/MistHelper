@@ -84,6 +84,8 @@ MENU_DESCRIPTIONS = {
     "78": "Generate support package for each site",
     "79": "Execute a CLI command on a gateway or switch",
     "80": "Run ARP command on an AP via WebSocket",
+    # Issue #2985. The scan sits above the static block above, so keep the key explicit.
+    "269": "Scan the organization for rogue DHCP servers on switches (30 days)",
 }
 
 
