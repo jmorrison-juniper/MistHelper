@@ -176,22 +176,23 @@ class SkillIssueTracker:
         """Send one queued stage event to GitHub."""
         try:
             self.rate_limit.defer_if_needed()  # Measure the API bucket before the comment call.
-            self._comment_issue(event)  # Write the machine-readable audit comment.
+            issue_number = self._document_issue_number(str(event["document_key"]))  # Read the current issue link.
+            self._comment_issue(event, issue_number)  # Write the machine-readable audit comment.
             self.store.mark_stage_event_synced(int(event["id"]))  # Mark the row only after GitHub accepts the comment.
             return 1
         except (GitHubCliError, GitHubRateLimitExhausted) as error:
             logging.debug("Deferred GitHub journal sync after error: %s", error)  # Leave the row queued for retry.
             return 0
 
-    def _comment_issue(self, event: dict[str, object]) -> None:
+    def _comment_issue(self, event: dict[str, object], issue_number: int) -> None:
         """Write one stage comment to a document issue."""
-        logging.info("Writing a stage audit comment to GitHub issue %s", event["issue_number"])  # Record the write.
+        logging.info("Writing a stage audit comment to GitHub issue %s", issue_number)  # Record the write.
         self.runner.run(  # Write the crash-recovery journal comment to GitHub.
             [
                 "gh",
                 "issue",
                 "comment",
-                str(event["issue_number"]),
+                str(issue_number),
                 "--repo",
                 self.repo,
                 "--body",
