@@ -69,7 +69,16 @@ def extract_command_session(
             "%s command failed; status=%s", command_label, response.status_code
         )
         return None  # Signal caller to abort
-    response_payload = response.json()  # Parse JSON body returned by the API
+    try:  # WHY: a 200 reply can still carry an empty or malformed body.
+        response_payload = response.json()  # Parse JSON body returned by the API
+    except ValueError as parse_error:  # WHY: JSONDecodeError subclasses ValueError.
+        logger.error(  # WHY: log the parse failure before returning the existing failure contract.
+            "The cloud returned an unparseable body for %s: %s",
+            getattr(response, "url", "unknown endpoint"),
+            parse_error,
+        )
+        websocket_manager.disconnect()  # Free the WS since no command result can be correlated
+        return None  # Signal caller to abort
     session_id = response_payload.get("session")  # Pull the session identifier used for demux
     if not session_id:  # API contract requires a session id for result correlation
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.

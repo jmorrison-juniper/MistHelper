@@ -287,7 +287,16 @@ class _RoutingUtilsPayload:  # WHY: cluster wrapper matching the parsing/display
         """Project a device command HTTP response into ``(session_id, error_msg)``."""
         if response.status_code != HTTPStatus.OK:  # WHY: any non-200 surfaces as an error message
             return None, f"HTTP {response.status_code}: {response.text}"  # WHY: preserve body detail
-        session_id: str | None = response.json().get("session")  # WHY: session key holds the id
+        try:  # WHY: a 200 reply can still carry an empty or malformed body.
+            response_payload = response.json()  # WHY: parse the envelope that holds the session id.
+        except ValueError as parse_error:  # WHY: JSONDecodeError subclasses ValueError.
+            logger.error(  # WHY: log the parse failure before returning the existing error tuple.
+                "The cloud returned an unparseable body for %s: %s",
+                getattr(response, "url", "unknown endpoint"),
+                parse_error,
+            )
+            return None, "Unparseable response body"  # WHY: match the existing (None, error_msg) contract.
+        session_id: str | None = response_payload.get("session")  # WHY: session key holds the id
         if not session_id:  # WHY: missing session id is a soft failure (API accepted but no id)
             return None, "No session ID returned"  # WHY: caller surfaces this message to the user
         return session_id, None  # WHY: happy path — id present, no error

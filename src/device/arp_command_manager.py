@@ -94,7 +94,12 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         response = requests.post(url, headers=headers, json={}, timeout=30)  # POST the command.
 
         if response.status_code == 200:  # Success.
-            session_id = response.json().get("session")  # Read the session id.
+            try:  # WHY: a 200 reply can still carry an empty or malformed body.
+                response_payload = response.json()  # WHY: parse the envelope that holds the session id.
+            except ValueError as parse_error:  # WHY: JSONDecodeError subclasses ValueError.
+                logger.error("The cloud returned an unparseable body for %s: %s", url, parse_error)  # WHY: log cause.
+                return None  # WHY: callers already abort when no session id is returned.
+            session_id = response_payload.get("session")  # Read the session id.
             logger.info(
                 "! ARP command triggered. Session ID: %s", session_id
             )  # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
