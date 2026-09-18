@@ -11,7 +11,7 @@ from __future__ import annotations
 import csv
 import logging
 import time
-from typing import Literal
+from typing import Any, Literal
 
 import mistapi
 from prettytable import PrettyTable
@@ -28,6 +28,14 @@ from src.utils.file_path_utils import FilePathUtils
 from src.utils.input_utils import InputUtils
 
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+_HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
+
+
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
 class PromptUtils:  # General prompt helpers.
@@ -275,6 +283,14 @@ class PromptUtils:  # General prompt helpers.
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         try:
             response = mistapi.api.v1.sites.clients.searchSiteWirelessClients(mh.apisession, site_id, limit=1000)
+            status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+            if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the client count unsafe.
+                logger.error(  # WHY: the operator must see the cloud status instead of a false zero-client count.
+                    "The cloud returned HTTP %s for site wireless clients at site %s",
+                    status_code,
+                    site_id,
+                )
+                return []  # WHY: preserve the existing empty-list failure contract.
             clients = mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page through all results.
             for client in clients:  # Tag each client.
                 client["client_type"] = "wireless"  # Mark as wireless type.

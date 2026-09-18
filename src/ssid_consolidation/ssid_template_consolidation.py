@@ -94,6 +94,8 @@ from ._ssid_template_phase45 import (  # WHY: re-export phase 4/5 helpers refere
 )
 
 logger = logging.getLogger(__name__)  # WHY: Use the module logger for non-exception log entries.
+_HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
 # WHY: declare the module-level re-export surface so ruff F401 does not flag the
 # intentional pass-throughs above (tests reach these helpers by patching them at
 # ``ssid_template_consolidation.<name>``, which requires the symbol to bind here).
@@ -172,6 +174,12 @@ WriteDataFn = Any  # Callable[[...], None]
 GetOrgIdFn = Any  # Callable[[], str | None]
 
 
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
+
+
 def _fetch_and_log(  # WHY: parent-owned so its __globals__ points here for mistapi test patches
     label: str,
     api_fn: Any,
@@ -189,6 +197,15 @@ def _fetch_and_log(  # WHY: parent-owned so its __globals__ points here for mist
     """
     logger.warning("Fetching %s...", label)  # WHY: operator telemetry during multi-call fetch
     response = api_fn(session, org_id, **kwargs)  # WHY: mistapi list endpoint call
+    status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+    if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the fetch count unsafe.
+        logger.error(  # WHY: the operator must see the cloud status instead of a false empty fetch.
+            "The cloud returned HTTP %s for %s at org %s",
+            status_code,
+            label,
+            org_id,
+        )
+        return []  # WHY: preserve the existing empty-list failure contract.
     data: list[dict[str, Any]] = mistapi.get_all(response=response, mist_session=session) or []  # WHY: paginate
     logger.info("%s fetched: %d", label.capitalize(), len(data))  # WHY: audit trail per collection
     return data  # WHY: caller receives the fully paginated list

@@ -15,13 +15,15 @@ from __future__ import annotations  # Enable postponed evaluation for forward-re
 
 import logging  # Structured action logging required by Constitution VII
 from dataclasses import dataclass  # Underpins the DeviceFetchConfig configuration container
-from typing import Any  # Loose typing for late-bound MistHelper attributes and fetch callables
+from typing import Any, Literal  # Loose typing for late-bound MistHelper attributes and fetch callables.
 
 from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 
 logger = logging.getLogger(__name__)  # Keep refactor logs tied to this module.
+_HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
 # ============================================================================
 # CONFIGURATION DATACLASS (5-Item Rule Compliance)
 # ============================================================================
@@ -43,6 +45,12 @@ class DeviceFetchConfig:
 
 
 _MH = SourceDependencyResolver  # Use the source resolver for lazy dependency access.
+
+
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
 class DeviceDataFetcher:
@@ -67,20 +75,23 @@ class DeviceDataFetcher:
         self.site_id = config.site_id  # Optional site scope (None means an org-wide fetch).
         self.device_id = config.device_id  # Optional single-device scope (None means all matching devices).
 
-    def fetch(self) -> None:
+    def fetch(self) -> Literal[False] | None:
         """Orchestrate the device data fetch workflow (main entry point)."""
         logger.info("Starting device data fetch: %s", self.description)  # Announce fetch start for observability
         if not self._resolve_site_id():  # Bail out early if we cannot determine which site to query
             logger.debug("Fetch aborted: site_id could not be resolved")  # Trace early exit
-            return  # Nothing else to do without a site scope
+            return None  # Nothing else to do without a site scope
         if not self._resolve_device_id():  # Bail out if we cannot determine which device to query
             logger.debug("Fetch aborted: device_id could not be resolved")  # Trace early exit
-            return  # Nothing else to do without a device scope
+            return None  # Nothing else to do without a device scope
         self._log_action()  # Emit the descriptive action log
         data = self._fetch_data()  # Perform the actual API call
+        if data is False:  # WHY: only an explicit HTTP failure changes the legacy path.
+            return False  # WHY: callers must not log completion after the cloud refuses.
         if data:  # Only process and export when data is non-empty
             self._process_and_output(data)  # Flatten, escape, write CSV, and display
         logger.debug("Completed device data fetch: %s", self.description)  # Trace successful completion
+        return None  # WHY: preserve the legacy no-return success path.
 
     def _resolve_site_id(self) -> bool:
         """Resolve site ID from parameter or user prompt."""
@@ -103,11 +114,19 @@ class DeviceDataFetcher:
         """Log the action being performed."""
         logger.info("%s for device ID: %s", self.description, self.device_id)  # Human-readable action trace
 
-    def _fetch_data(self) -> list[dict[str, Any]] | None:
+    def _fetch_data(self) -> list[dict[str, Any]] | Literal[False] | None:
         """Fetch data using the configured API function."""
         logger.info("Fetching data via %s", getattr(self.fetch_function, "__name__", "<fetch_function>"))  # API trace
         try:  # Guard against transient API failures so we can log and return None
             response = self.fetch_function(_MH.apisession, self.site_id, self.device_id)  # Live authenticated call
+            status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+            if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the device result unsafe.
+                logger.error(  # WHY: the operator must see the cloud status instead of a false empty result.
+                    "The cloud returned HTTP %s for device data at site %s",
+                    status_code,
+                    self.site_id,
+                )
+                return False  # WHY: explicit failure lets wrappers suppress success logs.
             result = [response.data] if response.data else None  # Wrap single-device response into a one-element list
             logger.debug("Fetch returned %s record(s)", 0 if result is None else len(result))  # Result-size trace
             return result  # None signals empty response so callers can skip processing
