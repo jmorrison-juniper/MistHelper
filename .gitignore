@@ -334,3 +334,4 @@ uv.lock
 
 # Claude Code agent scratch. A worktree here was committed as a broken gitlink once (issue #1752).
 .claude/
+.github/skills/juniper-junos-fundamentals/
