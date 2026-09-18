@@ -388,8 +388,21 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
         """Commit transaction and verify row count."""
         assert self.connection is not None, "Database connection not initialized"  # nosec B101
         assert self.cursor is not None, "Database cursor not initialized"  # nosec B101
+        logger.info(  # Log intent before the commit, not success before verification.
+            "Committing %s/%s rows to table %s in database %s using %s strategy at %s",
+            successful_inserts,
+            len(self.processed_data),
+            self.table_name,
+            self._database_path(),
+            self.strategy["type"],
+            self.timestamp,
+        )
         self.connection.commit()  # Persist the transaction.
-        logger.info(  # Log inserts committed.
+        safe_table_name = self._get_safe_table_name()  # Sanitize for the count query.
+        logger.info("Verifying row count for table %s at %s", self.table_name, self.timestamp)  # Log before verify.
+        self.cursor.execute(f"SELECT COUNT(*) FROM {safe_table_name}")  # nosec B608
+        row_count = self.cursor.fetchone()[0]  # Read the verified count.
+        logger.debug(  # Log the success claim only after the row-count proof exists.
             "Successfully wrote %s/%s rows to table %s in database %s using %s strategy at %s",
             successful_inserts,
             len(self.processed_data),
@@ -398,9 +411,6 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
             self.strategy["type"],
             self.timestamp,
         )
-        safe_table_name = self._get_safe_table_name()  # Sanitize for the count query.
-        self.cursor.execute(f"SELECT COUNT(*) FROM {safe_table_name}")  # nosec B608
-        row_count = self.cursor.fetchone()[0]  # Read the verified count.
         logger.info(  # Log the verified count.
             "Database verification: %s rows confirmed in table %s at %s",
             row_count,
