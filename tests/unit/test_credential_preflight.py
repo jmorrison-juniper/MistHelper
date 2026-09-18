@@ -16,6 +16,7 @@ import logging
 from unittest.mock import MagicMock
 
 import pytest
+from requests.exceptions import Timeout
 
 import MistHelper
 
@@ -210,6 +211,16 @@ class TestTokenPreviewCarriesNoSecret:
         assert self._RAW_TOKEN[:4] not in caplog.text, "the log must not carry the leading characters"
         assert self._RAW_TOKEN[-4:] not in caplog.text, "the log must not carry the trailing characters"
         assert "token 1/1" in caplog.text, "the log must carry the positional label"
+
+    def test_rate_limit_probe_marks_timeout_token_unavailable(self, caplog, monkeypatch):
+        """A token probe timeout must mark only that token unavailable."""
+        timeout = Timeout("synthetic timeout")  # Use the real Requests timeout type.
+        monkeypatch.setattr("requests.get", MagicMock(side_effect=timeout))  # Force the probe call to time out.
+        caplog.set_level(logging.WARNING)  # Capture the warning that explains the unavailable token.
+        result = MistHelper._check_token_rate_limit(self._RAW_TOKEN, "api.mist.com", "1/1")  # Drive the probe seam.
+        assert result is True  # The token must be treated as unavailable after a timeout.
+        assert "synthetic timeout" in caplog.text  # The log must state the timeout cause.
+        assert self._RAW_TOKEN not in caplog.text  # The log must not expose the token.
 
     def test_availability_loop_logs_a_distinct_label_per_token(self, caplog, monkeypatch):
         """An operator must still tell one token from another in the log."""

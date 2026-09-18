@@ -170,6 +170,18 @@ def test_download_one_returns_false_on_exception(tmp_path: Path) -> None:
     assert ok is False
 
 
+def test_download_one_returns_false_on_timeout(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """A download timeout must fail one row without writing a partial file."""
+    row = _CaptureRow("cap-1", "https://x/cap.pcap", "10", "cap.pcap")  # Drive the real download seam.
+    caplog.set_level("ERROR", logger=mod.logger.name)  # Capture the operator-visible timeout record.
+    timeout = mod.requests.exceptions.Timeout("synthetic timeout")  # Use the real transport timeout type.
+    with patch.object(mod.requests, "get", side_effect=timeout):  # Force the HTTP GET call to time out.
+        ok = ClientPacketCaptureDownloader._download_one(row, tmp_path)  # Execute product timeout handling.
+    assert ok is False  # A timed-out row must count as a failed download.
+    assert (tmp_path / "cap.pcap").exists() is False  # No partial file may appear after an early timeout.
+    assert "synthetic timeout" in caplog.text  # The log must preserve the timeout cause for operators.
+
+
 # ---------- run() orchestration guards ----------
 
 

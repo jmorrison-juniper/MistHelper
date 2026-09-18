@@ -116,6 +116,19 @@ class TestFetchWirelessClients:
             assert downloader._fetch_wireless_clients("site-1") == []
         assert "dns fail" in caplog.text  # WHY: the operator needs the cause to triage.
 
+    def test_a_search_timeout_returns_an_empty_list(
+        self, downloader: ClientPacketCaptureDownloader, caplog: Any
+    ) -> None:
+        """A wireless-client timeout must abort the step with a logged cause."""
+        caplog.set_level("ERROR", logger=cpd.logger.name)  # Capture the module log for the timeout path.
+        fake_sdk = MagicMock()  # Stand in for the SDK so no live Mist call starts.
+        timeout = cpd.requests.exceptions.Timeout("synthetic timeout")  # Use the real transport timeout type.
+        fake_sdk.api.v1.sites.clients.searchSiteWirelessClients.side_effect = timeout  # Timeout at the API call.
+        with patch.object(cpd, "mistapi", fake_sdk), patch.object(cpd, "MISTAPI_AVAILABLE", True):  # Enable SDK path.
+            result = downloader._fetch_wireless_clients("site-1")  # Drive the product timeout handling.
+        assert result == []  # The menu must see an empty list and abort safely.
+        assert "synthetic timeout" in caplog.text  # The log must preserve the timeout cause.
+
     def test_a_paging_failure_returns_an_empty_list(
         self, downloader: ClientPacketCaptureDownloader, caplog: Any
     ) -> None:
