@@ -471,6 +471,7 @@ class SourceDocumentVersionUpdater:
         logging.info("Writing refreshed version state for %s documents", len(groups))  # Log before in-place update.
         for group in groups:  # Update all rows so stale version data is removed from ungrouped documents.
             connection.execute(self._update_statement(), self._update_values(group))  # Persist the resolved state.
+            self._write_work_item(connection, group)  # Keep the queue aligned with the refreshed topic-build flag.
         logging.debug("Wrote refreshed version state for %s documents", len(groups))  # Report updated row count.
 
     def _update_statement(self) -> str:
@@ -488,6 +489,33 @@ class SourceDocumentVersionUpdater:
             1 if group.build_topics else 0,
             group.group_key,
         )  # Return ordered SQL values for one document update.
+
+    def _write_work_item(self, connection: sqlite3.Connection, group: DocumentGroup) -> None:
+        if not self._has_work_item_table(connection):  # Unit tests can validate source_document without a queue.
+            return
+        if not group.build_topics:  # Superseded rows must not enter the topic builder queue.
+            self._set_work_item(connection, group.group_key, "superseded", "superseded version")  # Block old releases.
+            return
+        self._restore_superseded_work_item(connection, group.group_key)  # Requeue a row that became current.
+
+    def _has_work_item_table(self, connection: sqlite3.Connection) -> bool:
+        row = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'work_item'"
+        ).fetchone()  # Check for the optional queue table without mutating the schema.
+        return row is not None  # Return whether queue alignment is possible in this database.
+
+    def _set_work_item(self, connection: sqlite3.Connection, key: str, status: str, reason: str) -> None:
+        connection.execute(
+            "UPDATE work_item SET status = ?, reason = ?, updated_at = CURRENT_TIMESTAMP WHERE document_key = ?",
+            (status, reason, key),
+        )  # Update the existing queue row while preserving its priority.
+
+    def _restore_superseded_work_item(self, connection: sqlite3.Connection, key: str) -> None:
+        connection.execute(
+            "UPDATE work_item SET status = 'pending', reason = 'version became current', "
+            "updated_at = CURRENT_TIMESTAMP WHERE document_key = ? AND status = 'superseded'",
+            (key,),
+        )  # Requeue rows that a corrected family decision makes buildable.
 
     def _ensure_current_index(self, connection: sqlite3.Connection) -> None:
         logging.info("Creating one-current partial index for version families")  # Log before structural guard setup.
