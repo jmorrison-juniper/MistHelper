@@ -213,6 +213,11 @@ def test_a_version_mismatch_makes_a_completed_record_failed() -> None:
     assert run_has_failures({"state": "complete", "targets": [target]}) is True
 
 
+def test_empty_target_stays_in_the_retry() -> None:
+    """An empty target MUST stay retryable because it has no success state."""
+    assert target_needs_retry({}) is True  # Missing target state is pending, so the retry must include it.
+
+
 def test_a_settled_version_mismatch_stays_in_the_retry() -> None:
     """A settled state cannot hide firmware that differs from the request."""
     target = {**row(VERSION_TARGET, VERSION_OLD), "state": "settled"}

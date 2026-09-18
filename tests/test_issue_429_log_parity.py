@@ -15,6 +15,7 @@ format spec, this test fails and pinpoints the offending line.
 from __future__ import annotations  # Enable PEP 604 union syntax on Python 3.13.
 
 import json  # Stdlib JSON loader for the baseline fixture.
+import sys  # Test CLI defaults without inheriting the pytest command line.
 from pathlib import Path  # Portable filesystem access on Windows + POSIX.
 from typing import Any  # Type hint for the heterogeneous inputs dict.
 
@@ -274,6 +275,21 @@ def test_capture_main_reports_missing_fixture_source(
     assert exit_code == 1  # Missing source files must keep the failure exit code.
     assert "failed to read missing_source.py" in caplog.text  # The error must name the missing fixture source.
     assert not output_path.exists()  # A failed read must not write a partial baseline.
+
+
+def test_capture_main_rejects_empty_arguments() -> None:
+    """Confirm an empty argument list reports the argparse usage failure."""
+    with pytest.raises(SystemExit) as caught:  # Argparse raises instead of returning on a missing required flag.
+        capture_log_baseline.main([])  # Empty arguments must fail before any file read.
+    assert caught.value.code == 2  # Argparse uses status 2 for a usage error.
+
+
+def test_capture_main_rejects_none_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Confirm a None argument list reads sys.argv and reports the usage failure."""
+    monkeypatch.setattr(sys, "argv", ["capture_log_baseline"])  # Keep pytest flags out of this CLI call.
+    with pytest.raises(SystemExit) as caught:  # Argparse raises because sys.argv holds no required flags.
+        capture_log_baseline.main(None)  # None is the module execution path.
+    assert caught.value.code == 2  # Argparse uses status 2 for a usage error.
 
 
 _LEVEL_METHODS = frozenset(  # Mirrors LEVEL_METHODS in the codemod module.

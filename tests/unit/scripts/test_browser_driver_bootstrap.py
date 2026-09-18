@@ -131,6 +131,18 @@ def test_the_report_names_the_browser_suite_on_success(tmp_path: Path, caplog: p
     assert PLAYWRIGHT_INSTALL_HINT not in caplog.text, "a ready browser needs no repair line"
 
 
+def test_the_report_names_no_requirement_files_for_empty_install_list(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """An empty install list MUST report `none` instead of a blank field."""
+    logging.info("Checking the empty install report")  # Report the plan before the work.
+    caplog.set_level(logging.INFO, logger="bootstrap_worktree")  # Capture the information lines.
+
+    report_result(WorktreeBootstrapper(tmp_path), [], browser_ready=True)  # Exercise the empty install edge case.
+
+    assert "Installed requirement files: none" in caplog.text  # The report must name the empty state.
+
+
 def _completed(code: int) -> object:
     """Build a stand-in that answers one return code, like a finished subprocess."""
     logging.debug("Building a stand-in process result with code %d", code)  # Record the build.

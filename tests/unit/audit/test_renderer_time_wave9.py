@@ -28,6 +28,10 @@ class TestEpochToReadable:
         # WHY: exercise strftime branch with multiple epochs; assert stable UTC suffix
         assert epoch_to_readable(epoch).endswith(" UTC")
 
+    def test_negative_epoch_returns_pre_1970_utc_string(self) -> None:
+        """A negative epoch must render the time before 1970 in UTC."""
+        assert epoch_to_readable(-1) == "1969-12-31 23:59 UTC"  # The result fixes the underflow behavior.
+
 
 class TestEpochToShort:
     """Cover both branches of epoch_to_short."""
@@ -47,3 +51,7 @@ class TestEpochToShort:
         rendered = epoch_to_short(epoch)
         assert "/" in rendered
         assert ":" in rendered
+
+    def test_negative_epoch_returns_pre_1970_short_string(self) -> None:
+        """A negative epoch must render the short time before 1970."""
+        assert epoch_to_short(-1) == "12/31 23:59"  # The compact label must stay stable for negative input.

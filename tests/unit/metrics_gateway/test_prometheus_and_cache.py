@@ -47,6 +47,14 @@ class TestValueFormat:
         """Python writes `nan`, and a scraper rejects it."""
         assert format_value(float("nan")) == "NaN"
 
+    def test_zero_keeps_the_integer_spelling(self) -> None:
+        """Zero must render without a decimal tail."""
+        assert format_value(0.0) == "0"  # A scraper accepts the whole-number spelling.
+
+    def test_a_negative_whole_number_drops_the_decimal_tail(self) -> None:
+        """A negative whole number must render without a decimal tail."""
+        assert format_value(-2.0) == "-2"  # The renderer must not leave a redundant decimal tail.
+
 
 class TestLabelEscape:
     """A label value must never end its own quotation early."""

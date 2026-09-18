@@ -51,6 +51,18 @@ def test_capture_dir_accepts_string_vlan() -> None:
     assert result.name == "vlan_unknown"
 
 
+def test_capture_dir_accepts_zero_vlan() -> None:
+    """VLAN zero remains visible in the capture folder name."""
+    result = capture_dir(Path("data"), "aa:bb:cc:dd:ee:ff", 0)  # Exercise the zero VLAN edge case.
+    assert result.name == "vlan_0"  # The folder name must preserve the exact VLAN identifier.
+
+
+def test_capture_dir_accepts_negative_vlan() -> None:
+    """A negative VLAN remains visible for a caller that passes bad data."""
+    result = capture_dir(Path("data"), "aa:bb:cc:dd:ee:ff", -1)  # Exercise the negative VLAN edge case.
+    assert result.name == "vlan_-1"  # The folder name must make the invalid identifier visible.
+
+
 # ---------- fixture ----------
 
 

@@ -118,3 +118,9 @@ class TestFormatDeltaHtmlIndentation:
         with_deeper_indent = format_delta_html({"k": 1}, indent=2)
         # WHY: deeper indent adds two extra characters ("  ") on each line
         assert len(with_deeper_indent) > len(with_zero_indent)
+
+    def test_negative_indent_keeps_a_valid_fragment(self) -> None:
+        """A negative indent cannot remove the data from the fragment."""
+        rendered = format_delta_html({"k": 1}, indent=-1)  # Exercise the negative indent edge case.
+        assert rendered.startswith("{\n")  # The formatter must still return a multi-line object.
+        assert "&quot;k&quot;: <b>1</b>" in rendered  # The rendered key and value must remain visible.

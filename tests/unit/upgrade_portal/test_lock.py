@@ -1291,6 +1291,7 @@ def test_an_unreachable_store_still_answers_the_site_list(store: ScriptedLockSto
     store.fail = True
 
     assert read_site_locks(ORG_ID, [SITE_ID], store) == {SITE_ID: None}
+    assert read_site_locks(ORG_ID, [], store) == {}  # An empty site list must answer an empty index.
     assert read_lock(ORG_ID, SITE_ID, store) is None
 
 
@@ -1309,7 +1310,7 @@ def test_no_client_answers_an_empty_index_and_refuses_a_write(monkeypatch: pytes
     assert read_site_locks(ORG_ID, [SITE_ID]) == {}
     assert read_lock(ORG_ID, SITE_ID) is None
     with pytest.raises(LockStoreUnreachableError) as refusal:
-        acquire_site_lock(build_request(FIRST_OWNER))
+        acquire_site_lock(build_request(FIRST_OWNER), client=None)  # None uses the configured store connection.
 
     assert refusal.value.code == "lock_store_unreachable"
 

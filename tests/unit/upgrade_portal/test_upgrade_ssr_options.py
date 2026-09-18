@@ -253,6 +253,21 @@ def test_the_request_names_only_the_selected_routers() -> None:
     ]
 
 
+def test_empty_router_selection_builds_no_upgrade_plan() -> None:
+    """An empty router selection MUST build no organization call."""
+    assert plan_upgrade((), options_from({}), ORG_ID, SITE_ID) == ()  # No target means no SSR upgrade request.
+
+
+def test_zero_duration_formats_as_seconds() -> None:
+    """A zero duration MUST stay visible as seconds."""
+    assert format_duration(0) == "0s"  # The browser must not show a blank schedule value.
+
+
+def test_negative_duration_formats_as_seconds() -> None:
+    """A negative duration MUST stay visible as seconds."""
+    assert format_duration(-1) == "-1s"  # The browser must expose invalid stored data instead of hiding it.
+
+
 def test_the_router_plan_keeps_the_organization_scope_and_endpoint() -> None:
     """That family owns the one cancel call, and it lives at organization scope."""
     plans = plan_upgrade(routers(), options_from({}), ORG_ID, SITE_ID)
