@@ -70,6 +70,24 @@ class TestVerbatimSimilarityGuard:
         assert report.results[0].longest_run < 12  # Prove the restatement stays below the threshold.
         assert report.passed  # Prove the guard clears genuine restatement.
 
+    def test_guard_reports_cleared_warned_and_failed_bands(self, tmp_path: Path) -> None:
+        """The guard reports the three similarity bands."""
+        source = "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike"  # Build source.
+        checks = self._band_checks(tmp_path, source)  # Build one file for each report band.
+        report = VerbatimSimilarityGuard().check(checks)  # Run the guard across all three files.
+        assert report.files_cleared == 1  # Prove the report counts the clear band.
+        assert report.files_warned == 1  # Prove the report counts the review band.
+        assert report.files_failed == 1  # Prove the report counts the hard-fail band.
+        assert not report.passed  # Prove the failed file still stops the build.
+
+    def _band_checks(self, tmp_path: Path, source: str) -> tuple[SimilarityCheckInput, ...]:
+        """Return one generated file for each similarity band."""
+        texts = ("alpha bravo charlie", source.rsplit(" ", 4)[0], source)  # Create clear, warn, and fail text.
+        paths = tuple(tmp_path / f"topic-{index}.md" for index in range(3))  # Create stable topic file paths.
+        for path, text in zip(paths, texts, strict=True):  # Write each test file before the guard reads it.
+            path.write_text(text, encoding="utf-8")  # Store the generated test text.
+        return tuple(SimilarityCheckInput(path, (source,)) for path in paths)  # Return guard inputs.
+
     def test_guard_fails_zero_files(self) -> None:
         """The guard fails when it checks no files."""
         report = VerbatimSimilarityGuard().check(tuple())  # Run the guard with no inputs.

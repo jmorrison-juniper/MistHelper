@@ -127,8 +127,36 @@ streams. The implementation MAY use a suffix array, a rolling hash, or dynamic
 programming. The result MUST be identical to an exact longest common substring
 computed over word tokens.
 
+The guard MUST warn on a file when the longest common prose run is 8 through 12
+consecutive words. The factory writes the file and records it for review.
+
 The guard MUST fail a file when the longest common prose run is greater than 12
-consecutive words. A run of 12 words or less passes. A run of 13 words fails.
+consecutive words. A run of 7 words or less clears. A run of 8 through 12 words
+warns. A run of 13 words fails.
+
+### Threshold evidence
+
+The rewriter agent tested the rule against a real Juniper source segment from
+`guides/junos-beginners-guide.md` lines 4975 through 5050 on 2026-09-17.
+
+| Sample | Longest run | Result |
+| - | -: | - |
+| Verbatim paragraph | 42 | Failed |
+| Light edit of the paragraph | 14 | Failed |
+| Genuine restatement | 1 | Cleared |
+| Genuine restatement with verbatim CLI | 1 | Cleared |
+
+The same test measured 30 genuine restatements of that source segment. The
+longest honest run was 4 words. The median was 1 word. The mean was 1.37 words.
+The 90th percentile was 2.1 words.
+
+The warning threshold of 8 words is twice the measured honest maximum. It shows
+the 8 through 12 word band without stopping the build. The hard threshold of 12
+words still catches the measured light edit, which reached 14 words.
+
+Caution: the evidence set holds 30 honest restatements. If a production run
+creates many warnings, measure a larger honest set and move the warning
+threshold with that evidence.
 
 ### Report format
 
@@ -140,8 +168,9 @@ The guard MUST report one row for each checked generated file.
 | `source_file` | path | Source Markdown file with the longest match. |
 | `longest_run_words` | integer | Longest shared prose run. |
 | `threshold_words` | integer | Always `12`. |
-| `status` | enum | `pass` or `fail`. |
-| `matched_text` | string | The matched normalized prose when status is `fail`. |
+| `warn_threshold_words` | integer | Always `8`. |
+| `status` | enum | `cleared`, `warned`, or `failed`. |
+| `matched_text` | string | The matched normalized prose when status is `warned` or `failed`. |
 | `generated_line` | integer | First generated line of the failed run. |
 | `source_line` | integer | First source line of the failed run. |
 | `excluded_regions` | integer | Count of excluded regions. |
@@ -151,6 +180,8 @@ The guard MUST also report a summary.
 | Field | Type | Rule |
 | - | - | - |
 | `files_checked` | integer | Count of generated Markdown files checked. |
+| `files_cleared` | integer | Count of generated Markdown files below 8 words. |
+| `files_warned` | integer | Count of generated Markdown files with 8 through 12 words. |
 | `files_failed` | integer | Count of generated Markdown files that failed. |
 | `max_run_words` | integer | Largest run found in any checked file. |
 | `source_documents_checked` | integer | Count of source Markdown files checked. |

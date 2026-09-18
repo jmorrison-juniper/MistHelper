@@ -64,6 +64,7 @@ class SimilarityFileResult:
     file_path: Path  # Identify the measured file in the guard report.
     longest_run: int  # Store the longest shared prose run in words.
     longest_phrase: str  # Store the measured phrase for a reviewer.
+    status: str  # Store the band status: cleared, warned, or failed.
     passed: bool  # Record whether this file stayed within the threshold.
 
 
@@ -73,6 +74,7 @@ class SimilarityGuardReport:
 
     files_checked: int  # Report the count because zero checked files must fail.
     threshold: int  # Report the active contract threshold.
+    warn_threshold: int  # Report the review band threshold.
     results: tuple[SimilarityFileResult, ...]  # Report every measured file.
     elapsed_seconds: float  # Report timing so large corpus runs can be tracked.
     errors: tuple[str, ...] = field(default_factory=tuple)  # Store guard-level failures.
@@ -82,6 +84,21 @@ class SimilarityGuardReport:
         """Return whether every file and guard condition passed."""
         file_status = all(result.passed for result in self.results)  # Require each file to pass.
         return self.files_checked > 0 and file_status and not self.errors  # Enforce the zero-file failure.
+
+    @property
+    def files_cleared(self) -> int:
+        """Return the count of files below the warning band."""
+        return sum(1 for result in self.results if result.status == "cleared")  # Count files below the warn line.
+
+    @property
+    def files_warned(self) -> int:
+        """Return the count of files in the review band."""
+        return sum(1 for result in self.results if result.status == "warned")  # Count files that need review.
+
+    @property
+    def files_failed(self) -> int:
+        """Return the count of files above the hard-fail threshold."""
+        return sum(1 for result in self.results if result.status == "failed")  # Count files that stop the build.
 
 
 @dataclass(frozen=True)

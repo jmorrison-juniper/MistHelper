@@ -16,9 +16,12 @@ _LOG = logging.getLogger(__name__)  # Give the rewrite guard a stable logger nam
 class VerbatimSimilarityGuard:
     """Measure shared prose while ignoring contract-approved verbatim text."""
 
-    def __init__(self, threshold: int = 12) -> None:
+    def __init__(self, threshold: int = 12, warn_threshold: int = 8) -> None:
         """Store the maximum allowed shared prose run."""
         self.threshold = threshold  # Keep the locked threshold configurable for tests.
+        # Assumption: 30 honest samples had a 4-word maximum, so 8 words is the first review band.
+        # If production runs create many warnings, measure a larger honest set and move this threshold.
+        self.warn_threshold = warn_threshold  # Use 30 samples as the current basis for the review band.
         self._strip = str.maketrans({char: " " for char in punctuation})  # Normalize punctuation as separators.
         self._token_cache: dict[str, int] = {}  # Cache token hashes so large corpus runs stay fast.
 
@@ -31,14 +34,28 @@ class VerbatimSimilarityGuard:
         results = tuple(self._check_one(check) for check in checks)  # Measure each requested generated file.
         elapsed = time.perf_counter() - started  # Compute elapsed time after all files finish.
         logging.debug("Similarity guard checked %d files in %.3f seconds", len(results), elapsed)  # Log the count.
-        return SimilarityGuardReport(len(results), self.threshold, results, elapsed)  # Return every measurement.
+        return SimilarityGuardReport(  # Return every measurement and band threshold.
+            len(results),
+            self.threshold,
+            self.warn_threshold,
+            results,
+            elapsed,
+        )
 
     def _empty_report(self, started: float) -> SimilarityGuardReport:
         """Return the contract failure report for an empty input set."""
         elapsed = time.perf_counter() - started  # Measure even the failure path for consistent reports.
         errors = ("The similarity guard checked zero files.",)  # Explain the locked contract failure.
         logging.debug("Similarity guard failed because it checked zero files")  # Log the guard failure reason.
-        return SimilarityGuardReport(0, self.threshold, tuple(), elapsed, errors)  # Return a failed report.
+        report = SimilarityGuardReport(  # Build the zero-file failure report.
+            0,
+            self.threshold,
+            self.warn_threshold,
+            tuple(),
+            elapsed,
+            errors,
+        )
+        return report  # Return a failed report.
 
     def _check_one(self, check: SimilarityCheckInput) -> SimilarityFileResult:
         """Return the longest shared prose run for one generated file."""
@@ -48,9 +65,18 @@ class VerbatimSimilarityGuard:
         generated_words = self.prose_words(generated_text)  # Remove verbatim classes from generated text.
         source_words = self.prose_words("\n".join(check.source_segments))  # Remove verbatim classes from sources.
         longest, phrase = self._longest_common_run(generated_words, source_words)  # Measure shared prose.
-        passed = longest <= self.threshold  # Apply the locked 12-word threshold.
+        status = self._status(longest)  # Assign cleared, warned, or failed for the report.
+        passed = status != "failed"  # Only hard-fail files stop the build.
         logging.debug("Measured %d shared prose words for %s", longest, check.generated_path)  # Log the result.
-        return SimilarityFileResult(check.generated_path, longest, phrase, passed)  # Return the file result.
+        return SimilarityFileResult(check.generated_path, longest, phrase, status, passed)  # Return the file result.
+
+    def _status(self, longest: int) -> str:
+        """Return the report band for one measured prose run."""
+        if longest > self.threshold:  # A run above the hard threshold is copied prose risk.
+            return "failed"  # Stop the build for files above 12 words.
+        if longest >= self.warn_threshold:  # A run in the margin band needs human review.
+            return "warned"  # Let the build continue and record the file.
+        return "cleared"  # The file sits below the measured review band.
 
     def prose_words(self, text: str) -> tuple[str, ...]:
         """Return normalized prose words with verbatim classes removed."""
