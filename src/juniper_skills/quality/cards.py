@@ -9,6 +9,8 @@ from typing import Protocol  # Accept card-like records without one concrete cla
 
 from .models import CardDeduplicationReport  # Return a measured merge result.
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 class CardLike(Protocol):
     """Define the fields needed to deduplicate a knowledge card."""
@@ -22,31 +24,31 @@ class CardDeduplicator:
 
     def deduplicate(self, cards: tuple[CardLike, ...]) -> CardDeduplicationReport:
         """Run the deduplicate operation."""
-        logging.info("Deduplicating %s generated knowledge cards", len(cards))  # Log before card merge.
+        logger.info("Deduplicating %s generated knowledge cards", len(cards))  # Log before card merge.
         selected: dict[str, CardLike] = {}  # Store the best card for each normalized fact text.
         for card in cards:  # Inspect every card emitted by the rewrite stage.
             key = self._normalized_text(card.fact)  # Compare only the fact text, not the citation.
             selected[key] = self._specific_card(selected.get(key), card)  # Keep the most specific citation.
         output = tuple(selected.values())  # Preserve first-seen order from the dictionary insertion order.
         report = CardDeduplicationReport(output, len(cards), len(cards) - len(output))  # Build proof metrics.
-        logging.debug("Deduplicated cards with %s merges", report.merge_count)  # Report merge count.
+        logger.debug("Deduplicated cards with %s merges", report.merge_count)  # Report merge count.
         return report  # Return deduplicated cards and the count.
 
     def deduplicate_markdown_text(self, text: str) -> tuple[str, int]:
         """Run the deduplicate markdown text operation."""
-        logging.info("Deduplicating Markdown knowledge-card lines")  # Log before generated text cleanup.
+        logger.info("Deduplicating Markdown knowledge-card lines")  # Log before generated text cleanup.
         lines = text.splitlines()  # Preserve the topic file line order.
         selected = self._selected_card_lines(lines)  # Choose the best line for each normalized card.
         emitted: set[str] = set()  # Track selected keys already written to avoid identical duplicates.
         output = [self._replacement_line(line, selected, emitted) for line in lines]  # Remove duplicate card lines.
         cleaned = "\n".join(line for line in output if line is not None)  # Rebuild the Markdown without duplicates.
         merges = len([line for line in output if line is None])  # Count duplicate lines removed from the topic.
-        logging.debug("Deduplicated Markdown knowledge cards with %s merges", merges)  # Report line merges.
+        logger.debug("Deduplicated Markdown knowledge cards with %s merges", merges)  # Report line merges.
         return cleaned, merges  # Return cleaned text and merge count.
 
     def deduplicate_markdown_paths(self, paths: tuple[Path, ...], write: bool = False) -> CardDeduplicationReport:
         """Run the deduplicate markdown paths operation."""
-        logging.info("Deduplicating Markdown cards in %s files", len(paths))  # Log before built-store cleanup.
+        logger.info("Deduplicating Markdown cards in %s files", len(paths))  # Log before built-store cleanup.
         output: list[object] = []  # Store paths that still exist after scanning.
         merges = 0  # Count duplicate card lines removed across all files.
         for path in paths:  # Process each Markdown path independently.
@@ -55,7 +57,7 @@ class CardDeduplicator:
             self._write_markdown(path, cleaned, count, write)  # Persist only when the caller requests cleanup.
             merges += count  # Add this file's merge count to the report.
             output.append(path)  # Preserve the checked path for count reporting.
-        logging.debug("Deduplicated Markdown cards with %s merges across %s files", merges, len(output))  # Report.
+        logger.debug("Deduplicated Markdown cards with %s merges across %s files", merges, len(output))  # Report.
         return CardDeduplicationReport(tuple(output), len(output), merges)  # Return aggregate proof counts.
 
     def _normalized_text(self, text: str) -> str:

@@ -18,6 +18,8 @@ from .taxonomy import (
     SUBSTANTIAL_ONLY_DOMAINS,
 )  # Use contract rules.
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 LOW_CONFIDENCE_LIMIT = 0.70  # Flag fallback and content-only matches for review.
 CONTENT_CHAR_LIMIT = 12000  # Bound source reads so large command references stay cheap.
 
@@ -31,21 +33,21 @@ class DomainClassifier:
 
     def classify_document(self, document: DomainDocument) -> DomainAssignment:
         """Run the classify document operation."""
-        logging.info("Classifying domain for document %s", document.document_key)  # Trace every classification request.
+        logger.info("Classifying domain for document %s", document.document_key)  # Trace every classification request.
         signals = self._signals(document)  # Build signals once so the rule scan stays deterministic.
         assignment = self._match_document_type(document, signals)  # Apply document-type precedence from the contract.
         assignment = assignment or self._match_domain_rules(
             document, signals
         )  # Apply ordered domain rules after type rules.
         assignment = assignment or self._fallback(document)  # Assign the required fallback domain when no rule matches.
-        logging.debug(
+        logger.debug(
             "Classified %s as %s by %s", document.document_key, assignment.domain, assignment.signal
         )  # Summarize.
         return assignment
 
     def migrate_database(self, database_path: Path) -> None:
         """Run the migrate database operation."""
-        logging.info("Adding domain columns to %s", database_path)  # Trace the schema migration before it starts.
+        logger.info("Adding domain columns to %s", database_path)  # Trace the schema migration before it starts.
         with sqlite3.connect(
             database_path
         ) as connection:  # Use a context manager so SQLite commits or rolls back atomically.
@@ -58,37 +60,37 @@ class DomainClassifier:
             self._add_column(
                 connection, "domain_signal", "TEXT NOT NULL DEFAULT ''"
             )  # Store the audit trail for the match.
-        logging.debug("Domain columns are present in %s", database_path)  # Confirm migration completion for operators.
+        logger.debug("Domain columns are present in %s", database_path)  # Confirm migration completion for operators.
 
     def classify_database(self, database_path: Path) -> DomainReport:
         """Run the classify database operation."""
-        logging.info("Classifying all source documents in %s", database_path)  # Trace the bulk classification start.
+        logger.info("Classifying all source documents in %s", database_path)  # Trace the bulk classification start.
         self.migrate_database(database_path)  # Ensure the populated database can hold the result.
         documents = self._load_documents(database_path)  # Load every source row with headings and content signals.
         assignments = tuple(self.classify_document(document) for document in documents)  # Classify each row once.
         self._persist_assignments(database_path, assignments)  # Write the single source-of-truth fields back to SQLite.
         report = self._build_report(documents, assignments)  # Produce distribution and low-confidence evidence.
         self._validate_report(report)  # Fail if the run did not classify each row exactly once.
-        logging.debug(
+        logger.debug(
             "Classified %s documents from %s", report.total_documents, database_path
         )  # Summarize the bulk result.
         return report
 
     def _add_column(self, connection: sqlite3.Connection, name: str, definition: str) -> None:
-        logging.info("Checking source_document column %s", name)  # Trace each idempotent migration decision.
+        logger.info("Checking source_document column %s", name)  # Trace each idempotent migration decision.
         columns = {row[1] for row in connection.execute("PRAGMA table_info(source_document)")}  # Read existing schema.
         if name not in columns:  # Add only missing columns so reruns are safe.
             connection.execute(
                 f"ALTER TABLE source_document ADD COLUMN {name} {definition}"
             )  # Add a nullable-safe column.
-        logging.debug("Column %s exists: %s", name, name in columns)  # Report whether this run changed the schema.
+        logger.debug("Column %s exists: %s", name, name in columns)  # Report whether this run changed the schema.
 
     def _load_documents(self, database_path: Path) -> tuple[DomainDocument, ...]:
-        logging.info("Loading source documents from %s", database_path)  # Trace the input read before the query runs.
+        logger.info("Loading source documents from %s", database_path)  # Trace the input read before the query runs.
         with sqlite3.connect(database_path) as connection:  # Open the database only for the load step.
             rows = connection.execute(self._document_query()).fetchall()  # Read each source row with part paths.
         documents = tuple(self._row_to_document(row) for row in rows)  # Convert raw rows into classifier contracts.
-        logging.debug("Loaded %s source documents", len(documents))  # Report the document count for reconciliation.
+        logger.debug("Loaded %s source documents", len(documents))  # Report the document count for reconciliation.
         return documents
 
     def _document_query(self) -> str:
@@ -101,7 +103,7 @@ class DomainClassifier:
         )
 
     def _row_to_document(self, row: tuple[object, ...]) -> DomainDocument:
-        logging.info("Reading source signals for %s", row[0])  # Trace each source document conversion.
+        logger.info("Reading source signals for %s", row[0])  # Trace each source document conversion.
         paths = tuple(Path(value) for value in str(row[5]).splitlines() if value)  # Preserve all known Markdown parts.
         headings, content = self._read_markdown_signals(
             paths
@@ -110,7 +112,7 @@ class DomainClassifier:
         document = DomainDocument(  # Build the classifier input from persisted source signals.
             str(row[0]), str(row[1]), str(row[2]), str(row[3]), page_count, headings, content, paths
         )
-        logging.debug(
+        logger.debug(
             "Read %s headings and %s content chars for %s", len(headings), len(content), row[0]
         )  # Summarize signals.
         return document
@@ -127,18 +129,18 @@ class DomainClassifier:
         )  # Bound memory and keep deterministic output.
 
     def _headings_from_file(self, relative_path: Path) -> tuple[str, ...]:
-        logging.info("Reading Markdown headings from %s", relative_path)  # Trace the file read before opening it.
+        logger.info("Reading Markdown headings from %s", relative_path)  # Trace the file read before opening it.
         text = self._safe_read(relative_path)  # Read the source file if the corpus exists locally.
         headings = tuple(
             line.lstrip("# ").strip() for line in text.splitlines() if line.startswith("#")
         )  # Extract headings.
-        logging.debug("Read %s headings from %s", len(headings), relative_path)  # Summarize the heading signal.
+        logger.debug("Read %s headings from %s", len(headings), relative_path)  # Summarize the heading signal.
         return headings
 
     def _content_from_file(self, relative_path: Path) -> str:
-        logging.info("Reading Markdown content from %s", relative_path)  # Trace the content read before opening it.
+        logger.info("Reading Markdown content from %s", relative_path)  # Trace the content read before opening it.
         text = self._safe_read(relative_path)[:CONTENT_CHAR_LIMIT]  # Bound the text sample for large source documents.
-        logging.debug("Read %s content chars from %s", len(text), relative_path)  # Summarize the content signal size.
+        logger.debug("Read %s content chars from %s", len(text), relative_path)  # Summarize the content signal size.
         return text
 
     def _safe_read(self, relative_path: Path) -> str:
@@ -241,22 +243,20 @@ class DomainClassifier:
         return DomainAssignment(document.document_key, rule.domain, confidence, signal, rule.domain, low_confidence)
 
     def _fallback(self, document: DomainDocument) -> DomainAssignment:
-        logging.info("Assigning fallback domain to %s", document.document_key)  # Trace every taxonomy miss.
+        logger.info("Assigning fallback domain to %s", document.document_key)  # Trace every taxonomy miss.
         signal = f"fallback:{GENERAL_DOMAIN}:no-rule"  # Make fallback assignments searchable in reports.
         assignment = DomainAssignment(document.document_key, GENERAL_DOMAIN, 0.20, signal, GENERAL_DOMAIN, True)
-        logging.debug("Fallback domain assigned to %s", document.document_key)  # Confirm the low-confidence assignment.
+        logger.debug("Fallback domain assigned to %s", document.document_key)  # Confirm the low-confidence assignment.
         return assignment
 
     def _persist_assignments(self, database_path: Path, assignments: tuple[DomainAssignment, ...]) -> None:
-        logging.info(
-            "Persisting %s domain assignments", len(assignments)
-        )  # Trace the write size before SQLite updates.
+        logger.info("Persisting %s domain assignments", len(assignments))  # Trace the write size before SQLite updates.
         rows = [
             (item.domain, item.confidence, item.signal, item.document_key) for item in assignments
         ]  # Prepare safe binds.
         with sqlite3.connect(database_path) as connection:  # Use one transaction for a consistent classification run.
             connection.executemany(self._update_sql(), rows)  # Update only the new classification columns.
-        logging.debug("Persisted %s domain assignments", len(assignments))  # Confirm the update count.
+        logger.debug("Persisted %s domain assignments", len(assignments))  # Confirm the update count.
 
     def _update_sql(self) -> str:
         return (  # Keep SQL in one method so tests can inspect the exact write contract.
@@ -267,7 +267,7 @@ class DomainClassifier:
     def _build_report(
         self, documents: tuple[DomainDocument, ...], assignments: tuple[DomainAssignment, ...]
     ) -> DomainReport:
-        logging.info("Building the domain classification report")  # Trace report construction for operators.
+        logger.info("Building the domain classification report")  # Trace report construction for operators.
         pages = {document.document_key: document.pages for document in documents}  # Index pages by primary key.
         domain_counts = Counter(item.domain for item in assignments)  # Count document ownership by domain.
         domain_pages = Counter(
@@ -279,7 +279,7 @@ class DomainClassifier:
             item.signal.split(":", 1)[0] for item in assignments
         )  # Count the deciding signal types.
         low_confidence = tuple(item for item in assignments if item.low_confidence)  # Keep weak decisions for review.
-        logging.debug("Built report for %s assignments", len(assignments))  # Summarize report size.
+        logger.debug("Built report for %s assignments", len(assignments))  # Summarize report size.
         return DomainReport(
             len(documents),
             sum(pages.values()),
@@ -290,10 +290,10 @@ class DomainClassifier:
         )
 
     def _validate_report(self, report: DomainReport) -> None:
-        logging.info("Validating the domain classification report")  # Trace the final safety check.
+        logger.info("Validating the domain classification report")  # Trace the final safety check.
         assigned = sum(report.domain_counts.values())  # Count persisted decisions across all domains.
         if (
             report.total_documents == 0 or assigned != report.total_documents
         ):  # Fail if the run missed rows or read nothing.
             raise RuntimeError("domain classification did not assign each source document exactly once")
-        logging.debug("Validated %s domain assignments", assigned)  # Confirm the exact one-domain invariant.
+        logger.debug("Validated %s domain assignments", assigned)  # Confirm the exact one-domain invariant.

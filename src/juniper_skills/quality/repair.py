@@ -10,6 +10,8 @@ from pathlib import Path  # Use platform-safe paths for source scans.
 
 from .models import RepairAccuracyReport  # Return measured repair accuracy and decision data.
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 class WordFrequencyDictionary:
     """Build a Juniper word-frequency dictionary from healthy documents."""
@@ -45,12 +47,12 @@ class WordFrequencyDictionary:
     @classmethod
     def from_paths(cls, paths: tuple[Path, ...]) -> WordFrequencyDictionary:
         """Run the from paths operation."""
-        logging.info("Building word-frequency dictionary from %s healthy documents", len(paths))  # Log corpus input.
+        logger.info("Building word-frequency dictionary from %s healthy documents", len(paths))  # Log corpus input.
         counts: Counter[str] = Counter()  # Collect word frequencies across healthy source files.
         for path in paths:  # Read each healthy document exactly once.
             counts.update(cls._tokens(path.read_text(encoding="utf-8", errors="ignore")))  # Learn source terms.
         counts.update({word: 1000 for word in cls.DOMAIN_WORDS})  # Ensure required Junos terms segment correctly.
-        logging.debug("Built word-frequency dictionary with %s tokens", len(counts))  # Report dictionary size.
+        logger.debug("Built word-frequency dictionary with %s tokens", len(counts))  # Report dictionary size.
         return cls(counts)  # Return a dictionary ready for dynamic programming.
 
     @staticmethod
@@ -77,19 +79,19 @@ class SourceTextRepairer:
 
     def repair_line(self, line: str, repair_commands: bool = False) -> str:
         """Run the repair line operation."""
-        logging.info("Repairing one stripped source line")  # Log before repair attempt.
+        logger.info("Repairing one stripped source line")  # Log before repair attempt.
         if self._looks_like_command(line) and not repair_commands:  # Command repair needs measured proof first.
-            logging.debug("Skipped command repair because command auto-repair is disabled")  # Report decision.
+            logger.debug("Skipped command repair because command auto-repair is disabled")  # Report decision.
             return "Command unavailable because source text failed quality repair. Read the source PDF."  # Warn safely.
         repaired = self._repair_compact(line) if " " not in line.strip() else line  # Segment only spaceless text.
-        logging.debug("Repaired line length changed from %s to %s", len(line), len(repaired))  # Report size change.
+        logger.debug("Repaired line length changed from %s to %s", len(line), len(repaired))  # Report size change.
         return repaired  # Return repaired prose or the safe command placeholder.
 
     def measure_accuracy(
         self, lines: tuple[str, ...], command_accuracy_bar: float | None = None
     ) -> RepairAccuracyReport:
         """Run the measure accuracy operation."""
-        logging.info("Measuring stripped-text repair accuracy on %s held-out lines", len(lines))  # Log measurement.
+        logger.info("Measuring stripped-text repair accuracy on %s held-out lines", len(lines))  # Log measurement.
         bar = command_accuracy_bar or self.ACCURACY_BAR  # Allow tests to set a deterministic threshold.
         repaired = [self._repair_compact(line.replace(" ", "")) for line in lines]  # Repair stripped held-out lines.
         line_accuracy = self._line_accuracy(lines, repaired)  # Measure exact full-line matches.
@@ -97,7 +99,7 @@ class SourceTextRepairer:
         command_accuracy, command_count = self._command_accuracy(lines, repaired)  # Measure command-line safety.
         auto_commands = command_count > 0 and command_accuracy >= bar  # Trust commands only above the safety bar.
         decision = self._decision(auto_commands, command_count, bar)  # Build a clear decision from the gate result.
-        logging.debug("Repair accuracy was %.4f lines and %.4f tokens", line_accuracy, token_accuracy)  # Report result.
+        logger.debug("Repair accuracy was %.4f lines and %.4f tokens", line_accuracy, token_accuracy)  # Report result.
         return RepairAccuracyReport(
             len(lines), line_accuracy, tokens, token_accuracy, command_count, command_accuracy, auto_commands, decision
         )

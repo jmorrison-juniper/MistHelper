@@ -7,6 +7,8 @@ import re  # Find page markers, sentences, and card fields.
 
 from .models import CardClassMark, KnowledgeCard  # Use the shared card model.
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 _LOG = logging.getLogger(__name__)  # Give the card extractor a stable logger name.
 
 
@@ -15,23 +17,23 @@ class CardExtractor:
 
     def extract(self, text: str, citation_prefix: str) -> tuple[KnowledgeCard, ...]:
         """Return candidate cards with exact page citations."""
-        logging.info("Extracting candidate knowledge cards")  # Log before text analysis.
+        logger.info("Extracting candidate knowledge cards")  # Log before text analysis.
         cards: list[KnowledgeCard] = []  # Collect cards in document order.
         current_page = "p.unknown"  # Keep a citation even if a caller passes damaged text.
         for line in text.splitlines():  # Walk each line so page markers apply to following facts.
             current_page = self._updated_page(line, current_page)  # Update the exact page citation.
             cards.extend(self._cards_from_line(line, citation_prefix, current_page))  # Add cards from this line.
-        logging.debug("Extracted %d candidate knowledge cards", len(cards))  # Log the card count.
+        logger.debug("Extracted %d candidate knowledge cards", len(cards))  # Log the card count.
         return tuple(cards)  # Return immutable cards for downstream stages.
 
     def from_markdown(self, line: str) -> KnowledgeCard:
         """Return a card parsed from the contract Markdown shape."""
-        logging.info("Parsing one knowledge card from Markdown")  # Log before parsing the card line.
+        logger.info("Parsing one knowledge card from Markdown")  # Log before parsing the card line.
         match = re.match(r"^-\s+\*\*(MUST|SHOULD|INFO)\*\*\s+(.+?)\s+(\[[^\]]+\])$", line.strip())  # Match card.
         if not match:  # Invalid card lines cannot round-trip safely.
             raise ValueError("The line does not match the knowledge card format.")  # Stop with a clear error.
         card = KnowledgeCard(CardClassMark(match.group(1)), match.group(2), match.group(3))  # Build the card.
-        logging.debug("Parsed a %s card with citation %s", card.mark.value, card.citation_key)  # Log safe metadata.
+        logger.debug("Parsed a %s card with citation %s", card.mark.value, card.citation_key)  # Log safe metadata.
         return card  # Return the parsed card.
 
     def _updated_page(self, line: str, current_page: str) -> str:

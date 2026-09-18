@@ -12,6 +12,8 @@ from src.juniper_skills.rewrite import (  # Reuse the locked copyright guard mod
     VerbatimSimilarityGuard,
 )
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 class CachedSourceSimilarityGuard:
     """Run the similarity guard when many topic parts share one source."""
@@ -25,29 +27,29 @@ class CachedSourceSimilarityGuard:
 
     def check_texts(self, generated: tuple[tuple[Path, str], ...], source_text: str) -> SimilarityGuardReport:
         """Return guard results for generated texts that share one source."""
-        logging.info("Running cached-source similarity guard")  # Log before guard measurement.
+        logger.info("Running cached-source similarity guard")  # Log before guard measurement.
         if not generated:  # A guard that measures no topic files must fail.
             return self.guard.check(tuple())  # Reuse the locked zero-file failure report.
         self._prepare_source(source_text)  # Normalize and index the shared source one time.
         results = tuple(self._check_one(path, text) for path, text in generated)  # Measure topics.
         report = SimilarityGuardReport(len(results), self.guard.threshold, self.guard.warn_threshold, results, 0.0)
-        logging.debug("Cached-source guard checked %d generated texts", len(results))  # Log the measured count.
+        logger.debug("Cached-source guard checked %d generated texts", len(results))  # Log the measured count.
         return report  # Return the same report model as the base guard.
 
     def check_files(self, paths: tuple[Path, ...], source_text: str) -> SimilarityGuardReport:
         """Return guard results for generated files that share one source."""
-        logging.info("Reading generated files for cached-source guard")  # Log before generated file input.
+        logger.info("Reading generated files for cached-source guard")  # Log before generated file input.
         generated = tuple((path, path.read_text(encoding="utf-8")) for path in paths)  # Read each topic file once.
-        logging.debug("Read %d generated files for cached-source guard", len(generated))  # Log input count.
+        logger.debug("Read %d generated files for cached-source guard", len(generated))  # Log input count.
         return self.check_texts(generated, source_text)  # Measure the generated text values.
 
     def _prepare_source(self, source_text: str) -> None:
         """Build bounded source indexes for repeated topic checks."""
-        logging.info("Indexing shared source text for cached guard")  # Log before source indexing.
+        logger.info("Indexing shared source text for cached guard")  # Log before source indexing.
         self._source_words = self._policy_words(source_text)  # Normalize the source with contract rules.
         self._source_hashes = self._hash_sets(self._source_words)  # Build threshold-bounded hash indexes.
         self._source_windows = {}  # Clear exact-window cache from a prior source.
-        logging.debug("Indexed %d source guard words", len(self._source_words))  # Log source index size.
+        logger.debug("Indexed %d source guard words", len(self._source_words))  # Log source index size.
 
     def _hash_sets(self, words: tuple[str, ...]) -> dict[int, set[int]]:
         """Return source hash sets through the hard-fail probe size."""

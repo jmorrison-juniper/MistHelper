@@ -22,6 +22,8 @@ from .models import (
 )  # Share models.
 from .parser import SourcePageParser  # Attach page citations before checklist extraction.
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 class CoverageAnalyzer:
     """Create a checklist of source facts that a writer must cover."""
@@ -37,22 +39,22 @@ class CoverageAnalyzer:
 
     def analyze_text(self, text: str, source_key: str, topic: str | None = None) -> CoverageManifest:
         """Return a deduplicated coverage manifest for one source region."""
-        logging.info("Building coverage manifest for %s", source_key)  # Log before analysis.
+        logger.info("Building coverage manifest for %s", source_key)  # Log before analysis.
         lines = self.parser.parse(text)  # Attach citations to all source lines.
         entries = self._entries(lines, source_key)  # Extract all checklist classes.
         numeric_rejections = self.numeric_extractor.rejected_count(lines)  # Count incomplete numeric candidates.
         useful_entries = tuple(entry for entry in entries if self._useful_entry(entry))  # Drop noise entries.
         kept, merges = self._deduplicate(useful_entries)  # Merge repeated checklist items.
         manifest = CoverageManifest(topic or self._topic(lines), self._region(lines), kept, merges, numeric_rejections)
-        logging.debug("Coverage manifest has %d entries after %d merges", len(kept), merges)  # Log counts.
+        logger.debug("Coverage manifest has %d entries after %d merges", len(kept), merges)  # Log counts.
         return manifest  # Return the checklist for writer and verifier stages.
 
     def verify(self, manifest: CoverageManifest, topic_text: str) -> CoverageVerificationReport:
         """Return the share of manifest entries covered by a finished topic."""
-        logging.info("Verifying topic coverage against a manifest")  # Log before verification.
+        logger.info("Verifying topic coverage against a manifest")  # Log before verification.
         covered = tuple(entry for entry in manifest.entries if self._covered(entry, topic_text))  # Find matches.
         missing = tuple(entry for entry in manifest.entries if entry not in covered)  # Keep uncovered facts.
-        logging.debug("Coverage verifier found %d of %d entries", len(covered), len(manifest.entries))  # Log result.
+        logger.debug("Coverage verifier found %d of %d entries", len(covered), len(manifest.entries))  # Log result.
         return CoverageVerificationReport(len(manifest.entries), len(covered), missing)  # Return coverage report.
 
     def _entries(self, lines: tuple[SourceLine, ...], source_key: str) -> tuple[CoverageEntry, ...]:
@@ -299,11 +301,11 @@ class CoverageAnalyzer:
 
     def _deduplicate(self, entries: tuple[CoverageEntry, ...]) -> tuple[tuple[CoverageEntry, ...], int]:
         """Return deduplicated manifest entries and the merge count."""
-        logging.info("Deduplicating coverage manifest entries")  # Log before manifest merging.
+        logger.info("Deduplicating coverage manifest entries")  # Log before manifest merging.
         kept: dict[str, CoverageEntry] = {}  # Store one item for each normalized checklist key.
         for entry in entries:  # Walk each candidate entry once.
             kept.setdefault(self._key(entry), entry)  # Keep the first citation for repeated items.
-        logging.debug("Merged %d coverage manifest entries", len(entries) - len(kept))  # Log merge count.
+        logger.debug("Merged %d coverage manifest entries", len(entries) - len(kept))  # Log merge count.
         return tuple(kept.values()), len(entries) - len(kept)  # Return entries and merge count.
 
     def _key(self, entry: CoverageEntry) -> str:

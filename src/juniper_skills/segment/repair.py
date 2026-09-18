@@ -6,6 +6,8 @@ import logging
 import re
 from dataclasses import dataclass
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 @dataclass(frozen=True)
 class DefectRepairResult:
@@ -25,7 +27,7 @@ class OrphanWordRepairer:
 
     def repair(self, text: str) -> DefectRepairResult:
         """Run the repair operation."""
-        logging.info("Repairing orphan inline words")  # Log before scanning converter output.
+        logger.info("Repairing orphan inline words")  # Log before scanning converter output.
         lines: list[str | None] = [line for line in text.splitlines()]  # Permit deletes after splitting source lines.
         repairs = 0  # Count orphan words that join into a sentence.
         index = 0  # Track the scan position across source lines.
@@ -34,7 +36,7 @@ class OrphanWordRepairer:
                 repairs += self._join_orphan(lines, index)  # Join the token into the sentence above when safe.
             index += 1  # Continue after the current source line.
         repaired = "\n".join(line for line in lines if line is not None)  # Remove orphan lines that were joined.
-        logging.debug("Repaired %s orphan inline words", repairs)  # Report the measured repair count.
+        logger.debug("Repaired %s orphan inline words", repairs)  # Report the measured repair count.
         return DefectRepairResult(repaired, repairs, 0, 0)  # Cover-art repair runs in another class.
 
     def _is_orphan(self, lines: list[str | None], index: int) -> bool:
@@ -96,16 +98,16 @@ class CoverArtHeadingRepairer:
 
     def repair(self, result: DefectRepairResult) -> DefectRepairResult:
         """Run the repair operation."""
-        logging.info("Repairing cover-art heading defects")  # Log before removing fake heading structure.
+        logger.info("Repairing cover-art heading defects")  # Log before removing fake heading structure.
         lines = result.text.splitlines()  # Preserve all non-heading source lines.
         real_start = self._real_start_index(lines)  # Find the first heading that starts the true structure.
         if real_start is None:  # Leave documents without a known real start unchanged.
-            logging.debug("Removed %s cover-art headings", 0)  # Report that no cover block existed.
+            logger.debug("Removed %s cover-art headings", 0)  # Report that no cover block existed.
             return result
         heading_count = sum(1 for line in lines[:real_start] if line.startswith("## "))  # Measure fake headings.
         repaired = self._drop_prefix(lines, real_start) if heading_count >= 5 else lines  # Drop the cover block.
         dropped = 1 if heading_count >= 5 else 0  # Count the front matter region as one non-knowledge section.
-        logging.debug("Removed %s cover-art headings", heading_count if heading_count >= 5 else 0)  # Report count.
+        logger.debug("Removed %s cover-art headings", heading_count if heading_count >= 5 else 0)  # Report count.
         return DefectRepairResult(
             "\n".join(repaired), result.orphan_words, heading_count if heading_count >= 5 else 0, dropped
         )  # Return metrics.
@@ -130,10 +132,10 @@ class DocumentDefectRepairer:
 
     def repair(self, text: str) -> DefectRepairResult:
         """Run the repair operation."""
-        logging.info("Starting document defect repair")  # Log the combined repair pass before any change.
+        logger.info("Starting document defect repair")  # Log the combined repair pass before any change.
         orphan_result = self.orphan_repairer.repair(text)  # Rejoin orphan words first so headings stay stable.
         final_result = self.cover_repairer.repair(orphan_result)  # Remove cover-art headings after text repair.
-        logging.debug(
+        logger.debug(
             "Document repair joined %s orphans and removed %s headings",
             final_result.orphan_words,
             final_result.cover_headings,

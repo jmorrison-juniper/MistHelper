@@ -9,6 +9,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 @dataclass(frozen=True)
 class GitHubCommandResult:
@@ -56,10 +58,10 @@ class GitHubRateLimitManager:
 
     def read_rate_limit(self) -> dict[str, Any]:
         """Return the current GitHub API rate limit object."""
-        logging.info("Reading the GitHub API rate limit")  # Record the network check.
+        logger.info("Reading the GitHub API rate limit")  # Record the network check.
         result = self.runner.run(["gh", "api", "rate_limit"])  # Ask GitHub for the measured limit.
         payload = json.loads(result.stdout)  # Parse the CLI JSON so callers can make decisions.
-        logging.debug("GitHub core limit has %s calls remaining", payload["rate"]["remaining"])  # Record safe evidence.
+        logger.debug("GitHub core limit has %s calls remaining", payload["rate"]["remaining"])  # Record safe evidence.
         return cast(dict[str, Any], payload)
 
     def defer_if_needed(self) -> None:
@@ -67,10 +69,10 @@ class GitHubRateLimitManager:
         rate_limit = self.read_rate_limit()["rate"]  # Read the core bucket that issue writes use.
         remaining = int(rate_limit["remaining"])  # Convert the value for the threshold comparison.
         if remaining >= self.minimum_remaining:  # Continue when enough calls remain.
-            logging.debug("GitHub API limit permits a queued write with %d calls remaining", remaining)  # Record state.
+            logger.debug("GitHub API limit permits a queued write with %d calls remaining", remaining)  # Record state.
             return
         reset_epoch = int(rate_limit["reset"])  # Keep the reset time for the queued retry.
-        logging.info("Deferring GitHub sync until rate-limit reset %d", reset_epoch)  # Record nonblocking backoff.
+        logger.info("Deferring GitHub sync until rate-limit reset %d", reset_epoch)  # Record nonblocking backoff.
         raise GitHubRateLimitExhausted(reset_epoch)  # Stop the background sync without losing local state.
 
     def wait_if_needed(self) -> None:
@@ -78,12 +80,12 @@ class GitHubRateLimitManager:
         rate_limit = self.read_rate_limit()["rate"]  # Read the core bucket that issue calls use.
         remaining = int(rate_limit["remaining"])  # Convert the value for the threshold comparison.
         if remaining >= self.minimum_remaining:  # Continue when enough calls remain.
-            logging.debug("GitHub API limit is sufficient with %d calls remaining", remaining)  # Record no-wait state.
+            logger.debug("GitHub API limit is sufficient with %d calls remaining", remaining)  # Record no-wait state.
             return
         wait_seconds = max(1, int(rate_limit["reset"]) - int(time.time()) + 1)  # Wait until reset plus a guard second.
-        logging.info("Waiting %d seconds for the GitHub API rate limit", wait_seconds)  # Record the backoff reason.
+        logger.info("Waiting %d seconds for the GitHub API rate limit", wait_seconds)  # Record the backoff reason.
         time.sleep(wait_seconds)  # Back off to avoid secondary throttling.
-        logging.debug("GitHub API rate limit wait finished")  # Record the end of the backoff.
+        logger.debug("GitHub API rate limit wait finished")  # Record the end of the backoff.
 
 
 class GitHubCliRunner:
@@ -96,7 +98,7 @@ class GitHubCliRunner:
 
     def run(self, command: list[str]) -> GitHubCommandResult:
         """Run one GitHub CLI command and return its output."""
-        logging.info("Running a GitHub CLI command: %s", self._safe_command(command))  # Log the action without secrets.
+        logger.info("Running a GitHub CLI command: %s", self._safe_command(command))  # Log the action without secrets.
         self.api_call_count += 1  # Measure writes and reads that pass through the GitHub CLI.
         completed = subprocess.run(  # nosec B603 - The command list is built by tracker command templates.
             command,
@@ -106,14 +108,14 @@ class GitHubCliRunner:
             timeout=self.timeout_seconds,
         )
         result = GitHubCommandResult(completed.returncode, completed.stdout, completed.stderr)  # Store command output.
-        logging.debug("GitHub CLI command returned code %d", result.returncode)  # Record the non-secret result.
+        logger.debug("GitHub CLI command returned code %d", result.returncode)  # Record the non-secret result.
         if result.returncode != 0:  # Convert CLI failures into a typed exception.
             raise GitHubCliError(result.stderr.strip() or result.stdout.strip())
         return result
 
     def run_with_input(self, command: list[str], input_text: str) -> GitHubCommandResult:
         """Run one GitHub CLI command with standard input."""
-        logging.info("Running a GitHub CLI command with input: %s", self._safe_command(command))  # Log safe action.
+        logger.info("Running a GitHub CLI command with input: %s", self._safe_command(command))  # Log safe action.
         self.api_call_count += 1  # Count this network operation for throughput reports.
         completed = subprocess.run(  # nosec B603 - The command list is built by tracker command templates.
             command,
@@ -124,7 +126,7 @@ class GitHubCliRunner:
             timeout=self.timeout_seconds,
         )
         result = GitHubCommandResult(completed.returncode, completed.stdout, completed.stderr)  # Store output safely.
-        logging.debug("GitHub CLI command with input returned code %d", result.returncode)  # Record safe status.
+        logger.debug("GitHub CLI command with input returned code %d", result.returncode)  # Record safe status.
         if result.returncode != 0:  # Convert CLI failures into a typed exception.
             raise GitHubCliError(result.stderr.strip() or result.stdout.strip())
         return result

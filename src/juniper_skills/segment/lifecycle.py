@@ -6,6 +6,8 @@ import logging
 import re
 from dataclasses import dataclass
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 @dataclass(frozen=True)
 class LifecycleClassification:
@@ -124,7 +126,7 @@ class LifecycleClassifier:
 
     def classify(self, title: str, text: str) -> LifecycleClassification:
         """Run the classify operation."""
-        logging.info("Classifying life cycle tags for topic %s", title)  # Log before signal scoring.
+        logger.info("Classifying life cycle tags for topic %s", title)  # Log before signal scoring.
         title_context = title.lower()  # Give the heading the strongest classification weight.
         body_context = self._context(text)  # Use the body only when the heading lacks strong evidence.
         signals = {tag: self._title_signals(title_context, tag) for tag in self.TAG_ORDER}  # Score headings first.
@@ -132,7 +134,7 @@ class LifecycleClassifier:
         self._add_body_signals(body_context, signals)  # Use body signals only when title and commands give no tag.
         tags = self._selected_tags(signals)  # Select positive tags without tagging every broad topic.
         signals = self._ensure_signal(tags, signals)  # Store a reason for each assigned tag.
-        logging.debug("Topic %s classified as %s", title, ",".join(tags))  # Report tag decision.
+        logger.debug("Topic %s classified as %s", title, ",".join(tags))  # Report tag decision.
         return LifecycleClassification(tags, signals)  # Return the decision and evidence.
 
     def _context(self, text: str) -> str:

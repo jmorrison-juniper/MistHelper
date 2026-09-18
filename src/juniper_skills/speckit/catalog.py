@@ -10,6 +10,8 @@ from typing import cast  # Narrow JSON-derived inventory values before iteration
 
 from src.juniper_skills.speckit.models import SpecKitPaths
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 class SpecKitCatalog:
     """Read the installed SpecKit catalog without guessing files."""
@@ -53,7 +55,7 @@ class SpecKitCatalog:
 
     def inventory(self) -> dict[str, object]:
         """Return the real installed SpecKit catalog."""
-        logging.info("Inventorying the installed SpecKit catalog")  # Record the catalog scan start.
+        logger.info("Inventorying the installed SpecKit catalog")  # Record the catalog scan start.
         commands = self._commands()  # Read command contracts once so the count stays typed.
         data: dict[str, object] = {  # Build one compact inventory for analysis and generated reports.
             "settings": self._read_known_files(),
@@ -63,12 +65,12 @@ class SpecKitCatalog:
             "workflows": self._files_under(self.paths.specify_dir / "workflows"),
             "commands": commands,
         }
-        logging.debug("Inventory contains %d command records", len(commands))  # Record catalog size.
+        logger.debug("Inventory contains %d command records", len(commands))  # Record catalog size.
         return data
 
     def render_markdown(self) -> str:
         """Return a written catalog for generated analysis reports."""
-        logging.info("Rendering the SpecKit catalog as Markdown")  # Record report rendering.
+        logger.info("Rendering the SpecKit catalog as Markdown")  # Record report rendering.
         inventory = self.inventory()  # Read live catalog data so the report matches this checkout.
         lines = ["# SpecKit catalog", ""]  # Start the written catalog with a stable heading.
         lines.extend(self._settings_lines(inventory))  # Add the installed settings and integration files.
@@ -76,98 +78,98 @@ class SpecKitCatalog:
         lines.extend(self._file_lines("Templates", inventory["templates"]))  # Add template evidence.
         lines.extend(self._file_lines("Scripts", inventory["scripts"]))  # Add script evidence.
         lines.extend(self._file_lines("Extensions", inventory["extensions"]))  # Add extension evidence.
-        logging.debug("Rendered %d catalog lines", len(lines))  # Record the catalog length.
+        logger.debug("Rendered %d catalog lines", len(lines))  # Record the catalog length.
         return "\n".join(lines) + "\n"
 
     def _read_known_files(self) -> dict[str, object]:
         """Read the required SpecKit metadata files."""
-        logging.info("Reading SpecKit metadata files")  # Record the metadata read action.
+        logger.info("Reading SpecKit metadata files")  # Record the metadata read action.
         names = ["extensions.yml", "feature.json", "init-options.json", "integration.json"]  # Lock required files.
         result = {name: self._read_text_or_json(self.paths.specify_dir / name) for name in names}  # Read each file.
-        logging.debug("Read %d SpecKit metadata files", len(result))  # Record the number of files read.
+        logger.debug("Read %d SpecKit metadata files", len(result))  # Record the number of files read.
         return result
 
     def _commands(self) -> list[dict[str, str]]:
         """Return installed and expected command records."""
-        logging.info("Cataloging SpecKit command files")  # Record command catalog creation.
+        logger.info("Cataloging SpecKit command files")  # Record command catalog creation.
         installed = self._installed_command_names()  # Measure command files in this checkout.
         names = sorted(
             set(installed) | set(self.CORE_COMMANDS) | set(self.COMPANION_COMMANDS)
         )  # Keep expected gaps visible.
         records = [self._command_record(name, installed) for name in names]  # Build one row per known command.
-        logging.debug("Cataloged %d SpecKit command rows", len(records))  # Record command row count.
+        logger.debug("Cataloged %d SpecKit command rows", len(records))  # Record command row count.
         return records
 
     def _installed_command_names(self) -> set[str]:
         """Return command names found in repository files."""
-        logging.info("Finding installed SpecKit command files")  # Record the command file scan.
+        logger.info("Finding installed SpecKit command files")  # Record the command file scan.
         roots = [self.paths.repo_root / ".github" / "agents", self.paths.specify_dir / "extensions"]  # Use real roots.
         paths = [
             path for root in roots for path in self._iter_files(root) if path.name.startswith("speckit.")
         ]  # Filter commands.
         names = {path.name.replace(".agent.md", "").replace(".md", "") for path in paths}  # Convert filenames to ids.
-        logging.debug("Found %d installed SpecKit command names", len(names))  # Record installed command count.
+        logger.debug("Found %d installed SpecKit command names", len(names))  # Record installed command count.
         return names
 
     def _command_record(self, name: str, installed: set[str]) -> dict[str, str]:
         """Return consume and emit notes for one command."""
-        logging.info("Building a SpecKit command catalog row")  # Record one command row build.
+        logger.info("Building a SpecKit command catalog row")  # Record one command row build.
         record = {  # State the real install status and command contract summary.
             "name": name,
             "installed": "yes" if name in installed else "no",
             "consumes": self._consumes(name),
             "emits": self._emits(name),
         }
-        logging.debug("Built command catalog row for %s", name)  # Record the command id.
+        logger.debug("Built command catalog row for %s", name)  # Record the command id.
         return record
 
     def _read_text_or_json(self, path: Path) -> object:
         """Read text or JSON from a known SpecKit file."""
-        logging.info("Reading SpecKit file %s", path)  # Record the file read action.
+        logger.info("Reading SpecKit file %s", path)  # Record the file read action.
         if not path.exists():
-            logging.debug("SpecKit file is missing: %s", path)  # Record a missing required file.
+            logger.debug("SpecKit file is missing: %s", path)  # Record a missing required file.
             return {"missing": True}
         text = path.read_text(encoding="utf-8")  # Read the file with explicit UTF-8.
-        logging.debug("Read %d characters from %s", len(text), path.name)  # Record safe file size.
+        logger.debug("Read %d characters from %s", len(text), path.name)  # Record safe file size.
         return json.loads(text) if path.suffix == ".json" else text  # Preserve JSON shape where available.
 
     def _files_under(self, root: Path) -> list[str]:
         """Return repository-relative files under a root."""
-        logging.info("Listing SpecKit files under %s", root)  # Record the directory scan.
+        logger.info("Listing SpecKit files under %s", root)  # Record the directory scan.
         files = [
             str(path.relative_to(self.paths.repo_root)) for path in self._iter_files(root)
         ]  # Use repo-relative paths.
-        logging.debug("Listed %d files under %s", len(files), root)  # Record the file count.
+        logger.debug("Listed %d files under %s", len(files), root)  # Record the file count.
         return files
 
     def _iter_files(self, root: Path) -> list[Path]:
         """Return files below root in stable order."""
-        logging.info("Scanning files below %s", root)  # Record the low-level scan.
+        logger.info("Scanning files below %s", root)  # Record the low-level scan.
         files = sorted(root.rglob("*")) if root.exists() else []  # Return no files when an optional root is absent.
         result = [path for path in files if self._is_catalog_file(path)]  # Keep only source files for catalog output.
-        logging.debug("Scanned %d files below %s", len(result), root)  # Record the scan result.
+        logger.debug("Scanned %d files below %s", len(result), root)  # Record the scan result.
         return result
 
     def _is_catalog_file(self, path: Path) -> bool:
         """Return whether a file belongs in the SpecKit catalog."""
-        logging.info("Checking whether a SpecKit file is catalog source")  # Record catalog filter action.
+        logger.info("Checking whether a SpecKit file is catalog source")  # Record catalog filter action.
         is_cache = "__pycache__" in path.parts or path.suffix == ".pyc"  # Exclude runtime cache files.
         result = path.is_file() and not is_cache  # Catalog only durable installed files.
-        logging.debug("SpecKit catalog source check for %s returned %s", path, result)  # Record decision.
+        logger.debug("SpecKit catalog source check for %s returned %s", path, result)  # Record decision.
         return result
 
     def _settings_lines(self, inventory: dict[str, object]) -> list[str]:
         """Return Markdown lines for settings files."""
-        logging.info("Rendering SpecKit settings lines")  # Record report section rendering.
+        logger.info("Rendering SpecKit settings lines")  # Record report section rendering.
         settings = cast(Iterable[str], inventory["settings"])  # Read the already measured settings object.
         lines = ["## Installed settings", ""]  # Start the settings section.
         lines.extend(f"- `{name}`: present" for name in settings)  # State each required metadata file.
-        logging.debug("Rendered %d settings lines", len(lines))  # Record section size.
+        logger.debug("Rendered %d settings lines", len(lines))  # Record section size.
         return lines + [""]
 
     def _command_lines(self, inventory: dict[str, object]) -> list[str]:
         """Return Markdown lines for command rows."""
-        logging.info("Rendering SpecKit command lines")  # Record command section rendering.
+        logger.info("Rendering SpecKit command lines")  # Record command section rendering.
         lines = [
             "## Commands",
             "",
@@ -176,20 +178,20 @@ class SpecKitCatalog:
         ]  # Add table head.
         for record in cast(Iterable[dict[str, object]], inventory["commands"]):
             lines.append("| `{name}` | {installed} | {consumes} | {emits} |".format(**record))  # Add one command row.
-        logging.debug("Rendered %d command table lines", len(lines))  # Record command table size.
+        logger.debug("Rendered %d command table lines", len(lines))  # Record command table size.
         return lines + [""]
 
     def _file_lines(self, heading: str, files: object) -> list[str]:
         """Return Markdown lines for one file list."""
-        logging.info("Rendering SpecKit file list for %s", heading)  # Record file list rendering.
+        logger.info("Rendering SpecKit file list for %s", heading)  # Record file list rendering.
         lines = [f"## {heading}", ""]  # Start the file list section.
         lines.extend(f"- `{file_name}`" for file_name in cast(Iterable[str], files))  # Add each measured file path.
-        logging.debug("Rendered %d file lines for %s", len(lines), heading)  # Record section size.
+        logger.debug("Rendered %d file lines for %s", len(lines), heading)  # Record section size.
         return lines + [""]
 
     def _consumes(self, name: str) -> str:
         """Return a concise consumed artifact list for one command."""
-        logging.info("Resolving consumed artifacts for command %s", name)  # Record mapping action.
+        logger.info("Resolving consumed artifacts for command %s", name)  # Record mapping action.
         mapping = {
             "speckit.specify": "feature text and spec template",
             "speckit.clarify": "spec.md",
@@ -202,12 +204,12 @@ class SpecKitCatalog:
             result = self._companion_consumes(name)  # Use real Companion command contracts.
         else:
             result = mapping.get(name, "current feature artifacts and extension state")  # Use a safe default.
-        logging.debug("Command %s consumes %s", name, result)  # Record the command mapping.
+        logger.debug("Command %s consumes %s", name, result)  # Record the command mapping.
         return result
 
     def _companion_consumes(self, name: str) -> str:
         """Return consumed artifacts for Companion commands."""
-        logging.info("Resolving Companion consumed artifacts for %s", name)  # Record mapping action.
+        logger.info("Resolving Companion consumed artifacts for %s", name)  # Record mapping action.
         if name.endswith(("after-specify", "after-plan", "after-tasks")):
             result = "active feature directory and lifecycle hook state"
         elif name.endswith("after-implement"):
@@ -216,12 +218,12 @@ class SpecKitCatalog:
             result = "living-specs registry, capability specs, git history, and changed files"
         else:
             result = "active feature artifacts, .spec-context.json, and companion config"
-        logging.debug("Companion command %s consumes %s", name, result)  # Record mapping result.
+        logger.debug("Companion command %s consumes %s", name, result)  # Record mapping result.
         return result
 
     def _emits(self, name: str) -> str:
         """Return a concise emitted artifact list for one command."""
-        logging.info("Resolving emitted artifacts for command %s", name)  # Record mapping action.
+        logger.info("Resolving emitted artifacts for command %s", name)  # Record mapping action.
         mapping = {
             "speckit.specify": "spec.md",
             "speckit.clarify": "updated spec.md",
@@ -235,12 +237,12 @@ class SpecKitCatalog:
             result = self._companion_emits(name)  # Use real Companion command contracts.
         else:
             result = mapping.get(name, ".spec-context.json or extension-specific state")  # Note extension state.
-        logging.debug("Command %s emits %s", name, result)  # Record the command mapping.
+        logger.debug("Command %s emits %s", name, result)  # Record the command mapping.
         return result
 
     def _companion_emits(self, name: str) -> str:
         """Return emitted artifacts for Companion commands."""
-        logging.info("Resolving Companion emitted artifacts for %s", name)  # Record mapping action.
+        logger.info("Resolving Companion emitted artifacts for %s", name)  # Record mapping action.
         if name.endswith(("after-specify", "after-plan", "after-tasks", "after-implement")):
             result = ".spec-context.json lifecycle history and status"
         elif name.endswith("living-coverage"):
@@ -253,5 +255,5 @@ class SpecKitCatalog:
             result = "capability spec files and living-specs registry updates"
         else:
             result = ".spec-context.json progress or pipeline output"
-        logging.debug("Companion command %s emits %s", name, result)  # Record mapping result.
+        logger.debug("Companion command %s emits %s", name, result)  # Record mapping result.
         return result

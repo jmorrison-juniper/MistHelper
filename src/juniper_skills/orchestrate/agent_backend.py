@@ -18,6 +18,8 @@ from src.juniper_skills.rewrite import (
     RewriteWorkPacket,
 )
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 class BackendDiscovery:
     """Find a real headless rewrite backend on this machine."""
@@ -28,10 +30,10 @@ class BackendDiscovery:
 
     def choose(self) -> tuple[RewriteBackend, tuple[BackendProbe, ...]]:
         """Run the choose operation."""
-        logging.info("Discovering a headless rewrite backend")  # Log before probing local tools.
+        logger.info("Discovering a headless rewrite backend")  # Log before probing local tools.
         probes = [self._copilot_probe(), self._gh_copilot_probe(), self._ollama_probe()]  # Test known local options.
         backend = self._backend_for(probes)  # Select the first true language-model path.
-        logging.debug("Selected rewrite backend %s", backend.__class__.__name__)  # Record the selected backend type.
+        logger.debug("Selected rewrite backend %s", backend.__class__.__name__)  # Record the selected backend type.
         return backend, tuple(probes)  # Return backend and probe evidence for the report.
 
     def _backend_for(self, probes: list[BackendProbe]) -> RewriteBackend:
@@ -41,7 +43,7 @@ class BackendDiscovery:
         return PacketFileBackend(self.packet_dir)  # Fall back to external-agent packet files honestly.
 
     def _copilot_probe(self) -> BackendProbe:
-        logging.info("Checking GitHub Copilot CLI for non-interactive prompt support")  # Log before command lookup.
+        logger.info("Checking GitHub Copilot CLI for non-interactive prompt support")  # Log before command lookup.
         path = shutil.which("copilot")  # Use PATH discovery without starting a model call.
         if path is None:  # Stop if the CLI is not installed.
             return BackendProbe("copilot", False, "copilot was not found on PATH")
@@ -51,7 +53,7 @@ class BackendDiscovery:
         return BackendProbe("copilot", available, evidence, (path, "-s", "-p"))  # Return command prefix for calls.
 
     def _gh_copilot_probe(self) -> BackendProbe:
-        logging.info("Checking gh copilot for a headless prompt command")  # Log before extension probe.
+        logger.info("Checking gh copilot for a headless prompt command")  # Log before extension probe.
         path = shutil.which("gh")  # Find the GitHub CLI path for extension checks.
         if path is None:  # Stop if gh is not installed.
             return BackendProbe("gh copilot", False, "gh was not found on PATH")
@@ -61,7 +63,7 @@ class BackendDiscovery:
         return BackendProbe("gh copilot", False, evidence if available else result[:200])  # Do not fake a rewrite path.
 
     def _ollama_probe(self) -> BackendProbe:
-        logging.info("Checking Ollama for local rewrite models")  # Log before local model discovery.
+        logger.info("Checking Ollama for local rewrite models")  # Log before local model discovery.
         path = shutil.which("ollama")  # Find Ollama without assuming it is installed.
         if path is None:  # Stop if the executable is absent.
             return BackendProbe("ollama", False, "ollama was not found on PATH")
@@ -81,10 +83,10 @@ class BackendDiscovery:
                 command, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20, check=False
             )  # Read help text.
         except OSError as error:
-            logging.debug("Backend probe failed to start: %s", error)  # Record why this probe failed.
+            logger.debug("Backend probe failed to start: %s", error)  # Record why this probe failed.
             return str(error)  # Return a short diagnostic for the probe evidence.
         except subprocess.TimeoutExpired:
-            logging.debug("Backend probe timed out for %s", command[0])  # Record the timed-out tool.
+            logger.debug("Backend probe timed out for %s", command[0])  # Record the timed-out tool.
             return "probe timed out"  # Return bounded evidence for the report.
         return (result.stdout + result.stderr).strip()  # Return all text because help can use either stream.
 
@@ -99,11 +101,11 @@ class SubprocessAgentBackend(RewriteBackend):
 
     def rewrite(self, packet: RewriteWorkPacket) -> RewriteResult:
         """Run the rewrite operation."""
-        logging.info("Running subprocess rewrite backend")  # Log before the model subprocess starts.
+        logger.info("Running subprocess rewrite backend")  # Log before the model subprocess starts.
         prompt = self.prompt_builder.build(packet)  # Build the copyright-safe rewrite instruction.
         output = self._invoke(prompt)  # Call the selected real backend.
         cards = self._cards(output, packet)  # Parse the contract list-item output.
-        logging.debug("Subprocess rewrite backend returned %d cards", len(cards))  # Record the parsed card count.
+        logger.debug("Subprocess rewrite backend returned %d cards", len(cards))  # Record the parsed card count.
         return RewriteResult(tuple(cards), packet.detected_commands, tuple())  # Return publishable cards and commands.
 
     def _invoke(self, prompt: str) -> str:
@@ -159,12 +161,12 @@ class PacketFileBackend(RewriteBackend):
 
     def rewrite(self, packet: RewriteWorkPacket) -> RewriteResult:
         """Run the rewrite operation."""
-        logging.info("Writing rewrite packet for external processing")  # Log before durable packet output.
+        logger.info("Writing rewrite packet for external processing")  # Log before durable packet output.
         self.packet_dir.mkdir(parents=True, exist_ok=True)  # Create the queue directory if it is absent.
         packet_path = self._packet_path(packet)  # Resolve the deterministic packet file path.
         response_path = packet_path.with_suffix(".response.json")  # Define the external-agent response path.
         packet_path.write_text(self._packet_text(packet), encoding="utf-8")  # Write the prompt and source safely.
-        logging.debug("Wrote rewrite packet %s", packet_path)  # Record the created packet path.
+        logger.debug("Wrote rewrite packet %s", packet_path)  # Record the created packet path.
         if not response_path.exists():  # Refuse to invent language-model output.
             raise RuntimeError(f"Rewrite response is not ready: {response_path}")  # Tell the runner to retry later.
         return self._read_response(response_path, packet)  # Load the completed external response.
@@ -177,12 +179,12 @@ class PacketFileBackend(RewriteBackend):
         return self.prompt_builder.build(packet) + "\n"  # Store the exact task for the external agent.
 
     def _read_response(self, response_path: Path, packet: RewriteWorkPacket) -> RewriteResult:
-        logging.info("Reading completed rewrite response %s", response_path)  # Log before reading external output.
+        logger.info("Reading completed rewrite response %s", response_path)  # Log before reading external output.
         payload = json.loads(response_path.read_text(encoding="utf-8"))  # Read the external agent JSON result.
         cards = tuple(self._response_card(row) for row in payload.get("cards", []))  # Convert rows into cards.
         if not cards:  # A response without cards cannot publish useful content.
             raise RuntimeError(f"Rewrite response has no cards: {response_path}")  # Fail loudly for retry.
-        logging.debug("Read %d cards from rewrite response", len(cards))  # Record the response size.
+        logger.debug("Read %d cards from rewrite response", len(cards))  # Record the response size.
         return RewriteResult(cards, packet.detected_commands, tuple(payload.get("limitations", ())))  # Return result.
 
     def _response_card(self, row: dict[str, str]) -> KnowledgeCard:

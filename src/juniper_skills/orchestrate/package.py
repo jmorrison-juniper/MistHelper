@@ -11,6 +11,8 @@ from src.juniper_skills.orchestrate.models import WorkItem
 from src.juniper_skills.rewrite import RewriteResult
 from src.juniper_skills.segment import JoinedDocument
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 class SkillPackageEmitter:
     """Write generated skill package files into the canonical store."""
@@ -22,7 +24,7 @@ class SkillPackageEmitter:
 
     def emit(self, item: WorkItem, joined: JoinedDocument, outputs: list[RewriteResult]) -> list[Path]:
         """Run the emit operation."""
-        logging.info("Emitting Juniper skill package files for %s", item.document_key)  # Log before file writes.
+        logger.info("Emitting Juniper skill package files for %s", item.document_key)  # Log before file writes.
         package = self._package_dir(item)  # Resolve the domain package folder.
         document_dir = package / "documents" / self._slug(item.title)  # Resolve the document topic folder.
         document_dir.mkdir(parents=True, exist_ok=True)  # Create package directories before writing files.
@@ -30,7 +32,7 @@ class SkillPackageEmitter:
         self._write_document_index(item, joined, document_dir, topic_paths)  # Write the level 2 route index.
         self._write_level_one(item, package, topic_paths)  # Write SKILL.md, INDEX.md, and sources.md.
         paths = [package / "SKILL.md", package / "INDEX.md", package / "sources.md", document_dir / "INDEX.md"]
-        logging.debug("Emitted %d package files for %s", len(paths) + len(topic_paths), item.document_key)  # Report.
+        logger.debug("Emitted %d package files for %s", len(paths) + len(topic_paths), item.document_key)  # Report.
         return paths + topic_paths  # Return every generated Markdown file for validation.
 
     def _write_topics(self, item: WorkItem, document_dir: Path, outputs: list[RewriteResult]) -> list[Path]:
@@ -59,19 +61,19 @@ class SkillPackageEmitter:
     def _write_document_index(
         self, item: WorkItem, joined: JoinedDocument, document_dir: Path, paths: list[Path]
     ) -> None:
-        logging.info("Writing the level 2 document index for %s", item.document_key)  # Log before index write.
+        logger.info("Writing the level 2 document index for %s", item.document_key)  # Log before index write.
         rows = [self._topic_row(path, document_dir) for path in paths]  # Build the topic route rows.
         text = self._document_index_text(item, joined, rows)  # Render the full level 2 index.
         (document_dir / "INDEX.md").write_text(text, encoding="utf-8")  # Write the index beside topic files.
-        logging.debug("Wrote the level 2 document index with %d topic rows", len(rows))  # Record row count.
+        logger.debug("Wrote the level 2 document index with %d topic rows", len(rows))  # Record row count.
 
     def _write_level_one(self, item: WorkItem, package: Path, topic_paths: list[Path]) -> None:
-        logging.info("Writing level 1 package files for %s", item.domain)  # Log before package index writes.
+        logger.info("Writing level 1 package files for %s", item.domain)  # Log before package index writes.
         package.mkdir(parents=True, exist_ok=True)  # Ensure the domain folder exists for metadata files.
         (package / "SKILL.md").write_text(self._skill_text(item, len(topic_paths)), encoding="utf-8")  # Write router.
         (package / "INDEX.md").write_text(self._index_text(item, topic_paths), encoding="utf-8")  # Write route index.
         (package / "sources.md").write_text(self._sources_text(item), encoding="utf-8")  # Write source table.
-        logging.debug("Wrote level 1 package files for %s", item.domain)  # Record package writes.
+        logger.debug("Wrote level 1 package files for %s", item.domain)  # Record package writes.
 
     def _document_index_text(self, item: WorkItem, joined: JoinedDocument, rows: list[str]) -> str:
         return (

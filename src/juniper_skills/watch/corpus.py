@@ -14,6 +14,8 @@ from src.juniper_skills.inventory.engine import InventoryBuilder  # Reuse the lo
 from src.juniper_skills.inventory.metadata import FrontMatterParser, TextKey  # Reuse source metadata parsing.
 from src.juniper_skills.inventory.models import SourceRoot  # Share the locked root record type.
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 @dataclass(frozen=True)
 class WatcherConfig:
@@ -72,17 +74,17 @@ class PollingFileState:
 
     def sample(self, path: Path) -> FileSample | None:
         """Run the sample operation."""
-        logging.info("Sampling Markdown file %s", path)  # Log the stat call before touching the filesystem.
+        logger.info("Sampling Markdown file %s", path)  # Log the stat call before touching the filesystem.
         try:
             stat = path.stat()  # Read size and mtime together so the quiet-period gate is consistent.
         except OSError as error:
-            logging.debug("Markdown file sample failed for %s: %s", path, error)  # Treat transient writes as not ready.
+            logger.debug("Markdown file sample failed for %s: %s", path, error)  # Treat transient writes as not ready.
             return None
         current = FileSample(stat.st_size, stat.st_mtime_ns)  # Store only readiness fields, not file content.
         prior = self.samples.get(path)  # Read the previous sample to detect a quiet period.
         current.stable_checks = self._stable_count(prior, current)  # Require two equal samples before hashing.
         self.samples[path] = current  # Save the newest sample for the next scan.
-        logging.debug("Markdown file %s has %s stable checks", path, current.stable_checks)  # Report readiness.
+        logger.debug("Markdown file %s has %s stable checks", path, current.stable_checks)  # Report readiness.
         return current
 
     def accept_hash(self, path: Path, content_hash: str) -> str:
@@ -115,13 +117,13 @@ class PollingFileState:
 
     def prune(self, paths: set[Path]) -> None:
         """Run the prune operation."""
-        logging.info("Pruning watcher state for missing Markdown files")  # Log cleanup before mutating state.
+        logger.info("Pruning watcher state for missing Markdown files")  # Log cleanup before mutating state.
         missing = set(self.samples) - paths  # Find files that disappeared since the last scan.
         for path in missing:  # Remove deleted files from in-memory readiness state.
             self.samples.pop(path, None)  # Drop stale samples so a recreated file starts fresh.
             self.hashes.pop(path, None)  # Drop stale hashes so a recreated file counts as new.
             self.accepted_samples.pop(path, None)  # Drop stale accepted samples for removed paths.
-        logging.debug("Pruned %s missing Markdown files from watcher state", len(missing))  # Report cleanup count.
+        logger.debug("Pruned %s missing Markdown files from watcher state", len(missing))  # Report cleanup count.
 
     def _stable_count(self, prior: FileSample | None, current: FileSample) -> int:
         if not prior:  # A first observation cannot prove the file is no longer being written.
@@ -145,20 +147,20 @@ class PartSetReadiness:
 
     def group_key(self, root: SourceRoot, path: Path, text: str) -> str:
         """Run the group key operation."""
-        logging.info("Resolving watcher part-set key for %s", path)  # Log grouping before parsing metadata.
+        logger.info("Resolving watcher part-set key for %s", path)  # Log grouping before parsing metadata.
         fields = self.parser.parse_text(text)  # Read source_file and title from stable content.
         key = self._metadata_key(root, fields) or self._fallback_key(root, path)  # Prefer contract metadata.
-        logging.debug("Resolved watcher part-set key with %s characters", len(key))  # Report key size, not prose.
+        logger.debug("Resolved watcher part-set key with %s characters", len(key))  # Report key size, not prose.
         return key
 
     def ready_groups(
         self, changes: list[ReadyChange], samples: dict[Path, FileSample], paths: list[Path]
     ) -> list[ReadyChange]:
         """Run the ready groups operation."""
-        logging.info("Checking quiet period for %s changed Markdown files", len(changes))  # Log group gate start.
+        logger.info("Checking quiet period for %s changed Markdown files", len(changes))  # Log group gate start.
         blocked = self._blocked_keys(changes, samples, paths)  # Find groups with a related in-progress part.
         ready = [change for change in changes if change.group_key not in blocked]  # Keep only settled groups.
-        logging.debug("Quiet period gate released %s Markdown files", len(ready))  # Report released changes.
+        logger.debug("Quiet period gate released %s Markdown files", len(ready))  # Report released changes.
         return ready
 
     def _blocked_keys(self, changes: list[ReadyChange], samples: dict[Path, FileSample], paths: list[Path]) -> set[str]:
@@ -176,7 +178,7 @@ class PartSetReadiness:
         prior_signature, prior_count = self.group_samples.get(key, ((), 0))  # Read the prior whole-set sample.
         count = prior_count + 1 if prior_signature == signature else 1  # Require two equal whole-set samples.
         self.group_samples[key] = (signature, count)  # Store the group sample for the next polling cycle.
-        logging.debug("Part set %s has %s quiet group checks", key, count)  # Report whole-set quiet progress.
+        logger.debug("Part set %s has %s quiet group checks", key, count)  # Report whole-set quiet progress.
         return count >= 2
 
     def _group_signature(self, peers: list[Path], samples: dict[Path, FileSample]) -> tuple[tuple[str, int, int], ...]:
@@ -216,31 +218,31 @@ class QueueRefresher:
 
     def refresh(self, changes: list[ReadyChange]) -> int:
         """Run the refresh operation."""
-        logging.info("Refreshing inventory for %s live Markdown changes", len(changes))  # Log refresh start.
+        logger.info("Refreshing inventory for %s live Markdown changes", len(changes))  # Log refresh start.
         self._enable_wal()  # Enable readers and the orchestrator to continue during short writes.
         builder = InventoryBuilder(self.config.repo_root, self.config.download_root)  # Reuse inventory priority logic.
         builder.build()  # Let inventory scan, group, dedupe, and update the shared queue.
         keys = self._document_keys(changes)  # Map physical parts to logical documents after inventory writes.
         count = self._boost_queue(keys)  # Add the live-change bonus without replacing inventory priority.
-        logging.debug("Inventory refresh boosted %s work items", count)  # Report queue update count.
+        logger.debug("Inventory refresh boosted %s work items", count)  # Report queue update count.
         return count
 
     def _enable_wal(self) -> None:
-        logging.info("Enabling WAL mode for the skill factory database")  # Log database mode change.
+        logger.info("Enabling WAL mode for the skill factory database")  # Log database mode change.
         self.db_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure the data folder exists before connecting.
         with sqlite3.connect(self.db_path, timeout=5.0) as connection:  # Keep the WAL transaction short.
             connection.execute("PRAGMA journal_mode=WAL")  # Permit concurrent readers during watcher writes.
             connection.execute("PRAGMA busy_timeout=5000")  # Wait briefly instead of failing on a transient writer.
-        logging.debug("WAL mode is enabled for %s", self.db_path)  # Report the database path.
+        logger.debug("WAL mode is enabled for %s", self.db_path)  # Report the database path.
 
     def _document_keys(self, changes: list[ReadyChange]) -> set[str]:
-        logging.info("Resolving changed Markdown files to document keys")  # Log the database lookup.
+        logger.info("Resolving changed Markdown files to document keys")  # Log the database lookup.
         keys: set[str] = set()  # Store logical document keys so part sets rebuild as one item.
         with sqlite3.connect(self.db_path, timeout=5.0) as connection:  # Use a short read transaction.
             connection.execute("PRAGMA busy_timeout=5000")  # Wait briefly for another factory writer.
             for change in changes:  # Look up each stable changed physical part.
                 keys.update(self._keys_for_change(connection, change))  # Add the logical document that owns this part.
-        logging.debug("Resolved %s document keys from changed parts", len(keys))  # Report logical queue count.
+        logger.debug("Resolved %s document keys from changed parts", len(keys))  # Report logical queue count.
         return keys
 
     def _keys_for_change(self, connection: sqlite3.Connection, change: ReadyChange) -> set[str]:
@@ -252,14 +254,14 @@ class QueueRefresher:
         return {str(row[0]) for row in rows}  # Return a set so duplicate rows cannot double count.
 
     def _boost_queue(self, keys: set[str]) -> int:
-        logging.info("Boosting live-change queue priority for %s documents", len(keys))  # Log queue write.
+        logger.info("Boosting live-change queue priority for %s documents", len(keys))  # Log queue write.
         if not keys:  # Avoid opening a write transaction when no document key resolved.
-            logging.debug("No live-change queue priority rows needed updates")  # Report the no-op state.
+            logger.debug("No live-change queue priority rows needed updates")  # Report the no-op state.
             return 0
         with sqlite3.connect(self.db_path, timeout=5.0) as connection:  # Keep the write transaction brief.
             connection.execute("PRAGMA busy_timeout=5000")  # Wait briefly if the orchestrator is writing.
             count = self._update_rows(connection, keys)  # Update queue rows with the testable priority rule.
-        logging.debug("Boosted %s live-change queue rows", count)  # Report the changed row count.
+        logger.debug("Boosted %s live-change queue rows", count)  # Report the changed row count.
         return count
 
     def _update_rows(self, connection: sqlite3.Connection, keys: set[str]) -> int:
@@ -294,23 +296,23 @@ class CorpusWatcher:
 
     def run(self, duration_seconds: float | None = None) -> WatcherStats:
         """Run the run operation."""
-        logging.info("Starting Juniper corpus watcher service")  # Log service start before the loop.
+        logger.info("Starting Juniper corpus watcher service")  # Log service start before the loop.
         deadline = time.monotonic() + duration_seconds if duration_seconds else None  # Bound proof runs when requested.
         while not self.stop_requested and not self._expired(deadline):  # Run until interrupt or proof duration ends.
             self.scan_once()  # Process one polling cycle with its own error boundary.
             time.sleep(self._sleep_seconds(deadline))  # Adapt sleep so scanning does not starve converter agents.
-        logging.debug("Watcher service stopped after %s scans", self.stats.scans)  # Report service stop.
+        logger.debug("Watcher service stopped after %s scans", self.stats.scans)  # Report service stop.
         return self.stats
 
     def stop(self) -> None:
         """Run the stop operation."""
-        logging.info("Stopping Juniper corpus watcher service")  # Log clean shutdown request.
+        logger.info("Stopping Juniper corpus watcher service")  # Log clean shutdown request.
         self.stop_requested = True  # Ask the run loop to exit after the current scan.
-        logging.debug("Watcher stop flag is set")  # Confirm the stop signal.
+        logger.debug("Watcher stop flag is set")  # Confirm the stop signal.
 
     def scan_once(self) -> WatcherStats:
         """Run the scan once operation."""
-        logging.info("Running one Juniper corpus watcher scan")  # Log scan start.
+        logger.info("Running one Juniper corpus watcher scan")  # Log scan start.
         started = time.monotonic()  # Measure full scan cost so polling cannot hide excessive work.
         try:
             self._scan_once()  # Keep transient filesystem errors inside the long-running service.
@@ -320,7 +322,7 @@ class CorpusWatcher:
             self._record_error(error)  # Count and log recoverable database failures.
         self._record_scan_time(started)  # Store scan duration before the caller reads stats.
         self.stats.scans += 1  # Count every attempted scan for progress reports.
-        logging.debug("Watcher scan %s finished", self.stats.scans)  # Report scan completion.
+        logger.debug("Watcher scan %s finished", self.stats.scans)  # Report scan completion.
         return self.stats
 
     def _scan_once(self) -> None:
@@ -333,17 +335,17 @@ class CorpusWatcher:
         self._mark_initialized(paths)  # Baseline existing files before live events can enqueue work.
 
     def _markdown_paths(self, roots: list[SourceRoot]) -> list[Path]:
-        logging.info("Discovering Markdown files across %s source roots", len(roots))  # Log discovery start.
+        logger.info("Discovering Markdown files across %s source roots", len(roots))  # Log discovery start.
         paths = [path for root in roots if root.path.exists() for path in root.path.rglob("*.md")]  # Find inputs.
         source_paths = sorted(path for path in paths if not path.name.startswith("_"))  # Exclude metadata reports.
-        logging.debug("Discovered %s source Markdown files", len(source_paths))  # Report discovery count.
+        logger.debug("Discovered %s source Markdown files", len(source_paths))  # Report discovery count.
         return source_paths
 
     def _ready_changes(self, roots: list[SourceRoot], paths: list[Path]) -> list[ReadyChange]:
-        logging.info("Checking %s Markdown files for stable content changes", len(paths))  # Log change pass start.
+        logger.info("Checking %s Markdown files for stable content changes", len(paths))  # Log change pass start.
         root_map = self._root_map(roots)  # Build a map for fast root lookup.
         changes = [change for path in paths if (change := self._change_for_path(root_map, path))]  # Keep changes.
-        logging.debug("Found %s stable Markdown content changes", len(changes))  # Report hash-based changes.
+        logger.debug("Found %s stable Markdown content changes", len(changes))  # Report hash-based changes.
         return changes
 
     def _change_for_path(self, root_map: dict[Path, SourceRoot], path: Path) -> ReadyChange | None:
@@ -376,7 +378,7 @@ class CorpusWatcher:
 
     def _refresh_if_ready(self, changes: list[ReadyChange]) -> None:
         if not changes:  # Avoid inventory work when no stable content changed.
-            logging.debug("No stable Markdown changes were ready for inventory refresh")  # Report no-op scan.
+            logger.debug("No stable Markdown changes were ready for inventory refresh")  # Report no-op scan.
             return
         self._count_changes(changes)  # Update file-level counters before the database refresh.
         self.stats.items_enqueued += self.refresher.refresh(changes)  # Refresh inventory and boost changed documents.
@@ -392,7 +394,7 @@ class CorpusWatcher:
             return
         hashed = all(path in self.state.hashes for path in paths)  # Require a content hash for each discovered file.
         self.state.initialized = hashed  # Treat later missing hashes as new files after this baseline.
-        logging.debug("Watcher baseline initialized=%s", self.state.initialized)  # Report baseline readiness.
+        logger.debug("Watcher baseline initialized=%s", self.state.initialized)  # Report baseline readiness.
 
     def _root_map(self, roots: list[SourceRoot]) -> dict[Path, SourceRoot]:
         return {root.path: root for root in roots}  # Map source root paths to their inventory metadata.
@@ -411,7 +413,7 @@ class CorpusWatcher:
         requested = max(self.config.interval_seconds, duty_sleep)  # Obey the operator interval and the duty limit.
         remaining = max(0.0, deadline - time.monotonic()) if deadline else requested  # Do not sleep past proof end.
         sleep_seconds = min(requested, remaining)  # Keep duration-bound runs responsive at the end.
-        logging.debug("Watcher sleep is %.3f seconds", sleep_seconds)  # Report adaptive sleep choice.
+        logger.debug("Watcher sleep is %.3f seconds", sleep_seconds)  # Report adaptive sleep choice.
         return sleep_seconds
 
     def _duty_sleep_seconds(self) -> float:
@@ -425,8 +427,8 @@ class CorpusWatcher:
         elapsed = time.monotonic() - started  # Measure wall time used by discovery, stat checks, and queue refresh.
         self.stats.last_scan_seconds = elapsed  # Store the latest value for live service reports.
         self.stats.total_scan_seconds += elapsed  # Accumulate time used by all scans in this process.
-        logging.debug("Watcher scan used %.3f seconds", elapsed)  # Report the measured scan cost.
+        logger.debug("Watcher scan used %.3f seconds", elapsed)  # Report the measured scan cost.
 
     def _record_error(self, error: Exception) -> None:
         self.stats.errors += 1  # Count transient failures without stopping the service.
-        logging.error("Watcher scan recovered from transient error: %s", error)  # Log a safe, non-secret summary.
+        logger.error("Watcher scan recovered from transient error: %s", error)  # Log a safe, non-secret summary.

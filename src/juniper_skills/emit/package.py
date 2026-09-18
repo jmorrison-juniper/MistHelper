@@ -12,6 +12,8 @@ from typing import Any
 
 import yaml
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 LIFECYCLE_TAGS = ("day0", "day1", "day2", "day2plus")
 SKILL_HARD_LIMIT = 12_288
 INDEX_HARD_LIMIT = 40_960
@@ -119,26 +121,26 @@ class CitationKeyAllocator:
 
     def allocate(self, domain: str, document_slug: str, title: str) -> str:
         """Run the allocate operation."""
-        logging.info("Allocating a citation key for %s", document_slug)
+        logger.info("Allocating a citation key for %s", document_slug)
         self._ensure_schema()
         existing = self._existing_key(domain, document_slug)
         if existing:
-            logging.debug("Reused citation key %s for %s", existing, document_slug)
+            logger.debug("Reused citation key %s for %s", existing, document_slug)
             return existing
         key = self._next_key(domain, title)
         self._insert_key(domain, document_slug, title, key)
-        logging.debug("Allocated citation key %s for %s", key, document_slug)
+        logger.debug("Allocated citation key %s for %s", key, document_slug)
         return key
 
     def _connect(self) -> sqlite3.Connection:
-        logging.info("Opening the skill factory database")
+        logger.info("Opening the skill factory database")
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(self.database_path)
-        logging.debug("Opened the skill factory database at %s", self.database_path)
+        logger.debug("Opened the skill factory database at %s", self.database_path)
         return connection
 
     def _ensure_schema(self) -> None:
-        logging.info("Ensuring the citation key table exists")
+        logger.info("Ensuring the citation key table exists")
         with self._connect() as connection:
             connection.execute(
                 "CREATE TABLE IF NOT EXISTS citation_keys ("
@@ -146,35 +148,35 @@ class CitationKeyAllocator:
                 "key TEXT NOT NULL, created_at TEXT NOT NULL, "
                 "PRIMARY KEY (domain, document_slug), UNIQUE (domain, key))"
             )
-        logging.debug("Citation key table is ready")
+        logger.debug("Citation key table is ready")
 
     def _existing_key(self, domain: str, document_slug: str) -> str:
-        logging.info("Reading an existing citation key for %s", document_slug)
+        logger.info("Reading an existing citation key for %s", document_slug)
         with self._connect() as connection:
             row = connection.execute(
                 "SELECT key FROM citation_keys WHERE domain = ? AND document_slug = ?",
                 (domain, document_slug),
             ).fetchone()
         key = str(row[0]) if row else ""
-        logging.debug("Existing citation key lookup returned %s", bool(key))
+        logger.debug("Existing citation key lookup returned %s", bool(key))
         return key
 
     def _insert_key(self, domain: str, document_slug: str, title: str, key: str) -> None:
-        logging.info("Persisting citation key %s for %s", key, document_slug)
+        logger.info("Persisting citation key %s for %s", key, document_slug)
         built = datetime.now(UTC).isoformat(timespec="seconds")
         with self._connect() as connection:
             connection.execute(
                 "INSERT INTO citation_keys (domain, document_slug, title, key, created_at) VALUES (?, ?, ?, ?, ?)",
                 (domain, document_slug, title, key, built),
             )
-        logging.debug("Persisted citation key %s for %s", key, document_slug)
+        logger.debug("Persisted citation key %s for %s", key, document_slug)
 
     def _next_key(self, domain: str, title: str) -> str:
-        logging.info("Building a candidate citation key for %s", title)
+        logger.info("Building a candidate citation key for %s", title)
         candidate = self._candidate(title)
         used = self._used_keys(domain)
         key = self._dedupe(candidate, used)
-        logging.debug("Selected citation key %s from candidate %s", key, candidate)
+        logger.debug("Selected citation key %s from candidate %s", key, candidate)
         return key
 
     def _candidate(self, title: str) -> str:
@@ -192,11 +194,11 @@ class CitationKeyAllocator:
         return words[0][:6] if words else "DOC"
 
     def _used_keys(self, domain: str) -> set[str]:
-        logging.info("Reading allocated citation keys for %s", domain)
+        logger.info("Reading allocated citation keys for %s", domain)
         with self._connect() as connection:
             rows = connection.execute("SELECT key FROM citation_keys WHERE domain = ?", (domain,)).fetchall()
         keys = {str(row[0]) for row in rows}
-        logging.debug("Read %s allocated citation keys for %s", len(keys), domain)
+        logger.debug("Read %s allocated citation keys for %s", len(keys), domain)
         return keys
 
     def _dedupe(self, candidate: str, used: set[str]) -> str:
@@ -221,7 +223,7 @@ class SkillPackageAssembler:
         self, domain: str, output_root: Path, documents: tuple[DocumentPackageInput, ...], taxonomy_path: Path
     ) -> PackageAssemblyResult:
         """Run the assemble operation."""
-        logging.info("Assembling domain skill package for %s", domain)
+        logger.info("Assembling domain skill package for %s", domain)
         package_dir = output_root / f"juniper-{domain}"
         package_dir.mkdir(parents=True, exist_ok=True)
         keys = {document.slug: self.allocator.allocate(domain, document.slug, document.title) for document in documents}
@@ -229,7 +231,7 @@ class SkillPackageAssembler:
         coverage = self._coverage(routes)
         self._write_level_one(package_dir, domain, documents, routes, taxonomy_path)
         result = self._result(package_dir, routes, documents, coverage)
-        logging.debug("Assembled %s with %s topics", package_dir, result.topic_count)
+        logger.debug("Assembled %s with %s topics", package_dir, result.topic_count)
         return result
 
     def _read_documents(
@@ -241,27 +243,27 @@ class SkillPackageAssembler:
         return routes
 
     def _read_document(self, package_dir: Path, document: DocumentPackageInput, key: str) -> list[TopicRoute]:
-        logging.info("Reading existing document tree for %s", document.slug)
+        logger.info("Reading existing document tree for %s", document.slug)
         if not (document.document_dir / "INDEX.md").exists():
             raise ValueError(f"document index is missing for {document.slug}")
         routes = self._read_topics(package_dir, document, key)
-        logging.debug("Read existing document tree for %s with %s topics", document.slug, len(routes))
+        logger.debug("Read existing document tree for %s with %s topics", document.slug, len(routes))
         return routes
 
     def _read_topics(self, package_dir: Path, document: DocumentPackageInput, key: str) -> list[TopicRoute]:
-        logging.info("Reading existing topic files for %s", document.slug)
+        logger.info("Reading existing topic files for %s", document.slug)
         source_files = self._topic_files(document.document_dir)
         subjects = SegmentIndexReader().subjects(document.document_dir / "INDEX.md")
         routes = [self._read_topic(package_dir, document.slug, key, path, subjects) for path in source_files]
-        logging.debug("Read %s existing topic files for %s", len(routes), document.slug)
+        logger.debug("Read %s existing topic files for %s", len(routes), document.slug)
         return routes
 
     def _topic_files(self, document_dir: Path) -> list[Path]:
-        logging.info("Reading topic files from %s", document_dir)
+        logger.info("Reading topic files from %s", document_dir)
         files = sorted(path for path in document_dir.glob("*.md") if path.name != "INDEX.md")
         if not files:
             raise ValueError(f"document folder has no topic files: {document_dir}")
-        logging.debug("Read %s topic files from %s", len(files), document_dir)
+        logger.debug("Read %s topic files from %s", len(files), document_dir)
         return files
 
     def _read_topic(
@@ -272,14 +274,14 @@ class SkillPackageAssembler:
         source_path: Path,
         subjects: dict[str, str],
     ) -> TopicRoute:
-        logging.info("Reading existing topic file %s", source_path.name)
+        logger.info("Reading existing topic file %s", source_path.name)
         source = source_path.read_text(encoding="utf-8")
         frontmatter, body = FrontMatterParser().parse(source)
         title = str(frontmatter.get("topic") or self._title_from_name(source_path))
         lifecycle = self._lifecycle(frontmatter)
         source_range = self._source_range(frontmatter, key)
         route = self._route(package_dir, title, slug, source_range, source_path, lifecycle, body, subjects)
-        logging.debug("Read existing topic file %s with %s bytes", source_path.name, source_path.stat().st_size)
+        logger.debug("Read existing topic file %s with %s bytes", source_path.name, source_path.stat().st_size)
         return route
 
     def _route(
@@ -330,10 +332,10 @@ class SkillPackageAssembler:
     def _write_document_index(
         self, target_dir: Path, document: DocumentPackageInput, key: str, routes: list[TopicRoute]
     ) -> None:
-        logging.info("Writing level 2 index for %s", document.slug)
+        logger.info("Writing level 2 index for %s", document.slug)
         text = DocumentIndexRenderer(document, key, routes).render()
         (target_dir / "INDEX.md").write_text(text, encoding="utf-8")
-        logging.debug("Wrote level 2 index for %s with %s rows", document.slug, len(routes))
+        logger.debug("Wrote level 2 index for %s with %s rows", document.slug, len(routes))
 
     def _write_level_one(
         self,
@@ -343,7 +345,7 @@ class SkillPackageAssembler:
         routes: list[TopicRoute],
         taxonomy_path: Path,
     ) -> None:
-        logging.info("Writing level 1 files for %s", domain)
+        logger.info("Writing level 1 files for %s", domain)
         keywords = TaxonomyReader(taxonomy_path).keywords_for(f"juniper-{domain}")
         coverage = self._coverage(routes)
         (package_dir / "SKILL.md").write_text(
@@ -352,12 +354,12 @@ class SkillPackageAssembler:
         (package_dir / "INDEX.md").write_text(IndexRenderer(domain, documents, routes, coverage).render(), "utf-8")
         sources_text = SourcesRenderer(documents, self.allocator, routes).render(domain)
         (package_dir / "sources.md").write_text(sources_text, "utf-8")
-        logging.debug("Wrote level 1 files for %s", domain)
+        logger.debug("Wrote level 1 files for %s", domain)
 
     def _coverage(self, routes: list[TopicRoute]) -> dict[str, int]:
-        logging.info("Counting life cycle coverage for the domain")
+        logger.info("Counting life cycle coverage for the domain")
         coverage = {tag: sum(1 for route in routes if tag in route.lifecycle) for tag in LIFECYCLE_TAGS}
-        logging.debug("Counted life cycle coverage as %s", coverage)
+        logger.debug("Counted life cycle coverage as %s", coverage)
         return coverage
 
     def _result(
@@ -367,7 +369,7 @@ class SkillPackageAssembler:
         documents: tuple[DocumentPackageInput, ...],
         coverage: dict[str, int],
     ) -> PackageAssemblyResult:
-        logging.info("Measuring generated level 1 file sizes")
+        logger.info("Measuring generated level 1 file sizes")
         result = PackageAssemblyResult(
             package_dir,
             (package_dir / "SKILL.md").stat().st_size,
@@ -377,7 +379,7 @@ class SkillPackageAssembler:
             len(documents),
             coverage,
         )
-        logging.debug("Measured level 1 files in %s", package_dir)
+        logger.debug("Measured level 1 files in %s", package_dir)
         return result
 
     def _title_from_name(self, path: Path) -> str:
@@ -406,11 +408,11 @@ class SmallDocumentPlanner:
 
     def plan(self, documents: tuple[DocumentPackageInput, ...]) -> SmallDocumentPlan:
         """Run the plan operation."""
-        logging.info("Planning document package granularity")  # Record the classification start.
+        logger.info("Planning document package granularity")  # Record the classification start.
         large = self._large_documents(documents)  # Keep long documents as standalone packages.
         small = self._small_documents(documents)  # Move short documents into a collection package.
         plan = SmallDocumentPlan(large, small)  # Return one immutable decision record.
-        logging.debug(  # Report the measured decision counts for the proof section.
+        logger.debug(  # Report the measured decision counts for the proof section.
             "Planned %s large documents, %s collection documents, and %s attached documents",
             len(plan.large_documents),
             len(plan.collection_documents),
@@ -419,15 +421,15 @@ class SmallDocumentPlanner:
         return plan  # Return the rule result to the caller.
 
     def _large_documents(self, documents: tuple[DocumentPackageInput, ...]) -> tuple[DocumentPackageInput, ...]:
-        logging.info("Selecting documents with at least %s pages", self.MIN_DOCUMENT_PACKAGE_PAGES)  # Log rule use.
+        logger.info("Selecting documents with at least %s pages", self.MIN_DOCUMENT_PACKAGE_PAGES)  # Log rule use.
         selected = tuple(document for document in documents if document.pages >= self.MIN_DOCUMENT_PACKAGE_PAGES)
-        logging.debug("Selected %s large documents", len(selected))  # Report the large path count.
+        logger.debug("Selected %s large documents", len(selected))  # Report the large path count.
         return selected  # Return documents that qualify for standalone packages.
 
     def _small_documents(self, documents: tuple[DocumentPackageInput, ...]) -> tuple[DocumentPackageInput, ...]:
-        logging.info("Selecting documents with fewer than %s pages", self.MIN_DOCUMENT_PACKAGE_PAGES)  # Log rule use.
+        logger.info("Selecting documents with fewer than %s pages", self.MIN_DOCUMENT_PACKAGE_PAGES)  # Log rule use.
         selected = tuple(document for document in documents if document.pages < self.MIN_DOCUMENT_PACKAGE_PAGES)
-        logging.debug("Selected %s small documents", len(selected))  # Report the collection path count.
+        logger.debug("Selected %s small documents", len(selected))  # Report the collection path count.
         return selected  # Return documents that must use the collection path.
 
 
@@ -442,7 +444,7 @@ class DocumentSkillPackageAssembler:
         self, domain: str, output_root: Path, document: DocumentPackageInput, taxonomy_path: Path
     ) -> PackageAssemblyResult:
         """Run the assemble operation."""
-        logging.info("Assembling document skill package for %s", document.slug)  # Log the package start.
+        logger.info("Assembling document skill package for %s", document.slug)  # Log the package start.
         package_dir = output_root / self.package_name(domain, document)  # Use the required stable skill name.
         self._require_existing_tree(package_dir, document)  # Refuse to create or replace topic files.
         key = self.allocator.allocate(domain, document.slug, document.title)  # Get one stable source key.
@@ -450,24 +452,24 @@ class DocumentSkillPackageAssembler:
         coverage = self._coverage(routes)  # Count stage coverage from the existing topic metadata.
         self._write_level_one(package_dir, domain, document, routes, taxonomy_path)  # Write only root package files.
         result = self._result(package_dir, routes, document, coverage)  # Measure the emitted package files.
-        logging.debug("Assembled document package %s with %s topics", package_dir.name, result.topic_count)
+        logger.debug("Assembled document package %s with %s topics", package_dir.name, result.topic_count)
         return result  # Return the measured package result.
 
     def package_name(self, domain: str, document: DocumentPackageInput) -> str:
         """Run the package name operation."""
-        logging.info("Building the document skill package name for %s", document.slug)  # Log naming.
+        logger.info("Building the document skill package name for %s", document.slug)  # Log naming.
         name = f"juniper-{domain}-{document.slug}"  # Include the domain and document slug for collision safety.
-        logging.debug("Built document skill package name %s", name)  # Record the stable package name.
+        logger.debug("Built document skill package name %s", name)  # Record the stable package name.
         return name  # Return the package directory and SKILL.md name.
 
     def _require_existing_tree(self, package_dir: Path, document: DocumentPackageInput) -> None:
-        logging.info("Checking existing topic tree for %s", document.slug)  # Log the no-write guard.
+        logger.info("Checking existing topic tree for %s", document.slug)  # Log the no-write guard.
         expected = package_dir / "documents" / document.slug  # Require topics inside the standalone package.
         if document.document_dir.resolve() != expected.resolve():  # Prevent hidden copies from another package.
             raise ValueError("document topic tree must already be inside the document skill package")
         if not (expected / "INDEX.md").exists():  # Require the existing document index before root writes.
             raise ValueError("document topic tree must include INDEX.md before assembly")
-        logging.debug("Existing topic tree passed for %s", document.slug)  # Record the positive guard result.
+        logger.debug("Existing topic tree passed for %s", document.slug)  # Record the positive guard result.
 
     def _write_level_one(
         self,
@@ -477,7 +479,7 @@ class DocumentSkillPackageAssembler:
         routes: list[TopicRoute],
         taxonomy_path: Path,
     ) -> None:
-        logging.info("Writing root files for document package %s", package_dir.name)  # Log root writes.
+        logger.info("Writing root files for document package %s", package_dir.name)  # Log root writes.
         keywords = TaxonomyReader(taxonomy_path).keywords_for(f"juniper-{domain}")  # Read the shared domain catalog.
         coverage = self._coverage(routes)  # Recompute coverage close to rendering for consistency.
         package_dir.mkdir(parents=True, exist_ok=True)  # Create only the package root if it is absent.
@@ -487,18 +489,18 @@ class DocumentSkillPackageAssembler:
         (package_dir / "INDEX.md").write_text(index, encoding="utf-8")  # Write the full route index.
         sources = SourcesRenderer((document,), self.allocator, routes).render(domain)  # Render source attribution.
         (package_dir / "sources.md").write_text(sources, encoding="utf-8")  # Write the source table.
-        logging.debug("Wrote root files for document package %s", package_dir.name)  # Record root write completion.
+        logger.debug("Wrote root files for document package %s", package_dir.name)  # Record root write completion.
 
     def _coverage(self, routes: list[TopicRoute]) -> dict[str, int]:
-        logging.info("Counting life cycle coverage for the document package")  # Log stage coverage measurement.
+        logger.info("Counting life cycle coverage for the document package")  # Log stage coverage measurement.
         coverage = {tag: sum(1 for route in routes if tag in route.lifecycle) for tag in LIFECYCLE_TAGS}
-        logging.debug("Counted document life cycle coverage as %s", coverage)  # Report measured stage counts.
+        logger.debug("Counted document life cycle coverage as %s", coverage)  # Report measured stage counts.
         return coverage  # Return coverage for SKILL.md and INDEX.md.
 
     def _result(
         self, package_dir: Path, routes: list[TopicRoute], document: DocumentPackageInput, coverage: dict[str, int]
     ) -> PackageAssemblyResult:
-        logging.info("Measuring document package root file sizes")  # Log before reading file sizes.
+        logger.info("Measuring document package root file sizes")  # Log before reading file sizes.
         result = PackageAssemblyResult(  # Build one measured outcome for proof and tests.
             package_dir,
             (package_dir / "SKILL.md").stat().st_size,
@@ -508,7 +510,7 @@ class DocumentSkillPackageAssembler:
             1,
             coverage,
         )
-        logging.debug("Measured document package for %s", document.slug)  # Record measurement completion.
+        logger.debug("Measured document package for %s", document.slug)  # Record measurement completion.
         return result  # Return measured package data.
 
 
@@ -523,17 +525,17 @@ class CollectionSkillPackageAssembler:
         self, domain: str, output_root: Path, documents: tuple[DocumentPackageInput, ...], taxonomy_path: Path
     ) -> PackageAssemblyResult:
         """Run the assemble operation."""
-        logging.info("Assembling a small-document collection for %s", domain)  # Log collection package start.
+        logger.info("Assembling a small-document collection for %s", domain)  # Log collection package start.
         name = self.package_name(domain)  # Use one stable collection package for this domain.
         result = self.assembler.assemble(f"{domain}-small-documents", output_root, documents, taxonomy_path)
-        logging.debug("Assembled small-document collection %s with %s documents", name, result.document_count)
+        logger.debug("Assembled small-document collection %s with %s documents", name, result.document_count)
         return result  # Return the measured package output.
 
     def package_name(self, domain: str) -> str:
         """Run the package name operation."""
-        logging.info("Building the small-document collection package name for %s", domain)  # Log naming.
+        logger.info("Building the small-document collection package name for %s", domain)  # Log naming.
         name = f"juniper-{domain}-small-documents"  # Keep the collection visible but not document-specific.
-        logging.debug("Built small-document collection package name %s", name)  # Record the package name.
+        logger.debug("Built small-document collection package name %s", name)  # Record the package name.
         return name  # Return the package name for router rows.
 
 
@@ -546,21 +548,21 @@ class SkillCatalogIndex:
 
     def package_names(self, domain: str) -> tuple[str, ...]:
         """Run the package names operation."""
-        logging.info("Reading catalog package names for %s", domain)  # Log catalog access.
+        logger.info("Reading catalog package names for %s", domain)  # Log catalog access.
         rows = self._rows()  # Read the generated catalog table or list.
         prefix = f"juniper-{domain}-"  # Select document packages for this domain.
         names = tuple(row for row in rows if row == f"juniper-{domain}" or row.startswith(prefix))
-        logging.debug("Read %s catalog package names for %s", len(names), domain)  # Report catalog coverage.
+        logger.debug("Read %s catalog package names for %s", len(names), domain)  # Report catalog coverage.
         return names  # Return package names that the domain router can cite.
 
     def _rows(self) -> tuple[str, ...]:
-        logging.info("Reading skill catalog text from %s", self.catalog_path)  # Log before file read.
+        logger.info("Reading skill catalog text from %s", self.catalog_path)  # Log before file read.
         if not self.catalog_path.exists():  # Permit early factory runs before the installer writes a catalog.
-            logging.debug("Skill catalog does not exist at %s", self.catalog_path)  # State the missing file path.
+            logger.debug("Skill catalog does not exist at %s", self.catalog_path)  # State the missing file path.
             return ()  # Return an empty catalog so explicit package inputs can still render.
         text = self.catalog_path.read_text(encoding="utf-8")  # Read the installer-owned catalog.
         names = tuple(dict.fromkeys(re.findall(r"`(juniper-[a-z0-9-]+)`", text)))  # Keep first seen order.
-        logging.debug("Read %s package names from the skill catalog", len(names))  # Report parsed row count.
+        logger.debug("Read %s package names from the skill catalog", len(names))  # Report parsed row count.
         return names  # Return unique package names from the catalog.
 
 
@@ -575,24 +577,24 @@ class DomainRouterPackageAssembler:
         self, domain: str, output_root: Path, packages: tuple[str, ...], taxonomy_path: Path
     ) -> PackageAssemblyResult:
         """Run the assemble operation."""
-        logging.info("Assembling domain router package for %s", domain)  # Log domain router start.
+        logger.info("Assembling domain router package for %s", domain)  # Log domain router start.
         package_dir = output_root / f"juniper-{domain}"  # Keep the domain routing tier package name.
         package_dir.mkdir(parents=True, exist_ok=True)  # Create the domain router folder.
         names = self._package_names(domain, packages)  # Merge catalog rows with unregistered package names.
         keywords = TaxonomyReader(taxonomy_path).keywords_for(f"juniper-{domain}")  # Read domain keywords.
         DomainRouterRenderer(domain, names, keywords).write(package_dir)  # Write the three router files.
         result = self._result(package_dir, names)  # Measure the router package.
-        logging.debug("Assembled domain router %s with %s package links", domain, len(names))
+        logger.debug("Assembled domain router %s with %s package links", domain, len(names))
         return result  # Return measured router output.
 
     def _package_names(self, domain: str, packages: tuple[str, ...]) -> tuple[str, ...]:
-        logging.info("Combining catalog packages with explicit domain packages")  # Log package source merge.
+        logger.info("Combining catalog packages with explicit domain packages")  # Log package source merge.
         names = tuple(dict.fromkeys(self.catalog.package_names(domain) + packages))  # Preserve catalog order.
-        logging.debug("Combined %s domain package names", len(names))  # Report the package link count.
+        logger.debug("Combined %s domain package names", len(names))  # Report the package link count.
         return names  # Return package names for the domain router.
 
     def _result(self, package_dir: Path, packages: tuple[str, ...]) -> PackageAssemblyResult:
-        logging.info("Measuring domain router package root file sizes")  # Log before measurement.
+        logger.info("Measuring domain router package root file sizes")  # Log before measurement.
         result = PackageAssemblyResult(  # Domain routers hold no source topics.
             package_dir,
             (package_dir / "SKILL.md").stat().st_size,
@@ -602,7 +604,7 @@ class DomainRouterPackageAssembler:
             len(packages),
             {tag: 0 for tag in LIFECYCLE_TAGS},
         )
-        logging.debug("Measured domain router package %s", package_dir.name)  # Record measurement completion.
+        logger.debug("Measured domain router package %s", package_dir.name)  # Record measurement completion.
         return result  # Return the measured router result.
 
 
@@ -626,14 +628,14 @@ class DocumentSkillRenderer:
 
     def render(self) -> str:
         """Run the render operation."""
-        logging.info("Rendering document SKILL.md for %s", self.document.slug)  # Log rendering start.
+        logger.info("Rendering document SKILL.md for %s", self.document.slug)  # Log rendering start.
         route_rows = RouteTableBuilder((self.document,), self.routes).rows(SKILL_HARD_LIMIT)  # Build user routes.
         text = self._frontmatter() + self._body(route_rows)  # Combine metadata and router guidance.
-        logging.debug("Rendered document SKILL.md with %s bytes", len(text.encode("utf-8")))  # Report size.
+        logger.debug("Rendered document SKILL.md with %s bytes", len(text.encode("utf-8")))  # Report size.
         return text  # Return complete SKILL.md text.
 
     def _frontmatter(self) -> str:
-        logging.info("Rendering document SKILL.md frontmatter")  # Log frontmatter generation.
+        logger.info("Rendering document SKILL.md frontmatter")  # Log frontmatter generation.
         built = datetime.now(UTC).isoformat(timespec="seconds")  # Record deterministic metadata precision.
         description = self._description()  # Build a complete trigger description for agent routing.
         text = (
@@ -644,71 +646,71 @@ class DocumentSkillRenderer:
             f"  domain: {self.domain}\n  document: {self.document.slug}\n  documents: 1\n"
             f"  topics: {len(self.routes)}\n  source_pages: {self.document.pages}\n  built: {built}\n---\n\n"
         )
-        logging.debug("Rendered frontmatter for %s", self.document.slug)  # Record frontmatter completion.
+        logger.debug("Rendered frontmatter for %s", self.document.slug)  # Record frontmatter completion.
         return text  # Return YAML frontmatter text.
 
     def _description(self) -> str:
-        logging.info("Building document skill description for %s", self.document.slug)  # Log trigger text build.
+        logger.info("Building document skill description for %s", self.document.slug)  # Log trigger text build.
         text = " ".join(self._description_parts())  # Combine dense routing signals for skill selection.
-        logging.debug("Built description with %s characters", len(text))  # Report description size.
+        logger.debug("Built description with %s characters", len(text))  # Report description size.
         return text  # Return one paragraph for skill registration.
 
     def _description_parts(self) -> list[str]:
-        logging.info("Building discriminating description parts")  # Log description part creation.
+        logger.info("Building discriminating description parts")  # Log description part creation.
         parts = [self._title_anchor(), self._subject_anchor(), self._task_anchor(), self._symptom_anchor()]
         version = self._version_anchor()  # Add a release or version only when the title carries one.
         if version:  # Avoid empty filler for documents with no version marker.
             parts.append(version)  # Preserve version specificity for sibling documents.
-        logging.debug("Built %s description parts", len(parts))  # Report selected part count.
+        logger.debug("Built %s description parts", len(parts))  # Report selected part count.
         return parts  # Return parts in a stable order for reproducible descriptions.
 
     def _title_anchor(self) -> str:
-        logging.info("Building the title anchor for the description")  # Log title anchor creation.
+        logger.info("Building the title anchor for the description")  # Log title anchor creation.
         title = self._clip_phrase(self.document.title, 92)  # Keep long sibling titles inside the token budget.
         anchor = f"Juniper {title}."  # Lead with the source document title for sibling disambiguation.
-        logging.debug("Built title anchor with %s characters", len(anchor))  # Report anchor length.
+        logger.debug("Built title anchor with %s characters", len(anchor))  # Report anchor length.
         return anchor  # Return the product title sentence.
 
     def _subject_anchor(self) -> str:
-        logging.info("Building the product and protocol anchor")  # Log subject anchor creation.
+        logger.info("Building the product and protocol anchor")  # Log subject anchor creation.
         subjects = self._subjects()  # Extract products, platforms, protocols, and features.
         anchor = f"Product, platform, protocol, feature: {subjects}."  # Use direct labels for routing terms.
-        logging.debug("Built subject anchor with %s characters", len(anchor))  # Report anchor length.
+        logger.debug("Built subject anchor with %s characters", len(anchor))  # Report anchor length.
         return anchor  # Return the searchable subject sentence.
 
     def _task_anchor(self) -> str:
         return "Tasks: configure, verify, troubleshoot, install, upgrade, design, automate."  # Add user task verbs.
 
     def _symptom_anchor(self) -> str:
-        logging.info("Building the symptom anchor")  # Log symptom selection.
+        logger.info("Building the symptom anchor")  # Log symptom selection.
         symptoms = ", ".join(self._symptoms())  # Select domain-specific symptom words.
         anchor = f"Symptoms: {symptoms}."  # Use words that an operator types during incidents.
-        logging.debug("Built symptom anchor with %s characters", len(anchor))  # Report anchor length.
+        logger.debug("Built symptom anchor with %s characters", len(anchor))  # Report anchor length.
         return anchor  # Return the symptom sentence.
 
     def _version_anchor(self) -> str:
-        logging.info("Searching document title for a release or version marker")  # Log version extraction.
+        logger.info("Searching document title for a release or version marker")  # Log version extraction.
         haystack = " ".join((self.document.title, self.document.slug, self.document.category))  # Search metadata only.
         match = re.search(r"\b(?:\d{2}\.\dR\d|\d{4}-\d{2}-\d{2}|[A-Z]?\d+\.\d+(?:R\d+)?)\b", haystack)
         anchor = f"Release or version: {match.group(0)}." if match else ""  # Include version only when present.
-        logging.debug("Version marker found: %s", bool(anchor))  # Report whether the anchor exists.
+        logger.debug("Version marker found: %s", bool(anchor))  # Report whether the anchor exists.
         return anchor  # Return empty text for non-versioned documents.
 
     def _subjects(self) -> str:
-        logging.info("Extracting document subject words for the skill description")  # Log subject extraction.
+        logger.info("Extracting document subject words for the skill description")  # Log subject extraction.
         route_text = " ".join(route.title + " " + route.subject for route in self.routes[:12])  # Sample topic terms.
         raw = " ".join([self.document.category, self.document.title, route_text, *self.keywords[:12]])
         words = re.findall(r"[A-Za-z0-9][A-Za-z0-9-]+", raw)  # Keep product and protocol tokens.
         chosen = tuple(dict.fromkeys(word for word in words if len(word) > 2))[:12]  # Keep stable order.
         text = ", ".join(chosen) if chosen else self.domain.replace("-", " ")  # Fall back to the domain name.
-        logging.debug("Extracted %s document subject words", len(chosen))  # Report trigger token count.
+        logger.debug("Extracted %s document subject words", len(chosen))  # Report trigger token count.
         return text  # Return compact subject text.
 
     def _symptoms(self) -> tuple[str, ...]:
-        logging.info("Selecting symptom words for the document domain")  # Log symptom selection.
+        logger.info("Selecting symptom words for the document domain")  # Log symptom selection.
         context = " ".join((self.domain, self.document.title, self.document.slug, self._subjects())).lower()
         choices = self._domain_symptoms(context)  # Pick protocol-specific terms when they match.
-        logging.debug("Selected %s symptom words", len(choices))  # Report selected symptom count.
+        logger.debug("Selected %s symptom words", len(choices))  # Report selected symptom count.
         return choices  # Return symptoms for the description.
 
     def _domain_symptoms(self, context: str) -> tuple[str, ...]:
@@ -729,7 +731,7 @@ class DocumentSkillRenderer:
         return text if len(text) <= limit else text[: limit - 3].rstrip() + "..."  # Keep long titles bounded.
 
     def _body(self, rows: str) -> str:
-        logging.info("Rendering document SKILL.md body")  # Log body generation.
+        logger.info("Rendering document SKILL.md body")  # Log body generation.
         text = (
             f"# {self.document.title}\n\nThis skill answers questions from one Juniper source document. "
             "Read the topic that holds the subject before you answer.\n\n"
@@ -743,13 +745,13 @@ class DocumentSkillRenderer:
             "Warning: never copy Juniper source prose into an answer. Juniper Networks holds the copyright.\n\n"
             "## Scope\n\nThis skill answers questions from this document only. It does not change a network device.\n"
         )
-        logging.debug("Rendered document SKILL.md body with %s bytes", len(text.encode("utf-8")))  # Report size.
+        logger.debug("Rendered document SKILL.md body with %s bytes", len(text.encode("utf-8")))  # Report size.
         return text  # Return the document router body.
 
     def _coverage_rows(self) -> str:
-        logging.info("Rendering life cycle coverage rows")  # Log coverage row rendering.
+        logger.info("Rendering life cycle coverage rows")  # Log coverage row rendering.
         rows = "".join(f"| {tag} | {self._coverage_status(tag)} |\n" for tag in LIFECYCLE_TAGS)
-        logging.debug("Rendered life cycle coverage rows for %s stages", len(LIFECYCLE_TAGS))  # Report row count.
+        logger.debug("Rendered life cycle coverage rows for %s stages", len(LIFECYCLE_TAGS))  # Report row count.
         return rows  # Return stage coverage rows.
 
     def _coverage_status(self, tag: str) -> str:
@@ -768,14 +770,14 @@ class DomainRouterRenderer:
 
     def write(self, package_dir: Path) -> None:
         """Run the write operation."""
-        logging.info("Writing domain router files for %s", self.domain)  # Log router file writes.
+        logger.info("Writing domain router files for %s", self.domain)  # Log router file writes.
         (package_dir / "SKILL.md").write_text(self._skill_text(), encoding="utf-8")  # Write the router skill.
         (package_dir / "INDEX.md").write_text(self._index_text(), encoding="utf-8")  # Write package targets.
         (package_dir / "sources.md").write_text(self._sources_text(), encoding="utf-8")  # State no source prose.
-        logging.debug("Wrote domain router files for %s", self.domain)  # Record router write completion.
+        logger.debug("Wrote domain router files for %s", self.domain)  # Record router write completion.
 
     def _skill_text(self) -> str:
-        logging.info("Rendering domain router SKILL.md")  # Log SKILL text build.
+        logger.info("Rendering domain router SKILL.md")  # Log SKILL text build.
         built = datetime.now(UTC).isoformat(timespec="seconds")  # Record the build time.
         text = (
             f"---\nname: juniper-{self.domain}\ndescription: >-\n  {self._description()}\n"
@@ -787,24 +789,24 @@ class DomainRouterRenderer:
             "## Route by package\n\n| Ask about | Read this package |\n| - | - |\n"
             f"{self._route_rows()}\nRead the named package skill next.\n"
         )
-        logging.debug("Rendered domain router SKILL.md with %s bytes", len(text.encode("utf-8")))  # Report size.
+        logger.debug("Rendered domain router SKILL.md with %s bytes", len(text.encode("utf-8")))  # Report size.
         return text  # Return the domain router skill text.
 
     def _description(self) -> str:
-        logging.info("Building domain router description")  # Log description build.
+        logger.info("Building domain router description")  # Log description build.
         subjects = ", ".join(self.keywords[:24]) or self.domain.replace("-", " ")  # Keep taxonomy wording.
         text = (
             f"Use this skill to choose the correct Juniper {subjects} document skill. "
             "Use it when a question names the domain but needs a specific manual, guide, release note, "
             "troubleshooting guide, command reference, configuration task, alarm, or protocol symptom."
         )
-        logging.debug("Built domain router description with %s characters", len(text))  # Report length.
+        logger.debug("Built domain router description with %s characters", len(text))  # Report length.
         return text  # Return the one-paragraph trigger.
 
     def _route_rows(self) -> str:
-        logging.info("Rendering domain router package rows")  # Log route row rendering.
+        logger.info("Rendering domain router package rows")  # Log route row rendering.
         rows = "".join(f"| {self._subject(name)} | `{name}` |\n" for name in self.packages)
-        logging.debug("Rendered %s domain router package rows", len(self.packages))  # Report row count.
+        logger.debug("Rendered %s domain router package rows", len(self.packages))  # Report row count.
         return rows or "| This domain has no built document package yet | `INDEX.md` |\n"  # Keep router useful.
 
     def _subject(self, package: str) -> str:
@@ -812,15 +814,15 @@ class DomainRouterRenderer:
         return f"Questions about {words}"  # Give a user-vocabulary route, not a file instruction.
 
     def _index_text(self) -> str:
-        logging.info("Rendering domain router INDEX.md")  # Log index generation.
+        logger.info("Rendering domain router INDEX.md")  # Log index generation.
         rows = "".join(f"| {package} | {package} |\n" for package in self.packages)  # List package targets.
-        logging.debug("Rendered domain router INDEX.md with %s rows", len(self.packages))  # Report row count.
+        logger.debug("Rendered domain router INDEX.md with %s rows", len(self.packages))  # Report row count.
         return f"# {self._title()} package index\n\n| Subject package | Skill name |\n| - | - |\n{rows}"
 
     def _sources_text(self) -> str:
-        logging.info("Rendering domain router sources.md")  # Log source text generation.
+        logger.info("Rendering domain router sources.md")  # Log source text generation.
         text = "# Sources\n\nThis router stores no source document prose.\n"  # State that source data lives below.
-        logging.debug("Rendered domain router sources.md")  # Record completion.
+        logger.debug("Rendered domain router sources.md")  # Record completion.
         return text  # Return the source note.
 
     def _title(self) -> str:
@@ -832,29 +834,29 @@ class FrontMatterParser:
 
     def parse(self, text: str) -> tuple[dict[str, Any], str]:
         """Run the parse operation."""
-        logging.info("Parsing Markdown frontmatter")
+        logger.info("Parsing Markdown frontmatter")
         if not text.startswith("---\n"):
-            logging.debug("Markdown file has no frontmatter")
+            logger.debug("Markdown file has no frontmatter")
             return {}, text
         end = text.find("\n---", 4)
         if end == -1:
-            logging.debug("Markdown file has an open frontmatter block")
+            logger.debug("Markdown file has an open frontmatter block")
             return {}, text
         try:
             data = yaml.safe_load(text[4:end]) or {}
         except yaml.YAMLError:
             data = self._fallback(text[4:end])
         body = text[end + 4 :].lstrip()
-        logging.debug("Parsed frontmatter with %s keys", len(data))
+        logger.debug("Parsed frontmatter with %s keys", len(data))
         return data if isinstance(data, dict) else {}, body
 
     def _fallback(self, text: str) -> dict[str, Any]:
-        logging.info("Parsing frontmatter with the fault-tolerant reader")
+        logger.info("Parsing frontmatter with the fault-tolerant reader")
         data: dict[str, Any] = {}
         for line in text.splitlines():
             if ":" in line:
                 self._fallback_line(data, line)
-        logging.debug("Fault-tolerant reader parsed %s keys", len(data))
+        logger.debug("Fault-tolerant reader parsed %s keys", len(data))
         return data
 
     def _fallback_line(self, data: dict[str, Any], line: str) -> None:
@@ -873,13 +875,13 @@ class SegmentIndexReader:
 
     def subjects(self, index_path: Path) -> dict[str, str]:
         """Run the subjects operation."""
-        logging.info("Reading segmenter subjects from %s", index_path)
+        logger.info("Reading segmenter subjects from %s", index_path)
         if not index_path.exists():
-            logging.debug("Segmenter index does not exist at %s", index_path)
+            logger.debug("Segmenter index does not exist at %s", index_path)
             return {}
         rows = self._rows(index_path.read_text(encoding="utf-8"))
         subjects = {row[0]: row[3] for row in rows if len(row) >= 4}
-        logging.debug("Read %s segmenter subjects from %s", len(subjects), index_path)
+        logger.debug("Read %s segmenter subjects from %s", len(subjects), index_path)
         return subjects
 
     def _rows(self, text: str) -> list[list[str]]:
@@ -897,12 +899,12 @@ class TaxonomyReader:
 
     def keywords_for(self, skill_name: str) -> list[str]:
         """Run the keywords for operation."""
-        logging.info("Reading taxonomy keywords for %s", skill_name)
+        logger.info("Reading taxonomy keywords for %s", skill_name)
         text = self.taxonomy_path.read_text(encoding="utf-8")
         pattern = rf"\|\s*\d+\s*\|\s*`{re.escape(skill_name)}`\s*\|\s*(.*?)\s*\|"
         match = re.search(pattern, text)
         keywords = self._split_keywords(match.group(1)) if match else [skill_name.replace("juniper-", "Juniper ")]
-        logging.debug("Read %s taxonomy keywords for %s", len(keywords), skill_name)
+        logger.debug("Read %s taxonomy keywords for %s", len(keywords), skill_name)
         return keywords
 
     def _split_keywords(self, text: str) -> list[str]:
@@ -931,12 +933,12 @@ class SkillRenderer:
 
     def render(self) -> str:
         """Run the render operation."""
-        logging.info("Rendering SKILL.md for %s", self.domain)
+        logger.info("Rendering SKILL.md for %s", self.domain)
         frontmatter = self._frontmatter()
         overhead = len(frontmatter.encode("utf-8")) + len(self._body("").encode("utf-8"))
         route_rows = RouteTableBuilder(self.documents, self.routes).rows(SKILL_HARD_LIMIT - overhead)
         text = frontmatter + self._body(route_rows)
-        logging.debug("Rendered SKILL.md for %s with %s bytes", self.domain, len(text.encode("utf-8")))
+        logger.debug("Rendered SKILL.md for %s with %s bytes", self.domain, len(text.encode("utf-8")))
         return text
 
     def _frontmatter(self) -> str:
@@ -995,10 +997,10 @@ class RouteTableBuilder:
 
     def rows(self, byte_budget: int) -> str:
         """Run the rows operation."""
-        logging.info("Building SKILL.md route rows with concrete destinations")
+        logger.info("Building SKILL.md route rows with concrete destinations")
         candidates = [self._cluster_rows(), self._lifecycle_rows(), self._document_rows(), self._domain_rows()]
         selected = next((rows for rows in candidates if 0 < len(rows.encode("utf-8")) <= byte_budget), candidates[-1])
-        logging.debug("Selected SKILL.md route rows with %s bytes", len(selected.encode("utf-8")))
+        logger.debug("Selected SKILL.md route rows with %s bytes", len(selected.encode("utf-8")))
         return selected
 
     def _cluster_rows(self) -> str:
@@ -1054,10 +1056,10 @@ class SubjectClusterBuilder:
 
     def clusters(self) -> list[RouteCluster]:
         """Run the clusters operation."""
-        logging.info("Building user-language route clusters")
+        logger.info("Building user-language route clusters")
         clusters = self._known_clusters()
         ordered = sorted(self._unique(clusters), key=lambda cluster: cluster.rank)
-        logging.debug("Built %s user-language route clusters", len(ordered))
+        logger.debug("Built %s user-language route clusters", len(ordered))
         return ordered
 
     def _known_clusters(self) -> list[RouteCluster]:
@@ -1133,11 +1135,11 @@ class IndexRenderer:
 
     def render(self) -> str:
         """Run the render operation."""
-        logging.info("Rendering level 1 INDEX.md for %s", self.domain)
+        logger.info("Rendering level 1 INDEX.md for %s", self.domain)
         text = self._text(self._topic_rows())
         if len(text.encode("utf-8")) > INDEX_HARD_LIMIT:
             text = self._text(self._summary_rows())
-        logging.debug("Rendered level 1 INDEX.md with %s bytes", len(text.encode("utf-8")))
+        logger.debug("Rendered level 1 INDEX.md with %s bytes", len(text.encode("utf-8")))
         return text
 
     def _text(self, route_rows: str) -> str:
@@ -1199,11 +1201,11 @@ class SourcesRenderer:
 
     def render(self, domain: str) -> str:
         """Run the render operation."""
-        logging.info("Rendering sources.md for %s", domain)
+        logger.info("Rendering sources.md for %s", domain)
         rows = "".join(self._row(domain, document) for document in self.documents)
         text = "# Sources\n\n| Key | Title | Author | Category | Pages | Converted | Origin | Markdown | PDF |\n"
         text += "| - | - | - | - | -: | - | - | - | - |\n" + rows
-        logging.debug("Rendered sources.md for %s with %s rows", domain, len(self.documents))
+        logger.debug("Rendered sources.md for %s with %s rows", domain, len(self.documents))
         return text
 
     def _row(self, domain: str, document: DocumentPackageInput) -> str:
@@ -1243,10 +1245,10 @@ class SourceMetadataReader:
 
     def read(self, document: DocumentPackageInput) -> dict[str, object]:
         """Run the read operation."""
-        logging.info("Reading source metadata for %s", document.slug)
+        logger.info("Reading source metadata for %s", document.slug)
         source_path = next((path for path in document.markdown_paths if path.exists()), None)
         metadata = self._read_path(source_path) if source_path else {}
-        logging.debug("Read %s source metadata fields for %s", len(metadata), document.slug)
+        logger.debug("Read %s source metadata fields for %s", len(metadata), document.slug)
         return metadata
 
     def _read_path(self, path: Path | None) -> dict[str, object]:
@@ -1268,11 +1270,11 @@ class DocumentIndexRenderer:
 
     def render(self) -> str:
         """Run the render operation."""
-        logging.info("Rendering level 2 index for %s", self.document.slug)
+        logger.info("Rendering level 2 index for %s", self.document.slug)
         text = self._text(self._topic_rows())
         if len(text.encode("utf-8")) > 10_240:
             text = self._text(self._compact_topic_rows())
-        logging.debug("Rendered level 2 index for %s with %s bytes", self.document.slug, len(text.encode("utf-8")))
+        logger.debug("Rendered level 2 index for %s with %s bytes", self.document.slug, len(text.encode("utf-8")))
         return text
 
     def _text(self, rows: str) -> str:
@@ -1325,7 +1327,7 @@ class SkillPackageValidator:
 
     def validate(self, package_dir: Path) -> ValidationResult:
         """Run the validate operation."""
-        logging.info("Validating skill package %s", package_dir)
+        logger.info("Validating skill package %s", package_dir)
         errors: list[ValidationFinding] = []
         warnings: list[ValidationFinding] = []
         markdown_files = self._markdown_files(package_dir)
@@ -1340,30 +1342,30 @@ class SkillPackageValidator:
         self._orphans(package_dir, markdown_files, errors)
         self._duplicates(package_dir, topic_names, errors)
         self._zero(markdown_files, errors, package_dir)
-        logging.debug("Validated %s files with %s errors", len(markdown_files), len(errors))
+        logger.debug("Validated %s files with %s errors", len(markdown_files), len(errors))
         return ValidationResult(len(markdown_files), tuple(errors), tuple(warnings))
 
     def _markdown_files(self, package_dir: Path) -> list[Path]:
-        logging.info("Listing Markdown files in %s", package_dir)
+        logger.info("Listing Markdown files in %s", package_dir)
         files = sorted(package_dir.rglob("*.md")) if package_dir.exists() else []
-        logging.debug("Found %s Markdown files in %s", len(files), package_dir)
+        logger.debug("Found %s Markdown files in %s", len(files), package_dir)
         return files
 
     def _required_files(self, package_dir: Path, errors: list[ValidationFinding]) -> None:
-        logging.info("Checking required level 1 files")
+        logger.info("Checking required level 1 files")
         for name in ("SKILL.md", "INDEX.md", "sources.md"):
             if not (package_dir / name).exists():
                 errors.append(ValidationFinding(package_dir / name, "required file is missing", "missing"))
-        logging.debug("Required level 1 file check produced %s errors", len(errors))
+        logger.debug("Required level 1 file check produced %s errors", len(errors))
 
     def _layout(self, package_dir: Path, files: list[Path], errors: list[ValidationFinding]) -> None:
-        logging.info("Checking package path layout")
+        logger.info("Checking package path layout")
         if not re.match(r"^juniper-[a-z0-9]+(-[a-z0-9]+)*$", package_dir.name):
             errors.append(ValidationFinding(package_dir, "package directory name is invalid", package_dir.name))
         for path in files:
             self._layout_path(package_dir, path, errors)
         self._overview_files(package_dir, errors)
-        logging.debug("Checked package path layout for %s files", len(files))
+        logger.debug("Checked package path layout for %s files", len(files))
 
     def _layout_path(self, package_dir: Path, path: Path, errors: list[ValidationFinding]) -> None:
         relative = path.relative_to(package_dir)
@@ -1393,10 +1395,10 @@ class SkillPackageValidator:
     def _sizes(
         self, package_dir: Path, files: list[Path], errors: list[ValidationFinding], warnings: list[ValidationFinding]
     ) -> None:
-        logging.info("Checking Markdown file size limits")
+        logger.info("Checking Markdown file size limits")
         for path in files:
             self._size(package_dir, path, errors, warnings)
-        logging.debug("Checked size limits for %s files", len(files))
+        logger.debug("Checked size limits for %s files", len(files))
 
     def _size(
         self, package_dir: Path, path: Path, errors: list[ValidationFinding], warnings: list[ValidationFinding]
@@ -1418,15 +1420,15 @@ class SkillPackageValidator:
         return 12_288, 20_480
 
     def _sources(self, package_dir: Path, errors: list[ValidationFinding]) -> set[str]:
-        logging.info("Reading citation keys from sources.md")
+        logger.info("Reading citation keys from sources.md")
         path = package_dir / "sources.md"
         if not path.exists():
-            logging.debug("No sources.md exists for citation validation")
+            logger.debug("No sources.md exists for citation validation")
             return set()
         rows = self._table_rows(path)
         keys = {row[0] for row in rows if row}
         self._duplicate_source_keys(path, rows, errors)
-        logging.debug("Read %s citation keys from sources.md", len(keys))
+        logger.debug("Read %s citation keys from sources.md", len(keys))
         return keys
 
     def _table_rows(self, path: Path) -> list[list[str]]:
@@ -1441,11 +1443,11 @@ class SkillPackageValidator:
             errors.append(ValidationFinding(path, "duplicate citation key", key))
 
     def _topics(self, package_dir: Path, sources: set[str], errors: list[ValidationFinding]) -> list[str]:
-        logging.info("Validating topic files")
+        logger.info("Validating topic files")
         names: list[str] = []
         for path in self._topic_paths(package_dir):
             names.append(self._topic(path, sources, errors))
-        logging.debug("Validated %s topic files", len(names))
+        logger.debug("Validated %s topic files", len(names))
         return names
 
     def _topic_paths(self, package_dir: Path) -> list[Path]:
@@ -1484,11 +1486,11 @@ class SkillPackageValidator:
             self._citation_resolves(path, str(citation), sources, errors)
 
     def _cards(self, path: Path, body: str, sources: set[str], errors: list[ValidationFinding]) -> None:
-        logging.info("Validating cards in %s", path.name)
+        logger.info("Validating cards in %s", path.name)
         cards = [line for line in body.splitlines() if line.startswith("- ")]
         for line in cards:
             self._card(path, line, sources, errors)
-        logging.debug("Validated %s cards in %s", len(cards), path.name)
+        logger.debug("Validated %s cards in %s", len(cards), path.name)
 
     def _card(self, path: Path, line: str, sources: set[str], errors: list[ValidationFinding]) -> None:
         if not re.match(r"^- (MUST|SHOULD|INFO): ", line):
@@ -1505,7 +1507,7 @@ class SkillPackageValidator:
             errors.append(ValidationFinding(path, "citation key does not resolve to sources.md", citation))
 
     def _skill_frontmatter(self, package_dir: Path, errors: list[ValidationFinding]) -> None:
-        logging.info("Validating SKILL.md frontmatter")
+        logger.info("Validating SKILL.md frontmatter")
         path = package_dir / "SKILL.md"
         if not path.exists():
             return
@@ -1516,7 +1518,7 @@ class SkillPackageValidator:
         self._skill_name(path, frontmatter.get("name"), package_dir.name, errors)
         self._skill_description(path, frontmatter.get("description"), errors)
         self._skill_metadata(path, frontmatter.get("metadata"), errors)
-        logging.debug("Validated SKILL.md frontmatter")
+        logger.debug("Validated SKILL.md frontmatter")
 
     def _skill_name(self, path: Path, value: object, package_name: str, errors: list[ValidationFinding]) -> None:
         if value != package_name:
@@ -1539,15 +1541,15 @@ class SkillPackageValidator:
         self._metadata_types(path, value, errors)
 
     def _route_vocabulary(self, package_dir: Path, errors: list[ValidationFinding]) -> None:
-        logging.info("Validating SKILL.md route vocabulary")
+        logger.info("Validating SKILL.md route vocabulary")
         path = package_dir / "SKILL.md"
         if not path.exists():
-            logging.debug("Skipped route vocabulary validation because SKILL.md is absent")
+            logger.debug("Skipped route vocabulary validation because SKILL.md is absent")
             return
         rows = self._table_rows(path)
         for row in rows:
             self._route_row_vocabulary(path, row, errors)
-        logging.debug("Validated route vocabulary for %s rows", len(rows))
+        logger.debug("Validated route vocabulary for %s rows", len(rows))
 
     def _route_row_vocabulary(self, path: Path, row: list[str], errors: list[ValidationFinding]) -> None:
         if len(row) < 2:
@@ -1577,10 +1579,10 @@ class SkillPackageValidator:
                 errors.append(ValidationFinding(path, "SKILL.md metadata field is not an integer", name))
 
     def _links(self, package_dir: Path, files: list[Path], errors: list[ValidationFinding]) -> None:
-        logging.info("Checking internal Markdown links")
+        logger.info("Checking internal Markdown links")
         for path in files:
             self._file_links(package_dir, path, errors)
-        logging.debug("Checked internal links for %s files", len(files))
+        logger.debug("Checked internal links for %s files", len(files))
 
     def _file_links(self, package_dir: Path, path: Path, errors: list[ValidationFinding]) -> None:
         text = path.read_text(encoding="utf-8")
@@ -1600,19 +1602,19 @@ class SkillPackageValidator:
             errors.append(ValidationFinding(path, "internal link is broken", target))
 
     def _orphans(self, package_dir: Path, files: list[Path], errors: list[ValidationFinding]) -> None:
-        logging.info("Checking for orphan topic files")
+        logger.info("Checking for orphan topic files")
         index_text = "\n".join(path.read_text("utf-8") for path in files if path.name == "INDEX.md")
         for topic in self._topic_paths(package_dir):
             if topic.name != "INDEX.md" and topic.name not in index_text:
                 errors.append(ValidationFinding(topic, "topic file is absent from the index", topic.name))
-        logging.debug("Checked orphan status for topic files")
+        logger.debug("Checked orphan status for topic files")
 
     def _duplicates(self, package_dir: Path, names: list[str], errors: list[ValidationFinding]) -> None:
-        logging.info("Checking for duplicate topic names")
+        logger.info("Checking for duplicate topic names")
         values = [name for name in names if name]
         for name in sorted({name for name in values if values.count(name) > 1}):
             errors.append(ValidationFinding(package_dir, "duplicate topic name", name))
-        logging.debug("Checked duplicate topic names")
+        logger.debug("Checked duplicate topic names")
 
     def _zero(self, files: list[Path], errors: list[ValidationFinding], package_dir: Path) -> None:
         if files:

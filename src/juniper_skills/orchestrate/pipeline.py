@@ -31,6 +31,8 @@ from src.juniper_skills.segment import (
 )
 from src.juniper_skills.speckit import SkillDocument, SpecKitHarness, SpecKitPaths
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 @dataclass(frozen=True)
 class PipelinePaths:
@@ -76,7 +78,7 @@ class PipelineRunner:
 
     def run(self, item: WorkItem, backend: RewriteBackend, worker_id: str, dry_run: bool = False) -> bool:
         """Run the run operation."""
-        logging.info("Running the Juniper skill pipeline for %s", item.document_key)  # Log document start.
+        logger.info("Running the Juniper skill pipeline for %s", item.document_key)  # Log document start.
         try:
             completed = self.journal.last_stage(item.document_key)  # Read the last durable checkpoint.
             if item.citation_only:  # Superseded versions stay citation-only by contract.
@@ -85,12 +87,12 @@ class PipelineRunner:
             files = self._build_outputs(item, state, worker_id, completed)  # Write package and SpecKit artifacts.
             self._publish(item, files, worker_id, completed, dry_run)  # Install, verify, and commit the result.
             self.queue.complete(item.document_key)  # Mark the queue item terminal after all stages succeed.
-            logging.debug("Completed the Juniper skill pipeline for %s", item.document_key)  # Record success.
+            logger.debug("Completed the Juniper skill pipeline for %s", item.document_key)  # Record success.
             return True  # Tell the long runner that one document completed.
         except Exception as error:
             self.journal.failed(item.document_key, "pipeline", worker_id, str(error))  # Persist failure for resume.
             self.queue.fail(item.document_key, str(error))  # Return the row to retryable failed state.
-            logging.exception("Juniper skill pipeline failed for %s", item.document_key)  # Log traceback.
+            logger.exception("Juniper skill pipeline failed for %s", item.document_key)  # Log traceback.
             return False  # Let the long runner continue with other documents.
 
     def _skip_superseded(self, item: WorkItem, worker_id: str) -> bool:
@@ -98,7 +100,7 @@ class PipelineRunner:
         outcome = StageOutcome(item.document_key, "superseded", "skipped", detail, worker_id)  # Build event.
         self.journal.completed(outcome)  # Persist the skip before queue completion.
         self.queue.complete(item.document_key, "skipped")  # Mark the queue item terminal without topic output.
-        logging.debug("Skipped superseded document %s", item.document_key)  # Record the skip.
+        logger.debug("Skipped superseded document %s", item.document_key)  # Record the skip.
         return True  # Count a superseded document as handled.
 
     def _build_content(
@@ -135,7 +137,7 @@ class PipelineRunner:
 
     def _join(self, item: WorkItem, worker_id: str, completed: str | None) -> JoinedDocument:
         if self._done("join", completed):  # Recompute lightweight state even when the checkpoint exists.
-            logging.debug("Recomputing joined document after checkpoint")  # State why work still runs.
+            logger.debug("Recomputing joined document after checkpoint")  # State why work still runs.
         self.journal.started(item.document_key, "join", worker_id)  # Persist the stage start before I/O.
         joined = self.joiner.join_paths(item.part_paths)  # Join inventory-provided parts in order.
         data = {"parts": len(joined.parts), "pages": f"{joined.page_start}-{joined.page_end}"}  # Measure output.

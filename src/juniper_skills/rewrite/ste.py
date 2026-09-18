@@ -15,6 +15,8 @@ from tools.ste_linter.scoring import ScoringModel  # Reuse the existing scoring 
 
 from .models import SteFileReport, SteValidationReport  # Use rewrite-stage report models.
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 _LOG = logging.getLogger(__name__)  # Give the validator a stable logger name.
 
 
@@ -28,20 +30,20 @@ class SteValidator:
 
     def validate(self, paths: tuple[Path, ...]) -> SteValidationReport:
         """Return one STE score for each file."""
-        logging.info("Starting STE validation for generated files")  # Log before validation starts.
+        logger.info("Starting STE validation for generated files")  # Log before validation starts.
         if not paths:  # A validator run with no files proves nothing.
             return SteValidationReport(0, tuple(), self.minimum_score, ("The STE validator checked zero files.",))
         config = self._config()  # Load the linter configuration once for all files.
         reports, errors = self._score_paths(paths, config)  # Score every requested file.
-        logging.debug("STE validator checked %d files with %d errors", len(reports), len(errors))  # Log the result.
+        logger.debug("STE validator checked %d files with %d errors", len(reports), len(errors))  # Log the result.
         return SteValidationReport(len(reports), tuple(reports), self.minimum_score, tuple(errors))  # Return scores.
 
     def _config(self) -> LinterConfig:
         """Return the repository STE linter configuration."""
-        logging.info("Loading STE linter configuration from %s", self.config_path)  # Log before config I/O.
+        logger.info("Loading STE linter configuration from %s", self.config_path)  # Log before config I/O.
         config = LinterConfig.load(str(self.config_path))  # Read pyproject settings or defaults.
         config.min_score = self.minimum_score  # Apply this validator threshold.
-        logging.debug("Loaded STE linter configuration with minimum score %d", config.min_score)  # Log threshold.
+        logger.debug("Loaded STE linter configuration with minimum score %d", config.min_score)  # Log threshold.
         return config  # Return the configured linter settings.
 
     def _score_paths(self, paths: tuple[Path, ...], config: LinterConfig) -> tuple[list[SteFileReport], list[str]]:
@@ -74,15 +76,15 @@ class SteValidator:
         errors: list[str],
     ) -> None:
         """Score one file and append the result or error."""
-        logging.info("Scoring STE compliance for %s", path)  # Log before file I/O and scoring.
+        logger.info("Scoring STE compliance for %s", path)  # Log before file I/O and scoring.
         if not path.is_file():  # Missing files cannot receive a valid score.
             errors.append(f"{path}: file not found")  # Record a clear error for the report.
-            logging.debug("STE validation skipped missing file %s", path)  # Log the skip reason.
+            logger.debug("STE validation skipped missing file %s", path)  # Log the skip reason.
             return  # Stop this file only.
         score = self._score_text(path, config, engine)  # Run the existing linter on this file.
         reports.append(SteFileReport(path, score.score, score.word_count, len(score.violations)))  # Store summary data.
         violation_count = len(score.violations)  # Count violations once for the report and log.
-        logging.debug("STE score for %s is %d with %d violations", path, score.score, violation_count)  # Log score.
+        logger.debug("STE score for %s is %d with %d violations", path, score.score, violation_count)  # Log score.
 
     def _score_text(
         self,

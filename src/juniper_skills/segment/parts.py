@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 @dataclass(frozen=True)
 class DocumentPartContent:
@@ -42,24 +44,24 @@ class FrontMatterReader:
 
     def read(self, text: str) -> tuple[dict[str, str], str]:
         """Run the read operation."""
-        logging.info("Reading Markdown front matter")  # Log before parsing converter metadata.
+        logger.info("Reading Markdown front matter")  # Log before parsing converter metadata.
         if not text.startswith("---\n"):  # A document without front matter still can be segmented.
-            logging.debug("Read %s front matter keys", 0)  # Report the missing front matter.
+            logger.debug("Read %s front matter keys", 0)  # Report the missing front matter.
             return {}, text
         end = text.find("\n---", 4)  # Locate the closing marker for the front matter block.
         if end == -1:  # Malformed front matter must not stop segmentation.
-            logging.debug("Read %s front matter keys", 0)  # Report that parsing failed safely.
+            logger.debug("Read %s front matter keys", 0)  # Report that parsing failed safely.
             return {}, text
         front_matter = self._parse_block(text[4:end])  # Parse key and scalar value pairs.
         body = text[end + 4 :].lstrip("\n")  # Remove only the front matter block from the body.
-        logging.debug("Read %s front matter keys", len(front_matter))  # Report parsed key count.
+        logger.debug("Read %s front matter keys", len(front_matter))  # Report parsed key count.
         return front_matter, body
 
     def page_markers(self, text: str) -> list[int]:
         """Run the page markers operation."""
-        logging.info("Reading page markers from Markdown")  # Log before page marker extraction.
+        logger.info("Reading page markers from Markdown")  # Log before page marker extraction.
         pages = [int(match.group(1)) for match in self.PAGE_PATTERN.finditer(text)]  # Read all page marker numbers.
-        logging.debug("Read %s page markers", len(pages))  # Report citation marker count.
+        logger.debug("Read %s page markers", len(pages))  # Report citation marker count.
         return pages
 
     def _parse_block(self, block: str) -> dict[str, str]:
@@ -84,31 +86,31 @@ class PartSetJoiner:
 
     def join_paths(self, paths: Sequence[Path]) -> JoinedDocument:
         """Run the join paths operation."""
-        logging.info("Joining %s Markdown parts from explicit paths", len(paths))  # Log path input count.
+        logger.info("Joining %s Markdown parts from explicit paths", len(paths))  # Log path input count.
         parts = [self._read_path(Path(path)) for path in paths]  # Read each path into a structured part record.
         self._validate_same_root(parts)  # Prevent cross-root duplicate joins from becoming one document.
         joined = self._join_parts(parts)  # Sort and concatenate the parts into one logical document.
-        logging.debug(
+        logger.debug(
             "Joined %s parts covering pages %s-%s", len(joined.parts), joined.page_start, joined.page_end
         )  # Report.
         return joined
 
     def join_inventory_group(self, group: Any) -> JoinedDocument:
         """Run the join inventory group operation."""
-        logging.info("Joining Markdown parts from inventory group")  # Log that the inventory authority supplied parts.
+        logger.info("Joining Markdown parts from inventory group")  # Log that the inventory authority supplied parts.
         paths = [Path(part.path) for part in group.parts]  # Consume the inventory grouping output without regrouping.
         joined = self.join_paths(paths)  # Reuse the same order and validation path.
-        logging.debug("Joined inventory group with %s parts", len(joined.parts))  # Report inventory join count.
+        logger.debug("Joined inventory group with %s parts", len(joined.parts))  # Report inventory join count.
         return joined
 
     def _read_path(self, path: Path) -> DocumentPartContent:
-        logging.info("Reading Markdown part %s", path)  # Log before disk access.
+        logger.info("Reading Markdown part %s", path)  # Log before disk access.
         text = path.read_text(encoding="utf-8", errors="ignore")  # Decode converter Markdown safely.
         front_matter, body = self.reader.read(text)  # Remove front matter before joining bodies.
         pages = self._page_span(front_matter, body)  # Read the citation range from metadata or page markers.
         part_number = self._part_number(path, front_matter, pages[0])  # Pick the most precise order key.
         root = self._source_root(path)  # Identify the corpus root for cross-root protection.
-        logging.debug("Read part %s as part %s with pages %s-%s", path.name, part_number, pages[0], pages[1])  # Report.
+        logger.debug("Read part %s as part %s with pages %s-%s", path.name, part_number, pages[0], pages[1])  # Report.
         return DocumentPartContent(path, body, front_matter, part_number, pages[0], pages[1], root)  # Return part.
 
     def _join_parts(self, parts: list[DocumentPartContent]) -> JoinedDocument:

@@ -8,6 +8,8 @@ import re  # Normalize checklist values for recall and precision.
 from .coverage import CoverageAnalyzer  # Build manifests from source regions under test.
 from .models import CoverageEntry, GroundTruthMeasurement, GroundTruthRegion, GroundTruthReport  # Share models.
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 class GroundTruthEvaluator:
     """Measure manifests against facts found independently."""
@@ -18,9 +20,9 @@ class GroundTruthEvaluator:
 
     def evaluate(self, regions: tuple[GroundTruthRegion, ...], source_key: str) -> GroundTruthReport:
         """Return aggregate recall and precision for independent regions."""
-        logging.info("Evaluating %d ground-truth regions", len(regions))  # Log before measurement starts.
+        logger.info("Evaluating %d ground-truth regions", len(regions))  # Log before measurement starts.
         measurements = tuple(self._evaluate_region(region, source_key) for region in regions)  # Measure regions.
-        logging.debug("Evaluated %d ground-truth regions", len(measurements))  # Log measured region count.
+        logger.debug("Evaluated %d ground-truth regions", len(measurements))  # Log measured region count.
         return GroundTruthReport(measurements)  # Return aggregate report.
 
     def _evaluate_region(self, region: GroundTruthRegion, source_key: str) -> GroundTruthMeasurement:

@@ -6,6 +6,8 @@ import logging
 import re
 from dataclasses import dataclass
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 @dataclass(frozen=True)
 class CommandDetectionResult:
@@ -49,17 +51,17 @@ class CommandBlockDetector:
 
     def __init__(self) -> None:
         """Initialize the CommandBlockDetector instance."""
-        logging.info("Compiling command detection patterns")  # Log setup before regular expressions are built.
+        logger.info("Compiling command detection patterns")  # Log setup before regular expressions are built.
         self.prompt_pattern = re.compile(r"^[\w.-]+@[\w.-]+[>#]\s*.*$")  # Detect operational and config prompts.
         self.interface_pattern = re.compile(
             r"^(?:ae|et|ge|irb|lo0|xe)-?\d*(?:/\d+/\d+)?(?:\.\d+)?\b"
         )  # Detect port names.
         self.table_pattern = re.compile(r"^\S+(?:\s{2,}|\s+\S+\s+\S+)\S*")  # Detect terse table rows.
-        logging.debug("Compiled %s command detection patterns", 3)  # Report setup completion.
+        logger.debug("Compiled %s command detection patterns", 3)  # Report setup completion.
 
     def refence_text(self, text: str) -> CommandDetectionResult:
         """Run the refence text operation."""
-        logging.info("Detecting unfenced Junos command blocks")  # Log command detection before scanning text.
+        logger.info("Detecting unfenced Junos command blocks")  # Log command detection before scanning text.
         lines = text.splitlines()  # Preserve exact line text while scanning logical lines.
         output: list[str] = []  # Accumulate the repaired Markdown in source order.
         index = 0  # Track the current source line position for deterministic scanning.
@@ -70,7 +72,7 @@ class CommandBlockDetector:
             blocks += block_count  # Add one when the copied unit was a command block.
             command_lines += line_count  # Add only nonblank command and output lines.
         result = CommandDetectionResult("\n".join(output), blocks, command_lines)  # Return text and proof metrics.
-        logging.debug("Command detection inserted %s fences for %s lines", blocks, command_lines)  # Report results.
+        logger.debug("Command detection inserted %s fences for %s lines", blocks, command_lines)  # Report results.
         return result
 
     def _copy_next(self, lines: list[str], index: int, output: list[str]) -> tuple[int, int, int]:

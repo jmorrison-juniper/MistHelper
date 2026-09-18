@@ -7,6 +7,8 @@ import subprocess  # nosec B404 - This module starts fixed git commands without 
 import time
 from pathlib import Path
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 class CanonicalSkillStore:
     """Manage safe git commits for generated Juniper skill files."""
@@ -17,20 +19,20 @@ class CanonicalSkillStore:
 
     def commit_document(self, domain: str, document_key: str) -> str:
         """Run the commit document operation."""
-        logging.info("Committing generated Juniper skill files for %s", document_key)  # Log before git writes.
+        logger.info("Committing generated Juniper skill files for %s", document_key)  # Log before git writes.
         self._ensure_repository()  # Refuse to run git commands outside the canonical repository.
         dirty = self._dirty_paths()  # Read the tree state before staging generated files.
         if dirty and not self._only_generated_dirty(dirty, domain):  # Protect unrelated operator work.
             detail = "canonical store has unrelated dirty files"  # State why no commit occurred.
-            logging.debug("Skipped canonical commit because %s", detail)  # Record the dirty-tree decision.
+            logger.debug("Skipped canonical commit because %s", detail)  # Record the dirty-tree decision.
             return detail  # Return a blocker string for the pipeline journal.
         self._with_index_retry(("git", "add", "skills", "CATALOG.md"))  # Stage only canonical generated paths.
         if not self._staged_changes():  # Avoid empty commits during repeat runs.
-            logging.debug("Skipped canonical commit because no generated files changed")  # Record empty result.
+            logger.debug("Skipped canonical commit because no generated files changed")  # Record empty result.
             return "no generated changes to commit"  # Return a stable detail for journal evidence.
         message = self._message(document_key)  # Build the Conventional Commit message.
         self._with_index_retry(("git", "commit", "-m", message))  # Commit generated files for durable progress.
-        logging.debug("Committed generated skill files for %s", document_key)  # Record successful persistence.
+        logger.debug("Committed generated skill files for %s", document_key)  # Record successful persistence.
         return "generated skill files committed"  # Return a compact outcome.
 
     def _ensure_repository(self) -> None:
@@ -40,7 +42,7 @@ class CanonicalSkillStore:
     def _dirty_paths(self) -> list[str]:
         result = self._git(("git", "status", "--porcelain"))  # Read porcelain output for stable parsing.
         paths = [line[3:].strip() for line in result.splitlines() if line.strip()]  # Extract changed paths only.
-        logging.debug("Canonical store has %d dirty paths", len(paths))  # Record dirty path count.
+        logger.debug("Canonical store has %d dirty paths", len(paths))  # Record dirty path count.
         return paths  # Return changed paths for blocker checks.
 
     def _only_generated_dirty(self, paths: list[str], domain: str) -> bool:
@@ -50,7 +52,7 @@ class CanonicalSkillStore:
     def _staged_changes(self) -> bool:
         result = self._git(("git", "diff", "--cached", "--name-only"))  # Read staged files after git add.
         staged = bool(result.strip())  # Convert output to a Boolean for empty commit checks.
-        logging.debug("Canonical store staged changes present: %s", staged)  # Record staged status.
+        logger.debug("Canonical store staged changes present: %s", staged)  # Record staged status.
         return staged  # Return whether commit can proceed.
 
     def _message(self, document_key: str) -> str:
@@ -67,7 +69,7 @@ class CanonicalSkillStore:
             except RuntimeError as error:
                 if "index.lock" not in str(error) or attempt == 4:  # Retry only the lock condition.
                     raise  # Preserve non-lock failures and exhausted retries.
-                logging.info("Waiting for git index lock before retry")  # Log before the required wait.
+                logger.info("Waiting for git index lock before retry")  # Log before the required wait.
                 time.sleep(5)  # Wait for the other worker to release the index.
         return ""  # Satisfy static analysis after the retry loop.
 

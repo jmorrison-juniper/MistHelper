@@ -15,6 +15,8 @@ from requests.adapters import HTTPAdapter
 
 from src.juniper_skills.tracking.github_cli import GitHubCliError, GitHubCommandResult
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 class GitHubRestRunner:
     """Run the tracker GitHub operations through one persistent HTTPS session."""
@@ -29,17 +31,17 @@ class GitHubRestRunner:
 
     def run(self, command: list[str]) -> GitHubCommandResult:
         """Run one supported GitHub operation."""
-        logging.info("Running a GitHub REST operation: %s", self._safe_command(command))  # Log without secrets.
+        logger.info("Running a GitHub REST operation: %s", self._safe_command(command))  # Log without secrets.
         result = self._dispatch(command)  # Convert the tracker command into one REST operation.
-        logging.debug("GitHub REST operation returned code %d", result.returncode)  # Record safe status.
+        logger.debug("GitHub REST operation returned code %d", result.returncode)  # Record safe status.
         return result  # Return the same result shape as the legacy CLI runner.
 
     def run_with_input(self, command: list[str], input_text: str) -> GitHubCommandResult:
         """Run one supported GitHub operation with a JSON body."""
-        logging.info("Running a GitHub REST operation with input: %s", self._safe_command(command))  # Log safely.
+        logger.info("Running a GitHub REST operation with input: %s", self._safe_command(command))  # Log safely.
         payload = json.loads(input_text)  # Parse the JSON body that tracker generated.
         result = self._request("PATCH", command[2], payload)  # Apply the issue update through REST.
-        logging.debug("GitHub REST operation with input returned code %d", result.returncode)  # Record status.
+        logger.debug("GitHub REST operation with input returned code %d", result.returncode)  # Record status.
         return result  # Return the shared command result shape.
 
     def _dispatch(self, command: list[str]) -> GitHubCommandResult:
@@ -69,12 +71,12 @@ class GitHubRestRunner:
         adapter = HTTPAdapter(pool_connections=8, pool_maxsize=8, max_retries=2)  # Retry transient transport errors.
         session.mount("https://", adapter)  # Apply the adapter to all GitHub API calls.
         session.headers.update(self._headers(token))  # Set headers once without writing the token to disk.
-        logging.debug("Created the GitHub REST session with a connection pool")  # Record session creation.
+        logger.debug("Created the GitHub REST session with a connection pool")  # Record session creation.
         return session  # Return the configured session.
 
     def _read_token(self) -> str:
         """Read the GitHub token from `gh` without logging it."""
-        logging.info("Reading the GitHub token from the authenticated CLI")  # Record the auth source.
+        logger.info("Reading the GitHub token from the authenticated CLI")  # Record the auth source.
         gh_path = shutil.which("gh")  # Resolve the executable path before the token handoff.
         if gh_path is None:  # Stop when the authenticated GitHub CLI is absent.
             raise GitHubCliError("GitHub CLI was not found on PATH")  # Give the operator a clear setup error.
@@ -87,7 +89,7 @@ class GitHubRestRunner:
         )
         if completed.returncode != 0:  # Stop when the local CLI has no usable credential.
             raise GitHubCliError(completed.stderr.strip() or "GitHub token read failed")
-        logging.debug("Read a GitHub token from the authenticated CLI")  # Do not record the token value.
+        logger.debug("Read a GitHub token from the authenticated CLI")  # Do not record the token value.
         return completed.stdout.strip()  # Return the token only in memory.
 
     def _headers(self, token: str) -> dict[str, str]:

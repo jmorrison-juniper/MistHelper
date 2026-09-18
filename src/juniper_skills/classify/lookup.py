@@ -8,6 +8,8 @@ from pathlib import Path  # Store database paths portably.
 
 from .models import DomainAssignment  # Return the same assignment contract that classification writes.
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 class DomainLookup:
     """Read domains from SourceDocument without reclassifying content."""
@@ -18,22 +20,22 @@ class DomainLookup:
 
     def get(self, document_key: str) -> DomainAssignment:
         """Run the get operation."""
-        logging.info("Reading domain assignment for %s", document_key)  # Trace the lookup before opening the database.
+        logger.info("Reading domain assignment for %s", document_key)  # Trace the lookup before opening the database.
         with sqlite3.connect(self.database_path) as connection:  # Keep the read transaction short for shared workers.
             row = connection.execute(self._query(), (document_key,)).fetchone()  # Read only the requested source row.
         if not row:  # Fail loudly so consumers do not invent a domain.
             raise KeyError(document_key)  # Signal that the source document does not exist.
         assignment = self._row_to_assignment(document_key, row)  # Convert the database row to the public contract.
-        logging.debug("Read domain %s for %s", assignment.domain, document_key)  # Summarize the lookup result.
+        logger.debug("Read domain %s for %s", assignment.domain, document_key)  # Summarize the lookup result.
         return assignment
 
     def all(self) -> dict[str, DomainAssignment]:
         """Run the all operation."""
-        logging.info("Reading all domain assignments")  # Trace bulk lookup for package builders.
+        logger.info("Reading all domain assignments")  # Trace bulk lookup for package builders.
         with sqlite3.connect(self.database_path) as connection:  # Use one read transaction for consistency.
             rows = connection.execute(self._all_query()).fetchall()  # Read persisted assignments only.
         assignments = {str(row[0]): self._row_to_assignment(str(row[0]), row[1:]) for row in rows}  # Build a key map.
-        logging.debug("Read %s domain assignments", len(assignments))  # Report how many rows consumers can use.
+        logger.debug("Read %s domain assignments", len(assignments))  # Report how many rows consumers can use.
         return assignments
 
     def _query(self) -> str:

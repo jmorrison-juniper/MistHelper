@@ -9,6 +9,8 @@ from typing import Any
 
 from src.juniper_skills.tracking.models import STAGE_ORDER, ResumePoint, StageEvent, StageName
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 class StageCommentCodec:
     """Create and parse machine-readable stage comments."""
@@ -18,29 +20,29 @@ class StageCommentCodec:
 
     def build_comment(self, event: StageEvent) -> str:
         """Build a comment with STE prose and a JSON state block."""
-        logging.info("Building the GitHub journal comment for stage %s", event.stage.value)  # Record the local action.
+        logger.info("Building the GitHub journal comment for stage %s", event.stage.value)  # Record the local action.
         payload = self._payload_for_event(event)  # Create the exact state that recovery reads later.
         json_block = json.dumps(payload, indent=2, sort_keys=True)  # Make the state deterministic for tests.
         comment = self._render_comment(event, json_block)  # Add human text before the machine-readable state.
-        logging.debug("Built a GitHub journal comment with %d characters", len(comment))  # Record safe output size.
+        logger.debug("Built a GitHub journal comment with %d characters", len(comment))  # Record safe output size.
         return comment
 
     def build_summary_comment(self, events: tuple[StageEvent, ...]) -> str:
         """Build one completion comment that contains all stage events."""
-        logging.info("Building a consolidated GitHub journal comment")  # Record the local action.
+        logger.info("Building a consolidated GitHub journal comment")  # Record the local action.
         payload = self._summary_payload(events)  # Create the exact state that recovery reads later.
         json_block = json.dumps(payload, indent=2, sort_keys=True)  # Make the state deterministic for tests.
         comment = self._render_summary(events, json_block)  # Add human text and a full stage table.
-        logging.debug("Built a consolidated GitHub comment with %d characters", len(comment))  # Record size.
+        logger.debug("Built a consolidated GitHub comment with %d characters", len(comment))  # Record size.
         return comment
 
     def parse_comments(self, comments: list[str], document_key: str) -> ResumePoint:
         """Read comments and return the most recent valid resume point."""
-        logging.info("Parsing %d GitHub journal comments", len(comments))  # Record the recovery action.
+        logger.info("Parsing %d GitHub journal comments", len(comments))  # Record the recovery action.
         events = [event for body in comments for event in self._events_from_body(body)]  # Read all JSON state blocks.
         matching_events = [event for event in events if event.document_key == document_key]  # Keep this document.
         resume_point = self._resume_from_events(matching_events, document_key)  # Convert events into one resume point.
-        logging.debug("Recovered resume action %s", resume_point.next_action)  # Record the recovered next action.
+        logger.debug("Recovered resume action %s", resume_point.next_action)  # Record the recovered next action.
         return resume_point
 
     def _payload_for_event(self, event: StageEvent) -> dict[str, Any]:
@@ -87,10 +89,10 @@ class StageCommentCodec:
 
     def _events_from_body(self, body: str) -> list[StageEvent]:
         """Extract all stage events from one issue comment body."""
-        logging.info("Reading machine-readable blocks from one issue comment")  # Record each parse operation.
+        logger.info("Reading machine-readable blocks from one issue comment")  # Record each parse operation.
         blocks = self._json_blocks(body)  # Find fenced JSON blocks without reading other prose.
         events = [event for block in blocks for event in self._events_from_json(block)]  # Keep valid events.
-        logging.debug("Read %d stage events from one issue comment", len(events))  # Record the parse result.
+        logger.debug("Read %d stage events from one issue comment", len(events))  # Record the parse result.
         return events
 
     def _json_blocks(self, body: str) -> list[str]:
@@ -143,7 +145,7 @@ class StageCommentCodec:
             payload = json.loads(block)  # Decode the state that GitHub stored.
             return self._events_from_payload(payload)  # Decode supported payload shapes.
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
-            logging.debug("Ignored an invalid journal JSON block: %s", error)  # Tolerate user comments.
+            logger.debug("Ignored an invalid journal JSON block: %s", error)  # Tolerate user comments.
             return []
 
     def _events_from_payload(self, payload: dict[str, Any]) -> list[StageEvent]:

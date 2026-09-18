@@ -7,6 +7,8 @@ import re  # Detect page markers and prose tokens.
 
 from .models import SourceLine  # Share source-line records across extractors.
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 _PAGE_PATTERN = re.compile(r"<!--\s*page\s+(\d+)\s*-->", re.IGNORECASE)  # Match converter page markers.
 
 
@@ -15,22 +17,22 @@ class SourcePageParser:
 
     def parse(self, text: str) -> tuple[SourceLine, ...]:
         """Return content lines with exact page numbers."""
-        logging.info("Parsing source text into page-tagged lines")  # Log before page parsing.
+        logger.info("Parsing source text into page-tagged lines")  # Log before page parsing.
         current_page = 0  # Reject facts until the first page marker appears.
         lines: list[SourceLine] = []  # Collect content that carries a valid citation.
         for number, raw_line in enumerate(text.splitlines(), start=1):  # Preserve source order for reports.
             current_page = self._page(raw_line, current_page)  # Update the active citation page.
             if self._keeps_line(raw_line, current_page):  # Emit only lines that can cite a page.
                 lines.append(SourceLine(number, current_page, raw_line.rstrip()))  # Keep original source spelling.
-        logging.debug("Parsed %d page-tagged source lines", len(lines))  # Log the parser output count.
+        logger.debug("Parsed %d page-tagged source lines", len(lines))  # Log the parser output count.
         return tuple(lines)  # Return immutable lines for extractors.
 
     def prose_chars(self, text: str) -> int:
         """Return source characters after page markers and blanks are removed."""
-        logging.info("Measuring source prose characters")  # Log before source measurement.
+        logger.info("Measuring source prose characters")  # Log before source measurement.
         lines = [line for line in text.splitlines() if self._measurable(line)]  # Drop markers and blank lines.
         count = len("\n".join(lines))  # Measure the source prose used by the retention target.
-        logging.debug("Measured %d source prose characters", count)  # Log the source size.
+        logger.debug("Measured %d source prose characters", count)  # Log the source size.
         return count  # Return the measured source size.
 
     def _page(self, line: str, current_page: int) -> int:

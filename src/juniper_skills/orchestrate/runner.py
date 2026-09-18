@@ -15,6 +15,8 @@ from src.juniper_skills.orchestrate.journal import OrchestratorJournal
 from src.juniper_skills.orchestrate.pipeline import PipelinePaths, PipelineRunner
 from src.juniper_skills.orchestrate.queue import WorkLeaseStore
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 @dataclass(frozen=True)
 class FactoryRunConfig:
@@ -45,16 +47,16 @@ class FactoryRunner:
 
     def run(self) -> dict[str, object]:
         """Run the run operation."""
-        logging.info("Starting the Juniper skill factory runner")  # Log before worker threads start.
+        logger.info("Starting the Juniper skill factory runner")  # Log before worker threads start.
         started = time.perf_counter()  # Measure throughput for the final report.
         try:
             self._run_workers()  # Start and wait for all worker loops.
         except KeyboardInterrupt:
             self.stop_event.set()  # Tell workers to stop before they claim more work.
-            logging.info("Factory runner received an interrupt")  # Record clean shutdown.
+            logger.info("Factory runner received an interrupt")  # Record clean shutdown.
         elapsed = time.perf_counter() - started  # Measure total runtime after workers stop.
         report = self._report(elapsed)  # Build a compact machine-readable result.
-        logging.debug("Factory runner completed report: %s", report)  # Record the final report.
+        logger.debug("Factory runner completed report: %s", report)  # Record the final report.
         return report  # Return progress and backend evidence.
 
     def _run_workers(self) -> None:

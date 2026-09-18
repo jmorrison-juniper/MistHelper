@@ -10,6 +10,8 @@ from pathlib import Path  # Use portable paths for corpus scans.
 
 from .models import SourceQualityReport, SourceQualityScore, SpaceRatioDistribution  # Share report records.
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 class SourceQualityGate:
     """Score source Markdown before any skill output is built."""
@@ -26,12 +28,12 @@ class SourceQualityGate:
 
     def check_paths(self, paths: tuple[Path, ...], pdf_roots: tuple[Path, ...] = ()) -> SourceQualityReport:
         """Validate the check paths requirement."""
-        logging.info("Checking source quality for %s documents", len(paths))  # Log before reading source files.
+        logger.info("Checking source quality for %s documents", len(paths))  # Log before reading source files.
         texts = self._read_texts(paths)  # Read each file once for distribution and scoring.
         distribution = self._distribution(tuple(texts.values()))  # Calibrate the threshold from real source text.
         scores = tuple(self._score_path(path, text, distribution.threshold, pdf_roots) for path, text in texts.items())
         errors = () if scores else ("source quality gate checked zero documents",)  # Fail an empty guard run.
-        logging.debug(
+        logger.debug(
             "Source quality checked %s documents with %s failures",
             len(scores),
             len([s for s in scores if not s.passed]),
@@ -40,30 +42,30 @@ class SourceQualityGate:
 
     def score_text(self, document_key: str, text: str, path: Path | None = None) -> SourceQualityScore:
         """Run the score text operation."""
-        logging.info("Scoring source quality for %s", document_key)  # Log the direct scoring operation.
+        logger.info("Scoring source quality for %s", document_key)  # Log the direct scoring operation.
         active_path = path or Path(document_key)  # Give in-memory tests a stable path value.
         threshold = self.threshold if self.threshold is not None else 0.08  # Use the safe default without a corpus.
         score = self._score(
             document_key, active_path, text, threshold, None
         )  # Score one text with the active threshold.
-        logging.debug("Source quality score for %s is %s with status %s", document_key, score.score, score.status)
+        logger.debug("Source quality score for %s is %s with status %s", document_key, score.score, score.status)
         return score  # Return the specific reason and measured values.
 
     def _read_texts(self, paths: tuple[Path, ...]) -> dict[Path, str]:
-        logging.info("Reading source documents for quality scoring")  # Log file input before it starts.
+        logger.info("Reading source documents for quality scoring")  # Log file input before it starts.
         texts = {path: self._read_sample(path) for path in paths if path.exists()}  # Read bounded source samples.
-        logging.debug("Read %s source documents for quality scoring", len(texts))  # Report successful input count.
+        logger.debug("Read %s source documents for quality scoring", len(texts))  # Report successful input count.
         return texts  # Return only readable paths so missing paths do not crash the distribution.
 
     def _read_sample(self, path: Path) -> str:
-        logging.info("Reading a bounded quality sample from %s", path)  # Log before one file read.
+        logger.info("Reading a bounded quality sample from %s", path)  # Log before one file read.
         with path.open("r", encoding="utf-8", errors="ignore") as handle:  # Open text safely for Windows paths.
             text = handle.read(self.SAMPLE_CHARS)  # Bound the scan to keep the gate fast on large PDFs.
-        logging.debug("Read %s sampled characters from %s", len(text), path)  # Report sample size.
+        logger.debug("Read %s sampled characters from %s", len(text), path)  # Report sample size.
         return text  # Return the bounded text sample.
 
     def _distribution(self, texts: tuple[str, ...]) -> SpaceRatioDistribution:
-        logging.info("Calibrating the source quality space-ratio threshold")  # Log before calculating statistics.
+        logger.info("Calibrating the source quality space-ratio threshold")  # Log before calculating statistics.
         ratios = sorted(self._space_ratio(text) for text in texts)  # Measure every source with one rule.
         if not ratios:  # A zero-document gate must fail but still needs a report object.
             return SpaceRatioDistribution(0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, self.threshold or 0.08)
@@ -81,15 +83,13 @@ class SourceQualityGate:
             ratios[-1],
             threshold,
         )  # Build report.
-        logging.debug(
+        logger.debug(
             "Calibrated source quality threshold %.4f from %s documents", threshold, len(ratios)
         )  # Report rule.
         return result  # Return distribution proof values.
 
     def _calibrated_threshold(self, ratios: list[float]) -> float:
-        logging.info(
-            "Selecting the largest low-ratio distribution gap"
-        )  # Log threshold selection before scanning gaps.
+        logger.info("Selecting the largest low-ratio distribution gap")  # Log threshold selection before scanning gaps.
         candidates = [
             (after - before, before, after)
             for before, after in zip(ratios, ratios[1:], strict=False)
@@ -97,16 +97,14 @@ class SourceQualityGate:
         ]
         best = max(candidates, default=(0.0, 0.06, 0.10))  # Fall back to the known conservative valley.
         threshold = max(0.035, min(0.09, (best[1] + best[2]) / 2.0))  # Keep the threshold in the safe defect band.
-        logging.debug(
-            "Selected source quality threshold %.4f from gap %.4f", threshold, best[0]
-        )  # Report gap evidence.
+        logger.debug("Selected source quality threshold %.4f from gap %.4f", threshold, best[0])  # Report gap evidence.
         return threshold  # Return the corruption cutoff.
 
     def _score_path(self, path: Path, text: str, threshold: float, pdf_roots: tuple[Path, ...]) -> SourceQualityScore:
-        logging.info("Scoring source path %s", path)  # Log before per-file scoring.
+        logger.info("Scoring source path %s", path)  # Log before per-file scoring.
         source_pdf = self._source_pdf(path, pdf_roots)  # Check whether a better source exists for re-extraction.
         score = self._score(self._document_key(path), path, text, threshold, source_pdf)  # Apply all quality rules.
-        logging.debug("Scored source path %s as %s", path, score.status)  # Report pass, review, or fail.
+        logger.debug("Scored source path %s as %s", path, score.status)  # Report pass, review, or fail.
         return score  # Return the row for quarantine and reports.
 
     def _document_key(self, path: Path) -> str:
@@ -151,13 +149,13 @@ class SourceQualityGate:
         return spaces / letters if letters else 0.0  # Return zero when no alphabetic evidence exists.
 
     def _text_counts(self, text: str) -> tuple[int, int]:
-        logging.info("Counting letters and spaces in a source sample")  # Log the bounded character scan.
+        logger.info("Counting letters and spaces in a source sample")  # Log the bounded character scan.
         letters = 0  # Count alphabetic characters for the ratio denominator.
         spaces = 0  # Count literal spaces for the defect numerator.
         for character in text:  # Inspect each sampled character once.
             letters += character.isalpha()  # Add one when the character is a source letter.
             spaces += character == " "  # Add one when the converter preserved a word space.
-        logging.debug("Counted %s letters and %s spaces", letters, spaces)  # Report ratio inputs.
+        logger.debug("Counted %s letters and %s spaces", letters, spaces)  # Report ratio inputs.
         return letters, spaces  # Return both values for ratio calculation.
 
     def _repeated_line_ratio(self, text: str) -> float:

@@ -25,6 +25,8 @@ from src.juniper_skills.inventory.models import (
     VersionFamilyValidationResult,
 )  # Share typed inventory records across the package.
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 class CorpusScanner:
     """Scan growing source roots into physical Markdown parts."""
@@ -37,20 +39,20 @@ class CorpusScanner:
 
     def scan(self) -> list[MarkdownPart]:
         """Run the scan operation."""
-        logging.info("Starting corpus scan across %s roots", len(self.roots))  # Log scan start with root count.
+        logger.info("Starting corpus scan across %s roots", len(self.roots))  # Log scan start with root count.
         catalog = self.metadata.load_catalog()  # Load titles, categories, pages, and source PDF values.
         statuses = self.metadata.load_manifest_statuses()  # Load ok and review statuses from manifests.
         parts = self._scan_roots(catalog, statuses)  # Convert physical Markdown files into part records.
-        logging.debug("Corpus scan found %s Markdown parts", len(parts))  # Report physical file count.
+        logger.debug("Corpus scan found %s Markdown parts", len(parts))  # Report physical file count.
         return parts
 
     def _scan_roots(self, catalog: dict[str, dict[str, str]], statuses: dict[str, str]) -> list[MarkdownPart]:
         parts: list[MarkdownPart] = []  # Accumulate records from all available roots.
         for root in self.roots:  # Scan each locked source root independently.
-            logging.info("Scanning source root %s", root.path)  # Log root access before discovery.
+            logger.info("Scanning source root %s", root.path)  # Log root access before discovery.
             found = self._scan_root(root, catalog, statuses) if root.path.exists() else []  # Missing roots are allowed.
             parts.extend(found)  # Keep all physical files because duplicate resolution happens later.
-            logging.debug("Source root %s produced %s parts", root.name, len(found))  # Report per-root count.
+            logger.debug("Source root %s produced %s parts", root.name, len(found))  # Report per-root count.
         return parts
 
     def _scan_root(
@@ -63,7 +65,7 @@ class CorpusScanner:
             path for path in root.path.rglob("*.md") if self._is_source_markdown(path)
         )  # Find inputs.
         parts = [self._read_part(root, path, catalog, statuses) for path in markdown_paths]  # Read metadata and hash.
-        logging.debug("Read %s source Markdown files from %s", len(parts), root.name)  # Report root inventory count.
+        logger.debug("Read %s source Markdown files from %s", len(parts), root.name)  # Report root inventory count.
         return parts
 
     def _is_source_markdown(self, path: Path) -> bool:
@@ -77,7 +79,7 @@ class CorpusScanner:
         catalog: dict[str, dict[str, str]],
         statuses: dict[str, str],
     ) -> MarkdownPart:
-        logging.info("Reading Markdown part %s", path)  # Log each file read before disk access.
+        logger.info("Reading Markdown part %s", path)  # Log each file read before disk access.
         raw = path.read_bytes()  # Read bytes once so the content hash sees exact converter output.
         text = raw.decode("utf-8", errors="ignore")  # Decode with replacement so inventory survives bad glyphs.
         front_matter = self.parser.parse_text(text)  # Extract authoritative converter metadata when it exists.
@@ -90,7 +92,7 @@ class CorpusScanner:
         part = MarkdownPart(
             part_key, root, path, relative_path, content_hash, len(raw), len(body), front_matter, catalog_row, status
         )  # Build the immutable record.
-        logging.debug("Read part %s with %s bytes", part.part_key, part.size_bytes)  # Report the file size.
+        logger.debug("Read part %s with %s bytes", part.part_key, part.size_bytes)  # Report the file size.
         return part
 
     def _catalog_for(
@@ -124,7 +126,7 @@ class PartSetGrouper:
 
     def group(self, parts: list[MarkdownPart]) -> list[DocumentGroup]:
         """Run the group operation."""
-        logging.info("Grouping %s Markdown parts into documents", len(parts))  # Log grouping before computation.
+        logger.info("Grouping %s Markdown parts into documents", len(parts))  # Log grouping before computation.
         buckets: dict[str, list[MarkdownPart]] = defaultdict(list)  # Store part sets by measured grouping key.
         methods: dict[str, str] = {}  # Preserve the evidence type used for each group.
         for part in parts:  # Assign each part with the contract priority order.
@@ -132,7 +134,7 @@ class PartSetGrouper:
             buckets[key].append(part)  # Add the physical part to its logical document bucket.
             methods[key] = method  # Record why this part joined the bucket.
         groups = self._merge_split_groups(buckets, methods)  # Merge measured split sets after exact grouping.
-        logging.debug(
+        logger.debug(
             "Grouped parts into %s document candidates", len(groups)
         )  # Report logical count before duplicates.
         return groups
@@ -260,14 +262,12 @@ class DuplicateResolver:
 
     def resolve(self, groups: list[DocumentGroup]) -> list[DuplicateDecision]:
         """Run the resolve operation."""
-        logging.info("Resolving duplicates across %s document candidates", len(groups))  # Log duplicate pass start.
+        logger.info("Resolving duplicates across %s document candidates", len(groups))  # Log duplicate pass start.
         buckets: dict[str, list[DocumentGroup]] = defaultdict(list)  # Group documents by natural document key.
         for group in groups:  # Add every candidate to a duplicate bucket.
             buckets[self._canonical_key(group)].append(group)  # Use source PDF or title as duplicate evidence.
         decisions = [self._decide(key, value) for key, value in buckets.items()]  # Pick a winner for each bucket.
-        logging.debug(
-            "Duplicate resolver produced %s logical documents", len(decisions)
-        )  # Report final document count.
+        logger.debug("Duplicate resolver produced %s logical documents", len(decisions))  # Report final document count.
         return decisions
 
     def _canonical_key(self, group: DocumentGroup) -> str:
@@ -276,11 +276,11 @@ class DuplicateResolver:
         return source_key or title_key or TextKey.normalize(group.group_key)  # Ensure every group has a stable key.
 
     def _decide(self, canonical_key: str, groups: list[DocumentGroup]) -> DuplicateDecision:
-        logging.info("Selecting duplicate winner for %s", canonical_key)  # Log the natural document key.
+        logger.info("Selecting duplicate winner for %s", canonical_key)  # Log the natural document key.
         winner = max(groups, key=self._winner_score)  # Apply the stated, testable duplicate winner rule.
         losers = [group for group in groups if group is not winner]  # Keep loser records for audit and re-run safety.
         self._mark_groups(canonical_key, winner, losers)  # Write winner state back to group records.
-        logging.debug("Duplicate key %s has %s losers", canonical_key, len(losers))  # Report duplicate loser count.
+        logger.debug("Duplicate key %s has %s losers", canonical_key, len(losers))  # Report duplicate loser count.
         return DuplicateDecision(canonical_key, winner, losers)
 
     def _winner_score(self, group: DocumentGroup) -> tuple[int, int, int]:
@@ -310,7 +310,7 @@ class VersionedFamilyResolver:
 
     def resolve(self, groups: list[DocumentGroup]) -> list[VersionedFamily]:
         """Run the resolve operation."""
-        logging.info("Resolving versioned product guide families")  # Log the version pass before mutation.
+        logger.info("Resolving versioned product guide families")  # Log the version pass before mutation.
         buckets: dict[str, list[DocumentGroup]] = defaultdict(list)  # Store versioned documents by product family.
         for group in groups:  # Clear stale state before this resolver writes the only version decision.
             self._mark_unversioned(group)  # Prevent an earlier run from leaving a second current member.
@@ -320,7 +320,7 @@ class VersionedFamilyResolver:
                 buckets[family_key].append(group)  # Add the versioned document to its family.
         families = [self._mark_family(key, value) for key, value in buckets.items() if len(value) > 1]  # Mark repeats.
         VersionFamilyInvariantValidator().validate_groups(groups)  # Fail if any marked family lacks one current.
-        logging.debug("Resolved %s versioned families", len(families))  # Report family count.
+        logger.debug("Resolved %s versioned families", len(families))  # Report family count.
         return sorted(families, key=lambda family: family.superseded_pages, reverse=True)  # Rank by page saving.
 
     def _family_key(self, title: str) -> str:
@@ -335,13 +335,13 @@ class VersionedFamilyResolver:
         return TextKey.normalize(without_brand)  # Normalize remaining product words into a family key.
 
     def _mark_family(self, family_key: str, groups: list[DocumentGroup]) -> VersionedFamily:
-        logging.info("Marking version family %s", family_key)  # Log family mutation before status writes.
+        logger.info("Marking version family %s", family_key)  # Log family mutation before status writes.
         current = max(groups, key=self._current_score)  # Use version, recency, pages, and yield to break ties.
         for group in groups:  # Assign a version status to each family member.
             self._mark_group(group, family_key, current)  # Store current or superseded state on the document.
         superseded = [group for group in groups if group is not current]  # Gather older documents for page savings.
         pages = sum(group.pages for group in superseded)  # Measure skipped topic-build pages.
-        logging.debug("Version family %s saves %s pages", family_key, pages)  # Report the measured page saving.
+        logger.debug("Version family %s saves %s pages", family_key, pages)  # Report the measured page saving.
         return VersionedFamily(family_key, current.title, current.version_value, len(groups), len(superseded), pages)
 
     def _mark_group(self, group: DocumentGroup, family_key: str, current: DocumentGroup) -> None:
@@ -383,22 +383,22 @@ class VersionFamilyInvariantValidator:
 
     def validate_groups(self, groups: list[DocumentGroup]) -> VersionFamilyValidationResult:
         """Validate the validate groups requirement."""
-        logging.info("Validating version family invariants from groups")  # Log the in-memory validation start.
+        logger.info("Validating version family invariants from groups")  # Log the in-memory validation start.
         counts = self._group_counts(groups)  # Count current members for each non-empty version family key.
         candidates = self._candidate_family_count(groups)  # Count families that the parser can derive from titles.
         result = self._validate_counts(len(groups), counts, candidates)  # Raise when candidate families vanish.
-        logging.debug("Validated %s version families from groups", result.families_checked)  # Report scope.
+        logger.debug("Validated %s version families from groups", result.families_checked)  # Report scope.
         return result
 
     def validate_database(self, connection: sqlite3.Connection) -> VersionFamilyValidationResult:
         """Validate the validate database requirement."""
-        logging.info("Validating version family invariants from the database")  # Log the database validation start.
+        logger.info("Validating version family invariants from the database")  # Log the database validation start.
         document_count = self._database_document_count(connection)  # Measure table scope before family counts.
         candidates = self._database_candidate_family_count(connection)  # Count title-derived version families.
         rows = connection.execute(self._database_query()).fetchall()  # Read one count row for each version family.
         counts = {str(row[0]): int(row[1]) for row in rows}  # Convert SQLite rows into the shared count mapping.
         result = self._validate_counts(document_count, counts, candidates)  # Raise when candidate families vanish.
-        logging.debug("Validated %s version families from the database", result.families_checked)  # Report scope.
+        logger.debug("Validated %s version families from the database", result.families_checked)  # Report scope.
         return result
 
     def _group_counts(self, groups: list[DocumentGroup]) -> dict[str, int]:
@@ -471,7 +471,7 @@ class SourceDocumentVersionUpdater:
 
     def refresh(self) -> tuple[list[VersionedFamily], VersionFamilyValidationResult]:
         """Run the refresh operation."""
-        logging.info("Refreshing source document version state in %s", self.db_path)  # Log before opening SQLite.
+        logger.info("Refreshing source document version state in %s", self.db_path)  # Log before opening SQLite.
         with sqlite3.connect(self.db_path) as connection:  # Use one transaction for all status changes.
             rows = self._document_rows(connection)  # Read current source document rows without changing schema.
             groups = self._groups(rows)  # Convert rows into resolver input records.
@@ -479,13 +479,13 @@ class SourceDocumentVersionUpdater:
             self._write_groups(connection, groups)  # Persist only version columns and topic build flags.
             self._ensure_current_index(connection)  # Enforce the one-current invariant at SQLite level.
             result = VersionFamilyInvariantValidator().validate_database(connection)  # Prove the persisted state.
-        logging.debug("Refreshed %s version families in %s", len(families), self.db_path)  # Report family count.
+        logger.debug("Refreshed %s version families in %s", len(families), self.db_path)  # Report family count.
         return families, result
 
     def _document_rows(self, connection: sqlite3.Connection) -> list[sqlite3.Row]:
         connection.row_factory = sqlite3.Row  # Return named rows so the loader is explicit and stable.
         rows = connection.execute("SELECT * FROM source_document ORDER BY document_key").fetchall()  # Read documents.
-        logging.debug("Read %s source document rows for version refresh", len(rows))  # Report refresh input size.
+        logger.debug("Read %s source document rows for version refresh", len(rows))  # Report refresh input size.
         return rows
 
     def _groups(self, rows: list[sqlite3.Row]) -> list[DocumentGroup]:
@@ -509,11 +509,11 @@ class SourceDocumentVersionUpdater:
         )  # Rebuild only fields needed for version resolution and reporting.
 
     def _write_groups(self, connection: sqlite3.Connection, groups: list[DocumentGroup]) -> None:
-        logging.info("Writing refreshed version state for %s documents", len(groups))  # Log before in-place update.
+        logger.info("Writing refreshed version state for %s documents", len(groups))  # Log before in-place update.
         for group in groups:  # Update all rows so stale version data is removed from ungrouped documents.
             connection.execute(self._update_statement(), self._update_values(group))  # Persist the resolved state.
             self._write_work_item(connection, group)  # Keep the queue aligned with the refreshed topic-build flag.
-        logging.debug("Wrote refreshed version state for %s documents", len(groups))  # Report updated row count.
+        logger.debug("Wrote refreshed version state for %s documents", len(groups))  # Report updated row count.
 
     def _update_statement(self) -> str:
         return """
@@ -559,13 +559,13 @@ class SourceDocumentVersionUpdater:
         )  # Requeue rows that a corrected family decision makes buildable.
 
     def _ensure_current_index(self, connection: sqlite3.Connection) -> None:
-        logging.info("Creating one-current partial index for version families")  # Log before structural guard setup.
+        logger.info("Creating one-current partial index for version families")  # Log before structural guard setup.
         connection.execute("""
             CREATE UNIQUE INDEX IF NOT EXISTS source_document_one_current_per_version_family
             ON source_document(version_family_key)
             WHERE version_family_key <> '' AND version_status = 'current'
             """)  # Let SQLite reject two current rows in the same family.
-        logging.debug("One-current partial index is present")  # Report structural guard completion.
+        logger.debug("One-current partial index is present")  # Report structural guard completion.
 
 
 class EditionFamilyAnalyzer:
@@ -575,14 +575,14 @@ class EditionFamilyAnalyzer:
 
     def find(self, groups: list[DocumentGroup]) -> list[EditionFamily]:
         """Run the find operation."""
-        logging.info("Analyzing source file edition families")  # Log the edition check before grouping.
+        logger.info("Analyzing source file edition families")  # Log the edition check before grouping.
         buckets: dict[str, list[DocumentGroup]] = defaultdict(list)  # Store same-stem hash families.
         for group in groups:  # Inspect each winning logical document.
             key = self._family_key(group)  # Build a same-stem key only for hashed source names.
             if key:  # Ignore unhashable source names because they are not the user-reported pattern.
                 buckets[key].append(group)  # Add this document to a possible edition family.
         families = [self._make_family(key, value) for key, value in buckets.items() if len(value) > 1]  # Keep repeats.
-        logging.debug("Found %s source file edition families", len(families))  # Report family count.
+        logger.debug("Found %s source file edition families", len(families))  # Report family count.
         return sorted(families, key=lambda item: item.document_count, reverse=True)  # Show the largest families first.
 
     def _family_key(self, group: DocumentGroup) -> str:
@@ -616,14 +616,14 @@ class PriorityScorer:
 
     def score(self, group: DocumentGroup) -> int:
         """Run the score operation."""
-        logging.info("Scoring priority for %s", group.group_key)  # Log scoring before applying the rule.
+        logger.info("Scoring priority for %s", group.group_key)  # Log scoring before applying the rule.
         score = (
             self._category_score(group)
             + self._page_score(group)
             + self._status_score(group)
             + self._recency_score(group)
         )
-        logging.debug("Priority score for %s is %s", group.group_key, score)  # Report the deterministic score.
+        logger.debug("Priority score for %s is %s", group.group_key, score)  # Report the deterministic score.
         return score
 
     def _category_score(self, group: DocumentGroup) -> int:
@@ -648,7 +648,7 @@ class InventoryDatabase:
 
     def write(self, decisions: list[DuplicateDecision]) -> None:
         """Run the write operation."""
-        logging.info("Writing inventory database to %s", self.db_path)  # Log persistence before file operations.
+        logger.info("Writing inventory database to %s", self.db_path)  # Log persistence before file operations.
         self.db_path.parent.mkdir(parents=True, exist_ok=True)  # Create the factory data folder if it is missing.
         with sqlite3.connect(self.db_path) as connection:  # Use a transaction so a crash loses at most one commit.
             self._create_schema(connection)  # Ensure the natural-key schema exists before upserts.
@@ -656,16 +656,16 @@ class InventoryDatabase:
             self._write_documents(connection, decisions)  # Upsert document and part records.
             self._write_work_items(connection, decisions, changed)  # Queue changed documents for conversion.
             self._enforce_version_invariants(connection)  # Stop bad version state before topic generation can run.
-        logging.debug(
+        logger.debug(
             "Inventory database write finished with %s changed parts", len(changed)
         )  # Report requeue signal count.
 
     def _create_schema(self, connection: sqlite3.Connection) -> None:
-        logging.info("Creating inventory database schema")  # Log schema creation before DDL.
+        logger.info("Creating inventory database schema")  # Log schema creation before DDL.
         for statement in self._schema_statements():  # Create each table with a bounded statement.
             connection.execute(statement)  # Execute DDL inside the same inventory transaction.
         self._ensure_document_columns(connection)  # Add version columns for an existing incremental database.
-        logging.debug("Inventory database schema is ready")  # Report DDL completion.
+        logger.debug("Inventory database schema is ready")  # Report DDL completion.
 
     def _schema_statements(self) -> list[str]:
         return [
@@ -706,13 +706,13 @@ class InventoryDatabase:
             """  # Store one queue row for each logical document.
 
     def _ensure_document_columns(self, connection: sqlite3.Connection) -> None:
-        logging.info("Checking source document version columns")  # Log schema migration before inspection.
+        logger.info("Checking source document version columns")  # Log schema migration before inspection.
         rows = connection.execute("PRAGMA table_info(source_document)").fetchall()  # Read the current table columns.
         existing = {str(row[1]) for row in rows}  # Build a set for constant-time migration checks.
         for name, definition in self._document_column_additions().items():  # Add each missing incremental column.
             if name not in existing:  # SQLite needs one ALTER statement for each missing column.
                 connection.execute(definition)  # Add the missing column with a safe default.
-        logging.debug("Source document table has %s columns", len(existing))  # Report inspected column count.
+        logger.debug("Source document table has %s columns", len(existing))  # Report inspected column count.
 
     def _document_column_additions(self) -> dict[str, str]:
         return {
@@ -725,11 +725,11 @@ class InventoryDatabase:
         }  # Keep migration statements near the document schema.
 
     def _changed_parts(self, connection: sqlite3.Connection, decisions: list[DuplicateDecision]) -> set[str]:
-        logging.info("Checking existing part hashes for changes")  # Log incremental detection before reading state.
+        logger.info("Checking existing part hashes for changes")  # Log incremental detection before reading state.
         rows = connection.execute("SELECT part_key, content_hash FROM source_part").fetchall()  # Read old hashes.
         old_hashes = {str(row[0]): str(row[1]) for row in rows}  # Build a comparison map by natural part key.
         changed = self._changed_document_keys(old_hashes, decisions)  # Convert changed parts to document keys.
-        logging.debug("Detected %s changed documents from part hashes", len(changed))  # Report incremental queue count.
+        logger.debug("Detected %s changed documents from part hashes", len(changed))  # Report incremental queue count.
         return changed
 
     def _changed_document_keys(self, old_hashes: dict[str, str], decisions: list[DuplicateDecision]) -> set[str]:
@@ -742,11 +742,11 @@ class InventoryDatabase:
         return changed
 
     def _write_documents(self, connection: sqlite3.Connection, decisions: list[DuplicateDecision]) -> None:
-        logging.info("Upserting source document and part rows")  # Log data writes before executing SQL.
+        logger.info("Upserting source document and part rows")  # Log data writes before executing SQL.
         for decision in decisions:  # Persist each logical document and its physical parts.
             self._upsert_document(connection, decision)  # Store one source_document row per logical document.
             self._upsert_parts(connection, decision)  # Store winner and loser part rows for audit.
-        logging.debug("Upserted %s source documents", len(decisions))  # Report document row count.
+        logger.debug("Upserted %s source documents", len(decisions))  # Report document row count.
 
     def _upsert_document(self, connection: sqlite3.Connection, decision: DuplicateDecision) -> None:
         connection.execute(
@@ -810,7 +810,7 @@ class InventoryDatabase:
         decisions: list[DuplicateDecision],
         changed: set[str],
     ) -> None:
-        logging.info("Upserting priority work queue")  # Log queue writes before SQL execution.
+        logger.info("Upserting priority work queue")  # Log queue writes before SQL execution.
         for decision in decisions:  # Ensure every logical document has one queue row.
             reason = self._queue_reason(decision, changed)  # Explain why the item is pending or preserved.
             status = self._queue_status(connection, decision, changed)  # Superseded items do not build topic files.
@@ -821,7 +821,7 @@ class InventoryDatabase:
                 """,
                 (decision.canonical_key, status, decision.winner.priority, reason),
             )  # Use document key as the natural queue key.
-        logging.debug("Upserted %s work items", len(decisions))  # Report queue size.
+        logger.debug("Upserted %s work items", len(decisions))  # Report queue size.
 
     def _existing_status(self, connection: sqlite3.Connection, decision: DuplicateDecision) -> str:
         row = connection.execute(
@@ -844,10 +844,10 @@ class InventoryDatabase:
         )  # State requeue reason.
 
     def _enforce_version_invariants(self, connection: sqlite3.Connection) -> None:
-        logging.info("Enforcing version family invariants")  # Log before the database guard runs.
+        logger.info("Enforcing version family invariants")  # Log before the database guard runs.
         SourceDocumentVersionUpdater(self.db_path)._ensure_current_index(connection)  # Add the SQLite uniqueness guard.
         VersionFamilyInvariantValidator().validate_database(connection)  # Fail when a family lacks exactly one current.
-        logging.debug("Version family invariants passed")  # Report successful guard completion.
+        logger.debug("Version family invariants passed")  # Report successful guard completion.
 
 
 class InventoryReport:
@@ -859,11 +859,11 @@ class InventoryReport:
 
     def write(self, result: InventoryResult) -> None:
         """Run the write operation."""
-        logging.info("Writing inventory report to %s", self.report_path)  # Log report write before disk access.
+        logger.info("Writing inventory report to %s", self.report_path)  # Log report write before disk access.
         self.report_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure the report directory exists.
         lines = self._lines(result)  # Build report lines from measured inventory values.
         self.report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")  # Persist the report as UTF-8 Markdown.
-        logging.debug("Inventory report wrote %s lines", len(lines))  # Report output length.
+        logger.debug("Inventory report wrote %s lines", len(lines))  # Report output length.
 
     def _lines(self, result: InventoryResult) -> list[str]:
         lines = self._summary_lines(result)  # Start with measured top-level counts.
@@ -1006,7 +1006,7 @@ class InventoryBuilder:
 
     def build(self) -> InventoryResult:
         """Run the build operation."""
-        logging.info("Building Juniper corpus inventory")  # Log the high-level build action.
+        logger.info("Building Juniper corpus inventory")  # Log the high-level build action.
         parts = CorpusScanner(self.roots, self.metadata).scan()  # Scan all physical Markdown roots.
         groups = PartSetGrouper().group(parts)  # Group split files before duplicate detection.
         decisions = DuplicateResolver().resolve(groups)  # Pick one conversion per logical document.
@@ -1019,7 +1019,7 @@ class InventoryBuilder:
         InventoryReport(self.repo_root / "data" / "juniper_skills" / "inventory-report.md").write(
             result
         )  # Write report.
-        logging.debug(
+        logger.debug(
             "Inventory build finished with %s logical documents", result.logical_documents
         )  # Report final count.
         return result
@@ -1034,10 +1034,10 @@ class InventoryBuilder:
         ]
 
     def _score(self, decisions: list[DuplicateDecision]) -> None:
-        logging.info("Scoring %s logical documents", len(decisions))  # Log priority scoring start.
+        logger.info("Scoring %s logical documents", len(decisions))  # Log priority scoring start.
         for decision in decisions:  # Score only active winner records.
             decision.winner.priority = self.scorer.score(decision.winner)  # Store the tunable priority value.
-        logging.debug("Scored %s logical documents", len(decisions))  # Report scored document count.
+        logger.debug("Scored %s logical documents", len(decisions))  # Report scored document count.
 
     def _result(
         self, parts: list[MarkdownPart], decisions: list[DuplicateDecision], version_families: list[VersionedFamily]

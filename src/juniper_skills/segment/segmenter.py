@@ -12,6 +12,8 @@ from src.juniper_skills.segment.lifecycle import LifecycleClassifier
 from src.juniper_skills.segment.repair import DefectRepairResult, DocumentDefectRepairer
 from src.juniper_skills.segment.subjects import TopicSubjectBuilder
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 @dataclass(frozen=True)
 class TopicSegment:
@@ -62,14 +64,14 @@ class PageTracker:
 
     def annotate(self, lines: list[str]) -> list[tuple[str, int]]:
         """Run the annotate operation."""
-        logging.info("Annotating %s lines with page markers", len(lines))  # Log before citation mapping.
+        logger.info("Annotating %s lines with page markers", len(lines))  # Log before citation mapping.
         page = 0  # Use zero until the first marker appears.
         annotated: list[tuple[str, int]] = []  # Accumulate each source line with its active page.
         for line in lines:  # Walk the document in source order.
             match = self.PAGE_PATTERN.search(line)  # Detect whether this line changes the active page.
             page = int(match.group(1)) if match else page  # Update the page after a marker appears.
             annotated.append((line, page))  # Attach the current page to the line.
-        logging.debug("Annotated %s lines through page %s", len(annotated), page)  # Report mapping size and last page.
+        logger.debug("Annotated %s lines through page %s", len(annotated), page)  # Report mapping size and last page.
         return annotated
 
 
@@ -98,7 +100,7 @@ class DocumentSegmenter:
 
     def segment_text(self, text: str, document_slug: str = "document") -> SegmenterResult:
         """Run the segment text operation."""
-        logging.info("Segmenting document %s", document_slug)  # Log before any document transformation.
+        logger.info("Segmenting document %s", document_slug)  # Log before any document transformation.
         body = self._strip_front_matter(text)  # Remove converter front matter from topic content.
         repair = self.repairer.repair(body)  # Repair measured converter defects first.
         command_result = self.detector.refence_text(repair.text)  # Fence commands while preserving exact command text.
@@ -111,7 +113,7 @@ class DocumentSegmenter:
         breaks = [segment for segment in segments if segment.size_bytes > self.hard_limit]  # Report failed topics.
         duplicates = self._duplicate_count(segments)  # Prove that routing names do not collide.
         non_knowledge = repair.non_knowledge_sections + dropped  # Combine text repair drops and section drops.
-        logging.debug(
+        logger.debug(
             "Document %s produced %s topics with %s hard breaks", document_slug, len(segments), len(breaks)
         )  # Report.
         return SegmenterResult(
@@ -131,13 +133,13 @@ class DocumentSegmenter:
         return text[end + 4 :].lstrip("\n") if end != -1 else text  # Remove only valid front matter.
 
     def _initial_chunks(self, text: str) -> list[_Chunk]:
-        logging.info("Splitting document on Markdown heading hierarchy")  # Log before structural segmentation.
+        logger.info("Splitting document on Markdown heading hierarchy")  # Log before structural segmentation.
         annotated = self.page_tracker.annotate(text.splitlines())  # Attach citation pages to every source line.
         heading_indexes = [index for index, row in enumerate(annotated) if self.HEADING_PATTERN.match(row[0])]  # Find.
         chunks = (
             self._chunks_from_headings(annotated, heading_indexes) if heading_indexes else [self._make_chunk(annotated)]
         )  # Build.
-        logging.debug("Heading split produced %s chunks", len(chunks))  # Report initial structural count.
+        logger.debug("Heading split produced %s chunks", len(chunks))  # Report initial structural count.
         return chunks
 
     def _chunks_from_headings(self, rows: list[tuple[str, int]], indexes: list[int]) -> list[_Chunk]:
@@ -166,14 +168,14 @@ class DocumentSegmenter:
         return fallback  # Use overview for preface chunks.
 
     def _bound_chunks(self, chunks: list[_Chunk]) -> list[_Chunk]:
-        logging.info("Applying topic hard size limit to %s chunks", len(chunks))  # Log before oversize handling.
+        logger.info("Applying topic hard size limit to %s chunks", len(chunks))  # Log before oversize handling.
         bounded: list[_Chunk] = []  # Accumulate chunks that obey the hard limit.
         for chunk in chunks:  # Check each heading chunk independently.
             if self._size(chunk.text) <= self.body_limit:  # Keep chunks that leave room for final front matter.
                 bounded.append(chunk)  # Add the safe chunk to the output list.
                 continue
             bounded.extend(self._split_large_chunk(chunk))  # Split oversize chunks at paragraph boundaries.
-        logging.debug("Hard limit split produced %s chunks", len(bounded))  # Report bounded chunk count.
+        logger.debug("Hard limit split produced %s chunks", len(bounded))  # Report bounded chunk count.
         return bounded
 
     def _split_large_chunk(self, chunk: _Chunk) -> list[_Chunk]:
@@ -238,14 +240,14 @@ class DocumentSegmenter:
         return [*lines, current] if current else lines  # Return all safe line slices.
 
     def _merge_chunks(self, chunks: list[_Chunk]) -> list[TopicSegment]:
-        logging.info("Merging tiny sections into bounded topics")  # Log before small-section merge.
+        logger.info("Merging tiny sections into bounded topics")  # Log before small-section merge.
         segments: list[TopicSegment] = []  # Store final topic segments.
         current: list[_Chunk] = []  # Store chunks for the current topic.
         for chunk in chunks:  # Pack chunks until the soft target or hard limit is reached.
             current = self._merge_one_chunk(segments, current, chunk)  # Add or flush one chunk.
         if current:  # Flush the final topic after the loop.
             self._append_segment(segments, current)  # Convert the final chunks into one topic segment.
-        logging.debug("Merged chunks into %s topic segments", len(segments))  # Report final topic count.
+        logger.debug("Merged chunks into %s topic segments", len(segments))  # Report final topic count.
         return segments
 
     def _merge_one_chunk(self, segments: list[TopicSegment], current: list[_Chunk], chunk: _Chunk) -> list[_Chunk]:
@@ -277,18 +279,18 @@ class DocumentSegmenter:
         return chunks[0].title if chunks else "overview"  # Fall back when a topic has no substantive heading.
 
     def _filter_non_knowledge(self, chunks: list[_Chunk]) -> tuple[list[_Chunk], int]:
-        logging.info("Filtering non-knowledge sections from %s chunks", len(chunks))  # Log before content filtering.
+        logger.info("Filtering non-knowledge sections from %s chunks", len(chunks))  # Log before content filtering.
         kept = [chunk for chunk in chunks if not self.NON_KNOWLEDGE_PATTERN.match(chunk.title)]  # Drop front matter.
         dropped = len(chunks) - len(kept)  # Count removed sections for the proof report.
-        logging.debug("Dropped %s non-knowledge sections", dropped)  # Report removed section count.
+        logger.debug("Dropped %s non-knowledge sections", dropped)  # Report removed section count.
         return kept, dropped  # Return only sections that can become useful topics.
 
     def _repair_titles(self, segments: list[TopicSegment]) -> list[TopicSegment]:
-        logging.info("Repairing %s topic names for routing", len(segments))  # Log before title cleanup.
+        logger.info("Repairing %s topic names for routing", len(segments))  # Log before title cleanup.
         titles = self._meaningful_titles(segments)  # Replace bare ordinals and generic headings.
         unique = self._unique_titles(titles)  # Add context until every routing name is unique.
         repaired = [replace(segment, title=unique[index]) for index, segment in enumerate(segments)]  # Apply titles.
-        logging.debug("Topic title repair left %s duplicates", self._duplicate_count(repaired))  # Report result.
+        logger.debug("Topic title repair left %s duplicates", self._duplicate_count(repaired))  # Report result.
         return repaired  # Return segments with production-safe topic names.
 
     def _meaningful_titles(self, segments: list[TopicSegment]) -> list[str]:
@@ -334,9 +336,9 @@ class DocumentSegmenter:
         return len(slugs) - len(set(slugs))  # Return the number of duplicate route names.
 
     def _enrich_segments(self, segments: list[TopicSegment]) -> list[TopicSegment]:
-        logging.info("Adding life cycle tags and subjects to %s topics", len(segments))  # Log before enrichment.
+        logger.info("Adding life cycle tags and subjects to %s topics", len(segments))  # Log before enrichment.
         enriched = [self._enrich_segment(segment) for segment in segments]  # Classify each final topic independently.
-        logging.debug("Added life cycle metadata to %s topics", len(enriched))  # Report enrichment count.
+        logger.debug("Added life cycle metadata to %s topics", len(enriched))  # Report enrichment count.
         return enriched  # Return topics with index metadata.
 
     def _enrich_segment(self, segment: TopicSegment) -> TopicSegment:
@@ -354,12 +356,12 @@ class DocumentSegmenter:
 
     def write_topic_tree(self, result: SegmenterResult, output_dir: Path, document_code: str) -> None:
         """Create the write topic tree output."""
-        logging.info("Writing %s segment topic files to %s", len(result.segments), output_dir)  # Log before writes.
+        logger.info("Writing %s segment topic files to %s", len(result.segments), output_dir)  # Log before writes.
         output_dir.mkdir(parents=True, exist_ok=True)  # Create the destination tree for generated topics.
         for segment in result.segments:  # Write each topic segment with citation metadata.
             self._write_segment(segment, output_dir, document_code)  # Write one segment file.
         self._write_index(result, output_dir)  # Write the required level 2 document index.
-        logging.debug("Wrote %s segment topic files", len(result.segments))  # Report write completion.
+        logger.debug("Wrote %s segment topic files", len(result.segments))  # Report write completion.
 
     def _write_segment(self, segment: TopicSegment, output_dir: Path, document_code: str) -> None:
         filename = f"{segment.index:02d}-{self._slug(segment.title)}.md"  # Build a stable topic file name.
@@ -380,12 +382,12 @@ class DocumentSegmenter:
         return trimmed or slug[:60]  # Fall back only when no word boundary exists.
 
     def _write_index(self, result: SegmenterResult, output_dir: Path) -> None:
-        logging.info("Writing level 2 INDEX.md to %s", output_dir)  # Log before the required index write.
+        logger.info("Writing level 2 INDEX.md to %s", output_dir)  # Log before the required index write.
         lines = ["# Document index", "", "| Topic | Pages | Life cycle | Subject |", "| - | - | - | - |"]  # Header.
         for segment in result.segments:  # Add one row for each topic in the document.
             lines.append(self._index_row(segment))  # Store topic routing data for the agent.
         (output_dir / "INDEX.md").write_text("\n".join(lines) + "\n", encoding="utf-8")  # Write the index file.
-        logging.debug("Wrote INDEX.md with %s topic rows", len(result.segments))  # Report index row count.
+        logger.debug("Wrote INDEX.md with %s topic rows", len(result.segments))  # Report index row count.
 
     def _index_row(self, segment: TopicSegment) -> str:
         pages = f"p.{segment.page_start}-{segment.page_end}"  # Format the exact page range.

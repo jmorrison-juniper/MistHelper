@@ -12,6 +12,8 @@ from typing import cast
 
 from src.juniper_skills.orchestrate.models import WorkItem
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 class SourceRootResolver:
     """Resolve inventory root names to the locked source paths."""
@@ -24,10 +26,10 @@ class SourceRootResolver:
 
     def resolve(self, root_name: str, relative_path: str) -> Path:
         """Run the resolve operation."""
-        logging.info("Resolving source part path for root %s", root_name)  # Log before path resolution.
+        logger.info("Resolving source part path for root %s", root_name)  # Log before path resolution.
         root = self.roots.get(root_name, self.repo_root)  # Fall back to the repository for test fixtures.
         path = root / Path(relative_path)  # Combine paths with pathlib for Windows compatibility.
-        logging.debug("Resolved source part path %s", path)  # Record the resolved path.
+        logger.debug("Resolved source part path %s", path)  # Record the resolved path.
         return path  # Return the path without reading it.
 
     def _roots(self) -> dict[str, Path]:
@@ -53,54 +55,54 @@ class WorkLeaseStore:
 
     def claim_next(self, worker_id: str, domain: str | None = None) -> WorkItem | None:
         """Run the claim next operation."""
-        logging.info("Claiming one Juniper skill work item")  # Log before the atomic queue transaction.
+        logger.info("Claiming one Juniper skill work item")  # Log before the atomic queue transaction.
         now = self._now()  # Capture one timestamp for claim and expiry comparisons.
         expiry = self._expiry(now)  # Compute the lease expiry before the write transaction.
         with self._connect() as connection:  # Hold one SQLite write transaction for the claim.
             connection.execute("BEGIN IMMEDIATE")  # Lock the queue so workers cannot claim the same row.
             row = self._candidate(connection, now, domain)  # Read the highest-priority available row.
             if row is None:  # Return cleanly when no work is available.
-                logging.debug("No work item was available for claim")  # Record the empty queue result.
+                logger.debug("No work item was available for claim")  # Record the empty queue result.
                 return None
             self._mark_claimed(connection, row["document_key"], worker_id, expiry)  # Persist the lease atomically.
             item = self._work_item(connection, row)  # Build the public work item while the row is stable.
-        logging.debug("Claimed work item %s until %s", item.document_key, expiry)  # Record the safe lease details.
+        logger.debug("Claimed work item %s until %s", item.document_key, expiry)  # Record the safe lease details.
         return item  # Return the claimed work item to the runner.
 
     def complete(self, document_key: str, status: str = "complete") -> None:
         """Run the complete operation."""
-        logging.info("Marking a Juniper skill work item as %s", status)  # Log before queue completion.
+        logger.info("Marking a Juniper skill work item as %s", status)  # Log before queue completion.
         self._set_status(document_key, status, None)  # Clear the lease so the row is terminal.
-        logging.debug("Marked work item %s as %s", document_key, status)  # Record the terminal status.
+        logger.debug("Marked work item %s as %s", document_key, status)  # Record the terminal status.
 
     def fail(self, document_key: str, detail: str) -> None:
         """Run the fail operation."""
-        logging.info("Marking a Juniper skill work item as failed")  # Log before queue failure.
+        logger.info("Marking a Juniper skill work item as failed")  # Log before queue failure.
         self._set_status(document_key, "failed", detail)  # Keep the row retryable for the next run.
-        logging.debug("Marked work item %s as failed", document_key)  # Record the retryable status.
+        logger.debug("Marked work item %s as failed", document_key)  # Record the retryable status.
 
     def release(self, document_key: str) -> None:
         """Run the release operation."""
-        logging.info("Releasing a Juniper skill work item lease")  # Log before an interrupt-safe release.
+        logger.info("Releasing a Juniper skill work item lease")  # Log before an interrupt-safe release.
         self._set_status(document_key, "pending", "lease released")  # Return interrupted work to the queue.
-        logging.debug("Released work item %s", document_key)  # Record the released row.
+        logger.debug("Released work item %s", document_key)  # Record the released row.
 
     def progress(self) -> dict[str, int]:
         """Run the progress operation."""
-        logging.info("Reading Juniper skill queue progress")  # Log before the status aggregation.
+        logger.info("Reading Juniper skill queue progress")  # Log before the status aggregation.
         with self._connect() as connection:  # Use one read connection for the status summary.
             rows = connection.execute("SELECT status, COUNT(*) AS count FROM work_item GROUP BY status").fetchall()
         progress = {str(row["status"]): int(row["count"]) for row in rows}  # Convert rows into a compact map.
-        logging.debug("Read queue progress for %d states", len(progress))  # Record the number of states.
+        logger.debug("Read queue progress for %d states", len(progress))  # Record the number of states.
         return progress  # Return counts for CLI progress reports.
 
     def _initialize(self) -> None:
-        logging.info("Initializing Juniper skill work leases")  # Log before schema extension.
+        logger.info("Initializing Juniper skill work leases")  # Log before schema extension.
         self.database_path.parent.mkdir(parents=True, exist_ok=True)  # Create the data directory for tests.
         with self._connect() as connection:  # Use one schema transaction for all required columns.
             self._ensure_work_table(connection)  # Let isolated tests create only the queue database.
             self._ensure_columns(connection)  # Add lease metadata when inventory did not create it.
-        logging.debug("Initialized Juniper skill work leases at %s", self.database_path)  # Record the database path.
+        logger.debug("Initialized Juniper skill work leases at %s", self.database_path)  # Record the database path.
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:

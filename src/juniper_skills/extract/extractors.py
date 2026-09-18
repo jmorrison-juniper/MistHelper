@@ -10,6 +10,8 @@ from src.juniper_skills.rewrite import CardClassMark  # Use the locked card clas
 
 from .models import ExtractedFact, SourceLine  # Share extraction records.
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 class FactExtractor(ABC):
     """Interface for one deterministic fact class extractor."""
@@ -18,9 +20,9 @@ class FactExtractor(ABC):
 
     def extract(self, lines: tuple[SourceLine, ...], source_key: str) -> tuple[ExtractedFact, ...]:
         """Return candidate facts for one source document."""
-        logging.info("Running %s", self.__class__.__name__)  # Log before extractor work starts.
+        logger.info("Running %s", self.__class__.__name__)  # Log before extractor work starts.
         facts = tuple(self._extract(lines, source_key))  # Run the concrete extractor implementation.
-        logging.debug("%s emitted %d facts", self.__class__.__name__, len(facts))  # Log the fact count.
+        logger.debug("%s emitted %d facts", self.__class__.__name__, len(facts))  # Log the fact count.
         return facts  # Return immutable facts for the engine.
 
     @abstractmethod
@@ -204,9 +206,9 @@ class NumericFactExtractor(FactExtractor):
 
     def rejected_count(self, lines: tuple[SourceLine, ...]) -> int:
         """Return the count of numeric candidates rejected as incomplete."""
-        logging.info("Counting rejected numeric candidates")  # Log before numeric quality measurement.
+        logger.info("Counting rejected numeric candidates")  # Log before numeric quality measurement.
         count = sum(1 for line in lines for value in self._candidate_values(line.text) if not self._valid(value))
-        logging.debug("Rejected %d numeric candidates", count)  # Log rejected candidate count.
+        logger.debug("Rejected %d numeric candidates", count)  # Log rejected candidate count.
         return count  # Return the rejection count for manifest reporting.
 
     def _valid_values(self, text: str) -> tuple[str, ...]:

@@ -10,6 +10,8 @@ from string import punctuation  # Remove punctuation during word normalization.
 
 from .models import SimilarityCheckInput, SimilarityFileResult, SimilarityGuardReport  # Use shared report models.
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 _LOG = logging.getLogger(__name__)  # Give the rewrite guard a stable logger name.
 
 
@@ -27,13 +29,13 @@ class VerbatimSimilarityGuard:
 
     def check(self, checks: tuple[SimilarityCheckInput, ...]) -> SimilarityGuardReport:
         """Return the similarity report for all generated files."""
-        logging.info("Starting the verbatim similarity guard")  # Log before the guard measures files.
+        logger.info("Starting the verbatim similarity guard")  # Log before the guard measures files.
         started = time.perf_counter()  # Measure elapsed time for the report.
         if not checks:  # A guard that checks zero files must fail by contract.
             return self._empty_report(started)  # Return a failed report with a clear reason.
         results = tuple(self._check_one(check) for check in checks)  # Measure each requested generated file.
         elapsed = time.perf_counter() - started  # Compute elapsed time after all files finish.
-        logging.debug("Similarity guard checked %d files in %.3f seconds", len(results), elapsed)  # Log the count.
+        logger.debug("Similarity guard checked %d files in %.3f seconds", len(results), elapsed)  # Log the count.
         return SimilarityGuardReport(  # Return every measurement and band threshold.
             len(results),
             self.threshold,
@@ -46,7 +48,7 @@ class VerbatimSimilarityGuard:
         """Return the contract failure report for an empty input set."""
         elapsed = time.perf_counter() - started  # Measure even the failure path for consistent reports.
         errors = ("The similarity guard checked zero files.",)  # Explain the locked contract failure.
-        logging.debug("Similarity guard failed because it checked zero files")  # Log the guard failure reason.
+        logger.debug("Similarity guard failed because it checked zero files")  # Log the guard failure reason.
         report = SimilarityGuardReport(  # Build the zero-file failure report.
             0,
             self.threshold,
@@ -59,15 +61,15 @@ class VerbatimSimilarityGuard:
 
     def _check_one(self, check: SimilarityCheckInput) -> SimilarityFileResult:
         """Return the longest shared prose run for one generated file."""
-        logging.info("Reading generated topic file %s", check.generated_path)  # Log before file I/O.
+        logger.info("Reading generated topic file %s", check.generated_path)  # Log before file I/O.
         generated_text = check.generated_path.read_text(encoding="utf-8")  # Read the generated topic text.
-        logging.debug("Read %d characters from %s", len(generated_text), check.generated_path)  # Log file size.
+        logger.debug("Read %d characters from %s", len(generated_text), check.generated_path)  # Log file size.
         generated_words = self.prose_words(generated_text)  # Remove verbatim classes from generated text.
         source_words = self.prose_words("\n".join(check.source_segments))  # Remove verbatim classes from sources.
         longest, phrase = self._longest_common_run(generated_words, source_words)  # Measure shared prose.
         status = self._status(longest)  # Assign cleared, warned, or failed for the report.
         passed = status != "failed"  # Only hard-fail files stop the build.
-        logging.debug("Measured %d shared prose words for %s", longest, check.generated_path)  # Log the result.
+        logger.debug("Measured %d shared prose words for %s", longest, check.generated_path)  # Log the result.
         return SimilarityFileResult(check.generated_path, longest, phrase, status, passed)  # Return the file result.
 
     def _status(self, longest: int) -> str:
@@ -80,10 +82,10 @@ class VerbatimSimilarityGuard:
 
     def prose_words(self, text: str) -> tuple[str, ...]:
         """Return normalized prose words with verbatim classes removed."""
-        logging.info("Normalizing prose for the similarity guard")  # Log before text normalization.
+        logger.info("Normalizing prose for the similarity guard")  # Log before text normalization.
         lines = self._prose_lines(text)  # Drop fences, commands, tables, and output rows.
         words = tuple(word for line in lines for word in self._line_words(line))  # Normalize remaining prose words.
-        logging.debug("Normalized prose to %d guard words", len(words))  # Log the guard token count.
+        logger.debug("Normalized prose to %d guard words", len(words))  # Log the guard token count.
         return words  # Return the filtered words for n-gram indexing.
 
     def _prose_lines(self, text: str) -> tuple[str, ...]:

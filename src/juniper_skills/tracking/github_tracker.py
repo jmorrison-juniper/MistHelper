@@ -20,6 +20,8 @@ from src.juniper_skills.tracking.recovery import SkillIssueRecoveryReader
 from src.juniper_skills.tracking.rest_client import GitHubRestRunner
 from src.juniper_skills.tracking.store import FactoryJournalStore
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 class SkillIssueTracker:
     """Open and update one GitHub issue for each source document."""
@@ -44,14 +46,14 @@ class SkillIssueTracker:
 
     def ensure_issue(self, document: DocumentRecord, sync: bool = True) -> int | None:
         """Queue one document issue and optionally reconcile it to GitHub."""
-        logging.info("Ensuring a document GitHub journal issue is queued")  # Record the durable local action.
+        logger.info("Ensuring a document GitHub journal issue is queued")  # Record the durable local action.
         self.store.save_document(document, self.issue_shape)  # Mirror document metadata before a network action.
         issue_number = self.store.get_issue_number(document.document_key)  # Reuse a local issue link if it exists.
         if issue_number is not None:  # Avoid duplicate issue creation on retries.
-            logging.debug("Using local journal issue %d", issue_number)  # Record the idempotent result.
+            logger.debug("Using local journal issue %d", issue_number)  # Record the idempotent result.
             return issue_number
         synced_count = self.sync_pending(limit=1) if sync else 0  # Let callers defer GitHub work.
-        logging.debug("Document issue queue sync attempted %d item", synced_count)  # Record nonblocking behavior.
+        logger.debug("Document issue queue sync attempted %d item", synced_count)  # Record nonblocking behavior.
         return self.store.get_issue_number(document.document_key)  # Return None when the background queue must retry.
 
     def record_stage(
@@ -62,7 +64,7 @@ class SkillIssueTracker:
         sync: bool = False,
     ) -> int:
         """Store a stage event and optionally sync the background queue."""
-        logging.info("Recording a skill factory stage transition")  # Record the durable journal action.
+        logger.info("Recording a skill factory stage transition")  # Record the durable journal action.
         self.store.save_document(document, self.issue_shape)  # Save the document before the comment event.
         issue_number = self.store.get_issue_number(document.document_key)  # Attach the issue number if it exists.
         event = self._stage_event(document, stage, issue_number, details or {})  # Build the exact recovery state.
@@ -71,42 +73,42 @@ class SkillIssueTracker:
         self.store.update_document_stage(
             document.document_key, stage.value, self._status_for_stage(stage)
         )  # Update board.
-        self.sync_pending() if sync else logging.debug("Deferred GitHub sync for stage event %d", event_id)
+        self.sync_pending() if sync else logger.debug("Deferred GitHub sync for stage event %d", event_id)
         return event_id
 
     def sync_pending(self, limit: int = 25) -> int:
         """Reconcile queued issues and comments to GitHub."""
-        logging.info("Reconciling local journal work to GitHub")  # Record the sync action.
+        logger.info("Reconciling local journal work to GitHub")  # Record the sync action.
         synced_count = self._sync_document_issues(limit)  # Create document issues before comments that need them.
         remaining_limit = max(0, limit - synced_count)  # Keep the caller limit across issue and comment writes.
         synced_count += self._sync_stage_events(remaining_limit)  # Send comments only for documents with issues.
-        logging.debug("Synced %d queued GitHub journal items", synced_count)  # Record the sync result.
+        logger.debug("Synced %d queued GitHub journal items", synced_count)  # Record the sync result.
         return synced_count
 
     def resume_point(self, document: DocumentRecord) -> ResumePoint:
         """Return the next action for a document after a crash."""
-        logging.info("Reading the crash recovery point for a document")  # Record the recovery action.
+        logger.info("Reading the crash recovery point for a document")  # Record the recovery action.
         issue_number = self.store.get_issue_number(document.document_key)  # Use the local issue link if present.
         reader = SkillIssueRecoveryReader(self.store, self.runner, self.rate_limit, self.repo)  # Build the reader.
         return reader.resume_point(document.document_key, issue_number)  # Reconstruct the exact resume point.
 
     def build_index_markdown(self) -> str:
         """Return a generated progress index grouped by domain."""
-        logging.info("Building the skill factory issue index")  # Record the index action.
+        logger.info("Building the skill factory issue index")  # Record the index action.
         rows = self.store.documents_for_index()  # Read progress rows from the durable local mirror.
         index = SkillFactoryIssueIndex(self.repo).render(rows)  # Render the Markdown index for issue #2925 or a file.
-        logging.debug("Built the skill factory issue index with %d characters", len(index))  # Record output size.
+        logger.debug("Built the skill factory issue index with %d characters", len(index))  # Record output size.
         return index
 
     def sync_parent_index_comment(self) -> int:
         """Add a generated index comment to the parent issue."""
-        logging.info("Writing the generated index comment to the parent issue")  # Record the index sync.
+        logger.info("Writing the generated index comment to the parent issue")  # Record the index sync.
         body = self.build_index_markdown()  # Build the current local progress board.
         self.rate_limit.defer_if_needed()  # Defer this optional write when the API bucket is low.
         self.runner.run(
             ["gh", "issue", "comment", str(self.parent_issue), "--repo", self.repo, "--body", body]
         )  # Write.
-        logging.debug("Wrote the generated index comment to issue %d", self.parent_issue)  # Record the target issue.
+        logger.debug("Wrote the generated index comment to issue %d", self.parent_issue)  # Record the target issue.
         return 1
 
     def _sync_document_issues(self, limit: int) -> int:
@@ -132,7 +134,7 @@ class SkillIssueTracker:
             return self._sync_event_summary(events)  # Post full context for human triage.
         if self._latest_stage(events) in {StageName.VERIFIED.value, StageName.RELEASED.value}:  # Healthy terminal.
             return self._sync_event_summary(events)  # Post one completion table with all measured values.
-        logging.debug("Deferred nonterminal stage events for document key %s", document_key)  # Wait for completion.
+        logger.debug("Deferred nonterminal stage events for document key %s", document_key)  # Wait for completion.
         return 0
 
     def _needs_start_comment(self, events: list[dict[str, Any]]) -> bool:
@@ -158,7 +160,7 @@ class SkillIssueTracker:
             self.store.mark_stage_events_synced(tuple(int(event["id"]) for event in events))  # Mark after success.
             return 1
         except (GitHubCliError, GitHubRateLimitExhausted) as error:
-            logging.debug("Deferred GitHub summary sync after error: %s", error)  # Leave events queued for retry.
+            logger.debug("Deferred GitHub summary sync after error: %s", error)  # Leave events queued for retry.
             return 0
 
     def _sync_one_document(self, row: dict[str, Any]) -> int:
@@ -170,7 +172,7 @@ class SkillIssueTracker:
             self.store.mark_document_issue_synced(document.document_key, issue_number)  # Persist the remote link.
             return 1
         except (GitHubCliError, GitHubRateLimitExhausted) as error:
-            logging.debug("Deferred document issue sync after error: %s", error)  # Leave the row queued for retry.
+            logger.debug("Deferred document issue sync after error: %s", error)  # Leave the row queued for retry.
             return 0
 
     def _sync_one_event(self, event: dict[str, object]) -> int:
@@ -183,12 +185,12 @@ class SkillIssueTracker:
             self.store.mark_stage_event_synced(event_id)  # Mark the row only after GitHub accepts the comment.
             return 1
         except (GitHubCliError, GitHubRateLimitExhausted) as error:
-            logging.debug("Deferred GitHub journal sync after error: %s", error)  # Leave the row queued for retry.
+            logger.debug("Deferred GitHub journal sync after error: %s", error)  # Leave the row queued for retry.
             return 0
 
     def _comment_issue(self, event: dict[str, object], issue_number: int) -> None:
         """Write one stage comment to a document issue."""
-        logging.info("Writing a stage audit comment to GitHub issue %s", issue_number)  # Record the write.
+        logger.info("Writing a stage audit comment to GitHub issue %s", issue_number)  # Record the write.
         self.runner.run(  # Write the crash-recovery journal comment to GitHub.
             [
                 "gh",
@@ -201,15 +203,15 @@ class SkillIssueTracker:
                 str(event["comment_body"]),
             ]
         )
-        logging.debug("Wrote a stage audit comment for event %s", event["id"])  # Record the queue row.
+        logger.debug("Wrote a stage audit comment for event %s", event["id"])  # Record the queue row.
 
     def _comment_summary(self, events: tuple[StageEvent, ...]) -> None:
         """Write one consolidated stage summary comment."""
         issue_number = events[-1].issue_number  # Use the latest event's issue number.
-        logging.info("Writing a consolidated audit comment to GitHub issue %s", issue_number)  # Record the write.
+        logger.info("Writing a consolidated audit comment to GitHub issue %s", issue_number)  # Record the write.
         body = self.codec.build_summary_comment(events)  # Build a full stage table with JSON recovery data.
         self.runner.run(["gh", "issue", "comment", str(issue_number), "--repo", self.repo, "--body", body])  # Write.
-        logging.debug("Wrote a consolidated audit comment to issue %s", issue_number)  # Record success.
+        logger.debug("Wrote a consolidated audit comment to issue %s", issue_number)  # Record success.
 
     def _document_issue_number(self, document_key: str) -> int:
         """Return the GitHub issue number for one document key."""
@@ -239,19 +241,19 @@ class SkillIssueTracker:
 
     def _search_issue(self, title: str) -> int | None:
         """Search GitHub for an exact journal title."""
-        logging.info("Searching GitHub for an existing document issue")  # Record the idempotency search.
+        logger.info("Searching GitHub for an existing document issue")  # Record the idempotency search.
         query = f'repo:{self.repo} in:title "{title}"'  # Scope search to this repository and exact title text.
         result = self.runner.run(  # Ask GitHub for a small JSON result set.
             ["gh", "issue", "list", "--repo", self.repo, "--state", "all", "--search", query, "--json", "number,title"]
         )
         matches = json.loads(result.stdout)  # Decode the result set for exact title comparison.
         issue_number = next((int(item["number"]) for item in matches if item["title"] == title), None)  # Match title.
-        logging.debug("GitHub document issue search found %s", issue_number)  # Record the idempotency result.
+        logger.debug("GitHub document issue search found %s", issue_number)  # Record the idempotency result.
         return issue_number
 
     def _create_issue(self, document: DocumentRecord, title: str) -> int:
         """Create a GitHub journal issue."""
-        logging.info("Creating a document GitHub journal issue")  # Record the network create action.
+        logger.info("Creating a document GitHub journal issue")  # Record the network create action.
         self._ensure_labels(document.domain, StageName.QUEUED.value, "queued")  # Ensure initial filters exist first.
         result = self.runner.run(  # Create one issue for this source document.
             [
@@ -271,7 +273,7 @@ class SkillIssueTracker:
         issue_number = self._issue_number_from_url(result.stdout)  # Read the created number from the CLI URL.
         issue_id = self._issue_id(issue_number)  # Read the REST ID that the sub-issue API needs.
         self._link_parent_issue(issue_number, issue_id)  # Try to connect the issue to #2925.
-        logging.debug("Created GitHub document journal issue %d", issue_number)  # Record the created issue number.
+        logger.debug("Created GitHub document journal issue %d", issue_number)  # Record the created issue number.
         return issue_number
 
     def _set_issue_labels(self, issue_number: int, stage: str) -> None:
@@ -284,17 +286,17 @@ class SkillIssueTracker:
         self.runner.run_with_input(
             ["gh", "api", f"repos/{self.repo}/issues/{issue_number}", "--method", "PATCH", "--input", "-"], body
         )  # Apply exact labels.
-        logging.debug("Set labels for issue %d to %s", issue_number, ",".join(labels))  # Record safe label names.
+        logger.debug("Set labels for issue %d to %s", issue_number, ",".join(labels))  # Record safe label names.
 
     def _close_if_complete(self, issue_number: int, stage: str) -> None:
         """Close the issue when the document reaches a terminal stage."""
         if stage not in {StageName.VERIFIED.value, StageName.RELEASED.value}:  # Keep open work visible until done.
             return
-        logging.info("Closing completed document issue %d", issue_number)  # Record the state change.
+        logger.info("Closing completed document issue %d", issue_number)  # Record the state change.
         self.runner.run(
             ["gh", "issue", "close", str(issue_number), "--repo", self.repo, "--reason", "completed"]
         )  # Close.
-        logging.debug("Closed completed document issue %d", issue_number)  # Record the completed issue.
+        logger.debug("Closed completed document issue %d", issue_number)  # Record the completed issue.
 
     def _row_for_issue(self, issue_number: int) -> dict[str, Any]:
         """Return the local document row for a GitHub issue."""
@@ -376,15 +378,15 @@ class SkillIssueTracker:
     def _issue_number_from_url(self, output: str) -> int:
         """Read the issue number from the `gh issue create` output URL."""
         issue_number = int(output.rstrip().split("/")[-1])  # The CLI returns the issue URL on success.
-        logging.debug("Parsed created issue number %d", issue_number)  # Record the parsed issue number.
+        logger.debug("Parsed created issue number %d", issue_number)  # Record the parsed issue number.
         return issue_number
 
     def _issue_id(self, issue_number: int) -> int:
         """Read the database ID that the GitHub sub-issue API uses."""
-        logging.info("Reading the GitHub issue REST ID")  # Record the metadata read.
+        logger.info("Reading the GitHub issue REST ID")  # Record the metadata read.
         result = self.runner.run(["gh", "api", f"repos/{self.repo}/issues/{issue_number}"])  # Ask `gh` for metadata.
         payload = json.loads(result.stdout)  # Decode the issue metadata response.
-        logging.debug("Read GitHub issue REST ID for issue %d", issue_number)  # Record safe issue context.
+        logger.debug("Read GitHub issue REST ID for issue %d", issue_number)  # Record safe issue context.
         return int(payload["id"])
 
     def _ensure_labels(self, domain: str, stage: str, status: str) -> None:
@@ -395,13 +397,13 @@ class SkillIssueTracker:
     def _ensure_one_label(self, name: str, color: str) -> None:
         """Create one GitHub label if it does not exist."""
         if name in self.ensured_labels:  # Skip labels that this process already checked.
-            logging.debug("GitHub label %s already checked in this process", name)  # Record the local cache hit.
+            logger.debug("GitHub label %s already checked in this process", name)  # Record the local cache hit.
             return
         try:
             self.runner.run(["gh", "label", "create", name, "--repo", self.repo, "--color", color])  # Create label.
-            logging.debug("Created GitHub label %s", name)  # Record the created label.
+            logger.debug("Created GitHub label %s", name)  # Record the created label.
         except GitHubCliError as error:
-            logging.debug("GitHub label %s already exists or cannot be created: %s", name, error)  # Keep idempotency.
+            logger.debug("GitHub label %s already exists or cannot be created: %s", name, error)  # Keep idempotency.
         self.ensured_labels.add(name)  # Cache the result because an existing label is sufficient for later writes.
 
     def _label_colors(self, domain: str, stage: str, status: str) -> dict[str, str]:
@@ -433,7 +435,7 @@ class SkillIssueTracker:
 
     def _link_parent_issue(self, issue_number: int, issue_id: int) -> None:
         """Attach the journal issue to the parent issue when the API permits it."""
-        logging.info("Linking the journal issue to the parent issue")  # Record the parent-link action.
+        logger.info("Linking the journal issue to the parent issue")  # Record the parent-link action.
         try:
             self.runner.run(  # Use the GitHub sub-issue API when it is available for this repository.
                 [
@@ -444,9 +446,9 @@ class SkillIssueTracker:
                     f"sub_issue_id={issue_id}",
                 ]
             )
-            logging.debug("Linked issue %d as a sub-issue of %d", issue_number, self.parent_issue)  # Record success.
+            logger.debug("Linked issue %d as a sub-issue of %d", issue_number, self.parent_issue)  # Record success.
         except GitHubCliError as error:
-            logging.debug("Sub-issue link failed for issue %d: %s", issue_number, error)  # Preserve core tracking.
+            logger.debug("Sub-issue link failed for issue %d: %s", issue_number, error)  # Preserve core tracking.
 
 
 class SkillFactoryIssueIndex:
@@ -458,11 +460,11 @@ class SkillFactoryIssueIndex:
 
     def render(self, rows: list[dict[str, Any]]) -> str:
         """Return a Markdown index grouped by domain."""
-        logging.info("Rendering the skill factory issue index")  # Record the render action.
+        logger.info("Rendering the skill factory issue index")  # Record the render action.
         lines = ["Skill factory document issue index.", "", "<!-- skill-factory-index -->"]  # Mark generated content.
         for domain, domain_rows in self._group_rows(rows).items():  # Render one section per domain.
             lines.extend(self._domain_lines(domain, domain_rows))  # Add the rows for one domain.
-        logging.debug("Rendered index for %d documents", len(rows))  # Record the document count.
+        logger.debug("Rendered index for %d documents", len(rows))  # Record the document count.
         return "\n".join(lines)
 
     def _group_rows(self, rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:

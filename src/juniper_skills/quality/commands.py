@@ -8,6 +8,8 @@ from pathlib import Path  # Use platform-safe paths for built-store scans.
 
 from .models import CommandFenceCleanReport  # Return cleaned text and proof counts.
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 class CommandFenceCleaner:
     """Remove prose lines that leaked into CLI code fences."""
@@ -17,7 +19,7 @@ class CommandFenceCleaner:
 
     def clean_text(self, text: str) -> CommandFenceCleanReport:
         """Run the clean text operation."""
-        logging.info("Cleaning command fences in one Markdown text")  # Log before parsing Markdown fences.
+        logger.info("Cleaning command fences in one Markdown text")  # Log before parsing Markdown fences.
         lines = text.splitlines()  # Preserve line order for deterministic output.
         output: list[str] = []  # Build cleaned Markdown lines.
         removed: list[str] = []  # Store bounded examples for a report.
@@ -25,12 +27,12 @@ class CommandFenceCleaner:
         for line in lines:  # Inspect every Markdown line once.
             in_fence = self._copy_line(line, output, removed, in_fence)  # Copy or reject the line by state.
         report = CommandFenceCleanReport("\n".join(output), 1, len(removed), tuple(removed[:10]))  # Build evidence.
-        logging.debug("Removed %s prose lines from command fences", report.lines_removed)  # Report cleanup count.
+        logger.debug("Removed %s prose lines from command fences", report.lines_removed)  # Report cleanup count.
         return report  # Return cleaned text and examples.
 
     def clean_paths(self, paths: tuple[Path, ...], write: bool = False) -> CommandFenceCleanReport:
         """Run the clean paths operation."""
-        logging.info("Cleaning command fences in %s Markdown files", len(paths))  # Log before store scan.
+        logger.info("Cleaning command fences in %s Markdown files", len(paths))  # Log before store scan.
         total_removed = 0  # Count all removed lines across the store.
         examples: list[str] = []  # Keep a bounded example list.
         for path in paths:  # Process each file independently so one bad file is visible.
@@ -38,7 +40,7 @@ class CommandFenceCleaner:
             total_removed += report.lines_removed  # Add the file count to the store count.
             examples.extend(report.removed_examples)  # Preserve early examples for the report.
             self._write_clean(path, report, write)  # Persist only when the caller requests a mutation.
-        logging.debug("Removed %s prose lines from %s files", total_removed, len(paths))  # Report store totals.
+        logger.debug("Removed %s prose lines from %s files", total_removed, len(paths))  # Report store totals.
         return CommandFenceCleanReport("", len(paths), total_removed, tuple(examples[:10]))  # Return aggregate proof.
 
     def _copy_line(self, line: str, output: list[str], removed: list[str], in_fence: bool) -> bool:

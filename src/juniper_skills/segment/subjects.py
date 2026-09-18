@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 import re
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 class TopicSubjectBuilder:
     """Derive an index subject from title, content concepts, and command verbs."""
@@ -50,15 +52,15 @@ class TopicSubjectBuilder:
 
     def build(self, title: str, text: str, lifecycle: list[str]) -> str:
         """Run the build operation."""
-        logging.info("Building index subject for topic %s", title)  # Log before subject extraction.
+        logger.info("Building index subject for topic %s", title)  # Log before subject extraction.
         direct = self._pattern_subject(title)  # Use a precise subject for known heading patterns.
         if direct:  # Return high-confidence subjects before generic composition.
-            logging.debug("Built pattern subject for %s", title)  # Report pattern subject use.
+            logger.debug("Built pattern subject for %s", title)  # Report pattern subject use.
             return direct
         commands = self._command_terms(text)  # Extract command verbs and pipe filters from the topic.
         concepts = self._concept_terms(title, text)  # Extract dominant network nouns from the topic.
         subject = self._compose(title, commands, concepts, lifecycle)  # Compose one useful index sentence.
-        logging.debug("Built subject for %s with %s concepts", title, len(concepts))  # Report extraction count.
+        logger.debug("Built subject for %s with %s concepts", title, len(concepts))  # Report extraction count.
         return subject  # Return the one-line subject for INDEX.md.
 
     def _command_terms(self, text: str) -> list[str]:

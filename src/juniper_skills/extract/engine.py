@@ -23,6 +23,8 @@ from .extractors import (  # Use one extractor class for each required fact clas
 from .models import DepthExtractionResult, ExtractedFact, SourceLine, TopicSplit  # Share engine records.
 from .parser import SourcePageParser  # Parse exact page citations before extraction.
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 class FactExtractionEngine:
     """Mine source Markdown into dense, cited, copyright-safe cards."""
@@ -37,7 +39,7 @@ class FactExtractionEngine:
 
     def extract_text(self, text: str, source_key: str) -> DepthExtractionResult:
         """Return dense cards and split topic content for one source text."""
-        logging.info("Starting depth extraction for %s", source_key)  # Log before the full extraction.
+        logger.info("Starting depth extraction for %s", source_key)  # Log before the full extraction.
         lines = self.parser.parse(text)  # Attach page numbers to all source lines.
         facts = self._facts(lines, source_key)  # Run each class-specific extractor.
         kept_facts, merges = self._deduplicate(facts)  # Merge repeated facts from long documents.
@@ -46,14 +48,14 @@ class FactExtractionEngine:
         topics = self._topics(cards, source_key)  # Render and split topic Markdown.
         prose_chars = self.parser.prose_chars(text)  # Measure source prose for retention.
         pages = tuple(sorted({line.page for line in lines}))  # Count pages that had source content.
-        logging.debug("Depth extraction kept %d cards after %d merges", len(cards), merges)  # Log final counts.
+        logger.debug("Depth extraction kept %d cards after %d merges", len(cards), merges)  # Log final counts.
         return DepthExtractionResult(cards, len(facts), merges, pages, topics, prose_chars, type_counts)  # Return.
 
     def extract_path(self, path: Path, source_key: str | None = None) -> DepthExtractionResult:
         """Return dense cards for one Markdown source file."""
-        logging.info("Reading source document %s", path)  # Log before file input.
+        logger.info("Reading source document %s", path)  # Log before file input.
         text = path.read_text(encoding="utf-8")  # Read the source Markdown document.
-        logging.debug("Read %d characters from %s", len(text), path)  # Log file size.
+        logger.debug("Read %d characters from %s", len(text), path)  # Log file size.
         key = source_key or self._source_key(path)  # Build a stable citation key when none is supplied.
         return self.extract_text(text, key)  # Extract facts from the source text.
 
@@ -73,32 +75,32 @@ class FactExtractionEngine:
 
     def _facts(self, lines: tuple[SourceLine, ...], source_key: str) -> tuple[ExtractedFact, ...]:
         """Return facts from all configured extractors."""
-        logging.info("Running %d fact extractors", len(self.extractors))  # Log before extractor fan-out.
+        logger.info("Running %d fact extractors", len(self.extractors))  # Log before extractor fan-out.
         facts: list[ExtractedFact] = []  # Collect facts from all classes.
         for extractor in self.extractors:  # Run each class-specific extractor.
             facts.extend(extractor.extract(lines, source_key))  # Append facts in extractor order.
-        logging.debug("Extractors emitted %d raw facts", len(facts))  # Log raw extraction count.
+        logger.debug("Extractors emitted %d raw facts", len(facts))  # Log raw extraction count.
         return tuple(facts)  # Return immutable facts for deduplication.
 
     def _deduplicate(self, facts: tuple[ExtractedFact, ...]) -> tuple[tuple[ExtractedFact, ...], int]:
         """Return deduplicated cards and the merge count."""
-        logging.info("Deduplicating extracted facts")  # Log before merge analysis.
+        logger.info("Deduplicating extracted facts")  # Log before merge analysis.
         by_key: dict[str, ExtractedFact] = {}  # Store the fullest fact for each normalized meaning.
         for fact in facts:  # Check every extracted fact for repeated meaning.
             key = self._dedup_key(fact)  # Normalize away citation and minor wording differences.
             by_key[key] = self._fuller(by_key.get(key), fact)  # Keep the fact with the fullest source span.
         kept_facts = tuple(by_key.values())  # Keep fact type metadata after deduplication.
         merges = len(facts) - len(kept_facts)  # Count how many candidates merged away.
-        logging.debug("Merged %d repeated facts", merges)  # Log deduplication effectiveness.
+        logger.debug("Merged %d repeated facts", merges)  # Log deduplication effectiveness.
         return kept_facts, merges  # Return both facts and evidence count.
 
     def _type_counts(self, facts: tuple[ExtractedFact, ...]) -> dict[str, int]:
         """Return the deduplicated card count for each fact type."""
-        logging.info("Counting deduplicated facts by extractor type")  # Log before result metric aggregation.
+        logger.info("Counting deduplicated facts by extractor type")  # Log before result metric aggregation.
         counts: dict[str, int] = {}  # Store each fact type count for reports.
         for fact in facts:  # Count only facts that survived deduplication.
             counts[fact.fact_type] = counts.get(fact.fact_type, 0) + 1  # Add one fact to its extractor class.
-        logging.debug("Counted %d deduplicated fact types", len(counts))  # Log the number of populated types.
+        logger.debug("Counted %d deduplicated fact types", len(counts))  # Log the number of populated types.
         return counts  # Return counts for measurement reports.
 
     def _dedup_key(self, fact: ExtractedFact) -> str:
@@ -117,13 +119,13 @@ class FactExtractionEngine:
 
     def _topics(self, cards: tuple[KnowledgeCard, ...], source_key: str) -> tuple[TopicSplit, ...]:
         """Return topic file parts that satisfy the hard size limit."""
-        logging.info("Rendering depth extraction topics for %s", source_key)  # Log before Markdown rendering.
+        logger.info("Rendering depth extraction topics for %s", source_key)  # Log before Markdown rendering.
         parts: list[TopicSplit] = []  # Collect split topic bodies.
         current: list[str] = [self._heading(source_key, 1)]  # Start the first topic part.
         for card in cards:  # Add cards without dropping content for size.
             current = self._append_card(parts, current, card, source_key)  # Split before a hard-limit overflow.
         self._store_part(parts, current, source_key)  # Store the final part after all cards are added.
-        logging.debug("Rendered %d topic part files for %s", len(parts), source_key)  # Log split count.
+        logger.debug("Rendered %d topic part files for %s", len(parts), source_key)  # Log split count.
         return tuple(parts)  # Return immutable topic parts.
 
     def _append_card(

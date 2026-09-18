@@ -9,6 +9,8 @@ from abc import ABC, abstractmethod  # Define the backend plug-in seam.
 from .cards import CardExtractor  # Reuse card extraction for deterministic facts.
 from .models import CardClassMark, KnowledgeCard, RewriteResult, RewriteWorkPacket  # Use shared rewrite models.
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 _LOG = logging.getLogger(__name__)  # Give the rewrite backend a stable logger name.
 
 
@@ -29,11 +31,11 @@ class RuleBasedBackend(RewriteBackend):
 
     def rewrite(self, packet: RewriteWorkPacket) -> RewriteResult:
         """Return cards for structured content without pretending to restate prose."""
-        logging.info("Running the rule-based rewrite backend")  # Log before deterministic extraction.
+        logger.info("Running the rule-based rewrite backend")  # Log before deterministic extraction.
         command_blocks = self._command_blocks(packet)  # Preserve detected commands unchanged.
         cards = self._structured_cards(packet)  # Extract tables and numeric facts as INFO cards.
         limitations = self._limitations(packet, cards)  # State the prose that this backend cannot restate.
-        logging.debug(
+        logger.debug(
             "Rule-based backend emitted %d cards and %d command blocks",
             len(cards),
             len(command_blocks),
@@ -104,10 +106,10 @@ class PromptTemplateBuilder:
 
     def build(self, packet: RewriteWorkPacket) -> str:
         """Return the full agent instruction for one rewrite packet."""
-        logging.info("Building the agent rewrite prompt")  # Log before prompt construction.
+        logger.info("Building the agent rewrite prompt")  # Log before prompt construction.
         sections = (self._role(packet), self._ste_rules(), self._copyright_rules(), self._output_rules(packet))
         prompt = "\n\n".join(sections)  # Join stable sections so prompt caching stays effective.
-        logging.debug("Built a rewrite prompt with %d characters", len(prompt))  # Log prompt size, not content.
+        logger.debug("Built a rewrite prompt with %d characters", len(prompt))  # Log prompt size, not content.
         return prompt  # Return the backend prompt.
 
     def _role(self, packet: RewriteWorkPacket) -> str:

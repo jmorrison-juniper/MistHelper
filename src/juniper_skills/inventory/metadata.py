@@ -9,6 +9,8 @@ import re  # Normalize keys and parse scalar front matter fields.
 from pathlib import Path  # Use cross-platform paths for all file access.
 from typing import Any  # Type JSON manifest values without adding a schema dependency.
 
+logger = logging.getLogger(__name__)  # Use a module logger so library logs keep their source name.
+
 
 class TextKey:
     """Normalize document fields into stable natural keys."""
@@ -18,10 +20,10 @@ class TextKey:
     @classmethod
     def normalize(cls, value: str) -> str:
         """Run the normalize operation."""
-        logging.info("Normalizing a document key field")  # Record key normalization for traceability.
+        logger.info("Normalizing a document key field")  # Record key normalization for traceability.
         lowered = value.lower().strip()  # Use lower case so equivalent titles share one key.
         normalized = cls._space_pattern.sub("-", lowered).strip("-")  # Remove punctuation that changes by source.
-        logging.debug("Normalized key field to %s characters", len(normalized))  # Report key length, not source text.
+        logger.debug("Normalized key field to %s characters", len(normalized))  # Report key length, not source text.
         return normalized
 
 
@@ -32,37 +34,37 @@ class FrontMatterParser:
 
     def parse(self, path: Path) -> dict[str, str]:
         """Run the parse operation."""
-        logging.info("Reading front matter from %s", path)  # Log the file read before disk access.
+        logger.info("Reading front matter from %s", path)  # Log the file read before disk access.
         text = path.read_text(
             encoding="utf-8", errors="ignore"
         )  # Read with replacement so one bad glyph does not stop.
         fields = self.parse_text(text)  # Parse the bounded front matter block only.
-        logging.debug("Read %s front matter fields from %s", len(fields), path)  # Report parsed field count.
+        logger.debug("Read %s front matter fields from %s", len(fields), path)  # Report parsed field count.
         return fields
 
     def parse_text(self, text: str) -> dict[str, str]:
         """Run the parse text operation."""
-        logging.info("Parsing front matter text")  # Mark the parse step for inventory diagnostics.
+        logger.info("Parsing front matter text")  # Mark the parse step for inventory diagnostics.
         if not text.startswith("---"):  # Return empty when the converter emitted no front matter.
-            logging.debug("Front matter text has no opening marker")  # Explain why no fields were returned.
+            logger.debug("Front matter text has no opening marker")  # Explain why no fields were returned.
             return {}
         end_index = text.find("\n---", 3)  # Find the closing marker used by the converter.
         if end_index == -1:  # Treat an unclosed block as unusable metadata.
-            logging.debug("Front matter text has no closing marker")  # Explain the missing metadata state.
+            logger.debug("Front matter text has no closing marker")  # Explain the missing metadata state.
             return {}
         fields = self._parse_lines(text[3:end_index].splitlines())  # Parse only metadata lines.
-        logging.debug("Parsed %s fields from front matter text", len(fields))  # Report the result size.
+        logger.debug("Parsed %s fields from front matter text", len(fields))  # Report the result size.
         return fields
 
     def body_text(self, text: str) -> str:
         """Run the body text operation."""
-        logging.info("Removing front matter from Markdown text")  # Log the transform before it runs.
+        logger.info("Removing front matter from Markdown text")  # Log the transform before it runs.
         if not text.startswith("---"):  # Keep the complete file when no metadata block exists.
-            logging.debug("Markdown text has no front matter to remove")  # Report that no change occurred.
+            logger.debug("Markdown text has no front matter to remove")  # Report that no change occurred.
             return text
         end_index = text.find("\n---", 3)  # Locate the closing metadata marker.
         body = text[end_index + 4 :] if end_index != -1 else text  # Keep content when the marker is valid.
-        logging.debug("Markdown body has %s characters", len(body))  # Report the text yield.
+        logger.debug("Markdown body has %s characters", len(body))  # Report the text yield.
         return body
 
     def _parse_lines(self, lines: list[str]) -> dict[str, str]:
@@ -88,29 +90,29 @@ class HarvesterMetadataLoader:
 
     def load_catalog(self) -> dict[str, dict[str, str]]:
         """Return the load catalog result."""
-        logging.info("Loading harvester catalog from %s", self.harvest_root)  # Log the catalog read before disk access.
+        logger.info("Loading harvester catalog from %s", self.harvest_root)  # Log the catalog read before disk access.
         catalog_path = self.harvest_root / "_catalog.csv"  # Use the locked catalog file name.
         rows = self._read_catalog_rows(catalog_path) if catalog_path.exists() else []  # Permit incremental first runs.
         catalog = self._index_catalog_rows(rows)  # Build lookups by Markdown path and source PDF.
-        logging.debug("Loaded %s catalog keys from %s", len(catalog), catalog_path)  # Report key count.
+        logger.debug("Loaded %s catalog keys from %s", len(catalog), catalog_path)  # Report key count.
         return catalog
 
     def load_manifest_statuses(self) -> dict[str, str]:
         """Return the load manifest statuses result."""
-        logging.info("Loading harvester manifests from %s", self.harvest_root)  # Log manifest discovery.
+        logger.info("Loading harvester manifests from %s", self.harvest_root)  # Log manifest discovery.
         statuses: dict[str, str] = {}  # Store the latest status for each source PDF.
         for path in sorted(self.harvest_root.glob("_manifest*.json")):  # Read every batch and watch manifest.
-            logging.info("Reading manifest %s", path)  # Log each manifest before opening it.
+            logger.info("Reading manifest %s", path)  # Log each manifest before opening it.
             data = json.loads(path.read_text(encoding="utf-8"))  # Parse the authoritative manifest JSON.
             self._merge_manifest(statuses, data)  # Merge new statuses over older repeated sources.
-            logging.debug("Manifest status map has %s entries", len(statuses))  # Report cumulative coverage.
+            logger.debug("Manifest status map has %s entries", len(statuses))  # Report cumulative coverage.
         return statuses
 
     def _read_catalog_rows(self, catalog_path: Path) -> list[dict[str, str]]:
-        logging.info("Reading catalog rows from %s", catalog_path)  # Log CSV access before opening the file.
+        logger.info("Reading catalog rows from %s", catalog_path)  # Log CSV access before opening the file.
         with catalog_path.open(newline="", encoding="utf-8-sig") as handle:  # Use BOM-safe UTF-8 for CSV input.
             rows = list(csv.DictReader(handle))  # Materialize rows because the file is small metadata.
-        logging.debug("Read %s catalog rows", len(rows))  # Report row count from authoritative catalog.
+        logger.debug("Read %s catalog rows", len(rows))  # Report row count from authoritative catalog.
         return rows
 
     def _index_catalog_rows(self, rows: list[dict[str, str]]) -> dict[str, dict[str, str]]:
