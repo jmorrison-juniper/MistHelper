@@ -128,6 +128,22 @@ class TestLoadPidTuningData:
         finally:
             rl.tuning_data_file = original
 
+    def test_handles_empty_body_tuning_file(self):
+        """An empty tuning file must return safe PID defaults."""
+        import src.utils.rate_limiting as rl
+
+        filepath = os.path.join("data", "tuning_data.json")  # Use the product default file name.
+        with open(filepath, "wb") as file_handle:  # Write bytes so the fixture matches an empty body.
+            file_handle.write(b"")  # Model a zero-byte persisted JSON reply.
+
+        original = rl.tuning_data_file  # Preserve module state for later tests.
+        rl.tuning_data_file = filepath  # Point the product loader at the empty file.
+        try:
+            data = RateLimitingUtils._load_pid_tuning_data()  # Drive the product fallback path.
+            assert data == {"k_p": 0.1, "k_i": 0.0005, "error": [], "integral": 0.0}  # Safe defaults.
+        finally:
+            rl.tuning_data_file = original  # Restore module state for later tests.
+
     def test_cleans_error_values_on_load(self):
         """Error values with NaN/Inf are cleaned during load."""
         import src.utils.rate_limiting as rl

@@ -62,6 +62,18 @@ def test_list_sqlite_tables_reports_the_error_instead_of_raising(service: DataBr
     assert "error" in result
 
 
+def test_empty_json_body_reports_read_error(tmp_path) -> None:
+    """Verify an empty JSON body returns an error payload instead of raising."""
+    json_path = tmp_path / "empty.json"  # Use an allowed extension for the preview route.
+    json_path.write_bytes(b"")  # Model a zero-byte JSON export from an empty response.
+    service = DataBrowserService(str(tmp_path))  # Scope the service to the fixture directory.
+
+    result = service.preview_file("empty.json", 1, 25, "")  # Drive the product JSON preview path.
+
+    assert result["error"].startswith("Failed to read JSON:")  # The caller receives a controlled error.
+    assert "Expecting value" in result["error"]  # The message identifies the empty JSON body.
+
+
 def test_preview_sqlite_closes_the_handle_when_the_table_is_absent(tmp_path) -> None:
     """Verify the empty-table early return still releases the connection."""
     service = DataBrowserService(str(tmp_path))

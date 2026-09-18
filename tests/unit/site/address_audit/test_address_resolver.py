@@ -149,6 +149,12 @@ class TestTier2Nominatim:
         assert second.source == "cache"
         assert _FakeValidator.count == 1  # Second call made zero external calls.
 
+    def test_empty_cache_body_returns_empty_payload(self) -> None:
+        """An empty cached JSON body must become an empty payload."""
+        empty_body = b"".decode()  # Model a zero-byte cache value from storage.
+        result = AddressResolver._loads_json(empty_body)  # Drive the product JSON boundary helper.
+        assert result == {}  # The resolver must treat an empty body as no cached payload.
+
     def test_nominatim_invalid_is_no_result(self, tmp_path, monkeypatch):
         """An invalid Nominatim comparison yields canonical_address None."""
         _FakeValidator.count = 0

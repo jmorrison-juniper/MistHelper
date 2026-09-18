@@ -90,6 +90,18 @@ def test_json_lines_detection_reuses_the_first_parsed_item(tmp_path, monkeypatch
     assert len(loads_calls) == 2  # The first JSON Lines item must not be parsed twice.
 
 
+def test_empty_json_body_returns_read_error(tmp_path) -> None:
+    """An empty JSON body must return an error instead of a false data table."""
+    json_path = tmp_path / "empty.json"  # The JSON preview accepts the .json extension.
+    json_path.write_bytes(b"")  # Model a zero-byte JSON export from an upstream empty body.
+    service = DataBrowserService(str(tmp_path))  # Scope the service to the fixture directory.
+
+    result = service.preview_file("empty.json", 1, 25, "")  # Drive the real JSON preview path.
+
+    assert result["error"].startswith("Failed to read JSON:")  # The product reports no valid preview data.
+    assert "Expecting value" in result["error"]  # The error names the empty JSON parse failure.
+
+
 def test_json_list_column_order_and_filtering_stay_stable(tmp_path) -> None:
     """A JSON object list keeps first-seen columns and filtered row counts."""
     json_path = tmp_path / "items.json"  # The JSON preview accepts the .json extension.

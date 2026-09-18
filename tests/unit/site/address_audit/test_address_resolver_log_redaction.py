@@ -56,6 +56,13 @@ def _log_text(caplog: pytest.LogCaptureFixture) -> str:
     return "\n".join(record.getMessage() for record in caplog.records)  # One buffer to search.
 
 
+def test_empty_cache_body_has_no_private_log_value() -> None:
+    """An empty cached JSON body must become an empty payload."""
+    empty_body = b"".decode()  # Model a zero-byte cache value from storage.
+    result = AddressResolver._loads_json(empty_body)  # Drive the product JSON boundary helper.
+    assert result == {}  # The resolver must not manufacture private fields from an empty body.
+
+
 class TestResolveLogsNoStreet:
     """The resolve entry point logs a digest, never the street."""
 

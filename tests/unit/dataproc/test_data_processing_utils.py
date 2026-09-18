@@ -96,6 +96,13 @@ class TestFlattenNestedFields:
         # Scalar path takes over: the raw string survives as-is under the original key.
         assert result == [{"cfg": "{not valid json or literal"}]  # Original string preserved.
 
+    def test_empty_body_string_returns_empty_value(self) -> None:
+        """An empty response body string must stay an empty value."""
+        empty_body = b"".decode()  # Model the text form of an empty HTTP body.
+        entry = {"cfg": empty_body}  # Drive the product parser with the empty value.
+        result = DataProcessingUtils.flatten_nested_fields([entry])  # Execute the real flattening pipeline.
+        assert result == [{"cfg": ""}]  # The product keeps the empty value without a false row.
+
     def test_stringified_list_of_scalars_joined_as_csv(self) -> None:
         """Parsed scalar lists join into a CSV string (line 112)."""
         # WHY: exercises _flatten_value_into fall-through when list is NOT list-of-dicts.

@@ -10,6 +10,7 @@ See issue #1946.
 
 from __future__ import annotations
 
+from io import StringIO
 import logging
 import sqlite3
 
@@ -170,3 +171,14 @@ class TestTheBoundsAreNamed:
         # An upper bound below the lower bound would make every clamp empty.
         assert MAX_PAGE_SIZE > MIN_PAGE_SIZE, "The upper bound must sit above the lower bound."
         logger.debug("The bounds are %d and %d", MIN_PAGE_SIZE, MAX_PAGE_SIZE)
+
+
+class TestEmptyJsonBody:
+    """The JSON Lines detector must handle an empty stream."""
+
+    def test_empty_body_is_not_json_lines(self, browser) -> None:
+        """An empty body must reset the stream and report no first item."""
+        stream = StringIO(b"".decode())  # Model a zero-byte JSON body as text.
+        result = browser._read_json_line_prefix(stream)  # Drive the product JSON Lines detector.
+        assert result == {"is_json_lines": False, "first_item": None}  # The empty stream is not data.
+        assert stream.tell() == 0  # The caller must be able to reread the stream from the start.
