@@ -110,6 +110,31 @@ python -m pytest tests/ -x -q
 Read `MYPY_PATHS` from `.github\workflows\ci.yml` before you run mypy.
 The workflow owns that path list.
 
+### Run the upgrade portal test shards
+
+The test tree for the upgrade portal is large.
+Use the same shards and the same per-test timeout that CI uses.
+Do not put both test trees for the upgrade portal in one 600-second local run.
+
+```powershell
+python -m pytest tests\contract\upgrade_portal -q --no-cov --timeout=120
+python -m pytest tests\unit\upgrade_portal -q --no-cov --timeout=120
+```
+
+CI gives each shard 15 minutes.
+On a loaded Windows machine, the unit shard can run for more than 10 minutes.
+Expect that time when each test stays under the 120-second per-test timeout.
+
+A local run on 2026-09-18 used 30 to 66 percent CPU load before each shard:
+
+| Shard | Result |
+| - | - |
+| `tests\contract\upgrade_portal` | 902 passed in 265.91 seconds |
+| `tests\unit\upgrade_portal` | 3338 passed in 652.53 seconds |
+
+`pytest-xdist` is not in the local environment by default.
+Do not use `-n auto` unless your environment already installs `pytest-xdist`.
+
 ## Prove a new guard
 
 If you add or change a guard, prove that it can fail.
