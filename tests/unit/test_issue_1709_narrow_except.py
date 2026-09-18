@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from requests.exceptions import Timeout
 
 import MistHelper
 
@@ -50,6 +51,22 @@ def test_latest_pypi_version_catches_network_error(monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setattr(builtins, "__import__", fake_import)  # Route the deferred requests import to the stub.
     assert MistHelper._get_latest_pypi_version("requests") == ""  # Preserve the latest-unknown contract.
+
+
+def test_latest_pypi_version_catches_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The PyPI reader treats a timeout as an unknown latest version."""
+    requests_stub = SimpleNamespace(get=MagicMock(side_effect=Timeout("synthetic timeout")))  # Simulate timeout.
+    original_import = builtins.__import__  # Keep the real importer for all other modules.
+
+    def fake_import(name: str, *args: object, **kwargs: object) -> object:
+        return requests_stub if name == "requests" else original_import(name, *args, **kwargs)  # Target requests only.
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)  # Route the deferred requests import to the stub.
+    assert MistHelper._get_latest_pypi_version("requests") == ""  # Preserve the latest-unknown contract.
+    requests_stub.get.assert_called_once_with(  # Prove the timeout came from the product HTTP call.
+        "https://pypi.org/pypi/requests/json",
+        timeout=5,
+    )
 
 
 def test_latest_pypi_version_rejects_unexpected_error(monkeypatch: pytest.MonkeyPatch) -> None:
