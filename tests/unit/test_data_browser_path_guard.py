@@ -146,3 +146,13 @@ class TestAllowedPathsStillWork:
         service = DataBrowserService(str(data_dir))  # Service under test, scoped to the data mount.
 
         assert service.resolve_safe_path("absent.csv") is None  # A missing file must return None.
+
+    def test_empty_json_body_returns_read_error(self, data_dir):
+        """An empty JSON file must return an error instead of a false preview."""
+        (data_dir / "empty.json").write_bytes(b"")  # Model a zero-byte JSON export.
+        service = DataBrowserService(str(data_dir))  # Service under test, scoped to the data mount.
+
+        result = service.preview_file("empty.json", 1, 25, "")  # Drive the product JSON preview.
+
+        assert result["error"].startswith("Failed to read JSON:")  # The preview must not claim success.
+        assert "Expecting value" in result["error"]  # The error must name the empty JSON parse failure.

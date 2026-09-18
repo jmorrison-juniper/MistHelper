@@ -53,6 +53,11 @@ class TestExclusionDriftReporter:
         output = '[{"code":"E501"},{"code":"F401"}]'
         assert ExclusionDriftReporter._count_findings("ruff", output) == 2
 
+    def test_ruff_empty_body_count_is_zero(self) -> None:
+        """An empty tool JSON body must count as zero findings."""
+        output = b"".decode()  # Model a tool that returned no JSON bytes.
+        assert ExclusionDriftReporter._count_findings("ruff", output) == 0  # The report must not crash.
+
     def test_mypy_error_count(self) -> None:
         """Mypy error lines must count while notes stay excluded."""
         output = "file.py:1: error: Bad type\nfile.py:1: note: Detail"

@@ -74,6 +74,18 @@ class TestMistAPIClient:
         # WHY: verify API was NOT called
         assert not self.mock_mist_api.listOrgSites.called  # WHY: API not called
 
+    def test_empty_cache_body_is_treated_as_cache_miss(self):
+        """Test an empty cache body returns no cached rows.
+
+        WHY: verify an empty Redis body does not become a false site list.
+        """
+        self.mock_redis.get.return_value = b""  # WHY: model a zero-byte cache reply.
+
+        result = self.client._get_cache("sites:org-123")  # WHY: drive the product cache parser.
+
+        assert result is None  # WHY: empty cache data must become a cache miss.
+        self.mock_redis.get.assert_called_once_with("sites:org-123")  # WHY: prove the cache seam was used.
+
     def test_list_sites_api_failure(self):
         """Test sites listing with API error.
 
