@@ -29,6 +29,14 @@ from src.data.data_processing_utils import (
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+_HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
+
+
+def _response_status_code(response: object) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
 class OrgSiteExporter:  # Org site exporters.
@@ -51,13 +59,15 @@ class OrgSiteExporter:  # Org site exporters.
         if emitter:  # Branch: emitter present.
             emitter.emit_progress_start("11", "sites", 1)  # Emit progress start.
         op_start = time.time()  # Record operation start time.
-        mh.APIDataFetcher(  # Fetch and write sites.
+        exported = mh.APIDataFetcher(  # Fetch and write sites.
             title="Site List:",
             api_call=mistapi.api.v1.orgs.sites.listOrgSites,
             filename="SiteList",
             sort_key="name",
             limit=1000,
         ).execute()
+        if exported is False:  # WHY: only an explicit failure skips the completion report.
+            return  # WHY: preserve the existing None return contract for this exporter.
         output_desc = "SQLite table" if mh.OUTPUT_FORMAT == "sqlite" else "CSV file"  # Describe output backend.
         logger.info("Completed site list export and wrote results to %s.", output_desc)  # Log site export success.
         if emitter:  # Branch: emitter present.
@@ -123,6 +133,14 @@ class OrgSiteExporter:  # Org site exporters.
         org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve org id.
         logger.debug("Using org_id: %s for current guest export.", org_id)  # Log org id used.
         response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization(mh.apisession, org_id, limit=1000)
+        status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+        if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the guest count untrustworthy.
+            logger.error(  # WHY: the operator must see the cloud status instead of a false empty export.
+                "The cloud returned HTTP %s for the current guest users at org %s",
+                status_code,
+                org_id,
+            )
+            return  # WHY: preserve the existing None return contract for this exporter.
         guests = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page through all guests.
         logger.info("Fetched %s current guest users from API.", len(guests))  # Log fetched guest count.
         guests = DataProcessingUtils.flatten_nested_fields(guests)  # Flatten nested guest fields.
@@ -146,6 +164,14 @@ class OrgSiteExporter:  # Org site exporters.
         response = mistapi.api.v1.orgs.guests.searchOrgGuestAuthorization(  # Search guests in window.
             mh.apisession, org_id, limit=1000, start=start_time, end=end_time
         )
+        status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+        if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the guest count untrustworthy.
+            logger.error(  # WHY: the operator must see the cloud status instead of a false empty export.
+                "The cloud returned HTTP %s for the historical guest users at org %s",
+                status_code,
+                org_id,
+            )
+            return  # WHY: preserve the existing None return contract for this exporter.
         guests = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page through all guests.
         logger.info("Fetched %s historical guest users from API.", len(guests))  # Log fetched guest count.
         guests = DataProcessingUtils.flatten_nested_fields(guests)  # Flatten nested guest fields.
