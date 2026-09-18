@@ -22,6 +22,8 @@ import mistapi.api.v1.sites.stats  # WHY: Mist Sites Stats API for per-port stat
 from prettytable import PrettyTable  # WHY: tabular display for device and port selection lists
 
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+_HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
 
 _MAX_PORTS_PER_CAPTURE = 6  # WHY: Mist API hard cap on concurrent packet-capture ports
 
@@ -46,6 +48,12 @@ _DEVICE_TABLE_FIELDS: list[str] = ["Index", "Name", "MAC", "Model", "Status"]  #
 _PORT_TABLE_FIELDS = ["Index", "Port Name", "Status", "Speed", "Duplex", "Profile", "Description"]  # WHY: header
 
 PortSelectionResult = list[str] | tuple[list[str], list[tuple[str, Any]]] | None  # WHY: return type union
+
+
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
 def _natural_sort_key(port_tuple: tuple[str, Any]) -> list[Any]:  # WHY: natural sort by digit runs
@@ -404,6 +412,14 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         except Exception as port_search_error:  # WHY: log and swallow -- caller falls back to config
             logging.error("Error fetching switch/gateway port stats: %s", port_search_error)  # WHY: audit
             return {}  # WHY: empty dict signals 'no live stats' to the caller
+        status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+        if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the port count untrustworthy.
+            logger.error(  # WHY: the operator must see the cloud status instead of a false empty result.
+                "The cloud returned HTTP %s for switch/gateway port stats at site %s",
+                status_code,
+                site_id,
+            )
+            return {}  # WHY: preserve the existing empty-dict failure contract.
         results = response.data.get("results", [])  # WHY: unwrap to the list of per-port dicts
         logger.info("Retrieved %d port stat entries from searchSiteSwOrGwPorts", len(results))  # WHY: audit
         port_stat = self._index_port_results(results)  # WHY: build port_id -> stat map
@@ -434,6 +450,14 @@ class PromptNetworkDeviceUtils:  # WHY: interactive Mist device and port selecti
         stats_response = mistapi.api.v1.sites.stats.getSiteDeviceStats(  # WHY: AP stats endpoint
             self._session, site_id, device_id
         )
+        status_code = _response_status_code(stats_response)  # WHY: a 5xx can carry an empty payload without raising.
+        if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the port count untrustworthy.
+            logger.error(  # WHY: the operator must see the cloud status instead of a false empty result.
+                "The cloud returned HTTP %s for AP port stats at site %s",
+                status_code,
+                site_id,
+            )
+            return {}  # WHY: preserve the existing empty-dict failure contract.
         stats_data = stats_response.data  # WHY: unwrap to the device stats dict
         port_stat = cast("dict[str, Any]", stats_data.get("port_stat", {}))  # WHY: narrow Any for mypy strict
         if port_stat:  # WHY: log presence so operators can confirm live data

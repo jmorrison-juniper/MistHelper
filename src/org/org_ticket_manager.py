@@ -50,13 +50,15 @@ class OrgTicketManager:  # Support ticket operations.
         logger.info("Menu 188: Starting organization ticket list export")  # Log operation entry
         logger.debug("ENTRY: OrgTicketManager.list_tickets()")  # Debug trace
         try:
-            mh.APIDataFetcher(  # Delegate to standard fetch-export pipeline
+            exported = mh.APIDataFetcher(  # Delegate to standard fetch-export pipeline
                 title="Organization Support Tickets:",  # User-facing header
                 api_call=mh.mistapi.api.v1.orgs.tickets.listOrgTickets,  # SDK function for ticket listing
                 filename="OrgTickets.csv",  # Output filename in data/ directory
                 sort_key="created_at",  # Sort tickets by creation timestamp
                 duration="365d",  # Look back 1 year (SDK defaults to 1d which misses older tickets)
             ).execute()  # Run the full fetch-flatten-export workflow
+            if exported is False:  # WHY: only an explicit failure skips the completion report.
+                return  # WHY: preserve the existing None return contract for this exporter.
             logger.info("Completed org ticket list export")  # Log success
             logger.debug("EXIT: OrgTicketManager.list_tickets - success")  # Debug trace
         except Exception as error:  # Catch API or export failures
