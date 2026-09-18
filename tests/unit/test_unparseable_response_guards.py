@@ -108,6 +108,21 @@ def test_diagnostic_common_disconnects_for_unparseable_success_body(
     assert _PARSE_LOG_FRAGMENT in _messages(caplog)  # WHY: operators need the parse-failure cause.
 
 
+def test_diagnostic_common_reports_404_without_parsing_body(caplog: pytest.LogCaptureFixture) -> None:
+    """The shared diagnostic parser reports a 404 and skips success-body parsing."""
+    websocket_manager = MagicMock()  # WHY: verify that the non-success path frees the socket.
+    response = _response(b'{"session": "ignored"}', "https://h/api/v1/sites/s/devices/d/arp")  # Build response.
+    response.status_code = HTTPStatus.NOT_FOUND  # WHY: model a client-side Mist command refusal.
+    response.json = MagicMock(side_effect=AssertionError("parsed 404 body"))  # WHY: parsing 4xx would be wrong.
+    caplog.set_level(logging.WARNING, logger="src.websocket.diagnostics.common")  # WHY: capture status logs.
+    result = diagnostic_common.extract_command_session(response, websocket_manager, "arp")  # WHY: drive parser.
+    assert result is None  # WHY: a 404 response must not return a session identifier.
+    websocket_manager.disconnect.assert_called_once()  # WHY: no result can arrive, so the socket must close.
+    response.json.assert_not_called()  # WHY: non-success status must stop before success-body parsing.
+    assert "Failed to issue arp command: 404" in _messages(caplog)  # WHY: the exact status must reach operators.
+    assert "command failed; status=404" in _messages(caplog)  # WHY: the audit log must pin the status.
+
+
 def test_redis_writer_json_call_is_not_an_http_response_parse() -> None:
     """RedisJSON writer line 597 sends JSON.SET and does not parse an HTTP body."""
     config = DatabaseConfig(redis_host="localhost", redis_port=6379, redis_password="test")  # WHY: real config.
