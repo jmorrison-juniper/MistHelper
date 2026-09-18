@@ -150,6 +150,11 @@ def test_a_staged_run_carries_the_chosen_phases_instead_of_the_cloud_default() -
     assert body["canary_phases"] == [25, 50, 100]  # The chosen list, and never the cloud default.
 
 
+def test_empty_target_selection_builds_no_upgrade_plan() -> None:
+    """An empty target selection MUST build no cloud call."""
+    assert plan_upgrade((), options_from({}), ORG_ID, SITE_ID) == ()  # The portal must show no plan for no target.
+
+
 def test_a_staged_run_with_no_chosen_phases_keeps_the_cloud_default() -> None:
     """An empty phase control keeps the documented cloud default.
 

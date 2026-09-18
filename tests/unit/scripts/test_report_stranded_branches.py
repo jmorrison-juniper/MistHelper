@@ -9,6 +9,7 @@ the report that names the result.
 from __future__ import annotations
 
 import logging
+import sys
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -314,6 +315,15 @@ def test_a_clean_repository_answers_zero_under_the_fail_flag(monkeypatch: pytest
     _patch_reader(monkeypatch, [])  # No branch at all, so nothing can be stranded.
 
     assert main(["--fail-on-find"]) == 0, "a clean repository must pass the gate"
+
+
+def test_none_arguments_read_sys_argv_and_report_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A None argument list MUST use sys.argv like module execution."""
+    logging.info("Checking the None argument path")  # Report the plan before the work.
+    monkeypatch.setattr(sys, "argv", ["report_stranded_branches"])  # Keep pytest flags out of argparse.
+    _patch_reader(monkeypatch, [])  # No branch at all, so the report stays clean.
+
+    assert main(None) == 0, "module execution with no findings must pass"  # Prove the None path behavior.
 
 
 def _patch_reader(monkeypatch: pytest.MonkeyPatch, records: list[BranchRecord]) -> None:

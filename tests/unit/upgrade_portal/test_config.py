@@ -197,6 +197,26 @@ def test_port_default_is_8056(monkeypatch: pytest.MonkeyPatch) -> None:
     assert load_settings().web.port == 8056
 
 
+def test_integer_reader_returns_zero() -> None:
+    """The integer reader returns zero before range checks apply."""
+    assert read_integer("0", 7, "TEST_VARIABLE") == 0  # The parser must not treat zero as missing text.
+
+
+def test_integer_reader_returns_negative_number() -> None:
+    """The integer reader returns a negative number before range checks apply."""
+    assert read_integer("-1", 7, "TEST_VARIABLE") == -1  # The caller owns the range check.
+
+
+def test_integer_reader_returns_zero_default_for_bad_text() -> None:
+    """The integer reader returns a zero default when text is not numeric."""
+    assert read_integer("bad", 0, "TEST_VARIABLE") == 0  # The fallback value must survive the parse failure.
+
+
+def test_integer_reader_returns_negative_default_for_bad_text() -> None:
+    """The integer reader returns a negative default when text is not numeric."""
+    assert read_integer("bad", -1, "TEST_VARIABLE") == -1  # The fallback value must survive the parse failure.
+
+
 def test_poll_interval_default_is_30_seconds() -> None:
     """The browser waits 30 seconds between two status calls.
 

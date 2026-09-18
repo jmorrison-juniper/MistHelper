@@ -15,7 +15,7 @@ import pytest  # Fixtures for temporary paths and log capture.
 from src.site.address_audit import address_resolver as resolver_mod  # Patch the Nominatim validator.
 from src.site.address_audit.address_resolver import AddressResolver  # Class under test.
 from src.site.address_audit.models import ResolveCandidates, ResolverResult  # Resolver input and output.
-from src.utils.logger_utils import private_digest  # Expected digest value for each assertion.
+from src.utils.logger_utils import PRIVATE_DIGEST_EMPTY, private_digest  # Expected digest value for each assertion.
 
 _STREET = "742 Evergreen Terrace Suite 12"  # A private street the log must never show.
 _CITY = "Springfield"  # City of the test address.
@@ -103,6 +103,10 @@ class TestResolveLogsNoStreet:
         assert _STREET not in text  # The street must never reach the log.
         assert "Resolve failed for key=" in text  # The warning still fires.
         assert result.canonical_address is None  # The audit degrades instead of aborting.
+
+    def test_private_digest_none_returns_the_empty_token(self) -> None:
+        """A missing private value MUST use the fixed empty token."""
+        assert private_digest(None) == PRIVATE_DIGEST_EMPTY  # The log must not build a digest from missing text.
 
 
 class TestTierLogsNoStreet:
