@@ -17,6 +17,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.capture.packet_capture import PacketCaptureManager
+from src.capture.packet_capture_download import PacketCaptureDownloadManager
 
 AP_MAC = "001122334455"  # WHY: device identifier that the payload log must never hold
 SCAN_PARAMS: dict[str, Any] = {  # WHY: stand in for the radio prompts so the test needs no user input
@@ -96,3 +97,12 @@ def test_log_safe_payload_fields_drops_every_value() -> None:
 def test_log_safe_payload_fields_handles_an_empty_payload() -> None:
     """The helper returns an empty string when the payload holds no field."""
     assert PacketCaptureManager._log_safe_payload_fields({}) == ""  # WHY: guard the boundary case
+
+
+def test_pcap_list_403_reports_status_and_no_payload(caplog: pytest.LogCaptureFixture, capsys) -> None:
+    """A forbidden PCAP list response must return no rows and report the status."""
+    caplog.set_level(logging.WARNING, logger="src.capture.packet_capture_download")  # Capture the warning status.
+    result = PacketCaptureDownloadManager._log_list_failure(403)  # Drive the product 4xx status helper.
+    assert result == []  # A 403 reply must not produce downloadable capture rows.
+    assert "HTTP 403" in capsys.readouterr().out  # The operator must see the forbidden status.
+    assert "Failed to list PCAPs: 403" in caplog.text  # The log must preserve the exact status.
