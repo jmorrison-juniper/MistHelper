@@ -321,7 +321,7 @@ def test_a_clean_repository_answers_zero_under_the_fail_flag(monkeypatch: pytest
 
 def test_none_arguments_read_sys_argv_and_report_success(monkeypatch: pytest.MonkeyPatch) -> None:
     """A None argument list MUST use sys.argv like module execution."""
-    logging.info("Checking the None argument path")  # Report the plan before the work.
+    logger.info("Checking the None argument path")  # Report the plan before the work.
     monkeypatch.setattr(sys, "argv", ["report_stranded_branches"])  # Keep pytest flags out of argparse.
     _patch_reader(monkeypatch, [])  # No branch at all, so the report stays clean.
 
