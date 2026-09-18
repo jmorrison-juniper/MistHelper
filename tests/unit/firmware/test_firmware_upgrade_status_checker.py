@@ -1265,7 +1265,7 @@ class TestExports:
     def test_export_device_status_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
         chk = _make_checker(monkeypatch)
         chk._export_device_status("ts")  # no-op, no exceptions
-        assert True
+        assert fm_mod._MH.DataExporter.write_with_format_selection.call_count == 0  # Empty input must not write output.
 
     def test_export_device_status_calls_writer(self, monkeypatch: pytest.MonkeyPatch) -> None:
         mh = _install_mh_proxy(monkeypatch)
