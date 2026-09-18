@@ -124,7 +124,7 @@ class OrgAdminExporter:
             filename="OrgUsage",
             sort_key="site_id",
         ).execute()
-        if not exported:  # WHY: a failed fetch must not report a completed export.
+        if exported is False:  # WHY: only an explicit failure skips the completion report.
             return  # WHY: preserve the existing None return contract for this exporter.
         logger.info(" License usage data exported to OrgUsage")  # Log completion.
         # WHY: user-visible completion banner (replaces prior print()).

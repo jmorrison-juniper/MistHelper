@@ -79,7 +79,7 @@ class OrgAlarmEventExporter:
                 duration=f"{hours}h",
                 acked=False,
             ).execute()
-            if not exported:  # WHY: a failed fetch must not report a completed export.
+            if exported is False:  # WHY: only an explicit failure skips the completion report.
                 return  # WHY: preserve the existing None return contract for this exporter.
             logger.info("Completed org alarms export and wrote results to OrgAlarms.csv.")
             logger.debug("EXIT: OrgAlarmEventExporter.alarms - success")  # Trace successful exit.

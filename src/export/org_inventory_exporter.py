@@ -89,7 +89,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
             vc=True,  # Include all physical VC member devices (6186 vs 3224 logical)
             limit=1000,
         ).execute()
-        if not exported:  # WHY: a failed fetch must not report a completed export.
+        if exported is False:  # WHY: only an explicit failure skips the completion report.
             return  # WHY: preserve the existing None return contract for this exporter.
         logger.info("Completed organization inventory export and wrote results to OrgInventory.csv.")
         if emitter:  # Branch: emitter present.
@@ -113,7 +113,7 @@ class OrgInventoryExporter:  # Org inventory exporters.
             filename="OrgDevices.csv",
             sort_key="type",
         ).execute()
-        if not exported:  # WHY: a failed fetch must not report a completed export.
+        if exported is False:  # WHY: only an explicit failure skips the completion report.
             return  # WHY: preserve the existing None return contract for this exporter.
         logger.info("Completed organization devices export and wrote results to OrgDevices.csv.")
         if emitter:  # Branch: emitter present.
