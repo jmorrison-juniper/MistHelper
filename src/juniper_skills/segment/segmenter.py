@@ -147,6 +147,7 @@ class DocumentSegmenter:
 
     def _split_large_chunk(self, chunk: _Chunk) -> list[_Chunk]:
         rows = self.page_tracker.annotate(chunk.text.splitlines())  # Reattach pages for paragraph splitting.
+        rows = [(line, page or chunk.page_start) for line, page in rows]  # Inherit pages when a marker was earlier.
         groups = self._paragraph_groups(rows)  # Use blank lines as lower-level boundaries.
         parts = self._pack_groups(chunk.title, groups)  # Pack paragraphs into hard-limit chunks.
         return parts  # Return the lower-level chunks.
@@ -166,13 +167,44 @@ class DocumentSegmenter:
         chunks: list[_Chunk] = []  # Accumulate packed paragraph chunks.
         current: list[tuple[str, int]] = []  # Store rows for the current packed chunk.
         for group in groups:  # Add groups until the next one would break the hard limit.
-            candidate = [*current, *group]  # Build a trial chunk for size checking.
-            if current and self._size_rows(candidate) > self.hard_limit:  # Close the current chunk before overflow.
-                chunks.append(self._make_chunk(current))  # Store the current hard-limit chunk.
-                current = group  # Start the next chunk with the paragraph that did not fit.
-            else:  # The paragraph fits in the current chunk.
-                current = candidate  # Keep growing the current chunk.
+            for unit in self._split_large_group(group):  # Reduce an oversize paragraph before packing.
+                candidate = [*current, *unit]  # Build a trial chunk for size checking.
+                if current and self._size_rows(candidate) > self.hard_limit:  # Close the chunk before overflow.
+                    chunks.append(self._make_chunk(current))  # Store the current hard-limit chunk.
+                    current = unit  # Start the next chunk with the unit that did not fit.
+                else:  # The paragraph unit fits in the current chunk.
+                    current = candidate  # Keep growing the current chunk.
         return [*chunks, self._make_chunk(current)] if current else chunks  # Return all packed chunks.
+
+    def _split_large_group(self, group: list[tuple[str, int]]) -> list[list[tuple[str, int]]]:
+        if self._size_rows(group) <= self.hard_limit:  # Keep normal paragraphs intact.
+            return [group]
+        units: list[list[tuple[str, int]]] = []  # Accumulate word-bounded paragraph slices.
+        current: list[tuple[str, int]] = []  # Store rows for the current slice.
+        for line, page in group:  # Split each oversize prose row without changing word order.
+            for unit_line in self._split_large_line(line):  # Break a long row at word boundaries.
+                candidate = [*current, (unit_line, page)]  # Test whether the line fits in the current slice.
+                if current and self._size_rows(candidate) > self.hard_limit:  # Flush before the slice overflows.
+                    units.append(current)  # Store the completed paragraph slice.
+                    current = [(unit_line, page)]  # Start a new slice with the current line.
+                else:  # The line fits in the current slice.
+                    current = candidate  # Keep growing the current slice.
+        return [*units, current] if current else units  # Return all slices for packing.
+
+    def _split_large_line(self, line: str) -> list[str]:
+        if self._size(line) <= self.hard_limit:  # Keep normal source lines unchanged.
+            return [line]
+        words = line.split(" ")  # Split only on spaces so words and numbers stay unchanged.
+        lines: list[str] = []  # Accumulate safe line slices.
+        current = ""  # Store the current line slice.
+        for word in words:  # Pack words until the hard limit would be exceeded.
+            candidate = f"{current} {word}".strip()  # Build a trial line slice.
+            if current and self._size(candidate) > self.hard_limit:  # Flush before overflow.
+                lines.append(current)  # Store the completed line slice.
+                current = word  # Start the next line slice.
+            else:  # The word fits in the current line slice.
+                current = candidate  # Keep the word in the current line slice.
+        return [*lines, current] if current else lines  # Return all safe line slices.
 
     def _merge_chunks(self, chunks: list[_Chunk]) -> list[TopicSegment]:
         logging.info("Merging tiny sections into bounded topics")  # Log before small-section merge.
