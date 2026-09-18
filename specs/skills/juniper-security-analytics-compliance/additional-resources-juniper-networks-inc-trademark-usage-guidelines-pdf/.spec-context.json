@@ -1,0 +1,61 @@
+{
+  "workflow": "speckit",
+  "specName": "Juniper Networks, Inc. Trademark Usage Guidelines skill package",
+  "branch": "feat/2925-juniper-skill-factory",
+  "status": "completed",
+  "currentStep": "implement",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-09-18T07:22:45.742Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-09-18T07:22:46.320Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-09-18T07:22:47.035Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "harness",
+      "at": "2026-09-18T07:22:47.600Z"
+    }
+  ],
+  "sourcePath": "C:\\Users\\jmorrison\\Downloads\\juniper-harvest-md\\additional-resources\\juniper-networks-inc-trademark-usage-guidelines.md",
+  "sourceFile": "additional-resources/juniper-networks-inc-trademark-usage-guidelines.pdf",
+  "sourceHash": "76cc24c4e686a6868419a9626d67c5718e1eac9d7492bdb7d0e50832d1ec1fd6",
+  "sourcePages": 5,
+  "partCount": 1,
+  "topicCount": null,
+  "guardResult": "not measured",
+  "livingSpecs": {
+    "loaded": [
+      "additional-resources-juniper-networks-inc-trademark-usage-guidelines-pdf"
+    ]
+  },
+  "decisions": [
+    {
+      "decision": "Use programmatic SpecKit generation",
+      "why": "Manual runs do not scale."
+    }
+  ],
+  "verified": [
+    {
+      "what": "Generated artifact set validates",
+      "result": "No critical findings"
+    }
+  ]
+}
