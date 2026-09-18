@@ -727,6 +727,28 @@ class TestTrackerPath:
         rows = json.loads(path.read_text(encoding="utf-8"))
         assert len(rows) == 1
 
+    def test_an_empty_tracker_does_not_stop_a_run(self, tmp_path: Path) -> None:
+        """A tracker file with a zero-byte body still accepts a new row.
+
+        Args:
+            tmp_path: The temporary directory pytest supplies.
+        """
+        (tmp_path / "ActiveUpgrades.json").write_bytes(b"")  # WHY: model an empty tracker body.
+        path = driver.write_tracker(make_record(), "t1", root=tmp_path)  # WHY: drive the product rewrite.
+        rows = json.loads(path.read_text(encoding="utf-8"))  # WHY: read the replacement tracker.
+        assert len(rows) == 1  # WHY: the damaged prior body must not stop the new row.
+
+    def test_a_malformed_tracker_does_not_stop_a_run(self, tmp_path: Path) -> None:
+        """A tracker file with malformed JSON still accepts a new row.
+
+        Args:
+            tmp_path: The temporary directory pytest supplies.
+        """
+        (tmp_path / "ActiveUpgrades.json").write_text("{not valid JSONDecodeError", encoding="utf-8")  # WHY: bad.
+        path = driver.write_tracker(make_record(), "t1", root=tmp_path)  # WHY: drive the product rewrite.
+        rows = json.loads(path.read_text(encoding="utf-8"))  # WHY: read the replacement tracker.
+        assert len(rows) == 1  # WHY: the damaged prior body must not stop the new row.
+
 
 class TestTrackerUnderThreads:
     """Two run threads that write the tracker both keep their row.

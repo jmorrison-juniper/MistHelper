@@ -130,3 +130,19 @@ class TestMultiWorkerGuard:
             ),
         ):
             session_store._read_worker_count()
+
+
+class TestDecodeInvalidPayload:
+    """Cover corrupt stored session payloads."""
+
+    def test_empty_body_payload_returns_none(self) -> None:
+        """A zero-byte session payload must resolve as no session."""
+        empty_body = b"".decode()  # WHY: model a Redis value with no JSON bytes.
+        result = SessionStore._decode("session-1", empty_body)  # WHY: drive the product decoder.
+        assert result is None  # WHY: invalid session data must log the user out.
+
+    def test_malformed_json_payload_returns_none(self) -> None:
+        """A malformed session payload must resolve as no session."""
+        malformed_body = "{not valid JSONDecodeError"  # WHY: model a damaged Redis JSON value.
+        result = SessionStore._decode("session-1", malformed_body)  # WHY: drive the product decoder.
+        assert result is None  # WHY: corrupt session data must log the user out.

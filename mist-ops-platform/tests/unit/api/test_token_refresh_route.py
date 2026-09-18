@@ -75,6 +75,20 @@ def test_renew_does_not_create_a_record_for_the_identifier_it_refused() -> None:
     assert store.resolve(unknown) is None  # No record may exist after the refusal.
 
 
+def test_decode_empty_body_payload_returns_none() -> None:
+    """A zero-byte session payload must not renew as a valid session."""
+    empty_body = b"".decode()  # Model a Redis value with no JSON bytes.
+    result = SessionStore._decode("session-1", empty_body)  # Drive the product decoder.
+    assert result is None  # The route must treat empty session data as anonymous.
+
+
+def test_decode_malformed_json_payload_returns_none() -> None:
+    """A malformed session payload must not renew as a valid session."""
+    malformed_body = "{not valid JSONDecodeError"  # Model a damaged Redis JSON value.
+    result = SessionStore._decode("session-1", malformed_body)  # Drive the product decoder.
+    assert result is None  # The route must treat corrupt session data as anonymous.
+
+
 # -- The route refuses an anonymous caller ------------------------------
 
 
