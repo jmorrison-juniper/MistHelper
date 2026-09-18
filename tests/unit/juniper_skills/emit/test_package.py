@@ -7,11 +7,14 @@ from pathlib import Path
 
 from src.juniper_skills.emit.package import (
     CitationKeyAllocator,
+    CollectionSkillPackageAssembler,
     DocumentPackageInput,
+    DocumentSkillPackageAssembler,
     IndexRenderer,
     RouteTableBuilder,
     SkillPackageAssembler,
     SkillPackageValidator,
+    SmallDocumentPlanner,
     TopicRoute,
 )
 
@@ -28,14 +31,24 @@ class EmitTestWorkspace:
         path.mkdir(parents=True, exist_ok=True)  # Create the directory for this test.
         return path  # Return the workspace path to the test.
 
-    def document(self, root: Path, slug: str, title: str, lifecycle: str = "day1") -> DocumentPackageInput:
-        document_dir = root / "out" / "juniper-junos-fundamentals" / "documents" / slug  # Use a real package tree.
+    def document(
+        self, root: Path, slug: str, title: str, lifecycle: str = "day1", pages: int = 10
+    ) -> DocumentPackageInput:
+        package = "juniper-junos-fundamentals"  # Use the legacy domain package name for existing tests.
+        return self.document_in_package(root, package, slug, title, lifecycle, pages)  # Build a source tree.
+
+    def document_in_package(
+        self, root: Path, package: str, slug: str, title: str, lifecycle: str = "day1", pages: int = 10
+    ) -> DocumentPackageInput:
+        document_dir = root / "out" / package / "documents" / slug  # Use a contract-shaped package tree.
         document_dir.mkdir(parents=True, exist_ok=True)  # Create the source document tree.
         self._topic(document_dir, "00-overview.md", title, lifecycle)  # Add the required overview topic.
         self._index(document_dir, title, lifecycle)  # Add the level 2 index that the assembler must read.
         markdown = Path("guides") / f"{slug}.md"  # Store a relative harvest path for sources.md.
         pdf = Path("pdf") / f"{slug}.pdf"  # Store a relative PDF path for sources.md.
-        return DocumentPackageInput(slug, title, "guides", 10, document_dir, (markdown,), pdf, "https://example.test")
+        return DocumentPackageInput(
+            slug, title, "guides", pages, document_dir, (markdown,), pdf, "https://example.test"
+        )
 
     def _topic(self, document_dir: Path, name: str, title: str, lifecycle: str) -> None:
         text = (
@@ -114,6 +127,44 @@ class TestSkillPackageEmitter:
         assert "Source Author" in sources  # The author must come from the source frontmatter.
         assert "| 77 |" in sources  # The page count must come from the source frontmatter.
 
+    def test_document_skill_package_uses_one_document_name(self) -> None:
+        workspace = EmitTestWorkspace().reset("document-package")  # Create isolated project-local test data.
+        package = "juniper-junos-fundamentals-junos-beginners-guide"  # Use the required per-document package name.
+        document = EmitTestWorkspace().document_in_package(  # Place topics where the document assembler expects them.
+            workspace,
+            package,
+            "junos-beginners-guide",
+            "Day One Beginner Guide",
+            "day2",
+            356,
+        )
+        before = (document.document_dir / "00-overview.md").read_text(encoding="utf-8")  # Capture topic content.
+        assembler = DocumentSkillPackageAssembler(workspace / "factory.db")  # Use a local citation database.
+        result = assembler.assemble("junos-fundamentals", workspace / "out", document, self._taxonomy(workspace))
+        skill_text = (result.package_dir / "SKILL.md").read_text(encoding="utf-8")  # Read the generated router.
+        after = (document.document_dir / "00-overview.md").read_text(encoding="utf-8")  # Capture topic content.
+        assert result.package_dir.name == package  # The package name must include the document slug.
+        assert "name: juniper-junos-fundamentals-junos-beginners-guide" in skill_text  # The skill name must match.
+        assert "absent in this document" in skill_text  # The skill must state missing life cycle stages.
+        assert after == before  # The assembler must not rewrite an existing topic file.
+
+    def test_small_documents_are_grouped_into_collection_package(self) -> None:
+        workspace = EmitTestWorkspace().reset("small-documents")  # Create isolated project-local test data.
+        package = "juniper-sd-wan-small-documents"  # Use the collection package for short source documents.
+        short = EmitTestWorkspace().document_in_package(workspace, package, "two-page-flyer", "Two Page Flyer", pages=2)
+        medium = EmitTestWorkspace().document_in_package(
+            workspace, package, "seventeen-page-eg", "Short Eguide", pages=17
+        )
+        large = EmitTestWorkspace().document(workspace, "long-guide", "Long Guide", pages=20)  # Build one large input.
+        plan = SmallDocumentPlanner().plan((short, medium, large))  # Apply the page-count rule.
+        result = CollectionSkillPackageAssembler(workspace / "factory.db").assemble(
+            "sd-wan", workspace / "out", plan.collection_documents, self._taxonomy(workspace)
+        )
+        assert len(plan.large_documents) == 1  # A 20-page document must become its own package.
+        assert len(plan.collection_documents) == 2  # Documents below 20 pages must enter the collection package.
+        assert result.package_dir.name == package  # The collection assembler must use the stable package name.
+        assert result.document_count == 2  # The collection must contain both short documents.
+
     def test_assembler_does_not_write_topic_files(self) -> None:
         workspace = EmitTestWorkspace().reset("preserve")  # Create isolated project-local test data.
         document = EmitTestWorkspace().document(workspace, "doc-one", "Preserve Guide", "day2")  # Build source.
@@ -124,6 +175,17 @@ class TestSkillPackageEmitter:
         )  # Assemble level 1 files only.
         after = topic_path.read_text(encoding="utf-8")  # Capture the exact topic content after assembly.
         assert after == before  # The assembler must never replace real topic content with a stub.
+
+    def test_validator_rejects_route_rows_that_restate_file_names(self) -> None:
+        workspace = EmitTestWorkspace().reset("route-vocabulary-failure")  # Create isolated test data.
+        package_dir = workspace / "out" / "juniper-junos-fundamentals-bad-route"  # Build a package root.
+        package_dir.mkdir(parents=True, exist_ok=True)  # Create the package root for SKILL.md.
+        skill_text = self._bad_route_skill_text()  # Build a route row that repeats the destination file name.
+        (package_dir / "SKILL.md").write_text(skill_text, encoding="utf-8")  # Write the invalid router.
+        validation = SkillPackageValidator().validate(package_dir)  # Run the package validator.
+        messages = [finding.message for finding in validation.errors]  # Collect error messages for assertion.
+        assert "route row restates the destination file name" in messages  # The guard must catch the bad route.
+        assert "route row must use user vocabulary" in messages  # The guard must catch the stale stub phrase.
 
     def test_coverage_gap_is_written_to_level_one_index(self) -> None:
         workspace = EmitTestWorkspace().reset("coverage")  # Create isolated project-local test data.
@@ -197,3 +259,14 @@ class TestSkillPackageEmitter:
             encoding="utf-8",
         )  # Write only the row needed by the assembler.
         return taxonomy  # Return the taxonomy path to the test.
+
+    def _bad_route_skill_text(self) -> str:
+        return (
+            "---\nname: juniper-junos-fundamentals-bad-route\ndescription: >-\n"
+            "  Use this skill for Juniper route validation. Use it when an operator needs a bad route test.\n"
+            "license: Test data.\nmetadata:\n  feature: 2925-juniper-skill-factory\n"
+            "  domain: junos-fundamentals\n  documents: 1\n  topics: 1\n  source_pages: 1\n"
+            "  built: 2026-09-17T00:00:00+00:00\n---\n\n# Bad route\n\n"
+            "## Route by subject\n\n| Ask about | Read this topic |\n| - | - |\n"
+            "| Read about Filtering Output. | `documents/doc-one/08-filtering-output.md` |\n"
+        )  # Return a router row that a real package must not generate.
