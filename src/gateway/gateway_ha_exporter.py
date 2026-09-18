@@ -21,6 +21,14 @@ from src.data.data_processing_utils import (
 )  # WHY: 1015 T-10 canonical import (eliminates mh.DataProcessingUtils).
 
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+_HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
+
+
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
 class GatewayHaExporter:
@@ -73,6 +81,14 @@ class GatewayHaExporter:
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logger.info("Fetching gateway device stats for site %s", site_id)  # Trace before API call
         stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(mh.apisession, site_id, type="gateway")  # API call
+        status_code = _response_status_code(stats_resp)  # WHY: a 5xx can carry an empty payload without raising.
+        if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the HA gateway count unsafe.
+            logger.error(  # WHY: the operator must see the cloud status instead of a false no-HA report.
+                "The cloud returned HTTP %s for HA gateway stats at site %s",
+                status_code,
+                site_id,
+            )
+            return None  # WHY: preserve the existing None failure contract.
         all_gateways = mh.APICoreFetchUtils.get_api_response_data(stats_resp)  # Unwrap list from response
         logger.debug("Received %d gateway stat records for site %s", len(all_gateways), site_id)  # Trace count
         ha_gateways = [gw for gw in all_gateways if gw.get("is_ha") is True]  # Filter to HA-enabled gateways

@@ -30,6 +30,14 @@ from src.config.source_dependency_resolver import (
 from src.utils.console import echo  # WHY: 1031 stdout + INFO log helper replaces legacy WARNING-channel echoes.
 
 logger = logging.getLogger(__name__)  # WHY: keep log records tied to this module.
+_HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
+
+
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
 class OfflineDeviceReporter:  # Offline device inventory report.
@@ -106,6 +114,14 @@ class OfflineDeviceReporter:  # Offline device inventory report.
         stats_resp = mh.mistapi.api.v1.orgs.stats.listOrgDevicesStats(
             mh.apisession, current_org_id, type="all", status="all", fields="*", limit=1000
         )
+        status_code = _response_status_code(stats_resp)  # WHY: a 5xx can carry an empty payload without raising.
+        if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the device count unsafe.
+            logger.error(  # WHY: the operator must see the cloud status instead of a false empty organization.
+                "The cloud returned HTTP %s for offline device stats at org %s",
+                status_code,
+                current_org_id,
+            )
+            return site_lookup, []  # WHY: preserve the tuple return shape while skipping false success logs.
         all_devices: list[dict[str, Any]] = mh.mistapi.get_all(response=stats_resp, mist_session=mh.apisession)
         logger.info("Retrieved stats for %s devices", len(all_devices))
         echo("  Retrieved %s devices from API", len(all_devices))

@@ -26,6 +26,8 @@ from src.firmware.running_version import (  # WHY: one reader holds the running-
 )
 
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
+_HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
 
 # Type aliases for injected dependencies keep readable signatures across helpers.
 SafeInputFn = Callable[..., str]  # WHY: safe_input(prompt, context=...) returning stripped text
@@ -66,6 +68,12 @@ mistapi: Any = _mistapi_module
 
 
 _MH = SourceDependencyResolver  # WHY: Resolve legacy host helpers through the bound source resolver.
+
+
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -3462,6 +3470,14 @@ class FirmwareUpgradeStatusChecker:
         stats_resp = mistapi.api.v1.sites.stats.listSiteDevicesStats(  # WHY: fetch first page for site
             apisession, self.site_filter, type="all", limit=1000
         )
+        status_code = _response_status_code(stats_resp)  # WHY: a 5xx can carry an empty payload without raising.
+        if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the device count unsafe.
+            logger.error(  # WHY: the operator must see the cloud status instead of a false zero-device count.
+                "The cloud returned HTTP %s for firmware site stats at site %s",
+                status_code,
+                self.site_filter,
+            )
+            return False  # WHY: preserve the existing boolean failure contract.
         site_stats = mistapi.get_all(response=stats_resp, mist_session=apisession)  # WHY: paginate to completion
         self.all_device_stats.extend(site_stats)  # WHY: accumulate into shared list
 
@@ -3475,6 +3491,14 @@ class FirmwareUpgradeStatusChecker:
         stats_resp = mistapi.api.v1.orgs.stats.listOrgDevicesStats(  # WHY: fetch first page org-wide
             apisession, self.org_id, type="all", fields="*", limit=1000
         )
+        status_code = _response_status_code(stats_resp)  # WHY: a 5xx can carry an empty payload without raising.
+        if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the device count unsafe.
+            logger.error(  # WHY: the operator must see the cloud status instead of a false zero-device count.
+                "The cloud returned HTTP %s for firmware organization stats at org %s",
+                status_code,
+                self.org_id,
+            )
+            return False  # WHY: preserve the existing boolean failure contract.
         org_stats = mistapi.get_all(response=stats_resp, mist_session=apisession)  # WHY: paginate to completion
         self.all_device_stats.extend(org_stats)  # WHY: accumulate into shared list
 
