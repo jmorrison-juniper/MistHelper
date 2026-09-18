@@ -10,8 +10,11 @@ from src.juniper_skills.extract import (  # Import the public depth extraction A
     ConfigurationFactExtractor,
     ConstraintFactExtractor,
     CoverageAnalyzer,
+    CoverageEntry,
     DefinitionFactExtractor,
     FactExtractionEngine,
+    GroundTruthEvaluator,
+    GroundTruthRegion,
     NumericFactExtractor,
     OutputFieldFactExtractor,
     PlatformReleaseFactExtractor,
@@ -191,6 +194,29 @@ class TestCoverageAnalyzer:
         assert "match" in manifest.values("pipe filters named")  # Prove pipe filter extraction.
         assert manifest.count("table rows") == 1  # Prove table row extraction.
 
+    def test_manifest_reads_all_pipe_help_filters(self) -> None:
+        """The analyzer reads every filter from pipe help output."""
+        source = "\n".join(  # Build the pipe help block that exposed the coverage defect.
+            (
+                "<!-- page 65 -->",
+                "root@Router1> show interfaces terse | ?",
+                "Possible completions:",
+                "save Save output text to file",
+                "tee Write to standard output and file",
+                "trim Trim specified number of columns from start of line",
+                "resolve Resolve IP addresses",
+            )
+        )
+        manifest = CoverageAnalyzer().analyze_text(source, "TEST")  # Build the coverage manifest.
+        values = set(manifest.values("pipe filters named"))  # Collect filters for direct checks.
+        assert {"save", "tee", "trim", "resolve"}.issubset(values)  # Prove the missed filters are now found.
+
+    def test_manifest_adds_refresh_interval_numeric_fact(self) -> None:
+        """The analyzer gives a refresh command value a seconds unit."""
+        source = "<!-- page 68 -->\nshow interfaces extensive | match ge-0|error|flap | refresh 2"  # Source.
+        manifest = CoverageAnalyzer().analyze_text(source, "TEST")  # Build manifest entries.
+        assert "refresh interval 2 seconds" in manifest.values("numeric limits")  # Prove full numeric fact.
+
     def test_manifest_verifier_reports_missing_entries(self) -> None:
         """The verifier reports the share of checklist entries covered."""
         source = "<!-- page 1 -->\nshow interfaces terse\nshow route terse"  # Build two command facts.
@@ -201,9 +227,10 @@ class TestCoverageAnalyzer:
 
     def test_numeric_manifest_requires_parameter_anchor(self) -> None:
         """The analyzer drops bare numbers and keeps named numeric limits."""
-        source = "<!-- page 2 -->\nFan 4 OK\nhold-time 90 seconds\nVersion 10.3 started"  # Build numeric text.
+        source = "<!-- page 2 -->\ncount 0\nlimit 69\nhold-time 90 seconds\nVersion 10.3 started"  # Source.
         manifest = CoverageAnalyzer().analyze_text(source, "TEST")  # Build manifest entries.
         assert manifest.values("numeric limits") == ("hold-time 90 seconds",)  # Prove anchored numeric extraction.
+        assert manifest.numeric_rejection_count == 2  # Prove incomplete numeric candidates are reported.
 
     def test_definition_extractor_rejects_heading_questions(self) -> None:
         """The definition extractor ignores question headings."""
@@ -212,3 +239,15 @@ class TestCoverageAnalyzer:
         definitions = DefinitionFactExtractor().extract(facts, "TEST")  # Extract definitions.
         assert len(definitions) == 1  # Prove only the real definition remains.
         assert "What if" not in definitions[0].fact  # Prove the heading did not become a term.
+
+    def test_ground_truth_evaluator_reports_recall_and_precision(self) -> None:
+        """The evaluator can report a coverage miss against independent truth."""
+        source = "<!-- page 1 -->\nshow route terse"  # Build source with one detected command.
+        facts = (  # Build independent truth with one extra missing filter.
+            CoverageEntry("commands found", "show route terse", "[TEST p.1]"),
+            CoverageEntry("pipe filters named", "match", "[TEST p.1]"),
+        )
+        region = GroundTruthRegion("region", source, facts)  # Store independent facts for one region.
+        report = GroundTruthEvaluator().evaluate((region,), "TEST")  # Measure manifest against truth.
+        assert report.recall_percent == 50.0  # Prove the metric can fall below 100 percent.
+        assert report.regions[0].missing_facts[0].value == "match"  # Prove the missing fact is reported.

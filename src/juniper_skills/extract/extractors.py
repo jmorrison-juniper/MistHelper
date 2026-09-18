@@ -84,7 +84,8 @@ class CommandFactExtractor(FactExtractor):
         """Return the command text from one source line, or an empty string."""
         stripped = text.strip().strip("`")  # Remove Markdown edge code marks without changing the command.
         prompt_match = re.match(
-            r"(?:[\w.-]+@[\w.-]+[>#]\s*)?((?:show|set|delete|edit|run|commit|request|clear|ping|traceroute)\s+.+)",
+            r"(?:[\w.-]+@[\w.-]+[>#]\s*)?"
+            r"((?:show|set|delete|edit|run|request|clear|save|ping|traceroute|rollback)\s+.+|commit\b.*)",
             stripped,
         )  # Detect CLI.
         if prompt_match:  # Prompt lines carry the command after the prompt.
@@ -95,7 +96,11 @@ class CommandFactExtractor(FactExtractor):
         """Return command text only when the line is not prose."""
         if re.search(r",\s+(and|or)\s+|\.\s+If\b|\bcommands?\.\s+If\b", command):  # Detect prose lists.
             return ""  # Do not preserve a prose sentence as a command.
-        if re.match(r"^(set|delete|show)\s+[A-Z]", command):  # Detect glossary rows that start with CLI verbs.
+        glossary = re.match(  # Detect glossary rows that start with CLI verbs.
+            r"^(set|delete|show|request|clear|run|commit|edit|save|ping|traceroute|rollback)\s+[A-Z]",
+            command,
+        )
+        if glossary and not self._valid_save(command):  # Configuration save commands can use uppercase names.
             return ""  # Reject command keyword descriptions as commands.
         if command.startswith("set ") and not re.match(
             r"set\s+(interfaces|protocols|routing-options|policy-options|security|vlans|groups|switch-options|forwarding-options|system|class-of-service)\b",
@@ -103,6 +108,10 @@ class CommandFactExtractor(FactExtractor):
         ):  # Validate set roots.
             return ""  # Reject prose that starts with the verb set.
         return command  # Return the command when it passes the prose filters.
+
+    def _valid_save(self, command: str) -> bool:
+        """Return whether a save line is a real command."""
+        return command.startswith("save ") and bool(re.search(r"[./\\]", command))  # Require a file-like target.
 
     def _command_facts(self, command: str, line: SourceLine, source_key: str) -> list[ExtractedFact]:
         """Return command and argument cards for one command line."""
@@ -156,20 +165,76 @@ class NumericFactExtractor(FactExtractor):
     """Extract numeric limits, defaults, ranges, timers, and thresholds."""
 
     fact_type = "numeric"  # Name numeric facts for dedup keys.
-    _PATTERN = re.compile(
+    _CANDIDATE_PATTERN = re.compile(
         r"\b(?:maximum|minimum|default|range|timer|threshold|limit|interval|hold-time|mtu|vlan-id|"
         r"preference|metric|timeout|delay|count|size|rate|age|priority|cost)\s+"
-        r"\d+(?:\.\d+)?(?:\s*(?:VLANs|MACs|routes|bytes|seconds|minutes|hours|days|Gbps|Mbps|"
-        r"kbps|dBm|dB|ms|sec|%|V|W|A))?",
+        r"\d+(?:\.\d+)?(?:\s+[A-Za-z%][A-Za-z0-9%/-]*(?:\s+[A-Za-z][A-Za-z0-9/-]*)?)?",
         re.IGNORECASE,
-    )  # Find numeric facts that have a named parameter anchor.
+    )  # Find named numeric candidates before unit validation.
+    _UNITS = {  # Keep only named values with an engineering unit or object.
+        "%",
+        "bytes",
+        "configurations",
+        "days",
+        "db",
+        "dbm",
+        "gbps",
+        "hours",
+        "kbps",
+        "lines",
+        "macs",
+        "mbps",
+        "minutes",
+        "ms",
+        "routes",
+        "sec",
+        "seconds",
+        "v",
+        "vlans",
+        "w",
+    }
+    _MULTI_UNITS = {"rollback configurations"}  # Keep common Junos object-unit phrases.
 
     def _extract(self, lines: tuple[SourceLine, ...], source_key: str) -> list[ExtractedFact]:
         facts: list[ExtractedFact] = []  # Collect numeric facts in source order.
         for line in lines:  # Check every page-tagged source line.
-            for match in self._PATTERN.finditer(line.text):  # Emit each numeric instance on the line.
-                facts.append(self._numeric_fact(match.group(0).strip(), line, source_key))  # Store one value fact.
+            for value in self._valid_values(line.text):  # Emit only parameter, value, and unit triples.
+                facts.append(self._numeric_fact(value, line, source_key))  # Store one value fact.
         return facts  # Return numeric facts for the engine.
+
+    def rejected_count(self, lines: tuple[SourceLine, ...]) -> int:
+        """Return the count of numeric candidates rejected as incomplete."""
+        logging.info("Counting rejected numeric candidates")  # Log before numeric quality measurement.
+        count = sum(1 for line in lines for value in self._candidate_values(line.text) if not self._valid(value))
+        logging.debug("Rejected %d numeric candidates", count)  # Log rejected candidate count.
+        return count  # Return the rejection count for manifest reporting.
+
+    def _valid_values(self, text: str) -> tuple[str, ...]:
+        """Return numeric candidates that include a parameter, value, and unit."""
+        return tuple(value for value in self._candidate_values(text) if self._valid(value))  # Keep complete values.
+
+    def _candidate_values(self, text: str) -> tuple[str, ...]:
+        """Return raw named numeric candidates from one line."""
+        return tuple(
+            self._trim_candidate(match.group(0)) for match in self._CANDIDATE_PATTERN.finditer(text)
+        )  # Extract.
+
+    def _trim_candidate(self, value: str) -> str:
+        """Return a numeric candidate without trailing prose glue."""
+        tokens = value.strip(" .,:;").split()  # Split the candidate for trailing-word cleanup.
+        if len(tokens) > 3 and tokens[-1].lower() in {"on", "in", "for", "from", "to", "with"}:  # Find glue.
+            tokens = tokens[:-1]  # Remove the preposition that belongs to surrounding prose.
+        return " ".join(tokens)  # Return the cleaned candidate string.
+
+    def _valid(self, value: str) -> bool:
+        """Return whether a numeric candidate has a unit or object."""
+        tokens = value.split()  # Separate the parameter, numeric value, and unit-like token.
+        if len(tokens) < 3:  # A complete numeric fact needs a parameter, value, and unit.
+            return False  # Reject bare parameter and value pairs.
+        unit = tokens[2].lower()  # Normalize the unit for whitelist checks.
+        pair = " ".join(token.lower() for token in tokens[2:4])  # Check two-word object units.
+        exact_unit = tokens[2] in {"A", "V", "W"}  # Keep electrical units without accepting the article a.
+        return exact_unit or unit in self._UNITS or pair in self._MULTI_UNITS  # Require a known unit or object.
 
     def _numeric_fact(self, value: str, line: SourceLine, source_key: str) -> ExtractedFact:
         """Return one numeric card with a short context."""

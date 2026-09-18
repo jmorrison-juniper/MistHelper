@@ -37,6 +37,7 @@ class CoverageManifest:
     region: str  # Store the exact source page range for the region.
     entries: tuple[CoverageEntry, ...]  # Store all deduplicated checklist items.
     merge_count: int  # Store how many repeated checklist items merged away.
+    numeric_rejection_count: int = 0  # Store numeric candidates rejected because they lacked a full anchor.
 
     def count(self, category: str) -> int:
         """Return the count of manifest entries in one category."""
@@ -82,6 +83,63 @@ class CoverageVerificationReport:
         if self.total_entries <= 0:  # A zero-entry manifest cannot prove coverage.
             return 0.0  # Return zero so callers do not treat it as passed.
         return self.covered_entries * 100.0 / self.total_entries  # Convert covered facts to a percentage.
+
+
+@dataclass(frozen=True)
+class GroundTruthRegion:
+    """One independent region with facts found outside the manifest pass."""
+
+    name: str  # Store the human-readable region name.
+    source_text: str  # Store the source region text under evaluation.
+    facts: tuple[CoverageEntry, ...]  # Store independent facts expected from the region.
+
+
+@dataclass(frozen=True)
+class GroundTruthMeasurement:
+    """Recall and precision for one region against independent ground truth."""
+
+    name: str  # Store the region name.
+    ground_truth_count: int  # Store the count of independent facts.
+    manifest_count: int  # Store the count of manifest entries.
+    matched_truth_count: int  # Store how many independent facts the manifest found.
+    precise_manifest_count: int  # Store how many manifest entries are real facts.
+    missing_facts: tuple[CoverageEntry, ...]  # Store independent facts absent from the manifest.
+    noisy_entries: tuple[CoverageEntry, ...]  # Store manifest entries absent from independent truth.
+
+    @property
+    def recall_percent(self) -> float:
+        """Return the share of independent facts found by the manifest."""
+        if self.ground_truth_count <= 0:  # Empty ground truth cannot prove recall.
+            return 0.0  # Return zero so empty cases do not pass by accident.
+        return self.matched_truth_count * 100.0 / self.ground_truth_count  # Return recall as a percentage.
+
+    @property
+    def precision_percent(self) -> float:
+        """Return the share of manifest entries that match independent facts."""
+        if self.manifest_count <= 0:  # Empty manifests cannot prove precision.
+            return 0.0  # Return zero so empty cases do not pass by accident.
+        return self.precise_manifest_count * 100.0 / self.manifest_count  # Return precision as a percentage.
+
+
+@dataclass(frozen=True)
+class GroundTruthReport:
+    """Aggregated ground-truth measurement for multiple regions."""
+
+    regions: tuple[GroundTruthMeasurement, ...]  # Store per-region recall and precision.
+
+    @property
+    def recall_percent(self) -> float:
+        """Return aggregate recall across all ground-truth regions."""
+        total = sum(region.ground_truth_count for region in self.regions)  # Count all independent facts.
+        matched = sum(region.matched_truth_count for region in self.regions)  # Count all matched facts.
+        return 0.0 if total <= 0 else matched * 100.0 / total  # Return the aggregate recall.
+
+    @property
+    def precision_percent(self) -> float:
+        """Return aggregate precision across all ground-truth regions."""
+        total = sum(region.manifest_count for region in self.regions)  # Count all manifest entries.
+        precise = sum(region.precise_manifest_count for region in self.regions)  # Count real manifest entries.
+        return 0.0 if total <= 0 else precise * 100.0 / total  # Return the aggregate precision.
 
 
 @dataclass(frozen=True)

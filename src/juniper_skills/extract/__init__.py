@@ -13,6 +13,7 @@ from .extractors import (  # Export each extractor so tests can verify every fac
     PrerequisiteFactExtractor,
     TableRowFactExtractor,
 )
+from .ground_truth import GroundTruthEvaluator  # Export independent recall and precision measurement.
 from .guard import CachedSourceSimilarityGuard  # Export the cached guard runner for large measurements.
 from .models import (  # Export result models for reports.
     CoverageEntry,
@@ -20,6 +21,9 @@ from .models import (  # Export result models for reports.
     CoverageVerificationReport,
     DepthExtractionResult,
     ExtractedFact,
+    GroundTruthMeasurement,
+    GroundTruthRegion,
+    GroundTruthReport,
     TopicSplit,
 )
 
@@ -36,6 +40,10 @@ __all__ = [  # Keep the public surface explicit for skill factory imports.
     "DepthExtractionResult",
     "ExtractedFact",
     "FactExtractionEngine",
+    "GroundTruthEvaluator",
+    "GroundTruthMeasurement",
+    "GroundTruthRegion",
+    "GroundTruthReport",
     "NumericFactExtractor",
     "OutputFieldFactExtractor",
     "PlatformReleaseFactExtractor",

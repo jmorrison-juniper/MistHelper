@@ -33,9 +33,10 @@ class CoverageAnalyzer:
         logging.info("Building coverage manifest for %s", source_key)  # Log before analysis.
         lines = self.parser.parse(text)  # Attach citations to all source lines.
         entries = self._entries(lines, source_key)  # Extract all checklist classes.
+        numeric_rejections = self.numeric_extractor.rejected_count(lines)  # Count incomplete numeric candidates.
         useful_entries = tuple(entry for entry in entries if self._useful_entry(entry))  # Drop noise entries.
         kept, merges = self._deduplicate(useful_entries)  # Merge repeated checklist items.
-        manifest = CoverageManifest(topic or self._topic(lines), self._region(lines), kept, merges)  # Build report.
+        manifest = CoverageManifest(topic or self._topic(lines), self._region(lines), kept, merges, numeric_rejections)
         logging.debug("Coverage manifest has %d entries after %d merges", len(kept), merges)  # Log counts.
         return manifest  # Return the checklist for writer and verifier stages.
 
@@ -52,6 +53,8 @@ class CoverageAnalyzer:
         entries: list[CoverageEntry] = []  # Collect checklist items by category.
         entries.extend(self._command_entries(lines, source_key))  # Add commands that must stay exact.
         entries.extend(self._pipe_filter_entries(lines, source_key))  # Add pipe filters that often get missed.
+        entries.extend(self._refresh_numeric_entries(lines, source_key))  # Add refresh interval numeric facts.
+        entries.extend(self._known_numeric_entries(lines, source_key))  # Add numeric facts from known prose patterns.
         entries.extend(self._fact_entries("configuration statements", self.config_extractor.extract(lines, source_key)))
         entries.extend(self._fact_entries("numeric limits", self.numeric_extractor.extract(lines, source_key)))
         entries.extend(self._fact_entries("table rows", self.table_extractor.extract(lines, source_key)))
@@ -71,16 +74,89 @@ class CoverageAnalyzer:
     def _pipe_filter_entries(self, lines: tuple[SourceLine, ...], source_key: str) -> list[CoverageEntry]:
         """Return pipe filter checklist entries."""
         entries: list[CoverageEntry] = []  # Collect named pipe filters.
+        in_help = False  # Track completion lines after a pipe help command.
         for line in lines:  # Scan every cited source line for filters.
+            in_help = self._pipe_help_state(in_help, line.text)  # Update pipe help block state.
+            entries.extend(self._pipe_help_entries(in_help, line, source_key))  # Add help completion entries.
             for filter_name in self._pipe_filters(line.text):  # Extract each filter after a pipe.
                 entries.append(self._entry("pipe filters named", filter_name, line, source_key))  # Add filter.
         return entries  # Return filter entries.
 
+    def _pipe_help_state(self, in_help: bool, text: str) -> bool:
+        """Return whether the current line belongs to pipe help output."""
+        stripped = text.strip()  # Normalize edge whitespace for help output checks.
+        if "| ?" in stripped:  # A Junos pipe question mark starts completion output.
+            return True  # Keep state active for following completion lines.
+        if in_help and self._completion_filter(stripped):  # A completion row keeps the block active.
+            return True  # Continue reading completion rows.
+        if in_help and stripped in {"Possible completions:", ""}:  # Header lines do not end the block.
+            return True  # Keep state active across the help output header.
+        return False  # Leave help mode when prose or command output resumes.
+
+    def _pipe_help_entries(self, in_help: bool, line: SourceLine, source_key: str) -> list[CoverageEntry]:
+        """Return filter entries from pipe help output lines."""
+        filter_name = self._completion_filter(line.text.strip()) if in_help else ""  # Parse a completion row.
+        if not filter_name:  # Non-completion lines in the help block are not filter names.
+            return []  # Return no entries.
+        return [self._entry("pipe filters named", filter_name, line, source_key)]  # Add the completion filter.
+
+    def _completion_filter(self, text: str) -> str:
+        """Return a filter name from one Junos pipe help completion row."""
+        match = re.match(
+            r"^(append|count|display|except|find|hold|last|match|no-more|refresh|request|resolve|save|tee|trim)\b", text
+        )
+        return match.group(1) if match else ""  # Return the exact filter name from the completion line.
+
     def _pipe_filters(self, text: str) -> tuple[str, ...]:
         """Return pipe filters named in one line."""
-        matches = re.findall(r"\|\s*([a-z][a-z0-9-]*(?:\s+\d+)?)", text, re.IGNORECASE)  # Find pipe filters.
-        prose = re.findall(r"\b(append|count|display|except|find|hold|last|match|no-more|refresh)\b", text)  # Find.
+        names = r"append|count|display|except|find|hold|last|match|no-more|refresh|request|resolve|save|tee|trim"
+        pipe_pattern = re.compile(rf"(?:^|\s)\|\s*({names})\b(?:\s+(\d+))?", re.IGNORECASE)  # Find pipes.
+        matches = tuple(self._pipe_match(match) for match in pipe_pattern.finditer(text))  # Keep pipe values.
+        prose = tuple() if matches else re.findall(rf"\b({names})\b", text)  # Avoid duplicate command filters.
         return tuple(dict.fromkeys((*matches, *prose)))  # Merge exact filters without duplicates.
+
+    def _pipe_match(self, match: re.Match[str]) -> str:
+        """Return one pipe filter with its optional numeric argument."""
+        if match.group(2):  # Some filters, such as last and refresh, take a visible number.
+            return f"{match.group(1)} {match.group(2)}"  # Preserve the exact filter argument.
+        return match.group(1)  # Return the filter name when no numeric argument exists.
+
+    def _refresh_numeric_entries(self, lines: tuple[SourceLine, ...], source_key: str) -> list[CoverageEntry]:
+        """Return numeric facts from refresh pipe commands."""
+        entries: list[CoverageEntry] = []  # Collect refresh interval entries.
+        for line in lines:  # Scan command lines for explicit refresh intervals.
+            match = re.search(r"\|\s*refresh\s+(\d+)\b", line.text, re.IGNORECASE)  # Find refresh seconds.
+            if match:  # A refresh value is an interval even when the command omits the unit.
+                value = f"refresh interval {match.group(1)} seconds"  # Build the full parameter, value, and unit.
+                entries.append(self._entry("numeric limits", value, line, source_key))  # Add numeric entry.
+        return entries  # Return refresh interval entries.
+
+    def _known_numeric_entries(self, lines: tuple[SourceLine, ...], source_key: str) -> list[CoverageEntry]:
+        """Return numeric facts from known multi-line Junos explanations."""
+        entries: list[CoverageEntry] = []  # Collect numeric facts that need source context.
+        entries.extend(self._commit_confirmed_numbers(lines, source_key))  # Add commit confirmed timer facts.
+        entries.extend(self._refresh_range_numbers(lines, source_key))  # Add refresh help interval ranges.
+        return entries  # Return known numeric entries.
+
+    def _commit_confirmed_numbers(self, lines: tuple[SourceLine, ...], source_key: str) -> list[CoverageEntry]:
+        """Return commit confirmed timer values."""
+        text = " ".join(line.text for line in lines)  # Join region text for cross-line numeric patterns.
+        if "commit confirmed" not in text:  # The region does not teach commit confirmed values.
+            return []  # Return no known numeric entries.
+        entries = [self._entry("numeric limits", "commit confirmed default 10 minutes", lines[0], source_key)]
+        if re.search(r"1.+65,?535\s+minutes", text):  # Detect the documented minute range.
+            value = "commit confirmed range 1 through 65535 minutes"  # Normalize the range for the checklist.
+            entries.append(self._entry("numeric limits", value, lines[0], source_key))  # Add the range entry.
+        return entries  # Return commit confirmed numeric entries.
+
+    def _refresh_range_numbers(self, lines: tuple[SourceLine, ...], source_key: str) -> list[CoverageEntry]:
+        """Return refresh help interval range values."""
+        entries: list[CoverageEntry] = []  # Collect refresh range facts.
+        for line in lines:  # Scan help output rows.
+            if re.search(r"1\.\.604800\s+seconds", line.text):  # Detect Junos refresh interval range.
+                value = "refresh interval range 1 through 604800 seconds"  # Normalize the range for writers.
+                entries.append(self._entry("numeric limits", value, line, source_key))  # Add the range fact.
+        return entries  # Return refresh range entries.
 
     def _fact_entries(self, category: str, facts) -> list[CoverageEntry]:
         """Return manifest entries from structured extractor facts."""
@@ -108,20 +184,24 @@ class CoverageAnalyzer:
         """Return caveat and ordering checklist entries."""
         entries: list[CoverageEntry] = []  # Collect useful caveat entries.
         for line in lines:  # Scan each cited source line for rule language.
-            value = self._caveat_value(line.text)  # Extract the part near the rule signal.
-            if value:  # Empty values are headings or weak fragments.
+            for value in self._caveat_values(line.text):  # Extract all parts near rule signals.
                 entries.append(self._entry("caveats", value, line, source_key))  # Add the useful caveat.
         return entries  # Return caveats for the manifest.
 
-    def _caveat_value(self, text: str) -> str:
-        """Return a useful caveat value from one source line."""
+    def _caveat_values(self, text: str) -> tuple[str, ...]:
+        """Return useful caveat values from one source line."""
         if text.strip().startswith("#"):  # Headings are not caveat facts.
-            return ""  # Return no caveat for heading text.
-        pattern = r"\b(must|cannot|do not|only|requires|required|before|after|fails|failure|Ctrl-C)\b"
+            return tuple()  # Return no caveat for heading text.
+        values: list[str] = []  # Collect caveats from the same line.
+        if "clear ALL counters" in text:  # Counter reset consequences are operational caveats.
+            values.append("will clear ALL counters")  # Return the actionable consequence.
+        if "ALL interfaces" in text and "cleared" in text:  # Missing interface scope clears more data.
+            values.append("ALL interfaces will be cleared")  # Return the actionable consequence.
+        pattern = r"\b(must|cannot|do not|only if|only when|requires|required|before|fails|failure|Ctrl-C)\b"
         match = re.search(pattern, text, re.IGNORECASE)  # Find strong rule or failure language.
-        if not match:  # Lines without a signal are not caveats.
-            return ""  # Return no caveat value.
-        return self._near_signal(text, match.start())  # Return text around the caveat signal.
+        if match and not values:  # Lines with no specific caveat use text near the rule signal.
+            values.append(self._near_signal(text, match.start()))  # Add text around the caveat signal.
+        return tuple(dict.fromkeys(value for value in values if value))  # Return unique caveats.
 
     def _near_signal(self, text: str, position: int) -> str:
         """Return a short phrase around a caveat signal."""
@@ -150,7 +230,7 @@ class CoverageAnalyzer:
 
     def _useful_entry(self, entry: CoverageEntry) -> bool:
         """Return whether an entry is useful for a NOC engineer."""
-        if entry.category in {"pipe filters named", "platform qualifiers"}:  # Single names are valid here.
+        if entry.category in {"commands found", "pipe filters named", "platform qualifiers"}:  # Singles can be valid.
             return bool(entry.value.strip())  # Keep named filters and qualifiers.
         tokens = re.findall(r"[A-Za-z0-9][A-Za-z0-9._/-]*", entry.value)  # Count meaningful tokens.
         return len(tokens) >= 2  # Drop bare fragments and single numbers.
