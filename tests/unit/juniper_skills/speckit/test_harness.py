@@ -29,10 +29,12 @@ class TestSpecKitHarness:
         harness = self._harness(workspace)  # Build the harness with isolated output.
         feature_dir = harness.emit_for_document(document)  # Generate the Companion context.
         data = json.loads((feature_dir / ".spec-context.json").read_text(encoding="utf-8"))  # Read context JSON.
-        for key in ("currentStep", "status", "phase", "phaseStatus", "completionPercentage"):
-            assert key in data  # Prove the root Companion schema keys exist.
-        assert data["livingSpec"]["enabled"] is True  # Prove living-spec metadata is active.
-        assert data["livingSpec"]["sourceHash"] == document.content_hash  # Prove drift tracking uses source bytes.
+        for key in ("workflow", "specName", "branch", "currentStep", "status", "history"):
+            assert key in data  # Prove the real Companion lifecycle keys exist.
+        assert data["currentStep"] == "implement"  # Prove completion keeps the last real step.
+        assert data["status"] == "completed"  # Prove mark-complete wrote the terminal status.
+        assert data["livingSpecs"]["loaded"] == [document.slug]  # Prove living-spec loading used capture.py.
+        assert data["sourceHash"] == document.content_hash  # Prove drift tracking uses source bytes.
 
     def test_analyzer_catches_missing_requirement_task(self) -> None:
         """Confirm the analyzer catches a real coverage inconsistency."""

@@ -140,8 +140,16 @@ class SpecKitCatalog:
         """Return files below root in stable order."""
         logging.info("Scanning files below %s", root)  # Record the low-level scan.
         files = sorted(root.rglob("*")) if root.exists() else []  # Return no files when an optional root is absent.
-        result = [path for path in files if path.is_file()]  # Keep only files for catalog output.
+        result = [path for path in files if self._is_catalog_file(path)]  # Keep only source files for catalog output.
         logging.debug("Scanned %d files below %s", len(result), root)  # Record the scan result.
+        return result
+
+    def _is_catalog_file(self, path: Path) -> bool:
+        """Return whether a file belongs in the SpecKit catalog."""
+        logging.info("Checking whether a SpecKit file is catalog source")  # Record catalog filter action.
+        is_cache = "__pycache__" in path.parts or path.suffix == ".pyc"  # Exclude runtime cache files.
+        result = path.is_file() and not is_cache  # Catalog only durable installed files.
+        logging.debug("SpecKit catalog source check for %s returned %s", path, result)  # Record decision.
         return result
 
     def _settings_lines(self, inventory: dict[str, object]) -> list[str]:
@@ -186,10 +194,25 @@ class SpecKitCatalog:
             "speckit.checklist": "spec.md, plan.md, tasks.md, and checklist template",
             "speckit.analyze": "spec.md, plan.md, tasks.md, and constitution",
         }
-        result = mapping.get(
-            name, "current feature artifacts and extension state"
-        )  # Use a safe default for extensions.
+        if name.startswith("speckit.companion."):
+            result = self._companion_consumes(name)  # Use real Companion command contracts.
+        else:
+            result = mapping.get(name, "current feature artifacts and extension state")  # Use a safe default.
         logging.debug("Command %s consumes %s", name, result)  # Record the command mapping.
+        return result
+
+    def _companion_consumes(self, name: str) -> str:
+        """Return consumed artifacts for Companion commands."""
+        logging.info("Resolving Companion consumed artifacts for %s", name)  # Record mapping action.
+        if name.endswith(("after-specify", "after-plan", "after-tasks")):
+            result = "active feature directory and lifecycle hook state"
+        elif name.endswith("after-implement"):
+            result = "active feature tasks.md and lifecycle hook state"
+        elif ".living-" in name:
+            result = "living-specs registry, capability specs, git history, and changed files"
+        else:
+            result = "active feature artifacts, .spec-context.json, and companion config"
+        logging.debug("Companion command %s consumes %s", name, result)  # Record mapping result.
         return result
 
     def _emits(self, name: str) -> str:
@@ -204,6 +227,27 @@ class SpecKitCatalog:
             "speckit.analyze": "read-only analysis report",
             "speckit.implement": "checked tasks and source changes",
         }
-        result = mapping.get(name, ".spec-context.json or extension-specific state")  # Note companion state behavior.
+        if name.startswith("speckit.companion."):
+            result = self._companion_emits(name)  # Use real Companion command contracts.
+        else:
+            result = mapping.get(name, ".spec-context.json or extension-specific state")  # Note extension state.
         logging.debug("Command %s emits %s", name, result)  # Record the command mapping.
+        return result
+
+    def _companion_emits(self, name: str) -> str:
+        """Return emitted artifacts for Companion commands."""
+        logging.info("Resolving Companion emitted artifacts for %s", name)  # Record mapping action.
+        if name.endswith(("after-specify", "after-plan", "after-tasks", "after-implement")):
+            result = ".spec-context.json lifecycle history and status"
+        elif name.endswith("living-coverage"):
+            result = "read-only requirement coverage report"
+        elif name.endswith("living-drift"):
+            result = "read-only drift report"
+        elif name.endswith("living-sync"):
+            result = "reviewable living spec edits and synced context names"
+        elif name.endswith(("living-adopt", "living-move")):
+            result = "capability spec files and living-specs registry updates"
+        else:
+            result = ".spec-context.json progress or pipeline output"
+        logging.debug("Companion command %s emits %s", name, result)  # Record mapping result.
         return result

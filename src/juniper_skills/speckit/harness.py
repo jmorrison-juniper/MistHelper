@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -81,10 +83,77 @@ class SpecKitHarness:
     def _write_context(self, feature_dir: Path, document: SkillDocument) -> None:
         """Write the Companion GUI context file."""
         logging.info("Writing Companion context for the skill document")  # Record context generation.
-        context = self._context(document)  # Build the schema-compatible Companion state.
-        path = feature_dir / ".spec-context.json"  # Store context beside the generated feature artifacts.
-        path.write_text(json.dumps(context, indent=2), encoding="utf-8")  # Write deterministic JSON for tests.
-        logging.debug("Wrote Companion context with %d top-level keys", len(context))  # Record schema breadth.
+        target = feature_dir / ".spec-context.json"  # Use the canonical Companion context path.
+        target.unlink(missing_ok=True)  # Remove stale generated state so the lifecycle can replay.
+        if self._companion_writer().exists():
+            self._write_context_with_companion(feature_dir, document)  # Use the real extension writer when installed.
+        else:
+            self._write_context_fallback(feature_dir, document)  # Keep clean clones able to generate proof artifacts.
+        logging.debug("Wrote Companion context at %s", target)  # Record the final context path.
+
+    def _write_context_with_companion(self, feature_dir: Path, document: SkillDocument) -> None:
+        """Write context by invoking the real Companion writer."""
+        logging.info("Invoking Companion lifecycle capture scripts")  # Record external writer use.
+        self._run_companion(feature_dir, ["--step", "specify", "--status", "specified", "--by", "harness"])
+        self._run_companion(
+            feature_dir, ["--step", "plan", "--status", "planned", "--kind", "complete", "--by", "harness"]
+        )
+        self._run_companion(
+            feature_dir, ["--step", "tasks", "--status", "ready-to-implement", "--kind", "complete", "--by", "harness"]
+        )
+        self._run_companion(
+            feature_dir,
+            [
+                "--step",
+                "implement",
+                "--status",
+                "implemented",
+                "--by",
+                "harness",
+                "--tasks-file",
+                str(feature_dir / "tasks.md"),
+            ],
+        )
+        self._run_companion(feature_dir, ["--mark-complete", "--by", "harness"])
+        self._write_companion_capture(feature_dir, document)  # Add non-lifecycle evidence through capture.py.
+        logging.debug("Invoked Companion lifecycle capture scripts for %s", feature_dir)  # Record completion.
+
+    def _write_companion_capture(self, feature_dir: Path, document: SkillDocument) -> None:
+        """Add metadata through the real capture.py writer surface."""
+        logging.info("Recording additive Companion capture fields")  # Record metadata capture.
+        self._run_companion(feature_dir, ["--living-specs", document.slug])  # Record the loaded living spec.
+        self._run_companion(feature_dir, ["--set", f"sourcePath={document.source_path}"])  # Record source path.
+        self._run_companion(feature_dir, ["--set", f"sourceFile={document.source_file}"])  # Record source file.
+        self._run_companion(feature_dir, ["--set", f"sourceHash={document.content_hash}"])  # Record source hash.
+        self._run_companion(feature_dir, ["--set", f"sourcePages={document.pages}"])  # Record page count.
+        self._run_companion(feature_dir, ["--decision", self._decision_capture()])  # Record the scale decision.
+        self._run_companion(feature_dir, ["--verified", self._verified_capture()])  # Record validation evidence.
+        logging.debug("Recorded additive Companion capture fields for %s", document.slug)  # Record capture result.
+
+    def _run_companion(self, feature_dir: Path, args: list[str]) -> None:
+        """Run the Companion writer with an explicit feature directory."""
+        logging.info("Running the Companion writer script")  # Record subprocess start.
+        command = [sys.executable, str(self._companion_writer()), "--feature-dir", str(feature_dir), *args]
+        result = subprocess.run(command, cwd=self.paths.repo_root, capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            logging.error("Companion writer failed with code %d", result.returncode)  # Record failure code.
+            raise RuntimeError(result.stderr.strip() or "Companion writer failed")
+        logging.debug("Companion writer output had %d characters", len(result.stdout))  # Record safe output size.
+
+    def _companion_writer(self) -> Path:
+        """Return the real Companion writer script path."""
+        logging.info("Resolving the Companion writer script")  # Record writer path lookup.
+        path = self.paths.specify_dir / "extensions" / "companion" / "scripts" / "write-context.py"
+        logging.debug("Resolved the Companion writer script at %s", path)  # Record resolved path.
+        return path
+
+    def _write_context_fallback(self, feature_dir: Path, document: SkillDocument) -> None:
+        """Write a minimal context only when the Companion writer is absent."""
+        logging.info("Writing fallback Companion context")  # Record fallback context generation.
+        context = self._fallback_context(document)  # Build the strict lifecycle shape.
+        path = feature_dir / ".spec-context.json"  # Store context beside generated artifacts.
+        path.write_text(json.dumps(context, indent=2) + "\n", encoding="utf-8")  # Write stable JSON.
+        logging.debug("Wrote fallback Companion context with %d keys", len(context))  # Record fallback size.
 
     def _write_analysis(self, feature_dir: Path) -> None:
         """Write the analysis report after validation."""
@@ -311,25 +380,33 @@ Generate one package first, validate it, then repeat the same harness for each d
         logging.debug("Rendered requirements checklist with %d characters", len(text))  # Record checklist size.
         return text
 
-    def _context(self, document: SkillDocument) -> dict[str, object]:
-        """Return a Companion-compatible context document."""
-        logging.info("Building Companion context data")  # Record context build.
-        context = {  # Mirror the observed Companion context keys from the repository root file.
+    def _fallback_context(self, document: SkillDocument) -> dict[str, object]:
+        """Return a minimal Companion-compatible context document."""
+        logging.info("Building fallback Companion context data")  # Record context build.
+        context = {  # Mirror the real Companion lifecycle keys from spec_context.py.
+            "workflow": "speckit",
+            "specName": f"{document.title} skill package",
+            "branch": "feat/2925-juniper-skill-factory",
             "currentStep": "implement",
             "status": "completed",
-            "phase": 5,
-            "phaseStatus": "completed",
-            "completionPercentage": "100%",
-            "completedPhases": self._completed_phases(),
-            "currentPhase": {"phase": 5, "status": "completed", "description": "Skill package emitted"},
-            "remainingPhases": [],
-            "handoffNotes": self._handoff_notes(document),
-            "timeline": {"generatedAt": self._now(), "sourcePages": document.pages},
-            "gitStatus": {"currentBranch": "feat/2925-juniper-skill-factory"},
-            "livingSpec": self._living_spec(document),
+            "history": self._fallback_history(),
+            "livingSpecs": {"loaded": [document.slug]},
+            "sourcePath": str(document.source_path),
+            "sourceFile": document.source_file,
+            "sourceHash": document.content_hash,
+            "sourcePages": document.pages,
         }
-        logging.debug("Built Companion context with %d keys", len(context))  # Record context schema size.
+        logging.debug("Built fallback Companion context with %d keys", len(context))  # Record context schema size.
         return context
+
+    def _fallback_history(self) -> list[dict[str, str | None]]:
+        """Return a compact fallback lifecycle history."""
+        logging.info("Building fallback Companion lifecycle history")  # Record history creation.
+        now = self._now()  # Use one timestamp for deterministic fallback ordering.
+        steps = ("specify", "plan", "tasks", "implement")  # Include the canonical lifecycle steps.
+        history = [{"step": step, "substep": None, "kind": "complete", "by": "harness", "at": now} for step in steps]
+        logging.debug("Built fallback Companion lifecycle history with %d entries", len(history))  # Record size.
+        return history
 
     def _completed_phases(self) -> list[dict[str, object]]:
         """Return completed SpecKit phases for Companion."""
@@ -385,10 +462,27 @@ A drift command can compare the stored hash with the current file hash.
 It can then mark the package for regeneration.
 
 Evidence: `.specify/extensions.yml` registers companion hooks after each core step.
-This checkout does not contain `.specify/extensions/companion/`.
-The harness records that gap and writes the Companion-compatible context directly.
+The real companion extension contains lifecycle writers, drift checks, coverage checks, and living-spec fold-back.
+The harness invokes `write-context.py` when the extension exists.
+Living-spec commands fit the tracking model, but the current resolver reads repository-relative paths.
+The Juniper source roots are outside this repository.
+The factory must bridge that gap with source hashes or a registry that names those roots.
 """
         logging.debug("Rendered living-spec judgement with %d characters", len(text))  # Record judgement size.
+        return text
+
+    def _decision_capture(self) -> str:
+        """Return the recorded scale decision for capture.py."""
+        logging.info("Rendering Companion decision capture")  # Record decision capture rendering.
+        text = json.dumps({"decision": "Use programmatic SpecKit generation", "why": "Manual runs do not scale."})
+        logging.debug("Rendered Companion decision capture with %d characters", len(text))  # Record size.
+        return text
+
+    def _verified_capture(self) -> str:
+        """Return the recorded validation proof for capture.py."""
+        logging.info("Rendering Companion verification capture")  # Record verification capture rendering.
+        text = json.dumps({"what": "Generated artifact set validates", "result": "No critical findings"})
+        logging.debug("Rendered Companion verification capture with %d characters", len(text))  # Record size.
         return text
 
     def _research(self, document: SkillDocument) -> str:

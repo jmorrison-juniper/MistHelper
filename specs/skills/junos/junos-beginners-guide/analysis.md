@@ -14,24 +14,24 @@
 | `speckit.analyze` | yes | spec.md, plan.md, tasks.md, and constitution | read-only analysis report |
 | `speckit.checklist` | yes | spec.md, plan.md, tasks.md, and checklist template | checklists/*.md |
 | `speckit.clarify` | yes | spec.md | updated spec.md |
-| `speckit.companion.after-implement` | no | current feature artifacts and extension state | .spec-context.json or extension-specific state |
-| `speckit.companion.after-plan` | no | current feature artifacts and extension state | .spec-context.json or extension-specific state |
-| `speckit.companion.after-specify` | no | current feature artifacts and extension state | .spec-context.json or extension-specific state |
-| `speckit.companion.after-tasks` | no | current feature artifacts and extension state | .spec-context.json or extension-specific state |
-| `speckit.companion.auto` | no | current feature artifacts and extension state | .spec-context.json or extension-specific state |
-| `speckit.companion.classify` | no | current feature artifacts and extension state | .spec-context.json or extension-specific state |
-| `speckit.companion.implement` | no | current feature artifacts and extension state | .spec-context.json or extension-specific state |
-| `speckit.companion.living-adopt` | no | current feature artifacts and extension state | .spec-context.json or extension-specific state |
-| `speckit.companion.living-coverage` | no | current feature artifacts and extension state | .spec-context.json or extension-specific state |
-| `speckit.companion.living-drift` | no | current feature artifacts and extension state | .spec-context.json or extension-specific state |
-| `speckit.companion.living-move` | no | current feature artifacts and extension state | .spec-context.json or extension-specific state |
-| `speckit.companion.living-sync` | no | current feature artifacts and extension state | .spec-context.json or extension-specific state |
-| `speckit.companion.mark-complete` | no | current feature artifacts and extension state | .spec-context.json or extension-specific state |
-| `speckit.companion.plan` | no | current feature artifacts and extension state | .spec-context.json or extension-specific state |
-| `speckit.companion.resume` | no | current feature artifacts and extension state | .spec-context.json or extension-specific state |
-| `speckit.companion.specify` | no | current feature artifacts and extension state | .spec-context.json or extension-specific state |
-| `speckit.companion.status` | no | current feature artifacts and extension state | .spec-context.json or extension-specific state |
-| `speckit.companion.tasks` | no | current feature artifacts and extension state | .spec-context.json or extension-specific state |
+| `speckit.companion.after-implement` | yes | active feature tasks.md and lifecycle hook state | .spec-context.json lifecycle history and status |
+| `speckit.companion.after-plan` | yes | active feature directory and lifecycle hook state | .spec-context.json lifecycle history and status |
+| `speckit.companion.after-specify` | yes | active feature directory and lifecycle hook state | .spec-context.json lifecycle history and status |
+| `speckit.companion.after-tasks` | yes | active feature directory and lifecycle hook state | .spec-context.json lifecycle history and status |
+| `speckit.companion.auto` | yes | active feature artifacts, .spec-context.json, and companion config | .spec-context.json progress or pipeline output |
+| `speckit.companion.classify` | yes | active feature artifacts, .spec-context.json, and companion config | .spec-context.json progress or pipeline output |
+| `speckit.companion.implement` | yes | active feature artifacts, .spec-context.json, and companion config | .spec-context.json progress or pipeline output |
+| `speckit.companion.living-adopt` | yes | living-specs registry, capability specs, git history, and changed files | capability spec files and living-specs registry updates |
+| `speckit.companion.living-coverage` | yes | living-specs registry, capability specs, git history, and changed files | read-only requirement coverage report |
+| `speckit.companion.living-drift` | yes | living-specs registry, capability specs, git history, and changed files | read-only drift report |
+| `speckit.companion.living-move` | yes | living-specs registry, capability specs, git history, and changed files | capability spec files and living-specs registry updates |
+| `speckit.companion.living-sync` | yes | living-specs registry, capability specs, git history, and changed files | reviewable living spec edits and synced context names |
+| `speckit.companion.mark-complete` | yes | active feature artifacts, .spec-context.json, and companion config | .spec-context.json progress or pipeline output |
+| `speckit.companion.plan` | yes | active feature artifacts, .spec-context.json, and companion config | .spec-context.json progress or pipeline output |
+| `speckit.companion.resume` | yes | active feature artifacts, .spec-context.json, and companion config | .spec-context.json progress or pipeline output |
+| `speckit.companion.specify` | yes | active feature artifacts, .spec-context.json, and companion config | .spec-context.json progress or pipeline output |
+| `speckit.companion.status` | yes | active feature artifacts, .spec-context.json, and companion config | .spec-context.json progress or pipeline output |
+| `speckit.companion.tasks` | yes | active feature artifacts, .spec-context.json, and companion config | .spec-context.json progress or pipeline output |
 | `speckit.constitution` | yes | current feature artifacts and extension state | .spec-context.json or extension-specific state |
 | `speckit.converge` | yes | current feature artifacts and extension state | .spec-context.json or extension-specific state |
 | `speckit.git.commit` | yes | current feature artifacts and extension state | .spec-context.json or extension-specific state |
@@ -66,6 +66,42 @@
 ## Extensions
 
 - `.specify\extensions\.registry`
+- `.specify\extensions\companion\commands\speckit.companion.after-implement.md`
+- `.specify\extensions\companion\commands\speckit.companion.after-plan.md`
+- `.specify\extensions\companion\commands\speckit.companion.after-specify.md`
+- `.specify\extensions\companion\commands\speckit.companion.after-tasks.md`
+- `.specify\extensions\companion\commands\speckit.companion.auto.md`
+- `.specify\extensions\companion\commands\speckit.companion.classify.md`
+- `.specify\extensions\companion\commands\speckit.companion.implement.md`
+- `.specify\extensions\companion\commands\speckit.companion.living-adopt.md`
+- `.specify\extensions\companion\commands\speckit.companion.living-coverage.md`
+- `.specify\extensions\companion\commands\speckit.companion.living-drift.md`
+- `.specify\extensions\companion\commands\speckit.companion.living-move.md`
+- `.specify\extensions\companion\commands\speckit.companion.living-sync.md`
+- `.specify\extensions\companion\commands\speckit.companion.mark-complete.md`
+- `.specify\extensions\companion\commands\speckit.companion.plan.md`
+- `.specify\extensions\companion\commands\speckit.companion.resume.md`
+- `.specify\extensions\companion\commands\speckit.companion.specify.md`
+- `.specify\extensions\companion\commands\speckit.companion.status.md`
+- `.specify\extensions\companion\commands\speckit.companion.tasks.md`
+- `.specify\extensions\companion\extension.yml`
+- `.specify\extensions\companion\LICENSE`
+- `.specify\extensions\companion\scripts\capture.py`
+- `.specify\extensions\companion\scripts\check-coverage.py`
+- `.specify\extensions\companion\scripts\companion_config.py`
+- `.specify\extensions\companion\scripts\derive-from-files.py`
+- `.specify\extensions\companion\scripts\drift.py`
+- `.specify\extensions\companion\scripts\living_spec_fold.py`
+- `.specify\extensions\companion\scripts\record-living-specs.py`
+- `.specify\extensions\companion\scripts\register-capability.py`
+- `.specify\extensions\companion\scripts\relocate-capability.py`
+- `.specify\extensions\companion\scripts\resolve-spec-paths.py`
+- `.specify\extensions\companion\scripts\spec_context.py`
+- `.specify\extensions\companion\scripts\spec_deltas.py`
+- `.specify\extensions\companion\scripts\status-context.py`
+- `.specify\extensions\companion\scripts\task_sync.py`
+- `.specify\extensions\companion\scripts\write-context.py`
+- `.specify\extensions\companion\workflows\speckit-companion.workflow.yml`
 - `.specify\extensions\extensions\.registry`
 - `.specify\extensions\extensions\git\commands\speckit.git.commit.md`
 - `.specify\extensions\extensions\git\commands\speckit.git.feature.md`
@@ -112,8 +148,11 @@ A drift command can compare the stored hash with the current file hash.
 It can then mark the package for regeneration.
 
 Evidence: `.specify/extensions.yml` registers companion hooks after each core step.
-This checkout does not contain `.specify/extensions/companion/`.
-The harness records that gap and writes the Companion-compatible context directly.
+The real companion extension contains lifecycle writers, drift checks, coverage checks, and living-spec fold-back.
+The harness invokes `write-context.py` when the extension exists.
+Living-spec commands fit the tracking model, but the current resolver reads repository-relative paths.
+The Juniper source roots are outside this repository.
+The factory must bridge that gap with source hashes or a registry that names those roots.
 
 # Specification Analysis Report
 
