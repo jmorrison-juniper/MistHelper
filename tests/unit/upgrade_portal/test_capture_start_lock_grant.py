@@ -66,6 +66,26 @@ WORKER_WAIT_SECONDS = 5.0  # A generous wait, so a slow machine does not fail th
 SITE_RECORD: dict[str, Any] = {"id": SITE_ID, "name": "Probe site", "org_id": ORG_ID}  # The one site.
 
 
+def test_request_body_empty_json_body_returns_empty_dict(portal_app: Flask) -> None:
+    """A zero-byte capture request body must become an empty field set."""
+    with portal_app.test_request_context(START_PATH, method="POST", data=b""):  # WHY: model an empty request body.
+        result = capture.request_body()  # WHY: drive the product request parser.
+    assert result == {}  # WHY: the route must use the tier refusal path, not a fault page.
+
+
+def test_request_body_malformed_json_returns_empty_dict(portal_app: Flask) -> None:
+    """A malformed capture request body must become an empty field set."""
+    headers = {"Content-Type": "application/json"}  # WHY: force Flask to parse the body as JSON.
+    with portal_app.test_request_context(  # WHY: model a damaged browser JSON request.
+        START_PATH,
+        method="POST",
+        data="{not valid JSONDecodeError",
+        headers=headers,
+    ):
+        result = capture.request_body()  # WHY: drive the product request parser.
+    assert result == {}  # WHY: the route must use the tier refusal path, not a fault page.
+
+
 # --------------------------------------------------------------------------
 # The stand-ins.
 # --------------------------------------------------------------------------

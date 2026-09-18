@@ -34,6 +34,28 @@ PROBE_EMAIL = "org-upgrade.operator@juniper.net"  # Issue #2615: a firmware writ
 RESERVED_EMAIL = "org-upgrade.operator@example.invalid"  # The reserved address that a firmware write must refuse.
 
 
+def test_request_source_empty_body_uses_form_mapping() -> None:
+    """A zero-byte options body must fall back to the form mapping."""
+    app = Flask(__name__)  # WHY: request parsing needs an application context.
+    with app.test_request_context(ORG_OPTIONS_API, method="POST", data=b""):  # WHY: model an empty request body.
+        result = org_upgrade._request_source()  # WHY: drive the product request parser.
+    assert dict(result) == {}  # WHY: the route must continue to its explicit missing-option error.
+
+
+def test_request_source_malformed_json_uses_form_mapping() -> None:
+    """A malformed options body must fall back to the form mapping."""
+    app = Flask(__name__)  # WHY: request parsing needs an application context.
+    headers = {"Content-Type": "application/json"}  # WHY: force Flask to parse the body as JSON.
+    with app.test_request_context(  # WHY: model a damaged browser JSON request.
+        ORG_OPTIONS_API,
+        method="POST",
+        data="{not valid JSONDecodeError",
+        headers=headers,
+    ):
+        result = org_upgrade._request_source()  # WHY: drive the product request parser.
+    assert dict(result) == {}  # WHY: the route must continue to its explicit missing-option error.
+
+
 class OrgUpgradeServiceStandIn:
     """Record organization upgrade calls and return fixed cloud outcomes."""
 

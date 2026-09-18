@@ -145,7 +145,9 @@ def test_subif_name_from_type_column_strips_prefix_and_suffix() -> None:
 def test_parse_json_ip_payload_handles_all_paths() -> None:
     """JSON payload parser covers empty, malformed, static, and non-static branches."""
     assert _parse_json_ip_payload("") == ("", "", "", "")  # WHY: empty payload fast-path.
+    assert _parse_json_ip_payload(b"".decode()) == ("", "", "", "")  # WHY: zero-byte body is empty payload.
     assert _parse_json_ip_payload("{bad json}") == ("parse_error", "", "", "")  # WHY: parse error branch.
+    assert _parse_json_ip_payload("{bad JSONDecodeError") == ("parse_error", "", "", "")  # WHY: damaged JSON.
     assert _parse_json_ip_payload('{"type": "static", "ip": "10.1.1.1", "netmask": "24", "gateway": "10.1.1.254"}') == (
         "static",
         "10.1.1.1",

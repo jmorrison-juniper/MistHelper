@@ -291,14 +291,14 @@ class TestFetchCloud:
         monkeypatch.setattr(zc_mod.urllib.request, "urlopen", _boom)
         assert fetch_cloud("zscaler.net") is None
 
-    def test_bad_json_returns_none(self, monkeypatch):
+    def test_bad_json_returns_none(self, monkeypatch, caplog: pytest.LogCaptureFixture):
         """Malformed JSON in the response body degrades to ``None``."""
 
         class _Resp:
             status = 200
 
             def read(self):
-                return b"not json"
+                return b"{not valid JSONDecodeError"
 
             def __enter__(self):
                 return self
@@ -306,8 +306,10 @@ class TestFetchCloud:
             def __exit__(self, *_a):
                 return False
 
+        caplog.set_level("WARNING", logger="src.utils.zscaler_catalogue")  # Capture the parse-failure status.
         monkeypatch.setattr(zc_mod.urllib.request, "urlopen", lambda *_a, **_kw: _Resp())
         assert fetch_cloud("zscaler.net") is None
+        assert "JSON parse failed" in caplog.text  # The operator must see the malformed body cause.
 
     def test_non_object_json_returns_none(self, monkeypatch):
         """Top-level JSON that isn't a dict is rejected (defends the merge contract)."""
