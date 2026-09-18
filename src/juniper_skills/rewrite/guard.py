@@ -198,7 +198,9 @@ class VerbatimSimilarityGuard:
 
     def _is_model(self, word: str) -> bool:
         """Return whether a token looks like a device model or standard name."""
-        return bool(re.match(r"^(ex|qfx|srx|mx|ptx|acx|ap|bt|ieee|iso|tia|ietf|rfc)[a-z0-9.-]*$", word))  # Keep models.
+        model = re.match(r"^(ex|qfx|srx|mx|ptx|acx|ap|bt)[0-9][a-z0-9.-]*$", word)  # Require a model number.
+        standard = re.match(r"^(ieee|iso|tia|ietf|rfc)[a-z0-9.-]*$", word)  # Keep named standards exact.
+        return bool(model or standard)  # Keep models and standards unchanged.
 
     def _is_port(self, word: str) -> bool:
         """Return whether a token is a Junos interface or port name."""

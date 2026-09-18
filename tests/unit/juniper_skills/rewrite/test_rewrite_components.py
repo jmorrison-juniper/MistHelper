@@ -45,6 +45,31 @@ class TestVerbatimSimilarityGuard:
         assert report.results[0].longest_run == 0  # Prove the CLI block did not count as prose.
         assert report.passed  # Prove approved verbatim classes pass.
 
+    def test_guard_catches_light_edit_of_source_prose(self, tmp_path: Path) -> None:
+        """The guard fails a copied paragraph with a small edit."""
+        source = "The router can apply another output filter after the first filter"  # Build source.
+        source = source + " reduces the display"  # Add the phrase that the copied text edits.
+        source = source + " and the operator reads useful rows."  # Add enough words to catch light edits.
+        generated = tmp_path / "topic.md"  # Put the generated topic in the pytest work directory.
+        copied = "The router can apply another output filter after the first filter reduces the output"  # Build edit.
+        copied = copied + " and the operator reads useful rows."  # Keep copied words around the edit.
+        generated.write_text(copied, encoding="utf-8")  # Write the light-edit plagiarism sample.
+        check = SimilarityCheckInput(generated, (source,))  # Compare the generated file to its source.
+        report = VerbatimSimilarityGuard().check((check,))  # Run the guard against one file.
+        assert report.results[0].longest_run > 12  # Prove the edit still leaves a long copied run.
+        assert not report.passed  # Prove the current contract catches this light edit.
+
+    def test_guard_clears_genuine_restatement(self, tmp_path: Path) -> None:
+        """The guard passes prose that states the same fact with new phrasing."""
+        source = "The router can apply another output filter after the first filter reduces the display."  # Set source.
+        generated = tmp_path / "topic.md"  # Put the generated topic in the pytest work directory.
+        restated = "Junos lets you narrow command results more than once with chained match operations."  # Restate.
+        generated.write_text(restated, encoding="utf-8")  # Write the restated sample.
+        check = SimilarityCheckInput(generated, (source,))  # Compare the generated file to its source.
+        report = VerbatimSimilarityGuard().check((check,))  # Run the guard against one file.
+        assert report.results[0].longest_run < 12  # Prove the restatement stays below the threshold.
+        assert report.passed  # Prove the guard clears genuine restatement.
+
     def test_guard_fails_zero_files(self) -> None:
         """The guard fails when it checks no files."""
         report = VerbatimSimilarityGuard().check(tuple())  # Run the guard with no inputs.
