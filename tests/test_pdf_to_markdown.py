@@ -24,6 +24,8 @@ from scripts.pdf_to_markdown import (
     PdfPartConverter,
 )  # import the converter pieces under test
 
+logger = logging.getLogger(__name__)  # Use the module logger for fixture diagnostics.
+
 # One drawn line of a fixture page: the text, the font size, and the bold state.
 TextLine = tuple[str, float, bool]
 
@@ -37,11 +39,11 @@ class PdfFixtureBuilder:
 
     def build(self, name: str, pages: list[list[TextLine]], metadata: dict[str, str] | None = None) -> Path:
         """Write one PDF file with the given pages and return its path."""
-        logging.info("Building PDF fixture %s", name)  # announce the write before it starts
+        logger.info("Building PDF fixture %s", name)  # announce the write before it starts
         objects, info_number = self._objects(pages, metadata or {})  # build every PDF object body
         path = self.directory / name  # pathlib keeps the path correct on Windows and on Linux
         path.write_bytes(self._serialize(objects, info_number))  # one atomic write of the whole file
-        logging.debug("Built fixture with %d bytes", path.stat().st_size)  # record the produced size
+        logger.debug("Built fixture with %d bytes", path.stat().st_size)  # record the produced size
         return path  # the test converts this file
 
     def _objects(self, pages: list[list[TextLine]], metadata: dict[str, str]) -> tuple[list[str], int]:

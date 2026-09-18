@@ -6,7 +6,7 @@ import ast  # Parse Python source so comments do not create false failures.
 import logging  # Record scan counts for guard proof audits.
 from pathlib import Path  # Resolve repository files without hardcoded separators.
 
-_LOGGER = logging.getLogger(__name__)  # Share one logger for guard diagnostics.
+logger = logging.getLogger(__name__)  # Share one module logger for guard diagnostics.
 _REPO_ROOT = Path(__file__).resolve().parents[2]  # Locate the repository root from this guard file.
 _SRC_ROOT = _REPO_ROOT / "src"  # Limit the guard to source packages owned by issue #1703.
 
@@ -17,26 +17,26 @@ class SourceBackReferenceScanner:
     @classmethod
     def python_files(cls, root: Path) -> tuple[Path, ...]:
         """Return sorted Python files below the scan root."""
-        logging.info("Scanning source files under %s", root)  # Log before reading the filesystem.
+        logger.info("Scanning source files under %s", root)  # Log before reading the filesystem.
         files = tuple(sorted(root.rglob("*.py")))  # Materialize the scan set so zero files cannot pass silently.
-        logging.debug("The source back-reference guard found %d file(s)", len(files))  # Record the measured count.
+        logger.debug("The source back-reference guard found %d file(s)", len(files))  # Record the measured count.
         return files  # Return the exact files used by the guard.
 
     @classmethod
     def scan_files(cls, files: tuple[Path, ...]) -> tuple[int, tuple[str, ...]]:
         """Return the scanned file count and every executable back-reference."""
-        logging.info("Checking %d source file(s) for root imports", len(files))  # Log the proof count.
+        logger.info("Checking %d source file(s) for root imports", len(files))  # Log the proof count.
         failures: list[str] = []  # Collect all failures so one run gives the complete repair list.
         for source_file in files:  # Parse each Python file in the measured set.
             source = source_file.read_text(encoding="utf-8")  # Read source text with the project encoding.
             failures.extend(cls._scan_text(source_file, source))  # Add executable back-reference findings.
-        logging.debug("The source back-reference guard found %d issue(s)", len(failures))  # Log the result count.
+        logger.debug("The source back-reference guard found %d issue(s)", len(failures))  # Log the result count.
         return len(files), tuple(failures)  # Return both the proof count and the full finding list.
 
     @staticmethod
     def _scan_text(source_file: Path, source: str) -> tuple[str, ...]:
         """Return executable back-references from one source string."""
-        logging.info("Parsing source file %s for root imports", source_file)  # Log before parsing one file.
+        logger.info("Parsing source file %s for root imports", source_file)  # Log before parsing one file.
         tree = ast.parse(source, filename=str(source_file))  # Parse Python so string mentions do not fail.
         root_names = SourceBackReferenceScanner._root_name_constants(tree)  # Track aliases that hide the root name.
         failures: list[str] = []  # Store every executable import in this file.
@@ -47,13 +47,13 @@ class SourceBackReferenceScanner:
                 failures.append(f"{source_file}:{node.lineno}: importlib root import")  # Report the exact line.
             if SourceBackReferenceScanner._reads_root_from_sys_modules(node, root_names):  # Detect module-table reads.
                 failures.append(f"{source_file}:{node.lineno}: sys.modules root lookup")  # Report the exact line.
-        logging.debug("Parsed %s and found %d issue(s)", source_file, len(failures))  # Log the per-file result.
+        logger.debug("Parsed %s and found %d issue(s)", source_file, len(failures))  # Log the per-file result.
         return tuple(failures)  # Return immutable findings for stable assertions.
 
     @staticmethod
     def _root_name_constants(tree: ast.AST) -> frozenset[str]:
         """Return names that hold the root CLI module string."""
-        logging.info("Collecting root-name constants from the source tree")  # Log before scanning assignments.
+        logger.info("Collecting root-name constants from the source tree")  # Log before scanning assignments.
         names: set[str] = set()  # Store local names that can hide a root import target.
         for node in ast.walk(tree):  # Walk every assignment because constants can live in helper scopes.
             if isinstance(node, ast.Assign) and SourceBackReferenceScanner._is_root_string(node.value):
@@ -61,7 +61,7 @@ class SourceBackReferenceScanner:
             if isinstance(node, ast.AnnAssign) and SourceBackReferenceScanner._is_root_string(node.value):
                 if isinstance(node.target, ast.Name):  # Annotated assignments have one target only.
                     names.add(node.target.id)  # Keep the annotated name for later call checks.
-        logging.debug("Collected %d root-name constant(s)", len(names))  # Log the number of hidden names.
+        logger.debug("Collected %d root-name constant(s)", len(names))  # Log the number of hidden names.
         return frozenset(names)  # Return an immutable set so scan logic cannot mutate it.
 
     @staticmethod
