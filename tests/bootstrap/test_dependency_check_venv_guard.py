@@ -81,6 +81,8 @@ class TestVenvGuardRunBehavior:
         """Non-isolated interpreter + no override -> zero install/upgrade calls."""
         orchestrator, installer, _log = _build_orchestrator(sys_module=_fake_sys("/usr", "/usr"))
         orchestrator.run()
+        assert installer.install_with_pip.call_count == 0  # The guard must prevent each pip write path.
+        assert installer.install_with_uv.call_count == 0  # The guard must prevent each UV write path.
         installer.install_with_pip.assert_not_called()
         installer.install_with_uv.assert_not_called()
 
@@ -88,7 +90,7 @@ class TestVenvGuardRunBehavior:
         """Genuine isolated venv -> missing packages are still installed (no regression, FR-011)."""
         orchestrator, installer, _log = _build_orchestrator(sys_module=_fake_sys("/proj/.venv", "/usr"))
         orchestrator.run()
-        installer.install_with_pip.assert_called()
+        installer.install_with_pip.assert_called_once_with("pkg-one>=1.0", upgrade=False)  # Confirm the exact install.
 
     def test_isolated_venv_preserves_upgrade_behavior(self):
         """Genuine isolated venv -> outdated packages are still upgraded (no regression, FR-011)."""
@@ -100,7 +102,8 @@ class TestVenvGuardRunBehavior:
         orchestrator._is_importable = lambda _name: True  # type: ignore[assignment]
         orchestrator.get_installed_version_fn = lambda _name: "1.0"  # type: ignore[assignment]
         orchestrator.run()
-        installer.install_with_pip.assert_called()  # WHY: pip fallback upgrade fired for the outdated pkg.
+        expected_spec = "pkg-two>=2.0"  # Name the required upgrade so the call check stays readable.
+        installer.install_with_pip.assert_called_once_with(expected_spec, upgrade=True)  # Confirm the exact upgrade.
 
     def test_override_allows_system_python_install_with_loud_warning(self):
         """Non-isolated + MISTHELPER_ALLOW_SYSTEM_PYTHON_INSTALL=true -> install proceeds with a loud warning."""
@@ -109,7 +112,7 @@ class TestVenvGuardRunBehavior:
             env={"MISTHELPER_ALLOW_SYSTEM_PYTHON_INSTALL": "true"},
         )
         orchestrator.run()
-        installer.install_with_pip.assert_called()
+        installer.install_with_pip.assert_called_once_with("pkg-one>=1.0", upgrade=False)  # Confirm the override call.
         warnings = " ".join(str(call.args) for call in logging_module.warning.call_args_list)
         assert "MISTHELPER_ALLOW_SYSTEM_PYTHON_INSTALL" in warnings, "override path must log a loud warning"
 
@@ -137,5 +140,7 @@ class TestVenvGuardRunBehavior:
             env={"DISABLE_AUTO_INSTALL": "true"},
         )
         orchestrator.run()
+        assert installer.install_with_pip.call_count == 0  # The disabled path must stop before pip install.
+        assert logging_module.warning.call_count == 0  # The disabled path must not add a second warning.
         installer.install_with_pip.assert_not_called()
         logging_module.warning.assert_not_called()  # WHY: no conflicting/duplicate venv-guard message.
