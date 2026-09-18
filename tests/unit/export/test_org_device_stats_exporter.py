@@ -285,6 +285,7 @@ class TestVpnPeerStats:
         fake_mh.PROGRESS_EMITTER = None
         with patch.object(OrgDeviceStatsExporter, "_vpn_peer_stats_cache_hit", return_value=False):
             OrgDeviceStatsExporter.vpn_peer_stats(fast=False)
+        assert fake_mh.APIDataFetcher.call_count == 1  # Missing emitter must not skip the data fetcher.
         fake_mh.APIDataFetcher.assert_called_once()
 
 

@@ -91,6 +91,7 @@ class TestByGatewayTemplateList:
             patch.object(DeviceRebootManager, "_confirm_reboot_operation") as confirm,
         ):
             DeviceRebootManager.by_gateway_template_list()
+        assert confirm.call_count == 0  # No validated targets must skip the confirmation prompt.
         confirm.assert_not_called()
 
     def test_aborts_when_user_declines(self, fake_mh: Any) -> None:

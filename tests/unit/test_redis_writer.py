@@ -257,6 +257,7 @@ class TestCoverageGapTargets:
         writer._ensure_key_single(  # Call with a key that is already in the cache
             "existing:ts:key", {"id": "dev-1"}, "testFunc"  # Key already cached → must return early
         )
+        assert mock_redis["ts"].create.call_count == 0  # The cached key must skip Redis key creation.
         mock_redis["ts"].create.assert_not_called()  # Redis ts.create must NOT be called for cached key
 
     def test_ensure_key_single_reraises_non_exists_response_error(self, config, mock_redis) -> None:

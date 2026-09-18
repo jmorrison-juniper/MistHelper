@@ -461,6 +461,7 @@ class TestRunWorkflow:
         mock_vpns.return_value = ([{"type": "hub_spoke", "paths": {}}], [])
         mock_select.return_value = None
         manager.run()
+        assert mock_action.call_count == 0  # A cancelled selection must not reach the action prompt.
         mock_action.assert_not_called()
 
     @patch.object(WanHubGroupNumberManager, "_prompt_action")

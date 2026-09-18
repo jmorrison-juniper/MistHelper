@@ -869,6 +869,7 @@ class TestExtractContinuation:
             patch.object(mgr, "_save_extraction") as mock_save,  # Should NOT be called
         ):
             mgr.extract()  # Should reach line 88 (if extraction) then stop
+        assert mock_save.call_count == 0  # A missing extraction must skip the save path.
         mock_save.assert_not_called()  # Verify save was not triggered for empty extraction
 
     def test_happy_path_saves_extraction(self) -> None:
