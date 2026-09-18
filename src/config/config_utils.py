@@ -41,6 +41,14 @@ from typing import Any, ClassVar  # ClassVar for cached state. Any for the mista
 import mistapi  # Third-party API SDK used only for interactive org selection.
 
 logger = logging.getLogger(__name__)  # Use this module name in log records.
+_HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
+
+
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
 class ConfigUtils:
@@ -152,6 +160,13 @@ class ConfigUtils:
             logger.error("Cannot select an organization without an authenticated API session.")
             sys.exit(1)  # Abort: prompt path is unreachable without a session.
         org_id_list = mistapi.cli.select_org(cls._apisession)  # Interactive org selection using injected session.
+        status_code = _response_status_code(org_id_list)  # WHY: a 5xx can carry an empty payload without raising.
+        if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status means the org list is not trustworthy.
+            logger.error(  # WHY: the operator must see the cloud status before the prompt result is treated as empty.
+                "The cloud returned HTTP %s for the organization selection prompt",
+                status_code,
+            )
+            sys.exit(1)  # WHY: preserve the existing failure contract for an unavailable org list.
         if not org_id_list:  # Selection returned nothing.
             logger.error("Failed to retrieve org list. Check your API token and authentication.")
             # WHY (#886 Phase 2): retire print() in favor of logging.error (surfaces on default root-logger).

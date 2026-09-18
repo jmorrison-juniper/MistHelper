@@ -22,6 +22,14 @@ import mistapi.api.v1.sites.servicepolicies  # Site service-policies endpoint na
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 
 _API_PAGE_LIMIT = 1000  # Standard pagination cap for org-level Mist list endpoints
+_HTTP_OK = 200  # WHY: a response double without a status should keep legacy success behavior.
+_HTTP_ERROR_MIN = 400  # WHY: HTTP 4xx and 5xx statuses mean the payload cannot prove emptiness.
+
+
+def _response_status_code(response: Any) -> int:
+    """Return the HTTP status when the SDK response exposes one."""
+    status_code = getattr(response, "status_code", _HTTP_OK)  # WHY: old tests use simple response doubles.
+    return status_code if isinstance(status_code, int) else _HTTP_OK  # WHY: non-int mock attributes are not statuses.
 
 
 def _add_valid_name(target: set[str], value: Any) -> None:  # Reusable single-value guard-and-insert
@@ -67,6 +75,14 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
             response = mistapi.api.v1.orgs.networks.listOrgNetworks(
                 self._session, org_id, limit=_API_PAGE_LIMIT
             )  # Fetch all org networks from Mist API
+            status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+            if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the count untrustworthy.
+                logger.error(  # WHY: the operator must see the cloud status instead of a false empty result.
+                    "The cloud returned HTTP %s for the organization network tenant list at org %s",
+                    status_code,
+                    org_id,
+                )
+                return []  # WHY: preserve the existing failure contract for this helper.
             if not (hasattr(response, "data") and response.data):  # Defensive: response may lack data
                 logger.warning("No org networks found or response data is empty")  # Surface empty result
                 return []  # Callers treat empty list as "no tenants found"
@@ -92,6 +108,14 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
             response = mistapi.api.v1.sites.networks.listSiteNetworksDerived(
                 self._session, site_id
             )  # Fetch site-derived network list from Mist API
+            status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
+            if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the count untrustworthy.
+                logger.error(  # WHY: the operator must see the cloud status instead of a false empty result.
+                    "The cloud returned HTTP %s for the site network tenant list at site %s",
+                    status_code,
+                    site_id,
+                )
+                return []  # WHY: preserve the existing failure contract for this helper.
             if not (hasattr(response, "data") and response.data):  # Guard against missing/empty payload
                 logger.warning("No site derived networks found or response data is empty")  # Empty trace
                 return []  # Fail-safe empty result
