@@ -119,9 +119,8 @@ class TestStageCommentCodec:
 class TestSkillIssueTracker:
     """Verify local mirroring, idempotency, and crash recovery."""
 
-    def test_rate_limit_exhaustion_resumes_without_duplicate_issue(self) -> None:
-        database_path = self._database_path("rate_limit")  # Use a repo-local database for the test.
-        self._remove_database(database_path)  # Start with a clean local mirror.
+    def test_rate_limit_exhaustion_resumes_without_duplicate_issue(self, tmp_path: Path) -> None:
+        database_path = self._database_path(tmp_path, "rate_limit")  # Use an isolated database for the test.
         runner = FakeGitHubRunner(low_limit_first=True)  # Force the first GitHub check to defer.
         tracker = SkillIssueTracker(database_path, runner=runner)  # Build the tracker with the fake network.
         tracker.record_stage(self._document(1), StageName.QUEUED)  # Write SQLite first with no network requirement.
@@ -130,11 +129,9 @@ class TestSkillIssueTracker:
         assert first_sync == 0  # Confirm the pipeline did not force a blocking wait.
         assert second_sync == 2  # Confirm the issue and the queued comment synced on retry.
         assert len(self._create_calls(runner)) == 1  # Confirm the retry did not create a duplicate issue.
-        self._remove_database(database_path)  # Clean the repo-local database after the test.
 
-    def test_tracker_prevents_duplicate_issues_at_scale(self) -> None:
-        database_path = self._database_path("idempotent_scale")  # Use a repo-local database for the test.
-        self._remove_database(database_path)  # Start with no prior local issue links.
+    def test_tracker_prevents_duplicate_issues_at_scale(self, tmp_path: Path) -> None:
+        database_path = self._database_path(tmp_path, "idempotent_scale")  # Use an isolated database for the test.
         runner = FakeGitHubRunner()  # Use a fake runner to count issue creation calls.
         tracker = SkillIssueTracker(database_path, runner=runner)  # Build the tracker.
         documents = [self._document(index) for index in range(50)]  # Use enough records to prove scale behavior.
@@ -144,11 +141,9 @@ class TestSkillIssueTracker:
         tracker.sync_pending(limit=200)  # Reconcile the queued documents in one batch.
         tracker.sync_pending(limit=200)  # Re-run reconciliation to prove idempotency.
         assert len(self._create_calls(runner)) == len(documents)  # Confirm one GitHub issue per document.
-        self._remove_database(database_path)  # Clean the repo-local database after the test.
 
-    def test_index_generation_groups_documents_by_domain_and_stage(self) -> None:
-        database_path = self._database_path("index")  # Use a repo-local database for the test.
-        self._remove_database(database_path)  # Start with a clean progress board.
+    def test_index_generation_groups_documents_by_domain_and_stage(self, tmp_path: Path) -> None:
+        database_path = self._database_path(tmp_path, "index")  # Use an isolated database for the test.
         tracker = SkillIssueTracker(database_path, runner=FakeGitHubRunner())  # Build the tracker.
         tracker.record_stage(self._document(1, "routing"), StageName.SEGMENTED)  # Add a routing document row.
         tracker.record_stage(self._document(2, "switching"), StageName.VERIFIED)  # Add a switching document row.
@@ -157,11 +152,9 @@ class TestSkillIssueTracker:
         assert "## switching" in index  # Confirm the second domain has a section.
         assert "`complete` `verified`" in index  # Confirm terminal stage status is visible.
         assert "`in-progress` `segmented`" in index  # Confirm unfinished stage status is visible.
-        self._remove_database(database_path)  # Clean the repo-local database after the test.
 
-    def test_tracker_records_and_recovers_exact_resume_point(self) -> None:
-        database_path = self._database_path("roundtrip")  # Use a repo-local database for the test.
-        self._remove_database(database_path)  # Start with a clean local mirror.
+    def test_tracker_records_and_recovers_exact_resume_point(self, tmp_path: Path) -> None:
+        database_path = self._database_path(tmp_path, "roundtrip")  # Use an isolated database for the test.
         runner = FakeGitHubRunner()  # Use a fake runner so no network call occurs.
         tracker = SkillIssueTracker(database_path, runner=runner)  # Build the real tracker.
         document = self._document(1)  # Build one source document for the journal.
@@ -172,11 +165,9 @@ class TestSkillIssueTracker:
         assert resume_point.completed_stage == StageName.SEGMENTED  # Confirm no uncompleted stage advanced.
         assert resume_point.next_action == "run the extracted stage"  # Confirm the resumed action is exact.
         assert len(runner.comments) == 1  # Confirm GitHub received only the immediate start comment.
-        self._remove_database(database_path)  # Clean the repo-local database after the test.
 
-    def test_tracker_posts_start_summary_and_close_for_completed_document(self) -> None:
-        database_path = self._database_path("summary_calls")  # Use a repo-local database for the test.
-        self._remove_database(database_path)  # Start with a clean local mirror.
+    def test_tracker_posts_start_summary_and_close_for_completed_document(self, tmp_path: Path) -> None:
+        database_path = self._database_path(tmp_path, "summary_calls")  # Use an isolated database for the test.
         runner = FakeGitHubRunner()  # Use a fake runner to count GitHub operations.
         tracker = SkillIssueTracker(database_path, runner=runner)  # Build the tracker.
         document = self._document(1)  # Build one source document for the queue.
@@ -188,18 +179,17 @@ class TestSkillIssueTracker:
         assert len(self._comment_calls(runner)) == 2  # Confirm only start and completion comments post.
         assert len(self._close_calls(runner)) == 1  # Confirm completed work closes the issue.
         assert "Skill factory document completion summary." in runner.comments[-1]  # Confirm summary form.
-        self._remove_database(database_path)  # Clean the repo-local database after the test.
 
-    def test_missing_upstream_measurements_are_not_measured(self) -> None:
-        reader = StageMeasurementReader(self._database_path("missing_measurements"))  # Use no source database.
+    def test_missing_upstream_measurements_are_not_measured(self, tmp_path: Path) -> None:
+        database_path = self._database_path(tmp_path, "missing_measurements")  # Use no source database.
+        reader = StageMeasurementReader(database_path)  # Read from an isolated absent database path.
         inputs = StageMeasurementInputs("missing-document")  # Provide no package or upstream result.
         details = reader.details(inputs)  # Build audit details from absent evidence.
         assert set(details.values()) == {"not measured"}  # Confirm no synthetic number can enter a comment.
 
-    def test_package_measurements_read_values_from_disk(self) -> None:
-        database_path = self._database_path("package_measurements")  # Use a repo-local source database.
-        package_dir = Path("data") / "juniper_skills" / "test_tracking_package"  # Keep test files inside data.
-        self._remove_database(database_path)  # Start with no prior source-size row.
+    def test_package_measurements_read_values_from_disk(self, tmp_path: Path) -> None:
+        database_path = self._database_path(tmp_path, "package_measurements")  # Use an isolated source database.
+        package_dir = tmp_path / "package"  # Keep generated package files out of the live factory data.
         self._write_source_size(database_path, "disk-document", 1000)  # Provide real source size for retention.
         self._write_topic(package_dir / "alpha.md", "- MUST: One fact. [A p.1]\n")  # Create one real card.
         self._write_topic(package_dir / "beta.md", "- **INFO**: Two fact. [A p.2]\n")  # Create one alternate card.
@@ -208,8 +198,6 @@ class TestSkillIssueTracker:
         assert details["topic_count"] == 2  # Confirm topic count came from Markdown files.
         assert details["card_count"] == 2  # Confirm both supported card syntaxes count.
         assert details["retention_percentage"] != "not measured"  # Confirm retention used disk and database sizes.
-        self._remove_package(package_dir)  # Clean generated test files.
-        self._remove_database(database_path)  # Clean the repo-local database after the test.
 
     def _document(self, index: int, domain: str = "junos") -> DocumentRecord:
         """Return one document record for tests."""
@@ -249,20 +237,15 @@ class TestSkillIssueTracker:
         """Return fake issue close calls."""
         return [command for command in runner.commands if command[:3] == ["gh", "issue", "close"]]  # Count closes.
 
-    def _database_path(self, name: str) -> Path:
-        """Return a repo-local SQLite path for one test."""
-        return Path("data") / "juniper_skills" / f"test_tracking_{name}.db"  # Avoid external temporary paths.
-
-    def _remove_database(self, database_path: Path) -> None:
-        """Remove a repo-local SQLite path if it exists."""
-        if database_path.exists():  # Leave the test independent of earlier failures.
-            database_path.unlink()  # Remove only the test database file.
+    def _database_path(self, tmp_path: Path, name: str) -> Path:
+        """Return an isolated SQLite path for one test."""
+        return tmp_path / f"test_tracking_{name}.db"  # Let pytest clean the database after open handles close.
 
     def _write_source_size(self, database_path: Path, document_key: str, text_chars: int) -> None:
         """Create a minimal source document table for measurement tests."""
         import sqlite3  # Keep SQLite local to this helper because production code owns database access.
 
-        database_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure the repo-local data directory exists.
+        database_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure the isolated database directory exists.
         connection = sqlite3.connect(database_path)  # Open a compact database fixture.
         try:
             connection.execute(
@@ -277,12 +260,6 @@ class TestSkillIssueTracker:
         """Write one generated topic file for measurement tests."""
         path.parent.mkdir(parents=True, exist_ok=True)  # Ensure the package directory exists.
         path.write_text(text, encoding="utf-8")  # Write a small Markdown topic for the reader.
-
-    def _remove_package(self, package_dir: Path) -> None:
-        """Remove test package files."""
-        for path in package_dir.glob("*.md"):  # Remove only files created by this test.
-            path.unlink()  # Delete the generated Markdown file.
-        package_dir.rmdir()  # Remove the now-empty test package directory.
 
 
 class TestGitHubRateLimitManager:
