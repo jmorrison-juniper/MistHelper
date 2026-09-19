@@ -13,6 +13,8 @@ import os
 import sys
 from unittest.mock import MagicMock, patch
 
+import pytest  # WHY: missing-target tests assert the safety guard raises or logs
+
 # Mock mistapi before importing the module under test
 _mock_mistapi = MagicMock()
 with patch.dict(
@@ -361,6 +363,17 @@ class TestStep5VersionSelection:
         result = upgrader._apply_version_selection("AP45", devices, selected)
         assert result is False
 
+    def test_apply_version_selection_rejects_missing_version(self, caplog):
+        """A version row without version fails before it enters the plan."""
+        upgrader = _make_upgrader()  # WHY: build the unit under test with safe defaults
+        devices = [SAMPLE_AP]  # WHY: one device proves the selected row controls planning
+        selected: dict[str, object] = {"models": ["AP45"]}  # WHY: simulate an API row with no version field
+        with caplog.at_level("ERROR"):  # WHY: the repair must make the missing field observable
+            result = upgrader._apply_version_selection("AP45", devices, selected)  # WHY: drive the safety branch
+        assert result is False  # WHY: caller handles False by skipping this model
+        assert "AP45" not in upgrader.upgrade_plan  # WHY: the missing version must not create a plan
+        assert "Missing required firmware field version" in caplog.text  # WHY: log names the missing field
+
     def test_find_universal_versions(self):
         """Find versions compatible with all models."""
         upgrader = _make_upgrader()
@@ -529,6 +542,14 @@ class TestStep8ExecuteUpgrades:
         body = upgrader._build_upgrade_body("0.14.123", ["ap-001"])
         assert "p2p_cluster_size" not in body
         assert body["force"] is True
+
+    def test_build_upgrade_body_rejects_missing_version(self, caplog):
+        """A request body with no target version fails before a cloud call."""
+        upgrader = _make_upgrader()  # WHY: build the unit under test with standard upgrade config
+        with caplog.at_level("ERROR"):  # WHY: the repair must write an error that names the field
+            with pytest.raises(ValueError, match="version"):  # WHY: callers already catch exceptions in execute path
+                upgrader._build_upgrade_body("", ["ap-001"])  # WHY: drive the final guard before request assembly
+        assert "Missing required firmware field version" in caplog.text  # WHY: log proves the failure is observable
 
     def test_organize_devices_by_site(self):
         """Organize upgrade plan by site."""
