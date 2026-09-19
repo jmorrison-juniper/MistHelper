@@ -26,6 +26,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from arango.exceptions import ArangoError  # WHY: tests exercise narrowed python-arango handlers.
 
 from src.upgrade_portal.capture import store
 
@@ -208,6 +209,147 @@ def _drop_cached_handle() -> Iterator[None]:
     store.reset_connection()
     yield
     store.reset_connection()
+
+
+def test_open_database_returns_none_when_arango_connection_fails(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A failed ArangoDB connection keeps the capture backup path active."""
+
+    class _BrokenClient:
+        """Stand in for a client that cannot open the database."""
+
+        def __init__(self, **_kwargs: Any) -> None:
+            """Accept the production constructor keywords."""
+
+        def db(self, *_args: Any, **_kwargs: Any) -> Any:
+            """Raise the python-arango base error during the database open."""
+            raise ArangoError("connect failed")  # WHY: drive the narrowed connection handler.
+
+    config = SimpleNamespace(  # WHY: _open_database reads only these database connection fields.
+        standalone_mode=False,
+        arango_host="http://db.example.invalid:8529",
+        arango_database="misthelper",
+        arango_username="user",
+        arango_password="secret",
+    )
+    monkeypatch.setattr(store, "ArangoClient", _BrokenClient)  # WHY: avoid a network connection in the test.
+    with caplog.at_level(logging.WARNING):  # WHY: the handler must make the fallback visible.
+        result = store._open_database(config)  # WHY: drive the narrowed ArangoError handler.
+    assert result is None  # WHY: the caller then uses the backup-file path.
+    assert "cannot reach the document store" in caplog.text  # WHY: the operator gets the failure reason.
+
+
+def test_ensure_collection_returns_false_when_arango_create_fails(caplog: pytest.LogCaptureFixture) -> None:
+    """A collection create failure returns a visible bootstrap failure."""
+
+    class _BrokenDatabase:
+        """Stand in for a database that refuses collection creation."""
+
+        def has_collection(self, _name: str) -> bool:
+            """Report that the collection is absent."""
+            return False  # WHY: force the create path.
+
+        def create_collection(self, _name: str, edge: bool = False) -> None:
+            """Raise the python-arango base error during collection creation."""
+            raise ArangoError("create failed")  # WHY: drive the narrowed collection handler.
+
+    with caplog.at_level(logging.WARNING):  # WHY: the handler must name the failed collection operation.
+        result = store._ensure_collection(_BrokenDatabase(), store.CAPTURE_COLLECTION, False)  # WHY: drive failure.
+    assert result is False  # WHY: bootstrap reports the collection as not ready.
+    assert "could not create collection" in caplog.text  # WHY: the log is the observable outcome.
+
+
+def test_ensure_index_returns_false_when_arango_add_index_fails(caplog: pytest.LogCaptureFixture) -> None:
+    """An index create failure returns a visible bootstrap failure."""
+
+    class _BrokenCollection:
+        """Stand in for a collection that refuses an index."""
+
+        def add_index(self, _definition: Mapping[str, Any]) -> None:
+            """Raise the python-arango base error during index creation."""
+            raise ArangoError("index failed")  # WHY: drive the narrowed index handler.
+
+    class _BrokenDatabase:
+        """Stand in for a database that returns the broken collection."""
+
+        def collection(self, _name: str) -> _BrokenCollection:
+            """Return the collection that raises on add_index."""
+            return _BrokenCollection()  # WHY: isolate the failure to add_index.
+
+    with caplog.at_level(logging.WARNING):  # WHY: the handler must name the failed index operation.
+        result = store._ensure_index(_BrokenDatabase(), store.INDEX_PLAN[0])  # WHY: drive the index failure.
+    assert result is False  # WHY: bootstrap reports the index as not ready.
+    assert "could not create index" in caplog.text  # WHY: the log is the observable outcome.
+
+
+def test_edge_index_present_returns_false_when_arango_index_read_fails(caplog: pytest.LogCaptureFixture) -> None:
+    """An edge index read failure returns a visible false report."""
+
+    class _BrokenCollection:
+        """Stand in for an edge collection that refuses index reads."""
+
+        def indexes(self) -> list[dict[str, Any]]:
+            """Raise the python-arango base error during index listing."""
+            raise ArangoError("index read failed")  # WHY: drive the narrowed index-read handler.
+
+    class _BrokenDatabase:
+        """Stand in for a database that returns the broken edge collection."""
+
+        def collection(self, _name: str) -> _BrokenCollection:
+            """Return the collection that raises on indexes."""
+            return _BrokenCollection()  # WHY: isolate the failure to indexes.
+
+    with caplog.at_level(logging.WARNING):  # WHY: the handler must name the failed index read.
+        result = store._edge_index_present(_BrokenDatabase())  # WHY: drive the narrowed handler.
+    assert result is False  # WHY: bootstrap reports the edge index as absent.
+    assert "could not read the indexes" in caplog.text  # WHY: the log is the observable outcome.
+
+
+def test_is_run_absent_returns_none_when_arango_read_fails(caplog: pytest.LogCaptureFixture) -> None:
+    """A run read failure keeps the edge and logs the failed repair read."""
+
+    class _BrokenCollection:
+        """Stand in for the run collection that refuses reads."""
+
+        def get(self, _key: str) -> None:
+            """Raise the python-arango base error during the run read."""
+            raise ArangoError("read failed")  # WHY: drive the narrowed run-read handler.
+
+    class _BrokenDatabase:
+        """Stand in for a database that returns the broken run collection."""
+
+        def collection(self, _name: str) -> _BrokenCollection:
+            """Return the collection that raises on get."""
+            return _BrokenCollection()  # WHY: isolate the failure to get.
+
+    with caplog.at_level(logging.WARNING):  # WHY: the handler must name the failed repair read.
+        result = store._run_absent(_BrokenDatabase(), _RUN_KEY)  # WHY: drive the narrowed handler.
+    assert result is None  # WHY: a failed read is not proof that the run is absent.
+    assert "could not read run" in caplog.text  # WHY: the log is the observable outcome.
+
+
+def test_remove_edge_returns_false_when_arango_delete_fails(caplog: pytest.LogCaptureFixture) -> None:
+    """An edge delete failure returns a visible repair failure."""
+
+    class _BrokenCollection:
+        """Stand in for an edge collection that refuses deletes."""
+
+        def delete(self, _key: str) -> None:
+            """Raise the python-arango base error during edge removal."""
+            raise ArangoError("delete failed")  # WHY: drive the narrowed delete handler.
+
+    class _BrokenDatabase:
+        """Stand in for a database that returns the broken edge collection."""
+
+        def collection(self, _name: str) -> _BrokenCollection:
+            """Return the collection that raises on delete."""
+            return _BrokenCollection()  # WHY: isolate the failure to delete.
+
+    with caplog.at_level(logging.WARNING):  # WHY: the handler must name the failed edge removal.
+        result = store._remove_edge(_BrokenDatabase(), _EDGE_KEY)  # WHY: drive the narrowed handler.
+    assert result is False  # WHY: the repair caller reports the removal as failed.
+    assert "could not remove edge" in caplog.text  # WHY: the log is the observable outcome.
 
 
 def _written_capture() -> dict[str, Any]:
@@ -403,11 +545,19 @@ def test_verify_write_rejects_an_absent_document() -> None:
 def test_verify_write_treats_a_failed_read_as_an_absent_document() -> None:
     """The read-back refuses a key when the database raises during the read."""
     database = _database_holding(None)
-    database.fake_collection.read_error = RuntimeError("The read failed.")
+    database.fake_collection.read_error = ArangoError("The read failed.")
     result = store.verify_write(store.CAPTURE_COLLECTION, _KEY, _written_capture(), database)
     assert result.verified is False
     assert result.reason == store.REASON_ABSENT
     assert result.stored_size_bytes == 0
+
+
+def test_verify_write_propagates_an_unexpected_read_bug() -> None:
+    """The read-back does not hide a non-driver programming fault."""
+    database = _database_holding(None)  # WHY: build a database seam for the read-back path.
+    database.fake_collection.read_error = RuntimeError("unexpected bug")  # WHY: prove broad handlers stay gone.
+    with pytest.raises(RuntimeError, match="unexpected bug"):  # WHY: unexpected faults must not become absent rows.
+        store.verify_write(store.CAPTURE_COLLECTION, _KEY, _written_capture(), database)  # WHY: drive the read path.
 
 
 def test_verify_write_rejects_a_different_schema_version() -> None:
@@ -808,7 +958,7 @@ def test_write_capture_leaves_the_capture_unmarked_when_the_patch_fails(monkeypa
     """
     database = _FakeDatabase()
     _install_exporter(monkeypatch, database)
-    database.fake_collection.update_error = RuntimeError("The patch failed.")
+    database.fake_collection.update_error = ArangoError("The patch failed.")
     result = store.write_capture(_written_capture(), database)
     assert result.verified is False
     assert result.reason == store.REASON_STATE_UNSET
@@ -1014,7 +1164,7 @@ def test_write_capture_builds_no_edge_when_the_mark_fails(monkeypatch: pytest.Mo
     """
     database = _FakeDatabase()
     _install_exporter(monkeypatch, database)
-    database.fake_collection.update_error = RuntimeError("The patch failed.")
+    database.fake_collection.update_error = ArangoError("The patch failed.")
     result = store.write_capture(_linked_capture(), database)
     assert result.verified is False
     assert result.reason == store.REASON_STATE_UNSET
@@ -1035,7 +1185,7 @@ def test_write_capture_keeps_its_result_when_the_edge_write_raises(monkeypatch: 
     linked = store.write_capture(_linked_capture(), healthy)
     broken = _FakeDatabase()
     _install_exporter(monkeypatch, broken)
-    broken.fake_collection.bulk_error = RuntimeError("The edge write failed.")
+    broken.fake_collection.bulk_error = ArangoError("The edge write failed.")
     unlinked = store.write_capture(_linked_capture(), broken)
     assert unlinked == linked
     assert unlinked.verified is True
@@ -1150,11 +1300,19 @@ def test_list_captures_reports_the_database_out_of_reach(monkeypatch: pytest.Mon
 def test_list_captures_returns_an_empty_page_when_the_query_fails() -> None:
     """A failed query returns an empty page and raises nothing."""
     database = _FakeDatabase()
-    database.aql.execute_error = RuntimeError("The query failed.")
+    database.aql.execute_error = ArangoError("The query failed.")
     page = store.list_captures(store.CaptureQuery(site_id="site-0001"), database)
     assert page.captures == ()
     assert page.total == 0
     assert page.database_available is True
+
+
+def test_run_aql_propagates_an_unexpected_query_bug() -> None:
+    """The history query helper does not hide a non-driver programming fault."""
+    database = _FakeDatabase()  # WHY: build the query seam without a live database.
+    database.aql.execute_error = RuntimeError("unexpected bug")  # WHY: prove broad handlers stay gone.
+    with pytest.raises(RuntimeError, match="unexpected bug"):  # WHY: unexpected faults must reach the caller.
+        store._run_aql(database, "RETURN 1", {})  # WHY: drive the query handler directly.
 
 
 def test_load_capture_reports_an_absent_capture() -> None:

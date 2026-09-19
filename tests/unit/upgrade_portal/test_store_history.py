@@ -24,6 +24,7 @@ from collections.abc import Iterator, Mapping
 from typing import Any
 
 import pytest
+from arango.exceptions import ArangoError  # WHY: history query tests exercise narrowed ArangoDB handlers.
 
 from src.upgrade_portal.capture import store
 from src.upgrade_portal.runtime.runs import RunRecordBuilder
@@ -444,7 +445,7 @@ def test_list_runs_returns_an_empty_page_when_the_query_fails() -> None:
         keeps the rest of the view alive.
     """
     database = _FakeDatabase()
-    database.aql.execute_error = RuntimeError("The query failed.")
+    database.aql.execute_error = ArangoError("The query failed.")
     page = store.list_runs(store.RunQuery(site_id=_SITE), database)
     assert page.runs == ()
     assert page.total == 0
