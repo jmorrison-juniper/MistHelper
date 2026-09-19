@@ -114,6 +114,24 @@ def test_execute_happy_path_invokes_write_outputs() -> None:
     write_outputs.assert_called_once_with(records, {"k": 1})
 
 
+def test_fetch_clients_503_logs_status_and_returns_empty(caplog: pytest.LogCaptureFixture) -> None:
+    """A failed wired-client response must not report a successful empty result."""
+    fake_mh = _make_mh()  # WHY: isolate the dependency resolver from live application state.
+    fake_response = SimpleNamespace(status_code=503, data=[])  # WHY: model a real failed SDK response.
+    fake_mistapi = MagicMock(name="mistapi")  # WHY: block live Mist SDK access.
+    fake_mistapi.api.v1.orgs.wired_clients.searchOrgWiredClients.return_value = fake_response  # WHY: drive branch.
+    with (
+        patch("src.reports.global_wired_client_report_generator.mistapi", fake_mistapi),
+        _patch_mh(fake_mh),
+        caplog.at_level(logging.ERROR),
+    ):
+        records, remote_complete = R._fetch_clients("org-uuid", {})  # WHY: call the real status parser.
+    assert records == []  # WHY: failed HTTP statuses keep the existing empty-list failure contract.
+    assert remote_complete is False  # WHY: failed remote prefiltering is not a complete result.
+    fake_mistapi.get_all.assert_not_called()  # WHY: pagination must not run after a failed first page.
+    assert "HTTP 503" in caplog.text  # WHY: the error log must preserve the exact status.
+
+
 # ---------- _prompt_filter_criteria ----------
 
 

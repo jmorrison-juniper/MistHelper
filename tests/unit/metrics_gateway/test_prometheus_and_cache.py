@@ -325,3 +325,14 @@ def _reading(snapshot: MetricSnapshot, name: str) -> float | None:
         if sample.definition.name == name:
             return sample.value
     return None
+
+
+def test_metrics_payload_returns_none_and_logs_503(caplog: pytest.LogCaptureFixture) -> None:
+    """A 503 Mist response must produce no metrics payload and report the status."""
+    from src.metrics_gateway.collector import MistStatsReader as FailureModeMistStatsReader  # WHY: prove src import.
+
+    response = StubResponse(status_code=503, data={"detail": "down"})  # WHY: model a server-side API outage.
+    caplog.set_level("ERROR", logger="src.metrics_gateway.collector")  # WHY: capture the product error record.
+    payload = FailureModeMistStatsReader._payload(response, "getOrgStats")  # WHY: drive the real status parser.
+    assert payload is None  # WHY: a 503 reply must not feed the metric renderer.
+    assert "getOrgStats call returned status 503" in caplog.text  # WHY: the log must name the exact status.
