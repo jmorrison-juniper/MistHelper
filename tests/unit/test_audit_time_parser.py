@@ -99,8 +99,8 @@ class TestParseRange:
         before = int(time.time())  # Lower bound for timing comparison
         result = TimeRangeParser.parse("6w-2w")  # Parse a range string
         after = int(time.time())  # Upper bound for timing comparison
-        assert result.start is not None  # Start epoch must be set
-        assert result.end is not None  # End epoch must be set
+        assert isinstance(result.start, int)  # Start epoch must be set
+        assert isinstance(result.end, int)  # End epoch must be set
         assert result.duration is None  # Duration must not be set for ranges
         expected_start = before - 6 * UNIT_SECONDS["w"]  # 6 weeks ago lower bound
         expected_end = after - 2 * UNIT_SECONDS["w"]  # 2 weeks ago upper bound
@@ -117,8 +117,8 @@ class TestParseRange:
     def test_range_with_different_units(self):
         """'3m-1w' must produce a valid start/end pair."""
         result = TimeRangeParser.parse("3m-1w")  # Mixed unit range
-        assert result.start is not None  # Start epoch set
-        assert result.end is not None  # End epoch set
+        assert isinstance(result.start, int)  # Start epoch set
+        assert isinstance(result.end, int)  # End epoch set
         assert result.start < result.end  # Start must be before end
 
 
