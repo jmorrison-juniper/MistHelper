@@ -149,7 +149,7 @@ class SingleCommandRunner:
             return False  # WHY: signal caller that the command failed.
         finally:
             log_ctx.runner._disconnect()  # WHY: teardown. Safe when client may be None.
-            logger.debug("[%s] SSH single command session completed", request.hostname)  # WHY: parity log.
+            logger.debug("[%s] SSH single command session ended", request.hostname)  # WHY: failure-safe final trace.
             SingleCommandRunner._write_footer(log_ctx, single_cmd_success, logger)  # WHY: footer always runs.
 
     @staticmethod

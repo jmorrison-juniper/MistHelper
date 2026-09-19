@@ -19,6 +19,10 @@ import mistapi.api.v1.sites.gatewaytemplates  # Site gateway-template endpoint n
 import mistapi.api.v1.sites.networks  # Site networks endpoint namespace
 import mistapi.api.v1.sites.servicepolicies  # Site service-policies endpoint namespace
 
+from src.api.response_integrity import (
+    ResponseIntegrityChecker,
+)  # WHY: a silent parse failure must not read as an empty result (issue #2934).
+
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 
 _API_PAGE_LIMIT = 1000  # Standard pagination cap for org-level Mist list endpoints
@@ -83,6 +87,11 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
                     org_id,
                 )
                 return []  # WHY: preserve the existing failure contract for this helper.
+            if ResponseIntegrityChecker.body_failed_to_parse(response):  # WHY: a broken reply is not an empty list.
+                ResponseIntegrityChecker.report_parse_failure(
+                    response, "the organization network tenant list", str(org_id)
+                )
+                return []  # WHY: preserve the existing failure contract for this helper.
             if not (hasattr(response, "data") and response.data):  # Defensive: response may lack data
                 logger.warning("No org networks found or response data is empty")  # Surface empty result
                 return []  # Callers treat empty list as "no tenants found"
@@ -115,6 +124,9 @@ class APITenantFetchUtils:  # Public class re-exported to MistHelper.py via the 
                     status_code,
                     site_id,
                 )
+                return []  # WHY: preserve the existing failure contract for this helper.
+            if ResponseIntegrityChecker.body_failed_to_parse(response):  # WHY: a broken reply is not an empty list.
+                ResponseIntegrityChecker.report_parse_failure(response, "the site network tenant list", str(site_id))
                 return []  # WHY: preserve the existing failure contract for this helper.
             if not (hasattr(response, "data") and response.data):  # Guard against missing/empty payload
                 logger.warning("No site derived networks found or response data is empty")  # Empty trace
