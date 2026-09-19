@@ -57,20 +57,28 @@ class TestCheckNameConflict:
         """A duplicate name would fail the create call or shadow a live object."""
         existing = [{"name": "Corp-LAN", "id": "dest-1"}]  # WHY: one object already in the org.
         conflict = manager._check_name_conflict({"name": "Corp-LAN"}, existing)
-        assert conflict is not None  # WHY: the guard must report, not stay silent.
+        assert conflict == {  # WHY: the guard must return the exact duplicate-name report.
+            "reason": "name_match",
+            "detail": "Object named 'Corp-LAN' already exists",
+            "existing_id": "dest-1",
+        }
         assert conflict["reason"] == "name_match"  # WHY: the report groups by this reason.
 
     def test_the_match_ignores_the_case(self, manager: OrgConfigMigrationManager) -> None:
         """A case-only difference is still a duplicate to the operator."""
         existing = [{"name": "corp-lan", "id": "dest-1"}]  # WHY: the stored name is lowercase.
         conflict = manager._check_name_conflict({"name": "CORP-LAN"}, existing)
-        assert conflict is not None  # WHY: the compare must fold the case.
+        assert conflict == {  # WHY: the guard must match the lowercase existing object.
+            "reason": "name_match",
+            "detail": "Object named 'corp-lan' already exists",
+            "existing_id": "dest-1",
+        }
 
     def test_the_existing_identifier_is_preserved(self, manager: OrgConfigMigrationManager) -> None:
         """The remap table needs the destination identifier to fix later references."""
         existing = [{"name": "Corp-LAN", "id": "dest-1"}]  # WHY: one object already in the org.
         conflict = manager._check_name_conflict({"name": "Corp-LAN"}, existing)
-        assert conflict is not None  # WHY: guard the index below.
+        assert conflict["reason"] == "name_match"  # WHY: guard the report before checking its identifier.
         # WHY: without this identifier a later VPN reference would keep the source value.
         assert conflict["existing_id"] == "dest-1"
 
@@ -97,7 +105,10 @@ class TestCheckNetworkSubnetOverlap:
         # WHY: the existing block contains the whole new block.
         existing = [{"name": "Corp", "subnet": "10.0.0.0/16"}]
         conflict = manager._check_network_subnet_overlap({"subnet": "10.0.1.0/24"}, existing)
-        assert conflict is not None  # WHY: the guard must report the overlap.
+        assert conflict == {  # WHY: the guard must name the new block and the blocking block.
+            "reason": "subnet_overlap",
+            "detail": "10.0.1.0/24 overlaps with 'Corp' (10.0.0.0/16)",
+        }
         assert conflict["reason"] == "subnet_overlap"  # WHY: the report groups by this reason.
 
     def test_an_adjacent_subnet_reports_no_conflict(self, manager: OrgConfigMigrationManager) -> None:
@@ -114,13 +125,21 @@ class TestCheckNetworkSubnetOverlap:
     def test_an_identical_subnet_is_reported(self, manager: OrgConfigMigrationManager) -> None:
         """An exact repeat is the most common real overlap."""
         existing = [{"name": "Corp", "subnet": "10.0.1.0/24"}]  # WHY: the same block.
-        assert manager._check_network_subnet_overlap({"subnet": "10.0.1.0/24"}, existing) is not None
+        conflict = manager._check_network_subnet_overlap({"subnet": "10.0.1.0/24"}, existing)
+        assert conflict == {  # WHY: identical networks must produce a subnet-overlap report.
+            "reason": "subnet_overlap",
+            "detail": "10.0.1.0/24 overlaps with 'Corp' (10.0.1.0/24)",
+        }
 
     def test_a_new_supernet_is_reported(self, manager: OrgConfigMigrationManager) -> None:
         """A wider new block that swallows an existing one is still an overlap."""
         # WHY: the new block contains the existing block, which is the reverse direction.
         existing = [{"name": "Corp", "subnet": "10.0.1.0/24"}]
-        assert manager._check_network_subnet_overlap({"subnet": "10.0.0.0/8"}, existing) is not None
+        conflict = manager._check_network_subnet_overlap({"subnet": "10.0.0.0/8"}, existing)
+        assert conflict == {  # WHY: a supernet must produce a subnet-overlap report.
+            "reason": "subnet_overlap",
+            "detail": "10.0.0.0/8 overlaps with 'Corp' (10.0.1.0/24)",
+        }
 
     def test_a_missing_new_subnet_reports_no_conflict(self, manager: OrgConfigMigrationManager) -> None:
         """A network without a subnet has no address range to compare."""
@@ -137,27 +156,37 @@ class TestCheckNetworkSubnetOverlap:
         """Operators write a host address with a prefix, and strict parsing would reject it."""
         existing = [{"name": "Corp", "subnet": "10.0.1.0/24"}]  # WHY: the same block, canonical.
         # WHY: 10.0.1.5/24 has host bits set, which only a non-strict parse accepts.
-        assert manager._check_network_subnet_overlap({"subnet": "10.0.1.5/24"}, existing) is not None
+        conflict = manager._check_network_subnet_overlap({"subnet": "10.0.1.5/24"}, existing)
+        assert conflict == {  # WHY: host-bit input must still produce an overlap report.
+            "reason": "subnet_overlap",
+            "detail": "10.0.1.5/24 overlaps with 'Corp' (10.0.1.0/24)",
+        }
 
     def test_an_existing_entry_without_a_subnet_is_skipped(self, manager: OrgConfigMigrationManager) -> None:
         """A partially built existing object must not stop the scan."""
         # WHY: the first entry has no subnet, so the loop must reach the second.
         existing = [{"name": "Empty"}, {"name": "Corp", "subnet": "10.0.1.0/24"}]
         conflict = manager._check_network_subnet_overlap({"subnet": "10.0.1.0/24"}, existing)
-        assert conflict is not None  # WHY: the real overlap must still be found.
+        assert conflict == {  # WHY: the scan must skip the empty entry and find the overlap.
+            "reason": "subnet_overlap",
+            "detail": "10.0.1.0/24 overlaps with 'Corp' (10.0.1.0/24)",
+        }
 
     def test_an_invalid_existing_subnet_is_skipped(self, manager: OrgConfigMigrationManager) -> None:
         """One corrupt existing record must not hide a real overlap behind it."""
         # WHY: the first entry fails to parse, so the loop must reach the second.
         existing = [{"name": "Bad", "subnet": "not-a-cidr"}, {"name": "Corp", "subnet": "10.0.1.0/24"}]
         conflict = manager._check_network_subnet_overlap({"subnet": "10.0.1.0/24"}, existing)
-        assert conflict is not None  # WHY: the real overlap must still be found.
+        assert conflict == {  # WHY: the scan must skip the bad entry and find the overlap.
+            "reason": "subnet_overlap",
+            "detail": "10.0.1.0/24 overlaps with 'Corp' (10.0.1.0/24)",
+        }
 
     def test_the_detail_names_both_networks(self, manager: OrgConfigMigrationManager) -> None:
         """The operator needs both names to decide which object to keep."""
         existing = [{"name": "Corp", "subnet": "10.0.0.0/16"}]  # WHY: the blocking object.
         conflict = manager._check_network_subnet_overlap({"subnet": "10.0.1.0/24"}, existing)
-        assert conflict is not None  # WHY: guard the index below.
+        assert conflict["reason"] == "subnet_overlap"  # WHY: guard the report before checking detail text.
         assert "10.0.1.0/24" in conflict["detail"]  # WHY: the new block must be named.
         assert "Corp" in conflict["detail"]  # WHY: the blocking object must be named.
 
@@ -170,7 +199,10 @@ class TestCheckServiceAddressOverlap:
         existing = [{"name": "Web", "addresses": ["10.0.0.0/16"]}]  # WHY: a wide existing block.
         new_obj = {"addresses": ["10.0.1.5/32"]}  # WHY: a host inside that block.
         conflict = manager._check_service_address_overlap(new_obj, existing)
-        assert conflict is not None  # WHY: the guard must report the overlap.
+        assert conflict == {  # WHY: the guard must name the new address and the blocking address.
+            "reason": "address_overlap",
+            "detail": "10.0.1.5/32 overlaps with 'Web' (10.0.0.0/16)",
+        }
         assert conflict["reason"] == "address_overlap"  # WHY: the report groups by this reason.
 
     def test_an_empty_address_list_reports_no_conflict(self, manager: OrgConfigMigrationManager) -> None:
@@ -188,21 +220,33 @@ class TestCheckServiceAddressOverlap:
         existing = [{"name": "Web", "addresses": ["192.168.5.0/24"]}]  # WHY: matches the third.
         # WHY: only the third address overlaps, so the loop must reach it.
         new_obj = {"addresses": ["10.0.0.0/24", "172.16.0.0/24", "192.168.5.10/32"]}
-        assert manager._check_service_address_overlap(new_obj, existing) is not None
+        conflict = manager._check_service_address_overlap(new_obj, existing)
+        assert conflict == {  # WHY: the scan must reach the third address and report it.
+            "reason": "address_overlap",
+            "detail": "192.168.5.10/32 overlaps with 'Web' (192.168.5.0/24)",
+        }
 
     def test_an_invalid_new_address_is_skipped(self, manager: OrgConfigMigrationManager) -> None:
         """A hostname in an address field must not crash the whole import."""
         existing = [{"name": "Web", "addresses": ["10.0.0.0/16"]}]  # WHY: a valid existing block.
         # WHY: the first value fails to parse, so the loop must reach the second.
         new_obj = {"addresses": ["not-an-ip", "10.0.1.5/32"]}
-        assert manager._check_service_address_overlap(new_obj, existing) is not None
+        conflict = manager._check_service_address_overlap(new_obj, existing)
+        assert conflict == {  # WHY: the scan must skip the bad address and report the second.
+            "reason": "address_overlap",
+            "detail": "10.0.1.5/32 overlaps with 'Web' (10.0.0.0/16)",
+        }
 
     def test_an_invalid_existing_address_is_skipped(self, manager: OrgConfigMigrationManager) -> None:
         """One corrupt existing address must not hide a real overlap beside it."""
         # WHY: the first existing address fails to parse, so the scan must continue.
         existing = [{"name": "Web", "addresses": ["bad-value", "10.0.0.0/16"]}]
         new_obj = {"addresses": ["10.0.1.5/32"]}  # WHY: a host inside the second block.
-        assert manager._check_service_address_overlap(new_obj, existing) is not None
+        conflict = manager._check_service_address_overlap(new_obj, existing)
+        assert conflict == {  # WHY: the scan must skip the bad existing address and report the second.
+            "reason": "address_overlap",
+            "detail": "10.0.1.5/32 overlaps with 'Web' (10.0.0.0/16)",
+        }
 
     def test_an_existing_service_without_addresses_is_skipped(self, manager: OrgConfigMigrationManager) -> None:
         """A port-only existing service has nothing to compare against."""
@@ -214,7 +258,7 @@ class TestCheckServiceAddressOverlap:
         """The operator needs both names to decide which object to keep."""
         existing = [{"name": "Web", "addresses": ["10.0.0.0/16"]}]  # WHY: the blocking service.
         conflict = manager._check_service_address_overlap({"addresses": ["10.0.1.5/32"]}, existing)
-        assert conflict is not None  # WHY: guard the index below.
+        assert conflict["reason"] == "address_overlap"  # WHY: guard the report before checking detail text.
         assert "10.0.1.5/32" in conflict["detail"]  # WHY: the new address must be named.
         assert "Web" in conflict["detail"]  # WHY: the blocking service must be named.
 
@@ -247,7 +291,7 @@ class TestDetectConflicts:
         # WHY: the object matches by name and would also overlap by subnet.
         manager._existing = {"networks": [{"name": "Corp", "subnet": "10.0.0.0/16", "id": "d1"}]}
         conflict = manager._detect_conflicts({"name": "Corp", "subnet": "10.0.1.0/24"}, "networks")
-        assert conflict is not None  # WHY: guard the index below.
+        assert conflict["existing_id"] == "d1"  # WHY: guard the remap target before checking reason.
         assert conflict["reason"] == "name_match"  # WHY: the name check must win the race.
 
     def test_a_subnet_conflict_is_found_when_the_name_is_clean(self, manager: OrgConfigMigrationManager) -> None:
@@ -255,7 +299,7 @@ class TestDetectConflicts:
         # WHY: the names differ, so only the subnet scan can catch this one.
         manager._existing = {"networks": [{"name": "Corp", "subnet": "10.0.0.0/16", "id": "d1"}]}
         conflict = manager._detect_conflicts({"name": "Branch", "subnet": "10.0.1.0/24"}, "networks")
-        assert conflict is not None  # WHY: guard the index below.
+        assert conflict["detail"] == "10.0.1.0/24 overlaps with 'Corp' (10.0.0.0/16)"  # WHY: prove the exact overlap.
         assert conflict["reason"] == "subnet_overlap"  # WHY: the subnet guard must catch it.
 
     def test_a_type_without_an_ip_field_skips_the_subnet_check(self, manager: OrgConfigMigrationManager) -> None:
