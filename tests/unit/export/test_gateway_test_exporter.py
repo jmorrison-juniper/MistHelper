@@ -21,6 +21,7 @@ import pytest
 
 from src.export import gateway_test_exporter as gte
 from src.export.gateway_test_exporter import GatewayTestExporter
+from src.export.gateway_test_exporter import GatewayTestExporter as FailureModeGatewayTestExporter
 from src.refactors import fast_mode_constants
 
 # ---------------------------------------------------------------------------
@@ -173,6 +174,23 @@ class TestFetchSyntheticTestStatsWithRetry:
             ("s", "d", "dn", "sn"), max_retries=-1, retry_delay=0.0
         )
         assert result is None
+
+    @pytest.mark.parametrize("status_code", [404, 503])
+    def test_http_status_fetch_error_logs_final_failure(
+        self, fake_mh: ModuleType, caplog: pytest.LogCaptureFixture, status_code: int
+    ) -> None:
+        """An HTTP 404 or HTTP 503 fetch failure must log a final failure."""
+        error = RuntimeError(f"HTTP {status_code}")  # Preserve the cloud status in the failed attempt.
+        with (
+            patch.object(GatewayTestExporter, "_call_synthetic_endpoint", side_effect=error),
+            caplog.at_level("WARNING"),
+        ):
+            result = FailureModeGatewayTestExporter.fetch_synthetic_test_stats_with_retry(
+                ("site-1", "device-1", "Gateway", "HQ"), max_retries=0, retry_delay=0.0
+            )  # Call the real retry wrapper.
+        assert result is None  # Prove the failure returns the documented sentinel.
+        assert f"HTTP {status_code}" in caplog.text  # Prove the operator can see the status.
+        assert "Final attempt failed" in caplog.text  # Prove the product logged the failure.
 
 
 # ---------------------------------------------------------------------------

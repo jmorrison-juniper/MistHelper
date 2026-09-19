@@ -18,6 +18,7 @@ from unittest.mock import MagicMock  # WHY: collaborator doubles and call assert
 import pytest  # WHY: monkeypatch and caplog fixtures.
 
 from src.export.org_search_exporter import OrgSearchExporter
+from src.export.org_search_exporter import OrgSearchExporter as FailureModeOrgSearchExporter
 from src.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 
 # Each row maps a menu entry to the operationId, the filename prefix, and the
@@ -154,6 +155,21 @@ class TestSharedBehavior:
 
         assert "Error fetching system event for org" in caplog.text
         wired["DataExporter"].write_with_format_selection.assert_not_called()
+
+    @pytest.mark.parametrize("status_code", [404, 503])
+    def test_http_status_sdk_error_is_logged_and_does_not_raise(
+        self, wired: dict[str, Any], caplog: pytest.LogCaptureFixture, status_code: int
+    ) -> None:
+        """An HTTP 404 or HTTP 503 SDK failure must surface in the error log."""
+        error = RuntimeError(f"HTTP {status_code}")  # Preserve the cloud status in the raised SDK error.
+        wired["mistapi"].api.v1.orgs.events.searchOrgSystemEvents.side_effect = error  # Reach the failure path.
+
+        with caplog.at_level(logging.ERROR):  # Capture the product error signal.
+            FailureModeOrgSearchExporter.system_events()  # Call the real exporter entry point from src.
+
+        assert f"HTTP {status_code}" in caplog.text  # Prove the operator can see the status.
+        assert "Error fetching system event for org" in caplog.text  # Prove the product logged the failure.
+        wired["DataExporter"].write_with_format_selection.assert_not_called()  # Failed calls must not write.
 
     def test_rows_are_flattened_and_escaped_before_the_write(self, wired: dict[str, Any]) -> None:
         """The persist step must run both CSV-safety helpers on the payload."""
