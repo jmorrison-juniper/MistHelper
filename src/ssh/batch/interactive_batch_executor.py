@@ -292,7 +292,7 @@ class InteractiveBatchExecutor:  # WHY: static-method container for the interact
             return False  # WHY: signal caller that the session failed.
         finally:
             log_ctx.runner._disconnect()  # WHY: teardown. Safe when client may be None.
-            logger.debug("[%s] SSH interactive session completed", request.hostname)  # WHY: parity log line.
+            logger.debug("[%s] SSH interactive session ended", request.hostname)  # WHY: failure-safe final trace.
             InteractiveBatchExecutor._write_footer(
                 log_ctx.writer, overall_success, log_ctx.log_file, logger
             )  # WHY: always emit footer.
