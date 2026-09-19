@@ -894,7 +894,9 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         selected: dict[str, Any],
     ) -> bool:
         """PCPP orchestrator: partition devices, record selection, return acceptance flag."""
-        target_version = selected.get("version")  # WHY: single lookup of the candidate version string
+        target_version = self._selected_target_version(model, selected)  # WHY: reject a version row with no target
+        if target_version is None:  # WHY: caller treats False as a refused model selection
+            return False  # WHY: stop before a missing target reaches the upgrade plan
         logger.info("apply_version_selection start model=%s v=%s n=%s", model, target_version, len(devices))  # FR-007
         needing_upgrade, already_at_target = self._partition_devices_by_version(devices, target_version)  # PCPP compute
         if already_at_target:  # WHY: only announce skips when the skip count is non-zero
@@ -907,6 +909,18 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         self._record_selection_in_plan(model, target_version, selected, needing_upgrade)  # WHY: PCPP persist
         logger.debug("apply_version_selection result=accepted model=%s n=%s", model, len(needing_upgrade))  # FR-007
         return True  # WHY: signal caller that selection was accepted
+
+    def _selected_target_version(self, model: str, selected: dict[str, Any]) -> str | None:
+        """Return a valid target version, or log the missing field."""
+        logger.info("Validating selected firmware version for model=%s", model)  # WHY: audit the safety check start
+        raw_version = selected.get("version")  # WHY: read the field that the cloud request requires
+        if not isinstance(raw_version, str) or not raw_version.strip():  # WHY: missing or blank version is unsafe
+            logger.error("Missing required firmware field version for model=%s", model)  # WHY: make input loss visible
+            print(f"! Missing firmware version for {model} - skipping this model")  # WHY: operator sees refusal
+            return None  # WHY: caller already handles False by skipping the model
+        target_version = raw_version.strip()  # WHY: preserve the exact version text without outer whitespace
+        logger.debug("Validated firmware version for model=%s version=%s", model, target_version)  # WHY: audit result
+        return target_version  # WHY: caller can safely build a plan with this target
 
     def _partition_devices_by_version(  # WHY: helper definition (see docstring)
         self,
@@ -1296,7 +1310,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
                     site_summary[site_name] = {  # WHY: capture intermediate value
                         "models": {},
                         "total": 0,
-                        "version": target_version,
+                        "version": target_version,  # WHY: only a validated target version may enter the request body
                     }
                 # WHY: increment per-model AP count within this site's record
                 site_summary[site_name]["models"].setdefault(model, 0)  # WHY: workflow step
@@ -1600,6 +1614,12 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
         device_ids: list[str | None],
     ) -> dict[str, Any]:
         """Return the always-present portion of the upgrade request body."""
+        logger.info("Validating upgrade body target version")  # WHY: audit the last guard before request assembly
+        if not isinstance(version, str) or not version.strip():  # WHY: a missing target must not reach Mist Cloud
+            logger.error("Missing required firmware field version for upgrade body")  # WHY: name the lost input field
+            raise ValueError("Missing required firmware field: version")  # WHY: caller logs the failure and stops
+        target_version = version.strip()  # WHY: store the checked target once for the request body
+        logger.debug("Validated upgrade body target version=%s", target_version)  # WHY: audit the accepted value
         # WHY: single dict literal for the fields Mist API requires on every upgrade request
         return {  # WHY: surface computed result
             "download_strategy": self.upgrade_config["download_strategy"],
@@ -1608,7 +1628,7 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             "enable_p2p": self.upgrade_config["enable_p2p"],
             "max_failure_percentage": self.upgrade_config["max_failure_percentage"],
             "reboot": self.upgrade_config["reboot"],
-            "version": version,
+            "version": target_version,
             "device_ids": device_ids,
         }
 

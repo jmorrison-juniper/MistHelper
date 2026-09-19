@@ -2780,7 +2780,7 @@ class FirmwareManager:
     ) -> str:
         """Return a single-word verdict for one candidate device.
 
-        Verdicts: 'missing' / 'stale' / 'current' / 'downgrade' / 'upgrade'.
+        Verdicts: 'missing' / 'missing_version' / 'stale' / 'current' / 'downgrade' / 'upgrade'.
         'stale' means the only version available is the configured value from
         the device listing. A stale reading must never produce a silent upgrade.
         """
@@ -2793,6 +2793,10 @@ class FirmwareManager:
             self._emit_ssr_verdict_stale(dev_id, info)  # WHY: warn the operator by name before skipping
             return "stale"  # WHY: sentinel tells the orchestrator to keep this device out of the upgrade list
         current = info.get("version", "")  # WHY: the running firmware version, confirmed as running state
+        if not isinstance(current, str) or not current.strip():  # WHY: missing running firmware must stop the device
+            self._emit_ssr_verdict_missing_version(dev_id, info)  # WHY: log and print the missing field
+            return "missing_version"  # WHY: caller treats all non-upgrade verdicts as skipped
+        current = current.strip()  # WHY: compare the reported version without outer transport whitespace
         if current == target_version:  # WHY: already at target -> no-op
             self._emit_ssr_verdict_current(dev_id, target_version)  # WHY: uniform current feedback
             return "current"  # WHY: sentinel for orchestrator
@@ -2827,6 +2831,16 @@ class FirmwareManager:
             f" reading. No running version was found in listSiteDevicesStats or getOrgInventory."
             f" Skipping this device to prevent an upgrade decision on a stale reading."
         )
+
+    def _emit_ssr_verdict_missing_version(self, dev_id: str, info: dict[str, Any]) -> None:
+        """Log + print the missing-running-version verdict."""
+        model = info.get("model")  # WHY: avoid a substitute value while naming the affected device when available
+        logger.error(  # WHY: missing running firmware is a safety stop, not a display fallback
+            "Missing required firmware field version for SSR device %s model=%s - skipping",
+            dev_id,
+            model,
+        )
+        print(f"    !? Device {dev_id} has no running firmware version - skipping")  # WHY: operator sees refusal
 
     def _emit_ssr_verdict_current(self, dev_id: str, target_version: str) -> None:
         """Log + print the already-at-target verdict."""
