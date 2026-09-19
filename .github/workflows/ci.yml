@@ -199,6 +199,7 @@ jobs:
       - mermaid_lint
       - bandit
       - pydocstyle
+      - test_quality_gate
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -601,6 +602,70 @@ jobs:
       - run: pip install -r requirements-dev.txt  # pinned (issue #1779)
       - name: Check docstring coverage
         run: interrogate ${{ env.INTERROGATE_PATHS }} --fail-under ${{ env.INTERROGATE_THRESHOLD }} -v
+
+  test_quality_gate:
+    name: "Test quality ratchet (gate)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements-dev.txt  # pinned (issue #1779)
+      - name: Fetch pull request base
+        if: ${{ github.event_name == 'pull_request' }}
+        run: git fetch --no-tags --depth=1 origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+      - name: Run test quality ratchet
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          python - <<'PY'
+          import os  # Read the workflow event inputs from the environment.
+          import subprocess  # Run git and the analyzer with explicit arguments.
+          import sys  # Return the analyzer exit code to the job.
+          from pathlib import Path  # Identify pytest files without hardcoded separators.
+
+          event_name = os.environ.get("EVENT_NAME", "")  # Tell pull requests from push runs.
+          base_ref = os.environ.get("BASE_REF", "")  # Name the branch that the pull request targets.
+          full_gate_paths = (  # These paths can change analyzer output outside the changed test files.
+              ".github/workflows/ci.yml",  # A workflow change must prove the full gate.
+              "tools/test_quality_analyzer/",  # Analyzer changes must measure the full repository.
+          )
+
+          def is_test_file(path: str) -> bool:
+              name = Path(path).name  # Use only the file name for pytest naming rules.
+              return path.endswith(".py") and (name.startswith("test_") or name.endswith("_test.py"))  # Match tests.
+
+          if event_name != "pull_request":
+              raise SystemExit(  # Push and manual runs prove the full repository baseline.
+                  subprocess.call([sys.executable, "-m", "tools.test_quality_analyzer", "--gate"]),
+              )
+
+          changed = subprocess.check_output(  # Read the pull request file set from git.
+              ["git", "diff", "--name-only", f"origin/{base_ref}", "HEAD"],
+              text=True,
+          ).splitlines()
+          if any(path == full_gate_paths[0] or path.startswith(full_gate_paths[1]) for path in changed):
+              raise SystemExit(  # Analyzer and workflow changes must prove the full repository baseline.
+                  subprocess.call([sys.executable, "-m", "tools.test_quality_analyzer", "--gate"]),
+              )
+
+          changed_tests = [path for path in changed if Path(path).exists() and is_test_file(path)]  # Scan live tests.
+          if not changed_tests:
+              print("gate_scope: 0 files checked, 0 findings checked")  # Prove that no test file changed.
+              print("test_quality_analyzer: 0 findings (0/0/0/0), 0 skipped, 0 parse errors")  # Keep summary shape.
+              print("gate: 0 new findings vs baseline")  # Keep the ratchet result visible.
+              raise SystemExit(0)  # A pull request without changed tests cannot add a test-quality finding.
+
+          command = [sys.executable, "-m", "tools.test_quality_analyzer", "--gate", "--roots", *changed_tests]  # Scope.
+          raise SystemExit(subprocess.call(command))  # Return the analyzer result to the job.
+          PY
 
   # ──────────────────────────────────────────────────────────────
   # PROJECT-SPECIFIC (remove or adapt when copying to other repos)
