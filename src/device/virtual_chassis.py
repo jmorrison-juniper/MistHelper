@@ -580,6 +580,10 @@ class VirtualChassisManager:
         device_id = switch.get("id", "")  # WHY: mistapi endpoint requires device_id.
         switch_name = switch.get("name", "")  # WHY: used in audit logs and operator output.
         site_name = switch.get("site_name", "")  # WHY: used in audit logs and operator output.
+        if not str(site_id).strip():  # WHY: a blank site id would send the conversion to an invalid scope.
+            logger.error("Preflight failed for bulk VC conversion: missing site_id for %s", switch_name)  # WHY.
+            print("! Preflight FAILED: Switch has no assigned site ID.")  # WHY: visible failure beats API drift.
+            return False  # WHY: caller counts the skipped conversion as a failure.
         try:
             response = mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac(  # WHY: call.
                 apisession, site_id, device_id
@@ -813,6 +817,11 @@ class VirtualChassisManager:
             print("! Preflight FAILED: Device has no assigned device ID.")  # WHY: operator note.
             logger.error("Preflight: missing device_id for VC conversion")  # WHY: audit.
             return False  # WHY: fail preflight.
+        site_id = switch.get("site_id", "")  # WHY: the convert endpoint requires a site scope.
+        if not str(site_id).strip():  # WHY: no site scope means the API call could target the wrong tenant.
+            print("! Preflight FAILED: Device has no assigned site ID.")  # WHY: operator note.
+            logger.error("Preflight: missing site_id for VC conversion")  # WHY: audit.
+            return False  # WHY: fail preflight before any API call can run.
         if not VirtualChassisManager._check_already_converted(switch, safe_input_fn):  # WHY: subhelper.
             return False  # WHY: operator declined to re-convert.
         logger.info(  # WHY: audit successful preflight.

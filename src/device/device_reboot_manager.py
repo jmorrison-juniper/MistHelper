@@ -275,6 +275,11 @@ class DeviceRebootManager:  # Device reboot manager.
                     ).strip()  # The gateway template assigned to this site
                     if gateway_template_id in template_ids:  # This site uses one of the target templates
                         site_id = row.get("id", "").strip()  # The site's unique ID
+                        if not site_id:  # WHY: a reboot target cannot use an empty site scope.
+                            logging.error(  # WHY: record the malformed row before the safety skip.
+                                "Skipping site with missing id for gateway template %s", gateway_template_id
+                            )
+                            continue  # WHY: prevent empty-site mappings from reaching reboot API calls.
                         site_name = row.get("name", "").strip()  # The site's display name
                         template_name = id_to_name.get(gateway_template_id, "Unknown")  # Resolve the template's name
                         site_to_template[site_id] = (gateway_template_id, template_name, site_name)  # Record the match
@@ -359,12 +364,16 @@ class DeviceRebootManager:  # Device reboot manager.
     def _reboot_one_device(device: dict) -> str:  # type: ignore[type-arg]
         """Send one restartSiteDevice call and return the status string (or 'ERROR: ...')."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
+        site_id = str(device.get("site_id", "")).strip()  # WHY: restartSiteDevice requires an explicit site scope.
+        if not site_id:  # WHY: a blank site id could send the reboot to an invalid or wrong scope.
+            logging.error("Missing site_id for gateway reboot target '%s'", device.get("device_name", ""))  # WHY.
+            return "ERROR: missing site_id"  # WHY: caller already records ERROR rows in the export.
         try:
             logger.info("Rebooting device '%s'", device["device_name"])  # Log before the call.
             print(f"! Rebooting {device['device_name']} at {device['site_name']}...")
             response = mh.mistapi.api.v1.sites.devices.restartSiteDevice(  # Send the reboot.
                 mh.apisession,
-                device["site_id"],
+                site_id,
                 device["device_id"],
                 body={"timestamp": datetime.now(UTC).isoformat()},
             )
