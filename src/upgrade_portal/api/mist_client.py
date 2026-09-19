@@ -6,9 +6,15 @@ Queries Mist API and caches results for 5 minutes per FR-003.
 import json  # WHY: JSON serialization for cache
 from typing import Any  # WHY: type hints
 
+import requests  # WHY: Mist SDK transport faults use the requests exception tree.
 import structlog  # WHY: structured logging
+from redis.exceptions import RedisError  # WHY: Redis cache calls fail with this base class.
 
 logger = structlog.get_logger(__name__)  # WHY: module-scoped logger
+
+MIST_TRANSPORT_ERRORS = (requests.RequestException,)  # WHY: endpoint absence must surface as AttributeError.
+CACHE_ERRORS = (RedisError, TypeError, ValueError, UnicodeDecodeError)  # WHY: damaged cache data is recoverable.
+CLIENT_RECOVERABLE_ERRORS = (*CACHE_ERRORS, requests.RequestException)  # WHY: callers convert these to 502.
 
 
 class MistAPIClient:
@@ -63,7 +69,7 @@ class MistAPIClient:
             try:
                 # WHY: example API call structure (adjust based on actual mistapi library)
                 sites = self.mist_api.listOrgSites(org_id)  # WHY: API call
-            except Exception as e:
+            except MIST_TRANSPORT_ERRORS as e:
                 # WHY: API call failed
                 logger.error("mist_api_list_sites_failed", org_id=org_id, error=str(e))  # WHY: API error
                 return None  # WHY: fail
@@ -86,7 +92,7 @@ class MistAPIClient:
             logger.info("mist_list_sites_success", org_id=org_id, count=len(sites_list))  # WHY: post-query log
             return sites_list  # WHY: return result
 
-        except Exception as e:
+        except CLIENT_RECOVERABLE_ERRORS as e:
             # WHY: catch unexpected exceptions
             logger.error("mist_list_sites_exception", org_id=org_id, error=str(e))  # WHY: exception log
             return None  # WHY: fail
@@ -122,7 +128,7 @@ class MistAPIClient:
             try:
                 # WHY: example API call structure (adjust based on actual mistapi library)
                 devices = self.mist_api.listSiteDevices(site_id, type=device_type)  # WHY: API call
-            except Exception as e:
+            except MIST_TRANSPORT_ERRORS as e:
                 # WHY: API call failed
                 logger.error("mist_api_list_devices_failed", site_id=site_id, error=str(e))  # WHY: API error
                 return None  # WHY: fail
@@ -147,7 +153,7 @@ class MistAPIClient:
             logger.info("mist_list_devices_success", site_id=site_id, count=len(devices_list))  # WHY: post-query log
             return devices_list  # WHY: return result
 
-        except Exception as e:
+        except CLIENT_RECOVERABLE_ERRORS as e:
             # WHY: catch unexpected exceptions
             logger.error("mist_list_devices_exception", site_id=site_id, error=str(e))  # WHY: exception log
             return None  # WHY: fail
@@ -173,7 +179,7 @@ class MistAPIClient:
                 return None  # WHY: cache miss
             # WHY: deserialize JSON
             return json.loads(value)  # WHY: deserialize
-        except Exception as e:
+        except CACHE_ERRORS as e:
             # WHY: catch cache errors
             logger.warning("cache_get_failed", key=key, error=str(e))  # WHY: cache error
             return None  # WHY: fail
@@ -199,7 +205,7 @@ class MistAPIClient:
             value_json = json.dumps(value)  # WHY: serialize
             self.redis.setex(key, ttl, value_json)  # WHY: Redis SETEX
             return True  # WHY: success
-        except Exception as e:
+        except CACHE_ERRORS as e:
             # WHY: catch cache errors
             logger.warning("cache_set_failed", key=key, error=str(e))  # WHY: cache error
             return False  # WHY: fail

@@ -49,6 +49,25 @@ class TestSiteStatsFirmwareEvidenceReader:
         assert result[0]["running_version"] == "24.2R2-S3.3"  # WHY: preserve the firmware evidence.
         assert result[0]["fwupdate_status"] == "success"  # WHY: preserve the reconciliation success token.
 
+    @pytest.mark.parametrize("status_code", [404, 503], ids=["site-missing", "cloud-error"])
+    def test_read_site_statistics_rejects_http_error_statuses(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+        status_code: int,
+    ) -> None:
+        """The evidence reader must not reconcile a failed statistics response."""
+
+        def fake_call(*_args: Any, **_kwargs: Any) -> SimpleNamespace:
+            return SimpleNamespace(status_code=status_code, data=[])  # WHY: model a real failed SDK response.
+
+        monkeypatch.setattr(routes.mistapi.api.v1.sites.stats, "listSiteDevicesStats", fake_call)  # WHY: no network.
+        reader = SiteStatsFirmwareEvidenceReader("signed-session")  # WHY: use the real reader with fake session.
+        caplog.set_level("WARNING", logger=routes.logger.name)  # WHY: capture the operator-grade signal.
+        result = reader._read_site_statistics("site-one")  # WHY: drive the real HTTP status branch.
+        assert result is None  # WHY: failed HTTP statuses cannot supply firmware evidence.
+        assert str(status_code) in caplog.text  # WHY: the log must name the exact cloud status.
+
     @staticmethod
     def _statistics_row() -> dict[str, Any]:
         """Return one site statistics row with extra payload fields."""
