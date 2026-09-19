@@ -123,6 +123,17 @@ class TestInstallUvWithPip:
         assert installer.install_uv_with_pip() is False  # WHY: exception path returns False
         assert log.warning.call_count == 1  # WHY: caller must be told via warning log
 
+    def test_unexpected_exception_propagates(self) -> None:
+        # WHY: ValueError is not a subprocess failure and must expose programmer faults.
+        installer, _os, _sub, _sys, log = _make_installer(subprocess_raises=ValueError("bad bootstrap state"))
+        with pytest.raises(
+            ValueError, match="bad bootstrap state"
+        ):  # WHY: narrowed handler must not swallow this fault.
+            installer.install_uv_with_pip()  # WHY: exercise the pip bootstrap handler.
+        assert (
+            log.warning.call_count == 0
+        )  # WHY: unhandled programmer faults must not log as expected bootstrap failures.
+
 
 class TestInstallWithUv:
     """Cover uv-install path including upgrade flag and failure logging."""
@@ -171,6 +182,13 @@ class TestInstallWithPip:
         installer, _os, _sub, _sys, log = _make_installer(subprocess_raises=RuntimeError("boom"))
         assert installer.install_with_pip("requests") is False  # WHY: failure surfaces as False
         assert log.error.call_count == 1  # WHY: pip-path failure uses error severity, not warning
+
+    def test_unexpected_exception_propagates(self) -> None:
+        # WHY: ValueError is not an install process failure and must expose programmer faults.
+        installer, _os, _sub, _sys, log = _make_installer(subprocess_raises=ValueError("bad install state"))
+        with pytest.raises(ValueError, match="bad install state"):  # WHY: narrowed handler must not swallow this fault.
+            installer.install_with_pip("requests")  # WHY: exercise the shared install handler.
+        assert log.error.call_count == 0  # WHY: unhandled programmer faults must not log as expected install failures.
 
 
 class TestBuildInstallCommands:

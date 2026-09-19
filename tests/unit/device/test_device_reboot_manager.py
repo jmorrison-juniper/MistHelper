@@ -525,6 +525,15 @@ class TestFindSitesUsingTemplates:
         result = DeviceRebootManager._find_sites_using_templates({"tpl-1"}, {"tpl-1": "Alpha"})
         assert result == {"s1": ("tpl-1", "Alpha", "Site1")}
 
+    def test_skips_matching_site_with_missing_id(self, fake_mh: Any, tmp_path: Any) -> None:
+        """Skip a matching site row when the site identifier is blank."""
+
+        path = tmp_path / "sites.csv"
+        path.write_text("id,name,gatewaytemplate_id\n,Site1,tpl-1\n", encoding="utf-8")
+        fake_mh.FilePathUtils.get_csv_path.return_value = str(path)
+        result = DeviceRebootManager._find_sites_using_templates({"tpl-1"}, {"tpl-1": "Alpha"})
+        assert result == {}
+
     def test_unknown_template_name(self, fake_mh: Any, tmp_path: Any) -> None:
         """Fall back to 'Unknown' when the id-to-name map is missing an entry."""
 
@@ -662,6 +671,14 @@ class TestRebootOneDevice:
         fake_mh.mistapi.api.v1.sites.devices.restartSiteDevice.side_effect = RuntimeError("boom")
         status = DeviceRebootManager._reboot_one_device(_target())
         assert status.startswith("ERROR: ")
+
+    def test_missing_site_id_returns_error_without_api_call(self, fake_mh: Any) -> None:
+        """Return an ``ERROR:`` string when the reboot target has no site scope."""
+
+        endpoint = fake_mh.mistapi.api.v1.sites.devices.restartSiteDevice  # WHY: check the API stays untouched.
+        status = DeviceRebootManager._reboot_one_device(_target(site_id=""))  # WHY: drive missing scope input.
+        assert status == "ERROR: missing site_id"  # WHY: missing site_id must be visible to the caller.
+        endpoint.assert_not_called()  # WHY: no API call may run without a site scope.
 
     def test_programming_error_raises(self, fake_mh: Any) -> None:
         """A malformed reboot SDK call must raise."""
