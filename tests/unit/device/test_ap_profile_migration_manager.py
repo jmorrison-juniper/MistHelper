@@ -478,6 +478,37 @@ def test_migrate_retries_transient_put_failure_then_succeeds(
     assert payload["outcome"] == "success"
 
 
+def test_assign_profile_retry_exhaustion_raises_first_failure(caplog: pytest.LogCaptureFixture) -> None:
+    """Assignment retries must report the first failure cause after all attempts fail."""
+    ap_record = _ap_record("d1", "site-1", "5c5b350e0001", "ap-1")  # WHY: valid AP record for direct helper call.
+    failures = [OSError("auth failed"), OSError("connection closed"), OSError("session gone")]  # WHY: distinct causes.
+    with (
+        patch("mistapi.api.v1.sites.devices.updateSiteDevice", side_effect=failures),
+        patch("time.sleep"),
+        caplog.at_level(logging.WARNING),
+    ):
+        with pytest.raises(OSError, match="auth failed"):
+            APProfileMigrationManager._reassign_one_ap(MagicMock(), ap_record, "target-profile")
+    log_text = "\n".join(record.getMessage() for record in caplog.records)  # WHY: inspect per-attempt evidence.
+    assert "auth failed" in log_text  # WHY: first attempt evidence must remain visible.
+    assert "connection closed" in log_text  # WHY: later attempt evidence must remain visible too.
+
+
+def test_revert_profile_retry_exhaustion_raises_first_failure(caplog: pytest.LogCaptureFixture) -> None:
+    """Revert retries must report the first failure cause after all attempts fail."""
+    failures = [OSError("auth failed"), OSError("connection closed"), OSError("session gone")]  # WHY: distinct causes.
+    with (
+        patch("mistapi.api.v1.sites.devices.updateSiteDevice", side_effect=failures),
+        patch("time.sleep"),
+        caplog.at_level(logging.WARNING),
+    ):
+        with pytest.raises(OSError, match="auth failed"):
+            APProfileMigrationManager._revert_one_ap(MagicMock(), "d1", "site-1", "source-profile")
+    log_text = "\n".join(record.getMessage() for record in caplog.records)  # WHY: inspect per-attempt evidence.
+    assert "auth failed" in log_text  # WHY: first attempt evidence must remain visible.
+    assert "connection closed" in log_text  # WHY: later attempt evidence must remain visible too.
+
+
 # ---------------------------------------------------------------------------
 # T014 -- stop-on-second-retry-exhaustion with partial-success record
 # ---------------------------------------------------------------------------
