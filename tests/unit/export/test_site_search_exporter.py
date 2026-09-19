@@ -16,6 +16,7 @@ from unittest.mock import MagicMock  # WHY: collaborator doubles and call assert
 import pytest  # WHY: monkeypatch and caplog fixtures.
 
 from src.export.site_search_exporter import SiteSearchExporter
+from src.export.site_search_exporter import SiteSearchExporter as FailureModeSiteSearchExporter
 
 # Each row maps a menu entry to the operationId, the filename prefix, and the
 # SDK attribute chain that the entry must call.
@@ -165,6 +166,20 @@ class TestSharedBehavior:
 
         assert "Error fetching alarm for site" in caplog.text
         wired["DataExporter"].write_with_format_selection.assert_not_called()
+
+    def test_http_503_sdk_error_is_logged_and_does_not_raise(
+        self, wired: dict[str, Any], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """An HTTP 503 SDK failure must surface in the error log."""
+        error = RuntimeError("HTTP 503")  # Preserve the cloud status in the SDK error.
+        wired["mistapi"].api.v1.sites.alarms.searchSiteAlarms.side_effect = error  # Reach the failure path.
+
+        with caplog.at_level(logging.ERROR):  # Capture the product error signal.
+            FailureModeSiteSearchExporter.alarms()  # Call the real exporter entry point from src.
+
+        assert "HTTP 503" in caplog.text  # Prove the operator can see the status.
+        assert "Error fetching alarm for site" in caplog.text  # Prove the product logged the failure.
+        wired["DataExporter"].write_with_format_selection.assert_not_called()  # Failed calls must not write.
 
     def test_rows_are_flattened_and_escaped_before_the_write(self, wired: dict[str, Any]) -> None:
         """The persist step must run both CSV-safety helpers on the payload."""
