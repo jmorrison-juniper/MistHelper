@@ -122,7 +122,62 @@ def test_an_old_finding_reads_historical() -> None:
 
 def test_an_acknowledged_alarm_reads_historical() -> None:
     """FR-017. An operator who acknowledged the alarm closed it."""
-    assert build_normalizer().resolve_state(RECENT, acked=True) == STATE_HISTORICAL
+    assert build_normalizer().resolve_state(RECENT, {"acked": True}) == STATE_HISTORICAL
+
+
+def test_a_resolved_alarm_reads_historical() -> None:
+    """Issue #2996. Mist resolved the fault, so the row must not read active."""
+    record = {"type": "sw_rogue_dhcp_server_detected", "status": "resolved"}
+    assert build_normalizer().resolve_state(RECENT, record) == STATE_HISTORICAL
+
+
+def test_a_closed_alarm_reads_historical() -> None:
+    """Issue #2996. A closed alarm is history, whatever the clock says."""
+    assert build_normalizer().resolve_state(RECENT, {"status": "closed"}) == STATE_HISTORICAL
+
+
+def test_a_resolved_time_stamp_reads_historical() -> None:
+    """Issue #2996. The cloud stamped the moment it resolved the alarm."""
+    assert build_normalizer().resolve_state(RECENT, {"resolved_time": RECENT}) == STATE_HISTORICAL
+
+
+def test_a_reoccured_alarm_still_reads_active() -> None:
+    """Issue #2996. A reoccured fault returned, so hiding it would lose a live rogue server."""
+    assert build_normalizer().resolve_state(RECENT, {"status": "reoccured"}) == STATE_ACTIVE
+
+
+def test_an_open_alarm_still_reads_active() -> None:
+    """Issue #2996. An open alarm inside the window is a standing fault."""
+    assert build_normalizer().resolve_state(RECENT, {"status": "open"}) == STATE_ACTIVE
+
+
+def test_the_resolution_status_ignores_letter_case() -> None:
+    """Issue #2996. A catalog value with another case must still close the row."""
+    assert build_normalizer().resolve_state(RECENT, {"status": " Resolved "}) == STATE_HISTORICAL
+
+
+def test_a_record_without_a_resolution_field_keeps_the_time_rule() -> None:
+    """Issue #2996. A switch event carries no resolution field, so the clock still decides."""
+    assert build_normalizer().resolve_state(RECENT, {"type": "SW_ROGUE_DHCP_SERVER_DETECTED"}) == STATE_ACTIVE
+
+
+def test_a_resolved_alarm_reaches_the_finding() -> None:
+    """Issue #2996. Prove the repair through the normalizer, not only the state helper."""
+    resolved = {**ALARM_RECORD, "timestamp": RECENT, "last_seen": RECENT, "status": "resolved"}
+    finding = build_normalizer().from_alarm(resolved, SOURCE_ORG_ALARM)
+    assert finding.state == STATE_HISTORICAL
+
+
+def test_an_open_alarm_reaches_the_finding_as_active() -> None:
+    """Issue #2996. The repair must not turn every alarm into history."""
+    open_alarm = {**ALARM_RECORD, "timestamp": RECENT, "last_seen": RECENT, "status": "open"}
+    finding = build_normalizer().from_alarm(open_alarm, SOURCE_ORG_ALARM)
+    assert finding.state == STATE_ACTIVE
+
+
+def test_is_closed_reports_false_for_an_empty_record() -> None:
+    """A record with no resolution field is not closed."""
+    assert RogueDhcpRecordNormalizer.is_closed({}) is False
 
 
 def test_a_missing_timestamp_reads_historical() -> None:
