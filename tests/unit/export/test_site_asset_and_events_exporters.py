@@ -17,6 +17,7 @@ import pytest  # WHY: monkeypatch and caplog fixtures.
 
 from src.export import org_site_exporter as org_site_mod  # WHY: patch the product guest exporter module.
 from src.export.org_site_exporter import OrgSiteExporter  # WHY: drive the real guest exporter.
+from src.export.org_site_exporter import OrgSiteExporter as FailureModeOrgSiteExporter
 from src.export.site_application_list_exporter import SiteApplicationListExporter
 from src.export.site_asset_exporter import SiteAssetExporter
 from src.export.site_system_events_exporter import SiteSystemEventsExporter
@@ -164,6 +165,31 @@ def test_current_guests_http_429_reports_status_and_skips_success(
     monkeypatch.setattr(org_site_mod.mistapi, "get_all", get_all_mock)  # WHY: observe pagination.
     OrgSiteExporter.current_guests()  # WHY: drive the product 4xx status path.
     assert "HTTP 429" in caplog.text  # WHY: the operator must see the exact rate-limit status.
+    assert "current guest users" in caplog.text  # WHY: the log must name the failed data set.
+    get_all_mock.assert_not_called()  # WHY: pagination must not run on failed status.
+    wired["DataExporter"].write_with_format_selection.assert_not_called()  # WHY: no false empty export.
+
+
+def test_current_guests_http_503_reports_status_and_skips_success(
+    wired: dict[str, Any], caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A 503 current-guest response must report the status and skip export."""
+    fake_mh = MagicMock()  # WHY: OrgSiteExporter resolves dependencies through its source resolver.
+    fake_mh.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"  # WHY: fixed org id for the call.
+    fake_mh.apisession = wired["apisession"]  # WHY: reuse the API session double.
+    fake_mh.DataExporter = wired["DataExporter"]  # WHY: observe that no export occurs.
+    response = MagicMock(status_code=503, data=[{"guest": "ignored"}])  # WHY: failed data is not trustworthy.
+    get_all_mock = MagicMock()  # WHY: prove success pagination is skipped.
+    caplog.set_level(logging.ERROR, logger=org_site_mod.logger.name)  # WHY: capture the product status log.
+    monkeypatch.setattr(org_site_mod, "SourceDependencyResolver", fake_mh)  # WHY: route dependencies.
+    monkeypatch.setattr(
+        org_site_mod.mistapi.api.v1.orgs.guests,
+        "searchOrgGuestAuthorization",
+        MagicMock(return_value=response),
+    )  # WHY: return the server-error response.
+    monkeypatch.setattr(org_site_mod.mistapi, "get_all", get_all_mock)  # WHY: observe pagination.
+    FailureModeOrgSiteExporter.current_guests()  # WHY: drive the real src 5xx status path.
+    assert "HTTP 503" in caplog.text  # WHY: the operator must see the exact server failure.
     assert "current guest users" in caplog.text  # WHY: the log must name the failed data set.
     get_all_mock.assert_not_called()  # WHY: pagination must not run on failed status.
     wired["DataExporter"].write_with_format_selection.assert_not_called()  # WHY: no false empty export.

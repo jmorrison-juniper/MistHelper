@@ -20,6 +20,7 @@ import pytest
 
 from src.export import org_client_security_exporter as ocse
 from src.export.org_client_security_exporter import OrgClientSecurityExporter
+from src.export.org_client_security_exporter import OrgClientSecurityExporter as FailureModeOrgClientSecurityExporter
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -170,6 +171,20 @@ class TestFetchRoguesForOneSite:
             fetch_callable, "site-1", "Alpha", "24h", "rogue APs"
         )
         assert result == []
+
+    def test_http_503_response_logs_error_and_returns_empty(
+        self, fake_mh: ModuleType, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A 503 rogue response must log the status and return no rows."""
+        response = MagicMock(status_code=503)  # WHY: simulate a failed cloud response.
+        fetch_callable = MagicMock(return_value=response)  # WHY: drive the product status branch.
+        with caplog.at_level("ERROR", logger=ocse.logger.name):  # WHY: capture the product error signal.
+            result = FailureModeOrgClientSecurityExporter._fetch_rogues_for_one_site(
+                fetch_callable, "site-1", "Alpha", "24h", "rogue APs"
+            )  # WHY: call the real per-site fetch function.
+        assert result == []  # WHY: failed status data must not be trusted.
+        assert "HTTP 503" in caplog.text  # WHY: the operator must see the exact server failure.
+        assert "rogue APs" in caplog.text  # WHY: the log must name the failed data set.
 
     def test_http_403_reports_status_and_skips_rogue_rows(
         self, fake_mh: ModuleType, caplog: pytest.LogCaptureFixture

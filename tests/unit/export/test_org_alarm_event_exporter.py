@@ -19,6 +19,7 @@ import pytest
 
 from src.export import org_alarm_event_exporter as oaee
 from src.export.org_alarm_event_exporter import OrgAlarmEventExporter
+from src.export.org_alarm_event_exporter import OrgAlarmEventExporter as FailureModeOrgAlarmEventExporter
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -185,10 +186,28 @@ class TestDeviceEvents:
             patch("src.export.org_alarm_event_exporter.mistapi") as mistapi_mock,
         ):
             mistapi_mock.api.v1.orgs.devices.searchOrgDeviceEvents.return_value = response  # WHY: return 401.
-            OrgAlarmEventExporter.device_events()  # WHY: drive the product status path.
+            FailureModeOrgAlarmEventExporter.device_events()  # WHY: drive the real src status path.
         assert "HTTP 401" in caplog.text  # WHY: the operator must see the exact auth failure.
         assert "organization device events" in caplog.text  # WHY: the log must name the failed operation.
         mistapi_mock.get_all.assert_not_called()  # WHY: the success pagination path must not run.
+        fake_mh.DataExporter.write_with_format_selection.assert_not_called()  # type: ignore[attr-defined]
+
+    def test_http_503_reports_status_and_skips_export(
+        self, fake_mh: ModuleType, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A 503 device-event response must report the exact status and skip success."""
+        response = MagicMock(status_code=503, data=[{"id": "ignored"}])  # WHY: failed data is not trustworthy.
+        caplog.set_level(logging.ERROR, logger=oaee.logger.name)  # WHY: capture the product status log.
+        with (
+            patch.object(oaee.TimeUtils, "get_dynamic_lookback_hours", return_value=24),
+            patch.object(oaee.TimeUtils, "log_dynamic_lookback"),
+            patch("src.export.org_alarm_event_exporter.mistapi") as mistapi_mock,
+        ):
+            mistapi_mock.api.v1.orgs.devices.searchOrgDeviceEvents.return_value = response  # WHY: return 503.
+            OrgAlarmEventExporter.device_events()  # WHY: drive the product status path.
+        assert "HTTP 503" in caplog.text  # WHY: the operator must see the exact server failure.
+        assert "organization device events" in caplog.text  # WHY: the log must name the failed operation.
+        mistapi_mock.get_all.assert_not_called()  # WHY: pagination must not run on a failed status.
         fake_mh.DataExporter.write_with_format_selection.assert_not_called()  # type: ignore[attr-defined]
 
 
