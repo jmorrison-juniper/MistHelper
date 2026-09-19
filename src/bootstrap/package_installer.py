@@ -52,7 +52,11 @@ class PackageInstaller:  # WHY: collaborator injecting stdlib modules for testab
                 timeout=_PIP_INSTALL_TIMEOUT,
             )
             return bool(result.returncode == 0)  # WHY: cast because result is Any-typed from injected module
-        except Exception as error:  # WHY: broad catch protects import-time bootstrap from any failure mode
+        except (
+            FileNotFoundError,
+            self.subprocess_module.SubprocessError,
+            OSError,
+        ) as error:  # WHY: install spawn failures permit pip fallback.
             self.logging_module.warning(_LOG_UV_INSTALL_FAILED, error)  # WHY: surface without aborting startup
             return False  # WHY: signal failure so caller can fall back to pip directly
 
@@ -151,7 +155,11 @@ class PackageInstaller:  # WHY: collaborator injecting stdlib modules for testab
                 timeout=_PACKAGE_ACTION_TIMEOUT,
             )
             return bool(result.returncode == 0)  # WHY: cast because result is Any-typed from injected module
-        except Exception as error:  # WHY: broad catch protects import-time bootstrap from any failure mode
+        except (
+            FileNotFoundError,
+            self.subprocess_module.SubprocessError,
+            OSError,
+        ) as error:  # WHY: install spawn failures permit caller fallback.
             # WHY: warn for uv (recoverable via pip fallback) and error for pip (final failure).
             logger = self.logging_module.warning if warn else self.logging_module.error
             logger(log_template, package_spec, error)  # WHY: emit diagnostic and return failure
