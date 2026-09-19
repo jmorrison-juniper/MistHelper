@@ -644,14 +644,14 @@ class TestLazyImports:
         with patch("src.capture.packet_capture._get_config_utils") as mock:
             mock.return_value = MagicMock()
             result = mock()
-            assert result is not None
+            assert result is mock.return_value
 
     def test_get_input_utils(self):
         """_get_input_utils returns the InputUtils class."""
         with patch("src.capture.packet_capture._get_input_utils") as mock:
             mock.return_value = MagicMock()
             result = mock()
-            assert result is not None
+            assert result is mock.return_value
 
     def test_get_websocket_manager(self):
         """_get_websocket_manager returns the WebSocketManager class."""
@@ -660,7 +660,7 @@ class TestLazyImports:
         ) as mock:
             mock.return_value = MagicMock()
             result = mock()
-            assert result is not None
+            assert result is mock.return_value
 
 
 # ---------------------------------------------------------------------------
@@ -784,14 +784,14 @@ class TestValidatePortSelection:
         """Empty port_list with available ports selects all."""
         available = [("ge-0/0/0", "UP"), ("ge-0/0/1", "DOWN")]
         result = manager._validate_port_selection(([], available))
-        assert result is not None
+        assert result == (["ge-0/0/0", "ge-0/0/1"], available)
         port_list, avail = result
         assert port_list == ["ge-0/0/0", "ge-0/0/1"]
 
     def test_specific_ports(self, manager):
         """Specific port selection passes through."""
         result = manager._validate_port_selection((["ge-0/0/0"], [("ge-0/0/0", "UP")]))
-        assert result is not None
+        assert result == (["ge-0/0/0"], [("ge-0/0/0", "UP")])
         port_list, _ = result
         assert port_list == ["ge-0/0/0"]
 
@@ -1557,8 +1557,8 @@ class TestAttemptLoopCapture:
         mock_resp.data = {"id": "cap-1", "duration": 60}
         mock_mistapi.api.v1.sites.pcaps.startSitePacketCapture.return_value = mock_resp
         result = manager._attempt_loop_capture("site-1", {"type": "client"}, 1)
-        assert result is not None
         assert isinstance(result, float)
+        assert result >= 0.0
 
     @patch("src.capture.packet_capture.mistapi")
     def test_api_error(self, mock_mistapi, manager):
@@ -1645,7 +1645,7 @@ class TestFetchOrgMxedges:
         ]
 
         result = manager._fetch_org_mxedges()
-        assert result is not None
+        assert result == ([{"id": "mx-1", "name": "Edge1"}], {"mx-1": {"id": "mx-1", "status": "connected"}})
         mxedges, stats_map = result
         assert len(mxedges) == 1
 
@@ -2499,14 +2499,14 @@ class TestApMacFilterManualInvalid:
         mock_iu.return_value.safe_input.return_value = "1"
         mock_pndu.return_value.select_ap_mac.return_value = "AA:BB:CC:DD:EE:FF"
         result = manager._prompt_ap_mac_filter("site-1")
-        assert result is not None
+        assert result == "aa:bb:cc:dd:ee:ff"
 
     @patch("src.capture.packet_capture._get_input_utils")
     def test_manual_valid_mac(self, mock_iu, manager):
         """Choice '2' with valid MAC returns normalized MAC."""
         mock_iu.return_value.safe_input.side_effect = ["2", "AA:BB:CC:DD:EE:FF"]
         result = manager._prompt_ap_mac_filter("site-1")
-        assert result is not None
+        assert result == "aa:bb:cc:dd:ee:ff"
 
 
 class TestLogExistingSiteCapturesEdge:
