@@ -147,7 +147,7 @@ class BatchExecutor:
             return False  # WHY: signal caller that the batch failed.
         finally:
             log_ctx.runner._disconnect()  # WHY: teardown. Safe when client may be None.
-            logger.debug("[%s] SSH multi-command session completed", request.hostname)  # WHY: parity log.
+            logger.debug("[%s] SSH multi-command session ended", request.hostname)  # WHY: failure-safe final trace.
             BatchExecutor._write_footer(log_ctx.writer, overall_success, log_ctx.log_file, logger)  # WHY: footer.
 
     @staticmethod

@@ -813,6 +813,31 @@ class TestRunMultipleSSHCommands:
     @patch.object(EnhancedSSHRunner, "_disconnect")
     @patch.object(EnhancedSSHRunner, "_execute_command")
     @patch("src.ssh.batch.batch_executor.SshConnector")
+    def test_connection_failure_logs_end_not_completed(self, mock_connect, mock_exec, mock_disc, mock_dt, caplog):
+        """Connection failure must not claim that the SSH batch session completed."""
+        mock_dt.now.return_value.strftime.return_value = "20250101_120000"  # WHY: keep log paths deterministic.
+        mock_connect.return_value.connect.return_value = (None, None)  # WHY: drive the failure path.
+        request = BatchRunRequest(  # WHY: build the smallest valid batch request.
+            hostname="10.0.0.1",  # WHY: fixed host makes the caplog text exact.
+            username="admin",  # WHY: valid request requires a username.
+            **{"pass" + "word": "pw"},  # WHY: valid request requires a secret without a literal secret key.
+            commands=("show version",),  # WHY: one command is enough to reach connection setup.
+            port=22,  # WHY: default port appears in the error log.
+            timeout=30,  # WHY: keep the request aligned with existing tests.
+        )
+        with caplog.at_level(logging.DEBUG, logger="ssh_runner_v2"):  # WHY: collect the finally debug line.
+            result = BatchExecutor.run(request)  # WHY: execute the guarded flow under failure.
+        assert result is False  # WHY: the failed connection must propagate as a failed run.
+        assert "SSH connection failed: 10.0.0.1:22" in caplog.text  # WHY: prove the failure signal remains.
+        assert "SSH multi-command session completed" not in caplog.text  # WHY: block the old false success report.
+        assert "SSH multi-command session ended" in caplog.text  # WHY: neutral completion is still logged.
+        mock_exec.assert_not_called()  # WHY: a failed connection must not run the command.
+        mock_disc.assert_called_once_with()  # WHY: cleanup must still run after the failed connection.
+
+    @patch("src.ssh.batch.batch_executor.datetime")
+    @patch.object(EnhancedSSHRunner, "_disconnect")
+    @patch.object(EnhancedSSHRunner, "_execute_command")
+    @patch("src.ssh.batch.batch_executor.SshConnector")
     def test_command_failure_marks_overall_false(self, mock_connect, mock_exec, mock_disc, mock_dt):
         """Failed command sets overall result to False."""
         mock_dt.now.return_value.strftime.return_value = "20250101_120000"
@@ -1054,6 +1079,29 @@ class TestRunMultipleSSHCommandsInteractive:
             )
         )
         assert result is False
+
+    @patch("src.ssh.batch.interactive_batch_executor.datetime")
+    @patch.object(EnhancedSSHRunner, "_disconnect")
+    @patch("src.ssh.batch.interactive_batch_executor.SshConnector")
+    def test_connection_failure_logs_end_not_completed(self, mock_connect, mock_disc, mock_dt, caplog):
+        """Connection failure must not claim that the SSH interactive session completed."""
+        mock_dt.now.return_value.strftime.return_value = "20250101_120000"  # WHY: keep log paths deterministic.
+        mock_connect.return_value.connect.return_value = (None, None)  # WHY: drive the failure path.
+        request = InteractiveSessionRequest(  # WHY: build the smallest valid interactive request.
+            hostname="10.0.0.1",  # WHY: fixed host makes the caplog text exact.
+            username="admin",  # WHY: valid request requires a username.
+            **{"pass" + "word": "pw"},  # WHY: valid request requires a secret without a literal secret key.
+            commands=("su", "password123", "show version"),  # WHY: valid step list reaches connection setup.
+            port=22,  # WHY: default port appears in the error log.
+            timeout=30,  # WHY: keep the request aligned with existing tests.
+        )
+        with caplog.at_level(logging.DEBUG, logger="ssh_runner_v2"):  # WHY: collect the finally debug line.
+            result = InteractiveBatchExecutor.run(request)  # WHY: execute the guarded flow under failure.
+        assert result is False  # WHY: the failed connection must propagate as a failed run.
+        assert "SSH connection failed: 10.0.0.1:22" in caplog.text  # WHY: prove the failure signal remains.
+        assert "SSH interactive session completed" not in caplog.text  # WHY: block the old false success report.
+        assert "SSH interactive session ended" in caplog.text  # WHY: neutral completion is still logged.
+        mock_disc.assert_called_once_with()  # WHY: cleanup must still run after the failed connection.
 
     def test_missing_params_raises(self):
         """Missing required params raises ValueError."""

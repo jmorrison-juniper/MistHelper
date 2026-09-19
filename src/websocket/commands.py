@@ -229,7 +229,10 @@ class MacTableCommand:  # WHY: Namespace grouping the show_mac_table workflow he
                 print(f"[DEBUG] Result keys: {list(mac_table_result.keys())}")  # WHY: Legacy debug detail.
 
         if mac_table_result:
-            MacTableCommand._render_result(mac_table_result)  # WHY: Pretty-print MAC table fields to stdout.
+            rendered_output = MacTableCommand._render_result(mac_table_result)  # WHY: render and classify payload.
+            if not rendered_output:  # WHY: an empty payload cannot prove MAC table success.
+                logger.warning("WebSocket show MAC table returned no output")  # WHY: report empty outcome.
+                return  # WHY: do not emit a success log after an empty payload.
             logger.info("WebSocket show MAC table completed successfully")  # WHY: Log success outcome.
             return  # WHY: Done — successful path.
 
@@ -248,7 +251,7 @@ class MacTableCommand:  # WHY: Namespace grouping the show_mac_table workflow he
         dump_ws_debug_state(websocket_manager, debug_mode)  # WHY: Emit additional WS state when debug enabled.
 
     @staticmethod
-    def _render_result(mac_table_result: dict[str, Any]) -> None:
+    def _render_result(mac_table_result: dict[str, Any]) -> bool:
         """Print the formatted MAC table result block to stdout (legacy formatting preserved)."""
         print("\n" + "=" * 60)  # WHY: Legacy top separator line.
         print("MAC TABLE RESULTS:")  # WHY: Legacy section header.
@@ -265,6 +268,7 @@ class MacTableCommand:  # WHY: Namespace grouping the show_mac_table workflow he
             print(f"Available result keys: {list(mac_table_result.keys())}")  # WHY: Legacy diagnostic listing.
 
         print("=" * 60)  # WHY: Legacy closing separator line.
+        return bool(raw_output or output_fields)  # WHY: caller logs success only when output exists.
 
     @staticmethod
     def _render_primary_output(raw_output: str, output_fields: str) -> None:
