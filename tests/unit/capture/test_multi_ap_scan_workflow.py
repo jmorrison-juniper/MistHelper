@@ -25,6 +25,7 @@ def test_run_returns_when_no_aps() -> None:
     workflow, _manager, _mistapi, _input = _build_workflow()
     workflow.device_utils.get_all_ap_macs_from_site.return_value = []
     workflow.run("site-1")
+    assert workflow.mistapi_module.api.v1.sites.pcaps.startSitePacketCapture.call_count == 0  # No APs means no capture.
     workflow.mistapi_module.api.v1.sites.pcaps.startSitePacketCapture.assert_not_called()
 
 

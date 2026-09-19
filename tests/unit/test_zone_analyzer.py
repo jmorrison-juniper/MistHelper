@@ -1165,6 +1165,7 @@ class TestExportEarlyReturns:
 
         save_fn = MagicMock()  # spy on whether the save function is ever called
         _export_summary({}, {}, {}, {}, {}, "20250101", save_fn)  # all-empty inputs
+        assert save_fn.call_count == 0  # Empty summary input must skip the save callback.
         save_fn.assert_not_called()  # early return before save_data_fn reached
 
     def test_export_all_zones_empty_input(self) -> None:

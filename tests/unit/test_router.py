@@ -465,6 +465,7 @@ class TestRouterSnapshotEdgeCases:
         )
         data = [{"id": "", "name": "Empty ID"}]
         router.write(data, "listOrgSites")
+        assert mock_backends["arango_writer"].snapshot.call_count == 0  # Empty primary key must skip snapshots.
         mock_backends["arango_writer"].snapshot.assert_not_called()
 
     def test_snapshot_skips_when_arango_none(self, config, mock_backends, strategies):

@@ -322,6 +322,7 @@ class TestRogueAps:
             patch.object(OrgClientSecurityExporter, "_export_rogues") as export_mock,
         ):
             OrgClientSecurityExporter.rogue_aps()
+        assert export_mock.call_count == 0  # A failed site collection must skip the export step.
         export_mock.assert_not_called()
 
     def test_normal_flow_exports(self, fake_mh: ModuleType) -> None:

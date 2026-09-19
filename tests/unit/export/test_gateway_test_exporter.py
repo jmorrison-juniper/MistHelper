@@ -87,6 +87,8 @@ class TestSyntheticTests:
         fake_mh.ConnectionPoolExecutor.execute.return_value = ([{"x": 1}], [])  # type: ignore[attr-defined]
         with patch.object(GatewayTestExporter, "_export_synthetic_results") as export_mock:
             GatewayTestExporter.synthetic_tests(fast=True)
+        assert fake_mh.ConnectionPoolExecutor.execute.call_count == 1  # Fast mode must use the pool exactly once.
+        assert export_mock.call_count == 1  # Fast mode must export the collected synthetic results once.
         export_mock.assert_called_once()
 
     def test_sequential_path_invokes_seq(self, fake_mh: ModuleType) -> None:
