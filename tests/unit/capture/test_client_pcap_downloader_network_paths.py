@@ -22,6 +22,9 @@ import pytest
 
 from src.capture import client_pcap_downloader as cpd
 from src.capture.client_pcap_downloader import ClientPacketCaptureDownloader, _CaptureRow
+from src.capture.client_pcap_downloader import (
+    ClientPacketCaptureDownloader as FailureModeClientPacketCaptureDownloader,
+)  # WHY: prove new HTTP status tests call src.
 
 
 @pytest.fixture
@@ -142,6 +145,25 @@ class TestFetchWirelessClients:
         assert result == []  # The menu must see an empty list and abort safely.
         assert "synthetic connection error" in caplog.text  # The log must preserve the connection cause.
 
+    def test_a_wireless_client_http_503_logs_status_and_returns_empty(
+        self, downloader: ClientPacketCaptureDownloader, caplog: Any
+    ) -> None:
+        """A server-error wireless-client response must abort the step with a logged status."""
+        response = MagicMock(spec=object)  # WHY: model the SDK response object that carries a status.
+        response.status_code = 503  # WHY: drive the real server-error branch.
+        response.data = [{"mac": "aa:bb:cc:dd:ee:ff"}]  # WHY: prove failed response data is not trusted.
+        fake_sdk = MagicMock()  # WHY: stand in for the whole mistapi package.
+        fake_sdk.api.v1.sites.clients.searchSiteWirelessClients.return_value = response  # WHY: return 503.
+        caplog.set_level("ERROR", logger=cpd.logger.name)  # WHY: capture the operator-visible status log.
+        with patch.object(cpd, "mistapi", fake_sdk), patch.object(cpd, "MISTAPI_AVAILABLE", True):
+            result = FailureModeClientPacketCaptureDownloader._fetch_wireless_clients(
+                downloader, "site-503"
+            )  # WHY: drive the real src status path.
+        assert result == []  # WHY: a 503 response must not return wireless clients.
+        fake_sdk.get_all.assert_not_called()  # WHY: pagination must not run on failed status.
+        assert "HTTP 503" in caplog.text  # WHY: the operator must see the exact server-error status.
+        assert "wireless client list" in caplog.text  # WHY: the log must name the failed data set.
+
     def test_a_paging_failure_returns_an_empty_list(
         self, downloader: ClientPacketCaptureDownloader, caplog: Any
     ) -> None:
@@ -184,6 +206,25 @@ class TestFetchCaptures:
         with patch.object(cpd, "mistapi", fake_sdk), patch.object(cpd, "MISTAPI_AVAILABLE", True):
             assert downloader._fetch_captures("site-1", "aa:bb:cc:dd:ee:ff") == []
         assert "bad gateway" in caplog.text  # WHY: the operator needs the cause to triage.
+
+    def test_a_capture_list_http_503_logs_status_and_returns_empty(
+        self, downloader: ClientPacketCaptureDownloader, caplog: Any
+    ) -> None:
+        """A server-error capture-list response must abort the step with a logged status."""
+        response = MagicMock(spec=object)  # WHY: model the SDK response object that carries a status.
+        response.status_code = 503  # WHY: drive the real server-error branch.
+        response.data = [{"id": "cap-1", "pcap_url": "ignored"}]  # WHY: prove failed data is not trusted.
+        fake_sdk = MagicMock()  # WHY: stand in for the whole mistapi package.
+        fake_sdk.api.v1.sites.pcaps.listSitePacketCaptures.return_value = response  # WHY: return 503.
+        caplog.set_level("ERROR", logger=cpd.logger.name)  # WHY: capture the operator-visible status log.
+        with patch.object(cpd, "mistapi", fake_sdk), patch.object(cpd, "MISTAPI_AVAILABLE", True):
+            result = FailureModeClientPacketCaptureDownloader._fetch_captures(
+                downloader, "site-503", "aa:bb:cc:dd:ee:ff"
+            )  # WHY: drive the real src status path.
+        assert result == []  # WHY: a 503 response must not return captures.
+        fake_sdk.get_all.assert_not_called()  # WHY: pagination must not run on failed status.
+        assert "HTTP 503" in caplog.text  # WHY: the operator must see the exact server-error status.
+        assert "packet capture list" in caplog.text  # WHY: the log must name the failed data set.
 
 
 class TestStepOrchestrators:
