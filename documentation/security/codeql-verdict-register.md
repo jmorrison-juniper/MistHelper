@@ -4,9 +4,9 @@
 
 **Owner**: The repository security reviewer.
 
-**Generated**: 2026-09-17
+**Generated**: 2026-09-19
 
-**Rows**: 86
+**Rows**: 88
 
 A dismissed CodeQL alert is a decision to accept a security risk. This register
 records that decision. Each row names the alert, the code location, the verdict,
@@ -137,6 +137,8 @@ reason. Add the reason to the alert on GitHub, then run `generate` again.
 | 193 | #1834 | starlink_dashboard.py | 1403 | starlink_dashboard.py::L1403 | accepted_with_rationale | accepted_with_rationale, 2026-08-22, PR #1834. The dump now prints 3 decimal places, about 100 meters, not an exact position. The taint path stays, so CodeQL still reports it. Trigger: a change to _format_gps_coordinate or to GPS_PRECISION_DECIMALS. See issue #1737. | jmorrison-juniper | 2026-08-22 | 2027-02-18 | A later CodeQL scan raises the same alert again. |
 | 194 | #1834 | starlink_dashboard.py | 1404 | starlink_dashboard.py::L1404 | accepted_with_rationale | accepted_with_rationale, 2026-08-22, PR #1834. The dump now prints 3 decimal places, about 100 meters, not an exact position. The taint path stays, so CodeQL still reports it. Trigger: a change to _format_gps_coordinate or to GPS_PRECISION_DECIMALS. See issue #1737. | jmorrison-juniper | 2026-08-22 | 2027-02-18 | A later CodeQL scan raises the same alert again. |
 | 199 | #1735 | src/device/_utility_commands_action.py | 321 | src/device/_utility_commands_action.py::L321 | accepted_with_rationale | accepted_with_rationale. Issue #1735. Review 2026-08-22. Menu 144 must show the one-time ZTP password on screen. PR #1876 gates the print on sys.stdout.isatty(), so a redirect, a pipe, or a recorded SSH session receives a withheld notice. A test blocks the #886 logging migration. | jmorrison-juniper | 2026-08-23 | 2027-02-19 | A later CodeQL scan raises the same alert again. |
+| 207 | #3000 | src/upgrade_portal/app/config.py | 394 | src/upgrade_portal/app/config.py::L394 | false_positive | False positive. The logged value is SECRET_KEY_VARIABLE, a constant holding the literal string CAPTURE_SECRET_KEY, which names an environment variable. The key value lives in the local name stored, which never reaches a log call. Issue #3000 records the analysis. | jmorrison-juniper | 2026-09-19 | 2027-03-18 | A later CodeQL scan raises the same alert again. |
+| 208 | #3000 | src/upgrade_portal/app/security.py | 118 | src/upgrade_portal/app/security.py::L118 | false_positive | False positive. The logged value is trusted_hops, which is declared int. It is the count of proxies in front of the portal, built by read_proxy_hops in config.py. A bad value falls back to zero. The value carries no credential. Issue #3000 records the full analysis. | jmorrison-juniper | 2026-09-19 | 2027-03-18 | A later CodeQL scan raises the same alert again. |
 | 211 | #1735 | src/device/_utility_commands_action.py | 323 | src/device/_utility_commands_action.py::L323 | accepted_with_rationale | accepted_with_rationale. Repeats dismissed alert 199 at the same file and line. Issue #1735, review 2026-08-22, PR #1876 gates the print on sys.stdout.isatty(). PR #1850 removed an unused noqa from that line, which changed the fingerprint. The behavior did not change. | jmorrison-juniper | 2026-08-26 | 2027-02-22 | A later CodeQL scan raises the same alert again. |
 
 
@@ -145,8 +147,8 @@ reason. Add the reason to the alert on GitHub, then run `generate` again.
 | Verdict | Rows |
 | - | - |
 | accepted_with_rationale | 4 |
-| false_positive | 28 |
+| false_positive | 30 |
 | test_fixture | 54 |
-| **Total** | 86 |
+| **Total** | 88 |
 
 Rows that still need a written reason: 39.
