@@ -570,8 +570,9 @@ class TestTraceroute:
         self,
         duc: DeviceUtilityCommands,
     ) -> None:
-        with patch.object(duc, "_select_site_and_device", return_value=None):
+        with patch.object(duc, "_select_site_and_device", return_value=None) as mock_select:
             duc.traceroute()
+            assert mock_select.call_count == 1  # Prove the command checks the device selection guard.
 
     def test_early_return_no_host(
         self,
@@ -609,8 +610,9 @@ class TestShowOspfNeighbors:
     """Tests for show_ospf_neighbors (show category)."""
 
     def test_early_return_no_selection(self, duc: DeviceUtilityCommands) -> None:
-        with patch.object(duc, "_select_site_and_device", return_value=None):
+        with patch.object(duc, "_select_site_and_device", return_value=None) as mock_select:
             duc.show_ospf_neighbors()
+            assert mock_select.call_count == 1  # Prove the command checks the device selection guard.
 
     def test_calls_ws_command(
         self,
@@ -625,14 +627,16 @@ class TestShowOspfNeighbors:
         ):
             duc.show_ospf_neighbors()
             mock_ws.assert_called_once()
+            assert mock_ws.call_count == 1  # Prove the WebSocket command runs once.
 
 
 class TestLocateDevice:
     """Tests for locate_device (management category)."""
 
     def test_early_return_no_selection(self, duc: DeviceUtilityCommands) -> None:
-        with patch.object(duc, "_select_site_and_device", return_value=None):
+        with patch.object(duc, "_select_site_and_device", return_value=None) as mock_select:
             duc.locate_device()
+            assert mock_select.call_count == 1  # Prove the command checks the device selection guard.
 
     def test_success_calls_api(
         self,
@@ -712,8 +716,9 @@ class TestBouncePort:
     """Tests for bounce_port (management with y/N confirmation)."""
 
     def test_early_return_no_selection(self, duc: DeviceUtilityCommands) -> None:
-        with patch.object(duc, "_select_site_and_device", return_value=None):
+        with patch.object(duc, "_select_site_and_device", return_value=None) as mock_select:
             duc.bounce_port()
+            assert mock_select.call_count == 1  # Prove the command checks the device selection guard.
 
     def test_blocks_management_port(
         self,
@@ -746,8 +751,9 @@ class TestClearArpCache:
     """Tests for clear_arp_cache (destructive with typed confirmation)."""
 
     def test_early_return_no_selection(self, duc: DeviceUtilityCommands) -> None:
-        with patch.object(duc, "_select_site_and_device", return_value=None):
+        with patch.object(duc, "_select_site_and_device", return_value=None) as mock_select:
             duc.clear_arp_cache()
+            assert mock_select.call_count == 1  # Prove the command checks the device selection guard.
 
     def test_cancelled_without_clear_keyword(
         self,
@@ -780,14 +786,17 @@ class TestClearArpCache:
         ):
             duc.clear_arp_cache()
             mock_api.api.v1.sites.devices.clearSiteSsrArpCache.assert_called_once()
+            api_call = mock_api.api.v1.sites.devices.clearSiteSsrArpCache  # Name the API mock for a focused count.
+            assert api_call.call_count == 1  # Prove the clear command reaches the API once.
 
 
 class TestPollSwitchStats:
     """Tests for poll_switch_stats (hardware category)."""
 
     def test_early_return_no_selection(self, duc: DeviceUtilityCommands) -> None:
-        with patch.object(duc, "_select_site_and_device", return_value=None):
+        with patch.object(duc, "_select_site_and_device", return_value=None) as mock_select:
             duc.poll_switch_stats()
+            assert mock_select.call_count == 1  # Prove the command checks the device selection guard.
 
     def test_success(
         self,
@@ -808,8 +817,9 @@ class TestCreateDeviceSnapshot:
     """Tests for create_device_snapshot (hardware category)."""
 
     def test_early_return_no_selection(self, duc: DeviceUtilityCommands) -> None:
-        with patch.object(duc, "_select_site_and_device", return_value=None):
+        with patch.object(duc, "_select_site_and_device", return_value=None) as mock_select:
             duc.create_device_snapshot()
+            assert mock_select.call_count == 1  # Prove the command checks the device selection guard.
 
     def test_success(
         self,
@@ -861,17 +871,19 @@ class TestCableTest:
     ) -> None:
         with (
             patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")),
-            patch.object(duc, "_select_port_from_device", return_value=None),
+            patch.object(duc, "_select_port_from_device", return_value=None) as mock_port,
         ):
             duc.cable_test()
+            assert mock_port.call_count == 1  # Prove the command checks the port selection guard.
 
 
 class TestUploadSupportFile:
     """Tests for upload_support_file."""
 
     def test_early_return_no_selection(self, duc: DeviceUtilityCommands) -> None:
-        with patch.object(duc, "_select_site_and_device", return_value=None):
+        with patch.object(duc, "_select_site_and_device", return_value=None) as mock_select:
             duc.upload_support_file()
+            assert mock_select.call_count == 1  # Prove the command checks the device selection guard.
 
     def test_success_calls_api(
         self,
@@ -1552,7 +1564,9 @@ class TestRunStreamingCommandExtended:
         with patch.object(duc, "_stream_ws_output") as mock_stream:
             duc._run_streaming_command("s1", "d1", MagicMock(), {"key": "v"}, 90)
             mock_stream.assert_called_once()
+            assert mock_stream.call_count == 1  # Prove the stream handler runs once.
         ws_mgr.disconnect.assert_called_once()
+        assert ws_mgr.disconnect.call_count == 1  # Prove the WebSocket manager disconnects once.
 
     @patch("src.device._utility_commands_websocket.time.sleep")
     def test_exception_in_stream(
@@ -1641,7 +1655,9 @@ class TestShowOspfInterfaces:
         ):
             duc.show_ospf_interfaces()
             mock_ws.assert_called_once()
+            assert mock_ws.call_count == 1  # Prove the WebSocket command runs once.
             mock_exp.assert_called_once()
+            assert mock_exp.call_count == 1  # Prove the result export runs once.
 
 
 class TestShowOspfDatabase:
@@ -1660,7 +1676,9 @@ class TestShowOspfDatabase:
         ):
             duc.show_ospf_database()
             mock_ws.assert_called_once()
+            assert mock_ws.call_count == 1  # Prove the WebSocket command runs once.
             mock_exp.assert_called_once()
+            assert mock_exp.call_count == 1  # Prove the result export runs once.
 
     def test_with_self_originate(
         self,
@@ -1696,7 +1714,9 @@ class TestShowOspfSummary:
         ):
             duc.show_ospf_summary()
             mock_ws.assert_called_once()
+            assert mock_ws.call_count == 1  # Prove the WebSocket command runs once.
             mock_exp.assert_called_once()
+            assert mock_exp.call_count == 1  # Prove the result export runs once.
 
 
 class TestResolveDns:
@@ -1713,7 +1733,9 @@ class TestResolveDns:
         ):
             duc.resolve_dns()
             mock_ws.assert_called_once()
+            assert mock_ws.call_count == 1  # Prove the WebSocket command runs once.
             mock_exp.assert_called_once()
+            assert mock_exp.call_count == 1  # Prove the result export runs once.
 
 
 class TestMonitorTraffic:
@@ -1725,9 +1747,10 @@ class TestMonitorTraffic:
     ) -> None:
         with (
             patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")),
-            patch.object(duc, "_select_port_from_device", return_value=None),
+            patch.object(duc, "_select_port_from_device", return_value=None) as mock_port,
         ):
             duc.monitor_traffic()
+            assert mock_port.call_count == 1  # Prove the command checks the port selection guard.
 
     def test_success(
         self,
@@ -1775,6 +1798,7 @@ class TestRunTop:
         ):
             duc.run_top()
             mock_stream.assert_called_once()
+            assert mock_stream.call_count == 1  # Prove the stream command runs once.
 
 
 class TestShowSession:
@@ -1793,7 +1817,9 @@ class TestShowSession:
         ):
             duc.show_session()
             mock_ws.assert_called_once()
+            assert mock_ws.call_count == 1  # Prove the WebSocket command runs once.
             mock_exp.assert_called_once()
+            assert mock_exp.call_count == 1  # Prove the result export runs once.
 
     def test_with_filters(
         self,
@@ -1829,7 +1855,9 @@ class TestShowServicePath:
         ):
             duc.show_service_path()
             mock_ws.assert_called_once()
+            assert mock_ws.call_count == 1  # Prove the WebSocket command runs once.
             mock_exp.assert_called_once()
+            assert mock_exp.call_count == 1  # Prove the result export runs once.
 
 
 class TestShowBgpSummary:
@@ -1848,7 +1876,9 @@ class TestShowBgpSummary:
         ):
             duc.show_bgp_summary()
             mock_ws.assert_called_once()
+            assert mock_ws.call_count == 1  # Prove the WebSocket command runs once.
             mock_exp.assert_called_once()
+            assert mock_exp.call_count == 1  # Prove the result export runs once.
 
 
 class TestShowArpTable:
@@ -1867,7 +1897,9 @@ class TestShowArpTable:
         ):
             duc.show_arp_table()
             mock_ws.assert_called_once()
+            assert mock_ws.call_count == 1  # Prove the WebSocket command runs once.
             mock_exp.assert_called_once()
+            assert mock_exp.call_count == 1  # Prove the result export runs once.
 
 
 class TestShowDhcpLeases:
@@ -1887,7 +1919,9 @@ class TestShowDhcpLeases:
         ):
             duc.show_dhcp_leases()
             mock_ws.assert_called_once()
+            assert mock_ws.call_count == 1  # Prove the WebSocket command runs once.
             mock_exp.assert_called_once()
+            assert mock_exp.call_count == 1  # Prove the result export runs once.
 
 
 class TestShowDot1x:
@@ -1906,7 +1940,9 @@ class TestShowDot1x:
         ):
             duc.show_dot1x()
             mock_ws.assert_called_once()
+            assert mock_ws.call_count == 1  # Prove the WebSocket command runs once.
             mock_exp.assert_called_once()
+            assert mock_exp.call_count == 1  # Prove the result export runs once.
 
 
 class TestShowEvpnDatabase:
@@ -1925,7 +1961,9 @@ class TestShowEvpnDatabase:
         ):
             duc.show_evpn_database()
             mock_ws.assert_called_once()
+            assert mock_ws.call_count == 1  # Prove the WebSocket command runs once.
             mock_exp.assert_called_once()
+            assert mock_exp.call_count == 1  # Prove the result export runs once.
 
 
 # ===================================================================
@@ -1975,9 +2013,10 @@ class TestBouncePortExtended:
     ) -> None:
         with (
             patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")),
-            patch.object(duc, "_select_port_from_device", return_value=None),
+            patch.object(duc, "_select_port_from_device", return_value=None) as mock_port,
         ):
             duc.bounce_port()
+            assert mock_port.call_count == 1  # Prove the command checks the port selection guard.
 
     def test_timeout_result(
         self,
@@ -2052,8 +2091,9 @@ class TestReadoptDevice:
     """Tests for readopt_device."""
 
     def test_early_return_no_selection(self, duc: DeviceUtilityCommands) -> None:
-        with patch.object(duc, "_select_site_and_device", return_value=None):
+        with patch.object(duc, "_select_site_and_device", return_value=None) as mock_select:
             duc.readopt_device()
+            assert mock_select.call_count == 1  # Prove the command checks the device selection guard.
 
     def test_not_vc_member(
         self,
@@ -2134,8 +2174,9 @@ class TestGetZtpPassword:
         return stream.getvalue()
 
     def test_early_return(self, duc: DeviceUtilityCommands) -> None:
-        with patch.object(duc, "_select_site_and_device", return_value=None):
+        with patch.object(duc, "_select_site_and_device", return_value=None) as mock_select:
             duc.get_ztp_password()
+            assert mock_select.call_count == 1  # Prove the command checks the device selection guard.
 
     def test_success_on_terminal_prints_value(
         self,
@@ -2316,8 +2357,9 @@ class TestGetConfigCommands:
     """Tests for get_config_commands."""
 
     def test_early_return(self, duc: DeviceUtilityCommands) -> None:
-        with patch.object(duc, "_select_site_and_device", return_value=None):
+        with patch.object(duc, "_select_site_and_device", return_value=None) as mock_select:
             duc.get_config_commands()
+            assert mock_select.call_count == 1  # Prove the command checks the device selection guard.
 
     def test_success_dict(
         self,
@@ -2380,8 +2422,9 @@ class TestClearBgpRoutes:
     """Tests for clear_bgp_routes."""
 
     def test_early_return_no_selection(self, duc: DeviceUtilityCommands) -> None:
-        with patch.object(duc, "_select_site_and_device", return_value=None):
+        with patch.object(duc, "_select_site_and_device", return_value=None) as mock_select:
             duc.clear_bgp_routes()
+            assert mock_select.call_count == 1  # Prove the command checks the device selection guard.
 
     def test_no_neighbor(
         self,
@@ -2403,6 +2446,7 @@ class TestClearBgpRoutes:
         mock_deps["safe_input_fn"].side_effect = ["10.0.0.1", "", "", "", "nope"]
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "gateway")):
             duc.clear_bgp_routes()
+            assert mock_deps["safe_input_fn"].call_count == 5  # Prove the cancel path reads all prompts.
 
     def test_success(
         self,
@@ -2416,6 +2460,8 @@ class TestClearBgpRoutes:
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "gateway")):
             duc.clear_bgp_routes()
             mock_api.api.v1.sites.devices.clearSiteSsrBgpRoutes.assert_called_once()
+            api_call = mock_api.api.v1.sites.devices.clearSiteSsrBgpRoutes  # Name the API mock for a focused count.
+            assert api_call.call_count == 1  # Prove the clear command reaches the API once.
 
     def test_exception(
         self,
@@ -2436,8 +2482,9 @@ class TestClearSession:
     """Tests for clear_session."""
 
     def test_early_return(self, duc: DeviceUtilityCommands) -> None:
-        with patch.object(duc, "_select_site_and_device", return_value=None):
+        with patch.object(duc, "_select_site_and_device", return_value=None) as mock_select:
             duc.clear_session()
+            assert mock_select.call_count == 1  # Prove the command checks the device selection guard.
 
     def test_with_service_name(
         self,
@@ -2451,6 +2498,8 @@ class TestClearSession:
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "gateway")):
             duc.clear_session()
             mock_api.api.v1.sites.devices.clearSiteDeviceSession.assert_called_once()
+            api_call = mock_api.api.v1.sites.devices.clearSiteDeviceSession  # Name the API mock for a focused count.
+            assert api_call.call_count == 1  # Prove the clear command reaches the API once.
 
     def test_with_session_ids(
         self,
@@ -2490,6 +2539,8 @@ class TestClearSession:
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "gateway")):
             duc.clear_session()
             mock_api.api.v1.sites.devices.clearSiteDeviceSession.assert_called_once()
+            api_call = mock_api.api.v1.sites.devices.clearSiteDeviceSession  # Name the API mock for a focused count.
+            assert api_call.call_count == 1  # Prove the clear command reaches the API once.
 
     def test_exception_400(
         self,
@@ -2513,8 +2564,9 @@ class TestClearMacTable:
     """Tests for clear_mac_table."""
 
     def test_early_return(self, duc: DeviceUtilityCommands) -> None:
-        with patch.object(duc, "_select_site_and_device", return_value=None):
+        with patch.object(duc, "_select_site_and_device", return_value=None) as mock_select:
             duc.clear_mac_table()
+            assert mock_select.call_count == 1  # Prove the command checks the device selection guard.
 
     def test_cancelled(
         self,
@@ -2524,6 +2576,7 @@ class TestClearMacTable:
         mock_deps["safe_input_fn"].side_effect = ["", "nope"]
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")):
             duc.clear_mac_table()
+            assert mock_deps["safe_input_fn"].call_count == 2  # Prove the cancel path reads both prompts.
 
     def test_success(
         self,
@@ -2537,6 +2590,8 @@ class TestClearMacTable:
         with patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")):
             duc.clear_mac_table()
             mock_api.api.v1.sites.devices.clearSiteDeviceMacTable.assert_called_once()
+            api_call = mock_api.api.v1.sites.devices.clearSiteDeviceMacTable  # Name the API mock for a focused count.
+            assert api_call.call_count == 1  # Prove the clear command reaches the API once.
 
     def test_exception(
         self,
@@ -2557,8 +2612,9 @@ class TestClearBpduError:
     """Tests for clear_bpdu_error."""
 
     def test_early_return(self, duc: DeviceUtilityCommands) -> None:
-        with patch.object(duc, "_select_site_and_device", return_value=None):
+        with patch.object(duc, "_select_site_and_device", return_value=None) as mock_select:
             duc.clear_bpdu_error()
+            assert mock_select.call_count == 1  # Prove the command checks the device selection guard.
 
     def test_cancelled(
         self,
@@ -2568,9 +2624,10 @@ class TestClearBpduError:
         with (
             patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")),
             patch.object(duc, "_select_port_optional", return_value=""),
-            patch.object(duc, "_confirm_destructive", return_value=False),
+            patch.object(duc, "_confirm_destructive", return_value=False) as mock_confirm,
         ):
             duc.clear_bpdu_error()
+            assert mock_confirm.call_count == 1  # Prove the cancel path asks for confirmation once.
 
     def test_success(
         self,
@@ -2586,6 +2643,10 @@ class TestClearBpduError:
         ):
             duc.clear_bpdu_error()
             mock_api.api.v1.sites.devices.clearBpduErrorsFromPortsOnSwitch.assert_called_once()
+            api_call = (
+                mock_api.api.v1.sites.devices.clearBpduErrorsFromPortsOnSwitch
+            )  # Name the API mock for a focused count.
+            assert api_call.call_count == 1  # Prove the clear command reaches the API once.
 
     def test_exception(
         self,
@@ -2608,8 +2669,9 @@ class TestClearLearnedMacs:
     """Tests for clear_learned_macs."""
 
     def test_early_return(self, duc: DeviceUtilityCommands) -> None:
-        with patch.object(duc, "_select_site_and_device", return_value=None):
+        with patch.object(duc, "_select_site_and_device", return_value=None) as mock_select:
             duc.clear_learned_macs()
+            assert mock_select.call_count == 1  # Prove the command checks the device selection guard.
 
     def test_no_port(
         self,
@@ -2631,9 +2693,10 @@ class TestClearLearnedMacs:
         with (
             patch.object(duc, "_select_site_and_device", return_value=("s1", "d1", "switch")),
             patch.object(duc, "_select_port_from_device", return_value="ge-0/0/0"),
-            patch.object(duc, "_confirm_destructive", return_value=False),
+            patch.object(duc, "_confirm_destructive", return_value=False) as mock_confirm,
         ):
             duc.clear_learned_macs()
+            assert mock_confirm.call_count == 1  # Prove the cancel path asks for confirmation once.
 
     def test_success(
         self,
