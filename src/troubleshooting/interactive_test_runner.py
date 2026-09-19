@@ -239,7 +239,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
             )  # WHY: fail-closed (issue #1637) — do not silently fall back.
         site_id = matching_site["id"]  # WHY: capture matched site id for downstream operations.
         site_name = matching_site.get("name", "Unknown")  # WHY: capture matched site name for context.
-        logger.warning(
+        logger.info(
             "   Using test site from MIST_INTERACTIVE_TEST_SITE: %s (%s)",
             site_name,
             site_id,
@@ -261,7 +261,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         site_name = sites_response.data[0].get(
             "name", "Unknown"
         )  # WHY: capture fallback site name for user-visible context.
-        logger.warning(
+        logger.info(
             "   Using first available test site: %s (%s)",
             site_name,
             site_id,

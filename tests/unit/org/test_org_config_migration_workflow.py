@@ -147,7 +147,7 @@ class TestDisplayExportSummary:
 
     def test_every_type_and_the_total_are_shown(self, manager: OrgConfigMigrationManager, caplog: Any) -> None:
         """A missing row hides an empty type that the operator expected to hold data."""
-        caplog.set_level("WARNING")  # WHY: the printer writes at WARNING level.
+        caplog.set_level("INFO", logger="src.org.org_config_migration_manager")  # WHY: preview now uses INFO.
         counts = {key: 1 for key in TYPE_KEYS}  # WHY: one object of every type.
         bundle = {"metadata": {"object_counts": counts}}  # WHY: the printer reads this section.
         manager._display_export_summary(bundle, "data/OrgConfig_Export_Acme.json")  # WHY: drive the printer.
@@ -157,7 +157,7 @@ class TestDisplayExportSummary:
 
     def test_an_empty_export_reports_a_zero_total(self, manager: OrgConfigMigrationManager, caplog: Any) -> None:
         """An org with no WAN config must report zero rather than raise."""
-        caplog.set_level("WARNING")  # WHY: the printer writes at WARNING level.
+        caplog.set_level("INFO")  # WHY: INFO keeps this operator preview visible by default.
         manager._display_export_summary({"metadata": {"object_counts": {}}}, "data/x.json")  # WHY: drive it empty.
         assert "TOTAL" in caplog.text  # WHY: the totals row must still print.
 
@@ -354,7 +354,7 @@ class TestDisplayBundlePreview:
 
     def test_the_preview_names_the_source_and_the_total(self, manager: OrgConfigMigrationManager, caplog: Any) -> None:
         """A preview without a count gives the operator nothing to check."""
-        caplog.set_level("WARNING")  # WHY: the printer writes at WARNING level.
+        caplog.set_level("INFO", logger="src.org.org_config_migration_manager")  # WHY: preview now uses INFO.
         metadata = {
             "source_org_name": "Acme-Corp",  # WHY: the operator recognizes the org by name.
             "export_timestamp": "2026-08-23T00:00:00+00:00",  # WHY: a stale bundle is a common mistake.

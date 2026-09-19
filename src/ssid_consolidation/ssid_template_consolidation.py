@@ -195,7 +195,7 @@ def _fetch_and_log(  # WHY: parent-owned so its __globals__ points here for mist
     ``patch.object(ssid_template_consolidation, "mistapi", ...)``
     observable when they call ``_mod._fetch_and_log`` directly.
     """
-    logger.warning("Fetching %s...", label)  # WHY: operator telemetry during multi-call fetch
+    logger.info("Fetching %s...", label)  # WHY: operator telemetry during multi-call fetch
     response = api_fn(session, org_id, **kwargs)  # WHY: mistapi list endpoint call
     status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
     if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the fetch count unsafe.
@@ -590,7 +590,7 @@ def _create_site_group(group: dict[str, Any], org_id: str, apisession: Any) -> N
             group["group_name"],
             group["group_id"],
         )
-        logger.warning("Created group: %s", group["group_name"])  # WHY: operator feedback for the create
+        logger.info("Created group: %s", group["group_name"])  # WHY: operator feedback for the create
     except Exception as error:  # WHY: convert API/network failure into an audit-log + user message
         logging.error(  # WHY: audit-log the failure with the group name
             "Failed to create group '%s': %s",

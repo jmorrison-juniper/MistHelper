@@ -253,6 +253,7 @@ def test_log_selector_miss_prints_and_logs(caplog: pytest.LogCaptureFixture) -> 
 
 def test_lookup_selector_site_returns_match(caplog: pytest.LogCaptureFixture) -> None:
     """_lookup_selector_site returns the matched site tuple and logs the legacy success line."""
+    caplog.set_level(logging.INFO)  # WHY: selector success now uses INFO instead of WARNING.
     mistapi_module = MagicMock()
     site_response = MagicMock()
     mistapi_module.api.v1.orgs.sites.listOrgSites.return_value = site_response
