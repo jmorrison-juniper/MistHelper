@@ -47,6 +47,9 @@ from src.upgrade_portal.capture.store import (  # WHY: issue #2061 pins the writ
     RUN_OPERATION,
 )
 from src.utils.operation_registry import OperationRegistry
+from tests.support.git_environment import (
+    git_subprocess_environment,  # WHY: issue #3022, repair a partial editor git config set.
+)
 
 # WHY: This file sits at tests/unit/upgrade_portal, so the root is three levels up.
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -346,7 +349,14 @@ def run_git(*arguments: str) -> subprocess.CompletedProcess[str]:
     executable = shutil.which("git")  # WHY: The absolute path avoids a shell lookup.
     if executable is None:  # WHY: A computer without git cannot answer the question.
         pytest.skip("git is absent, so the test cannot read the index")
-    return subprocess.run([executable, *arguments], cwd=REPO_ROOT, capture_output=True, text=True, check=False)
+    return subprocess.run(
+        [executable, *arguments],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=git_subprocess_environment(),  # WHY: issue #3022, a partial editor config set makes git stop.
+    )
 
 
 def active_ignore_patterns(path: Path) -> list[tuple[str, int]]:
