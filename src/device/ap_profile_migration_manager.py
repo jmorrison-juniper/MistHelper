@@ -1270,8 +1270,7 @@ class APProfileMigrationManager:
                 APProfileMigrationManager._check_reassign_response(response, ap_record["device_id"])
                 return
             except Exception as exc:  # WHY: broad catch for retry policy.
-                if first_exc is None:  # WHY: keep the first failure before later symptoms replace it.
-                    first_exc = exc  # WHY: final attempts can fail for follow-on reasons.
+                first_exc = APProfileMigrationManager._remember_first_failure(first_exc, exc)  # WHY: keep cause.
                 _LOGGER.warning(
                     "AP profile assignment attempt %s failed for %s: %s",
                     attempt + 1,
@@ -1290,6 +1289,11 @@ class APProfileMigrationManager:
         # WHY: unreachable; guard against typing lint anyway.
         if first_exc is not None:  # WHY: preserve the first failure if control somehow leaves the loop.
             raise first_exc  # WHY: report the original cause, not a later symptom.
+
+    @staticmethod
+    def _remember_first_failure(first: BaseException | None, current: BaseException) -> BaseException:
+        """Return the first failure, so a later symptom cannot replace the cause."""
+        return first if first is not None else current  # WHY: preserve the original retry failure cause.
 
     @staticmethod
     def _check_reassign_response(response: Any, device_id: str) -> None:
@@ -1854,8 +1858,7 @@ class APProfileMigrationManager:
             try:
                 response = _mist_site_devices.updateSiteDevice(session, site_id, device_id, body)
             except Exception as exc:  # WHY: broad catch for retry policy.
-                if first_exc is None:  # WHY: keep the first failure before later symptoms replace it.
-                    first_exc = exc  # WHY: final attempts can fail for follow-on reasons.
+                first_exc = APProfileMigrationManager._remember_first_failure(first_exc, exc)  # WHY: keep cause.
                 _LOGGER.warning("AP profile revert attempt %s failed for %s: %s", attempt + 1, device_id, exc)
                 if attempt < len(_RETRY_BACKOFF_SECONDS):
                     time.sleep(_RETRY_BACKOFF_SECONDS[attempt])
@@ -1870,8 +1873,9 @@ class APProfileMigrationManager:
             # treat as failure and back off the same way an exception would.
             if isinstance(status, int) and status >= 500:
                 status_error = RuntimeError(f"HTTP {status} on updateSiteDevice for {device_id}")  # WHY: wrap status.
-                if first_exc is None:  # WHY: keep the first failed HTTP status.
-                    first_exc = status_error  # WHY: final attempts can fail for follow-on reasons.
+                first_exc = APProfileMigrationManager._remember_first_failure(
+                    first_exc, status_error
+                )  # WHY: keep cause.
                 _LOGGER.warning("AP profile revert attempt %s failed for %s: %s", attempt + 1, device_id, status_error)
                 if attempt < len(_RETRY_BACKOFF_SECONDS):
                     time.sleep(_RETRY_BACKOFF_SECONDS[attempt])
