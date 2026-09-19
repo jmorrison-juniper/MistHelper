@@ -450,7 +450,7 @@ class SSIDTemplateConsolidationManager:  # pylint: disable=too-many-instance-att
                 logging.exception("Phase %d failed: %s", phase_number, error)  # WHY: audit-log full traceback
                 logging.warning("Phase %d failed: %s", phase_number, error)  # WHY: surface the error to the operator
                 return  # WHY: halt the sequence on the first failure
-        logger.warning("All 5 phases completed successfully.")  # WHY: success message after full sequence
+        logger.info("All 5 phases completed successfully.")  # WHY: success message after full sequence
 
     # ------------------------------------------------------------------
     # Shared helpers
