@@ -23,6 +23,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.export.org_sec_intel_profile_exporter import OrgSecIntelProfileExporter
+from src.export.org_sec_intel_profile_exporter import (
+    OrgSecIntelProfileExporter as FailureModeOrgSecIntelProfileExporter,
+)
 
 ORG_ID = "org-1148"
 PROFILE_ID = "11111111-2222-3333-4444-555555555555"
@@ -231,3 +234,21 @@ class TestProfileMenu:
             OrgSecIntelProfileExporter.profile()
 
         mist_helper.DataExporter.write_with_format_selection.assert_not_called()
+
+    @pytest.mark.parametrize("status_code", [404, 503])
+    def test_secintel_http_status_sdk_error_is_logged(
+        self, mist_helper: MagicMock, caplog: pytest.LogCaptureFixture, status_code: int
+    ) -> None:
+        """An HTTP 404 or HTTP 503 SDK failure must be logged and contained."""
+        mist_helper.ConfigUtils.get_cached_or_prompted_org_id.return_value = ORG_ID  # Reach the API call.
+        error = RuntimeError(f"HTTP {status_code}")  # Preserve the cloud status in the SDK error.
+        with patch(
+            f"{MODULE}.mistapi.api.v1.orgs.secintelprofiles.listOrgSecIntelProfiles",
+            side_effect=error,
+        ):
+            with caplog.at_level("ERROR"):  # Capture the product error signal.
+                FailureModeOrgSecIntelProfileExporter.profile()  # Call the real exporter entry point from src.
+
+        assert f"HTTP {status_code}" in caplog.text  # Prove the operator can see the status.
+        assert "Error fetching the SecIntel profile" in caplog.text  # Prove the product logged the failure.
+        mist_helper.DataExporter.write_with_format_selection.assert_not_called()  # Failed calls must not write.
