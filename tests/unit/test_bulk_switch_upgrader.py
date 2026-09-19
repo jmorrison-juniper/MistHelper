@@ -144,8 +144,8 @@ class TestInit:
         upgrader_with_override: BulkSwitchFirmwareUpgrader,
     ) -> None:
         """Verify initialization with sites override."""
-        assert upgrader_with_override.sites_override is not None
-        assert len(upgrader_with_override.sites_override) == 2
+        assert [site["id"] for site in upgrader_with_override.sites_override] == ["site-1", "site-2"]
+        assert [site["name"] for site in upgrader_with_override.sites_override] == ["Site One", "Site Two"]
 
     def test_cache_constants(self) -> None:
         """Verify cache file path and freshness constants."""
@@ -269,8 +269,8 @@ class TestSiteSelection:
         mock_mistapi.api.v1.orgs.sites.listOrgSites.return_value = mock_response
 
         result = upgrader._interactive_site_selection()
-        assert result is not None
-        assert result.get("cancelled") is True
+        assert result == {"cancelled": True}
+        assert list(result) == ["cancelled"]
 
     def test_interactive_api_error(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
         """Verify error handling on API failure."""
@@ -281,8 +281,8 @@ class TestSiteSelection:
         mock_mistapi.api.v1.orgs.sites.listOrgSites.return_value = mock_response
 
         result = upgrader._interactive_site_selection()
-        assert result is not None
-        assert "error" in result
+        assert result["error"] == "Failed to retrieve sites"
+        assert list(result) == ["error"]
 
     def test_interactive_exception(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
         """Verify error handling on exception."""
@@ -290,8 +290,8 @@ class TestSiteSelection:
         mock_mistapi.api.v1.orgs.sites.listOrgSites.side_effect = RuntimeError("Network error")
 
         result = upgrader._interactive_site_selection()
-        assert result is not None
-        assert "error" in result
+        assert result["error"] == "Site discovery error: Network error"
+        assert list(result) == ["error"]
 
         # Cleanup
         mock_mistapi.api.v1.orgs.sites.listOrgSites.side_effect = None
@@ -345,8 +345,8 @@ class TestSiteSelection:
         """Verify error on invalid site selection."""
         all_sites = [{"id": "s1", "name": "Site 1"}]
         result = upgrader._parse_specific_sites(all_sites)
-        assert result is not None
-        assert "error" in result
+        assert result["error"] == "Invalid site selection"
+        assert list(result) == ["error"]
 
     @patch("builtins.input", return_value="X")
     def test_prompt_invalid_choice(
@@ -357,8 +357,8 @@ class TestSiteSelection:
         """Verify invalid choice handling."""
         all_sites = [{"id": "s1", "name": "Site 1"}]
         result = upgrader._prompt_site_selection(all_sites)
-        assert result is not None
-        assert "error" in result
+        assert result["error"] == "Invalid selection"
+        assert list(result) == ["error"]
 
     @patch("builtins.input", return_value="99")
     def test_parse_specific_sites_empty_result(
@@ -369,8 +369,8 @@ class TestSiteSelection:
         """Verify error when no valid sites selected."""
         all_sites = [{"id": "s1", "name": "Site 1"}]
         result = upgrader._parse_specific_sites(all_sites)
-        assert result is not None
-        assert "error" in result
+        assert result["error"] == "No valid sites selected"
+        assert list(result) == ["error"]
 
 
 # ---------------------------------------------------------------------------
@@ -794,8 +794,8 @@ class TestVersionSelection:
 
         with patch("builtins.input", return_value="n"):
             result = upgrader._get_version_selection()
-        assert result is not None
-        assert "error" in result
+        assert result["error"] == "No compatible firmware versions and manual entry declined"
+        assert list(result) == ["error"]
 
     @patch("builtins.input", side_effect=["y", "23.4R2.21"])
     def test_handle_no_versions_fallback(
@@ -1087,7 +1087,7 @@ class TestExecution:
 
         upgrader._finalize_results()
 
-        assert upgrader.upgrade_results["end_time"] is not None
+        assert "T" in upgrader.upgrade_results["end_time"]
 
     def test_display_results_summary(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
         """Verify summary display does not raise."""
@@ -1132,8 +1132,8 @@ class TestExecution:
 
         result = upgrader._handle_critical_error(RuntimeError("Fatal error"))
 
-        assert "error" in result
-        assert result["end_time"] is not None
+        assert result["error"] == "Fatal error"
+        assert "T" in result["end_time"]
 
     def test_display_config_summary(self, upgrader: BulkSwitchFirmwareUpgrader) -> None:
         """Verify config summary display does not raise."""
@@ -1324,8 +1324,8 @@ class TestAdditionalCoverage:
         mock_mistapi.api.v1.orgs.sites.listOrgSites.return_value = mock_response
 
         result = upgrader._interactive_site_selection()
-        assert result is not None
-        assert "error" in result
+        assert result["error"] == "Failed to retrieve sites"
+        assert list(result) == ["error"]
 
     def test_interactive_site_selection_exception(
         self,
@@ -1336,8 +1336,8 @@ class TestAdditionalCoverage:
         mock_mistapi.api.v1.orgs.sites.listOrgSites.side_effect = RuntimeError("Boom")
 
         result = upgrader._interactive_site_selection()
-        assert result is not None
-        assert "error" in result
+        assert result["error"] == "Site discovery error: Boom"
+        assert list(result) == ["error"]
 
         mock_mistapi.api.v1.orgs.sites.listOrgSites.side_effect = None
 
@@ -1353,8 +1353,8 @@ class TestAdditionalCoverage:
         ):
             result = upgrader._discover_and_select_firmware()
 
-        assert result is not None
-        assert "error" in result
+        assert result["error"] == "Failed to retrieve switch inventory"
+        assert list(result) == ["error"]
 
     def test_discover_firmware_no_data(
         self,
@@ -1371,8 +1371,8 @@ class TestAdditionalCoverage:
         ):
             result = upgrader._discover_and_select_firmware()
 
-        assert result is not None
-        assert "error" in result
+        assert result["error"] == "No firmware data available"
+        assert list(result) == ["error"]
 
     def test_cache_stale_returns_none(
         self,
@@ -1490,8 +1490,8 @@ class TestAdditionalCoverage:
         upgrader.available_versions = ["23.4R2.21"]
 
         result = upgrader._prompt_version_selection()
-        assert result is not None
-        assert "cancelled" in result
+        assert result == {"cancelled": True}
+        assert list(result) == ["cancelled"]
 
     def test_execute_upgrades_success(
         self,
@@ -1516,7 +1516,7 @@ class TestAdditionalCoverage:
         result = upgrader._execute_upgrades()
         assert result["sites_processed"] == 1
         assert result["sites_successful"] == 1
-        assert result["end_time"] is not None
+        assert "T" in result["end_time"]
 
     def test_execute_upgrades_exception(
         self,
@@ -1587,8 +1587,8 @@ class TestAdditionalCoverage:
         with patch("builtins.input", return_value="n"):
             result = upgrader._handle_no_versions()
 
-        assert result is not None
-        assert "error" in result
+        assert result["error"] == "No compatible firmware versions and manual entry declined"
+        assert list(result) == ["error"]
 
     @patch("builtins.input", side_effect=["y", "", "23.4R2.21"])
     def test_manual_version_entry_empty_retry(
