@@ -375,7 +375,7 @@ class MarvisTroubleshootUtils:
         )  # WHY: persist results.
         row_count = len(data) if data else 0  # WHY: guard against None/empty rows before len().
         logger.debug("Marvis %s CSV saved (rows=%s)", kind, row_count)  # WHY: post-write log.
-        logger.warning("! Results saved to %s", filename)  # WHY: user confirmation.
+        logger.info("! Results saved to %s", filename)  # WHY: user confirmation.
 
     # ---- shared display / dispatch helpers (each CC <= 5) --------------------
 
@@ -996,7 +996,7 @@ class MarvisTroubleshootUtils:
         )  # WHY: persist.
         row_count = len(formatted_insights) if formatted_insights else 0  # WHY: guard against None/empty.
         logger.debug("Insights CSV saved (rows=%s)", row_count)  # WHY: post-write log.
-        logger.warning("  Full insights saved to %s", filename)  # WHY: user confirmation.
+        logger.info("  Full insights saved to %s", filename)  # WHY: user confirmation.
 
     @staticmethod
     def _log_endpoint_error(endpoint_name: str, exception: Exception) -> None:

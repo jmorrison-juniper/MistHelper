@@ -264,6 +264,7 @@ def test_prompt_ticket_id_returns_input_value():
 
 def test_print_ticket_created_summary(caplog):
     """_print_ticket_created_summary prints ID, subject, type and status."""
+    caplog.set_level(logging.INFO)  # WHY: ticket creation success now uses INFO instead of WARNING.
     OrgTicketManager._print_ticket_created_summary({"id": "t-1", "status": "open"}, "subj", "problem")
     text = caplog.text
     assert "t-1" in text
@@ -274,6 +275,7 @@ def test_print_ticket_created_summary(caplog):
 
 def test_print_ticket_created_summary_missing_id_status(caplog):
     """_print_ticket_created_summary tolerates missing id/status."""
+    caplog.set_level(logging.INFO)  # WHY: ticket creation success now uses INFO instead of WARNING.
     OrgTicketManager._print_ticket_created_summary({}, "subj", "question")
     text = caplog.text
     assert "unknown" in text
@@ -565,6 +567,7 @@ def test_render_ticket_list_table_prints_rows(caplog):
 
 def test_resolve_ticket_choice_valid_returns_id(caplog):
     """_resolve_ticket_choice returns id and prints subject on valid pick."""
+    caplog.set_level(logging.INFO)  # WHY: selection confirmation now uses INFO instead of WARNING.
     result = OrgTicketManager._resolve_ticket_choice(
         "1",
         [{"id": "t-1", "subject": "s"}],

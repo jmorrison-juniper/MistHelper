@@ -159,7 +159,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
         if created_vpn is None:  # WHY: creation failed -> do not attempt profile updates.
             return  # WHY: caller already saw an error message from _create_vpn.
         vpn_id = created_vpn.get("id", "")  # WHY: id is required for downstream vpn_paths refs.
-        logger.warning(
+        logger.info(
             "  VPN '%s' created successfully. ID: %s", vpn_name, vpn_id
         )  # WHY: operator confirmation of success.
         logger.info("VPN '%s' created with ID %s", vpn_name, vpn_id)  # WHY: audit trail of created id.
