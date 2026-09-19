@@ -185,7 +185,7 @@ class OrgTicketManager:  # Support ticket operations.
         """Print + log the newly created ticket summary."""
         ticket_id = ticket_data.get("id", "unknown")  # Get new ticket UUID from response
         logger.debug("Ticket created: id=%s, status=%s", ticket_id, ticket_data.get("status"))  # Log result
-        logger.warning(
+        logger.info(
             "\n  Ticket created successfully!" "\n  ID:      %s" "\n  Subject: %s" "\n  Type:    %s" "\n  Status:  %s",
             ticket_id,
             subject,
@@ -437,7 +437,7 @@ class OrgTicketManager:  # Support ticket operations.
             return ""  # Signal cancellation
         selected_id = tickets[idx].get("id", "")  # Extract ticket ID
         selected_subj = tickets[idx].get("subject", "(no subject)")  # Extract subject for confirmation
-        logger.warning("  Selected: %s", selected_subj)  # Confirm selection to user
+        logger.info("  Selected: %s", selected_subj)  # Confirm selection to user
         logger.info("User selected ticket %s (%s)", selected_id, selected_subj)  # Log selection
         return selected_id  # Return chosen ticket ID
 
@@ -484,7 +484,7 @@ class OrgTicketManager:  # Support ticket operations.
     def _collect_ticket_details(org_id: str, tickets: list) -> list:
         """For each summary in tickets, fetch + flatten its full detail. Returns list of flat dicts."""
         all_details = []  # Accumulate flattened ticket+comment records
-        logger.warning("\n  Fetching details for %d tickets...", len(tickets))  # Progress indicator
+        logger.info("\n  Fetching details for %d tickets...", len(tickets))  # Progress indicator
         for index, ticket in enumerate(tickets, 1):  # Iterate each ticket summary
             tid = ticket.get("id", "")  # Extract ticket ID from summary
             if not tid:  # Skip tickets without valid IDs

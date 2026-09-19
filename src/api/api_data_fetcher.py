@@ -286,7 +286,7 @@ class APIDataFetcher:
         logger.warning("API returned unexpected structure. Recovered %s records.", len(self.rawdata))
         api_name = self.api_call.__name__  # API callable name.
         mh.DataExporter.write_with_format_selection(self.rawdata, self.filename, api_function_name=api_name)
-        logger.warning("Recovered data saved to %s (%s rows)", self.filename, len(self.rawdata))
+        logger.info("Recovered data saved to %s (%s rows)", self.filename, len(self.rawdata))
 
     def _handle_no_recovery(self) -> None:  # Report unrecoverable response.
         """Handle case where no data could be recovered."""

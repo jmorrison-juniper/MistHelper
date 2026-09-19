@@ -302,7 +302,7 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
         if not (1 <= index <= count):  # WHY: out-of-range index also drives retry.
             return None  # WHY: keep loop responsibility in caller.
         selected = profiles[index - 1]  # WHY: display list is 1-based, list is 0-based.
-        logger.warning("  Selected: %s", selected.get("name", ""))  # WHY: selection echo via logger.
+        logger.info("  Selected: %s", selected.get("name", ""))  # WHY: selection echo via logger.
         return selected  # WHY: signal success to caller.
 
     def _prompt_action(

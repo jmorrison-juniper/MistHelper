@@ -280,6 +280,7 @@ def test_render_summary_fallback_no_raw_keys_when_flag_false(caplog: Any) -> Non
 
 def test_persist_csv_writes_and_prints(caplog: Any) -> None:
     """CSV persistence delegates to data_exporter and prints a confirmation."""
+    caplog.set_level(logging.INFO)  # WHY: save confirmation now uses INFO instead of WARNING.
     deps = _make_deps()  # WHY: fresh deps for interaction assertions.
     MarvisTroubleshootUtils._persist_csv(deps, [{"row": 1}], "file.csv", "client")  # WHY: exercise happy path.
     deps.data_exporter.write_with_format_selection.assert_called_once_with(
@@ -728,6 +729,7 @@ def test_describe_insight_dict_chains_fallbacks() -> None:
 
 def test_persist_insight_csv_writes_and_prints(caplog: Any) -> None:
     """Insight CSV persistence delegates to data_exporter and prints confirmation."""
+    caplog.set_level(logging.INFO)  # WHY: save confirmation now uses INFO instead of WARNING.
     deps = _make_deps()  # WHY: fresh deps.
     MarvisTroubleshootUtils._persist_insight_csv(deps, [{"row": 1}], "file.csv")  # WHY: exercise happy path.
     deps.data_exporter.write_with_format_selection.assert_called_once_with(

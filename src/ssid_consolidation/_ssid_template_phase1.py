@@ -80,7 +80,7 @@ def _fetch_and_log(  # WHY: mirror parent's fetch helper so mistapi patching lan
     shared ``mistapi`` MagicMock injected via ``sys.modules``) in effect
     for ``_fetch_all_org_data`` callers.
     """
-    logger.warning("Fetching %s...", label)  # WHY: operator telemetry during multi-call fetch
+    logger.info("Fetching %s...", label)  # WHY: operator telemetry during multi-call fetch
     response = api_fn(session, org_id, **kwargs)  # WHY: mistapi list endpoint call
     status_code = _response_status_code(response)  # WHY: a 5xx can carry an empty payload without raising.
     if status_code >= _HTTP_ERROR_MIN:  # WHY: a failing HTTP status makes the fetch count unsafe.
@@ -648,7 +648,7 @@ class _SsidTemplatePhase1Cluster(_ClusterBase):
         cached_data = self._try_load_cached()  # WHY: helper isolates cache-read + prompt branch
         if cached_data is not None:  # WHY: sentinel None means proceed to fresh fetch
             return cached_data
-        logger.warning("Fetching fresh organization data...")  # WHY: operator telemetry for fetch path
+        logger.info("Fetching fresh organization data...")  # WHY: operator telemetry for fetch path
         # WHY: route through parent so tests may patch _fetch_all_org_data on mgr directly.
         fresh: dict[str, Any] = self._call("_fetch_all_org_data")
         return fresh
@@ -662,7 +662,7 @@ class _SsidTemplatePhase1Cluster(_ClusterBase):
         if not cached or not cached.get("data"):  # WHY: no cache => caller performs fresh fetch
             return None
         age = _cache_age_minutes(cached.get("collected_at", ""))  # WHY: minutes since cache stamp
-        logger.warning("Cached data found (%.0f minutes old).", age)  # WHY: operator sees freshness
+        logger.info("Cached data found (%.0f minutes old).", age)  # WHY: operator sees freshness
         choice = parent.safe_input_fn(  # WHY: prompt operator with default-Y reuse
             _CACHE_REUSE_PROMPT,
             default_value="Y",

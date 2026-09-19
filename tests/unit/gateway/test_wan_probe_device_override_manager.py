@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import logging  # WHY: caplog level assertions need logging constants.
+import logging  # WHY: caplog assertions compare INFO and WARNING levels.
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 

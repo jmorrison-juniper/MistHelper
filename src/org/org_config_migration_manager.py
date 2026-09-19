@@ -251,7 +251,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
             return ""  # Signal no selection made
 
         if len(files) == 1:  # Auto-select when only one file exists
-            logger.warning("\n  Found 1 export bundle: %s", os.path.basename(files[0]))  # Confirm auto-selection
+            logger.info("\n  Found 1 export bundle: %s", os.path.basename(files[0]))  # Confirm auto-selection
             return files[0]  # Return the only available file
 
         return self._prompt_file_selection(files)  # Multiple files -- let user choose
@@ -316,7 +316,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
     def _display_bundle_preview(self, bundle: dict) -> None:  # type: ignore[type-arg]
         """Show a preview of what the bundle contains before importing."""
         metadata = bundle["metadata"]  # Extract metadata section for display
-        logger.warning(
+        logger.info(
             "\n  Bundle from: %s\n  Exported at: %s\n  Source org:  %s...",
             metadata.get("source_org_name", "Unknown"),
             metadata.get("export_timestamp", "Unknown"),
@@ -356,7 +356,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
 
     def _fetch_existing_objects(self) -> None:  # Fetch existing objects.
         """Fetch current objects from destination org for conflict detection."""
-        logger.warning("\n  Fetching existing config from destination org...")  # User feedback
+        logger.info("\n  Fetching existing config from destination org...")  # User feedback
         logger.info("Fetching existing objects from destination org for conflict detection")  # Log operation
         for config_type in self.CONFIG_TYPES:  # Iterate all 6 config types
             items = self._fetch_config_type(config_type)  # Reuse same fetch logic as export
