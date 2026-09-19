@@ -20,6 +20,7 @@ import types
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 from src.dataclasses.endpoint_config import EndpointConfig
 from src.export.const_definitions_exporter import ConstDefinitionsExporter
@@ -73,7 +74,7 @@ def test_fetch_and_export_endpoint_logs_http_status_errors(
 ) -> None:
     """An HTTP 404 or HTTP 503 endpoint export failure must be logged."""
     config = _endpoint_config()  # Build the real endpoint configuration object.
-    error = RuntimeError(f"HTTP {status_code}")  # Preserve the cloud status in the fetch error.
+    error = requests.HTTPError(f"HTTP {status_code}")  # Preserve the cloud status in the fetch error.
     with (
         patch.object(exporter, "_fetch_endpoint_data", side_effect=error),
         caplog.at_level("ERROR"),
@@ -115,11 +116,20 @@ class TestExportAll:
             exporter.export_all()
         proc.assert_called_once()
         summary.assert_called_once()
+        assert proc.call_count == 1
+        assert summary.call_count == 1
 
     def test_catches_exception_from_discovery(self, exporter, capsys):
-        with patch.object(exporter, "_discover_endpoints", side_effect=RuntimeError("boom")):
+        with patch.object(exporter, "_discover_endpoints", side_effect=AttributeError("boom")):
             exporter.export_all()
         assert "Critical error" in capsys.readouterr().out
+
+    def test_unexpected_discovery_exception_propagates(self, exporter):
+        with (
+            patch.object(exporter, "_discover_endpoints", side_effect=RuntimeError("boom")),
+            pytest.raises(RuntimeError, match="boom"),
+        ):
+            exporter.export_all()
 
 
 class TestDiscoverEndpoints:
@@ -154,6 +164,7 @@ class TestInspectModule:
         with patch("importlib.import_module") as imp:
             exporter._inspect_module("mistapi.api.v1.const._private")
         imp.assert_not_called()
+        assert imp.call_count == 0
 
     def test_delegates_to_inspect_module_functions(self, exporter):
         fake_mod = MagicMock()
@@ -174,6 +185,15 @@ class TestInspectModule:
         with patch("importlib.import_module", side_effect=ImportError("nope")):
             exporter._inspect_module("")
         assert "Error inspecting" in capsys.readouterr().out
+
+    def test_unexpected_inspection_error_propagates(self, exporter):
+        fake_mod = MagicMock()
+        with (
+            patch("importlib.import_module", return_value=fake_mod),
+            patch.object(exporter, "_inspect_module_functions", side_effect=RuntimeError("bad inspection")),
+            pytest.raises(RuntimeError, match="bad inspection"),
+        ):
+            exporter._inspect_module("mistapi.api.v1.const.foo")
 
 
 class TestInspectModuleFunctions:
@@ -389,10 +409,20 @@ class TestProcessSingleEndpoint:
 
     def test_exception_counts_failed(self, exporter):
         cfg = _endpoint_config()
-        with patch.object(exporter, "_is_file_fresh", side_effect=RuntimeError("boom")):
+        with patch.object(exporter, "_is_file_fresh", side_effect=OSError("boom")):
             exporter._process_single_endpoint(cfg)
         assert exporter.endpoints_failed == 1
         assert exporter.endpoints_processed == 1
+
+    def test_unexpected_processing_error_propagates(self, exporter):
+        cfg = _endpoint_config()
+        with (
+            patch.object(exporter, "_is_file_fresh", side_effect=TypeError("bad cache state")),
+            pytest.raises(TypeError, match="bad cache state"),
+        ):
+            exporter._process_single_endpoint(cfg)
+        assert exporter.endpoints_failed == 0
+        assert exporter.endpoints_processed == 0
 
 
 class TestEvaluateCacheWindow:
@@ -429,6 +459,15 @@ class TestIsFileFresh:
             assert exporter._is_file_fresh(cfg) is False
         assert "Error checking file timestamp" in capsys.readouterr().out
 
+    def test_unexpected_timestamp_error_propagates(self, exporter):
+        cfg = _endpoint_config()
+        with (
+            patch("os.path.exists", return_value=True),
+            patch("os.path.getmtime", side_effect=TypeError("bad timestamp")),
+            pytest.raises(TypeError, match="bad timestamp"),
+        ):
+            exporter._is_file_fresh(cfg)
+
 
 class TestFetchAndExportEndpoint:
     def test_happy_path(self, exporter):
@@ -442,12 +481,35 @@ class TestFetchAndExportEndpoint:
 
     def test_error_writes_empty_and_counts_failure(self, exporter, fake_mh):
         cfg = _endpoint_config()
-        with patch.object(exporter, "_fetch_endpoint_data", side_effect=RuntimeError("boom")):
+        with patch.object(exporter, "_fetch_endpoint_data", side_effect=requests.RequestException("boom")):
             exporter._fetch_and_export_endpoint(cfg)
         fake_mh.DataExporter.write_with_format_selection.assert_called_once_with(
             [], cfg.filename, api_function_name="listStuff"
         )  # WHY: empty write keeps endpoint metadata.
         assert exporter.endpoints_failed == 1
+
+    def test_connection_error_writes_empty_and_counts_failure(self, exporter, fake_mh):
+        cfg = _endpoint_config()
+        with patch.object(exporter, "_fetch_endpoint_data", side_effect=requests.ConnectionError("offline")):
+            exporter._fetch_and_export_endpoint(cfg)
+        assert fake_mh.DataExporter.write_with_format_selection.call_count == 1
+        assert exporter.endpoints_failed == 1
+
+    def test_timeout_writes_empty_and_counts_failure(self, exporter, fake_mh):
+        cfg = _endpoint_config()
+        with patch.object(exporter, "_fetch_endpoint_data", side_effect=requests.Timeout("slow cloud")):
+            exporter._fetch_and_export_endpoint(cfg)
+        assert fake_mh.DataExporter.write_with_format_selection.call_count == 1
+        assert exporter.endpoints_failed == 1
+
+    def test_unexpected_fetch_error_propagates(self, exporter, fake_mh):
+        cfg = _endpoint_config()
+        with (
+            patch.object(exporter, "_fetch_endpoint_data", side_effect=TypeError("bad endpoint wiring")),
+            pytest.raises(TypeError, match="bad endpoint wiring"),
+        ):
+            exporter._fetch_and_export_endpoint(cfg)
+        fake_mh.DataExporter.write_with_format_selection.assert_not_called()
 
 
 class TestFetchEndpointData:
@@ -496,11 +558,20 @@ class TestFetchOneGatewayModel:
 
     def test_reraises_on_api_error(self, exporter):
         def broken(session, model):
-            raise RuntimeError("boom")
+            raise requests.RequestException("boom")
 
         mod = types.SimpleNamespace(getConfig=broken)
         cfg = _endpoint_config(module=mod, function_name="getConfig")
-        with pytest.raises(RuntimeError):
+        with pytest.raises(requests.RequestException):
+            exporter._fetch_one_gateway_model(cfg, "SRX300")
+
+    def test_unexpected_model_fetch_error_propagates(self, exporter):
+        def broken(session, model):
+            raise ValueError("bad model response")
+
+        mod = types.SimpleNamespace(getConfig=broken)
+        cfg = _endpoint_config(module=mod, function_name="getConfig")
+        with pytest.raises(ValueError, match="bad model response"):
             exporter._fetch_one_gateway_model(cfg, "SRX300")
 
 
@@ -512,11 +583,20 @@ class TestFetchAllGatewayModels:
             patch.object(
                 exporter,
                 "_fetch_one_gateway_model",
-                side_effect=[[{"model": "A"}], RuntimeError("boom"), []],
+                side_effect=[[{"model": "A"}], requests.RequestException("boom"), []],
             ),
         ):
             result = exporter._fetch_all_gateway_models(cfg)
         assert result == [{"model": "A"}]
+
+    def test_unexpected_gateway_model_loop_error_propagates(self, exporter):
+        cfg = _endpoint_config()
+        with (
+            patch.object(exporter, "_get_gateway_models_list", return_value=["A", "B"]),
+            patch.object(exporter, "_fetch_one_gateway_model", side_effect=ValueError("bad gateway loop")),
+            pytest.raises(ValueError, match="bad gateway loop"),
+        ):
+            exporter._fetch_all_gateway_models(cfg)
 
 
 class TestGetGatewayModelsList:
@@ -528,9 +608,16 @@ class TestGetGatewayModelsList:
         assert result == ["SRX300"]
 
     def test_falls_back_when_api_fails(self, exporter):
-        with patch("importlib.import_module", side_effect=RuntimeError("boom")):
+        with patch("importlib.import_module", side_effect=ImportError("boom")):
             result = exporter._get_gateway_models_list()
         assert result == ConstDefinitionsExporter.FALLBACK_GATEWAY_MODELS
+
+    def test_unexpected_gateway_model_list_error_propagates(self, exporter):
+        with (
+            patch("importlib.import_module", side_effect=ValueError("bad import state")),
+            pytest.raises(ValueError, match="bad import state"),
+        ):
+            exporter._get_gateway_models_list()
 
     def test_falls_back_when_no_gateways_found(self, exporter):
         response = types.SimpleNamespace(data=[])
@@ -594,13 +681,25 @@ class TestFetchAllCountryStates:
 
     def test_handles_failure(self, exporter):
         def broken(s, country_code):
-            raise RuntimeError("boom")
+            raise requests.RequestException("boom")
 
         mod = types.SimpleNamespace(getStates=broken)
         cfg = _endpoint_config(module=mod, function_name="getStates")
         with patch.object(exporter, "_get_country_codes_list", return_value=["US"]):
             result = exporter._fetch_all_country_states(cfg)
         assert result == []
+
+    def test_unexpected_country_state_error_propagates(self, exporter):
+        def broken(s, country_code):
+            raise ValueError("bad state payload")
+
+        mod = types.SimpleNamespace(getStates=broken)
+        cfg = _endpoint_config(module=mod, function_name="getStates")
+        with (
+            patch.object(exporter, "_get_country_codes_list", return_value=["US"]),
+            pytest.raises(ValueError, match="bad state payload"),
+        ):
+            exporter._fetch_all_country_states(cfg)
 
     def test_skips_when_no_data(self, exporter):
         mod = types.SimpleNamespace(getStates=lambda s, country_code: types.SimpleNamespace(data=None))
@@ -618,8 +717,15 @@ class TestCallCountriesApi:
             assert exporter._call_countries_api() == {"US": "United States"}
 
     def test_returns_empty_on_failure(self, exporter):
-        with patch("importlib.import_module", side_effect=RuntimeError("boom")):
+        with patch("importlib.import_module", side_effect=ImportError("boom")):
             assert exporter._call_countries_api() == {}
+
+    def test_unexpected_country_api_error_propagates(self, exporter):
+        with (
+            patch("importlib.import_module", side_effect=ValueError("bad country import")),
+            pytest.raises(ValueError, match="bad country import"),
+        ):
+            exporter._call_countries_api()
 
 
 class TestIsValidAlpha2:
@@ -732,13 +838,25 @@ class TestFetchAllCountryChannels:
 
     def test_handles_failure(self, exporter):
         def broken(s, country_code):
-            raise RuntimeError("boom")
+            raise requests.RequestException("boom")
 
         mod = types.SimpleNamespace(listChannels=broken)
         cfg = _endpoint_config(module=mod, function_name="listChannels")
         with patch.object(exporter, "_get_channel_country_codes", return_value=["US"]):
             result = exporter._fetch_all_country_channels(cfg)
         assert result == []
+
+    def test_unexpected_country_channel_error_propagates(self, exporter):
+        def broken(s, country_code):
+            raise ValueError("bad channel payload")
+
+        mod = types.SimpleNamespace(listChannels=broken)
+        cfg = _endpoint_config(module=mod, function_name="listChannels")
+        with (
+            patch.object(exporter, "_get_channel_country_codes", return_value=["US"]),
+            pytest.raises(ValueError, match="bad channel payload"),
+        ):
+            exporter._fetch_all_country_channels(cfg)
 
     def test_skips_when_no_data(self, exporter):
         mod = types.SimpleNamespace(listChannels=lambda s, country_code: types.SimpleNamespace(data=None))
@@ -762,9 +880,16 @@ class TestGetChannelCountryCodes:
         assert set(result) == {"US", "CA"}
 
     def test_falls_back_on_error(self, exporter):
-        with patch("importlib.import_module", side_effect=RuntimeError("boom")):
+        with patch("importlib.import_module", side_effect=ImportError("boom")):
             result = exporter._get_channel_country_codes()
         assert result == ConstDefinitionsExporter.FALLBACK_CHANNEL_COUNTRIES
+
+    def test_unexpected_channel_country_error_propagates(self, exporter):
+        with (
+            patch("importlib.import_module", side_effect=ValueError("bad channel import")),
+            pytest.raises(ValueError, match="bad channel import"),
+        ):
+            exporter._get_channel_country_codes()
 
     def test_falls_back_when_no_codes(self, exporter):
         response = types.SimpleNamespace(data={})
