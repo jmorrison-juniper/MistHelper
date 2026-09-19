@@ -168,7 +168,7 @@ class TestFindPicocellPolicy:
             ]
         }
         result = _find_picocell_policy(config, "TestTemplate")
-        assert result is not None
+        assert result == {"name": "Picocell", "action": "allow"}  # Prove the helper returns the matching policy.
         assert result["name"] == "Picocell"
 
     def test_no_picocell(self) -> None:
@@ -198,7 +198,7 @@ class TestParseTemplateIndices:
     def test_valid_multiple(self) -> None:
         available = [{"name": "A"}, {"name": "B"}, {"name": "C"}]
         result = _parse_template_indices("0,2", available)
-        assert result is not None
+        assert result == [{"name": "A"}, {"name": "C"}]  # Prove the parser keeps the selected templates.
         assert len(result) == 2
 
     def test_invalid_format(self) -> None:
@@ -209,7 +209,7 @@ class TestParseTemplateIndices:
     def test_out_of_range_filtered(self) -> None:
         available = [{"name": "A"}]
         result = _parse_template_indices("0,5", available)
-        assert result is not None
+        assert result == [{"name": "A"}]  # Prove the parser keeps the valid template and drops the invalid one.
         assert len(result) == 1
 
     def test_all_out_of_range(self) -> None:
@@ -332,7 +332,7 @@ class TestFetchTemplates:
             mock_api.get_all.return_value = mock_templates
             result = mgr._fetch_templates()
 
-        assert result is not None
+        assert [template["name"] for template in result] == ["Alpha", "Zebra"]  # Prove the templates are sorted.
         assert result[0]["name"] == "Alpha"
 
     def test_returns_none_on_empty(self) -> None:
@@ -363,7 +363,7 @@ class TestSelectTemplate:
         mgr = _make_manager(input_fn=MagicMock(return_value="0"))
         templates = [{"name": "T1", "type": "standalone", "id": "id1"}]
         result = mgr._select_template(templates, "extract")
-        assert result is not None
+        assert result == templates[0]  # Prove the selected template is returned unchanged.
         assert result["name"] == "T1"
 
     def test_invalid_non_numeric(self) -> None:
@@ -429,9 +429,14 @@ class TestExtractConfigs:
             "service_policies": [{"name": "Picocell", "action": "allow"}],
         }
         result = GatewayTemplateConfigManager._extract_configs(config, {"name": "T1", "id": "id1"})
-        assert result is not None
-        assert result["configurations"]["traffic_steering"]["DIA_Pico"] is not None
-        assert result["configurations"]["application_policies"]["Picocell"] is not None
+        assert result["source_template_name"] == "T1"  # Prove the extraction records the source template name.
+        assert result["configurations"]["traffic_steering"]["DIA_Pico"] == {
+            "strategy": "ordered",
+        }  # Prove the traffic-steering policy is extracted.
+        assert result["configurations"]["application_policies"]["Picocell"] == {
+            "name": "Picocell",
+            "action": "allow",
+        }  # Prove the application policy is extracted.
 
     def test_extracts_dia_pico_only(self) -> None:
         config = {
@@ -439,7 +444,9 @@ class TestExtractConfigs:
             "service_policies": [],
         }
         result = GatewayTemplateConfigManager._extract_configs(config, {"name": "T1", "id": "id1"})
-        assert result is not None
+        assert result["configurations"]["traffic_steering"]["DIA_Pico"] == {
+            "strategy": "ordered",
+        }  # Prove a traffic-steering-only extraction is kept.
 
     def test_returns_none_when_neither_found(self) -> None:
         config = {"path_preferences": {}, "service_policies": []}
@@ -481,7 +488,7 @@ class TestLoadExtractionFile:
                 input_fn=MagicMock(return_value="0"),
             )
             result = mgr._load_extraction_file()
-            assert result is not None
+            assert result == test_data  # Prove the saved extraction data loads unchanged.
             assert result["source_template_name"] == "Test"
 
     def test_no_files_returns_none(self) -> None:
@@ -502,7 +509,7 @@ class TestSelectDestinationTemplates:
         ]
         extraction_data = {"source_template_id": "id1"}
         result = mgr._select_destination_templates(templates, extraction_data)
-        assert result is not None
+        assert result == [{"name": "T2", "id": "id2"}]  # Prove the source template is filtered from "all".
         assert len(result) == 1
         assert result[0]["name"] == "T2"
 
@@ -514,7 +521,7 @@ class TestSelectDestinationTemplates:
         ]
         extraction_data = {"source_template_id": "id1"}
         result = mgr._select_destination_templates(templates, extraction_data)
-        assert result is not None
+        assert result == [{"name": "T2", "id": "id2"}]  # Prove index zero selects the remaining destination.
         assert len(result) == 1
 
     def test_no_other_templates(self) -> None:
@@ -1243,11 +1250,15 @@ class TestCreateTemplatesEdgeCases:
         mock_resp = MagicMock()  # Mock API response object
         mock_resp.status_code = 200  # Simulate successful creation
         mock_resp.data = {"id": "new-template-id"}  # Response contains new template id
-        mock_api.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate.return_value = mock_resp
+        mistapi_mock = _our_mock  # Use the module-level Mist API mock that the product module imported.
+        mistapi_mock.reset_mock()  # Clear prior calls so this assertion measures one test.
+        mistapi_mock.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate.return_value = mock_resp
         source_config = {"service_policies": []}  # Source config to clone from
         to_create = [{"name": "T-TX", "key": "TX", "type": "state"}]  # Templates to create
-        result = mgr._create_templates(source_config, to_create, {})  # Call with empty existing
-        assert result is not None  # Some result mapping returned on success
+        with patch("src.gateway.template_config.mistapi", mistapi_mock):  # Bind the product module to this mock.
+            result = mgr._create_templates(source_config, to_create, {})  # Call with empty existing.
+        assert result == {"T-TX": "new-template-id"}  # Prove the create path maps the new template identifier.
+        assert mistapi_mock.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate.call_count == 1  # Prove one API call.
 
     def test_api_failure_marks_failed(self) -> None:
         """_create_templates with non-200 API response does not crash."""
@@ -1255,11 +1266,15 @@ class TestCreateTemplatesEdgeCases:
         mgr = _make_manager(apisession=mock_api)  # Inject mock so we can configure it
         mock_resp = MagicMock()  # Mock API response object
         mock_resp.status_code = 500  # Simulate API error response
-        mock_api.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate.return_value = mock_resp
+        mistapi_mock = _our_mock  # Use the module-level Mist API mock that the product module imported.
+        mistapi_mock.reset_mock()  # Clear prior calls so this assertion measures one test.
+        mistapi_mock.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate.return_value = mock_resp
         source_config = {"service_policies": []}  # Source config to clone from
         to_create = [{"name": "T-TX", "key": "TX", "type": "state"}]  # Templates to create
-        result = mgr._create_templates(source_config, to_create, {})  # Should handle failure
-        assert result is not None  # Result mapping returned even on failure
+        with patch("src.gateway.template_config.mistapi", mistapi_mock):  # Bind the product module to this mock.
+            result = mgr._create_templates(source_config, to_create, {})  # Should handle failure.
+        assert result == {}  # Prove the failure path returns no successful template mapping.
+        assert mistapi_mock.api.v1.orgs.gatewaytemplates.createOrgGatewayTemplate.call_count == 1  # Prove one API call.
 
 
 class TestAssignSingleSiteEdgeCases:
