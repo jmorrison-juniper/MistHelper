@@ -69,6 +69,12 @@ _ZSCALER_SUFFIX_SUBRULES: tuple[tuple[str, str], ...] = (  # WHY: These rules fo
     ("private.zscaler", "Zscaler private/internal"),  # WHY: Private hosts need the most explicit safety label.
 )
 
+_GOOGLE_PROBE_HOSTS: tuple[str, ...] = (
+    "google.com",
+)  # WHY: The registrable names whose own hosts carry the Google probe label.
+
+_MINIMUM_TLS_VERSION = ssl.TLSVersion.TLSv1_2  # WHY: Refuse TLS 1.0 and TLS 1.1 on every probe connection.
+
 
 @dataclass
 class ProbeResult:
@@ -325,6 +331,24 @@ def _udp_check(host: str, port: int, timeout: float) -> str:
 _PROBE_HEADERS = {"User-Agent": "MistHelper-probe/1.0"}  # Identify the probe to the far end.
 
 
+def _probe_tls_context() -> ssl.SSLContext:
+    """Return a TLS context that refuses TLS 1.0 and TLS 1.1.
+
+    Why:
+        ``ssl.create_default_context`` already raises the floor to TLS 1.2 on
+        the interpreters this project supports. The floor is an interpreter
+        default, so a future build could lower it. This function states the
+        requirement in the code, so the probe never negotiates a retired
+        protocol version.
+
+    Returns:
+        A context with certificate verification on and a TLS 1.2 floor.
+    """
+    context = ssl.create_default_context()  # Start from the secure default trust store and cipher set.
+    context.minimum_version = _MINIMUM_TLS_VERSION  # State the floor instead of inheriting it.
+    return context  # Every probe connection shares this one construction path.
+
+
 def _open_probe_connection(host: str, port: int, timeout: float, *, tls: bool) -> HTTPConnection:
     """Return a connection to ``host`` on ``port``, over TLS when asked.
 
@@ -333,7 +357,7 @@ def _open_probe_connection(host: str, port: int, timeout: float, *, tls: bool) -
         settings, so the factory lives in one place rather than twice.
     """
     if tls:  # HTTPS uses the system default trust store.
-        return HTTPSConnection(host, port, timeout=timeout, context=ssl.create_default_context())
+        return HTTPSConnection(host, port, timeout=timeout, context=_probe_tls_context())
     return HTTPConnection(host, port, timeout=timeout)  # Plain HTTP for port 80 probes.
 
 
@@ -430,7 +454,7 @@ def _tls_peer(
         success.
     """
     try:
-        ctx = ssl.create_default_context()
+        ctx = _probe_tls_context()  # Build the context with an explicit TLS floor.
         with socket.create_connection((host, port), timeout=timeout) as raw:
             with ctx.wrap_socket(raw, server_hostname=host) as tls:
                 cert = tls.getpeercert() or {}
@@ -511,13 +535,34 @@ def _classify_generic(fqdn: str, server: str) -> str:
     """
     if _is_digicert_responder(fqdn, server):
         return "DigiCert OCSP/CRL responder"  # WHY: DigiCert responders are certificate infrastructure.
-    if fqdn.endswith("google.com"):
+    if _is_google_probe_host(fqdn):  # Accept google.com and its subdomains, and reject a lookalike name.
         return "Google captive-portal probe target"  # WHY: Preserve the exact Google suffix rule.
     if "secb2b" in fqdn:
         return "Samsung ELM activation (secb2b.com)"  # WHY: Preserve the Samsung substring rule.
     if server:
         return f"Web server ({server})"  # WHY: Preserve the server-header fallback for reachable unknown web hosts.
     return "unknown"  # WHY: No known signal was available for this endpoint.
+
+
+def _is_google_probe_host(fqdn: str) -> bool:
+    """Return True when the host is a Google probe target.
+
+    Why:
+        ``fqdn.endswith("google.com")`` accepts any name that ends with those
+        characters. ``notgoogle.com`` and ``evilgoogle.com`` both pass that
+        test, and a third party can register either one. This function accepts
+        the registrable name itself and its subdomains, and nothing else.
+
+    Args:
+        fqdn: Hostname of the endpoint under classification.
+
+    Returns:
+        True when the host equals a Google probe name or sits below one.
+    """
+    host = fqdn.lower().rstrip(".")  # Normalize case and the trailing dot of an absolute name.
+    return any(
+        host == name or host.endswith("." + name) for name in _GOOGLE_PROBE_HOSTS
+    )  # Require a label boundary, so a sibling registration cannot match.
 
 
 def _is_digicert_responder(fqdn: str, server: str) -> bool:
