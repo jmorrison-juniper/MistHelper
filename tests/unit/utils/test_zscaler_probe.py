@@ -281,6 +281,34 @@ class TestClassify:
             == "Google captive-portal probe target"
         )
 
+    def test_google_apex_host_still_matches(self) -> None:
+        """The registrable name itself keeps the captive-portal label."""
+        assert _classify(_make_result(fqdn="google.com")) == "Google captive-portal probe target"
+
+    def test_google_absolute_name_still_matches(self) -> None:
+        """A trailing dot marks an absolute name and must not defeat the rule."""
+        assert _classify(_make_result(fqdn="www.google.com.")) == "Google captive-portal probe target"
+
+    @pytest.mark.parametrize(
+        "lookalike",
+        [
+            "notgoogle.com",  # A third party can register this name today.
+            "evilgoogle.com",  # The old suffix test accepted this name.
+            "my-google.com",  # A hyphen does not create a label boundary.
+            "googlexcom",  # No separator at all.
+        ],
+    )
+    def test_google_lookalike_host_is_not_the_probe_target(self, lookalike: str) -> None:
+        """A name that merely ends with the characters must not claim the label.
+
+        Why:
+            ``fqdn.endswith("google.com")`` accepted every name in this list.
+            Issue #2978 reports that shape as an incomplete host check. A label
+            boundary is required, so only the name itself and its subdomains
+            match.
+        """
+        assert _classify(_make_result(fqdn=lookalike)) != "Google captive-portal probe target"
+
     def test_secb2b_samsung(self) -> None:
         """``secb2b`` substring maps to the Samsung ELM activation label."""
         assert (

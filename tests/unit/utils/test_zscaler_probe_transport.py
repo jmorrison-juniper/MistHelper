@@ -15,6 +15,7 @@ from __future__ import annotations
 import socket
 import ssl
 import subprocess
+import warnings
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -214,6 +215,67 @@ class TestOpenProbeConnection:
         with patch.object(zp, "HTTPConnection") as http_cls:
             zp._open_probe_connection("gateway.zscaler.net", 80, 3.0, tls=False)
         http_cls.assert_called_once_with("gateway.zscaler.net", 80, timeout=3.0)
+
+
+class TestProbeTlsContext:
+    """Cover the TLS floor that every probe connection must carry."""
+
+    def test_the_context_refuses_tls_1_0_and_tls_1_1(self) -> None:
+        """A TLS 1.0 handshake must not succeed against a probe target.
+
+        Why:
+            Issue #2978 reports ``py/insecure-protocol`` on the bare
+            ``ssl.create_default_context`` call. This test states the shipped
+            floor, so a future interpreter default cannot lower it in silence.
+        """
+        context = zp._probe_tls_context()  # Build the real context, not a mock.
+        assert context.minimum_version is ssl.TLSVersion.TLSv1_2  # The floor must be explicit.
+
+    def test_the_helper_raises_a_weak_default_floor(self) -> None:
+        """The helper must set the floor, not inherit it.
+
+        Why:
+            ``ssl.create_default_context`` returns a TLS 1.2 floor on Python
+            3.13, so an assertion on the shipped context alone would pass even
+            if the code set nothing. This test hands the helper a context with
+            a TLS 1.0 floor and requires the helper to raise it.
+        """
+        weak = ssl.create_default_context()  # Start from the real context class.
+        with warnings.catch_warnings():  # The retired version emits a DeprecationWarning.
+            warnings.simplefilter("ignore", DeprecationWarning)  # Keep the test output clean.
+            weak.minimum_version = ssl.TLSVersion.TLSv1  # Simulate an interpreter with a lower default.
+        with patch.object(ssl, "create_default_context", return_value=weak):
+            context = zp._probe_tls_context()  # The helper must correct the weak floor.
+        assert context.minimum_version is ssl.TLSVersion.TLSv1_2  # The helper states the floor itself.
+
+    def test_the_context_keeps_certificate_verification(self) -> None:
+        """A context without hostname checking would accept any certificate."""
+        context = zp._probe_tls_context()  # Build the real context, not a mock.
+        assert context.check_hostname is True  # The name on the certificate must match.
+        assert context.verify_mode is ssl.CERT_REQUIRED  # An unverified peer must fail.
+
+    def test_the_tls_connection_factory_uses_the_floored_context(self) -> None:
+        """A raw default context would reintroduce the retired versions."""
+        context = MagicMock()  # WHY: stand in for the floored context.
+        with (
+            patch.object(zp, "HTTPSConnection") as https_cls,
+            patch.object(zp, "_probe_tls_context", return_value=context) as factory,
+        ):
+            zp._open_probe_connection("gateway.zscaler.net", 443, 3.0, tls=True)
+        factory.assert_called_once_with()  # WHY: the connection must go through the floored path.
+        _, kwargs = https_cls.call_args  # WHY: read the connection keywords.
+        assert kwargs["context"] is context  # WHY: the floored context must reach the connection.
+
+    def test_the_certificate_reader_uses_the_floored_context(self) -> None:
+        """The certificate probe opens its own socket and needs the same floor."""
+        context = MagicMock()  # WHY: stand in for the floored context.
+        context.wrap_socket.side_effect = ssl.SSLError("stop after the context call")
+        with (
+            patch.object(zp, "_probe_tls_context", return_value=context) as factory,
+            patch.object(socket, "create_connection", return_value=MagicMock()),
+        ):
+            zp._tls_peer("gateway.zscaler.net", 443, 3.0)
+        factory.assert_called_once_with()  # WHY: the certificate read must use the same floor.
 
 
 class TestCloseQuietly:
