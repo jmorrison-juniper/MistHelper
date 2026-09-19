@@ -11,6 +11,8 @@ import logging  # Record each store action without raw actor or request values.
 from collections.abc import Mapping  # Accept stored ArangoDB documents as read-only values.
 from typing import Any  # Accept python-arango and controlled fake handles.
 
+from arango.exceptions import ArangoError  # Narrow repository handlers to python-arango driver failures.
+
 from src.refactors.endpoint_primary_key_strategies import (  # Use the registered composite domain key directly.
     ENDPOINT_PRIMARY_KEY_STRATEGIES,
 )
@@ -108,7 +110,10 @@ class ActionRepository:
             for definition in _INDEX_DEFINITIONS:  # Install each approved index idempotently.
                 collection.add_index(dict(definition))  # Give the driver a fresh definition map.
             self._verify_indexes(collection)  # Read the index definitions back before success.
-        except Exception as error:  # Convert every driver fault to the stable fail-closed error.
+        except (
+            ArangoError,
+            RuntimeError,
+        ) as error:  # Convert driver and schema faults to the stable fail-closed error.
             logger.exception("The upgrade action store bootstrap failed")  # Record full safe fault context.
             raise ActionStoreUnavailable("The ArangoDB action store is unavailable.") from error  # Fail closed.
         logger.debug("Created the upgrade action collection with three indexes")  # Confirm safe schema counts.
@@ -122,7 +127,7 @@ class ActionRepository:
             collection = self.database.collection(ACTION_COLLECTION)  # Use only the action journal.
             stored = self._find_action(collection, actor_scope, action_id)  # Filter by actor and public identifier.
             action = UpgradeRunAction.from_document(stored) if stored is not None else None  # Validate a found row.
-        except Exception as error:  # Convert driver and corrupt-record faults to one store error.
+        except (ArangoError, KeyError, TypeError, ValueError) as error:  # Convert driver and parse faults.
             logger.exception("The actor-scoped upgrade action read failed")  # Record full safe fault context.
             raise ActionStoreUnavailable("The ArangoDB action store is unavailable.") from error  # Fail closed.
         logger.debug("The actor-scoped action read found a record: %s", action is not None)  # Report no identity.
@@ -137,7 +142,7 @@ class ActionRepository:
             stored = self.database.collection(ACTION_COLLECTION).get(key)  # Use the composite digest directly.
             owned = stored if stored is not None and stored.get("actor_scope") == actor_scope else None  # Hide actors.
             action = UpgradeRunAction.from_document(owned) if owned is not None else None  # Validate a found row.
-        except Exception as error:  # Convert driver and corrupt-record faults to one store error.
+        except (ArangoError, KeyError, TypeError, ValueError) as error:  # Convert driver and parse faults.
             logger.exception("The durable request key read failed")  # Record full safe fault context.
             raise ActionStoreUnavailable("The ArangoDB action store is unavailable.") from error  # Fail closed.
         logger.debug("The durable request key read found a record: %s", action is not None)  # Report no key value.
@@ -160,7 +165,7 @@ class ActionRepository:
             )
         except ActionRequestConflict:  # Keep the stable different-request conflict.
             raise  # Let the route map this error to HTTP 409.
-        except Exception as error:  # Resolve a possible concurrent same-key insert before failure.
+        except ArangoError as error:  # Resolve a possible concurrent same-key insert before failure.
             action = self._resolve_initialize_fault(candidate, error)  # Return only a verified matching action.
         verified = self._verify_action(action)  # Read the stored action back before success.
         logger.debug("Initialized one durable action with %s item(s)", len(verified.ledger.items))  # Safe count.
@@ -221,7 +226,7 @@ class ActionRepository:
             )
         except ActionStateConflict:  # Keep a stable compare-and-swap refusal.
             raise  # Let the caller choose the correct durable refusal.
-        except Exception as error:  # Convert all database faults to the fail-closed error.
+        except (ArangoError, RuntimeError) as error:  # Convert database faults to the fail-closed error.
             logger.exception("The atomic run and action write failed")  # Record full safe fault context.
             raise ActionStoreUnavailable("The ArangoDB action store is unavailable.") from error  # Fail closed.
         action = self._verify_outcome(self._read_required(actor_scope, action_id), outcome)  # Verify the item.
@@ -363,7 +368,7 @@ class ActionRepository:
             )
         except (ActionStateConflict, ValueError):  # Keep stable validation and compare conflicts.
             raise  # Let the caller store the correct durable refusal.
-        except Exception as error:  # Convert driver faults to the stable fail-closed error.
+        except (ArangoError, RuntimeError) as error:  # Convert driver faults to the stable fail-closed error.
             logger.exception("The upgrade action compare-and-swap write failed")  # Record full safe context.
             raise ActionStoreUnavailable("The ArangoDB action store is unavailable.") from error  # Fail closed.
 
@@ -388,7 +393,7 @@ class ActionRepository:
         document["_rev"] = revision  # Ask ArangoDB to reject a stale action version.
         try:  # A revision conflict is a stable state conflict, not store unavailability.
             collection.replace(document, check_rev=True, sync=True)  # Replace all fields under revision control.
-        except Exception as error:  # Keep driver details out of the stable error message.
+        except ArangoError as error:  # Keep driver details out of the stable error message.
             error_name = type(error).__name__.casefold()  # Read only the safe exception class name.
             error_text = str(error).casefold()  # Inspect the driver reason without logging record content.
             if "revision" in error_name or "conflict" in error_name or "revision" in error_text:  # Detect stale writes.
@@ -552,7 +557,7 @@ class ActionRepository:
         logger.info("Read one run after the atomic action transaction")  # Record verification before its read.
         try:  # A read fault makes the prior write result unknown.
             stored = self.database.collection(RUN_COLLECTION).get(mutation.run_id)  # Read the natural run key.
-        except Exception as error:  # Convert a failed verification read to store unavailability.
+        except ArangoError as error:  # Convert a failed verification read to store unavailability.
             logger.exception("The atomic run read-back failed")  # Record full safe fault context.
             raise ActionStoreUnavailable("The ArangoDB run write is not verified.") from error  # Fail closed.
         if stored is None or any(stored.get(key) != value for key, value in mutation.document.items()):  # Verify.

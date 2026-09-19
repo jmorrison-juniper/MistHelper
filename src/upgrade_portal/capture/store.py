@@ -28,6 +28,7 @@ from typing import Any, ClassVar
 from urllib.parse import urlparse
 
 from arango.client import ArangoClient
+from arango.exceptions import ArangoError  # WHY: narrow store handlers to python-arango driver failures
 
 from src.dataclasses.export_backend_options import ExportBackendOptions
 from src.db import DatabaseConfig
@@ -561,7 +562,7 @@ def _open_database(config: DatabaseConfig) -> Any:
             password=config.arango_password,
             verify=True,
         )
-    except Exception as error:  # The store must keep working without a database.
+    except ArangoError as error:  # The store must keep working without a database.
         logger.warning(
             "Upgrade portal cannot reach the document store at %s: %s",
             _safe_host(config.arango_host),
@@ -624,7 +625,7 @@ def _ensure_collection(database: Any, name: str, edge: bool) -> bool:
             database.create_collection(name, edge=edge)
             logger.info("Upgrade portal created collection %s, edge=%s", name, edge)
         return True
-    except Exception as error:  # A second worker may create the same collection.
+    except ArangoError as error:  # A second worker may create the same collection.
         logger.warning("Upgrade portal could not create collection %s: %s", name, type(error).__name__)
         return False
 
@@ -654,7 +655,7 @@ def _ensure_index(database: Any, plan: IndexPlan) -> bool:
     try:
         database.collection(plan.collection).add_index(definition)
         return True
-    except Exception as error:  # A missing index slows a query but loses no record.
+    except ArangoError as error:  # A missing index slows a query but loses no record.
         logger.warning("Upgrade portal could not create index %s: %s", plan.name, type(error).__name__)
         return False
 
@@ -676,7 +677,7 @@ def _edge_index_present(database: Any) -> bool:
     try:
         indexes = database.collection(EDGE_COLLECTION).indexes() or []
         return any(str(entry.get("type")) == "edge" for entry in indexes)
-    except Exception as error:  # The report stays honest when the read fails.
+    except ArangoError as error:  # The report stays honest when the read fails.
         logger.warning("Upgrade portal could not read the indexes of %s: %s", EDGE_COLLECTION, type(error).__name__)
         return False
 
@@ -977,7 +978,7 @@ def _read_document(database: Any, collection: str, key: str) -> dict[str, Any] |
     """
     try:
         stored = database.collection(collection).get(key)
-    except Exception as error:  # A failed read counts as an unverified write.
+    except ArangoError as error:  # A failed read counts as an unverified write.
         logger.warning("Upgrade portal could not read %s %s back: %s", collection, key, type(error).__name__)
         return None
     if stored is None:
@@ -1326,7 +1327,7 @@ def _patch_capture(database: Any, key: str, final: Mapping[str, Any]) -> bool:
     }
     try:
         database.collection(CAPTURE_COLLECTION).update(patch)
-    except Exception as error:  # An unmarked capture is safe, because no comparison takes it.
+    except ArangoError as error:  # An unmarked capture is safe, because no comparison takes it.
         logger.warning("Upgrade portal could not mark capture %s verified: %s", key, type(error).__name__)
         return False
     return True
@@ -1531,7 +1532,7 @@ def _insert_edge(database: Any, edge: Mapping[str, Any]) -> bool:
     """
     try:
         database.collection(EDGE_COLLECTION).import_bulk([dict(edge)], on_duplicate="replace")
-    except Exception as error:  # A lost edge hides no capture, because the capture names its run.
+    except ArangoError as error:  # A lost edge hides no capture, because the capture names its run.
         logger.warning("Upgrade portal could not write edge %s: %s", edge.get("_key", ""), type(error).__name__)
         return False
     return True
@@ -1656,7 +1657,7 @@ def _run_absent(database: Any, run_key: str) -> bool | None:
         return True
     try:
         stored = database.collection(RUN_COLLECTION).get(run_key)  # The run document, or None when absent.
-    except Exception as error:  # A failed read is not proof of absence, so the edge stays.
+    except ArangoError as error:  # A failed read is not proof of absence, so the edge stays.
         logger.warning("Upgrade portal could not read run %s for a repair: %s", run_key, type(error).__name__)
         return None
     return stored is None  # A clean None means the run is truly absent.
@@ -1679,7 +1680,7 @@ def _remove_edge(database: Any, edge_key: str) -> bool:
     """
     try:
         database.collection(EDGE_COLLECTION).delete(edge_key)  # The next scan no longer sees this edge.
-    except Exception as error:  # A failed removal loses no capture, so the repair reports it and moves on.
+    except ArangoError as error:  # A failed removal loses no capture, so the repair reports it and moves on.
         logger.warning("Upgrade portal could not remove edge %s: %s", edge_key, type(error).__name__)
         return False
     return True
@@ -2056,7 +2057,7 @@ def _run_aql(database: Any, query: str, binds: Mapping[str, Any]) -> list[Any]:
     try:
         cursor = database.aql.execute(query, bind_vars=dict(binds))
         return list(cursor)
-    except Exception as error:  # A failed read reports an empty page and never raises.
+    except ArangoError as error:  # A failed read reports an empty page and never raises.
         logger.warning("Upgrade portal could not run a history query: %s", type(error).__name__)
         return []
 
