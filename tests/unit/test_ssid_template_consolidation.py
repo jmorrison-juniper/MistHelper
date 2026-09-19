@@ -3044,17 +3044,22 @@ class TestInstanceMethods:
             mgr._run_all_phases(dispatch)
         dispatch["2"].assert_not_called()
 
-    def test_run_all_phases_completes(self) -> None:
+    def test_run_all_phases_completes(self, caplog: pytest.LogCaptureFixture) -> None:
         mgr = self._make_manager()
         dispatch = {str(i): MagicMock() for i in range(1, 6)}
-        with patch.object(
-            _mod,
-            "_check_prerequisite_for_all",
-            return_value=True,
-        ):
-            mgr._run_all_phases(dispatch)
+        with caplog.at_level(logging.INFO):  # WHY: capture the full-sequence completion summary.
+            with patch.object(
+                _mod,
+                "_check_prerequisite_for_all",
+                return_value=True,
+            ):
+                mgr._run_all_phases(dispatch)
         for fn in dispatch.values():
             fn.assert_called_once()
+        completion_records = [
+            record for record in caplog.records if "All 5 phases completed successfully." in record.getMessage()
+        ]  # WHY: isolate the repaired success summary.
+        assert [record.levelno for record in completion_records] == [logging.INFO]  # WHY: success is not a warning.
 
     def test_execute_no_org_id(self) -> None:
         SSIDTemplateConsolidationManager.execute(
