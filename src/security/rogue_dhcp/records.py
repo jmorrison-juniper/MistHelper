@@ -41,6 +41,10 @@ STATE_HISTORICAL = "historical"  # WHY: the window holds the finding, but the so
 # WHY: a finding whose last seen time falls inside this trailing span still counts as active.
 ACTIVE_WINDOW_SECONDS = 86400
 
+# WHY: Mist states the resolution in the alarm `status` field. A `reoccured` value means the
+# fault returned, so it is absent here on purpose. Issue #2996 records the defect this closes.
+RESOLVED_STATUSES = frozenset({"resolved", "closed"})
+
 UNKNOWN_SITE_NAME = "unknown"  # WHY: a result can name a site identifier that the site list does not hold.
 
 
@@ -171,21 +175,49 @@ class RogueDhcpRecordNormalizer:
             return ""
         return datetime.fromtimestamp(epoch_seconds, tz=UTC).isoformat()  # WHY: UTC avoids a local offset.
 
-    def resolve_state(self, last_seen_epoch: float, acked: Any = None) -> str:
+    @staticmethod
+    def is_closed(record: dict[str, Any]) -> bool:
+        """Report whether Mist already closed this record.
+
+        Why:
+            A time window alone cannot tell an open fault from a fault that Mist
+            resolved two hours ago. Both fall inside the trailing window. The
+            alarm record carries the answer directly, in ``status`` and in
+            ``resolved_time``, so this method reads the cloud verdict instead of
+            guessing from the clock.
+
+        Warning: a ``status`` of ``reoccured`` means the fault returned. That
+        value must never read as closed, or the scan would hide a live rogue
+        DHCP server.
+
+        Args:
+            record: One raw Mist alarm, event, or Marvis config action.
+
+        Returns:
+            True when an operator acknowledged the record, or Mist resolved it.
+        """
+        if record.get("acked") is True:  # WHY: an operator closed the alarm by hand.
+            return True
+        if record.get("resolved_time"):  # WHY: the cloud stamped the moment it resolved the alarm.
+            return True
+        return str(record.get("status") or "").strip().lower() in RESOLVED_STATUSES  # WHY: the cloud verdict.
+
+    def resolve_state(self, last_seen_epoch: float, record: dict[str, Any] | None = None) -> str:
         """Report whether a finding is open now or closed inside the window.
 
-        A finding reads ``active`` when its last occurrence falls inside the
-        trailing active window and no operator acknowledged it. Every other
-        finding reads ``historical``.
+        A finding reads ``historical`` when Mist closed it. Otherwise it reads
+        ``active`` when its last occurrence falls inside the trailing active
+        window. Every other finding reads ``historical``.
 
         Args:
             last_seen_epoch: The last occurrence as epoch seconds.
-            acked: The alarm acknowledgement flag. An event carries none.
+            record: The raw Mist record. An event carries no resolution field,
+                so the caller may leave it unset.
 
         Returns:
             The literal ``active`` or the literal ``historical``.
         """
-        if acked is True:  # WHY: an operator closed the alarm, so it is no longer open.
+        if record is not None and self.is_closed(record):  # WHY: the cloud verdict outranks the clock.
             return STATE_HISTORICAL
         age = self._window_end - last_seen_epoch  # WHY: measure backward from the window end, not from now.
         if last_seen_epoch and age <= ACTIVE_WINDOW_SECONDS:  # WHY: a recent occurrence means the fault stands.
@@ -279,7 +311,7 @@ class RogueDhcpRecordNormalizer:
                 "source": source,
                 "signal_type": self._first_text(record.get("type")),
                 "signal_family": RogueDhcpSignalMatcher.signal_family(record),
-                "state": self.resolve_state(last_seen, record.get("acked")),
+                "state": self.resolve_state(last_seen, record),  # WHY: an alarm states its own resolution.
                 "severity": self._first_text(record.get("severity")),
                 "first_seen_epoch": min(first_seen, last_seen) if first_seen and last_seen else last_seen,
                 "last_seen_epoch": last_seen,
@@ -314,7 +346,7 @@ class RogueDhcpRecordNormalizer:
                 "source": source,
                 "signal_type": self._first_text(record.get("type")),
                 "signal_family": RogueDhcpSignalMatcher.signal_family(record),
-                "state": self.resolve_state(last_seen),
+                "state": self.resolve_state(last_seen, record),  # WHY: honor a resolution field if Mist adds one.
                 "severity": self._first_text(record.get("severity")),
                 "first_seen_epoch": first_seen,
                 "last_seen_epoch": last_seen,
@@ -347,7 +379,7 @@ class RogueDhcpRecordNormalizer:
                 "source": SOURCE_MARVIS_ACTION,
                 "signal_type": self._first_text(record.get("type")) or reason,
                 "signal_family": MARVIS_REMEDIATION_FAMILY,
-                "state": self.resolve_state(last_seen),
+                "state": self.resolve_state(last_seen, record),  # WHY: honor a resolution field if Mist adds one.
                 "severity": self._first_text(record.get("severity")),
                 "first_seen_epoch": last_seen,
                 "last_seen_epoch": last_seen,
