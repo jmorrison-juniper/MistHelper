@@ -23,6 +23,7 @@ import pytest
 
 from src.dataclasses.endpoint_config import EndpointConfig
 from src.export.const_definitions_exporter import ConstDefinitionsExporter
+from src.export.const_definitions_exporter import ConstDefinitionsExporter as FailureModeConstDefinitionsExporter
 
 
 @pytest.fixture
@@ -61,6 +62,28 @@ def _endpoint_config(**overrides) -> EndpointConfig:
     }
     defaults.update(overrides)
     return EndpointConfig(**defaults)
+
+
+@pytest.mark.parametrize("status_code", [404, 503])
+def test_fetch_and_export_endpoint_logs_http_status_errors(
+    exporter: ConstDefinitionsExporter,
+    fake_mh: types.ModuleType,
+    caplog: pytest.LogCaptureFixture,
+    status_code: int,
+) -> None:
+    """An HTTP 404 or HTTP 503 endpoint export failure must be logged."""
+    config = _endpoint_config()  # Build the real endpoint configuration object.
+    error = RuntimeError(f"HTTP {status_code}")  # Preserve the cloud status in the fetch error.
+    with (
+        patch.object(exporter, "_fetch_endpoint_data", side_effect=error),
+        caplog.at_level("ERROR"),
+    ):
+        FailureModeConstDefinitionsExporter._fetch_and_export_endpoint(
+            exporter, config
+        )  # Call the real export failure path from src.
+    assert f"HTTP {status_code}" in caplog.text  # Prove the operator can see the status.
+    assert "Failed to export" in caplog.text  # Prove the product logged the failure.
+    fake_mh.DataExporter.write_with_format_selection.assert_called_once()  # Prove the failure wrote the empty file.
 
 
 class TestInit:

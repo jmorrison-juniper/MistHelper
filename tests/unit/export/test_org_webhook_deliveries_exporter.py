@@ -8,6 +8,9 @@ from unittest.mock import MagicMock, patch  # WHY: isolate SDK and writer calls.
 import pytest  # WHY: provide fixtures and parameterized cases.
 
 from src.export.org_webhook_deliveries_exporter import OrgWebhookDeliveriesExporter
+from src.export.org_webhook_deliveries_exporter import (
+    OrgWebhookDeliveriesExporter as FailureModeOrgWebhookDeliveriesExporter,
+)
 
 _MODULE = "src.export.org_webhook_deliveries_exporter"  # WHY: keep patch targets consistent.
 _WEBHOOKS = [{"id": "wh-1", "name": "Alarms"}, {"id": "wh-2", "name": "Audits"}]  # WHY: test two valid choices.
@@ -98,6 +101,23 @@ class TestWebhookExport:
             ),
         ):
             OrgWebhookDeliveriesExporter.deliveries()
+        mist_helper.DataExporter.write_with_format_selection.assert_not_called()  # WHY: failed calls write nothing.
+
+    @pytest.mark.parametrize("status_code", [404, 503])
+    def test_webhook_http_status_sdk_error_is_logged(
+        self, mist_helper: MagicMock, caplog: pytest.LogCaptureFixture, status_code: int
+    ) -> None:
+        """An HTTP 404 or HTTP 503 SDK failure must be logged and contained."""
+        mist_helper.ConfigUtils.get_cached_or_prompted_org_id.return_value = "org-1"  # WHY: reach the API call.
+        error = RuntimeError(f"HTTP {status_code}")  # WHY: preserve the cloud status in the SDK error.
+        with (
+            patch.object(OrgWebhookDeliveriesExporter, "_select_webhook_id", return_value=("wh-1", "Alarms")),
+            patch(f"{_MODULE}.mistapi.api.v1.orgs.webhooks.searchOrgWebhooksDeliveries", side_effect=error),
+            caplog.at_level("ERROR"),
+        ):
+            FailureModeOrgWebhookDeliveriesExporter.deliveries()  # WHY: call the real exporter entry point from src.
+        assert f"HTTP {status_code}" in caplog.text  # WHY: the operator must see the status.
+        assert "Error fetching organization webhook deliveries" in caplog.text  # WHY: prove product logging.
         mist_helper.DataExporter.write_with_format_selection.assert_not_called()  # WHY: failed calls write nothing.
 
 
