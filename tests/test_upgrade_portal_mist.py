@@ -7,6 +7,7 @@ import json  # WHY: JSON serialization for cache simulation
 from unittest.mock import Mock  # WHY: mocking dependencies
 
 import pytest  # WHY: test framework
+import requests  # WHY: tests model the transport failures that the client handles.
 from flask import Flask  # WHY: Flask app for the route tests
 
 # WHY: import modules under test
@@ -48,8 +49,7 @@ class TestMistAPIClient:
         result = self.client.list_sites("org-123")  # WHY: API call
 
         # WHY: verify result
-        assert result is not None  # WHY: not none
-        assert len(result) == 2  # WHY: two sites
+        assert [site["id"] for site in result] == ["site-1", "site-2"]  # WHY: prove both sorted rows returned.
         assert result[0]["name"] == "Austin"  # WHY: sorted by name
         assert result[1]["name"] == "Boston"  # WHY: second site
         # WHY: verify cache was set
@@ -104,7 +104,7 @@ class TestMistAPIClient:
         WHY: verify None returned on API failure.
         """
         # WHY: mock API error
-        self.mock_mist_api.listOrgSites.side_effect = Exception("API error")  # WHY: exception
+        self.mock_mist_api.listOrgSites.side_effect = requests.RequestException("API error")  # WHY: transport fault
         # WHY: mock cache miss
         self.mock_redis.get.return_value = None  # WHY: cache miss
 
@@ -130,8 +130,7 @@ class TestMistAPIClient:
         result = client.list_sites("org-123")  # WHY: API call
 
         # WHY: verify result
-        assert result is not None  # WHY: not none
-        assert len(result) == 1  # WHY: one site
+        assert result == [{"id": "site-1", "name": "Austin", "country_code": "US"}]  # WHY: exact no-cache rows.
 
     def test_list_devices_success(self):
         """Test successful devices listing from Mist API.
@@ -157,8 +156,7 @@ class TestMistAPIClient:
         result = self.client.list_site_devices("site-123", "ap")  # WHY: API call
 
         # WHY: verify result
-        assert result is not None  # WHY: not none
-        assert len(result) == 1  # WHY: one device
+        assert len(result) == 1  # WHY: one normalized device row returned.
         assert result[0]["id"] == "dev-1"  # WHY: device id
         assert result[0]["firmware_version"] == "12.3.4"  # WHY: mapped field
         # WHY: verify cache was set
@@ -213,7 +211,7 @@ class TestMistAPIClient:
         WHY: verify None returned on API failure.
         """
         # WHY: mock API error
-        self.mock_mist_api.listSiteDevices.side_effect = Exception("API error")  # WHY: exception
+        self.mock_mist_api.listSiteDevices.side_effect = requests.RequestException("API error")  # WHY: transport fault
         # WHY: mock cache miss
         self.mock_redis.get.return_value = None  # WHY: cache miss
 
@@ -266,8 +264,11 @@ class TestMistRoutes:
 
         WHY: verify 400 Bad Request when org_id is missing.
         """
-        # WHY: this would test with Flask test client
-        pass  # WHY: placeholder for integration test
+        response = self.client.get("/api/sites")  # WHY: omit org_id to drive the validation branch.
+
+        assert response.status_code == 400  # WHY: missing org_id is a client request error.
+        assert response.get_json()["error"] == "org_id is required"  # WHY: exact operator message returned.
+        self.mock_mist_client.list_sites.assert_not_called()  # WHY: validation stops before the client call.
 
     def test_get_devices_success(self):
         """Test GET /api/sites/:site_id/devices returns devices.
@@ -287,8 +288,11 @@ class TestMistRoutes:
             },  # WHY: device data
         ]  # WHY: mock data
 
-        # WHY: would test route response (requires Flask test client)
-        # This is simplified since we're testing the route function directly
+        response = self.client.get("/api/sites/site-123/devices", query_string={"type": "all"})  # WHY: call route.
+
+        assert response.status_code == 200  # WHY: valid device read succeeds.
+        assert response.get_json()["devices"][0]["firmware_version"] == "12.3.4"  # WHY: payload is preserved.
+        self.mock_mist_client.list_site_devices.assert_called_once_with("site-123", "all")  # WHY: seam call used.
 
 
 if __name__ == "__main__":
