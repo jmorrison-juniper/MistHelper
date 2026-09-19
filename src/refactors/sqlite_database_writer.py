@@ -248,22 +248,32 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
         self.cursor = self.connection.cursor()  # Create a cursor.
         logger.info("Successfully connected to database: %s at %s", database_path, self.timestamp)  # Log connection.
 
+    def _require_cursor(self) -> sqlite3.Cursor:
+        """Return the active database cursor or raise a visible error."""
+        if self.cursor is None:  # WHY: SQL execution cannot proceed without an initialized cursor.
+            raise RuntimeError("Database cursor not initialized")  # WHY: keep the old assertion message.
+        return self.cursor  # WHY: callers need a narrowed cursor object.
+
+    def _require_connection(self) -> sqlite3.Connection:
+        """Return the active database connection or raise a visible error."""
+        if self.connection is None:  # WHY: commit and rollback cannot proceed without a connection.
+            raise RuntimeError("Database connection not initialized")  # WHY: keep the old assertion message.
+        return self.connection  # WHY: callers need a narrowed connection object.
+
     def _create_table_and_indexes(self) -> None:  # Create table then indexes.
         """Create table with strategy-appropriate schema and indexes."""
-        assert (
-            self.cursor is not None
-        ), "Database cursor not initialized"  # nosec B101  # Defensive: ensure connect() succeeded
+        self._require_cursor()  # WHY: fail visibly under python -O if connect() did not initialize a cursor.
         self._create_schema_table()  # Delegate DDL creation to keep this function under STRUCT-LENGTH limit
         self._create_schema_indexes()  # Delegate index creation to keep this function under STRUCT-LENGTH limit
 
     def _create_schema_table(self) -> None:  # Extract table DDL to keep parent under 25 lines
         """Build and execute the CREATE TABLE DDL for the current strategy."""
-        assert self.cursor is not None, "Database cursor not initialized"  # nosec B101
+        cursor = self._require_cursor()  # WHY: fail visibly under python -O before DDL execution.
         # Build the CREATE TABLE SQL using the strategy (natural/composite/auto-increment)
         create_table_sql = self._deps.DatabaseSchemaUtils.build_create_table_sql(
             self.table_name, self.fields, self.strategy
         )
-        self.cursor.execute(create_table_sql)  # Execute DDL to create or verify the table structure
+        cursor.execute(create_table_sql)  # Execute DDL to create or verify the table structure
         logger.debug(  # Trace the DDL.
             "Table %s created/verified with hybrid %s schema - using natural business keys from API",
             self.table_name,
@@ -272,11 +282,11 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
 
     def _create_schema_indexes(self) -> None:  # Extract index DDL to keep parent under 25 lines
         """Build and execute the CREATE INDEX statements paired with the schema strategy."""
-        assert self.cursor is not None, "Database cursor not initialized"  # nosec B101
+        cursor = self._require_cursor()  # WHY: fail visibly under python -O before index DDL execution.
         # Compute the CREATE INDEX DDL statements that pair with the chosen strategy
         index_sqls = self._deps.DatabaseSchemaUtils.build_indexes_sql(self.table_name, self.fields, self.strategy)
         for index_sql in index_sqls:  # Create each index.
-            self.cursor.execute(index_sql)  # Execute the index DDL.
+            cursor.execute(index_sql)  # Execute the index DDL.
         if index_sqls:  # Only log when indexes exist.
             logger.debug(  # Trace index creation.
                 "Created %s performance indexes for table %s with %s strategy",
@@ -287,7 +297,7 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
 
     def _determine_insert_mode(self) -> str:  # Choose upsert vs insert.
         """Determine insert strategy based on schema type."""
-        assert self.cursor is not None, "Database cursor not initialized"  # nosec B101
+        cursor = self._require_cursor()  # WHY: fail visibly under python -O before a DELETE can run.
         if self.strategy["type"] in ["natural_pk", "composite_pk"]:  # Keyed tables upsert.
             logger.debug(  # Trace upsert mode.
                 "Using REPLACE mode for %s strategy - enables efficient upsert operations with natural keys",
@@ -295,7 +305,7 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
             )
             return "INSERT OR REPLACE"  # Upsert on conflict.
         safe_table = self._get_safe_table_name()  # Sanitize for the clear.
-        self.cursor.execute(f"DELETE FROM {safe_table}")  # nosec B608
+        cursor.execute(f"DELETE FROM {safe_table}")  # nosec B608
         logger.debug("Cleared existing data and using INSERT mode for auto-increment fallback strategy")  # fallback.
         return "INSERT"  # Plain insert (cleared table).
 
@@ -330,11 +340,11 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
         current_time: str,
     ) -> bool:
         """Insert a single row into the database."""
-        assert self.cursor is not None, "Database cursor not initialized"  # nosec B101
+        cursor = self._require_cursor()  # WHY: fail visibly under python -O before a row insert can run.
         try:
             values = self._prepare_row_values(row, current_time)  # Build the value tuple.
             insert_sql = self._build_insert_sql(insert_mode, safe_fields, len(values))  # Build the INSERT SQL.
-            self.cursor.execute(insert_sql, values)  # Execute the insert.
+            cursor.execute(insert_sql, values)  # Execute the insert.
             self._log_sample_insert(idx, insert_mode)  # Trace first few rows for diagnostics
             return True  # Row inserted.
         except Exception as error:  # Per-row failure.
@@ -386,8 +396,8 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
 
     def _commit_and_verify(self, successful_inserts: int) -> None:  # Commit then verify row count.
         """Commit transaction and verify row count."""
-        assert self.connection is not None, "Database connection not initialized"  # nosec B101
-        assert self.cursor is not None, "Database cursor not initialized"  # nosec B101
+        connection = self._require_connection()  # WHY: fail visibly under python -O before commit.
+        cursor = self._require_cursor()  # WHY: fail visibly under python -O before verification.
         logger.info(  # Log intent before the commit, not success before verification.
             "Committing %s/%s rows to table %s in database %s using %s strategy at %s",
             successful_inserts,
@@ -397,11 +407,11 @@ class SQLiteDatabaseWriter:  # Upsert records into SQLite.
             self.strategy["type"],
             self.timestamp,
         )
-        self.connection.commit()  # Persist the transaction.
+        connection.commit()  # Persist the transaction.
         safe_table_name = self._get_safe_table_name()  # Sanitize for the count query.
         logger.info("Verifying row count for table %s at %s", self.table_name, self.timestamp)  # Log before verify.
-        self.cursor.execute(f"SELECT COUNT(*) FROM {safe_table_name}")  # nosec B608
-        row_count = self.cursor.fetchone()[0]  # Read the verified count.
+        cursor.execute(f"SELECT COUNT(*) FROM {safe_table_name}")  # nosec B608
+        row_count = cursor.fetchone()[0]  # Read the verified count.
         logger.debug(  # Log the success claim only after the row-count proof exists.
             "Successfully wrote %s/%s rows to table %s in database %s using %s strategy at %s",
             successful_inserts,
