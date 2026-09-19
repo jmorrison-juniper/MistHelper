@@ -20,6 +20,10 @@ ARANGO_DEFAULT_PORT = 9529  # Port applied when ARANGO_HOST carries no explicit 
 REDIS_DEFAULT_HOST = "misthelper-redis"  # Compose service name used when REDIS_HOST is unset.
 REDIS_DEFAULT_PORT = 9379  # Port applied when REDIS_PORT is unset or unreadable.
 PROBE_TIMEOUT_SECONDS = 0.5  # Short TCP budget so a dead host never stalls an export.
+ARANGO_USERNAME_FIELD = "ARANGO_USERNAME"  # Name the ArangoDB account environment variable.
+ARANGO_PASSWORD_FIELD = "ARANGO_ROOT_PASSWORD"  # nosec B105  # Name the ArangoDB password variable.
+REDIS_PASSWORD_FIELD = "REDIS_PASSWORD"  # nosec B105  # Name the Redis password variable.
+WEBHOOK_SECRET_FIELD = "WEBHOOK_SECRET"  # nosec B105  # Name the Mist webhook secret variable.
 
 
 def configure_db_logging() -> None:
@@ -64,24 +68,30 @@ class DatabaseConfig:
         Auto-detects standalone mode when database hosts are unreachable,
         preventing noisy retry loops when running outside a container.
         """
-        explicit_standalone = os.environ.get("MISTHELPER_STANDALONE", "").lower() == "true"
-        arango_host = os.environ.get("ARANGO_HOST", ARANGO_DEFAULT_URL)
-        redis_host = os.environ.get("REDIS_HOST", REDIS_DEFAULT_HOST)
-        redis_port = _env_int("REDIS_PORT", REDIS_DEFAULT_PORT)
-
-        standalone = explicit_standalone or _hosts_unreachable(arango_host, redis_host)
+        explicit_standalone = os.environ.get("MISTHELPER_STANDALONE", "").lower() == "true"  # Read CSV-only override.
+        arango_host = os.environ.get("ARANGO_HOST", ARANGO_DEFAULT_URL)  # Use the compose host unless overridden.
+        redis_host = os.environ.get("REDIS_HOST", REDIS_DEFAULT_HOST)  # Use the compose Redis host unless overridden.
+        redis_port = _env_int("REDIS_PORT", REDIS_DEFAULT_PORT)  # Parse the Redis port with the existing guard.
+        standalone = explicit_standalone or _hosts_unreachable(
+            arango_host, redis_host
+        )  # Skip secrets when no DB exists.
+        webhook_enabled = os.environ.get("WEBHOOK_ENABLED", "true").lower() == "true"  # Preserve the existing default.
+        arango_username = _optional_env(ARANGO_USERNAME_FIELD) if standalone else _required_env(ARANGO_USERNAME_FIELD)
+        arango_password = _optional_env(ARANGO_PASSWORD_FIELD) if standalone else _required_env(ARANGO_PASSWORD_FIELD)
+        redis_password = _optional_env(REDIS_PASSWORD_FIELD) if standalone else _required_env(REDIS_PASSWORD_FIELD)
+        webhook_secret = _optional_env(WEBHOOK_SECRET_FIELD)  # The webhook route rejects an empty secret before use.
 
         return cls(
             arango_host=arango_host,
             arango_database=os.environ.get("ARANGO_DATABASE", "misthelper"),
-            arango_username=os.environ.get("ARANGO_USERNAME", "root"),
-            arango_password=os.environ.get("ARANGO_ROOT_PASSWORD", "misthelper"),
+            arango_username=arango_username,
+            arango_password=arango_password,
             redis_host=redis_host,
             redis_port=redis_port,
-            redis_password=os.environ.get("REDIS_PASSWORD", "misthelper"),
+            redis_password=redis_password,
             standalone_mode=standalone,
-            webhook_enabled=os.environ.get("WEBHOOK_ENABLED", "true").lower() == "true",
-            webhook_secret=os.environ.get("WEBHOOK_SECRET", ""),
+            webhook_enabled=webhook_enabled,
+            webhook_secret=webhook_secret,
         )
 
 
@@ -104,6 +114,23 @@ def _hosts_unreachable(arango_url: str, redis_host: str) -> bool:
         )
         return True
     return False
+
+
+def _required_env(name: str) -> str:
+    """Return a required environment value, or raise a field-named error."""
+    raw = os.environ.get(name)  # Read without a default so absence stays visible.
+    value = str(raw or "").strip()  # Treat whitespace as missing for credential fields.
+    if value:  # A non-empty value can authenticate the configured backend.
+        return value  # Return only the value, never log it.
+    log = structlog.get_logger(__name__)  # Build a package logger for the validation event.
+    log.error("missing_required_database_config", field=name)  # Log only the field name.
+    raise ValueError(f"Missing required environment variable: {name}")  # Stop before a default credential is used.
+
+
+def _optional_env(name: str) -> str:
+    """Return an optional environment value with whitespace trimmed."""
+    raw = os.environ.get(name)  # Read without a default so no placeholder credential appears.
+    return str(raw or "").strip()  # Empty means not configured, and no authenticated call uses it.
 
 
 def _can_resolve(hostname: str) -> bool:

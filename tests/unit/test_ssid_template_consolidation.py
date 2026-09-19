@@ -504,8 +504,8 @@ class TestWlanHelpers:
     def test_find_target_wlan_match(self) -> None:
         wlans = [{"ssid": "Corp-WiFi"}, {"ssid": "Guest"}]
         result = _find_target_wlan(wlans, "corp-wifi")
-        assert result is not None
         assert result["ssid"] == "Corp-WiFi"
+        assert list(result) == ["ssid"]
 
     def test_find_target_wlan_no_match(self) -> None:
         wlans = [{"ssid": "Guest"}]
@@ -1057,8 +1057,8 @@ class TestTemplateConfigBuilders:
             ]
         }
         result = _find_representative(cache, "East")
-        assert result is not None
         assert result["site_name"] == "A"
+        assert result["target_group"] == "East"
 
     def test_find_representative_fallback_to_pilot(self) -> None:
         cache = {
@@ -1072,8 +1072,8 @@ class TestTemplateConfigBuilders:
             ]
         }
         result = _find_representative(cache, "NonExistent")
-        assert result is not None
         assert result["site_name"] == "P1"
+        assert result["target_group"] == "pilot"
 
     def test_find_representative_none(self) -> None:
         cache = {"matrix": []}
@@ -1234,8 +1234,8 @@ class TestTemplateCreation:
                 safe_input_fn=MagicMock(),
             )
             result = _append_ssid_to_template(params, existing)
-        assert result is not None
         assert result["action"] == "updated_append"
+        assert result["template_id"] == existing["id"]
 
     def test_create_new_template(self) -> None:
         session = MagicMock()
@@ -1259,8 +1259,8 @@ class TestTemplateCreation:
                 safe_input_fn=MagicMock(),
             )
             result = _create_new_template(params)
-        assert result is not None
         assert result["action"] == "created"
+        assert result["template_id"] == mock_resp.data.get("id")
 
 
 # ===================================================================
@@ -2257,8 +2257,8 @@ class TestLoadCache:
         cache_file.write_text(json.dumps(cache_data))
         mgr.CACHE_FILE = str(cache_file)
         result = mgr._load_cache()
-        assert result is not None
         assert result["data"] == {"sites": []}
+        assert "collected_at" in result
 
     def test_returns_none_on_invalid_json(
         self,
@@ -2313,8 +2313,8 @@ class TestTemplateCreationExtra:
                 safe_input_fn=MagicMock(),
             )
             result = _append_ssid_to_template(params, existing)
-        assert result is not None
         assert result["action"] == "updated_append"
+        assert result["template_id"] == existing["id"]
 
     def test_create_new_template(self) -> None:
         session = MagicMock()
@@ -2338,8 +2338,8 @@ class TestTemplateCreationExtra:
                 safe_input_fn=MagicMock(),
             )
             result = _create_new_template(params)
-        assert result is not None
         assert result["action"] == "created"
+        assert repr(result["template_id"]).startswith("<MagicMock")
 
 
 # ===================================================================
@@ -2447,7 +2447,7 @@ class TestCachePersistence:
         with open(cache_file, "w", encoding="utf-8") as fh:
             json.dump(data, fh)
         result = manager._load_cache()
-        assert result is not None
+        assert result == data
 
     def test_save_phase_results(self, tmp_path: object) -> None:
         manager = _make_manager()
@@ -2797,8 +2797,8 @@ class TestFindRepresentative:
             ],
         }
         result = _find_representative(cache, "East")
-        assert result is not None
         assert result["site_id"] == "s1"
+        assert result["target_group"] == "East"
 
     def test_falls_back_to_pilot(self) -> None:
         cache: dict[str, object] = {
@@ -2807,8 +2807,8 @@ class TestFindRepresentative:
             ],
         }
         result = _find_representative(cache, "West")
-        assert result is not None
         assert result["site_id"] == "p1"
+        assert result["target_group"] == "pilot"
 
     def test_returns_none_when_empty(self) -> None:
         cache: dict[str, object] = {"matrix": []}
@@ -3008,7 +3008,7 @@ class TestInstanceMethods:
             ),
         ):
             result = mgr._load_cache()
-        assert result is not None
+        assert result["data"] == {"sites": []}
 
     def test_load_cache_corrupt(self) -> None:
         mgr = self._make_manager()
