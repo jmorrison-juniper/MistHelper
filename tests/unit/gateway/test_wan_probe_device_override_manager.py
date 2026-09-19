@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging  # WHY: caplog level assertions need logging constants.
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -77,7 +78,7 @@ def test_confirm_operation_requires_apply_keyword() -> None:
     assert manager._confirm_operation(3) is True
 
 
-def test_generate_report_calls_exporter_with_expected_output_filename() -> None:
+def test_generate_report_calls_exporter_with_expected_output_filename(caplog) -> None:
     """Report generation writes audit output through injected exporter dependency."""
     _configure_dependencies()
     manager = WANProbeDeviceOverrideManager()
@@ -88,22 +89,27 @@ def test_generate_report_calls_exporter_with_expected_output_filename() -> None:
     exporter = MagicMock()
     module.DataExporter.write_with_format_selection = exporter
 
-    manager._generate_report(
-        [
-            {
-                "device_name": "gw-1",
-                "device_id": "dev-1",
-                "site_name": "site-a",
-                "site_id": "site-1",
-                "template_name": "Template-A",
-                "ports_updated": ["ge-0/0/0"],
-                "status": "DRY-RUN",
-                "error": "",
-            }
-        ],
-        dry_run=True,
-    )
+    with caplog.at_level(logging.INFO):  # WHY: capture the completion summary and its level.
+        manager._generate_report(
+            [
+                {
+                    "device_name": "gw-1",
+                    "device_id": "dev-1",
+                    "site_name": "site-a",
+                    "site_id": "site-1",
+                    "template_name": "Template-A",
+                    "ports_updated": ["ge-0/0/0"],
+                    "status": "DRY-RUN",
+                    "error": "",
+                }
+            ],
+            dry_run=True,
+        )
 
     exporter.assert_called_once()
     _, output_filename = exporter.call_args.args
     assert output_filename == "GatewayDevice_WAN_Probe_Override_Audit.csv"
+    completion_records = [
+        record for record in caplog.records if "Menu #167 DESTRUCTIVE operation complete" in record.getMessage()
+    ]  # WHY: isolate the repaired success summary.
+    assert [record.levelno for record in completion_records] == [logging.INFO]  # WHY: success is not a warning.
