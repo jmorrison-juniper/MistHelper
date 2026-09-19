@@ -1,11 +1,11 @@
-"""Unit tests for the skill Markdown control-byte guard."""
+"""Unit tests for the Markdown control-byte guard."""
 
 from __future__ import annotations
 
 import shutil
 from pathlib import Path
 
-from tools.skill_markdown_control_bytes import SkillMarkdownControlByteScanner
+from tools.markdown_control_bytes import MarkdownControlByteScanner
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]  # Anchor scans at the checkout, not the pytest cwd.
 
@@ -23,17 +23,13 @@ class ControlByteGuardWorkspace:
         return path  # Return the directory to the caller.
 
 
-class TestSkillMarkdownControlBytes:
+class TestMarkdownControlBytes:
     """Verify that the guard measures files and reports bad control bytes."""
 
-    def test_shipped_skill_markdown_has_no_disallowed_control_bytes(self) -> None:
-        roots = (
-            REPOSITORY_ROOT / "skills",
-            REPOSITORY_ROOT / ".github" / "skills",
-        )  # Scan both shipped skill locations.
-        report = SkillMarkdownControlByteScanner().scan_roots(roots)  # Measure every shipped Markdown file.
+    def test_tracked_markdown_has_no_disallowed_control_bytes(self) -> None:
+        report = MarkdownControlByteScanner().scan_repository(REPOSITORY_ROOT)  # Measure tracked Markdown files.
         print(report.summary())  # State the file count so a zero-file scan is visible in guard output.
-        assert report.checked_count > 0, report.summary()  # Fail if both roots are absent or empty.
+        assert report.checked_count > 0, report.summary()  # Fail if the repository Markdown list is empty.
         assert not report.findings, report.summary()  # Fail with exact byte offsets for each affected file.
 
     def test_guard_reports_vertical_tab_in_project_local_file(self) -> None:
@@ -41,7 +37,7 @@ class TestSkillMarkdownControlBytes:
         try:  # Clean project-local proof files even when an assertion fails.
             bad_file = workspace / "bad.md"  # Use a Markdown file so the scanner must inspect it.
             bad_file.write_bytes(b"set routing-options\x0b bad\n")  # Write a vertical tab as failure proof.
-            report = SkillMarkdownControlByteScanner().scan_roots((workspace,))  # Scan the controlled bad file.
+            report = MarkdownControlByteScanner().scan_roots((workspace,))  # Scan the controlled bad file.
             print(report.summary())  # State the measured count and the bad byte location.
             assert report.checked_count == 1, report.summary()  # Prove the guard measured the bad file.
             assert len(report.findings) == 1, report.summary()  # Prove the guard reports the file.

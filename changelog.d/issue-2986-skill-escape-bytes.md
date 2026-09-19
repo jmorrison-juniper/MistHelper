@@ -1,3 +1,3 @@
 ### Fixed
 
-- Added a guard that rejects hidden control bytes in shipped skill Markdown for issue #2986.
+- Added a guard that rejects hidden control bytes in tracked Markdown files for issue #2986.
