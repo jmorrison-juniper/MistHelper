@@ -560,25 +560,25 @@ class TestTimeParsingRelative:
     def test_minutes(self):
         u = _make_upgrader()
         td = u._parse_relative_offset("15 minutes")
-        assert td is not None
+        assert str(td) == "0:15:00"
         assert td.total_seconds() == 900
 
     def test_hours(self):
         u = _make_upgrader()
         td = u._parse_relative_offset("+3h")
-        assert td is not None
+        assert str(td) == "3:00:00"
         assert td.total_seconds() == 10800
 
     def test_days(self):
         u = _make_upgrader()
         td = u._parse_relative_offset("2 days")
-        assert td is not None
+        assert td.days == 2
         assert td.total_seconds() == 172800
 
     def test_in_prefix(self):
         u = _make_upgrader()
         td = u._parse_relative_offset("in 30 min")
-        assert td is not None
+        assert str(td) == "0:30:00"
         assert td.total_seconds() == 1800
 
     def test_invalid(self):
@@ -603,21 +603,21 @@ class TestTimeParsingAbsolute:
         u = _make_upgrader()
         u.upgrade_config = {"use_site_local_time": False}
         result = u._parse_time_input("+3h")
-        assert result is not None
         assert result.endswith("Z")
+        assert "T" in result
 
     def test_absolute_hhmm(self):
         u = _make_upgrader()
         u.upgrade_config = {"use_site_local_time": False}
         result = u._parse_time_input("21:30")
-        assert result is not None
+        assert result.endswith(":30:00Z")
 
     def test_utc_suffix(self):
         u = _make_upgrader()
         u.upgrade_config = {"use_site_local_time": False}
         result = u._parse_time_input("19:45 UTC")
-        assert result is not None
         assert result.endswith("Z")
+        assert "T" in result
 
     def test_invalid_time(self):
         u = _make_upgrader()
@@ -628,8 +628,8 @@ class TestTimeParsingAbsolute:
         u = _make_upgrader()
         u.upgrade_config = {"use_site_local_time": True}
         result = u._parse_time_input("21:00")
-        assert result is not None
-        assert not result.endswith("Z")
+        assert result.endswith("T21:00:00")
+        assert "Z" not in result
 
 
 class TestP2PConfig:

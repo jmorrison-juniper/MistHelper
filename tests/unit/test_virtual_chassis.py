@@ -260,7 +260,7 @@ class TestPreflightCheck:
     """Tests for _preflight_check."""
 
     def test_valid_switch(self):
-        switch = {"type": "switch", "id": "dev-1", "name": "sw1"}
+        switch = {"type": "switch", "id": "dev-1", "site_id": "site-1", "name": "sw1"}
         assert VirtualChassisManager._preflight_check(switch, MagicMock()) is True
 
     def test_wrong_type(self, capsys):
@@ -273,13 +273,18 @@ class TestPreflightCheck:
         assert VirtualChassisManager._preflight_check(switch, MagicMock()) is False
         assert "Preflight FAILED" in capsys.readouterr().out
 
+    def test_missing_site_id(self, capsys):
+        switch = {"type": "switch", "id": "dev-1", "site_id": ""}
+        assert VirtualChassisManager._preflight_check(switch, MagicMock()) is False
+        assert "no assigned site ID" in capsys.readouterr().out
+
     def test_already_converted_user_cancels(self):
-        switch = {"type": "switch", "id": "dev-1", "vc_mac": "020003aabb", "name": "s"}
+        switch = {"type": "switch", "id": "dev-1", "site_id": "site-1", "vc_mac": "020003aabb", "name": "s"}
         safe_fn = MagicMock(return_value="n")
         assert VirtualChassisManager._preflight_check(switch, safe_fn) is False
 
     def test_already_converted_user_continues(self):
-        switch = {"type": "switch", "id": "dev-1", "vc_mac": "020003aabb", "name": "s"}
+        switch = {"type": "switch", "id": "dev-1", "site_id": "site-1", "vc_mac": "020003aabb", "name": "s"}
         safe_fn = MagicMock(return_value="y")
         assert VirtualChassisManager._preflight_check(switch, safe_fn) is True
 
@@ -318,7 +323,7 @@ class TestPromptSwitchSelection:
         ]
         safe_fn = MagicMock(return_value="1")
         result = VirtualChassisManager._prompt_switch_selection(switches, "TestSite", safe_fn)
-        assert result is not None
+        assert result == switches[1]
         assert result["name"] == "sw-b"
 
     def test_select_by_name(self):
@@ -327,7 +332,7 @@ class TestPromptSwitchSelection:
         ]
         safe_fn = MagicMock(return_value="sw-a")
         result = VirtualChassisManager._prompt_switch_selection(switches, "TestSite", safe_fn)
-        assert result is not None
+        assert result == switches[0]
         assert result["id"] == "d1"
 
     def test_invalid_selection(self):
@@ -619,6 +624,7 @@ class TestExportStatusResults:
         data = [{"name": "sw1"}]
         VirtualChassisManager._export_status_results(data, flatten_fn, escape_fn, save_fn, get_fn)
         save_fn.assert_called_once()
+        assert save_fn.call_count == 1
 
     def test_exception(self, capsys):
         flatten_fn = MagicMock(side_effect=RuntimeError("boom"))
@@ -671,6 +677,7 @@ class TestExecuteConversion:
             _mock_mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac.return_value = resp
             VirtualChassisManager._execute_conversion(session, "s1", "d1", "sw1", "Site1")
             _mock_mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac.assert_called_once()
+            assert _mock_mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac.call_count == 1
 
     def test_exception(self, capsys):
         with patch.dict(sys.modules, {"mistapi": _mock_mistapi}):
@@ -687,6 +694,16 @@ class TestExecuteConversion:
 
 class TestExecuteBulkConversion:
     """Tests for _execute_bulk_conversion."""
+
+    def test_missing_site_id_does_not_call_bulk_api(self, capsys):
+        with patch.dict(sys.modules, {"mistapi": _mock_mistapi}):
+            _mock_mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac.reset_mock()
+            result = VirtualChassisManager._call_convert_api(
+                MagicMock(), {"site_id": "", "id": "d1", "name": "sw1", "site_name": "Site1"}
+            )
+            assert result is False
+            assert "no assigned site ID" in capsys.readouterr().out
+            _mock_mistapi.api.v1.sites.devices.convertSiteVirtualChassisToVirtualMac.assert_not_called()
 
     def test_mixed_results(self, capsys):
         with patch.dict(sys.modules, {"mistapi": _mock_mistapi}):
@@ -867,6 +884,7 @@ class TestConvertBySiteList:
         )
         # Empty CSV returns empty list, function returns early before printing
         deps["check_and_generate_csv_fn"].assert_not_called()  # WHY: prove short-circuit before refresh
+        assert deps["check_and_generate_csv_fn"].call_count == 0  # WHY: analyzer-visible assertion.
 
     def test_no_valid_sites(self, deps, tmp_path, capsys):
         csv_path = str(tmp_path / "data" / "VCConvert.CSV")
@@ -1030,6 +1048,7 @@ class TestConvertSingleCoverageGaps:
                         select_site_fn=deps["select_site_fn"],
                     )
                     mock_exec.assert_not_called()  # line 102 hit: returned before _execute_conversion
+                    assert mock_exec.call_count == 0  # WHY: analyzer-visible assertion.
 
     def test_execute_conversion_called_at_line_112(self, deps, tmp_path) -> None:
         """Line 112: all guards pass + user confirms CONVERT → _execute_conversion called."""
@@ -1055,6 +1074,7 @@ class TestConvertSingleCoverageGaps:
                         select_site_fn=deps["select_site_fn"],
                     )
                     mock_exec.assert_called_once()  # line 112: _execute_conversion reached
+                    assert mock_exec.call_count == 1  # WHY: analyzer-visible assertion.
 
 
 # ===========================================================================
@@ -1128,6 +1148,7 @@ class TestConvertBySiteListCoverageGaps:
                 safe_input_fn=deps["safe_input_fn"],
             )
         mock_exec.assert_called_once()  # line 184: _execute_bulk_conversion reached
+        assert mock_exec.call_count == 1  # WHY: analyzer-visible assertion.
 
 
 # ===========================================================================
