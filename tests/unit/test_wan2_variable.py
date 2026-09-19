@@ -560,15 +560,19 @@ class TestRunDeviceMigrations:
 class TestPrintHeader:
     """Test header output."""
 
-    def test_dry_run_header(self, capsys: object) -> None:
+    def test_dry_run_header(self, caplog: object) -> None:
         migrator = _make_migrator()
         migrator._dry_run = True
-        migrator._print_header()
+        with caplog.at_level("INFO", logger="src.gateway._wan2_variable_io"):
+            migrator._print_header()
+        assert "DRY-RUN MODE" in caplog.text
 
-    def test_live_header(self, capsys: object) -> None:
+    def test_live_header(self, caplog: object) -> None:
         migrator = _make_migrator()
         migrator._dry_run = False
-        migrator._print_header()
+        with caplog.at_level("WARNING", logger="src.gateway._wan2_variable_io"):
+            migrator._print_header()
+        assert "modifies gateway templates" in caplog.text
 
 
 # --- Execute workflow tests ---
@@ -582,12 +586,14 @@ class TestExecute:
         migrator._load_csv_data = MagicMock(return_value=None)  # type: ignore[method-assign]
         migrator.execute(fast=False, dry_run=True)
         migrator._load_csv_data.assert_called_once()
+        assert migrator._load_csv_data.call_count == 1
 
     def test_returns_early_when_no_templates_selected(self) -> None:
         migrator = _make_migrator()
         migrator._load_csv_data = MagicMock(return_value=([], [], {}))  # type: ignore[method-assign]
         migrator._display_and_select_templates = MagicMock(return_value=None)  # type: ignore[method-assign]
         migrator.execute(fast=False, dry_run=False)
+        assert migrator._display_and_select_templates.call_count == 1
 
     def test_returns_early_when_direction_cancelled(self) -> None:
         migrator = _make_migrator()
@@ -595,6 +601,7 @@ class TestExecute:
         migrator._display_and_select_templates = MagicMock(return_value=[{"id": "t1"}])  # type: ignore[method-assign]
         migrator._select_operation_direction = MagicMock(return_value=None)  # type: ignore[method-assign]
         migrator.execute(fast=False, dry_run=False)
+        assert migrator._select_operation_direction.call_count == 1
 
     def test_returns_early_when_no_changes_found(self) -> None:
         migrator = _make_migrator()
@@ -605,6 +612,7 @@ class TestExecute:
         )
         migrator._analyze_templates_parallel = MagicMock(return_value=[])  # type: ignore[method-assign]
         migrator.execute(fast=False, dry_run=False)
+        assert migrator._analyze_templates_parallel.call_count == 1
 
     def test_returns_early_when_confirm_rejected(self) -> None:
         migrator = _make_migrator()
@@ -616,6 +624,7 @@ class TestExecute:
         migrator._analyze_templates_parallel = MagicMock(return_value=[{"id": "t1"}])  # type: ignore[method-assign]
         migrator._preview_and_confirm = MagicMock(return_value=False)  # type: ignore[method-assign]
         migrator.execute(fast=False, dry_run=True)
+        assert migrator._preview_and_confirm.call_count == 1
 
     def test_full_workflow_completes(self) -> None:
         migrator = _make_migrator()
@@ -637,6 +646,7 @@ class TestExecute:
         migrator._generate_reports = MagicMock()  # type: ignore[method-assign]
         migrator.execute(fast=False, dry_run=False)
         migrator._generate_reports.assert_called_once()
+        assert migrator._generate_reports.call_count == 1
 
 
 # --- Load CSV data tests ---
@@ -685,7 +695,7 @@ class TestLoadCsvData:
                 site_exclude_prefix="",
             )
             result = migrator._load_csv_data()
-            assert result is not None
+            assert isinstance(result, tuple)
             templates, sites, counts = result
             assert len(templates) == 1
             assert len(sites) == 1
@@ -706,7 +716,7 @@ class TestDisplayAndSelectTemplates:
         ]
         site_counts = {"t1": 5, "t2": 3}
         result = migrator._display_and_select_templates(template_rows, site_counts)
-        assert result is not None
+        assert isinstance(result, list)
         assert len(result) == 2
         assert result[0]["name"] == "Alpha Template"
 
@@ -735,7 +745,7 @@ class TestFetchTemplateConfig:
         _our_mock.api.v1.orgs.gatewaytemplates.getOrgGatewayTemplate.return_value = mock_resp
 
         result = migrator._fetch_template_config({"id": "t1", "name": "T1", "site_count": 3})
-        assert result is not None
+        assert isinstance(result, dict)
         assert result["id"] == "t1"
         assert len(result["ports_to_replace"]) == 1
 
@@ -931,7 +941,7 @@ class TestCheckDeviceOverride:
 
         device = {"id": "d1", "name": "GW-1"}
         result = migrator._check_device_override(device, "s1", {"s1": "t1"}, mock_mod)
-        assert result is not None
+        assert isinstance(result, dict)
         assert result["device_id"] == "d1"
 
     def test_returns_none_when_no_override(self) -> None:
@@ -1165,17 +1175,19 @@ class TestGenerateReports:
 class TestPrintTemplateSummary:
     """Test template summary output."""
 
-    def test_dry_run_summary(self) -> None:
+    def test_dry_run_summary(self, capsys: object) -> None:
         migrator = _make_migrator()
         migrator._dry_run = True
         results = [{"status": "DRY-RUN"}, {"status": "DRY-RUN"}, {"status": "SKIPPED"}]
         migrator._print_template_summary(results)
+        assert "Would Be Updated: 2" in capsys.readouterr().out
 
-    def test_live_summary(self) -> None:
+    def test_live_summary(self, capsys: object) -> None:
         migrator = _make_migrator()
         migrator._dry_run = False
         results = [{"status": "SUCCESS"}, {"status": "FAILED"}]
         migrator._print_template_summary(results)
+        assert "Successfully Updated: 1" in capsys.readouterr().out
 
 
 # --- Device summary tests ---
@@ -1184,22 +1196,25 @@ class TestPrintTemplateSummary:
 class TestPrintDeviceSummary:
     """Test device summary output."""
 
-    def test_no_devices(self) -> None:
+    def test_no_devices(self, capsys: object) -> None:
         migrator = _make_migrator()
         migrator._dry_run = False
         migrator._print_device_summary([], [])
+        assert capsys.readouterr().out == ""
 
-    def test_dry_run_with_devices(self) -> None:
+    def test_dry_run_with_devices(self, capsys: object) -> None:
         migrator = _make_migrator()
         migrator._dry_run = True
         device_results = [{"status": "DRY-RUN"}, {"status": "SKIPPED"}]
         migrator._print_device_summary(device_results, [{"id": "d1"}])
+        assert "Would Preserve Static IPs: 1" in capsys.readouterr().out
 
-    def test_live_with_devices(self) -> None:
+    def test_live_with_devices(self, capsys: object) -> None:
         migrator = _make_migrator()
         migrator._dry_run = False
         device_results = [{"status": "SUCCESS"}, {"status": "FAILED"}]
         migrator._print_device_summary(device_results, [{"id": "d1"}])
+        assert "Static IPs Preserved: 1" in capsys.readouterr().out
 
 
 # --- Report paths tests ---
@@ -1208,11 +1223,13 @@ class TestPrintDeviceSummary:
 class TestPrintReportPaths:
     """Test report path output."""
 
-    def test_with_devices(self) -> None:
+    def test_with_devices(self, capsys: object) -> None:
         _Wan2VariableReporting._print_report_paths("audit.csv", [{"id": "d1"}])
+        assert "Device migration:" in capsys.readouterr().out
 
-    def test_without_devices(self) -> None:
+    def test_without_devices(self, capsys: object) -> None:
         _Wan2VariableReporting._print_report_paths("audit.csv", [])
+        assert "Template audit: audit.csv" in capsys.readouterr().out
 
 
 # --- Final guidance tests ---
@@ -1221,30 +1238,39 @@ class TestPrintReportPaths:
 class TestPrintFinalGuidance:
     """Test final guidance output."""
 
-    def test_dry_run_guidance(self) -> None:
+    def test_dry_run_guidance(self, capsys: object, caplog: object) -> None:
         migrator = _make_migrator()
         migrator._dry_run = True
         migrator._operation_mode = "apply"
         results = [{"status": "DRY-RUN"}]
         device_results = [{"status": "DRY-RUN"}]
         devices = [{"id": "d1"}]
-        migrator._print_final_guidance(results, device_results, devices)
+        with caplog.at_level("WARNING", logger="src.gateway._wan2_variable_reporting"):
+            migrator._print_final_guidance(results, device_results, devices)
+        assert "DRY-RUN: 1 templates" in capsys.readouterr().out
+        assert "DESTRUCTIVE operation complete" in caplog.text
 
-    def test_live_guidance_with_success(self) -> None:
+    def test_live_guidance_with_success(self, capsys: object, caplog: object) -> None:
         migrator = _make_migrator()
         migrator._dry_run = False
         migrator._operation_mode = "apply"
         results = [{"status": "SUCCESS"}, {"status": "FAILED"}]
         device_results = [{"status": "SUCCESS"}, {"status": "FAILED"}]
         devices = [{"id": "d1"}, {"id": "d2"}]
-        migrator._print_final_guidance(results, device_results, devices)
+        with caplog.at_level("WARNING", logger="src.gateway._wan2_variable_reporting"):
+            migrator._print_final_guidance(results, device_results, devices)
+        assert "1 templates now use" in capsys.readouterr().out
+        assert "Device override migration" in caplog.text
 
-    def test_live_guidance_no_devices(self) -> None:
+    def test_live_guidance_no_devices(self, capsys: object, caplog: object) -> None:
         migrator = _make_migrator()
         migrator._dry_run = False
         migrator._operation_mode = "apply"
         results = [{"status": "SUCCESS"}]
-        migrator._print_final_guidance(results, [], [])
+        with caplog.at_level("WARNING", logger="src.gateway._wan2_variable_reporting"):
+            migrator._print_final_guidance(results, [], [])
+        assert "1 templates now use" in capsys.readouterr().out
+        assert "DESTRUCTIVE operation complete" in caplog.text
 
 
 # --- Dry run guidance tests ---
@@ -1253,22 +1279,25 @@ class TestPrintFinalGuidance:
 class TestPrintDryRunGuidance:
     """Test dry-run guidance output."""
 
-    def test_with_devices(self) -> None:
+    def test_with_devices(self, capsys: object) -> None:
         migrator = _make_migrator()
         results = [{"status": "DRY-RUN"}]
         device_results = [{"status": "DRY-RUN"}]
         devices = [{"id": "d1"}]
         migrator._print_dry_run_guidance(results, device_results, devices)
+        assert "1 devices WOULD" in capsys.readouterr().out
 
-    def test_without_devices(self) -> None:
+    def test_without_devices(self, capsys: object) -> None:
         migrator = _make_migrator()
         results = [{"status": "DRY-RUN"}]
         migrator._print_dry_run_guidance(results, [], [])
+        assert "run without --dry-run flag" in capsys.readouterr().out
 
-    def test_no_dry_run_results(self) -> None:
+    def test_no_dry_run_results(self, capsys: object) -> None:
         migrator = _make_migrator()
         results = [{"status": "SKIPPED"}]
         migrator._print_dry_run_guidance(results, [], [])
+        assert capsys.readouterr().out == ""
 
 
 # --- Live guidance tests ---
@@ -1277,16 +1306,19 @@ class TestPrintDryRunGuidance:
 class TestPrintLiveGuidance:
     """Test live-mode guidance output."""
 
-    def test_with_devices(self) -> None:
+    def test_with_devices(self, capsys: object) -> None:
         device_results = [{"status": "SUCCESS"}]
         devices = [{"id": "d1"}]
         _Wan2VariableReporting._print_live_guidance(1, device_results, devices)
+        assert "1 devices had" in capsys.readouterr().out
 
-    def test_without_devices(self) -> None:
+    def test_without_devices(self, capsys: object) -> None:
         _Wan2VariableReporting._print_live_guidance(1, [], [])
+        assert "Sites without the variable" in capsys.readouterr().out
 
-    def test_zero_success(self) -> None:
+    def test_zero_success(self, capsys: object) -> None:
         _Wan2VariableReporting._print_live_guidance(0, [], [])
+        assert capsys.readouterr().out == ""
 
 
 # --- Print device migration header tests ---
@@ -1295,19 +1327,23 @@ class TestPrintLiveGuidance:
 class TestPrintDeviceMigrationHeader:
     """Test device migration header output."""
 
-    def test_apply_mode(self) -> None:
+    def test_apply_mode(self, caplog: object) -> None:
         migrator = _make_migrator()
         migrator._operation_mode = "apply"
         migrator._search_pattern = "ge-0/0/1"
         migrator._replacement_value = "{{wan2_interface}}"
-        migrator._print_device_migration_header()
+        with caplog.at_level("INFO", logger="src.gateway._wan2_variable_device"):
+            migrator._print_device_migration_header()
+        assert "Preserving static IP" in caplog.text
 
-    def test_revert_mode(self) -> None:
+    def test_revert_mode(self, caplog: object) -> None:
         migrator = _make_migrator()
         migrator._operation_mode = "revert"
         migrator._search_pattern = "{{wan2_interface}}"
         migrator._replacement_value = "ge-0/0/1"
-        migrator._print_device_migration_header()
+        with caplog.at_level("INFO", logger="src.gateway._wan2_variable_device"):
+            migrator._print_device_migration_header()
+        assert "REVERT" in caplog.text
 
 
 # --- Complex port pattern tests ---
@@ -1344,17 +1380,20 @@ class TestPromptTemplateSelectionEdge:
 class TestPrintDeviceFailureWarning:
     """Test device failure warning output."""
 
-    def test_no_devices_needing_migration(self) -> None:
+    def test_no_devices_needing_migration(self, capsys: object) -> None:
         migrator = _make_migrator()
         migrator._print_device_failure_warning([], [])
+        assert capsys.readouterr().out == ""
 
-    def test_no_failures(self) -> None:
+    def test_no_failures(self, capsys: object) -> None:
         migrator = _make_migrator()
         migrator._print_device_failure_warning([{"status": "SUCCESS"}], [{"id": "d1"}])
+        assert capsys.readouterr().out == ""
 
-    def test_with_failures(self) -> None:
+    def test_with_failures(self, capsys: object) -> None:
         migrator = _make_migrator()
         migrator._print_device_failure_warning([{"status": "FAILED"}], [{"id": "d1"}])
+        assert "devices failed override migration" in capsys.readouterr().out
 
 
 # --- Log operation summary tests ---
@@ -1363,12 +1402,16 @@ class TestPrintDeviceFailureWarning:
 class TestLogOperationSummary:
     """Test operation summary logging."""
 
-    def test_without_devices(self) -> None:
+    def test_without_devices(self, caplog: object) -> None:
         migrator = _make_migrator()
         migrator._operation_mode = "apply"
-        migrator._log_operation_summary(5, 1, [], [])
+        with caplog.at_level("WARNING", logger="src.gateway._wan2_variable_reporting"):
+            migrator._log_operation_summary(5, 1, [], [])
+        assert "5 templates updated, 1 failed" in caplog.text
 
-    def test_with_devices(self) -> None:
+    def test_with_devices(self, caplog: object) -> None:
         migrator = _make_migrator()
         migrator._operation_mode = "apply"
-        migrator._log_operation_summary(5, 1, [{"status": "SUCCESS"}], [{"id": "d1"}])
+        with caplog.at_level("WARNING", logger="src.gateway._wan2_variable_reporting"):
+            migrator._log_operation_summary(5, 1, [{"status": "SUCCESS"}], [{"id": "d1"}])
+        assert "Device override migration" in caplog.text
