@@ -27,6 +27,9 @@ import mistapi  # WHY: dotted-path Mist API resolution + pagination helper.
 import requests  # WHY: Mist API SDK transport failures surface as requests exceptions.
 from tqdm import tqdm  # WHY: progress bar for long-running site/device fetches.
 
+from src.api.response_integrity import (
+    ResponseIntegrityChecker,
+)  # WHY: a silent parse failure must not read as an empty result (issue #2934).
 from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
@@ -70,6 +73,10 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
                     status_code,
                     org_id,
                 )
+                return []  # WHY: preserve the existing failure contract for this helper.
+
+            if ResponseIntegrityChecker.body_failed_to_parse(response):  # WHY: a broken reply is not an empty list.
+                ResponseIntegrityChecker.report_parse_failure(response, "the organization service list", str(org_id))
                 return []  # WHY: preserve the existing failure contract for this helper.
 
             if hasattr(response, "data") and response.data:  # Only proceed with data.
@@ -122,6 +129,9 @@ class APIFetchUtils:  # Higher-level org/site fetchers.
                     status_code,
                     site_id,
                 )
+                return None  # WHY: preserve the existing failure contract for a skipped site.
+            if ResponseIntegrityChecker.body_failed_to_parse(response):  # WHY: a broken reply is not an empty config.
+                ResponseIntegrityChecker.report_parse_failure(response, "the site setting", str(site_id))
                 return None  # WHY: preserve the existing failure contract for a skipped site.
             raw = response.data  # Fetch site settings only after the status proves the payload is valid.
             config = CredentialRedactor.redact(raw)  # Drop every credential before the record travels.
