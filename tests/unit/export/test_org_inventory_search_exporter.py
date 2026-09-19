@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.export.org_inventory_search_exporter import OrgInventorySearchExporter
+from src.export.org_inventory_search_exporter import OrgInventorySearchExporter as FailureModeOrgInventorySearchExporter
 
 MODULE = "src.export.org_inventory_search_exporter"
 
@@ -85,3 +86,19 @@ def test_inventory_api_error_is_logged(wired: dict[str, Any], caplog: pytest.Log
         OrgInventorySearchExporter.inventory()
 
     assert "Error fetching organization inventory search" in caplog.text
+
+
+@pytest.mark.parametrize("status_code", [404, 503])
+def test_inventory_http_status_error_is_logged(
+    wired: dict[str, Any], caplog: pytest.LogCaptureFixture, status_code: int
+) -> None:
+    """An HTTP 404 or HTTP 503 SDK failure must return to the menu and log."""
+    error = RuntimeError(f"HTTP {status_code}")  # Preserve the cloud status in the SDK error.
+    wired["mistapi"].api.v1.orgs.inventory.searchOrgInventory.side_effect = error  # Reach the failure path.
+
+    with caplog.at_level(logging.ERROR):  # Capture the product error signal.
+        FailureModeOrgInventorySearchExporter.inventory()  # Call the real exporter entry point from src.
+
+    assert f"HTTP {status_code}" in caplog.text  # Prove the operator can see the status.
+    assert "Error fetching organization inventory search" in caplog.text  # Prove the product logged the failure.
+    wired["helper"].DataExporter.write_with_format_selection.assert_not_called()  # Failed calls must not write.
