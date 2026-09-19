@@ -14,6 +14,9 @@ from src.capture.client_pcap_downloader import (
     capture_dir,
     normalise_mac,
 )
+from src.capture.client_pcap_downloader import (
+    ClientPacketCaptureDownloader as FailureModeClientPacketCaptureDownloader,
+)  # WHY: prove new status tests call src.
 
 # ---------- module helpers ----------
 
@@ -160,6 +163,26 @@ def test_download_one_returns_false_on_non_200(tmp_path: Path) -> None:
     assert ok is False
     assert not (tmp_path / "cap.pcap").exists()
     response.__exit__.assert_called_once()  # WHY: a non-200 reply must not leave the socket checked out.
+
+
+def test_fetch_wireless_clients_http_503_logs_and_returns_empty(
+    downloader: ClientPacketCaptureDownloader,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A 503 wireless-client response must return no rows and report the status."""
+    response = MagicMock(spec=object)  # WHY: opaque SDK response double for the product status reader.
+    response.status_code = 503  # WHY: model an unavailable wireless-client list.
+    response.data = [{"mac": "aa:bb:cc:dd:ee:ff"}]  # WHY: prove failed response data is not trusted.
+    caplog.set_level("ERROR", logger=mod.logger.name)  # WHY: capture the operator-visible status log.
+    with patch("src.capture.client_pcap_downloader.mistapi") as fake_mistapi:  # WHY: isolate the SDK.
+        fake_mistapi.api.v1.sites.clients.searchSiteWirelessClients.return_value = response  # WHY: return 503.
+        result = FailureModeClientPacketCaptureDownloader._fetch_wireless_clients(
+            downloader, "site-503"
+        )  # WHY: drive the real src client-list path.
+    assert result == []  # WHY: a 503 response must not return wireless clients.
+    fake_mistapi.get_all.assert_not_called()  # WHY: pagination must not run for failed status.
+    assert "HTTP 503" in caplog.text  # WHY: the operator must see the exact server-error status.
+    assert "wireless client list" in caplog.text  # WHY: the log must name the failed data set.
 
 
 def test_download_one_returns_false_on_exception(tmp_path: Path) -> None:
