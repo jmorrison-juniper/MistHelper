@@ -469,7 +469,7 @@ class WanHubGroupNumberManager:  # WHY: single public surface consumed by Menu 1
             if updated is None:  # WHY: None signals failure - abort remaining VPNs.
                 return  # WHY: preserve partial-success state for triage.
             total_updated += updated  # WHY: accumulate successful mutation count.
-        logger.warning(
+        logger.info(
             "  Updated %d paths for '%s' to pod %d.",
             total_updated,
             profile_name,
