@@ -223,16 +223,17 @@ class DeviceEvents52wExporter:  # WHY: Public streaming exporter bound to a sing
         backoff: float = _DEFAULT_BACKOFF_SECONDS,
     ) -> Any:
         """Fetch a page with retry and exponential backoff."""
-        last_error: Exception | None = None  # WHY: Preserve final exception for re-raise
+        first_error: Exception | None = None  # WHY: preserve the first cause across retry failures
         for attempt in range(retries):  # WHY: Bounded retry loop with exponential backoff
             try:
                 return self._fetch_page(token, duration, limit)  # WHY: Happy-path returns immediately
             except Exception as error:  # WHY: Preserve blanket-except for compatibility
-                last_error = error  # WHY: Track for terminal re-raise
+                if first_error is None:  # WHY: keep the original failure cause.
+                    first_error = error  # WHY: final attempts can be follow-on symptoms.
                 self.logger.warning(_LOG_ATTEMPT_FAIL, attempt + 1, retries, error)  # WHY: Trace attempt
                 self._sleep_before_retry(attempt, retries, backoff)  # WHY: Backoff isolated in helper
-        if last_error is not None:  # WHY: Re-raise last observed error to caller
-            raise last_error  # WHY: Propagate original exception with its stack context
+        if first_error is not None:  # WHY: Re-raise the original cause to caller
+            raise first_error  # WHY: Preserve the first failure evidence across retries
         raise RuntimeError("All retries failed with no exception captured")  # WHY: Defensive fallback
 
     def _sleep_before_retry(self, attempt: int, retries: int, backoff: float) -> None:  # WHY: Backoff helper
