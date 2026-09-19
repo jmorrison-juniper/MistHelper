@@ -24,6 +24,7 @@ import pytest  # WHY: monkeypatch + caplog fixtures.
 
 from src.device import device_utils as device_utils_mod  # WHY: patch the product module SDK and logger.
 from src.device.device_utils import DeviceUtils  # WHY: SUT direct import.
+from src.device.device_utils import DeviceUtils as FailureModeDeviceUtils  # WHY: prove new status tests call src.
 
 
 def _install_fake_mist_helper(monkeypatch: pytest.MonkeyPatch) -> Any:
@@ -107,6 +108,23 @@ class TestGetAllApMacsFromSite:
         assert result == []  # WHY: a 404 response must not return AP MACs.
         fake_mistapi.api.v1.sites.devices.listSiteDevices.assert_called_once()  # WHY: prove the SDK path ran.
         assert "HTTP 404" in caplog.text  # WHY: the operator must see the exact client-error status.
+        assert "Found 1 AP MACs" not in caplog.text  # WHY: the product must not log a false success count.
+
+    def test_http_503_returns_empty_and_logs_status(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A 503 AP list must return no rows and report the exact status."""
+        _install_fake_mist_helper(monkeypatch)  # WHY: lazy MistHelper import must resolve without side effects.
+        response = MagicMock(spec=object)  # WHY: opaque SDK response double for the product status reader.
+        response.status_code = 503  # WHY: model a site whose AP list is unavailable by server error.
+        response.data = [{"mac": "aa"}]  # WHY: prove the product ignores data from a failed status.
+        caplog.set_level(logging.ERROR, logger=device_utils_mod.logger.name)  # WHY: capture the status log.
+        with patch("src.device.device_utils.mistapi") as fake_mistapi:  # WHY: isolate the SDK call.
+            fake_mistapi.api.v1.sites.devices.listSiteDevices.return_value = response  # WHY: return the 503 reply.
+            result = FailureModeDeviceUtils.get_all_ap_macs_from_site("site-503")  # WHY: drive the src path.
+        assert result == []  # WHY: a 503 response must not return AP MACs.
+        fake_mistapi.api.v1.sites.devices.listSiteDevices.assert_called_once()  # WHY: prove the SDK path ran.
+        assert "HTTP 503" in caplog.text  # WHY: the operator must see the exact server-error status.
         assert "Found 1 AP MACs" not in caplog.text  # WHY: the product must not log a false success count.
 
 
