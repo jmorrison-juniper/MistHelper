@@ -1498,3 +1498,19 @@ class TestRecordHelpers:
         chk._record_stored_upgrade("u12345678", "s1", "Site 1", {"status": "up"})
         assert chk.active_upgrades[0]["source"] == "stored_tracking"
         assert "Site 1" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("status_code", [404, 503], ids=["not-found", "service-unavailable"])
+def test_ssr_upgrade_payload_http_errors_return_none(
+    monkeypatch: pytest.MonkeyPatch,
+    status_code: int,
+) -> None:
+    """The status checker must reject failed SSR upgrade list responses."""
+    chk = _make_checker(monkeypatch)  # WHY: build the real checker with isolated MistHelper state.
+    monkeypatch.setattr(  # WHY: replace only the Mist SDK call that returns the HTTP response.
+        fm_mod.mistapi.api.v1.orgs.ssr,
+        "listOrgSsrUpgrades",
+        lambda _session, _org: _FakeResponse(status_code=status_code, data=[]),
+    )
+    result = chk._fetch_ssr_upgrades_payload()  # WHY: drive the real response-status branch.
+    assert result is None  # WHY: failed HTTP status codes cannot prove that no upgrades exist.
