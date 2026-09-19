@@ -215,20 +215,11 @@ def _count_zcc_host_entries(doc: dict[str, Any]) -> int:  # WHY: Keep behavior.
     Returns:
         Non-negative int count of every ``roles[*].fqdns`` entry summed.
     """
-    total = 0  # WHY: Keep behavior.
-    roles = doc.get("roles")  # WHY: Keep behavior.
-    # Same list-vs-dict tolerance as ``_promote_zcc_document`` so the load-size
-    # counter never under-reports just because the outer shape is a list.
-    role_bodies: list[Any] = []  # WHY: Keep behavior.
-    if isinstance(roles, list):  # WHY: Keep behavior.
-        role_bodies = list(roles)  # WHY: Keep behavior.
-    elif isinstance(roles, dict):  # WHY: Keep behavior.
-        role_bodies = list(roles.values())  # WHY: Keep behavior.
-    for role_body in role_bodies:  # WHY: Keep behavior.
-        if isinstance(role_body, dict):  # WHY: Keep behavior.
-            fqdns = role_body.get("fqdns")  # WHY: Keep behavior.
-            if isinstance(fqdns, list):  # WHY: Keep behavior.
-                total += len(fqdns)  # WHY: Keep behavior.
+    total = 0  # WHY: Preserve the existing count while sharing the tolerant role iterator.
+    for role_body in _iter_zcc_role_bodies(doc):  # WHY: Reuse one shape guard for list-backed and dict-backed roles.
+        fqdns = role_body.get("fqdns")  # WHY: Read the host bag before the list guard.
+        if isinstance(fqdns, list):  # WHY: Count only the host bag shape that can hold catalogue entries.
+            total += len(fqdns)  # WHY: Add all role host entries to the load-size metric.
     return total  # WHY: Keep behavior.
 
 
@@ -302,15 +293,7 @@ def _zcc_needs_promotion(doc: dict[str, Any]) -> bool:  # WHY: Keep behavior.
     Returns:
         ``True`` if any inspected FQDN bag's first element is a bare string.
     """
-    roles = doc.get("roles")  # WHY: Keep behavior.
-    role_bodies: list[Any] = []  # WHY: Keep behavior.
-    if isinstance(roles, list):  # WHY: Keep behavior.
-        role_bodies = list(roles)  # WHY: Keep behavior.
-    elif isinstance(roles, dict):  # WHY: Keep behavior.
-        role_bodies = list(roles.values())  # WHY: Keep behavior.
-    for role_body in role_bodies:  # WHY: Keep behavior.
-        if not isinstance(role_body, dict):  # WHY: Keep behavior.
-            continue  # WHY: Keep behavior.
+    for role_body in _iter_zcc_role_bodies(doc):  # WHY: Reuse the same role unwrap rule as the ZCC promotion walk.
         fqdns = role_body.get("fqdns")  # WHY: Keep behavior.
         if isinstance(fqdns, list) and fqdns and isinstance(fqdns[0], str):  # WHY: Keep behavior.
             return True  # WHY: Keep behavior.
