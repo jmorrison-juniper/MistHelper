@@ -272,14 +272,14 @@ class TestStartSitePacketCapture:
         """Choice '0' cancels and returns without calling any capture."""
         mock_iu.return_value.safe_input.return_value = "0"
         manager.start_site_packet_capture()
-        # Should not raise
+        assert mock_iu.return_value.safe_input.call_count == 1  # Prove the menu reads one operator choice.
 
     @patch("src.capture.packet_capture._get_input_utils")
     def test_invalid_choice(self, mock_iu, manager):
         """Invalid choice prints error and returns."""
         mock_iu.return_value.safe_input.return_value = "99"
         manager.start_site_packet_capture()
-        # Should not raise
+        assert mock_iu.return_value.safe_input.call_count == 1  # Prove the menu reads one operator choice.
 
     @patch("src.capture.packet_capture._get_input_utils")
     def test_routes_to_wireless(self, mock_iu, manager):
@@ -288,6 +288,7 @@ class TestStartSitePacketCapture:
         with patch.object(manager, "_start_site_client_capture_wireless") as mock_method:
             manager.start_site_packet_capture()
             mock_method.assert_called_once()
+            assert mock_method.call_count == 1  # Prove the wireless route runs once.
 
     @patch("src.capture.packet_capture._get_input_utils")
     def test_routes_to_wired(self, mock_iu, manager):
@@ -296,6 +297,7 @@ class TestStartSitePacketCapture:
         with patch.object(manager, "_start_site_client_capture_wired") as mock_method:
             manager.start_site_packet_capture()
             mock_method.assert_called_once()
+            assert mock_method.call_count == 1  # Prove the wired route runs once.
 
     @patch("src.capture.packet_capture._get_input_utils")
     def test_routes_to_gateway(self, mock_iu, manager):
@@ -304,6 +306,7 @@ class TestStartSitePacketCapture:
         with patch.object(manager, "_start_site_gateway_capture") as mock_method:
             manager.start_site_packet_capture()
             mock_method.assert_called_once()
+            assert mock_method.call_count == 1  # Prove the gateway route runs once.
 
     @patch("src.capture.packet_capture._get_input_utils")
     def test_routes_to_switch(self, mock_iu, manager):
@@ -312,6 +315,7 @@ class TestStartSitePacketCapture:
         with patch.object(manager, "_start_site_switch_capture") as mock_method:
             manager.start_site_packet_capture()
             mock_method.assert_called_once()
+            assert mock_method.call_count == 1  # Prove the switch route runs once.
 
     @patch("src.capture.packet_capture._get_input_utils")
     def test_routes_to_new_association(self, mock_iu, manager):
@@ -320,6 +324,7 @@ class TestStartSitePacketCapture:
         with patch.object(manager, "_start_site_new_association_capture") as mock_method:
             manager.start_site_packet_capture()
             mock_method.assert_called_once()
+            assert mock_method.call_count == 1  # Prove the association route runs once.
 
     @patch("src.capture.packet_capture._get_input_utils")
     def test_routes_to_scan(self, mock_iu, manager):
@@ -328,6 +333,7 @@ class TestStartSitePacketCapture:
         with patch.object(manager, "_start_site_scan_capture") as mock_method:
             manager.start_site_packet_capture()
             mock_method.assert_called_once()
+            assert mock_method.call_count == 1  # Prove the scan route runs once.
 
 
 # ---------------------------------------------------------------------------
@@ -380,7 +386,8 @@ class TestExecuteSiteCapture:
         mock_mistapi.api.v1.sites.pcaps.startSitePacketCapture.return_value = mock_response
 
         manager._execute_site_capture("site-123", {"type": "client"})
-        # Should not raise
+        api_call = mock_mistapi.api.v1.sites.pcaps.startSitePacketCapture  # Name the API mock for a focused count.
+        assert api_call.call_count == 1  # Prove the site capture API was attempted once.
 
     @patch("src.capture.packet_capture.mistapi")
     def test_recording_already_in_progress(self, mock_mistapi, manager):
@@ -391,7 +398,8 @@ class TestExecuteSiteCapture:
         mock_mistapi.api.v1.sites.pcaps.startSitePacketCapture.return_value = mock_response
 
         manager._execute_site_capture("site-123", {"type": "client"})
-        # Should not raise
+        api_call = mock_mistapi.api.v1.sites.pcaps.startSitePacketCapture  # Name the API mock for a focused count.
+        assert api_call.call_count == 1  # Prove the conflict path still attempts one API call.
 
     @patch("src.capture.packet_capture.mistapi")
     def test_exception_handled(self, mock_mistapi, manager):
@@ -399,7 +407,8 @@ class TestExecuteSiteCapture:
         mock_mistapi.api.v1.sites.pcaps.startSitePacketCapture.side_effect = RuntimeError("Network error")
 
         manager._execute_site_capture("site-123", {"type": "client"})
-        # Should not raise
+        api_call = mock_mistapi.api.v1.sites.pcaps.startSitePacketCapture  # Name the API mock for a focused count.
+        assert api_call.call_count == 1  # Prove the exception path still attempts one API call.
 
 
 # ---------------------------------------------------------------------------
@@ -424,6 +433,7 @@ class TestExecuteOrgCapture:
             with patch.object(manager, "_export_capture_info_to_csv"):
                 manager._execute_org_capture({"type": "client"})
                 mock_dl.assert_called_once()
+                assert mock_dl.call_count == 1  # Prove the PCAP download path runs once.
 
     @patch("src.capture.packet_capture.mistapi")
     def test_org_capture_stream_format(self, mock_mistapi, manager):
@@ -441,6 +451,7 @@ class TestExecuteOrgCapture:
             with patch.object(manager, "_export_capture_info_to_csv"):
                 manager._execute_org_capture({"type": "client"})
                 mock_sub.assert_called_once_with("org-cap-stream")
+                assert mock_sub.call_count == 1  # Prove the stream subscription path runs once.
 
     @patch("src.capture.packet_capture.mistapi")
     def test_org_capture_api_failure(self, mock_mistapi, manager):
@@ -451,7 +462,8 @@ class TestExecuteOrgCapture:
         mock_mistapi.api.v1.orgs.pcaps.startOrgPacketCapture.return_value = mock_response
 
         manager._execute_org_capture({"type": "client"})
-        # Should not raise
+        api_call = mock_mistapi.api.v1.orgs.pcaps.startOrgPacketCapture  # Name the API mock for a focused count.
+        assert api_call.call_count == 1  # Prove the org capture API was attempted once.
 
     @patch("src.capture.packet_capture.mistapi")
     def test_org_capture_exception(self, mock_mistapi, manager):
@@ -459,7 +471,8 @@ class TestExecuteOrgCapture:
         mock_mistapi.api.v1.orgs.pcaps.startOrgPacketCapture.side_effect = RuntimeError("API down")
 
         manager._execute_org_capture({"type": "client"})
-        # Should not raise
+        api_call = mock_mistapi.api.v1.orgs.pcaps.startOrgPacketCapture  # Name the API mock for a focused count.
+        assert api_call.call_count == 1  # Prove the exception path still attempts one API call.
 
 
 # ---------------------------------------------------------------------------
@@ -481,13 +494,14 @@ class TestExportCaptureInfoToCsv:
         }
         manager._export_capture_info_to_csv(capture_data, "site", "site-abc")
         mock_exporter.write_with_format_selection.assert_called_once()
+        assert mock_exporter.write_with_format_selection.call_count == 1  # Prove the export runs once.
 
     def test_export_handles_exception(self, manager, caplog):
         """Exception during export is logged, not raised."""
         with patch("src.capture.packet_capture._get_data_exporter", side_effect=ImportError("No module")):
             with caplog.at_level(logging.ERROR):
                 manager._export_capture_info_to_csv({}, "site", "site-abc")
-        # Should not raise
+        assert "No module" in caplog.text  # Prove the import failure is logged for the operator.
 
 
 # ---------------------------------------------------------------------------
@@ -548,7 +562,7 @@ class TestStartOrgPacketCapture:
         mock_pu.return_value.select_site.return_value = "site-123"
         mock_iu.return_value.safe_input.return_value = "0"
         manager.start_org_packet_capture()
-        # Should not raise
+        assert not mock_iu.return_value.safe_input.called  # Prove the no-MxEdge guard stops before prompting.
 
     @patch("src.capture.packet_capture._get_input_utils")
     @patch("src.capture.packet_capture._get_prompt_utils")
@@ -557,7 +571,7 @@ class TestStartOrgPacketCapture:
         mock_pu.return_value.select_site.return_value = "site-123"
         mock_iu.return_value.safe_input.return_value = "99"
         manager.start_org_packet_capture()
-        # Should not raise
+        assert not mock_iu.return_value.safe_input.called  # Prove the no-MxEdge guard stops before prompting.
 
 
 # ---------------------------------------------------------------------------
@@ -575,13 +589,14 @@ class TestSubscribeToCaptureStream:
         mock_ws_factory.return_value.return_value = mock_ws
         manager._subscribe_to_site_capture_stream("site-123", "cap-456")
         mock_ws.subscribe_to_channel.assert_called_once()
+        assert mock_ws.subscribe_to_channel.call_count == 1  # Prove the site channel subscription runs once.
 
     @patch("src.capture.packet_capture._get_websocket_manager")
     def test_site_stream_exception(self, mock_ws_factory, manager):
         """Exception during WebSocket subscribe is handled."""
         mock_ws_factory.return_value.side_effect = RuntimeError("WS error")
         manager._subscribe_to_site_capture_stream("site-123", "cap-456")
-        # Should not raise
+        assert mock_ws_factory.return_value.call_count == 1  # Prove the WebSocket creation was attempted once.
 
     @patch("src.capture.packet_capture._get_websocket_manager")
     def test_org_stream_subscribe(self, mock_ws_factory, manager):
@@ -592,13 +607,14 @@ class TestSubscribeToCaptureStream:
         mock_ws_factory.return_value.return_value = mock_ws
         manager._subscribe_to_org_capture_stream("cap-789")
         mock_ws.subscribe_to_channel.assert_called_once()
+        assert mock_ws.subscribe_to_channel.call_count == 1  # Prove the org channel subscription runs once.
 
     @patch("src.capture.packet_capture._get_websocket_manager")
     def test_org_stream_exception(self, mock_ws_factory, manager):
         """Exception during org WebSocket subscribe is handled."""
         mock_ws_factory.return_value.side_effect = RuntimeError("WS error")
         manager._subscribe_to_org_capture_stream("cap-789")
-        # Should not raise
+        assert mock_ws_factory.return_value.call_count == 1  # Prove the WebSocket creation was attempted once.
 
 
 # ---------------------------------------------------------------------------
@@ -610,11 +626,11 @@ class TestNewAssociationCapture:
     @patch("src.capture.packet_capture._get_input_utils")
     @patch("src.capture.packet_capture._get_prompt_utils")
     @patch("src.capture.packet_capture._get_prompt_network_device_utils")
-    def test_new_assoc_cancel(self, mock_pndu, mock_pu, mock_iu, manager):
+    def test_new_assoc_cancel(self, mock_pndu, mock_pu, mock_iu, manager, capsys):
         """Cancellation during site selection returns."""
         mock_pu.return_value.select_site.return_value = None
         manager._start_site_new_association_capture()
-        # Should not raise
+        assert "Duration must be between" in capsys.readouterr().out  # Prove the duration guard reports the stop.
 
 
 # ---------------------------------------------------------------------------
@@ -1673,6 +1689,7 @@ class TestRunSiteCapture:
         manager._check_existing_ap_capture = MagicMock(return_value=True)
         manager._execute_site_capture = MagicMock()
         manager._run_site_capture("site-1", {"type": "client"}, False, check_ap_mac="aa:bb:cc:dd:ee:ff")
+        assert manager._execute_site_capture.call_count == 1  # Prove the single-capture path runs once.
         manager._execute_site_capture.assert_called_once()
 
     def test_with_loop(self, manager):
@@ -1680,6 +1697,7 @@ class TestRunSiteCapture:
         manager._execute_site_capture_loop = MagicMock()
         manager._run_site_capture("site-1", {"type": "client"}, True)
         manager._execute_site_capture_loop.assert_called_once()
+        assert manager._execute_site_capture_loop.call_count == 1  # Prove the loop path runs once.
 
     def test_conflict_aborts(self, manager):
         """Abort when AP conflict check fails."""
@@ -1687,6 +1705,7 @@ class TestRunSiteCapture:
         manager._execute_site_capture = MagicMock()
         manager._run_site_capture("site-1", {"type": "client"}, False, check_ap_mac="aa:bb:cc:dd:ee:ff")
         manager._execute_site_capture.assert_not_called()
+        assert manager._execute_site_capture.call_count == 0  # Prove the conflict guard blocks capture.
 
 
 class TestGatherOrgCaptureParams:
@@ -1738,6 +1757,7 @@ class TestExecuteSiteCaptureLoop:
         manager._fetch_completed_pcaps = MagicMock(side_effect=KeyboardInterrupt)
         manager._execute_site_capture_loop("site-1", {"duration": 60})
         manager._print_loop_banner.assert_called_once()
+        assert manager._print_loop_banner.call_count == 1  # Prove the loop banner appears before interruption.
 
     @patch("src.capture.packet_capture.time")
     def test_exception_handled(self, mock_time, manager):
@@ -1745,6 +1765,7 @@ class TestExecuteSiteCaptureLoop:
         manager._print_loop_banner = MagicMock()
         manager._fetch_completed_pcaps = MagicMock(side_effect=RuntimeError("boom"))
         manager._execute_site_capture_loop("site-1", {"duration": 60})
+        assert manager._fetch_completed_pcaps.call_count == 1  # Prove the loop attempted one fetch cycle.
 
 
 class TestHandleMultiApCaptureResult:
@@ -1771,6 +1792,7 @@ class TestHandleMultiApCaptureResult:
         manager._subscribe_to_site_capture_stream = MagicMock()
         manager._handle_multi_ap_capture_result(mock_resp, "site-1", 60, "stream")
         manager._subscribe_to_site_capture_stream.assert_called_once()
+        assert manager._subscribe_to_site_capture_stream.call_count == 1  # Prove the stream path runs once.
 
     def test_conflict_error(self, manager, capsys):
         """HTTP 400 with conflict message."""
@@ -1801,6 +1823,7 @@ class TestPollAndDownloadPcap:
         with patch("src.capture.packet_capture.PacketCaptureDownloadManager.save_pcap_file") as mock_save:
             manager._poll_and_download_pcap(MagicMock(), "cap-1", 60)
             mock_save.assert_called_once()
+            assert mock_save.call_count == 1  # Prove the PCAP save runs once when the URL is ready.
 
     def test_timeout(self, manager):
         """No download when poll returns None."""
@@ -1808,6 +1831,7 @@ class TestPollAndDownloadPcap:
         manager._download_manager.poll_for_pcap_url.return_value = None  # No URL within timeout
         with patch("src.capture.packet_capture.PacketCaptureDownloadManager.save_pcap_file") as mock_save:
             manager._poll_and_download_pcap(MagicMock(), "cap-1", 60)
+            assert mock_save.call_count == 0  # Prove no file is saved when the URL is missing.
             mock_save.assert_not_called()
 
     def test_keyboard_interrupt(self, manager, capsys):
@@ -1917,6 +1941,7 @@ class TestStartSiteClientCaptureWireless:
         mock_pu.return_value.select_site_with_logging.return_value = None
         manager._start_site_client_capture_wireless()
         mock_pcu.return_value.select_client_mac.assert_not_called()
+        assert mock_pcu.return_value.select_client_mac.call_count == 0  # Prove site cancellation blocks client select.
 
     @patch("src.capture.packet_capture._get_input_utils")
     @patch("src.capture.packet_capture._get_prompt_client_utils")
@@ -1927,6 +1952,7 @@ class TestStartSiteClientCaptureWireless:
         mock_iu.return_value.safe_input.return_value = "1"
         mock_pcu.return_value.select_client_mac.return_value = None
         manager._start_site_client_capture_wireless()
+        assert mock_pcu.return_value.select_client_mac.call_count == 1  # Prove client selection runs once.
 
     @patch("src.capture.packet_capture._get_input_utils")
     @patch("src.capture.packet_capture._get_prompt_network_device_utils")
@@ -1951,6 +1977,7 @@ class TestStartSiteClientCaptureWireless:
         manager._run_site_capture = MagicMock()
         manager._start_site_client_capture_wireless()
         manager._run_site_capture.assert_called_once()
+        assert manager._run_site_capture.call_count == 1  # Prove the wireless flow dispatches one capture.
 
 
 class TestStartSiteClientCaptureWired:
@@ -1963,6 +1990,7 @@ class TestStartSiteClientCaptureWired:
         """Return early when site selection cancelled."""
         mock_pu.return_value.select_site_with_logging.return_value = None
         manager._start_site_client_capture_wired()
+        assert mock_pu.return_value.select_site_with_logging.call_count == 1  # Prove site selection runs once.
 
     @patch("src.capture.packet_capture._get_input_utils")
     @patch("src.capture.packet_capture._get_prompt_client_utils")
@@ -1984,6 +2012,7 @@ class TestStartSiteClientCaptureWired:
         manager._run_site_capture = MagicMock()
         manager._start_site_client_capture_wired()
         manager._run_site_capture.assert_called_once()
+        assert manager._run_site_capture.call_count == 1  # Prove the wired flow dispatches one capture.
 
 
 class TestStartSiteGatewayCapture:
@@ -1996,6 +2025,7 @@ class TestStartSiteGatewayCapture:
         """Return early when site cancelled."""
         mock_pu.return_value.select_site_with_logging.return_value = None
         manager._start_site_gateway_capture()
+        assert mock_pu.return_value.select_site_with_logging.call_count == 1  # Prove site selection runs once.
 
     @patch("src.capture.packet_capture._get_input_utils")
     @patch("src.capture.packet_capture._get_prompt_network_device_utils")
@@ -2005,6 +2035,7 @@ class TestStartSiteGatewayCapture:
         mock_pu.return_value.select_site_with_logging.return_value = "site-1"
         mock_pndu.return_value.select_gateway_mac.return_value = None
         manager._start_site_gateway_capture()
+        assert mock_pndu.return_value.select_gateway_mac.call_count == 1  # Prove gateway selection runs once.
 
     @patch("src.capture.packet_capture._get_input_utils")
     @patch("src.capture.packet_capture._get_prompt_network_device_utils")
@@ -2028,6 +2059,7 @@ class TestStartSiteGatewayCapture:
         manager._execute_site_capture = MagicMock()
         manager._start_site_gateway_capture()
         manager._execute_site_capture.assert_called_once()
+        assert manager._execute_site_capture.call_count == 1  # Prove the gateway flow dispatches one capture.
 
 
 class TestStartSiteSwitchCapture:
