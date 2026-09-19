@@ -5,8 +5,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
+import pytest
+
 from src.metrics_gateway.catalog import MetricCatalog, MetricKind, MetricScope
 from src.metrics_gateway.collector import MistMetricsCollector, MistStatsReader
+from src.metrics_gateway.collector import MistStatsReader as FailureModeMistStatsReader
 from src.metrics_gateway.prometheus import NAME_PATTERN
 from src.metrics_gateway.samples import MetricSnapshot
 from tests.unit.metrics_gateway.conftest import ORG_ID, SITE_A, SITE_B, StubResponse, build_overrides
@@ -204,6 +207,14 @@ class TestCollectorFailures:
         snapshot = _collect(overrides)
         assert snapshot.ok is True
         assert _value(snapshot, "mist_org_sites") is None
+
+    def test_a_503_status_produces_no_org_payload(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A server-error organization response must produce no payload and log the status."""
+        response = StubResponse(None, status_code=503)  # WHY: model a failed Mist statistics response.
+        caplog.set_level("ERROR", logger="src.metrics_gateway.collector")  # WHY: capture the product status log.
+        payload = FailureModeMistStatsReader._payload(response, "getOrgStats")  # WHY: drive the real src parser.
+        assert payload is None  # WHY: a 503 response must not feed the collector.
+        assert "getOrgStats call returned status 503" in caplog.text  # WHY: the log must keep the exact status.
 
     def test_a_record_that_is_not_a_mapping_is_dropped(self) -> None:
         """A malformed record must not stop the pass."""
