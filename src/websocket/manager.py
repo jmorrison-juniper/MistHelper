@@ -146,7 +146,8 @@ class WebSocketManager:
         self.mist_session = mist_session  # WHY: Retained for later token lookups.
         # WHY: Precedence — explicit arg, then session attr, then env var, then default cloud.
         self.mist_host = mist_host or getattr(mist_session, "host", None) or os.getenv("MIST_HOST", "api.mist.com")
-        assert self.mist_host is not None, "mist_host must be set"  # nosec B101  # WHY: Contract for type narrow.
+        if self.mist_host is None:  # WHY: a websocket URL cannot be built without a host.
+            raise ValueError("mist_host must be set")  # WHY: keep the old assertion message under python -O.
         websocket_host = self.mist_host.replace(_WS_API_HOST_PREFIX, _WS_HOST_PREFIX)  # WHY: REST -> WS host swap.
         self.websocket_url = f"wss://{websocket_host}{_WS_STREAM_PATH}"  # WHY: Full endpoint URL.
         self.websocket_connection: websocket.WebSocketApp | None = None  # WHY: Lazily created in connect().

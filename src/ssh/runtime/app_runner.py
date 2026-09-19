@@ -429,7 +429,9 @@ class AppRunner:  # WHY: decomposed orchestrator preserving legacy CLI entrypoin
         hosts, user, password, env_config, use_env = context  # Unpack context tuple once
         if not AppRunner._finalize_preflight(hosts, user, password, use_env):  # Phase: preflight gate
             return None  # Preflight failure signals abort to the pipeline
-        assert user is not None  # nosec B101 - validated by _finalize_preflight above
+        if user is None:  # WHY: request building requires an SSH user after preflight.
+            logger.error("SSH preflight passed without a user")  # WHY: make the impossible state visible.
+            return None  # WHY: caller already treats None as an aborted pipeline.
         return AppRunner._build_request(args, (hosts, user, password, env_config, use_env), logger)  # Phase: bundle
 
     @staticmethod

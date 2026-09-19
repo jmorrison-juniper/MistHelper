@@ -3214,7 +3214,9 @@ class FirmwareManager:
         prepared, error = self._prepare_ssr_bulk_upgrade(sites_to_upgrade_override)  # WHY: gather org/sites/version
         if error is not None:  # WHY: propagate first prep failure
             return error  # WHY: cancel/validation error surfaces to caller
-        assert prepared is not None  # nosec B101 - The error guard above proves prepared is set.
+        if prepared is None:  # WHY: the prep helper must return a ready tuple when no error exists.
+            logging.error("SSR bulk upgrade preparation returned no data")  # WHY: operator must see this defect.
+            return {"error": "SSR bulk upgrade preparation returned no data"}  # WHY: caller handles error dicts.
         org_name, selected_sites, upgrade_config, target_version = prepared  # WHY: unpack ready state
         if not self._confirm_ssr_upgrade(org_name, selected_sites, target_version, upgrade_config):  # WHY: last gate
             logger.info("SSR bulk upgrade cancelled at confirmation prompt")  # WHY: audit user cancel
@@ -3242,12 +3244,16 @@ class FirmwareManager:
         org_and_sites, error = self._resolve_ssr_org_and_sites(sites_to_upgrade_override)  # WHY: org + sites gate
         if error:  # WHY: propagate org / site resolution error uniformly
             return None, error  # WHY: preserve pre-refactor return shape
-        assert org_and_sites is not None  # nosec B101 - The error guard above proves org_and_sites is set.
+        if org_and_sites is None:  # WHY: success without org/sites is an internal prep failure.
+            logging.error("SSR bulk upgrade org and site resolution returned no data")  # WHY: visible failure.
+            return None, {"error": "SSR bulk upgrade org and site resolution returned no data"}
         org_name, selected_sites = org_and_sites  # WHY: unpack org name + selected sites
         config_and_version, error = self._resolve_ssr_config_and_version()  # WHY: pick channel/strategy + version
         if error:  # WHY: propagate cancel / version resolution error uniformly
             return None, error  # WHY: preserve pre-refactor return shape
-        assert config_and_version is not None  # nosec B101 - The error guard above proves config_and_version is set.
+        if config_and_version is None:  # WHY: success without config/version is an internal prep failure.
+            logging.error("SSR bulk upgrade config and version resolution returned no data")  # WHY: visible failure.
+            return None, {"error": "SSR bulk upgrade config and version resolution returned no data"}
         upgrade_config, target_version = config_and_version  # WHY: unpack resolver tuple
         logger.debug("SSR bulk upgrade prep complete sites=%d", len(selected_sites))  # WHY: trace success
         return (org_name, selected_sites, upgrade_config, target_version), None  # WHY: tuple + None-error signals ok
@@ -3262,7 +3268,9 @@ class FirmwareManager:
         selected_sites, error = self._resolve_ssr_sites_or_error(sites_to_upgrade_override)  # WHY: pick+guard sites
         if error:  # WHY: propagate site-resolution error
             return None, error  # WHY: preserve pre-refactor return shape
-        assert selected_sites is not None  # nosec B101 - The error guard above proves selected_sites is set.
+        if selected_sites is None:  # WHY: success without selected sites is an internal prep failure.
+            logging.error("SSR bulk upgrade site resolution returned no data")  # WHY: visible failure.
+            return None, {"error": "SSR bulk upgrade site resolution returned no data"}
         return (org_name, selected_sites), None  # WHY: success two-slot tuple
 
     def _resolve_ssr_config_and_version(
