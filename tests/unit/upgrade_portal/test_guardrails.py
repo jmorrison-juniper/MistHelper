@@ -47,6 +47,9 @@ from src.upgrade_portal.capture.store import (  # WHY: issue #2061 pins the writ
     RUN_OPERATION,
 )
 from src.utils.operation_registry import OperationRegistry
+from tests.support.git_environment import (
+    git_subprocess_environment,  # WHY: issue #3022, repair a partial editor git config set.
+)
 
 # WHY: This file sits at tests/unit/upgrade_portal, so the root is three levels up.
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -346,7 +349,14 @@ def run_git(*arguments: str) -> subprocess.CompletedProcess[str]:
     executable = shutil.which("git")  # WHY: The absolute path avoids a shell lookup.
     if executable is None:  # WHY: A computer without git cannot answer the question.
         pytest.skip("git is absent, so the test cannot read the index")
-    return subprocess.run([executable, *arguments], cwd=REPO_ROOT, capture_output=True, text=True, check=False)
+    return subprocess.run(
+        [executable, *arguments],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=git_subprocess_environment(),  # WHY: issue #3022, a partial editor config set makes git stop.
+    )
 
 
 def active_ignore_patterns(path: Path) -> list[tuple[str, int]]:
@@ -483,8 +493,8 @@ class TestRepositoryGuardrails:
             key_field: The single field that forms the key.
         """
         anchor = where(STRATEGY_PATH, line_of(STRATEGY_PATH, f'"{endpoint}"'))  # WHY: Names the entry.
-        entry = ENDPOINT_PRIMARY_KEY_STRATEGIES.get(endpoint)  # WHY: An absent entry reads as None.
-        assert entry is not None, f"{anchor} holds no {endpoint} entry"
+        assert endpoint in ENDPOINT_PRIMARY_KEY_STRATEGIES, f"{anchor} holds no {endpoint} entry"
+        entry = ENDPOINT_PRIMARY_KEY_STRATEGIES[endpoint]  # WHY: The assertion above proved the key exists.
         strategy = entry.get("type", "")  # WHY: The message repeats the wrong value.
         assert strategy == "natural_pk", f"{anchor} sets the strategy {strategy} for {endpoint}"
         assert entry.get("primary_key") == [key_field], f"{anchor} names another key field for {endpoint}"

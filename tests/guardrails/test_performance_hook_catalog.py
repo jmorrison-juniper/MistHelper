@@ -14,6 +14,10 @@ import subprocess  # Ask Git for the tracked Python files named by the spec.
 from dataclasses import dataclass  # Keep scan records explicit and typed.
 from pathlib import Path  # Resolve repository paths on Windows and Linux.
 
+from tests.support.git_environment import (
+    git_subprocess_environment,  # WHY: issue #3022, repair a partial editor git config set.
+)
+
 _LOGGER = logging.getLogger(__name__)  # Share one logger for this guard module.
 _REPO_ROOT = Path(__file__).resolve().parents[2]  # Locate the repository root from tests/guardrails.
 _ARTIFACT_ROOT = _REPO_ROOT / "specs" / "2448-misthelper-performance-monitoring" / "artifacts"  # Locate artifacts.
@@ -56,6 +60,7 @@ class CatalogSourceScanner:
             check=True,
             capture_output=True,
             text=True,
+            env=git_subprocess_environment(),  # WHY: issue #3022, a partial editor config set makes git stop.
         )
         paths = [line for line in result.stdout.splitlines() if line]  # Drop the final empty line, if present.
         _LOGGER.debug("Git returned %s tracked Python files", len(paths))  # Log the source set size.
