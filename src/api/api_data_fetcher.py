@@ -18,6 +18,9 @@ from prettytable import PrettyTable  # WHY: render result rows for logging.
 from tqdm import tqdm  # WHY: progress bar during table build.
 
 from src.api import api_usage_cache  # WHY: share API quota state without a root-module back-reference.
+from src.api.response_integrity import (
+    ResponseIntegrityChecker,
+)  # WHY: a silent parse failure must not read as an empty export (issue #2934).
 from src.config import runtime_settings  # WHY: read API retry settings from the source settings module.
 from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
@@ -125,6 +128,8 @@ class APIDataFetcher:
         self._log_response_structure(response)  # Trace response shape.
         if self._reject_http_failure(response, api_name):  # WHY: HTTP failures cannot prove an empty export.
             return False  # WHY: skip pagination, export, and caller success logs.
+        if self._reject_unparsed_body(response, api_name):  # WHY: a broken reply cannot prove an empty export.
+            return False  # WHY: skip pagination, export, and caller success logs.
 
         try:
             self.rawdata = mistapi.get_all(response=response, mist_session=mh.apisession)  # Page through all rows.
@@ -151,6 +156,14 @@ class APIDataFetcher:
         )
         self.rawdata = []  # WHY: preserve the existing empty-result failure contract.
         return True  # WHY: caller must stop before it logs a success count.
+
+    def _reject_unparsed_body(self, response: Any, api_name: str) -> bool:
+        """Return true after logging a reply whose body the SDK could not parse."""
+        if not ResponseIntegrityChecker.body_failed_to_parse(response):  # A parsed body needs no report.
+            return False  # Continue to pagination and export.
+        ResponseIntegrityChecker.report_parse_failure(response, api_name, str(self.org_id))  # Name the broken reply.
+        self.rawdata = []  # WHY: preserve the existing empty-result failure contract.
+        return True  # WHY: caller must stop before it reports an empty site.
 
     def _call_api_with_retry(self, api_name: str) -> Any:  # Retry the API call.
         """Call API with retry/backoff (mistapi swallows timeouts as status_code=None)."""

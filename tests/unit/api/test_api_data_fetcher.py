@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import importlib
 import logging
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -750,6 +751,45 @@ class TestFetchAPIData:
         err.response = MagicMock(status_code=429)  # type: ignore[attr-defined]
         with patch("src.api.api_data_fetcher.mistapi.get_all", side_effect=err):
             fetcher._fetch_api_data()
+
+    def test_an_unparsed_body_stops_the_fetch_before_pagination(
+        self, fake_mh: _FakeMH, api_call: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A broken reply must never reach pagination or the export.
+
+        Why:
+            ``mistapi`` swallows the parse error and leaves status 200 with an
+            empty payload. Without this stop the run reports an empty site, and
+            a firmware decision then concludes the site needs no work. See
+            GitHub issue #2934.
+        """
+        response = SimpleNamespace(status_code=200, raw_data="this is not json", data={})
+        api_call.return_value = response
+        fetcher = _make_fetcher(api_call)
+        with (
+            caplog.at_level(logging.ERROR),
+            patch("src.api.api_data_fetcher.mistapi.get_all") as paginate,
+        ):
+            proceeded = fetcher._fetch_api_data()
+        assert proceeded is False  # The caller must not log a success count.
+        paginate.assert_not_called()  # A broken reply must not reach pagination.
+        assert fetcher.rawdata == []  # The failure contract keeps the empty list.
+        assert any("did not parse" in record.getMessage() for record in caplog.records)  # The operator sees the cause.
+
+    def test_a_genuine_empty_result_still_reaches_pagination(self, fake_mh: _FakeMH, api_call: MagicMock) -> None:
+        """An empty site must keep its existing path.
+
+        Why:
+            The new check must separate a broken reply from a real empty
+            answer. A site with no device answers ``[]``, which parses.
+        """
+        response = SimpleNamespace(status_code=200, raw_data="[]", data=[])
+        api_call.return_value = response
+        fetcher = _make_fetcher(api_call)
+        with patch("src.api.api_data_fetcher.mistapi.get_all", return_value=[]) as paginate:
+            proceeded = fetcher._fetch_api_data()
+        assert proceeded is True  # The empty answer is the true answer.
+        paginate.assert_called_once()  # The existing path still runs.
 
 
 # ---------------------------------------------------------------------------
