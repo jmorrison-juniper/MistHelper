@@ -15,6 +15,50 @@ var currentSSE = null;
 var currentParameters = [];
 
 // ---------------------------------------------------------------------------
+// Visibility
+// ---------------------------------------------------------------------------
+
+/**
+ * Show or hide one element.
+ *
+ * The page marks every collapsible panel with the Bootstrap class `d-none`,
+ * and Bootstrap declares that class with `display: none !important`. An
+ * `!important` rule in a stylesheet outranks an inline style, so writing
+ * `element.style.display` can never reveal such a panel. Issue #3030 records
+ * the defect. Every operation panel stayed invisible, so no user could reach
+ * the Run button.
+ *
+ * This helper toggles the class instead, which is the pattern that
+ * `data_preview.js` already uses. It also clears any stale inline value, so an
+ * element that an older code path hid inline becomes visible again.
+ *
+ * @param {Element|string} target The element, or the id of the element.
+ * @param {boolean} visible True to show the element, false to hide it.
+ */
+function setElementVisible(target, visible) {
+    var element = typeof target === 'string' ? document.getElementById(target) : target;
+    if (!element) return;  // A missing element is not an error, because panels differ by page.
+    if (visible) {
+        element.classList.remove('d-none');  // Drop the rule that outranks the inline style.
+        element.style.display = '';          // Clear a stale inline value from an older path.
+    } else {
+        element.classList.add('d-none');     // One rule hides the element on every browser.
+    }
+}
+
+/**
+ * Report whether one element is visible now.
+ *
+ * @param {Element|string} target The element, or the id of the element.
+ * @returns {boolean} True when the element is not hidden.
+ */
+function isElementVisible(target) {
+    var element = typeof target === 'string' ? document.getElementById(target) : target;
+    if (!element) return false;  // A missing element cannot be visible.
+    return !element.classList.contains('d-none') && element.style.display !== 'none';
+}
+
+// ---------------------------------------------------------------------------
 // Operation Listing
 // ---------------------------------------------------------------------------
 
@@ -102,8 +146,7 @@ function highlightActiveItem(element) {
 }
 
 function showSelectedPanel(menuNumber, element) {
-    var panel = document.getElementById('selectedOp');
-    panel.style.display = '';
+    setElementVisible('selectedOp', true);  // Issue #3030: the class, not the inline style, hides this panel.
     document.getElementById('selectedOpTitle').textContent = 'Menu ' + menuNumber;
     document.getElementById('selectedOpDesc').textContent = element
         ? element.textContent.trim().replace(/interactive|SSH only/g, '').trim()
@@ -111,9 +154,9 @@ function showSelectedPanel(menuNumber, element) {
 }
 
 function resetParameterPanels() {
-    document.getElementById('cliOnlyPanel').style.display = 'none';
-    document.getElementById('parameterForm').style.display = 'none';
-    document.getElementById('parameterError').style.display = 'none';
+    setElementVisible('cliOnlyPanel', false);
+    setElementVisible('parameterForm', false);
+    setElementVisible('parameterError', false);
     document.getElementById('parameterFields').innerHTML = '';
     currentParameters = [];
 }
@@ -128,17 +171,17 @@ function loadParameters(menuNumber) {
     var loadingDiv = document.getElementById('parameterLoading');
 
     fieldsDiv.innerHTML = '';
-    loadingDiv.style.display = 'block';
-    formDiv.style.display = '';
+    setElementVisible(loadingDiv, true);
+    setElementVisible(formDiv, true);
 
     fetch('/api/operations/parameters/' + menuNumber)
         .then(function(response) { return response.json(); })
         .then(function(data) {
-            loadingDiv.style.display = 'none';
+            setElementVisible(loadingDiv, false);
             handleParameterResponse(data, formDiv, fieldsDiv);
         })
         .catch(function(err) {
-            loadingDiv.style.display = 'none';
+            setElementVisible(loadingDiv, false);
             showParameterError('Failed to load parameters: ' + err.message);
         });
 }
@@ -149,39 +192,37 @@ function handleParameterResponse(data, formDiv, fieldsDiv) {
     if (data.category === 'cli_only') {
         showCliOnlyPanel(data.cli_only_message);
         runBtn.disabled = true;
-        runBtn.style.display = 'none';
-        formDiv.style.display = 'none';
+        setElementVisible(runBtn, false);
+        setElementVisible(formDiv, false);
         return;
     }
 
-    runBtn.style.display = '';
+    setElementVisible(runBtn, true);
     if (data.parameters && data.parameters.length > 0) {
         currentParameters = data.parameters;
         renderParameterFields(data.parameters, fieldsDiv);
-        formDiv.style.display = '';
+        setElementVisible(formDiv, true);
         validateForm();
     } else {
-        formDiv.style.display = 'none';
+        setElementVisible(formDiv, false);
     }
 }
 
 function showCliOnlyPanel(message) {
-    var cliPanel = document.getElementById('cliOnlyPanel');
-    cliPanel.style.display = '';
+    setElementVisible('cliOnlyPanel', true);
     document.getElementById('cliOnlyMessage').textContent =
         message || 'This operation requires SSH access on port 2200.';
 }
 
 function retryLoadParameters() {
-    document.getElementById('parameterError').style.display = 'none';
+    setElementVisible('parameterError', false);
     if (selectedMenuNumber) loadParameters(selectedMenuNumber);
 }
 
 function showParameterError(msg) {
-    var errorDiv = document.getElementById('parameterError');
     document.getElementById('parameterErrorMsg').textContent = msg;
-    errorDiv.style.display = '';
-    document.getElementById('parameterForm').style.display = '';
+    setElementVisible('parameterError', true);
+    setElementVisible('parameterForm', true);
 }
 
 // ---------------------------------------------------------------------------
@@ -566,7 +607,7 @@ function runSelectedOperation() {
         }
         currentRunId = data.run_id;
         setStatus('running', 'Operation started');
-        document.getElementById('stopBtn').style.display = '';
+        setElementVisible('stopBtn', true);  // Issue #3030: the class hides this control, not the inline style.
         startSSEStream(data.run_id);
     })
     .catch(function(err) {
@@ -706,14 +747,13 @@ function checkRunStatus(runId) {
 // ---------------------------------------------------------------------------
 
 function resetExecutionPanel() {
-    var panel = document.getElementById('executionPanel');
-    panel.style.display = '';
+    setElementVisible('executionPanel', true);  // Issue #3030: the class hides this panel, not the inline style.
     document.getElementById('logViewer').innerHTML = '';
     document.getElementById('debugLogViewer').innerHTML = '';
-    document.getElementById('debugLogToggle').style.display = 'none';
-    document.getElementById('debugLogPanel').style.display = 'none';
+    setElementVisible('debugLogToggle', false);
+    setElementVisible('debugLogPanel', false);
     document.getElementById('debugLogCount').textContent = '0';
-    document.getElementById('outputFiles').style.display = 'none';
+    setElementVisible('outputFiles', false);
     document.getElementById('outputFileList').innerHTML = '';
     updateProgress(0, '');
     setStatus('pending', 'Waiting...');
@@ -738,7 +778,7 @@ function appendDebugLog(message, level) {
     var toggle = document.getElementById('debugLogToggle');
     var viewer = document.getElementById('debugLogViewer');
     var counter = document.getElementById('debugLogCount');
-    toggle.style.display = '';
+    setElementVisible(toggle, true);  // Issue #3030: the class must go, or the toggle stays hidden.
     var count = parseInt(counter.textContent || '0', 10) + 1;
     counter.textContent = count;
     var line = document.createElement('div');
@@ -746,25 +786,20 @@ function appendDebugLog(message, level) {
     var ts = new Date().toLocaleTimeString();
     line.textContent = '[' + ts + '] ' + message;
     viewer.appendChild(line);
-    if (document.getElementById('debugLogPanel').style.display !== 'none') {
+    if (isElementVisible('debugLogPanel')) {
         viewer.scrollTop = viewer.scrollHeight;
     }
 }
 
 function toggleDebugLog() {
-    var panel = document.getElementById('debugLogPanel');
     var btn = document.getElementById('debugLogToggle');
     var viewer = document.getElementById('debugLogViewer');
-    if (panel.style.display === 'none') {
-        panel.style.display = '';
-        btn.innerHTML = '&#9660; Debug Log <span class="badge bg-secondary ms-1" id="debugLogCount">' +
-            document.getElementById('debugLogCount').textContent + '</span>';
-        viewer.scrollTop = viewer.scrollHeight;
-    } else {
-        panel.style.display = 'none';
-        btn.innerHTML = '&#9654; Debug Log <span class="badge bg-secondary ms-1" id="debugLogCount">' +
-            document.getElementById('debugLogCount').textContent + '</span>';
-    }
+    var opening = !isElementVisible('debugLogPanel');  // Issue #3030: read the class, not the inline style.
+    setElementVisible('debugLogPanel', opening);
+    var arrow = opening ? '&#9660;' : '&#9654;';  // A filled arrow points down while the panel is open.
+    btn.innerHTML = arrow + ' Debug Log <span class="badge bg-secondary ms-1" id="debugLogCount">' +
+        document.getElementById('debugLogCount').textContent + '</span>';
+    if (opening) viewer.scrollTop = viewer.scrollHeight;  // Show the newest line when the panel opens.
 }
 
 function updateProgress(percent, message) {
@@ -810,7 +845,7 @@ function showOutputFiles(files) {
 
     var panel = document.getElementById('outputFiles');
     var list = document.getElementById('outputFileList');
-    panel.style.display = '';
+    setElementVisible(panel, true);  // Issue #3030: the class hides the result list, not the inline style.
 
     files.forEach(function(file) {
         var li = document.createElement('li');
@@ -850,7 +885,7 @@ function finishRun() {
     btn.disabled = false;
     btn.textContent = 'Run Operation';
     var stopBtn = document.getElementById('stopBtn');
-    stopBtn.style.display = 'none';
+    setElementVisible(stopBtn, false);
     stopBtn.disabled = false;
     stopBtn.textContent = 'Stop Operation';
     refreshActiveOps();
@@ -877,11 +912,11 @@ function renderActiveOps(runs) {
     var list = document.getElementById('activeOpsList');
 
     if (runs.length === 0) {
-        panel.style.display = 'none';
+        setElementVisible(panel, false);
         return;
     }
 
-    panel.style.display = '';
+    setElementVisible(panel, true);  // Issue #3030: the class hides this list, not the inline style.
     list.innerHTML = '';
     runs.forEach(function(run) {
         var div = document.createElement('div');
@@ -917,16 +952,15 @@ function reconnectToOperation(runId, menuNumber, description) {
 
     var titleEl = document.getElementById('selectedOpTitle');
     var descEl = document.getElementById('selectedOpDesc');
-    var selectedPanel = document.getElementById('selectedOp');
     titleEl.textContent = 'Menu ' + menuNumber;
     descEl.textContent = description || '';
-    selectedPanel.style.display = '';
+    setElementVisible('selectedOp', true);  // Issue #3030: the class hides this panel, not the inline style.
 
-    document.getElementById('parameterForm').style.display = 'none';
-    document.getElementById('cliOnlyPanel').style.display = 'none';
+    setElementVisible('parameterForm', false);
+    setElementVisible('cliOnlyPanel', false);
     document.getElementById('runBtn').disabled = true;
     document.getElementById('runBtn').textContent = 'Running...';
-    document.getElementById('stopBtn').style.display = '';
+    setElementVisible('stopBtn', true);
 
     resetExecutionPanel();
     setStatus('running', 'Reconnected to Menu ' + menuNumber);
