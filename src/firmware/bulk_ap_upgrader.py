@@ -2178,9 +2178,9 @@ class BulkAPFirmwareUpgrader:  # pylint: disable=too-many-instance-attributes
             # WHY: Compute step — extend tracking with one row per new upgrade ID
             self._append_upgrade_tracking_entries(tracking_data)  # WHY: instance state
             self._write_tracking_file(tracking_file, tracking_data)  # WHY: Persist step writes JSON back
+            logger.debug("save_upgrade_tracking complete")  # WHY: report completion only after the write succeeds
         except Exception as error:  # WHY: broad catch matches pre-refactor behavior for FR-017 parity
             logging.warning("Failed to save tracking: %s", error)  # WHY: non-fatal warning per pre-refactor
-        logger.debug("save_upgrade_tracking complete")  # WHY: FR-007 debug-after
 
     def _load_existing_tracking(self, tracking_file: str) -> list[dict[str, Any]]:  # WHY: helper definition (see doc...
         """Prepare helper: read ActiveUpgrades.json if present, otherwise return empty list."""
