@@ -1329,6 +1329,18 @@ class TestClassifySSRDeviceForUpgrade:
         assert result == "upgrade"
         assert "Upgrade needed" in capsys.readouterr().out
 
+    def test_missing_version_verdict(
+        self, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A present SSR with no running version is skipped with an error."""
+        mgr = _make_manager()  # WHY: build the unit under test with mocked dependencies
+        inv = {"d1": {"model": "SSR-100"}}  # WHY: simulate inventory that lost the required version field
+        with caplog.at_level("ERROR"):  # WHY: the repair must make the missing field visible in logs
+            result = mgr._classify_ssr_device_for_upgrade("d1", inv, "6.3.5")  # WHY: drive missing-version branch
+        assert result == "missing_version"  # WHY: caller treats non-upgrade verdicts as skipped devices
+        assert "no running firmware version" in capsys.readouterr().out  # WHY: operator sees the refusal
+        assert "Missing required firmware field version" in caplog.text  # WHY: log names the missing field
+
 
 class TestValidateSSRDevicesForVersion:
     """Split ids into validated vs skipped lists."""
