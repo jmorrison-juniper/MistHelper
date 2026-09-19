@@ -8,6 +8,7 @@ drop throws away a setting that the developer chose.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -102,6 +103,28 @@ class TestTheHelperKeepsAHealthySet:
         """Most machines hold no set at all, and nothing must change there."""
         source = {"PATH": "/usr/bin", "HOME": "/home/someone"}
         assert git_subprocess_environment(source) == source
+
+    def test_an_empty_environment_returns_an_empty_environment(self) -> None:
+        """An empty mapping holds no set, so the helper must return it unchanged.
+
+        A container stage can start a process with no environment at all. The
+        helper must answer with an empty mapping instead of raising.
+        """
+        assert git_subprocess_environment({}) == {}
+
+    def test_no_argument_reads_the_live_environment(self) -> None:
+        """The default argument reads ``os.environ``, which is how every caller uses it.
+
+        The result must hold the live variables and must never be the same
+        object as ``os.environ``, because a caller edits the copy.
+        """
+        repaired = git_subprocess_environment()
+        assert repaired is not os.environ, "The helper returned os.environ itself, so a caller could corrupt it."
+        assert "PATH" in repaired or "Path" in repaired, "The live environment holds no PATH, so the read failed."
+
+    def test_an_explicit_none_reads_the_live_environment(self) -> None:
+        """Passing ``None`` must behave exactly like passing no argument at all."""
+        assert git_subprocess_environment(None) == git_subprocess_environment()
 
     def test_a_whole_set_survives(self) -> None:
         """Every promised entry holds a name and a value, so git can parse it."""
