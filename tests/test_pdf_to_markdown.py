@@ -397,6 +397,33 @@ class TestGlyphRules:
         assert rules.normalize("A \ufb01lter and a \ufb02ag") == "A filter and a flag"  # 2 ligatures
         assert rules.normalize("the device\u2019s \u201cclass\u201d") == 'the device\'s "class"'
 
+    def test_control_byte_bullet_becomes_a_list_item(self) -> None:
+        """A subset font can write a control byte where its bullet glyph belongs."""
+        # The font of one Juniper infographic maps its bullet to 0x19. Without a
+        # rule the byte reaches the Markdown file and the list mark is lost.
+        # Python treats 0x1c through 0x1f as space, so str.split drops those
+        # before this rule sees them. These 3 bytes reach the rule intact.
+        rules = MarkdownTextRules()  # the rules hold no state, so a test builds one instance
+        for byte in ("\x19", "\x01", "\x08"):  # 3 bytes that survive the space rule
+            given = f"{byte} Marvis Actions finds the fault before a user reports it."
+            cleaned = rules.normalize(given)  # the call under test
+            assert cleaned.startswith("- "), f"the byte must give a list item: {cleaned!r}"
+            assert byte not in cleaned, f"the control byte must not survive: {cleaned!r}"
+        assert rules.normalize("\x19 Cloud ZTP") == "- Cloud ZTP"  # the whole item stays
+
+    def test_no_control_byte_survives_a_line(self) -> None:
+        """No control byte may reach the Markdown file, whatever the space rule does."""
+        rules = MarkdownTextRules()  # the rules hold no state, so a test builds one instance
+        for code in list(range(1, 9)) + list(range(11, 32)):  # every byte except tab and newline
+            cleaned = rules.normalize(f"{chr(code)} Wired Assurance reports the port state.")
+            assert chr(code) not in cleaned, f"byte {code:#04x} must not survive: {cleaned!r}"
+
+    def test_tab_and_return_are_not_bullets(self) -> None:
+        """A tab and a carriage return carry layout, so neither starts a list."""
+        rules = MarkdownTextRules()  # the rules hold no state, so a test builds one instance
+        assert not rules.normalize("\tan indented body line").startswith("- ")
+        assert not rules.normalize("\ra returned body line").startswith("- ")
+
     def test_glyph_bullet_becomes_a_list_item(self, tmp_path: Path) -> None:
         """A line that starts with a bullet glyph becomes a Markdown list item."""
         pages: list[list[TextLine]] = [[("\u2022 Apply the filter to the loopback interface.", 10.0, False)]]
