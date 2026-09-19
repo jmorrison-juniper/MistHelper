@@ -579,6 +579,22 @@ def test_render_arp_result_prints_banner_and_context_and_body(capsys, caplog) ->
     assert any("WebSocket ARP completed successfully" in r.message for r in caplog.records)
 
 
+def test_render_arp_result_empty_output_does_not_log_success(capsys, caplog) -> None:
+    """An empty ARP payload prints the diagnostic and does not log success."""
+    with caplog.at_level(logging.INFO):  # WHY: capture the empty-payload outcome log.
+        ArpDeviceExecutor()._render_arp_result(  # WHY: drive the empty branch through the public renderer.
+            {"session": "s"},  # WHY: no raw or Output field makes the payload empty.
+            {"type": "ap", "model": "AP43", "name": "ap1"},  # WHY: context appears in the warning.
+            "dev-id",  # WHY: device id is the fallback context.
+            False,  # WHY: debug output is not needed for this assertion.
+        )
+    out = capsys.readouterr().out  # WHY: read the operator-facing diagnostic.
+    assert "No output data received" in out  # WHY: prove the empty branch ran.
+    log_out = "\n".join(record.getMessage() for record in caplog.records)  # WHY: inspect rendered log messages.
+    assert "WebSocket ARP completed successfully" not in log_out  # WHY: empty payload is not success.
+    assert "WebSocket ARP returned no output for ap ap1" in log_out  # WHY: prove the error signal remains.
+
+
 # ---------- _connect_ws ----------
 
 
