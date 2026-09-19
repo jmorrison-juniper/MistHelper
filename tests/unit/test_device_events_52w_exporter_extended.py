@@ -355,14 +355,14 @@ def test_fetch_with_retries_returns_immediately_on_success() -> None:
 
 
 def test_fetch_with_retries_reraises_after_all_attempts_fail() -> None:
-    """_fetch_with_retries must re-raise the last exception after all retries fail."""
+    """_fetch_with_retries must re-raise the first exception after all retries fail."""
     exporter = _build_exporter()
-    boom = RuntimeError("transient")  # Simulated transient error
+    failures = [RuntimeError("auth failed"), RuntimeError("connection closed")]  # WHY: prove cause is preserved.
     with (
-        patch.object(DeviceEvents52wExporter, "_fetch_page", side_effect=boom),
+        patch.object(DeviceEvents52wExporter, "_fetch_page", side_effect=failures),
         patch.object(DeviceEvents52wExporter, "_sleep_before_retry"),
     ):
-        with pytest.raises(RuntimeError, match="transient"):
+        with pytest.raises(RuntimeError, match="auth failed"):
             exporter._fetch_with_retries("tok", "52w", 1000, retries=2, backoff=0.0)
 
 

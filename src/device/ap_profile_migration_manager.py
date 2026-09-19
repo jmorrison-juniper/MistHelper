@@ -1252,12 +1252,12 @@ class APProfileMigrationManager:
             target_profile_id: The device-profile UUID to bind the AP to.
 
         Raises:
-            Exception: The last exception observed after retry exhaustion.
+            Exception: The first exception observed after retry exhaustion.
         """
         # WHY: two retries -> three total attempts. The backoff sequence is
         # pinned by research Decision 2 -- any change here breaks T013.
         body = {"deviceprofile_id": target_profile_id}
-        last_exc: BaseException | None = None
+        first_exc: BaseException | None = None  # WHY: preserve the original retry failure cause.
         # WHY: attempt indices 0, 1, 2. Sleep AFTER attempts 0 and 1 only.
         for attempt in range(len(_RETRY_BACKOFF_SECONDS) + 1):
             try:
@@ -1270,19 +1270,26 @@ class APProfileMigrationManager:
                 APProfileMigrationManager._check_reassign_response(response, ap_record["device_id"])
                 return
             except Exception as exc:  # WHY: broad catch for retry policy.
-                last_exc = exc
+                if first_exc is None:  # WHY: keep the first failure before later symptoms replace it.
+                    first_exc = exc  # WHY: final attempts can fail for follow-on reasons.
+                _LOGGER.warning(
+                    "AP profile assignment attempt %s failed for %s: %s",
+                    attempt + 1,
+                    ap_record["device_id"],
+                    exc,
+                )
                 # WHY: sleep only if there is a next attempt to make. Attribute
                 # access on the ``time`` module (rather than a captured default
                 # parameter) lets ``patch("time.sleep", ...)`` intercept.
                 if attempt < len(_RETRY_BACKOFF_SECONDS):
                     time.sleep(_RETRY_BACKOFF_SECONDS[attempt])
                     continue
-                # WHY: retry exhaustion -- re-raise the last exception so the
-                # loop can record the failure detail and stop.
-                raise
+                # WHY: retry exhaustion -- re-raise the first exception so the
+                # loop can record the original failure detail and stop.
+                raise first_exc from None  # WHY: report the original cause without chaining a later symptom.
         # WHY: unreachable; guard against typing lint anyway.
-        if last_exc is not None:
-            raise last_exc
+        if first_exc is not None:  # WHY: preserve the first failure if control somehow leaves the loop.
+            raise first_exc  # WHY: report the original cause, not a later symptom.
 
     @staticmethod
     def _check_reassign_response(response: Any, device_id: str) -> None:
@@ -1837,21 +1844,23 @@ class APProfileMigrationManager:
             the sentinel ``_REVERT_MISSING`` when Mist returns 404 for the AP.
 
         Raises:
-            Exception: The last exception observed after retry exhaustion.
+            Exception: The first exception observed after retry exhaustion.
         """
         # WHY: same cadence as the migrate side -- two retries, three total
         # attempts, sleep only when a next attempt exists.
         body = {"deviceprofile_id": source_profile_id}
-        last_exc: BaseException | None = None
+        first_exc: BaseException | None = None  # WHY: preserve the original retry failure cause.
         for attempt in range(len(_RETRY_BACKOFF_SECONDS) + 1):
             try:
                 response = _mist_site_devices.updateSiteDevice(session, site_id, device_id, body)
             except Exception as exc:  # WHY: broad catch for retry policy.
-                last_exc = exc
+                if first_exc is None:  # WHY: keep the first failure before later symptoms replace it.
+                    first_exc = exc  # WHY: final attempts can fail for follow-on reasons.
+                _LOGGER.warning("AP profile revert attempt %s failed for %s: %s", attempt + 1, device_id, exc)
                 if attempt < len(_RETRY_BACKOFF_SECONDS):
                     time.sleep(_RETRY_BACKOFF_SECONDS[attempt])
                     continue
-                raise
+                raise first_exc from None  # WHY: report the original cause without chaining a later symptom.
             # WHY: mistapi returns a response object; a 404 status means the
             # AP is missing from Mist -- report as missing (FR-023) not retry.
             status = getattr(response, "status_code", 200)
@@ -1860,16 +1869,19 @@ class APProfileMigrationManager:
             # WHY: any 5xx (or other non-2xx) is a retryable server problem;
             # treat as failure and back off the same way an exception would.
             if isinstance(status, int) and status >= 500:
-                last_exc = RuntimeError(f"HTTP {status} on updateSiteDevice for {device_id}")
+                status_error = RuntimeError(f"HTTP {status} on updateSiteDevice for {device_id}")  # WHY: wrap status.
+                if first_exc is None:  # WHY: keep the first failed HTTP status.
+                    first_exc = status_error  # WHY: final attempts can fail for follow-on reasons.
+                _LOGGER.warning("AP profile revert attempt %s failed for %s: %s", attempt + 1, device_id, status_error)
                 if attempt < len(_RETRY_BACKOFF_SECONDS):
                     time.sleep(_RETRY_BACKOFF_SECONDS[attempt])
                     continue
-                raise last_exc
+                raise first_exc
             # WHY: fell through -- SDK success or 2xx status.
             return None
         # WHY: unreachable; guard against typing lint anyway.
-        if last_exc is not None:
-            raise last_exc
+        if first_exc is not None:  # WHY: preserve the first failure if control somehow leaves the loop.
+            raise first_exc  # WHY: report the original cause, not a later symptom.
         return None
 
     @staticmethod
