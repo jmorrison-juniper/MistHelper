@@ -64,7 +64,7 @@ class TestArangoDBWriterInit:  # WHY: pytest test class
 
         writer = ArangoDBWriter(config)  # WHY: system under test
         mock_arango_client["client_cls"].assert_called_once()  # WHY: test line
-        assert writer._db is not None  # WHY: verify expected behavior
+        assert writer._db is mock_arango_client["db"]  # WHY: prove the writer stored the selected application DB
 
     def test_creates_database_if_missing(self, config, mock_arango_client):  # WHY: pytest discovers this by name
         from src.db.arango_writer import ArangoDBWriter  # WHY: import ArangoDBWriter symbol under test
@@ -205,7 +205,7 @@ class TestArangoDBWriterSoftDelete:  # WHY: pytest test class
 
         mock_collection.update.assert_called_once()  # WHY: test line
         update_doc = mock_collection.update.call_args[0][0]  # WHY: arrange test state
-        assert update_doc["_misthelper_deleted_at"] is not None  # WHY: verify expected behavior
+        assert isinstance(update_doc["_misthelper_deleted_at"], int)  # WHY: prove the writer stamped a delete time
 
     def test_clears_deleted_on_reappearance(self, config, mock_arango_client):  # WHY: pytest discovers this by name
         from src.db.arango_writer import ArangoDBWriter  # WHY: import ArangoDBWriter symbol under test
@@ -636,7 +636,7 @@ class TestArangoDBWriterBackfillEdges:  # WHY: pytest test class
         mock_db.has_collection.side_effect = lambda name: name != "config_snapshots"  # WHY: prime mock side effect
         writer = ArangoDBWriter(config)  # WHY: system under test
         # Should not raise; silently returns
-        assert writer is not None  # WHY: verify expected behavior
+        assert writer._db is mock_db  # WHY: prove initialization completed with the provided DB handle
 
     @staticmethod
     def _mock_backfill_db(mock_db):  # WHY: fixture / helper function
@@ -668,7 +668,7 @@ class TestArangoDBWriterBackfillEdges:  # WHY: pytest test class
         ]  # WHY: one valid snapshot and one with unmapped entity_type
         mock_db.aql.execute.return_value = iter(cursor)  # WHY: AQL returns snapshots to backfill
         writer = ArangoDBWriter(config)  # WHY: backfill runs during __init__ -> _ensure_graph
-        assert writer is not None  # WHY: smoke check the writer initialized without raising
+        assert writer._db is mock_db  # WHY: prove initialization completed after the backfill path ran
 
 
 _DEVICE_VERTEX_INPUT = {  # WHY: canonical device shape reused by build-vertex tests, hoisted to keep tests short
@@ -969,33 +969,95 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
     """Tests for site-level apps, calls, WAN usage, fingerprints graph storage (issue #183)."""
 
     def test_site_apps_mapping_exists(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: load schema constants for direct assertions
+
+        assert "listSiteApps" in COLLECTION_VERTEX_MAP  # WHY: prove the application endpoint has a graph mapping
         assert_vertex_config("listSiteApps", "applications", "key")  # WHY: vertex+key pair check
 
     def test_site_calls_mapping_exists(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: load schema constants for direct assertions
+
+        assert "searchSiteCalls" in COLLECTION_VERTEX_MAP  # WHY: prove the call search endpoint has a graph mapping
         assert_vertex_config("searchSiteCalls", "calls", "mac")  # WHY: vertex+key pair check
 
     def test_site_wan_usage_mapping_exists(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: load schema constants for direct assertions
+
+        assert "searchSiteWanUsage" in COLLECTION_VERTEX_MAP  # WHY: prove the WAN usage endpoint has a graph mapping
         assert_vertex_config("searchSiteWanUsage", "wan_usage", "mac")  # WHY: vertex+key pair check
 
     def test_fingerprints_mapping_exists(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: load schema constants for direct assertions
+
+        assert (
+            "searchSiteClientFingerprints" in COLLECTION_VERTEX_MAP
+        )  # WHY: prove the fingerprint endpoint has a graph mapping
         assert_vertex_config("searchSiteClientFingerprints", "fingerprints", "mac")  # WHY: vertex+key pair check
 
     def test_ui_settings_mapping_exists(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: load schema constants for direct assertions
+
+        assert "listSiteUiSettings" in COLLECTION_VERTEX_MAP  # WHY: prove the UI settings endpoint has a graph mapping
         assert_vertex_config("listSiteUiSettings", "ui_settings", "id")  # WHY: vertex+key pair check
 
     def test_troubleshoot_calls_mapping_exists(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: load schema constants for direct assertions
+
+        assert (
+            "listSiteTroubleshootCalls" in COLLECTION_VERTEX_MAP
+        )  # WHY: prove troubleshoot calls have a graph mapping
         assert_vertex_config("listSiteTroubleshootCalls", "troubleshoot_calls", "mac")  # WHY: vertex+key pair check
 
     def test_site_calls_edges_complete(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: load schema constants for direct assertions
+
+        assert (
+            "searchSiteCalls" in COLLECTION_VERTEX_MAP
+        )  # WHY: prove the call edge mapping exists before subset checks
         assert_edge_cols_include("searchSiteCalls", {"CallOnDevice"})  # WHY: subset check
 
     def test_wan_usage_edges_complete(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: load schema constants for direct assertions
+
+        assert (
+            "searchSiteWanUsage" in COLLECTION_VERTEX_MAP
+        )  # WHY: prove the WAN usage edge mapping exists before subset checks
         assert_edge_cols_include("searchSiteWanUsage", {"WanUsageOnDevice", "WanUsagePeerDevice"})  # WHY: subset
 
     def test_troubleshoot_calls_edges_complete(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: load schema constants for direct assertions
+
+        assert (
+            "listSiteTroubleshootCalls" in COLLECTION_VERTEX_MAP
+        )  # WHY: prove the troubleshoot edge mapping exists before subset checks
         assert_edge_cols_include("listSiteTroubleshootCalls", {"TroubleshootCallOnDevice"})  # WHY: subset
 
     def test_apps_calls_edge_definitions_registered(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            EDGE_DEFINITIONS,
+        )  # WHY: load schema constants for direct assertions
+
+        assert any(
+            edge["edge_collection"] == "ApplicationOnSite" for edge in EDGE_DEFINITIONS
+        )  # WHY: prove an apps edge is registered
         assert_edges_registered(
             {  # WHY: subset check collapses 5 asserts to CC=1
                 "ApplicationOnSite",
@@ -1007,6 +1069,11 @@ class TestArangoDBWriterSiteAppsCallsGraph:  # WHY: pytest test class
         )
 
     def test_apps_calls_entity_types_mapped(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            ENTITY_TYPE_TO_VERTEX,
+        )  # WHY: load schema constants for direct assertions
+
+        assert "listSiteApps" in ENTITY_TYPE_TO_VERTEX  # WHY: prove the application endpoint maps to a vertex
         assert_entity_types_mapped(
             {  # WHY: single dict-subset check collapses 6 asserts to CC=1
                 "listSiteApps": "applications",
@@ -1136,6 +1203,13 @@ class TestArangoDBWriterSLEImpactedGraph:  # WHY: pytest test class
         assert "SLEImpactedApplication" in edge_cols  # WHY: verify expected behavior
 
     def test_sle_edge_definitions_registered(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            EDGE_DEFINITIONS,
+        )  # WHY: load schema constants for direct assertions
+
+        assert any(
+            edge["edge_collection"] == "SLEMetricForSite" for edge in EDGE_DEFINITIONS
+        )  # WHY: prove an SLE edge is registered
         assert_edges_registered(
             {  # WHY: single subset check keeps CC=1 vs 5 asserts
                 "SLEMetricForSite",
@@ -1147,6 +1221,11 @@ class TestArangoDBWriterSLEImpactedGraph:  # WHY: pytest test class
         )
 
     def test_sle_entity_types_mapped(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            ENTITY_TYPE_TO_VERTEX,
+        )  # WHY: load schema constants for direct assertions
+
+        assert "listSiteSleImpactedAps" in ENTITY_TYPE_TO_VERTEX  # WHY: prove an SLE endpoint maps to a vertex
         assert_entity_types_mapped(
             {  # WHY: single dict-subset check collapses 10 asserts to CC=1
                 "listSiteSlesMetrics": "sle_metrics",
@@ -1267,6 +1346,13 @@ class TestArangoDBWriterSiteRoutingGraph:  # WHY: pytest test class
         assert "RrmNeighborBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_routing_edge_definitions_registered(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            EDGE_DEFINITIONS,
+        )  # WHY: load schema constants for direct assertions
+
+        assert any(
+            edge["edge_collection"] == "DeviceHasBGPPeer" for edge in EDGE_DEFINITIONS
+        )  # WHY: prove a routing edge is registered
         assert_edges_registered(
             {  # WHY: single subset check keeps CC=1 vs 6 asserts
                 "DeviceHasBGPPeer",
@@ -1279,6 +1365,11 @@ class TestArangoDBWriterSiteRoutingGraph:  # WHY: pytest test class
         )
 
     def test_routing_entity_types_mapped(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            ENTITY_TYPE_TO_VERTEX,
+        )  # WHY: load schema constants for direct assertions
+
+        assert "searchSiteBgpStats" in ENTITY_TYPE_TO_VERTEX  # WHY: prove a routing endpoint maps to a vertex
         assert_entity_types_mapped(
             {  # WHY: single dict-subset check collapses 8 asserts to CC=1
                 "searchSiteBgpStats": "bgp_stats",
@@ -1415,6 +1506,13 @@ class TestArangoDBWriterSiteMapsZonesGraph:  # WHY: pytest test class
         assert "ZoneSessionOnMap" in edge_cols  # WHY: verify expected behavior
 
     def test_maps_zones_edge_definitions_registered(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            EDGE_DEFINITIONS,
+        )  # WHY: load schema constants for direct assertions
+
+        assert any(
+            edge["edge_collection"] == "MapBelongsToSite" for edge in EDGE_DEFINITIONS
+        )  # WHY: prove a maps edge is registered
         assert_edges_registered(
             {  # WHY: single set-subset check collapses 10 asserts to CC=1
                 "MapBelongsToSite",
@@ -1431,6 +1529,11 @@ class TestArangoDBWriterSiteMapsZonesGraph:  # WHY: pytest test class
         )
 
     def test_maps_zones_entity_types_mapped(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            ENTITY_TYPE_TO_VERTEX,
+        )  # WHY: load schema constants for direct assertions
+
+        assert "listSiteMaps" in ENTITY_TYPE_TO_VERTEX  # WHY: prove a map endpoint maps to a vertex
         assert_entity_types_mapped(
             {  # WHY: single dict-subset check collapses 10 asserts to CC=1
                 "listSiteMaps": "maps",
@@ -1578,6 +1681,13 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
         assert "AnomalyEventBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_events_alarms_edge_definitions_registered(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            EDGE_DEFINITIONS,
+        )  # WHY: load schema constants for direct assertions
+
+        assert any(
+            edge["edge_collection"] == "ServicePathEventOnDevice" for edge in EDGE_DEFINITIONS
+        )  # WHY: prove an event edge is registered
         assert_edges_registered(
             {  # WHY: single set-subset check collapses 9 asserts to CC=1
                 "ServicePathEventOnDevice",
@@ -1593,6 +1703,11 @@ class TestArangoDBWriterSiteEventsAlarmsGraph:  # WHY: pytest test class
         )
 
     def test_events_alarms_entity_types_mapped(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            ENTITY_TYPE_TO_VERTEX,
+        )  # WHY: load schema constants for direct assertions
+
+        assert "searchSiteServicePathEvents" in ENTITY_TYPE_TO_VERTEX  # WHY: prove an event endpoint maps to a vertex
         assert_entity_types_mapped(
             {  # WHY: single dict-subset check collapses 9 asserts to CC=1
                 "searchSiteAlarms": "alarms",
@@ -1690,6 +1805,13 @@ class TestConfigHistorySyntheticTestGraphStorage:  # WHY: pytest test class
         assert "PacketCaptureBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_edge_definitions_registered(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            EDGE_DEFINITIONS,
+        )  # WHY: load schema constants for direct assertions
+
+        assert len(EDGE_DEFINITIONS) >= len(
+            ALL_EXPECTED_EDGES
+        )  # WHY: prove the edge registry covers the canonical set size
         assert_edges_registered(
             {  # WHY: single subset check keeps CC=1 vs 4 asserts
                 "ConfigHistoryForDevice",
@@ -1760,6 +1882,11 @@ class TestSiteWlansPsksWebhooksGraphStorage:  # WHY: pytest test class
         assert "WebhookBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_site_wxrules_collection_vertex_map(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: load schema constants for direct assertions
+
+        assert "listSiteWxRules" in COLLECTION_VERTEX_MAP  # WHY: prove site Wx rules have a graph mapping
         assert_vertex_config("listSiteWxRules", "wx_rules", "id")  # WHY: single vertex+key check keeps CC=1
         assert_edge_cols_include(  # WHY: subset check collapses 4 asserts into one
             "listSiteWxRules",
@@ -1792,6 +1919,13 @@ class TestSiteWlansPsksWebhooksGraphStorage:  # WHY: pytest test class
         assert "WxTunnelBelongsToSite" in edge_cols  # WHY: verify expected behavior
 
     def test_edge_definitions_registered(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            EDGE_DEFINITIONS,
+        )  # WHY: load schema constants for direct assertions
+
+        assert len(EDGE_DEFINITIONS) >= len(
+            ALL_EXPECTED_EDGES
+        )  # WHY: prove the edge registry covers the canonical set size
         assert_edges_registered(
             {  # WHY: single subset check keeps CC=1 vs 4 asserts
                 "WxRuleBelongsToSite",
@@ -1856,6 +1990,11 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
         assert ENTITY_TYPE_TO_VERTEX["listSiteUnconnectedClientStats"] == "unconnected_clients"  # WHY: verify expected
 
     def test_wireless_clients_edges(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: load schema constants for direct assertions
+
+        assert "searchSiteWirelessClients" in COLLECTION_VERTEX_MAP  # WHY: prove wireless client edge mapping exists
         assert_vertex_config("searchSiteWirelessClients", "clients", "mac")  # WHY: vertex+key check in one call
         assert_edge_cols_include(  # WHY: subset check covers 4 edge assertions in one
             "searchSiteWirelessClients",
@@ -1863,14 +2002,29 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
         )
 
     def test_wired_clients_edges(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: load schema constants for direct assertions
+
+        assert "searchSiteWiredClients" in COLLECTION_VERTEX_MAP  # WHY: prove wired client edge mapping exists
         assert_vertex_config("searchSiteWiredClients", "clients", "mac")  # WHY: vertex+key check in one call
         assert_edge_cols_include("searchSiteWiredClients", {"ClientConnectedToDevice", "ClientBelongsToSite"})  # WHY: s
 
     def test_wan_clients_edges(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: load schema constants for direct assertions
+
+        assert "searchSiteWanClients" in COLLECTION_VERTEX_MAP  # WHY: prove WAN client edge mapping exists
         assert_vertex_config("searchSiteWanClients", "clients", "mac")  # WHY: vertex+key check in one call
         assert_edge_cols_include("searchSiteWanClients", {"ClientBelongsToSite"})  # WHY: single-edge subset check
 
     def test_nac_clients_edges(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: load schema constants for direct assertions
+
+        assert "searchSiteNacClients" in COLLECTION_VERTEX_MAP  # WHY: prove NAC client edge mapping exists
         assert_vertex_config("searchSiteNacClients", "clients", "mac")  # WHY: vertex+key check in one call
         assert_edge_cols_include(  # WHY: 3-edge subset check in one call
             "searchSiteNacClients",
@@ -1878,6 +2032,11 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
         )
 
     def test_nac_client_events_edges(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: load schema constants for direct assertions
+
+        assert "searchSiteNacClientEvents" in COLLECTION_VERTEX_MAP  # WHY: prove NAC client event edge mapping exists
         assert_vertex_config("searchSiteNacClientEvents", "nac_events", "id")  # WHY: vertex+key check in one call
         assert_edge_cols_include(  # WHY: 2-edge subset check
             "searchSiteNacClientEvents",
@@ -1885,6 +2044,13 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
         )
 
     def test_wireless_client_events_edges(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: load schema constants for direct assertions
+
+        assert (
+            "searchSiteWirelessClientEvents" in COLLECTION_VERTEX_MAP
+        )  # WHY: prove wireless client event edge mapping exists
         assert_vertex_config("searchSiteWirelessClientEvents", "client_events", "id")  # WHY: vertex+key check
         assert_edge_cols_include(  # WHY: 3-edge subset check
             "searchSiteWirelessClientEvents",
@@ -1892,9 +2058,23 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
         )
 
     def test_wireless_client_events_ensure_targets(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: load schema constants for direct assertions
+
+        assert (
+            "searchSiteWirelessClientEvents" in COLLECTION_VERTEX_MAP
+        )  # WHY: prove wireless client event targets can be checked
         assert_ensure_target("searchSiteWirelessClientEvents", ("mac", "clients"))  # WHY: single membership check
 
     def test_wireless_client_sessions_edges(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: load schema constants for direct assertions
+
+        assert (
+            "searchSiteWirelessClientSessions" in COLLECTION_VERTEX_MAP
+        )  # WHY: prove wireless session edge mapping exists
         assert_vertex_config("searchSiteWirelessClientSessions", "client_sessions", "id")  # WHY: vertex+key check
         assert_edge_cols_include(  # WHY: 4-edge subset check
             "searchSiteWirelessClientSessions",
@@ -1902,6 +2082,11 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
         )
 
     def test_wan_client_events_edges(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: load schema constants for direct assertions
+
+        assert "searchSiteWanClientEvents" in COLLECTION_VERTEX_MAP  # WHY: prove WAN client event edge mapping exists
         assert_vertex_config("searchSiteWanClientEvents", "wan_events", "id")  # WHY: vertex+key check
         assert_edge_cols_include(  # WHY: 2-edge subset check
             "searchSiteWanClientEvents",
@@ -1909,6 +2094,13 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
         )
 
     def test_unconnected_clients_edges(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: load schema constants for direct assertions
+
+        assert (
+            "listSiteUnconnectedClientStats" in COLLECTION_VERTEX_MAP
+        )  # WHY: prove unconnected client edge mapping exists
         assert_vertex_config("listSiteUnconnectedClientStats", "unconnected_clients", "mac")  # WHY: vertex+key check
         assert_edge_cols_include(  # WHY: 2-edge subset check
             "listSiteUnconnectedClientStats",
@@ -1916,6 +2108,13 @@ class TestSiteClientsGraphStorage:  # WHY: pytest test class
         )
 
     def test_edge_definitions_registered(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            EDGE_DEFINITIONS,
+        )  # WHY: load schema constants for direct assertions
+
+        assert len(EDGE_DEFINITIONS) >= len(
+            ALL_EXPECTED_EDGES
+        )  # WHY: prove the edge registry covers the canonical set size
         assert_edges_registered(
             {  # WHY: single subset check covers 5 asserts
                 "ClientUsedPSK",
@@ -2261,9 +2460,16 @@ class TestDerivedConfigGraphStorage:  # WHY: pytest test class
         assert "wlans" in edge["from_vertex_collections"]  # WHY: verify expected behavior
 
     def test_all_edged_ops_have_derived_config_for_site(self):  # WHY: pytest discovers this by name
+
+        assert len(ALL_EXPECTED_EDGES) > 0  # WHY: prove the schema expectation set is populated
         assert_all_edged_ops_include(self.DERIVED_OPS, "DerivedConfigForSite")  # WHY: single helper call keeps CC=1
 
     def test_only_wlans_has_derived_from_template(self):  # WHY: pytest discovers this by name
+        from src.db.arango_writer import (
+            COLLECTION_VERTEX_MAP,
+        )  # WHY: load schema constants for direct assertions
+
+        assert "listOrgWlans" in COLLECTION_VERTEX_MAP  # WHY: prove WLANs have the derived template source under test
         assert_ops_carrying_edge_include(self.DERIVED_OPS, "DerivedFromTemplate", "listSiteWlansDerived")  # WHY: single
 
     def test_new_vertex_collections_in_edge_defs(self):  # WHY: pytest discovers this by name
