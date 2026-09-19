@@ -1326,7 +1326,7 @@ def test_load_capture_reports_an_absent_capture() -> None:
 def test_load_capture_returns_a_verified_capture() -> None:
     """The store hands out a verified capture and calls it comparable."""
     loaded = store.load_capture(_KEY, _database_holding(_verified_capture()))
-    assert loaded.capture is not None
+    assert loaded.capture[store.CAPTURE_STATE_FIELD] == store.CaptureState.VERIFIED.value
     assert loaded.comparable is True
     assert loaded.reason == store.REASON_VERIFIED
 
@@ -1340,7 +1340,7 @@ def test_load_capture_hands_out_an_unverified_capture_with_its_reason() -> None:
     """
     stored = dict(_written_capture(), **{store.CAPTURE_STATE_FIELD: store.CaptureState.WRITING.value})
     loaded = store.load_capture(_KEY, _database_holding(stored))
-    assert loaded.capture is not None
+    assert loaded.capture[store.CAPTURE_STATE_FIELD] == store.CaptureState.WRITING.value
     assert loaded.comparable is False
     assert loaded.reason == store.REASON_CAPTURE_NOT_VERIFIED
 
@@ -1371,7 +1371,6 @@ def test_load_capture_for_comparison_withholds_a_capture_that_names_no_state() -
 def test_load_capture_for_comparison_returns_a_verified_capture() -> None:
     """A verified capture reaches the comparison whole."""
     loaded = store.load_capture_for_comparison(_KEY, _database_holding(_verified_capture()))
-    assert loaded.capture is not None
     assert loaded.comparable is True
     assert loaded.capture["capture_id"] == _KEY
 
@@ -1400,7 +1399,6 @@ def test_a_written_capture_reads_back_as_comparable(monkeypatch: pytest.MonkeyPa
     assert written.verified is True
     assert edge.verified is True
     assert loaded.comparable is True
-    assert loaded.capture is not None
     assert loaded.capture["stored_size_bytes"] == written.stored_size_bytes
 
 

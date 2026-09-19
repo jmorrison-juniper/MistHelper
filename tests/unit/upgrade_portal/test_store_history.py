@@ -248,7 +248,7 @@ def test_load_capture_opens_a_record_of_an_older_schema_version() -> None:
         age, so an older record still opens and still joins a comparison.
     """
     loaded = store.load_capture(_KEY, _FakeDatabase(_capture(store.SCHEMA_VERSION - 1)))
-    assert loaded.capture is not None
+    assert loaded.capture["schema_version"] == store.SCHEMA_VERSION - 1
     assert loaded.comparable is True
     assert loaded.reason == store.REASON_VERIFIED
 
@@ -264,7 +264,6 @@ def test_load_capture_refuses_a_record_of_a_later_schema_version() -> None:
     loaded = store.load_capture(_KEY, _FakeDatabase(_capture(store.SCHEMA_VERSION + 1)))
     assert loaded.comparable is False
     assert loaded.reason == store.REASON_SCHEMA_TOO_NEW
-    assert loaded.capture is not None
     assert loaded.capture["schema_version"] == store.SCHEMA_VERSION + 1
 
 
