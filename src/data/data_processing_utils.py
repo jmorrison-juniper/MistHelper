@@ -108,10 +108,10 @@ class DataProcessingUtils:
             return value  # Return as-is.
         try:
             return json.loads(value)  # Try the fast, common-case JSON parse first.
-        except Exception:  # json.loads failed. Try the slower Python-literal parse.
+        except json.JSONDecodeError:  # json.loads rejected malformed JSON, so try the Python-literal parser.
             try:
                 return ast.literal_eval(value)  # Handles single-quoted Python literals JSON rejects.
-            except Exception:  # nosec B110 - both parses failed. Leave value as string.
+            except (SyntaxError, ValueError):  # nosec B110 - both parsers rejected user data. Leave it unchanged.
                 return value  # Final fallback: original string.
 
     @staticmethod

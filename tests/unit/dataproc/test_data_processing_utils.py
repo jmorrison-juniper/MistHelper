@@ -15,6 +15,9 @@ from __future__ import annotations  # WHY: PEP 604 unions for optional typing in
 
 from typing import Any  # WHY: Any typing for the intentionally mixed test input.
 
+import pytest  # WHY: assert the narrowed parse handlers let programmer errors propagate.
+
+from src.data import data_processing_utils as data_processing_utils_module  # WHY: patch parser collaborators.
 from src.data.data_processing_utils import DataProcessingUtils  # Real class under test.
 
 
@@ -109,6 +112,42 @@ class TestFlattenNestedFields:
         entry = {"cfg": malformed_body}  # Drive the product parser with malformed JSON text.
         result = DataProcessingUtils.flatten_nested_fields([entry])  # Execute the real flattening pipeline.
         assert result == [{"cfg": "{not valid JSONDecodeError"}]  # The product keeps the original value.
+
+    def test_json_parser_programmer_error_propagates(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Programmer errors from json.loads must not look like malformed user data."""
+
+        def raise_type_error(_value: str) -> object:
+            raise TypeError("bad parser wiring")  # WHY: model a coding fault inside the parser call.
+
+        monkeypatch.setattr(  # WHY: make json.loads raise an exception outside JSONDecodeError.
+            data_processing_utils_module.json,
+            "loads",
+            raise_type_error,
+        )
+        with pytest.raises(TypeError, match="bad parser wiring"):  # WHY: narrowed handler must not swallow this fault.
+            DataProcessingUtils.flatten_nested_fields([{"cfg": "{}"}])  # WHY: trigger the json parser branch.
+
+    def test_literal_parser_programmer_error_propagates(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Programmer errors from ast.literal_eval must not look like malformed user data."""
+
+        def raise_decode_error(_value: str) -> object:
+            raise data_processing_utils_module.json.JSONDecodeError("bad", "{}", 0)  # WHY: force literal fallback.
+
+        def raise_type_error(_value: str) -> object:
+            raise TypeError("bad literal wiring")  # WHY: model a coding fault inside the literal parser call.
+
+        monkeypatch.setattr(  # WHY: force the function through the json failure path.
+            data_processing_utils_module.json,
+            "loads",
+            raise_decode_error,
+        )
+        monkeypatch.setattr(  # WHY: make ast.literal_eval raise outside SyntaxError and ValueError.
+            data_processing_utils_module.ast,
+            "literal_eval",
+            raise_type_error,
+        )
+        with pytest.raises(TypeError, match="bad literal wiring"):  # WHY: narrowed handler must not swallow this fault.
+            DataProcessingUtils.flatten_nested_fields([{"cfg": "{}"}])  # WHY: trigger both parser calls.
 
     def test_stringified_list_of_scalars_joined_as_csv(self) -> None:
         """Parsed scalar lists join into a CSV string (line 112)."""
