@@ -8,6 +8,7 @@ confirmation, execution, auto-upgrade, status check, and results writing.
 from __future__ import annotations
 
 import csv
+import logging  # WHY: caplog needs logging levels for completion-claim assertions.
 import os
 import sys
 from unittest.mock import MagicMock, patch
@@ -2147,15 +2148,18 @@ class TestStep10StatusCheckExtended:
                 except Exception:
                     pass  # File I/O mocking is complex
 
-    def test_save_upgrade_tracking_error(self):
+    def test_save_upgrade_tracking_error(self, caplog):
         """Save tracking handles write error."""
-        upgrader = _make_upgrader()
-        upgrader.upgrade_ids = ["upgrade-001"]
-        upgrader.upgrade_config = {"download_strategy": "canary", "reboot_strategy": "rrm"}
-        with patch("os.path.exists", return_value=False):
-            with patch("builtins.open", side_effect=PermissionError("denied")):
-                # Should not raise
-                upgrader._save_upgrade_tracking()
+        upgrader = _make_upgrader()  # WHY: build a configured upgrader without cloud calls.
+        upgrader.upgrade_ids = ["upgrade-001"]  # WHY: force the method past the no-op guard.
+        upgrader.upgrade_config = {"download_strategy": "canary", "reboot_strategy": "rrm"}  # WHY: valid row data.
+        with caplog.at_level(logging.DEBUG):  # WHY: capture both the failure warning and debug completion line.
+            with patch("os.path.exists", return_value=False):  # WHY: avoid reading a real tracking file.
+                with patch("builtins.open", side_effect=PermissionError("denied")):  # WHY: drive write failure.
+                    upgrader._save_upgrade_tracking()  # WHY: failure is swallowed by design.
+        log_out = "\n".join(record.getMessage() for record in caplog.records)  # WHY: inspect rendered log messages.
+        assert "Failed to save tracking: denied" in log_out  # WHY: prove the failure signal remains.
+        assert "save_upgrade_tracking complete" not in log_out  # WHY: failed writes must not log completion.
 
 
 # ===================================================================
