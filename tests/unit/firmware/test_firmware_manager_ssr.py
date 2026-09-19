@@ -2043,3 +2043,25 @@ class TestSelectTemplateAndSites:
         monkeypatch.setattr(mgr, "_prompt_template_selection", lambda *_a: ("orphan-id", "orphan"))
         result = mgr._select_template_and_sites({"orphan": "orphan-id"}, {})
         assert result == ("orphan", [])
+
+
+@pytest.mark.parametrize("status_code", [404, 503], ids=["missing-org", "cloud-error"])
+def test_org_validation_http_error_statuses_return_error_envelope(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    status_code: int,
+) -> None:
+    """Organization validation must stop on client and server HTTP errors."""
+    import mistapi.api.v1.orgs.orgs as real_orgs
+
+    monkeypatch.setattr(  # WHY: replace the Mist API call with a real response-shaped double.
+        real_orgs,
+        "getOrg",
+        lambda _session, _org: _FakeResponse(status_code=status_code, data={}),
+    )
+    mgr = _make_manager()  # WHY: drive the real manager helper with test configuration.
+    with caplog.at_level(logging.ERROR, logger=fm_mod.logger.name):  # WHY: capture the product error signal.
+        name, err = mgr._validate_org_for_ssr_upgrade()  # WHY: call the real HTTP status branch.
+    assert name == ""  # WHY: a failed organization lookup must not supply a display name.
+    assert err == {"error": "Organization access failed"}  # WHY: callers depend on this error envelope.
+    assert str(status_code) in caplog.text  # WHY: the log must preserve the exact cloud status.
