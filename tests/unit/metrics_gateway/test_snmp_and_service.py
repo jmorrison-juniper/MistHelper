@@ -11,6 +11,7 @@ import pytest
 from src.metrics_gateway.cache import MetricsCache
 from src.metrics_gateway.catalog import ROW_IDENTITY_COLUMN, MetricScope
 from src.metrics_gateway.collector import MistMetricsCollector, MistStatsReader
+from src.metrics_gateway.collector import MistStatsReader as FailureModeMistStatsReader
 from src.metrics_gateway.samples import MetricSnapshot
 from src.metrics_gateway.service import (
     ALL_INTERFACES_HOST,
@@ -58,6 +59,15 @@ def test_payload_returns_none_and_logs_429(caplog: pytest.LogCaptureFixture) -> 
     payload = MistStatsReader._payload(response, "getOrgStats")  # Drive the product status parser.
     assert payload is None  # A 429 reply must not feed the metric collector.
     assert "getOrgStats call returned status 429" in caplog.text  # The log must name the exact status.
+
+
+def test_payload_returns_none_and_logs_503(caplog: pytest.LogCaptureFixture) -> None:
+    """A 503 Mist response must produce no payload and report the status."""
+    response = StubResponse(status_code=503, data={"detail": "unavailable"})  # Model a server-error endpoint.
+    caplog.set_level("ERROR", logger="src.metrics_gateway.collector")  # Capture the product error record.
+    payload = FailureModeMistStatsReader._payload(response, "getOrgStats")  # Drive the real src status parser.
+    assert payload is None  # A 503 reply must not feed the metric collector.
+    assert "getOrgStats call returned status 503" in caplog.text  # The log must name the exact status.
 
 
 class TestOidText:

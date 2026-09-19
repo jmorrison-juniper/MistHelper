@@ -24,6 +24,9 @@ from src.firmware.running_version import (
     SITE_STATS_ENDPOINT,
     RunningFirmwareVersionResolver,
 )
+from src.firmware.running_version import (
+    RunningFirmwareVersionResolver as FailureModeRunningFirmwareVersionResolver,
+)
 
 STALE_VERSION = "20.4R3-S2.6"
 RUNNING_VERSION = "23.4R2-S5.5"
@@ -114,6 +117,16 @@ def test_rows_from_response_reports_http_404(caplog: Any) -> None:
     assert rows == []  # Failed status data must not feed a firmware decision.
     assert "returned 404" in caplog.text  # The log must keep the exact status.
     assert "site-404" in caplog.text  # The log must keep the failed site identifier.
+
+
+def test_rows_from_response_reports_http_503(caplog: Any) -> None:
+    """A 503 site stats response must return no rows and log the exact status."""
+    response = _FakeResponse(status_code=503, data=[{"id": "ignored"}])  # Model a server-side refusal.
+    with caplog.at_level("ERROR", logger="src.firmware.running_version"):  # Capture the product status log.
+        rows = FailureModeRunningFirmwareVersionResolver._rows_from_response(response, "site-503")  # Drive parser.
+    assert rows == []  # Failed status data must not feed a firmware decision.
+    assert "returned 503" in caplog.text  # The log must keep the exact status.
+    assert "site-503" in caplog.text  # The log must keep the failed site identifier.
 
 
 def test_fetch_site_running_versions_surfaces_programming_error() -> None:

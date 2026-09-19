@@ -8,6 +8,9 @@ import pytest
 
 from src.capture.packet_capture import PacketCaptureManager
 from src.capture.packet_capture_download import PacketCaptureDownloadManager
+from src.capture.packet_capture_download import (
+    PacketCaptureDownloadManager as FailureModePacketCaptureDownloadManager,
+)  # WHY: prove new HTTP status tests call src.
 
 
 @pytest.fixture()
@@ -67,3 +70,16 @@ def test_fetch_completed_pcaps_reports_http_404(capsys, caplog: pytest.LogCaptur
     assert result == []  # A 404 response must not enter the success parse path.
     assert "HTTP 404" in capsys.readouterr().out  # The operator must see the status code.
     assert "Failed to list PCAPs: 404" in caplog.text  # The log must preserve the exact status.
+
+
+def test_fetch_completed_pcaps_reports_http_503(capsys, caplog: pytest.LogCaptureFixture) -> None:
+    """A 503 listing response must report the status and return no captures."""
+    response = MagicMock(status_code=503, data={"detail": "unavailable"})  # Model a server-side API failure.
+    downloader = FailureModePacketCaptureDownloadManager()  # Drive the real src helper that reads response status.
+    caplog.set_level("WARNING", logger="src.capture.packet_capture_download")  # Capture the audit status record.
+
+    result = downloader.fetch_completed_pcaps(lambda: response, 1)  # Drive the real list status path.
+
+    assert result == []  # A 503 response must not enter the success parse path.
+    assert "HTTP 503" in capsys.readouterr().out  # The operator must see the status code.
+    assert "Failed to list PCAPs: 503" in caplog.text  # The log must preserve the exact status.
