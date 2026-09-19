@@ -60,6 +60,11 @@ class MarkdownTextRules:
         "\ufffd": "",  # the reader writes this mark when a glyph has no mapping
     }
     BULLETS = "\u2022\u2023\u25aa\u25cf\u25e6\u2043\u00b7\uf0b7\uf0a7"  # the glyphs that start a list item
+    # A subset font can map its bullet glyph to a control character instead of a
+    # bullet. The line then starts with a byte such as 0x19, the list mark is
+    # lost, and the control character reaches the Markdown file. Issue #2988
+    # holds the evidence.
+    CONTROL_BULLETS = "".join(chr(code) for code in range(1, 32) if code not in (9, 10, 13))
     FOLIO = re.compile(r"^(?:x{0,3}(?:ix|iv|v?i{0,3})|\d{1,4}|page\s+\d{1,4}|\d{1,4}\s+of\s+\d{1,4})$", re.IGNORECASE)
     CONTENTS = re.compile(r".+?(?:\|\s*|\.{3,}\s*)\d+(?=\s|$)")  # one contents entry, which ends in a page number
 
@@ -73,6 +78,8 @@ class MarkdownTextRules:
             cleaned = f"\\{cleaned}"  # the escape keeps the line as body text
         if cleaned and cleaned[0] in self.BULLETS:  # a leading bullet glyph marks a list item
             return "- " + cleaned[1:].strip()  # the Markdown form of the same item
+        if cleaned and cleaned[0] in self.CONTROL_BULLETS:  # a broken font wrote a control byte
+            return "- " + cleaned[1:].strip()  # the same list item, with the byte removed
         return cleaned  # a normal body line needs no mark
 
     def is_noise(self, text: str, headers: frozenset[str]) -> bool:
