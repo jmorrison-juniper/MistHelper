@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging  # WHY: caplog must select the SSH logger level for failure-path assertions.
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -84,6 +85,25 @@ class TestRunOrchestration:
         assert ok is False
         mock_execute.assert_not_called()  # Skipped because connect failed
         mock_disconnect.assert_called_once()  # Cleanup still runs in finally
+
+    @patch("src.ssh.command.command_runner.SshConnector")
+    @patch("src.ssh.ssh_runner.EnhancedSSHRunner._create_secure_log_file")
+    @patch("src.ssh.ssh_runner.EnhancedSSHRunner._execute_command")
+    @patch("src.ssh.ssh_runner.EnhancedSSHRunner._disconnect")
+    def test_connection_failure_logs_end_not_completed(
+        self, mock_disconnect, mock_execute, mock_log, mock_connector_class, caplog
+    ) -> None:
+        """Connection failure must not claim that the SSH command session completed."""
+        mock_connector_class.return_value.connect.return_value = (None, None)  # WHY: drive the failure path.
+        mock_log.return_value = ("data\\host.log", lambda _msg: None)  # WHY: avoid filesystem writes in this test.
+        with caplog.at_level(logging.DEBUG, logger="ssh_runner_v2"):  # WHY: collect the finally debug line.
+            ok = SingleCommandRunner.run(self._make_request())  # WHY: execute the guarded flow under failure.
+        assert ok is False  # WHY: the failed connection must propagate as a failed run.
+        assert "SSH connection failed: 10.0.0.1:22" in caplog.text  # WHY: prove the failure signal remains.
+        assert "SSH single command session completed" not in caplog.text  # WHY: block the old false success report.
+        assert "SSH single command session ended" in caplog.text  # WHY: neutral completion is still logged.
+        mock_execute.assert_not_called()  # WHY: a failed connection must not run the command.
+        mock_disconnect.assert_called_once()  # WHY: cleanup must still run after the failed connection.
 
     @patch("src.ssh.command.command_runner.SshConnector")
     @patch("src.ssh.ssh_runner.EnhancedSSHRunner._create_secure_log_file")

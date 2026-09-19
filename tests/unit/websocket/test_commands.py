@@ -10,6 +10,7 @@ cannot silently change the observable contract.
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -458,6 +459,19 @@ def test_await_and_display_success_debug_prints_keys(capsys) -> None:
     out = capsys.readouterr().out
     assert "[DEBUG] wait_for_command_result returned: True" in out
     assert "[DEBUG] Result keys:" in out
+
+
+def test_await_and_display_empty_result_does_not_log_success(capsys, caplog) -> None:
+    """An empty MAC table payload prints the diagnostic and does not log success."""
+    wm = MagicMock()  # WHY: fake WebSocket manager avoids a live WebSocket wait.
+    wm.wait_for_command_result.return_value = {"session": "s"}  # WHY: no raw or Output field makes it empty.
+    with caplog.at_level(logging.INFO):  # WHY: capture the empty-payload outcome log.
+        MacTableCommand._await_and_display(wm, "sess-1", debug_mode=False)  # WHY: exercise the success-log site.
+    out = capsys.readouterr().out  # WHY: read the operator-facing diagnostic.
+    assert "No output data received" in out  # WHY: prove the empty branch ran.
+    log_out = "\n".join(record.getMessage() for record in caplog.records)  # WHY: inspect rendered log messages.
+    assert "WebSocket show MAC table completed successfully" not in log_out  # WHY: empty payload is not success.
+    assert "WebSocket show MAC table returned no output" in log_out  # WHY: prove the error signal remains.
 
 
 def test_await_and_display_timeout_calls_render_timeout() -> None:

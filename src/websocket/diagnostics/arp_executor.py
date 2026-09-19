@@ -330,11 +330,14 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
         self._render_device_context(device_info)  # WHY: optional device-context block.
         raw_output = arp_result.get("raw", "")  # WHY: primary output field in the schema.
         parsed_output = arp_result.get("Output", "")  # WHY: secondary output (often empty).
-        self._render_output_sections(  # WHY: pick raw/parsed/empty branch.
+        rendered_output = self._render_output_sections(  # WHY: pick raw/parsed/empty branch.
             raw_output, parsed_output, device_info, debug_mode
         )
         print("=" * 60)  # WHY: legacy visual closer preserved verbatim.
         device_context = self._format_device_context(device_info, device_id)  # WHY: log payload.
+        if not rendered_output:  # WHY: an empty payload cannot prove ARP success.
+            logger.warning("WebSocket ARP returned no output for %s", device_context)  # WHY: report empty outcome.
+            return  # WHY: do not emit a success log after an empty payload.
         logger.info("WebSocket ARP completed successfully for %s", device_context)  # WHY: log.
 
     @staticmethod
@@ -350,14 +353,15 @@ class ArpDeviceExecutor:  # WHY: orchestrates ARP-over-WebSocket diagnostic work
         parsed_output: str,
         device_info: dict[str, Any] | None,
         debug_mode: bool,
-    ) -> None:
+    ) -> bool:
         """Render the raw / parsed / empty result sections for a successful ARP call."""
         if not raw_output and not parsed_output:  # WHY: empty-result diagnostic path.
             self._render_empty_result(device_info)  # WHY: emit legacy phrasing block.
-            return  # WHY: nothing further to render.
+            return False  # WHY: caller must not report success after an empty payload.
         if raw_output:  # WHY: gateway-table vs raw-passthrough decision lives here.
             self._render_raw_output_block(raw_output, device_info, debug_mode)  # WHY: raw.
         self._maybe_render_parsed(raw_output, parsed_output)  # WHY: optional parsed section.
+        return True  # WHY: at least one output channel rendered.
 
     @staticmethod
     def _maybe_render_parsed(raw_output: str, parsed_output: str) -> None:

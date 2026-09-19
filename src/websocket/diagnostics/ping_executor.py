@@ -304,6 +304,11 @@ class PingDeviceExecutor:  # WHY: orchestrates ping-over-WebSocket diagnostic wo
         print_extra_result_fields(ping_result, set(_EXCLUDED_RESULT_KEYS))  # WHY: extras.
         if not raw_output and not other_output:  # WHY: surface empty-result diagnostic.
             self._render_empty_result(ping_result)  # WHY: emit legacy phrasing block.
+            print(_HEADER_SEPARATOR)  # WHY: keep the legacy closer on the empty-payload path.
+            logger.warning(
+                "WebSocket ping returned no output for %s", target_host
+            )  # WHY: empty payload is not success.
+            return  # WHY: do not emit a success log after an empty payload.
         print(_HEADER_SEPARATOR)  # WHY: legacy visual closer preserved.
         logger.info(  # WHY: final action log on successful render.
             "WebSocket ping completed successfully for %s", target_host

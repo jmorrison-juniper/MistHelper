@@ -279,11 +279,15 @@ def test_render_ping_result_full(capsys, caplog: pytest.LogCaptureFixture) -> No
     assert "extra1" in log_out
 
 
-def test_render_ping_result_empty_output_shows_diagnostic(capsys) -> None:
+def test_render_ping_result_empty_output_shows_diagnostic(capsys, caplog: pytest.LogCaptureFixture) -> None:
     """No raw/no other → empty-result diagnostic block emitted."""
-    PingDeviceExecutor()._render_ping_result({"session": "s"}, "1.1.1.1")
+    with caplog.at_level(logging.INFO):  # WHY: capture the empty-payload outcome log.
+        PingDeviceExecutor()._render_ping_result({"session": "s"}, "1.1.1.1")  # WHY: drive the empty branch.
     out = capsys.readouterr().out
     assert "No output data received" in out
+    log_out = "\n".join(record.getMessage() for record in caplog.records)  # WHY: inspect rendered log messages.
+    assert "WebSocket ping completed successfully" not in log_out  # WHY: empty payload is not success.
+    assert "WebSocket ping returned no output for 1.1.1.1" in log_out  # WHY: prove the error signal remains.
 
 
 # ---------- _announce_wait ----------
