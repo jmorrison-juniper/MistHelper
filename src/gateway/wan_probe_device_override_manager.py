@@ -596,7 +596,7 @@ class WANProbeDeviceOverrideManager:  # WHY: encapsulates Menu #167 destructive 
         print(f"\n  Report saved to: {AUDIT_OUTPUT_FILE}")  # WHY: echo audit file path.
         print(HEADER_RULE)  # WHY: close banner.
         success_count = self._count_success(results)  # WHY: successful updates only.
-        logger.warning("Menu #167 DESTRUCTIVE operation complete: %s devices updated", success_count)  # WHY: audit.
+        logger.info("Menu #167 DESTRUCTIVE operation complete: %s devices updated", success_count)  # WHY: audit.
 
     def _write_audit_csv(self, results: list[dict[str, Any]]) -> None:  # WHY: isolate CSV export side effect.
         """Serialise per-device results to the audit CSV via the injected exporter."""

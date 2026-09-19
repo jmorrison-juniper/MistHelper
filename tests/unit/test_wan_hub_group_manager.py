@@ -594,6 +594,17 @@ class TestPromptSetPodConfirmation:
 class TestApplyVpnUpdatesError:
     """Test _apply_vpn_updates error handling."""
 
+    def test_success_summary_uses_info_level(self, manager, caplog: pytest.LogCaptureFixture):
+        """Successful pod updates log the summary at INFO, not WARNING."""
+        vpn_updates = {"vpn-1": {"name": "OrgOverlay", "paths": ["ALPHA-WAN1"]}}  # WHY: one update is enough.
+        manager._apply_one_vpn = MagicMock(return_value=1)  # type: ignore[method-assign] # WHY: avoid API calls.
+        with caplog.at_level(logging.INFO):  # WHY: capture the repaired success summary.
+            manager._apply_vpn_updates(vpn_updates, "ALPHA", 99)  # WHY: exercise the summary log site.
+        summary_records = [
+            record for record in caplog.records if "Updated 1 paths for 'ALPHA' to pod 99" in record.getMessage()
+        ]  # WHY: isolate the repaired success summary.
+        assert [record.levelno for record in summary_records] == [logging.INFO]  # WHY: success is not a warning.
+
     @patch("src.wan_hub_group_manager.mistapi.api.v1.orgs.vpns.getOrgVpn")
     def test_api_error_prints_message(self, mock_get, manager, caplog: pytest.LogCaptureFixture):
         caplog.set_level(logging.ERROR)
