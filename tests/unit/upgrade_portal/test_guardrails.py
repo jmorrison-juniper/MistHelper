@@ -493,8 +493,8 @@ class TestRepositoryGuardrails:
             key_field: The single field that forms the key.
         """
         anchor = where(STRATEGY_PATH, line_of(STRATEGY_PATH, f'"{endpoint}"'))  # WHY: Names the entry.
-        entry = ENDPOINT_PRIMARY_KEY_STRATEGIES.get(endpoint)  # WHY: An absent entry reads as None.
-        assert entry is not None, f"{anchor} holds no {endpoint} entry"
+        assert endpoint in ENDPOINT_PRIMARY_KEY_STRATEGIES, f"{anchor} holds no {endpoint} entry"
+        entry = ENDPOINT_PRIMARY_KEY_STRATEGIES[endpoint]  # WHY: The assertion above proved the key exists.
         strategy = entry.get("type", "")  # WHY: The message repeats the wrong value.
         assert strategy == "natural_pk", f"{anchor} sets the strategy {strategy} for {endpoint}"
         assert entry.get("primary_key") == [key_field], f"{anchor} names another key field for {endpoint}"
