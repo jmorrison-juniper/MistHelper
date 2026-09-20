@@ -648,7 +648,8 @@ def test_the_typed_word_still_works_one_second_before_the_lease_ends(store: Scri
     grant = acquire_site_lock(build_request(SECOND_OWNER, TAKEOVER_CONFIRMATION_TEXT), client=store)
 
     assert grant.state is LockState.TAKEN_OVER
-    assert isinstance(grant.audit, lock_module.TakeoverAudit)
+    assert isinstance(grant.audit, lock_module.TakeoverAudit)  # The takeover returns the audit record type
+    assert grant.audit.to_record()["actor_email"] == SECOND_OWNER.actor_email  # The record names the new owner
     assert stored_record(store).owner == SECOND_OWNER
 
 
@@ -695,6 +696,7 @@ def test_the_store_double_drops_a_key_the_real_server_would_have_dropped(store: 
     """
     seed_lock(store, FIRST_OWNER, LOCK_TTL_SECONDS - 1)
     assert isinstance(store.get(SITE_KEY), str)  # Inside the lease, so the real server keeps it
+    assert SEEDED_TOKEN in store.get(SITE_KEY)  # The kept value still carries the seeded token
 
     seed_lock(store, FIRST_OWNER, LOCK_TTL_SECONDS + 1)
     assert store.get(SITE_KEY) is None  # Past the lease, so the real server dropped it
@@ -739,7 +741,8 @@ def test_the_confirmed_takeover_moves_the_site_and_writes_an_audit(store: Script
     assert grant.state is LockState.TAKEN_OVER
     assert grant.record.lock_token != SEEDED_TOKEN
     assert stored_record(store).owner == SECOND_OWNER
-    assert isinstance(grant.audit, lock_module.TakeoverAudit)
+    assert isinstance(grant.audit, lock_module.TakeoverAudit)  # The takeover returns the audit record type
+    assert grant.audit.to_record()["actor_email"] == SECOND_OWNER.actor_email  # The record names the new owner
     assert grant.audit.to_record()["previous_actor_email"] == FIRST_OWNER.actor_email
 
 
@@ -1653,6 +1656,9 @@ def test_the_audit_text_form_holds_neither_address(store: ScriptedLockStore) -> 
     seed_lock(store, FIRST_OWNER, COOLDOWN_SECONDS + 1)
     grant = acquire_site_lock(build_request(SECOND_OWNER, TAKEOVER_CONFIRMATION_TEXT), client=store)
     assert isinstance(grant.audit, lock_module.TakeoverAudit)  # A takeover always reports the audit record
+    assert (
+        grant.audit.to_record()["actor_email"] == SECOND_OWNER.actor_email
+    )  # The audit names the actor who took the lock
 
     written = repr(grant.audit)
 
@@ -1676,6 +1682,9 @@ def test_the_audit_record_still_holds_both_addresses(store: ScriptedLockStore) -
     seed_lock(store, FIRST_OWNER, COOLDOWN_SECONDS + 1)
     grant = acquire_site_lock(build_request(SECOND_OWNER, TAKEOVER_CONFIRMATION_TEXT), client=store)
     assert isinstance(grant.audit, lock_module.TakeoverAudit)  # A takeover always reports the audit record
+    assert (
+        grant.audit.to_record()["actor_email"] == SECOND_OWNER.actor_email
+    )  # The audit names the actor who took the lock
 
     kept = grant.audit.to_record()
 

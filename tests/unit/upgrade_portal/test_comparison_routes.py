@@ -163,7 +163,7 @@ class TestGetComparisonResultsRoute:
         )  # WHY: blueprint created
 
         # WHY: verify blueprint is created with its route group
-        assert blueprint.name == "comparison"  # WHY: verify blueprint name.
+        assert blueprint.url_prefix == "/api/runs"  # WHY: verify blueprint route prefix.
 
 
 class TestApproveComparisonRoute:
@@ -250,7 +250,7 @@ class TestApproveComparisonRoute:
         )  # WHY: blueprint created
 
         # WHY: verify blueprint is created with its route group
-        assert blueprint.name == "comparison"  # WHY: verify blueprint name.
+        assert blueprint.url_prefix == "/api/runs"  # WHY: verify blueprint route prefix.
 
     def test_approve_comparison_no_body(self):
         # WHY: verify endpoint rejects missing request body with 400 Bad Request
@@ -271,7 +271,7 @@ class TestApproveComparisonRoute:
         )  # WHY: blueprint created
 
         # WHY: verify blueprint is created with its route group
-        assert blueprint.name == "comparison"  # WHY: verify blueprint name.
+        assert blueprint.url_prefix == "/api/runs"  # WHY: verify blueprint route prefix.
 
     def test_approve_comparison_invalid_data(self):
         # WHY: verify endpoint rejects invalid approval data with 400 Bad Request
@@ -292,7 +292,7 @@ class TestApproveComparisonRoute:
         )  # WHY: blueprint created
 
         # WHY: verify blueprint is created with its route group
-        assert blueprint.name == "comparison"  # WHY: verify blueprint name.
+        assert blueprint.url_prefix == "/api/runs"  # WHY: verify blueprint route prefix.
 
     def test_approve_comparison_already_approved(self):
         # WHY: verify endpoint rejects approval of already-approved comparison
@@ -326,7 +326,7 @@ class TestApproveComparisonRoute:
         # WHY: verify mock setup
         assert mock_db_router.get_comparison.return_value.get("approved")  # WHY: verify already approved
         # WHY: verify blueprint is created with its route group
-        assert blueprint.name == "comparison"  # WHY: verify blueprint name.
+        assert blueprint.url_prefix == "/api/runs"  # WHY: verify blueprint route prefix.
 
     def test_approve_comparison_comparison_not_found(self):
         # WHY: verify endpoint returns 404 for missing comparison
@@ -351,7 +351,7 @@ class TestApproveComparisonRoute:
         # WHY: verify mock setup
         assert mock_db_router.get_comparison.return_value is None  # WHY: verify mock
         # WHY: verify blueprint is created with its route group
-        assert blueprint.name == "comparison"  # WHY: verify blueprint name.
+        assert blueprint.url_prefix == "/api/runs"  # WHY: verify blueprint route prefix.
 
 
 class TestComparisonRoutesIntegration:
@@ -394,6 +394,6 @@ class TestComparisonRoutesIntegration:
         )  # WHY: blueprint created
 
         # WHY: verify blueprint is created with its route group
-        assert blueprint.name == "comparison"  # WHY: verify blueprint name.
+        assert blueprint.url_prefix == "/api/runs"  # WHY: verify blueprint route prefix.
         # WHY: verify blueprint name
         assert blueprint.name == "comparison"  # WHY: verify blueprint name
