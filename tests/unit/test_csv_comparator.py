@@ -164,13 +164,15 @@ class TestAddressComparisonCounters:
             "bad_format": 1,
         }
 
-    def test_log_summary(self) -> None:
+    def test_log_summary(self, caplog: object) -> None:
         """Verify log_summary runs without error."""
         counters = AddressComparisonCounters()
         counters.total_devices = 10
         counters.start_timing()
         counters.end_timing()
-        counters.log_summary()
+        with caplog.at_level("INFO", logger="src.inventory.csv_comparator"):
+            counters.log_summary()
+        assert "Total devices processed: 10" in caplog.text
 
 
 # ================================================================
@@ -338,7 +340,7 @@ class TestLookupBuilding:
             }
         }
         result = comp._get_comparison_address("SN123")
-        assert result is not None
+        assert isinstance(result, dict)
         assert result["address"] == "789 Elm St"
 
     def test_get_comparison_address_not_found(self) -> None:
@@ -766,14 +768,15 @@ class TestParseFailures:
 class TestResultsDisplay:
     """Tests for results display methods."""
 
-    def test_print_success_message(self) -> None:
+    def test_print_success_message(self, capsys: object) -> None:
         """Success message runs without error."""
         comp = _make_comparator()
         comp.counters.perfect_matches = 10
         comp.counters.auto_corrections = 2
         comp._print_success_message()
+        assert "All 12 addresses are consistent" in capsys.readouterr().out
 
-    def test_print_results_summary(self) -> None:
+    def test_print_results_summary(self, capsys: object) -> None:
         """Summary runs without error."""
         comp = _make_comparator()
         comp.counters.total_devices = 100
@@ -782,14 +785,16 @@ class TestResultsDisplay:
         comp.counters.start_timing()
         comp.counters.end_timing()
         comp._print_results_summary()
+        assert "Address conflicts found: 5" in capsys.readouterr().out
 
-    def test_display_conflict_preview_empty(self) -> None:
+    def test_display_conflict_preview_empty(self, capsys: object) -> None:
         """Preview with empty items runs without error."""
         comp = _make_comparator()
         comp.mismatched_items = []
         comp._display_conflict_preview()
+        assert "Data Integrity Conflicts" in capsys.readouterr().out
 
-    def test_print_conflict_item(self) -> None:
+    def test_print_conflict_item(self, capsys: object) -> None:
         """Print single conflict item runs without error."""
         comp = _make_comparator()
         item = {
@@ -805,6 +810,7 @@ class TestResultsDisplay:
             "Validation_Recommendation": "N/A",
         }
         comp._print_conflict_item(0, item)
+        assert "Serial: SN1" in capsys.readouterr().out
 
 
 # ================================================================
@@ -877,6 +883,7 @@ class TestDataLoading:
             get_csv_path_fn=lambda f: "/nonexistent/" + f,
         )
         comp._load_skip_addresses()
+        assert comp.skip_addresses == []
 
     def test_get_available_csv_files(self) -> None:
         """List available CSV files excluding source."""
@@ -1065,14 +1072,15 @@ class TestDuplicateWorkflow:
         result = comp._build_ref_site_addresses()
         assert len(result) == 1
 
-    def test_report_duplicates_none(self) -> None:
+    def test_report_duplicates_none(self, capsys: object) -> None:
         """Report no duplicates found."""
         comp = _make_comparator()
         comp.mist_duplicates = {}
         comp.ref_duplicates = {}
         comp._report_duplicates({}, {})
+        assert "No duplicate addresses found" in capsys.readouterr().out
 
-    def test_report_duplicates_with_mist(self) -> None:
+    def test_report_duplicates_with_mist(self, capsys: object) -> None:
         """Report Mist duplicates."""
         comp = _make_comparator()
         comp.mist_duplicates = {"a|b|c|1": ["Site A", "Site B"]}
@@ -1098,13 +1106,15 @@ class TestDuplicateWorkflow:
             },
         }
         comp._report_duplicates(mist_addrs, {})
+        assert "Mist sites sharing the same address" in capsys.readouterr().out
 
-    def test_print_duplicate_summary(self) -> None:
+    def test_print_duplicate_summary(self, capsys: object) -> None:
         """Print duplicate summary runs without error."""
         comp = _make_comparator()
         comp.mist_duplicates = {"k": ["A", "B"]}
         comp.ref_duplicates = {"j": ["C", "D", "E"]}
         comp._print_duplicate_summary()
+        assert "affecting 2 sites" in capsys.readouterr().out
 
     def test_detect_duplicate_addresses(self) -> None:
         """Full duplicate detection workflow."""
@@ -1430,7 +1440,7 @@ class TestValidationWorkflow:
             1,
             "Org",
         )
-        assert result is not None
+        assert isinstance(result, dict)
         assert result["recommendation"] == "mist"
 
     def test_validate_single_conflict_exception(self) -> None:
@@ -1455,7 +1465,7 @@ class TestValidationWorkflow:
         )
         assert result is None
 
-    def test_print_validation_header(self) -> None:
+    def test_print_validation_header(self, capsys: object) -> None:
         """Validation header prints without error."""
         comp = _make_comparator()
         comp._print_validation_header(
@@ -1465,8 +1475,9 @@ class TestValidationWorkflow:
             1,
             10,
         )
+        assert "[1/10] Validating SN1" in capsys.readouterr().out
 
-    def test_print_validation_results(self) -> None:
+    def test_print_validation_results(self, capsys: object) -> None:
         """Validation results print without error."""
         comp = _make_comparator()
         comp._print_validation_results(
@@ -1478,8 +1489,9 @@ class TestValidationWorkflow:
                 "recommendation_reason": "Higher confidence",
             },
         )
+        assert "Higher confidence" in capsys.readouterr().out
 
-    def test_print_validation_results_uncertain(self) -> None:
+    def test_print_validation_results_uncertain(self, capsys: object) -> None:
         """Uncertain recommendation with inconclusive reason."""
         comp = _make_comparator()
         comp._print_validation_results(
@@ -1491,6 +1503,7 @@ class TestValidationWorkflow:
                 "recommendation_reason": "Results inconclusive",
             },
         )
+        assert "Recommendation:  Uncertain" in capsys.readouterr().out
 
 
 # ================================================================
@@ -1501,7 +1514,7 @@ class TestValidationWorkflow:
 class TestFinalization:
     """Tests for results finalization and saving."""
 
-    def test_finalize_no_mismatches(self) -> None:
+    def test_finalize_no_mismatches(self, capsys: object) -> None:
         """Finalization with no mismatches prints success."""
         comp = _make_comparator()
         comp.counters.start_timing()
@@ -1510,8 +1523,9 @@ class TestFinalization:
         comp.parse_failures = []
         comp.mismatched_items = []
         comp._finalize_and_display_results()
+        assert "No conflicts found" in capsys.readouterr().out
 
-    def test_finalize_with_mismatches(self) -> None:
+    def test_finalize_with_mismatches(self, capsys: object) -> None:
         """Finalization with mismatches displays preview."""
         comp = _make_comparator()
         comp.counters.start_timing()
@@ -1540,6 +1554,7 @@ class TestFinalization:
         with tempfile.TemporaryDirectory() as tmpdir:
             comp._get_csv_path = lambda f: os.path.join(tmpdir, f)
             comp._finalize_and_display_results()
+        assert "AddressMismatches_vs_test.csv" in capsys.readouterr().out
 
     def test_save_results_to_csv(self) -> None:
         """Save mismatch results to CSV file."""
@@ -1559,22 +1574,25 @@ class TestFinalization:
                 )
                 mock_open.return_value.__exit__ = MagicMock(return_value=False)
                 comp._save_results_to_csv()
+                assert mock_open.call_count == 2
 
-    def test_print_save_confirmation(self) -> None:
+    def test_print_save_confirmation(self, capsys: object) -> None:
         """Print save confirmation runs without error."""
         comp = _make_comparator()
         comp.address_validation_enabled = True
         comp.diff_report_items = [{"a": 1}]
         comp._print_save_confirmation("output.csv")
+        assert "External validation recommendations included" in capsys.readouterr().out
 
-    def test_print_save_confirmation_no_validation(self) -> None:
+    def test_print_save_confirmation_no_validation(self, capsys: object) -> None:
         """Print save without validation runs without error."""
         comp = _make_comparator()
         comp.address_validation_enabled = False
         comp.diff_report_items = [{"a": 1}]
         comp._print_save_confirmation("output.csv")
+        assert "No external validation performed" in capsys.readouterr().out
 
-    def test_display_conflict_preview_many(self) -> None:
+    def test_display_conflict_preview_many(self, capsys: object) -> None:
         """Preview truncates at 10 items."""
         comp = _make_comparator()
         comp.address_validation_enabled = False
@@ -1592,8 +1610,9 @@ class TestFinalization:
         }
         comp.mismatched_items = [item.copy() for _ in range(15)]
         comp._display_conflict_preview()
+        assert "... and 5 more conflicts" in capsys.readouterr().out
 
-    def test_print_conflict_item_with_validation(self) -> None:
+    def test_print_conflict_item_with_validation(self, capsys: object) -> None:
         """Print conflict with validation recommendation."""
         comp = _make_comparator()
         comp.address_validation_enabled = True
@@ -1610,49 +1629,56 @@ class TestFinalization:
             "Validation_Recommendation": "mist",
         }
         comp._print_conflict_item(0, item)
+        assert "Recommendation: mist" in capsys.readouterr().out
 
-    def test_print_conflict_rate(self) -> None:
+    def test_print_conflict_rate(self, capsys: object) -> None:
         """Print conflict rate with data."""
         comp = _make_comparator()
         comp.counters.mismatches_found = 5
         comp.counters.devices_enriched = 100
         comp._print_conflict_rate()
+        assert "Conflict rate: 5.0%" in capsys.readouterr().out
 
-    def test_print_conflict_rate_zero(self) -> None:
+    def test_print_conflict_rate_zero(self, capsys: object) -> None:
         """No output when no mismatches."""
         comp = _make_comparator()
         comp.counters.mismatches_found = 0
         comp.counters.devices_enriched = 100
         comp._print_conflict_rate()
+        assert capsys.readouterr().out == ""
 
-    def test_print_parse_failure_breakdown(self) -> None:
+    def test_print_parse_failure_breakdown(self, capsys: object) -> None:
         """Print parse failure breakdown."""
         comp = _make_comparator()
         comp.counters.parse_failures = 3
         comp.counters.parse_failure_reasons = {"bad": 2, "ugly": 1}
         comp._print_parse_failure_breakdown()
+        assert "- bad: 2" in capsys.readouterr().out
 
-    def test_print_processing_rate(self) -> None:
+    def test_print_processing_rate(self, capsys: object) -> None:
         """Print processing rate."""
         comp = _make_comparator()
         comp.counters.total_devices = 100
         comp.counters.start_timing()
         comp.counters.end_timing()
         comp._print_processing_rate()
+        assert "Processing rate:" in capsys.readouterr().out
 
-    def test_print_header_fast(self) -> None:
+    def test_print_header_fast(self, capsys: object) -> None:
         """Print header in fast mode."""
         comp = _make_comparator(fast=True)
         comp.address_threshold = 75.0
         comp._print_header()
+        assert "Fast mode enabled" in capsys.readouterr().out
 
-    def test_print_header_debug(self) -> None:
+    def test_print_header_debug(self, capsys: object) -> None:
         """Print header in debug mode."""
         comp = _make_comparator(debug=True)
         comp.address_threshold = 75.0
         comp._print_header()
+        assert "Debug mode enabled" in capsys.readouterr().out
 
-    def test_print_detected_fields(self) -> None:
+    def test_print_detected_fields(self, capsys: object) -> None:
         """Print detected fields."""
         comp = _make_comparator()
         comp.serial_field = "Serial"
@@ -1662,8 +1688,10 @@ class TestFinalization:
         comp.state_field = "State"
         comp.country_field = "Country"
         comp._print_detected_fields()
+        assert "Serial" in capsys.readouterr().out
 
-    def test_display_csv_file_list(self) -> None:
+    def test_display_csv_file_list(self, capsys: object) -> None:
         """Display CSV file list."""
         comp = _make_comparator()
         comp._display_csv_file_list(["a.csv", "b.csv"])
+        assert "[1] b.csv" in capsys.readouterr().out
