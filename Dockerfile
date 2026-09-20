@@ -106,6 +106,12 @@ COPY MistHelper.py __init__.py wsgi.py wsgi_capture.py ./
 COPY scripts/ ./scripts/
 COPY web_portal/ ./web_portal/
 COPY src/ ./src/
+# Issue #3104: menu 243 generates the SNMP MIB from the Mist OpenAPI document,
+# and the operation failed on every container run while this file was absent.
+# The registry calls menu 243 safe, so the portal lists it and an operator can
+# start it. Copy the one file that has a runtime reader. It costs 5.3 MB, and
+# the rest of the documentation directory holds 130 MB that nothing reads here.
+COPY documentation/mist-api-openapi31json.json ./documentation/
 
 # Set ownership and switch to non-root user for application files
 RUN chown -R misthelper:misthelper /app

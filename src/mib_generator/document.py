@@ -59,11 +59,20 @@ class OpenApiDocument:
             This document, so a caller can chain the call.
 
         Raises:
+            FileNotFoundError: If the file is absent. The message names the
+                path and the action that restores the file.
             ValueError: If the file holds no valid JSON. The message names the
                 path and the position of the JSON error.
             OpenApiVersionError: If the `openapi` field is not a 3.1 version.
         """
         logger.info("%s Reading the OpenAPI file at %s", LOG_PREFIX, self._path)  # Log before the read.
+        if not self._path.is_file():  # Issue #3104: a raw errno names no action an operator can take.
+            logging.error("%s The OpenAPI file is absent at %s", LOG_PREFIX, self._path)  # Name the missing input.
+            raise FileNotFoundError(
+                f"The OpenAPI file is absent at {self._path}. This operation reads the Mist OpenAPI document that "
+                f"ships in the repository. If you run MistHelper from a container, rebuild the image, because an "
+                f"older image carried no documentation directory. If you run from a clone, pull the repository again."
+            )
         raw = self._path.read_text(encoding="utf-8")  # An explicit encoding keeps Windows and Linux in agreement.
         try:  # A broken file must name its own defect, because an operator cannot guess a byte offset.
             self._document = json.loads(raw)
