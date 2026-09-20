@@ -43,7 +43,7 @@ class TestComparisonResult:
         assert result.deltas == []  # WHY: default deltas
         assert result.summary == {}  # WHY: default summary
         assert result.failed_checks == []  # WHY: default failed_checks
-        assert result.timestamp is not None  # WHY: timestamp auto-generated
+        assert "T" in result.timestamp  # WHY: timestamp auto-generated
 
     def test_comparison_result_custom_values(self):  # WHY: test custom values
         """Verify custom values are stored correctly."""
@@ -289,7 +289,7 @@ class TestComparisonServicePrePostCaptureFetch:
         result = service._fetch_pre_capture(run_id="run-1")
 
         # WHY: verify result
-        assert result is not None  # WHY: not None
+        assert result["run_id"] == "run-1"  # WHY: not None
         assert result["run_id"] == "run-1"  # WHY: correct run_id
         assert result["capture_type"] == "pre"  # WHY: correct type
         assert "timestamp" in result  # WHY: has timestamp
@@ -303,7 +303,7 @@ class TestComparisonServicePrePostCaptureFetch:
         result = service._fetch_post_capture(run_id="run-1")
 
         # WHY: verify result
-        assert result is not None  # WHY: not None
+        assert result["run_id"] == "run-1"  # WHY: not None
         assert result["run_id"] == "run-1"  # WHY: correct run_id
         assert result["capture_type"] == "post"  # WHY: correct type
         assert "timestamp" in result  # WHY: has timestamp
@@ -433,7 +433,7 @@ class TestComparisonServiceCheckSettleGate:
         )
 
         # WHY: verify result
-        assert result is not None  # WHY: not None
+        assert result["passed"] is True  # WHY: not None
         assert "passed" in result  # WHY: has passed key
         assert "failed_checks" in result  # WHY: has failed_checks key
 
@@ -502,7 +502,7 @@ class TestDetailedComparisonResult:
         assert result.deltas == []  # WHY: default deltas
         assert result.summary == {}  # WHY: default summary
         assert result.flagged_for_review == []  # WHY: default flagged
-        assert result.timestamp is not None  # WHY: timestamp auto-generated
+        assert "T" in result.timestamp  # WHY: timestamp auto-generated
 
     def test_detailed_result_custom_values(self):  # WHY: test custom values
         """Verify custom values are stored correctly."""

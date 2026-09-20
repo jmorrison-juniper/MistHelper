@@ -603,7 +603,7 @@ class TestLockResultDataclass:
         # WHY: verify acquired_at is aware UTC
         assert result.acquired_at.utcoffset() == timedelta(0)  # WHY: verify timestamp convention.
         # WHY: verify lock_token names the holder
-        assert result.lock_token.startswith("user-1#")  # WHY: verify token content.
+        assert result.lock_token == "user-1#2026-01-01T00:00:00.000000"  # WHY: verify token content.
         # WHY: verify reason is None for success
         assert result.reason is None  # WHY: verify no reason
         # WHY: verify owner_id is None for success

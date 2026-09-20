@@ -180,7 +180,7 @@ def test_import_opens_no_socket() -> None:
         make every test and every start of the portal wait on a server.
     """
     module = wiring.load_module("src.upgrade_portal.app.wiring")  # The autouse fixture blocks every socket.
-    assert module is not None  # A socket call would have raised instead.
+    assert module.__name__ == "src.upgrade_portal.app.wiring"  # A socket call would have raised instead.
 
 
 def test_load_module_answers_none_for_an_absent_module() -> None:
@@ -242,7 +242,7 @@ def test_the_same_heartbeat_reaches_both_seats() -> None:
         driver alone would beat twice for each phase and the lock would lapse.
     """
     deps = wiring.build_driver_deps(driver, sample_record(), bindings_with_lock())  # The whole build.
-    assert deps is not None  # A missing collaborator would have answered None.
+    assert deps.post_check_mode == "automatic"  # A missing collaborator would have answered None.
     assert isinstance(deps.heartbeat, driver.LockHeartbeat)  # The first seat, which the driver beats.
     assert deps.gate._deps.progress is deps.heartbeat  # The second seat, inside the 20-second poll loop.
 
@@ -316,7 +316,7 @@ def test_the_driver_always_holds_a_submitter() -> None:
         That is the same silent defect in a second place.
     """
     deps = wiring.build_driver_deps(driver, sample_record(), bindings_with_lock())  # The whole build.
-    assert deps is not None  # A missing collaborator would have answered None.
+    assert deps.post_check_mode == "automatic"  # A missing collaborator would have answered None.
     assert isinstance(deps.submit, wiring.CloudUpgradeSubmitter)  # A real call, never a quiet skip.
 
 
@@ -782,7 +782,9 @@ def test_the_run_mirror_holds_a_bounded_number_of_runs() -> None:
     for number in range(wiring.MIRROR_LIMIT + 5):  # Five more runs than the table may hold.
         wiring.mirror_run({"run_id": f"run-{number}", "site_id": SITE_ID})
     assert wiring.mirrored_run("run-0") is None  # The oldest run left first.
-    assert wiring.mirrored_run(f"run-{wiring.MIRROR_LIMIT + 4}") is not None  # The newest run stayed.
+    assert (
+        wiring.mirrored_run(f"run-{wiring.MIRROR_LIMIT + 4}")["run_id"] == f"run-{wiring.MIRROR_LIMIT + 4}"
+    )  # The newest run stayed.
 
 
 def test_a_record_with_no_run_key_reaches_no_mirror() -> None:

@@ -648,7 +648,7 @@ def test_session_owner_is_frozen(fake_mist_session: SimpleNamespace) -> None:
         fake_mist_session: The fake cloud session from the shared conftest.
     """
     owner = owner_for_tests()
-    assert fake_mist_session is not None  # The fixture proves the offline setup ran
+    assert fake_mist_session.host == "api.example.com"  # The fixture proves the offline setup ran
     with pytest.raises(FrozenInstanceError):
         owner.actor_email = SECOND_EMAIL  # type: ignore[misc]
 
@@ -732,8 +732,8 @@ def test_operator_session_records_the_credential_mode_and_a_utc_time(
     """
     record = operator_session_for_tests(fake_mist_session)
     assert record.credential_mode is CredentialMode.ENVIRONMENT_TOKEN
-    assert record.created_at.tzinfo is not None
-    assert record.created_at.utcoffset() is not None
+    assert record.created_at.isoformat().endswith("+00:00")
+    assert record.created_at.utcoffset().total_seconds() == 0
 
 
 def test_credential_mode_holds_both_modes() -> None:
@@ -894,8 +894,8 @@ def test_two_browsers_of_one_email_are_two_sessions(
     assert registry.owner_count() == 2
     first_record = registry.get(first_owner.key)
     second_record = registry.get(second_owner.key)
-    assert first_record is not None
-    assert second_record is not None
+    assert first_record.owner == first_owner
+    assert second_record.owner == second_owner
     assert first_record is not second_record
 
 
@@ -919,7 +919,7 @@ def test_dropping_one_browser_keeps_the_other_browser(
             )
         )
     assert registry.drop(first_owner.key) is True
-    assert registry.get(second_owner.key) is not None
+    assert registry.get(second_owner.key).owner == second_owner
     assert registry.owner_count() == 1
 
 
@@ -1680,7 +1680,7 @@ def test_sign_out_leaves_the_session_of_a_second_browser(
         assert sign_out() is True
 
     assert identity.SESSION_REGISTRY.owner_count() == 1
-    assert identity.SESSION_REGISTRY.get(owners[SECOND_BROWSER_ID].key) is not None
+    assert identity.SESSION_REGISTRY.get(owners[SECOND_BROWSER_ID].key).owner == owners[SECOND_BROWSER_ID]
 
 
 def test_sign_out_writes_the_digest_and_no_address_to_the_log(
