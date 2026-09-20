@@ -334,11 +334,12 @@ class TestBuildBody:
             monkeypatch: The pytest patch helper.
         """
         install(monkeypatch, refuse_every_endpoint)
-        upgrade_service.build_body(
+        body = upgrade_service.build_body(
             (make_target(),),
             upgrade_service.UpgradeOptions(),
             upgrade_service.GatewayFamily.JUNOS,
         )
+        assert body["device_ids"] == [f"00000000-0000-0000-1000-{MAC_SWITCH}"]  # WHY: prove the pure builder ran.
 
 
 class TestPlanUpgrade:
@@ -414,7 +415,9 @@ class TestPlanUpgrade:
             monkeypatch: The pytest patch helper.
         """
         install(monkeypatch, refuse_every_endpoint)
-        upgrade_service.plan_upgrade((make_target(),), upgrade_service.UpgradeOptions(), ORG_ID, SITE_ID)
+        plans = upgrade_service.plan_upgrade((make_target(),), upgrade_service.UpgradeOptions(), ORG_ID, SITE_ID)
+        assert len(plans) == 1  # WHY: prove the pure planner built the one expected plan.
+        assert plans[0].endpoint == upgrade_service.ENDPOINT_SITE_DEVICES  # WHY: prove it picked the site endpoint.
 
 
 class TestInvokeUpgrade:

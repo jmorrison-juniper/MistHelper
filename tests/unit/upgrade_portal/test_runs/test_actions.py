@@ -548,7 +548,9 @@ def test_validate_accepts_a_fresh_record() -> None:
         The builder validates before it returns. This test proves the two
         agree, so a valid build never raises.
     """
-    RunRecordBuilder.validate(_record())
+    record = _record()  # WHY: keep the accepted value available for a positive assertion.
+    assert RunRecordBuilder.validate(record) is None  # WHY: prove validation accepted the complete record.
+    assert record["schema_version"] == SCHEMA_VERSION  # WHY: prove the accepted record is the current schema.
 
 
 @pytest.mark.parametrize("version", [0, 2, "1"])
