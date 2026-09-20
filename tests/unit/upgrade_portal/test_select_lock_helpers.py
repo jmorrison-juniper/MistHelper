@@ -15,6 +15,7 @@ Why:
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from typing import Any
 
@@ -359,3 +360,65 @@ class TestLockBannerRunLink:
 
         assert enriched["lock_holder_run"] == ""  # Empty run text is not useful to an operator.
         assert enriched["lock_holder_run_url"] == ""  # Empty run text must not form a broken link.
+
+
+class TestIssue2926SelectBroadHandlers:
+    """Tests for kept-broad selection-page handlers."""
+
+    def test_read_site_locks_logs_exception_type(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The site list stays readable when the lock seam raises."""
+        monkeypatch.setattr(select, "lock_reader", lambda: explode)  # WHY: drive the kept-broad handler.
+        with caplog.at_level(logging.WARNING):  # WHY: capture the fallback log.
+            assert select.read_site_locks(ORG_ID, [SITE_ID]) == {}  # WHY: read-only page falls back.
+        assert "RuntimeError" in caplog.text  # WHY: the log must name the exception type.
+
+    def test_session_lock_record_logs_exception_type(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The banner stays readable when the browser lock index is damaged."""
+        monkeypatch.setattr(select, "stored_lock_records", explode)  # WHY: drive the kept-broad handler.
+        with caplog.at_level(logging.WARNING):  # WHY: capture the fallback log.
+            assert select.session_lock_record(SITE_ID) is None  # WHY: unknown is safer than a page failure.
+        assert "RuntimeError" in caplog.text  # WHY: the log must name the exception type.
+
+    def test_lock_cooldown_logs_exception_type(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The cooldown line hides itself when the lock store raises."""
+        monkeypatch.setattr(select.lock, "read_lock", explode)  # WHY: drive the kept-broad handler.
+        monkeypatch.setattr(select, "lock_client", lambda: None)  # WHY: keep the test offline.
+        with caplog.at_level(logging.WARNING):  # WHY: capture the fallback log.
+            assert select.lock_cooldown_seconds(ORG_ID, SITE_ID) == NO_WAIT  # WHY: no measured wait exists.
+        assert "RuntimeError" in caplog.text  # WHY: the log must name the exception type.
+
+    def test_takeover_word_logs_exception_type(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The stricter takeover word stays when the owner read raises."""
+        monkeypatch.setattr(select.identity, "current_owner", explode)  # WHY: drive the kept-broad handler.
+        with caplog.at_level(logging.WARNING):  # WHY: capture the fallback log.
+            assert select.takeover_word(HOLDER) == select.lock.TAKEOVER_CONFIRMATION_TEXT  # WHY: fail closed.
+        assert "RuntimeError" in caplog.text  # WHY: the log must name the exception type.
+
+    def test_lock_banner_context_logs_exception_type(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The lock banner shows unknown state when the lock seam raises."""
+        monkeypatch.setattr(select, "session_lock_record", lambda site_id: None)  # WHY: reach the seam branch.
+        monkeypatch.setattr(select, "read_site_locks", explode)  # WHY: drive the kept-broad handler.
+        with caplog.at_level(logging.WARNING):  # WHY: capture the fallback log.
+            banner = select.lock_banner_context(ORG_ID, SITE_ID)  # WHY: render the fallback banner.
+        assert banner["lock_state"] == select.LOCK_STATE_UNKNOWN  # WHY: unknown is safer than false free.
+        assert "RuntimeError" in caplog.text  # WHY: the log must name the exception type.
+
+    def test_read_banner_lock_record_logs_exception_type(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The banner omits the run link when the lock record read raises."""
+        monkeypatch.setattr(select.lock, "read_lock", explode)  # WHY: drive the kept-broad handler.
+        monkeypatch.setattr(select, "lock_client", lambda: None)  # WHY: keep the test offline.
+        with caplog.at_level(logging.WARNING):  # WHY: capture the fallback log.
+            assert select.read_banner_lock_record(ORG_ID, SITE_ID) is None  # WHY: no run link is safe.
+        assert "RuntimeError" in caplog.text  # WHY: the log must name the exception type.
