@@ -636,7 +636,7 @@ class TestCreateSecureLogFile:
         os.makedirs("data", exist_ok=True)
         log_path, write_fn = runner._create_secure_log_file("host1")
         write_fn("")  # Should not raise
-        assert os.path.getsize(log_path) == 0  # WHY: empty input takes the early return and writes no bytes.
+        assert not os.path.exists(log_path)  # WHY: the early return writes no file, so none is created.
 
     @patch("src.ssh.ssh_runner.datetime")
     def test_sanitizes_hostname(self, mock_dt, runner, tmp_path, monkeypatch):
