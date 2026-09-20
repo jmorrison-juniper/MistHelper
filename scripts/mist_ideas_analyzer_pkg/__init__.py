@@ -374,7 +374,7 @@ class AiBackendDetector:
         if not url:
             return None
         model = os.environ.get("AI_MODEL", "llama3.3")
-        api_key = os.environ.get("AVA_API_KEY", "ava")
+        api_key = self._read_required_env("AVA_API_KEY")  # Refuse a guessed API key for a configured AVA endpoint.
         logger.info(
             "Backend: AVA MCP (model=%s, url=%s)",
             model,
@@ -386,6 +386,19 @@ class AiBackendDetector:
             "model": model,
             "api_key": api_key,
         }
+
+    @staticmethod
+    def _read_required_env(name: str) -> str:
+        """Return a required environment value, or raise a variable-named error."""
+        logger.info("Reading required environment variable %s", name)  # Name the input before validation.
+        value = os.environ.get(name)  # Read without a default so absence stays visible.
+        if value and value.strip():  # A non-empty value can authenticate the configured backend.
+            logger.debug("Required environment variable %s is set", name)  # Confirm presence without logging the value.
+            return value.strip()  # Return trimmed text so a whitespace value cannot authenticate.
+        logger.debug("Required environment variable %s is not set", name)  # Name only the missing input.
+        raise ValueError(
+            f"{name} is not set. Set it before you use this backend."
+        )  # Stop before a guessed key is used.
 
     def _try_generic(self) -> dict | None:
         """Check for generic OpenAI-compatible backend."""
