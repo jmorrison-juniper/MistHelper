@@ -368,7 +368,8 @@ class _Wan2VariableDevice(_ClusterBase):
 
     def _migrate_devices_fast(self, devices: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Migrate devices using connection pool (fast mode)."""
-        assert self._pool_fn is not None  # nosec B101 - The use_fast gate proved the pool exists.
+        if self._pool_fn is None:  # WHY: fast mode cannot run without the injected executor.
+            raise RuntimeError("Connection pool executor must be configured for fast mode")  # WHY: visible guard.
 
         count = len(devices)  # WHY: banner count
         # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.

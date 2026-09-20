@@ -36,7 +36,7 @@ class TestInit:
         emitter = TelemetryEmitter(str(target))  # WHY: construct against real writable tmp dir.
         try:
             assert target.parent.exists()  # WHY: makedirs created the missing parent.
-            assert emitter._handle is not None  # WHY: append-handle opened successfully.
+            assert emitter._handle.name == str(target)  # WHY: append-handle opened the target file.
         finally:
             emitter.close()  # WHY: release the OS handle deterministically.
 
@@ -48,7 +48,7 @@ class TestInit:
         emitter = TelemetryEmitter("events.jsonl")  # WHY: bare filename → dirname("") is falsy.
         try:
             fake_makedirs.assert_not_called()  # WHY: empty parent → skip branch executed.
-            assert emitter._handle is not None  # WHY: file still opened at cwd.
+            assert emitter._handle.name == "events.jsonl"  # WHY: file still opened at cwd.
         finally:
             emitter.close()
 
@@ -123,7 +123,7 @@ class TestClose:
     def test_close_sets_handle_to_none(self, tmp_path: Path) -> None:
         """After close the handle attribute is None."""
         emitter = TelemetryEmitter(str(tmp_path / "c.jsonl"))
-        assert emitter._handle is not None  # WHY: sanity pre-check.
+        assert emitter._handle.name == str(tmp_path / "c.jsonl")  # WHY: sanity pre-check.
         emitter.close()
         assert emitter._handle is None  # WHY: post-close contract.
 
@@ -151,7 +151,7 @@ class TestContextManager:
         """with-block returns emitter and closes on exit."""
         target = tmp_path / "cm.jsonl"
         with TelemetryEmitter(str(target)) as emitter:
-            assert emitter._handle is not None  # WHY: handle is live inside the with-block.
+            assert emitter._handle.name == str(target)  # WHY: handle is live inside the with-block.
             emitter.emit({"event_type": "hello"})  # WHY: prove usable during scope.
         assert emitter._handle is None  # WHY: closed on __exit__.
         assert target.read_text(encoding="utf-8").strip().startswith("{")  # WHY: content flushed.

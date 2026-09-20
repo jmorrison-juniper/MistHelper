@@ -14,6 +14,7 @@ import time  # WHY: sites_sle_summary progress timer.
 from typing import Any  # WHY: raw insight rows are duck-typed dicts from mistapi.
 
 import mistapi  # WHY: direct SDK access for org export endpoints.
+import requests  # WHY: Mist SDK calls use requests exceptions for transport failures.
 
 from src.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
@@ -88,7 +89,7 @@ class OrgExportUtils:
                 site_data["sle_type"] = sle_type  # Record the SLE type on the row.
                 all_sites_sle_data.append(site_data)  # Collect into accumulator.
             logger.debug("Retrieved SLE data for %s sites with SLE type: %s", len(sites_sle_data), sle_type)
-        except Exception as exception:  # Fetch failed -- skip this type but continue overall.
+        except (AttributeError, requests.RequestException) as exception:  # Fetch failed -- skip this type.
             logging.warning("Failed to get sites SLE data for type %s: %s", sle_type, exception)  # Warn and skip.
 
     @staticmethod
@@ -203,7 +204,7 @@ class OrgExportUtils:
                 mh.apisession
             )  # GET /const/insight_metrics
             definitions = getattr(response, "data", response) or {}  # Unwrap to the metric -> definition map
-        except Exception as exception:  # Any failure simply disables expansion this run
+        except (AttributeError, requests.RequestException) as exception:  # Constants fetch failed for this run.
             logging.error("Failed to load insight-metric constants for parameter expansion: %s", exception)  # Trace
             return {}  # No parameterized map available
         parameterized = OrgExportUtils._extract_metric_choices(definitions)  # Pull choices from the definitions
@@ -226,7 +227,7 @@ class OrgExportUtils:
         try:  # Per-choice failures must not abort the whole export
             response = session.mist_get(uri=uri, query=query)  # Low-level GET (SDK cannot pass query 'metric')
             payload = getattr(response, "data", None)  # Unwrap the response data payload
-        except Exception as exception:  # Network/HTTP failure for this specific choice
+        except (AttributeError, requests.RequestException) as exception:  # Network or SDK failure for this choice.
             logging.debug("Failed to fetch %s metric=%s: %s", metric, choice, exception)  # Trace the miss
             return None  # Signal failure to the caller
         if not payload:  # Empty payload means no data for this choice
@@ -298,7 +299,7 @@ class OrgExportUtils:
                 "Got %s sites for insight metric: %s SLE: %s", len(sites_data), metric, sle_category
             )
             return OrgExportUtils._insight_build_sites_result(org_id, metric, sle_category, sites_data)
-        except Exception as sites_error:  # Category fetch failed. Log and report None without counting a failure.
+        except (AttributeError, requests.RequestException) as sites_error:  # Category fetch failed.
             logging.debug("Failed to get sites data for metric '%s' SLE '%s': %s", metric, sle_category, sites_error)
             return None  # Treat the failed category as no data.
 
@@ -346,7 +347,7 @@ class OrgExportUtils:
             if OrgExportUtils._insight_is_worst_sites_metric(metric):  # Site-SLE metric -> per-category analysis.
                 return OrgExportUtils._insight_fetch_worst_sites_sle(org_id, metric)  # Fetch across wifi/wan/wired.
             return OrgExportUtils._insight_fetch_default_metric(org_id, metric)  # Ordinary metric -> single getOrgSle.
-        except Exception as metric_error:  # The metric failed entirely. Count it and keep going.
+        except (AttributeError, requests.RequestException) as metric_error:  # The metric failed entirely.
             logging.debug("Failed to get org insight data for metric '%s': %s", metric, metric_error)  # Trace failure.
             return [], 0, 1  # No records, one failed metric.
 
@@ -367,7 +368,7 @@ class OrgExportUtils:
                 logger.debug("Successfully retrieved org sites SLE data for %s sites", len(sites_data))  # Trace count.
                 return list(sites_data), 1, 0  # All rows as records. Counts as one successful retrieval.
             return [], 0, 0  # No summary data. Neither retrieved nor failed (matches original).
-        except Exception as sites_error:  # Summary fetch failed.
+        except (AttributeError, requests.RequestException) as sites_error:  # Summary fetch failed.
             logging.debug("Failed to get org sites SLE summary: %s", sites_error)  # Trace the failure.
             return [], 0, 1  # Count the summary as a single failure.
 
@@ -526,7 +527,7 @@ class OrgExportUtils:
                 logger.warning("! 0 organization insight metrics exported (no data available)")  # Tell the user zero.
                 logger.warning("No org insight data available - all metrics failed or returned empty")  # Warn no data.
                 OrgExportUtils._insight_write_empty_outputs(include_legacy=True)  # Write the 5 empty files.
-        except Exception as exception:  # The export failed unexpectedly.
+        except (AttributeError, OSError, requests.RequestException) as exception:  # Export or SDK failure.
             # WHY: preserve operator notice verbatim. Route through logger for capture/redirection.
             logger.error("! Error exporting organization insight metrics: %s", exception)  # Tell the user.
             logging.error("Failed to export org insight metrics: %s", exception)  # Log the failure with context.
@@ -764,7 +765,7 @@ class OrgExportUtils:
             logger.info("Completed audit logs export and wrote results to OrgAuditLogs.csv.")  # Log completion.
             logger.info("Menu #22: Audit logs export completed - %s records", len(data))  # Log the count.
             logger.debug("EXIT: OrgExportUtils.audit_logs - success")  # Trace success.
-        except Exception as e:  # Export failed.
+        except (AttributeError, OSError, requests.RequestException) as e:  # Export failed.
             logging.error("Failed to export audit logs: %s", e)  # Log the error.
             logging.debug("EXIT: OrgExportUtils.audit_logs - error")  # Trace exit.
             raise  # Re-raise to caller.
