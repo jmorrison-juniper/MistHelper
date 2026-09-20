@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -231,7 +232,8 @@ class TestEnhancedParse:
     def test_debug_mode(self):
         with patch("src.utils.address_utils.normalize_address_record", None):
             result = AddressUtils.enhanced_parse("123 Main St, City, ST", debug=True)
-            assert result is not None
+            assert result["is_parseable"] is True
+            assert result["original"] == "123 Main St, City, ST"
 
 
 # ============================================================================
@@ -694,6 +696,7 @@ class TestNominatimValidatorInit:
             with patch("src.utils.address_utils.urllib3") as mock_u3:
                 mock_u3.exceptions.InsecureRequestWarning = Exception
                 NominatimValidator(config)
+                mock_u3.disable_warnings.assert_called_once_with(Exception)
                 mock_u3.disable_warnings.assert_called_once()
 
 
@@ -796,7 +799,7 @@ class TestNominatimValidatorAPI:
         with patch("src.utils.address_utils.requests") as mock_req:
             mock_req.get.return_value = mock_resp
             result = self.validator._make_api_request("123 Main")  # WHY: source left the signature
-            assert result is not None
+            assert result is mock_resp
 
     def test_make_api_request_retry_then_success(self):
         mock_resp = MagicMock()
@@ -812,6 +815,29 @@ class TestNominatimValidatorAPI:
             with patch("time.sleep"):
                 result = self.validator._make_api_request("123 Main")  # WHY: source left the signature
                 assert result is None
+
+    def test_make_api_request_logs_first_failure_after_distinct_retry_errors(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """All failed Nominatim attempts must log the first failure, not only the final one."""
+        with patch("src.utils.address_utils.requests") as mock_req:
+            mock_req.get.side_effect = [
+                Exception("auth failed"),
+                Exception("connection closed"),
+            ]  # WHY: distinct failures prove which attempt survives.
+            with (
+                patch("time.sleep"),
+                patch.object(self.validator, "MAX_RETRIES", 1),
+                caplog.at_level(logging.WARNING, logger="src.utils.address_utils"),
+            ):
+                result = self.validator._make_api_request("123 Main")  # WHY: drive two failed attempts.
+
+        messages = [record.getMessage() for record in caplog.records]  # WHY: compare rendered operator messages.
+        assert result is None  # WHY: preserve the existing no-response contract.
+        assert any(
+            "Nominatim attempt 2 failed: connection closed" in message for message in messages
+        )  # WHY: every retry failure must remain visible in the log.
+        assert any("first error: auth failed" in message for message in messages)  # WHY: final log names first cause.
 
     def test_try_request_attempt_returns_none_on_timeout(self):
         """A Nominatim timeout must return no response for the retry loop."""
@@ -1141,16 +1167,18 @@ class TestNominatimConfidenceComparison:
 class TestNominatimLogEntry:
     """Tests for _log_entry method."""
 
-    def test_log_entry_debug(self):
+    def test_log_entry_debug(self, caplog: pytest.LogCaptureFixture):
         config = AddressValidationConfig(debug=True)
         validator = NominatimValidator(config)
-        # Should not raise
-        validator._log_entry({"address": "a"}, {"address": "b"})
+        with caplog.at_level(logging.DEBUG, logger="src.utils.address_utils"):
+            validator._log_entry({"address": "a"}, {"address": "b"})
+        assert any("ENTRY: NominatimValidator.validate()" in record.message for record in caplog.records)
 
-    def test_log_entry_no_debug(self):
+    def test_log_entry_no_debug(self, caplog: pytest.LogCaptureFixture):
         validator = NominatimValidator()
-        # Should not raise
-        validator._log_entry({}, {})
+        with caplog.at_level(logging.DEBUG, logger="src.utils.address_utils"):
+            validator._log_entry({}, {})
+        assert not caplog.records
 
 
 class TestNominatimDetermineRecommendationBothValid:
