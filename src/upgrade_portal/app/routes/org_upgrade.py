@@ -719,7 +719,7 @@ def _call_submission(
     except ValueError as error:
         session.pop(LAST_JOB_SESSION_KEY, None)
         return json_error(BAD_REQUEST_STATUS, OPTIONS_INVALID, str(error))
-    except RequestException as error:
+    except Exception as error:  # Keep broad because any failure after the write leaves the outcome unknown.
         logger.exception(
             "The organization upgrade submission outcome is unknown after %s: %s",
             type(error).__name__,
@@ -1249,7 +1249,7 @@ def _call_cancellation(cloud_session: Any, org_id: str, upgrade_id: str) -> OrgU
         return upgrade_service().cancel(cloud_session, org_id, upgrade_id)
     except (TypeError, ValueError) as error:
         return json_error(BAD_REQUEST_STATUS, CANCEL_FAILED, str(error))
-    except RequestException as error:
+    except Exception as error:  # Keep broad because any failure after the cancel write leaves the outcome unknown.
         logger.exception(
             "The organization upgrade cancellation outcome is unknown after %s: %s",
             type(error).__name__,
