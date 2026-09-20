@@ -147,8 +147,10 @@ class TestThePortalStillRefusesEveryUnsafeClass:
     def test_a_destructive_operation_is_refused_at_the_run_path(self, executor) -> None:
         """The listing and the run path must agree, or a hidden row could still run."""
         destructive = sorted(options_by_category("destructive"))
-        assert destructive, "The registry holds no destructive option, so this guard proves nothing."
-        assert executor._validate_operation(destructive[0]) is not None
+        assert len(destructive) > 0, "The registry holds no destructive option, so this guard proves nothing."
+        refusal = executor._validate_operation(destructive[0])
+        assert isinstance(refusal, dict), "The run path accepted a destructive operation."
+        assert "error" in refusal, f"The refusal names no reason for the operator: {refusal}."
 
 
 class TestTheDescriptionMapMatchesTheRegistry:

@@ -190,7 +190,7 @@ class TestTheClientDropdown:
         )
         with patch.dict("sys.modules", {"mistapi": api}):
             result = _fetch_site_clients(object(), "site-1")
-        assert result, "The stand-in returned no client, so this test proves nothing."
+        assert len(result) == 2, "The stand-in returned the wrong client count, so this test proves nothing."
         assert (
             names(result, CLIENT_LABEL_FIELDS)[0] == "alpha"
         ), "A wired client never reaches the top, so the join still decides the order."
@@ -209,3 +209,69 @@ def test_the_sort_never_changes_the_row_count(count: int) -> None:
     """A sort that dropped a row would hide a device from the operator."""
     rows = [{"name": f"device-{index:03d}"} for index in range(count)]
     assert len(sort_by_name(rows)) == count
+
+
+class TestACloudFailureLeavesTheSelectorUsable:
+    """The three fetchers call the Mist cloud, which can refuse or fail.
+
+    Warning: the route reads ``len()`` on each result, so a fetcher that raised
+    or answered ``None`` would break the whole operations page and not only one
+    dropdown. Each case below must answer with an empty list instead.
+    """
+
+    @staticmethod
+    def raising_api(error: Exception) -> MagicMock:
+        """Return a stand-in SDK whose every call raises the supplied error."""
+        api = MagicMock()
+        api.api.v1.orgs.sites.listOrgSites.side_effect = error
+        api.api.v1.sites.devices.listSiteDevices.side_effect = error
+        api.api.v1.sites.clients.searchSiteWirelessClients.side_effect = error
+        api.api.v1.sites.clients.searchSiteWiredClients.side_effect = error
+        return api
+
+    @pytest.mark.parametrize(
+        ("status", "reason"),
+        [
+            (401, "the token expired"),
+            (403, "the token lacks the scope"),
+            (404, "the organization is gone"),
+            (429, "the cloud rate limited the call"),
+        ],
+    )
+    def test_a_client_error_returns_an_empty_site_list(self, status: int, reason: str) -> None:
+        """An HTTP 4xx answer must leave the page usable, not raise into the route."""
+        error = RuntimeError(f"HTTP {status}: {reason}")
+        with patch.dict("sys.modules", {"mistapi": self.raising_api(error)}):
+            assert _fetch_org_sites(object(), "org-1") == []
+
+    @pytest.mark.parametrize("status", [500, 502, 503])
+    def test_a_server_error_returns_an_empty_site_list(self, status: int) -> None:
+        """An HTTP 5xx answer is a cloud fault, and the page must survive it."""
+        error = RuntimeError(f"HTTP {status}: the cloud failed")
+        with patch.dict("sys.modules", {"mistapi": self.raising_api(error)}):
+            assert _fetch_org_sites(object(), "org-1") == []
+
+    @pytest.mark.parametrize("status", [401, 429, 500, 503])
+    def test_a_failed_device_call_returns_an_empty_list(self, status: int) -> None:
+        """The device selector must answer with no row on any HTTP failure."""
+        error = RuntimeError(f"HTTP {status}")
+        with patch.dict("sys.modules", {"mistapi": self.raising_api(error)}):
+            assert _fetch_site_devices(object(), "site-1", "all") == []
+
+    @pytest.mark.parametrize("status", [403, 500])
+    def test_a_failed_client_call_returns_an_empty_list(self, status: int) -> None:
+        """Both client searches can fail, and the joined list must stay a list."""
+        error = RuntimeError(f"HTTP {status}")
+        with patch.dict("sys.modules", {"mistapi": self.raising_api(error)}):
+            assert _fetch_site_clients(object(), "site-1") == []
+
+    def test_one_failed_client_source_keeps_the_other(self) -> None:
+        """A wired failure must not hide every wireless client as well."""
+        api = MagicMock()
+        api.api.v1.sites.clients.searchSiteWirelessClients.return_value = MagicMock(
+            data={"results": [{"mac": "w1", "hostname": "alpha"}]}
+        )
+        api.api.v1.sites.clients.searchSiteWiredClients.side_effect = RuntimeError("HTTP 500")
+        with patch.dict("sys.modules", {"mistapi": api}):
+            result = _fetch_site_clients(object(), "site-1")
+        assert names(result, CLIENT_LABEL_FIELDS) == ["alpha"]
