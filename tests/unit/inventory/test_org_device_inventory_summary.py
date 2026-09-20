@@ -5,6 +5,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest  # WHY: parameterize request-failure coverage.
+import requests  # WHY: model expected Mist transport failures.
+
 from src.inventory.org_device_inventory_summary import (
     OrgDeviceInventorySummaryCore,
     configure_org_device_inventory_summary_dependencies,
@@ -244,3 +247,20 @@ def test_run_for_org_calls_all_export_steps(monkeypatch) -> None:
     assert len(ver_per_model) == 1
     assert display_mock.call_count == 2
     pivot_mock.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "exception",
+    [
+        requests.ConnectionError("offline"),
+        requests.Timeout("slow"),
+    ],
+)
+def test_gateway_inventory_connection_failures_return_empty(exception: requests.RequestException) -> None:
+    """Connection errors and timeouts must keep the inventory summary alive."""
+    _configure_dependencies()
+    from src.inventory import org_device_inventory_summary as summary_module
+
+    summary_module.mistapi.api.v1.orgs.inventory.getOrgInventory.side_effect = exception
+    result = OrgDeviceInventorySummaryCore._fetch_gateway_physical_inventory("org-1")
+    assert result == []
