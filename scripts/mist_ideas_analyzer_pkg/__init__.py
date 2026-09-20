@@ -973,8 +973,13 @@ class IdeaAnalyzer:
                 continue
             except json.JSONDecodeError:
                 logger.warning("JSON parse error on attempt %d", attempt)
-            except Exception:
-                logger.exception("AI call failed on attempt %d", attempt)
+            except Exception as error:
+                logger.exception(
+                    "AI call failed on attempt %d after %s: %s",
+                    attempt,
+                    type(error).__name__,
+                    error,
+                )
                 self._backoff(attempt)
                 continue
 
@@ -1033,10 +1038,12 @@ class IdeaAnalyzer:
                     attempt,
                 )
                 self._backoff(attempt)
-            except Exception:
+            except Exception as error:
                 logger.exception(
-                    "Batch AI call failed on attempt %d",
+                    "Batch AI call failed on attempt %d after %s: %s",
                     attempt,
+                    type(error).__name__,
+                    error,
                 )
                 self._backoff(attempt)
         logger.error(
@@ -1274,8 +1281,12 @@ class IdeaAnalyzer:
             data = json.loads(response.choices[0].message.content)
             groups = data.get("duplicate_groups", [])
             return self._validate_dedup_groups(groups, known_titles)
-        except Exception:
-            logger.exception("Duplicate detection batch failed, skipping batch")
+        except Exception as error:
+            logger.exception(
+                "Duplicate detection batch failed after %s: %s; skipping batch",
+                type(error).__name__,
+                error,
+            )
             return []
 
     def detect_duplicates(
@@ -2529,8 +2540,13 @@ class OllamaFleetManager:
         """Collect one provisioning future into the shared config list."""
         try:  # Keep per-server exceptions isolated so one bad host does not stop the fleet.
             config = future.result()  # Wait for the provisioner to finish for this host.
-        except Exception:  # Preserve the existing traceback for unexpected provisioning failures.
-            logger.exception("Error provisioning %s", host)  # Keep host context in the failure log.
+        except Exception as error:  # Preserve the existing traceback for unexpected provisioning failures.
+            logger.exception(
+                "Error provisioning %s after %s: %s",
+                host,
+                type(error).__name__,
+                error,
+            )  # Keep host context and the exception type in the failure log.
             return  # Leave this host out of the final fleet.
         if config:  # Only real configs should reach the shared fleet list.
             configs.append(config)  # Preserve the existing config payload unchanged.
@@ -2691,9 +2707,16 @@ def _queue_worker(
             logger.warning("[%s] Daily limit hit after %d items", server_label, items_done)
             work_queue.put((orig_idx, idea))
             break
-        except Exception:
+        except Exception as error:
             consecutive_failures += 1
-            logger.exception("[%s] Failed on idea %d (%d consecutive)", server_label, orig_idx, consecutive_failures)
+            logger.exception(
+                "[%s] Failed on idea %d after %s: %s (%d consecutive)",
+                server_label,
+                orig_idx,
+                type(error).__name__,
+                error,
+                consecutive_failures,
+            )
             if consecutive_failures >= max_consecutive_failures and fleet:
                 logger.error("[%s] %d consecutive failures -- marking server DEAD", server_label, consecutive_failures)
                 fleet.mark_server_dead(analyzer.backend_config["base_url"])
@@ -2879,8 +2902,13 @@ def _run_fleet_batch(
                 try:
                     items_done = finished.result()
                     logger.info("Worker %s finished (%d items)", label, items_done)
-                except Exception:
-                    logger.exception("Worker %s failed", label)
+                except Exception as error:
+                    logger.exception(
+                        "Worker %s failed after %s: %s",
+                        label,
+                        type(error).__name__,
+                        error,
+                    )
 
             if futures:
                 time.sleep(2)
