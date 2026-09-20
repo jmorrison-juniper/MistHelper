@@ -280,6 +280,68 @@ def _format_sse(event_type: str, data: dict) -> str:
     return f"event: {event_type}\ndata: {payload}\n\n"
 
 
+def display_label(entry: dict, fields: tuple[str, ...]) -> str:
+    """Return the text the dropdown shows for one entry.
+
+    Why:
+        A sort must order the list by the text the operator reads. Sorting by a
+        hidden field would leave the visible list in no order at all, which is
+        the defect this helper repairs.
+
+    Args:
+        entry: One dropdown row.
+        fields: The label fields, in the order the page prefers them.
+
+    Returns:
+        The first field that holds text, or an empty string.
+    """
+    for field in fields:  # The page shows the first of these that carries text.
+        value = str(entry.get(field) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def sort_by_name(entries: list, fields: tuple[str, ...] = ("name",)) -> list:
+    """Return dropdown entries in the order of the label the page shows.
+
+    Why:
+        The Mist API returns a site, a device, and a client in its own order,
+        and that order is neither the name order nor stable between calls. An
+        engineer who looks for one site then reads the whole list. Issue #3083
+        records the defect.
+
+    Warning: the label fields must match the fields that
+    ``web_portal/static/js/operations.js`` renders. A client carries its name in
+    ``hostname`` and not in ``name``, so a sort that read ``name`` alone would
+    treat every client as unnamed and change nothing.
+
+    Rules:
+        The order ignores letter case, so ``alpha`` and ``Alpha`` sit together.
+        An entry with no label sorts last, because a blank row must never hide a
+        named one at the top of the list. An unlabelled entry stays in the list,
+        because it carries an identifier that an operator may still need.
+
+    Args:
+        entries: The dropdown rows.
+        fields: The label fields, in the order the page prefers them.
+
+    Returns:
+        A new list in label order.
+    """
+    return sorted(
+        entries,
+        key=lambda entry: (not display_label(entry, fields), display_label(entry, fields).casefold()),
+    )
+
+
+# WHY: the page renders `device.name || device.mac`, so the sort reads both.
+DEVICE_LABEL_FIELDS = ("name", "mac")
+
+# WHY: the page renders the client hostname and falls back to the MAC address.
+CLIENT_LABEL_FIELDS = ("hostname", "mac")
+
+
 def _fetch_org_sites(apisession, org_id: str) -> list:
     """Fetch organization sites from Mist API."""
     if not apisession or not org_id:
@@ -289,16 +351,18 @@ def _fetch_org_sites(apisession, org_id: str) -> list:
 
         response = mistapi.api.v1.orgs.sites.listOrgSites(apisession, org_id)
         sites = response.data if hasattr(response, "data") else []
-        return [
-            {
-                "id": site.get("id", ""),
-                "name": site.get("name", ""),
-                "address": site.get("address", ""),
-                "country_code": site.get("country_code", ""),
-                "timezone": site.get("timezone", ""),
-            }
-            for site in sites
-        ]
+        return sort_by_name(
+            [
+                {
+                    "id": site.get("id", ""),
+                    "name": site.get("name", ""),
+                    "address": site.get("address", ""),
+                    "country_code": site.get("country_code", ""),
+                    "timezone": site.get("timezone", ""),
+                }
+                for site in sites
+            ]
+        )  # Issue #3083: the dropdown lists the sites by name.
     except Exception as error:  # Keep the site selector usable when the Mist API request fails.
         # Use logger.exception() so the full traceback appears at ERROR level.
         # Name the org ID so the operator can find the failing request in logs.
@@ -324,17 +388,20 @@ def _fetch_site_devices(apisession, site_id: str, device_type: str) -> list:
             kwargs["type"] = "all"
         response = mistapi.api.v1.sites.devices.listSiteDevices(apisession, **kwargs)
         devices = response.data if hasattr(response, "data") else []
-        return [
-            {
-                "id": device.get("id", ""),
-                "mac": device.get("mac", ""),
-                "name": device.get("name", ""),
-                "model": device.get("model", ""),
-                "type": device.get("type", ""),
-                "status": device.get("status", ""),
-            }
-            for device in devices
-        ]
+        return sort_by_name(
+            [
+                {
+                    "id": device.get("id", ""),
+                    "mac": device.get("mac", ""),
+                    "name": device.get("name", ""),
+                    "model": device.get("model", ""),
+                    "type": device.get("type", ""),
+                    "status": device.get("status", ""),
+                }
+                for device in devices
+            ],
+            DEVICE_LABEL_FIELDS,
+        )  # Issue #3083: the dropdown lists the devices by the label it shows.
     except Exception as error:  # Keep the device selector usable when the Mist API request fails.
         # Use logger.exception() so the full traceback appears at ERROR level.
         # Name the site ID and device type so the operator can trace the request.
@@ -355,7 +422,10 @@ def _fetch_site_clients(apisession, site_id: str) -> list:
 
         wireless = _fetch_wireless_clients(mistapi, apisession, site_id)
         wired = _fetch_wired_clients(mistapi, apisession, site_id)
-        clients = wireless + wired
+        # Issue #3083: a plain concatenation put every wireless client before
+        # every wired one, whatever its name. One sort interleaves both types.
+        # A client carries its name in `hostname`, so the sort must read that.
+        clients = sort_by_name(wireless + wired, CLIENT_LABEL_FIELDS)
     except Exception as client_error:
         logging.debug("Could not fetch site clients: %s", client_error)
     return clients

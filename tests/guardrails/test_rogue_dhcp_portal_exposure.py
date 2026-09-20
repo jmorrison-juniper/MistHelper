@@ -1,19 +1,24 @@
 """Guard the operations web dashboard exposure of the rogue DHCP scan (issue #2985).
 
-The portal gate carries a numeric bound, ``DESTRUCTIVE_THRESHOLD``, set to 90.
-Menu 269 sits far above that bound, so the gate refused it. Removing the bound
-would widen the portal by every operation between 90 and 268, which is a change
-this feature must not make.
+History:
+    The portal gate once carried a numeric bound, ``DESTRUCTIVE_THRESHOLD``, set
+    to 90. Menu 269 sits far above that bound, so the gate refused it. The first
+    repair added an explicit allowlist that named menu 269 only.
 
-The repair adds one explicit allowlist that names menu 269 only. The registry
-check still runs first, so the allowlist can never admit an operation that
-``OperationRegistry`` does not call safe.
+    Issue #3082 removed that bound. A menu number states when an operation was
+    added, not what the operation does, and the bound hid 79 operations that the
+    registry calls safe. ``OperationRegistry`` now decides alone, so the
+    allowlist is gone as well.
+
+    ``tests/guardrails/test_portal_operation_coverage.py`` now proves the rule
+    for every operation. This file stays as the named regression guard for menu
+    269, because that operation is the reason the gate changed twice.
 
 These tests prove both directions.
 
 1. The gate admits menu 269, so the operator can run the scan from the browser.
-2. The gate still refuses a destructive number, an unparseable key, and an
-   allowlisted number whose registry category is not safe.
+2. The gate still refuses a destructive number, an unparseable key, and menu 269
+   itself when the registry category is not safe.
 
 The guard reports the count of gate decisions it checked, so a future edit that
 empties the fixture cannot pass silently.
@@ -27,8 +32,6 @@ from src.utils.menu_entry import MenuEntry  # WHY: fixtures must match the produ
 from src.utils.operation_registry import OperationRegistry
 from web_portal.services.operation import (
     CATEGORY_RANGES,
-    DESTRUCTIVE_THRESHOLD,
-    PORTAL_EXPLICIT_ALLOWLIST,
     PORTAL_RUNNABLE_CATEGORIES,
     OperationExecutor,
 )
@@ -80,14 +83,18 @@ def test_the_registry_calls_the_scan_safe() -> None:
     assert OperationRegistry.skip_category(ROGUE_DHCP_MENU) == "safe"
 
 
-def test_the_scan_sits_above_the_numeric_bound() -> None:
-    """Without this fact the allowlist would be pointless, so the test states it."""
-    assert int(ROGUE_DHCP_MENU) > DESTRUCTIVE_THRESHOLD
+def test_the_gate_reads_no_numeric_bound(executor) -> None:
+    """Issue #3082. A number must not decide what the portal may run.
 
+    Menu 269 is the operation that proved the bound wrong twice. It sits far
+    above the old value of 90, and the registry calls it safe, so the gate must
+    admit it on the category alone.
+    """
+    from web_portal.services import operation as module
 
-def test_the_allowlist_names_the_scan() -> None:
-    """The allowlist is the only reason the gate admits a number above the bound."""
-    assert ROGUE_DHCP_MENU in PORTAL_EXPLICIT_ALLOWLIST
+    assert not hasattr(module, "DESTRUCTIVE_THRESHOLD"), "A numeric menu bound returned to the portal gate."
+    assert not hasattr(module, "PORTAL_EXPLICIT_ALLOWLIST"), "The allowlist returned, so the bound likely did too."
+    assert executor._is_portal_runnable(ROGUE_DHCP_MENU) is True
 
 
 def test_the_gate_admits_the_scan(executor) -> None:
@@ -127,7 +134,7 @@ def test_the_category_range_covers_the_scan() -> None:
 
 
 def test_the_gate_still_refuses_a_destructive_operation(executor) -> None:
-    """The allowlist must not widen the gate for any other operation."""
+    """Widening the portal must never admit an operation that writes."""
     assert executor._is_portal_runnable("154") is False
 
 
@@ -136,18 +143,14 @@ def test_the_gate_still_refuses_an_unparseable_key(executor) -> None:
     assert executor._is_portal_runnable("x1") is False
 
 
-def test_the_gate_still_refuses_an_operation_above_the_bound(executor) -> None:
-    """Menu 268 is safe to read but is not allowlisted, so the bound must still hold."""
-    assert executor._is_portal_runnable("268") is False
+def test_the_gate_now_admits_a_safe_operation_above_the_old_bound(executor) -> None:
+    """Issue #3082. Menu 268 is interactive safe, and the bound used to hide it."""
+    assert OperationRegistry.skip_category("268") == "interactive_safe"
+    assert executor._is_portal_runnable("268") is True
 
 
-def test_the_allowlist_holds_only_the_scan() -> None:
-    """A growing allowlist would silently widen the portal, so pin its exact contents."""
-    assert PORTAL_EXPLICIT_ALLOWLIST == frozenset({ROGUE_DHCP_MENU})
-
-
-def test_an_allowlisted_number_still_needs_a_safe_category(monkeypatch, executor) -> None:
-    """Prove the failure path. The registry check must outrank the allowlist."""
+def test_the_scan_still_needs_a_safe_category(monkeypatch, executor) -> None:
+    """Prove the failure path. The registry verdict is the only gate that remains."""
     monkeypatch.setattr(OperationRegistry, "skip_category", staticmethod(lambda _number: "destructive"))
     assert executor._is_portal_runnable(ROGUE_DHCP_MENU) is False
 
