@@ -845,7 +845,7 @@ def test_analyze_device_override_returns_record_when_meaningful() -> None:
     manager.template_data = []
     row = {"port_config_ge-0/0/1_ip_config": '{"type": "static", "ip": "10.0.0.1"}'}
     record = manager._analyze_device_override(row, "s1")
-    assert record is not None
+    assert isinstance(record, dict)  # WHY: an override row must produce an analysis record.
     assert record["override_severity"] == "CRITICAL"
 
 

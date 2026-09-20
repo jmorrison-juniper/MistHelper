@@ -90,7 +90,7 @@ class TestChooseProfile:
 
         chosen = OrgSecIntelProfileExporter._choose_profile(profiles)
 
-        assert chosen is not None
+        assert isinstance(chosen, dict)  # WHY: a valid selection must return the chosen profile row.
         assert chosen["id"] == "second-id"
 
     @pytest.mark.parametrize("answer", ["", "abc", "0", "3", "-1"])
