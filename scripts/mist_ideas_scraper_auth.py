@@ -106,8 +106,13 @@ def do_login():
                     if has_content:
                         logger.info("Login detected! Forum content visible.")
                         break
-            except Exception:
-                pass  # Page may be navigating
+            # The page can navigate while this probe reads it, so one failure must not stop the wait.
+            except Exception as probe_error:
+                logger.debug(
+                    "Login probe failed after %s: %s",
+                    type(probe_error).__name__,
+                    probe_error,
+                )  # Name the failure, because the old bare pass hid a broken selector too.
 
             if elapsed % 30 == 0 and elapsed > 0:
                 logger.info("Still waiting for login... (%ds)", elapsed)
