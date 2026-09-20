@@ -25,6 +25,7 @@ import sys  # WHY: the terminal check keeps the ZTP credential off a stored stre
 from typing import Any  # WHY: Any narrows the SDK response type
 
 import mistapi  # WHY: direct SDK access mirrors parent module's usage
+import requests  # WHY: Mist SDK transport failures surface through requests exceptions.
 
 from ._utility_commands_cluster import _ClusterBase  # WHY: shared proxy base
 
@@ -89,7 +90,11 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
                 "Locate device failed",
             ):  # WHY: emit success/error line based on HTTP status
                 print("-> Use 'Unlocate Device' (menu 139) to stop.")  # WHY: teach follow-up action
-        except Exception as error:  # WHY: log-and-continue on SDK/transport failure
+        except (
+            AttributeError,
+            RuntimeError,
+            requests.RequestException,
+        ) as error:  # WHY: log-and-continue on SDK/transport failure
             logging.exception("Locate device failed: %s", error)  # WHY: audit failure with stack
             print(f"! Locate failed: {error}")  # WHY: surface error to operator
 
@@ -111,7 +116,11 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
                 "Device LED blinking stopped.",
                 "Unlocate failed",
             )  # WHY: emit success/error line
-        except Exception as error:  # WHY: log-and-continue on SDK/transport failure
+        except (
+            AttributeError,
+            RuntimeError,
+            requests.RequestException,
+        ) as error:  # WHY: log-and-continue on SDK/transport failure
             logging.exception("Unlocate device failed: %s", error)  # WHY: audit failure with stack
             print(f"! Unlocate failed: {error}")  # WHY: surface error to operator
 
@@ -201,7 +210,11 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
                 "Device reprovisioning initiated.",
                 "Reprovision failed",
             )  # WHY: emit success/error line
-        except Exception as error:  # WHY: log-and-continue on SDK/transport failure
+        except (
+            AttributeError,
+            RuntimeError,
+            requests.RequestException,
+        ) as error:  # WHY: log-and-continue on SDK/transport failure
             logging.exception("Reprovision failed: %s", error)  # WHY: audit failure with stack
             print(f"! Reprovision failed: {error}")  # WHY: surface error to operator
 
@@ -232,7 +245,11 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
             if not vc_data.get("is_virtual_chassis", False):  # WHY: readopt requires VC
                 print("! Device is not a Virtual Chassis member. 'readopt' applies only to VC devices. Skipping.")
                 return False
-        except Exception as error:  # WHY: warn-and-continue. Readopt may still work
+        except (
+            AttributeError,
+            RuntimeError,
+            requests.RequestException,
+        ) as error:  # WHY: warn-and-continue. Readopt may still work
             logging.warning("VC preflight check failed: %s", error, exc_info=True)  # WHY: audit warning
         return True  # WHY: preflight passed or was inconclusive
 
@@ -249,7 +266,11 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
                 "Device re-adoption initiated.",
                 "Re-adopt failed",
             )  # WHY: emit success/error line
-        except Exception as error:  # WHY: log-and-continue on SDK/transport failure
+        except (
+            AttributeError,
+            RuntimeError,
+            requests.RequestException,
+        ) as error:  # WHY: log-and-continue on SDK/transport failure
             logging.exception("Re-adopt failed: %s", error)  # WHY: audit failure with stack
             print(f"! Re-adopt failed: {error}")  # WHY: surface error to operator
 
@@ -271,7 +292,11 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
                 device_id,
             )  # WHY: fetch one-time ZTP credential
             self._render_ztp_response(response)  # WHY: show the value on a live terminal only
-        except Exception as error:  # WHY: log-and-continue on SDK/transport failure
+        except (
+            AttributeError,
+            RuntimeError,
+            requests.RequestException,
+        ) as error:  # WHY: log-and-continue on SDK/transport failure
             error_msg = f"{type(error).__name__}: {str(error)}"  # WHY: qualify error type
             logging.error("ZTP password request failed: %s", error_msg)  # WHY: audit failure
             print(f"! ZTP password request failed: {error_msg}")  # WHY: surface error
@@ -366,7 +391,11 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
                 device_id,
             )  # WHY: fetch generated CLI config bundle
             self._render_config_response(response)  # WHY: pretty-print each section
-        except Exception as error:  # WHY: log-and-continue on SDK/transport failure
+        except (
+            AttributeError,
+            RuntimeError,
+            requests.RequestException,
+        ) as error:  # WHY: log-and-continue on SDK/transport failure
             logging.exception("Config commands request failed: %s", error)  # WHY: audit failure
             print(f"! Config commands request failed: {error}")  # WHY: surface error
 
@@ -446,7 +475,11 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
                 "Support file upload failed",
             ):  # WHY: emit success/error line
                 print("-> Files will be available in the Mist dashboard.")  # WHY: teach follow-up
-        except Exception as error:  # WHY: log-and-continue on SDK/transport failure
+        except (
+            AttributeError,
+            RuntimeError,
+            requests.RequestException,
+        ) as error:  # WHY: log-and-continue on SDK/transport failure
             logging.exception("Support file upload failed: %s", error)  # WHY: audit failure with stack
             print(f"! Support file upload failed: {error}")  # WHY: surface error to operator
 
@@ -473,7 +506,11 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
                 "Poll switch stats failed",
             ):  # WHY: emit success/error line
                 print("-> Updated stats will appear in next stats export.")  # WHY: manage expectations
-        except Exception as error:  # WHY: log-and-continue on SDK/transport failure
+        except (
+            AttributeError,
+            RuntimeError,
+            requests.RequestException,
+        ) as error:  # WHY: log-and-continue on SDK/transport failure
             logging.exception("Poll switch stats failed: %s", error)  # WHY: audit failure with stack
             print(f"! Poll switch stats failed: {error}")  # WHY: surface error to operator
 
@@ -495,7 +532,11 @@ class _UtilityCommandsAction(_ClusterBase):  # WHY: cluster wrapper mirroring ea
                 "Device snapshot created successfully.",
                 "Create snapshot failed",
             )  # WHY: emit success/error line
-        except Exception as error:  # WHY: log-and-continue on SDK/transport failure
+        except (
+            AttributeError,
+            RuntimeError,
+            requests.RequestException,
+        ) as error:  # WHY: log-and-continue on SDK/transport failure
             logging.exception("Create snapshot failed: %s", error)  # WHY: audit failure with stack
             print(f"! Create snapshot failed: {error}")  # WHY: surface error to operator
 
